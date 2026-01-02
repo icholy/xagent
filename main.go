@@ -21,6 +21,7 @@ func main() {
 			command.ContainersCommand,
 			command.WorkspacesCommand,
 			command.McpCommand,
+			command.GithubCommand,
 		},
 	}
 
