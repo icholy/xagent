@@ -34,7 +34,6 @@ func NewClient(opts ClientOptions) *Client {
 }
 
 func (c *Client) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	// Auto-approve all permission requests (for demo purposes)
 	if len(params.Options) == 0 {
 		return acp.RequestPermissionResponse{}, nil
 	}
@@ -45,7 +44,6 @@ func (c *Client) RequestPermission(ctx context.Context, params acp.RequestPermis
 	if title == "" && params.ToolCall.Kind != nil {
 		title = string(*params.ToolCall.Kind)
 	}
-	c.log.Info("permission", "action", "auto-approve", "title", title)
 	return acp.RequestPermissionResponse{
 		Outcome: acp.RequestPermissionOutcome{
 			Selected: &acp.RequestPermissionOutcomeSelected{
