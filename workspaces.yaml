@@ -14,7 +14,7 @@ workspaces:
     acp:
       command: ["npx", "@zed-industries/claude-code-acp"]
       claude_resume_hack: true
-      cwd: /home/vscode/gomajor
+      cwd: /home/vscode/llmpatch
     commands:
       - git clone https://github.com/icholy/llmpatch
     container:
