@@ -113,13 +113,14 @@ var RunCommand = &cli.Command{
 
 		logger.Flush()
 
-		// Ask agent to report any links it created
+		// Ask agent to report links and problems
 		if err := a.Prompt(ctx, strings.Join([]string{
 			"If you created any pull requests, Jira tickets, or other external",
 			"resources during this task, use the create_link tool to report each one.",
-			"If you did not create any, do nothing.",
+			"If you encountered any problems or blockers, use the report tool to log them.",
+			"If you have nothing to report, do nothing.",
 		}, " ")); err != nil {
-			slog.Error("links prompt failed", "error", err)
+			slog.Error("report prompt failed", "error", err)
 		}
 
 		// Save config

@@ -77,6 +77,41 @@ var McpCommand = &cli.Command{
 			},
 		)
 
+		s.AddTool(
+			mcp.NewTool("report",
+				mcp.WithDescription("Report a problem or log message for the current task"),
+				mcp.WithString("type",
+					mcp.Required(),
+					mcp.Description("Type of report: 'error', 'warning', 'info'"),
+				),
+				mcp.WithString("message",
+					mcp.Required(),
+					mcp.Description("The message to report"),
+				),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				args := req.GetArguments()
+				logType, _ := args["type"].(string)
+				message, _ := args["message"].(string)
+
+				if logType == "" || message == "" {
+					return mcp.NewToolResultError("type and message are required"), nil
+				}
+
+				_, err := client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
+					TaskId: taskID,
+					Entries: []*xagentv1.LogEntry{
+						{Type: logType, Content: message},
+					},
+				})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to upload log: %v", err)), nil
+				}
+
+				return mcp.NewToolResultText("Report submitted"), nil
+			},
+		)
+
 		return server.ServeStdio(s)
 	},
 }
