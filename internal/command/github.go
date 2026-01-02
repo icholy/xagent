@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -52,6 +51,11 @@ var GithubCommand = &cli.Command{
 			Usage:   "xagent server URL",
 			Value:   "http://localhost:8080",
 		},
+		&cli.StringFlag{
+			Name:    "token",
+			Usage:   "GitHub token",
+			Sources: cli.EnvVars("GITHUB_TOKEN"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		repo := cmd.String("repo")
@@ -68,7 +72,7 @@ var GithubCommand = &cli.Command{
 		owner, repoName := parts[0], parts[1]
 
 		ghClient := github.NewClient(nil)
-		if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		if token := cmd.String("token"); token != "" {
 			ghClient = ghClient.WithAuthToken(token)
 		}
 
