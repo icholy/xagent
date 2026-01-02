@@ -12,19 +12,20 @@ import (
 type Comment struct {
 	ID       int64
 	PRNumber int
+	PRURL    string
 	Author   string
 	Body     string
 	URL      string
 }
 
 type PollerOptions struct {
-	Client   *github.Client
-	Owner    string
-	Repo     string
-	Username string
-	Keyword  string
-	Label    string
-	Interval time.Duration
+	Client    *github.Client
+	Owner     string
+	Repo      string
+	Username  string
+	Keyword   string
+	Label     string
+	Interval  time.Duration
 	OnComment func(Comment)
 }
 
@@ -42,7 +43,7 @@ func NewPoller(opts PollerOptions) *Poller {
 
 func (p *Poller) Run(ctx context.Context) error {
 	for {
-		comments, err := p.fetchComments(ctx)
+		comments, err := p.search(ctx)
 		if err != nil {
 			slog.Error("failed to fetch comments", "error", err)
 		} else {
@@ -65,7 +66,7 @@ func (p *Poller) Run(ctx context.Context) error {
 	}
 }
 
-func (p *Poller) fetchComments(ctx context.Context) ([]Comment, error) {
+func (p *Poller) search(ctx context.Context) ([]Comment, error) {
 	query := "repo:" + p.opts.Owner + "/" + p.opts.Repo + " is:pr is:open label:" + p.opts.Label
 	result, _, err := p.opts.Client.Search.Issues(ctx, query, nil)
 	if err != nil {
@@ -93,6 +94,7 @@ func (p *Poller) fetchComments(ctx context.Context) ([]Comment, error) {
 			comments = append(comments, Comment{
 				ID:       c.GetID(),
 				PRNumber: prNumber,
+				PRURL:    issue.GetHTMLURL(),
 				Author:   c.GetUser().GetLogin(),
 				Body:     c.GetBody(),
 				URL:      c.GetHTMLURL(),
