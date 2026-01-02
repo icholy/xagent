@@ -22,6 +22,7 @@ func main() {
 			command.WorkspacesCommand,
 			command.McpCommand,
 			command.GithubCommand,
+			command.ShellCommand,
 		},
 	}
 
