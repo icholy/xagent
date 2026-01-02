@@ -8,7 +8,7 @@ workspaces:
       environment:
         CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
     commands:
-      - git clone https://github.com/icholy/gomajor
+      - git clone https://github.com/icholy/llmpatch
 
   gomajor:
     acp:
@@ -16,7 +16,7 @@ workspaces:
       claude_resume_hack: true
       cwd: /home/vscode/gomajor
     commands:
-      - git clone https://github.com/icholy/gomajor
+      - git clone https://github.com/icholy/llmpatch
     container:
       image: containeragent
       working_dir: /home/vscode
