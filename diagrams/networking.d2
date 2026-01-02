@@ -1,0 +1,49 @@
+host: Host Machine {
+  style.fill: "#f8f9fa"
+  style.stroke: "#dee2e6"
+
+  runner: Runner Process {
+    style.fill: "#e74c3c"
+
+    proxy: Unix Socket Proxy\n(/tmp/xagent.sock) {
+      style.fill: "#fff"
+    }
+  }
+
+  c2: C2 Server\n(:8080) {
+    style.fill: "#2ecc71"
+    style.font-color: "#fff"
+  }
+
+  runner -> c2: RPC
+}
+
+containers: Docker Containers {
+  style.fill: "#f8f9fa"
+  style.stroke: "#dee2e6"
+
+  agent1: Agent 1 {
+    style.fill: "#3498db"
+    style.font-color: "#fff"
+  }
+
+  agent2: Agent 2 {
+    style.fill: "#3498db"
+    style.font-color: "#fff"
+  }
+
+  agent3: Agent 3 {
+    style.fill: "#3498db"
+    style.font-color: "#fff"
+  }
+}
+
+containers.agent1 -> host.runner.proxy: /var/run/xagent.sock\n(bind mount) {
+  style.stroke-dash: 3
+}
+containers.agent2 -> host.runner.proxy: /var/run/xagent.sock\n(bind mount) {
+  style.stroke-dash: 3
+}
+containers.agent3 -> host.runner.proxy: /var/run/xagent.sock\n(bind mount) {
+  style.stroke-dash: 3
+}

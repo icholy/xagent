@@ -1,0 +1,43 @@
+direction: down
+
+c2: C2 Server {
+  api: Connect RPC API
+  db: SQLite DB
+  logs: Log Store
+}
+
+runner: Runner {
+  poller: Task Poller
+  proxy: Unix Socket Proxy
+  docker: Docker Manager
+}
+
+agents: Agents {
+  direction: right
+  a1: Agent 1\n(Container) {
+    shape: rectangle
+  }
+  a2: Agent 2\n(Container) {
+    shape: rectangle
+  }
+  an: Agent N\n(Container) {
+    shape: rectangle
+  }
+}
+
+c2 <-> runner: RPC {
+  style.stroke: "#3498db"
+}
+
+runner -> agents: Manages\nContainers {
+  style.stroke: "#2ecc71"
+}
+
+agents -> runner: Unix Socket\n(/var/run/xagent.sock) {
+  style.stroke: "#e74c3c"
+}
+
+runner -> c2: Proxies\nRequests {
+  style.stroke: "#e74c3c"
+  style.stroke-dash: 3
+}

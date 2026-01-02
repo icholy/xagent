@@ -1,0 +1,15 @@
+[tasks.prebuild]
+description = "Build xagent binaries for all architectures"
+run = """
+mkdir -p prebuilt
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 .
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o prebuilt/xagent-linux-arm64 .
+"""
+
+[tasks.generate]
+description = "Generate code from proto files"
+run = "go tool buf generate"
+
+[tasks.wipe]
+description = "Delete the database"
+run = "rm -rf ./data/xagent.db*"

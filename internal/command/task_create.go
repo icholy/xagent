@@ -1,0 +1,56 @@
+package command
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/xagentclient"
+	"github.com/urfave/cli/v3"
+)
+
+var TaskCreateCommand = &cli.Command{
+	Name:  "create",
+	Usage: "Create a new task",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:    "server",
+			Aliases: []string{"s"},
+			Usage:   "C2 server URL",
+			Value:   "http://localhost:8080",
+		},
+		&cli.StringFlag{
+			Name:  "id",
+			Usage: "Task ID (optional, auto-generated if not provided)",
+		},
+		&cli.StringFlag{
+			Name:    "workspace",
+			Aliases: []string{"w"},
+			Usage:   "Workspace to use",
+			Value:   "default",
+		},
+		&cli.StringSliceFlag{
+			Name:    "prompt",
+			Aliases: []string{"p"},
+			Usage:   "Prompt to execute (can be specified multiple times)",
+		},
+	},
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		client := xagentclient.New(cmd.String("server"))
+
+		resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+			Id:        cmd.String("id"),
+			Workspace: cmd.String("workspace"),
+			Prompts:   cmd.StringSlice("prompt"),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create task: %w", err)
+		}
+
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(resp.Task)
+	},
+}

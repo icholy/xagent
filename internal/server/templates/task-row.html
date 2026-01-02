@@ -1,0 +1,6 @@
+<tr class="task-link" data-id="{{.ID}}">
+    <td><code>{{.ID | printf "%.8s"}}</code></td>
+    <td>{{.Workspace}}</td>
+    <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
+    <td>{{.CreatedAt.Format "Jan 2 15:04"}}</td>
+</tr>

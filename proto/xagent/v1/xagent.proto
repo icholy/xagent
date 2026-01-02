@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package xagent.v1;
+
+option go_package = "github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1";
+
+service XAgentService {
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+  rpc UploadLogs(UploadLogsRequest) returns (UploadLogsResponse);
+  rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
+  rpc ListLinks(ListLinksRequest) returns (ListLinksResponse);
+  rpc FindLinksByURL(FindLinksByURLRequest) returns (FindLinksByURLResponse);
+}
+
+message Task {
+  string id = 1;
+  string workspace = 2;
+  repeated string prompts = 3;
+  string status = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+
+message McpServer {
+  string name = 1;
+  string command = 2;
+  repeated string args = 3;
+  map<string, string> env = 4;
+}
+
+message ListTasksRequest {
+  repeated string statuses = 1;
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+message CreateTaskRequest {
+  string id = 1;
+  string workspace = 2;
+  repeated string prompts = 3;
+}
+
+message CreateTaskResponse {
+  Task task = 1;
+}
+
+message GetTaskRequest {
+  string id = 1;
+}
+
+message GetTaskResponse {
+  Task task = 1;
+}
+
+message UpdateTaskRequest {
+  string id = 1;
+  string status = 2;
+  repeated string add_prompts = 3;
+}
+
+message UpdateTaskResponse {}
+
+message DeleteTaskRequest {
+  string id = 1;
+}
+
+message DeleteTaskResponse {}
+
+message LogEntry {
+  string type = 1;
+  string content = 2;
+}
+
+message UploadLogsRequest {
+  string task_id = 1;
+  repeated LogEntry entries = 2;
+}
+
+message UploadLogsResponse {}
+
+message TaskLink {
+  int64 id = 1;
+  string task_id = 2;
+  string type = 3;
+  string url = 4;
+  string title = 5;
+  string created_at = 6;
+}
+
+message CreateLinkRequest {
+  string task_id = 1;
+  string type = 2;
+  string url = 3;
+  string title = 4;
+}
+
+message CreateLinkResponse {
+  TaskLink link = 1;
+}
+
+message ListLinksRequest {
+  string task_id = 1;
+}
+
+message ListLinksResponse {
+  repeated TaskLink links = 1;
+}
+
+message FindLinksByURLRequest {
+  string url = 1;
+}
+
+message FindLinksByURLResponse {
+  repeated TaskLink links = 1;
+}

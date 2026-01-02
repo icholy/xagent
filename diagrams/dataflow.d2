@@ -1,0 +1,29 @@
+shape: sequence_diagram
+
+client: Client
+c2: C2 Server
+runner: Runner
+agent: Agent\n(Container)
+claude: Claude Code
+
+client -> c2: CreateTask
+c2 -> c2: Store task (pending)
+
+runner -> c2: ListTasks (pending)
+c2 -> runner: Task list
+
+runner -> agent: Start container
+runner -> c2: UpdateTask (running)
+
+agent -> c2: GetTask
+c2 -> agent: Task details
+
+agent -> claude: Create session
+claude -> agent: Session ID
+
+agent -> claude: Execute prompt
+claude -> claude: Run tools, MCP, etc.
+claude -> agent: Result
+
+agent -> c2: UploadLogs
+agent -> c2: UpdateTask (completed)

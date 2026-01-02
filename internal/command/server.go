@@ -1,0 +1,56 @@
+package command
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+
+	"github.com/icholy/xagent/internal/server"
+	"github.com/icholy/xagent/internal/store"
+	"github.com/urfave/cli/v3"
+)
+
+var ServerCommand = &cli.Command{
+	Name:  "server",
+	Usage: "Start the xagent server",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:    "addr",
+			Aliases: []string{"a"},
+			Usage:   "Address to listen on",
+			Value:   ":8080",
+		},
+		&cli.StringFlag{
+			Name:    "db",
+			Aliases: []string{"d"},
+			Usage:   "Database file path",
+			Value:   "data/xagent.db",
+		},
+	},
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		addr := cmd.String("addr")
+		dbPath := cmd.String("db")
+
+		db, err := store.Open(dbPath)
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		defer db.Close()
+
+		tasks := store.NewTaskRepository(db)
+		logs := store.NewLogRepository(db)
+		links := store.NewLinkRepository(db)
+		srv := server.New(server.Options{
+			Tasks: tasks,
+			Logs:  logs,
+			Links: links,
+		})
+
+		slog.Info("starting server", "addr", addr, "db", dbPath)
+		if err := http.ListenAndServe(addr, srv.Handler()); err != nil {
+			return fmt.Errorf("server error: %w", err)
+		}
+		return nil
+	},
+}

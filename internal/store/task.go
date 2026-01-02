@@ -1,0 +1,203 @@
+package store
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+)
+
+type TaskStatus string
+
+const (
+	TaskStatusPending   TaskStatus = "pending"
+	TaskStatusRunning   TaskStatus = "running"
+	TaskStatusCompleted TaskStatus = "completed"
+	TaskStatusFailed    TaskStatus = "failed"
+	TaskStatusCancelled TaskStatus = "cancelled"
+	TaskStatusArchived  TaskStatus = "archived"
+)
+
+type Task struct {
+	ID        string     `json:"id"`
+	Workspace string     `json:"workspace"`
+	Prompts   []string   `json:"prompts"`
+	Status    TaskStatus `json:"status"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+type TaskRepository struct {
+	db *sql.DB
+}
+
+func NewTaskRepository(db *sql.DB) *TaskRepository {
+	return &TaskRepository{db: db}
+}
+
+func (r *TaskRepository) Create(task *Task) error {
+	prompts, err := json.Marshal(task.Prompts)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	_, err = r.db.Exec(`
+		INSERT INTO tasks (id, workspace, prompts, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, task.ID, task.Workspace, prompts, task.Status, now, now)
+	return err
+}
+
+func (r *TaskRepository) Get(id string) (*Task, error) {
+	row := r.db.QueryRow(`
+		SELECT id, workspace, prompts, status, created_at, updated_at
+		FROM tasks WHERE id = ?
+	`, id)
+	return r.scanTask(row)
+}
+
+func (r *TaskRepository) List() ([]*Task, error) {
+	rows, err := r.db.Query(`
+		SELECT id, workspace, prompts, status, created_at, updated_at
+		FROM tasks WHERE status != 'archived' ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanTasks(rows)
+}
+
+func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) {
+	if len(statuses) == 0 {
+		return r.List()
+	}
+	placeholders := make([]string, len(statuses))
+	args := make([]any, len(statuses))
+	for i, s := range statuses {
+		placeholders[i] = "?"
+		args[i] = s
+	}
+	query := fmt.Sprintf(`
+		SELECT id, workspace, prompts, status, created_at, updated_at
+		FROM tasks WHERE status IN (%s) ORDER BY created_at DESC
+	`, strings.Join(placeholders, ","))
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanTasks(rows)
+}
+
+type TaskUpdate struct {
+	Status     TaskStatus
+	AddPrompts []string
+}
+
+func (r *TaskRepository) Update(id string, update TaskUpdate) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Add prompts if provided
+	if len(update.AddPrompts) > 0 {
+		row := tx.QueryRow(`SELECT prompts FROM tasks WHERE id = ?`, id)
+
+		var existingPrompts []byte
+		if err := row.Scan(&existingPrompts); err != nil {
+			return err
+		}
+
+		var allPrompts []string
+		if err := json.Unmarshal(existingPrompts, &allPrompts); err != nil {
+			return err
+		}
+
+		allPrompts = append(allPrompts, update.AddPrompts...)
+		newPrompts, err := json.Marshal(allPrompts)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(`
+			UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
+		`, newPrompts, time.Now(), id)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update status if provided
+	if update.Status != "" {
+		_, err = tx.Exec(`
+			UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?
+		`, update.Status, time.Now(), id)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *TaskRepository) Delete(id string) error {
+	_, err := r.db.Exec(`DELETE FROM tasks WHERE id = ?`, id)
+	return err
+}
+
+func (r *TaskRepository) scanTask(row *sql.Row) (*Task, error) {
+	var task Task
+	var prompts []byte
+
+	err := row.Scan(
+		&task.ID,
+		&task.Workspace,
+		&prompts,
+		&task.Status,
+		&task.CreatedAt,
+		&task.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(prompts, &task.Prompts); err != nil {
+		return nil, err
+	}
+
+	return &task, nil
+}
+
+func (r *TaskRepository) scanTasks(rows *sql.Rows) ([]*Task, error) {
+	var tasks []*Task
+	for rows.Next() {
+		var task Task
+		var prompts []byte
+
+		err := rows.Scan(
+			&task.ID,
+			&task.Workspace,
+			&prompts,
+			&task.Status,
+			&task.CreatedAt,
+			&task.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(prompts, &task.Prompts); err != nil {
+			return nil, err
+		}
+
+		tasks = append(tasks, &task)
+	}
+	return tasks, rows.Err()
+}
