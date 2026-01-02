@@ -33,6 +33,18 @@ func NewClient(opts ClientOptions) *Client {
 	}
 }
 
+func getAllowOptionId(options []acp.PermissionOption) acp.PermissionOptionId {
+	if len(options) == 0 {
+		return ""
+	}
+	for _, opt := range options {
+		if opt.Kind == acp.PermissionOptionKindAllowAlways || opt.Kind == acp.PermissionOptionKindAllowOnce {
+			return opt.OptionId
+		}
+	}
+	return options[0].OptionId
+}
+
 func (c *Client) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	if len(params.Options) == 0 {
 		return acp.RequestPermissionResponse{}, nil
@@ -47,8 +59,7 @@ func (c *Client) RequestPermission(ctx context.Context, params acp.RequestPermis
 	return acp.RequestPermissionResponse{
 		Outcome: acp.RequestPermissionOutcome{
 			Selected: &acp.RequestPermissionOutcomeSelected{
-				// Hopefully "approve" is always the first option
-				OptionId: params.Options[0].OptionId,
+				OptionId: getAllowOptionId(params.Options),
 			},
 		},
 	}, nil
