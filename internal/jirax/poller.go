@@ -1,4 +1,4 @@
-package githubx
+package jirax
 
 import (
 	"context"
@@ -8,22 +8,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v68/github"
+	jira "github.com/andygrunwald/go-jira/v2/cloud"
 )
 
 type Comment struct {
-	ID       int64
-	PRNumber int
-	PRURL    string
+	ID       string
+	IssueKey string
+	IssueURL string
 	Author   string
 	Body     string
-	URL      string
 }
 
 type PollerOptions struct {
-	Client    *github.Client
-	Owner     string
-	Repo      string
+	Client    *jira.Client
+	Project   string
 	Username  string
 	Keyword   string
 	Label     string
@@ -34,13 +32,13 @@ type PollerOptions struct {
 
 type Poller struct {
 	opts PollerOptions
-	seen map[int64]bool
+	seen map[string]bool
 }
 
 func NewPoller(opts PollerOptions) *Poller {
 	p := &Poller{
 		opts: opts,
-		seen: make(map[int64]bool),
+		seen: make(map[string]bool),
 	}
 	p.loadState()
 	return p
@@ -54,7 +52,7 @@ func (p *Poller) loadState() {
 	if err != nil {
 		return
 	}
-	var ids []int64
+	var ids []string
 	if err := json.Unmarshal(data, &ids); err != nil {
 		return
 	}
@@ -68,7 +66,7 @@ func (p *Poller) saveState() {
 	if p.opts.StateFile == "" {
 		return
 	}
-	ids := make([]int64, 0, len(p.seen))
+	ids := make([]string, 0, len(p.seen))
 	for id := range p.seen {
 		ids = append(ids, id)
 	}
@@ -109,37 +107,41 @@ func (p *Poller) Run(ctx context.Context) error {
 }
 
 func (p *Poller) search(ctx context.Context) ([]Comment, error) {
-	query := "repo:" + p.opts.Owner + "/" + p.opts.Repo + " is:pr is:open label:" + p.opts.Label
-	result, _, err := p.opts.Client.Search.Issues(ctx, query, nil)
+	jql := "project = " + p.opts.Project + " AND labels = " + p.opts.Label + " AND status != Done"
+	issues, _, err := p.opts.Client.Issue.Search(ctx, jql, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var comments []Comment
 
-	for _, issue := range result.Issues {
-		prNumber := issue.GetNumber()
-
-		issueComments, _, err := p.opts.Client.Issues.ListComments(ctx, p.opts.Owner, p.opts.Repo, prNumber, nil)
+	for _, issue := range issues {
+		issueDetail, _, err := p.opts.Client.Issue.Get(ctx, issue.Key, &jira.GetQueryOptions{
+			Expand: "renderedFields",
+		})
 		if err != nil {
-			slog.Error("failed to get comments", "pr", prNumber, "error", err)
+			slog.Error("failed to get issue", "key", issue.Key, "error", err)
 			continue
 		}
 
-		for _, c := range issueComments {
-			if !strings.EqualFold(c.GetUser().GetLogin(), p.opts.Username) {
+		if issueDetail.Fields.Comments == nil {
+			continue
+		}
+
+		for _, c := range issueDetail.Fields.Comments.Comments {
+			if !strings.EqualFold(c.Author.DisplayName, p.opts.Username) &&
+				!strings.EqualFold(c.Author.EmailAddress, p.opts.Username) {
 				continue
 			}
-			if !strings.Contains(strings.ToLower(c.GetBody()), strings.ToLower(p.opts.Keyword)) {
+			if !strings.Contains(strings.ToLower(c.Body), strings.ToLower(p.opts.Keyword)) {
 				continue
 			}
 			comments = append(comments, Comment{
-				ID:       c.GetID(),
-				PRNumber: prNumber,
-				PRURL:    issue.GetHTMLURL(),
-				Author:   c.GetUser().GetLogin(),
-				Body:     c.GetBody(),
-				URL:      c.GetHTMLURL(),
+				ID:       c.ID,
+				IssueKey: issue.Key,
+				IssueURL: issueDetail.Self,
+				Author:   c.Author.DisplayName,
+				Body:     c.Body,
 			})
 		}
 	}

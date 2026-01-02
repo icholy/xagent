@@ -8,27 +8,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v68/github"
-	"github.com/icholy/xagent/internal/githubx"
+	jira "github.com/andygrunwald/go-jira/v2/cloud"
+	"github.com/icholy/xagent/internal/jirax"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
 
-var GithubCommand = &cli.Command{
-	Name:  "github",
-	Usage: "Poll GitHub for PR comments",
+var JiraCommand = &cli.Command{
+	Name:  "jira",
+	Usage: "Poll Jira for issue comments",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:     "repo",
-			Aliases:  []string{"r"},
-			Usage:    "Repository (owner/repo)",
+			Name:     "project",
+			Aliases:  []string{"p"},
+			Usage:    "Jira project key",
 			Required: true,
 		},
 		&cli.StringFlag{
 			Name:     "username",
 			Aliases:  []string{"u"},
-			Usage:    "GitHub username to filter by",
+			Usage:    "Jira username to filter by",
 			Required: true,
 		},
 		&cli.StringFlag{
@@ -38,7 +38,7 @@ var GithubCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  "label",
-			Usage: "Label to filter PRs by",
+			Usage: "Label to filter issues by",
 			Value: "xagent",
 		},
 		&cli.DurationFlag{
@@ -53,9 +53,19 @@ var GithubCommand = &cli.Command{
 			Value:   "http://localhost:8080",
 		},
 		&cli.StringFlag{
+			Name:     "url",
+			Usage:    "Jira base URL",
+			Required: true,
+		},
+		&cli.StringFlag{
+			Name:    "email",
+			Usage:   "Jira account email",
+			Sources: cli.EnvVars("JIRA_EMAIL"),
+		},
+		&cli.StringFlag{
 			Name:    "token",
-			Usage:   "GitHub token",
-			Sources: cli.EnvVars("GITHUB_TOKEN"),
+			Usage:   "Jira API token",
+			Sources: cli.EnvVars("JIRA_TOKEN"),
 		},
 		&cli.StringFlag{
 			Name:    "data",
@@ -65,58 +75,59 @@ var GithubCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		repo := cmd.String("repo")
+		project := cmd.String("project")
 		username := cmd.String("username")
 		keyword := cmd.String("keyword")
 		label := cmd.String("label")
 		interval := cmd.Duration("interval")
 		serverURL := cmd.String("server")
+		jiraURL := cmd.String("url")
+		email := cmd.String("email")
+		token := cmd.String("token")
 		dataDir := cmd.String("data")
 
-		parts := strings.SplitN(repo, "/", 2)
-		if len(parts) != 2 {
-			return cli.Exit("repo must be in owner/repo format", 1)
+		tp := jira.BasicAuthTransport{
+			Username: email,
+			APIToken: token,
 		}
-		owner, repoName := parts[0], parts[1]
 
-		ghClient := github.NewClient(nil)
-		if token := cmd.String("token"); token != "" {
-			ghClient = ghClient.WithAuthToken(token)
+		jiraClient, err := jira.NewClient(jiraURL, tp.Client())
+		if err != nil {
+			return fmt.Errorf("failed to create jira client: %w", err)
 		}
 
 		xagent := xagentclient.New(serverURL)
 
-		slog.Info("starting github poller",
-			"repo", repo,
+		slog.Info("starting jira poller",
+			"project", project,
 			"username", username,
 			"keyword", keyword,
 			"label", label,
 			"interval", interval,
 		)
 
-		poller := githubx.NewPoller(githubx.PollerOptions{
-			Client:    ghClient,
-			Owner:     owner,
-			Repo:      repoName,
+		poller := jirax.NewPoller(jirax.PollerOptions{
+			Client:    jiraClient,
+			Project:   project,
 			Username:  username,
 			Keyword:   keyword,
 			Label:     label,
 			Interval:  interval,
-			StateFile: filepath.Join(dataDir, "github.json"),
-			OnComment: func(c githubx.Comment) {
+			StateFile: filepath.Join(dataDir, "jira.json"),
+			OnComment: func(c jirax.Comment) {
 				if strings.TrimSpace(c.Body) != "xagent fix" {
 					return
 				}
 
-				slog.Info("found fix command", "pr", c.PRNumber)
+				slog.Info("found fix command", "issue", c.IssueKey)
 
-				links, err := xagent.FindLinksByURL(ctx, &xagentv1.FindLinksByURLRequest{Url: c.PRURL})
+				links, err := xagent.FindLinksByURL(ctx, &xagentv1.FindLinksByURLRequest{Url: c.IssueURL})
 				if err != nil {
-					slog.Error("failed to find links", "url", c.PRURL, "error", err)
+					slog.Error("failed to find links", "url", c.IssueURL, "error", err)
 					return
 				}
 				if len(links.Links) == 0 {
-					slog.Info("no tasks linked to PR", "url", c.PRURL)
+					slog.Info("no tasks linked to issue", "url", c.IssueURL)
 					return
 				}
 
@@ -125,7 +136,7 @@ var GithubCommand = &cli.Command{
 					Id:     taskID,
 					Status: "pending",
 					AddPrompts: []string{
-						fmt.Sprintf("The following linked PR contains comments indicating that it needs to be fixed: %s", c.PRURL),
+						fmt.Sprintf("The following linked Jira issue contains comments indicating that it needs to be fixed: %s", c.IssueURL),
 					},
 				})
 				if err != nil {
