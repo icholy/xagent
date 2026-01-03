@@ -44,24 +44,20 @@ var RunCommand = &cli.Command{
 		slog.Info("loaded config",
 			"cwd", cfg.Cwd,
 			"commands", cfg.Commands,
-			"command_index", cfg.CommandIndex,
-			"session_id", cfg.SessionID,
+			"started", cfg.Started,
 			"prompt_index", cfg.PromptIndex,
 		)
 
-		// Run pending setup commands
-		for cfg.CommandIndex < len(cfg.Commands) {
-			command := cfg.Commands[cfg.CommandIndex]
-			fmt.Printf("Running setup command: %s\n", command)
-			c := exec.CommandContext(ctx, "sh", "-c", command)
-			c.Stdout = os.Stdout
-			c.Stderr = os.Stderr
-			if err := c.Run(); err != nil {
-				return fmt.Errorf("setup command failed: %w", err)
-			}
-			cfg.CommandIndex++
-			if err := agent.SaveConfig(taskID, cfg); err != nil {
-				return fmt.Errorf("failed to save config: %w", err)
+		// Run setup commands if not started yet
+		if !cfg.Started {
+			for _, command := range cfg.Commands {
+				fmt.Printf("Running setup command: %s\n", command)
+				c := exec.CommandContext(ctx, "sh", "-c", command)
+				c.Stdout = os.Stdout
+				c.Stderr = os.Stderr
+				if err := c.Run(); err != nil {
+					return fmt.Errorf("setup command failed: %w", err)
+				}
 			}
 		}
 
@@ -81,7 +77,7 @@ var RunCommand = &cli.Command{
 		// Start agent
 		a, err := agent.Start(ctx, agent.Options{
 			Cwd:        cfg.Cwd,
-			SessionID:  cfg.SessionID,
+			Resume:     cfg.Started,
 			McpServers: cfg.McpServers,
 		})
 		if err != nil {
@@ -111,7 +107,7 @@ var RunCommand = &cli.Command{
 		}
 
 		// Save config
-		cfg.SessionID = a.SessionID()
+		cfg.Started = true
 		cfg.PromptIndex = len(task.Prompts)
 		if err := agent.SaveConfig(taskID, cfg); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)

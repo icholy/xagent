@@ -18,9 +18,8 @@ type Config struct {
 	Commands   []string             `json:"commands,omitempty"`
 
 	// Agent-managed state
-	SessionID    string `json:"session_id,omitempty"`
-	PromptIndex  int    `json:"prompt_index,omitempty"`
-	CommandIndex int    `json:"command_index,omitempty"`
+	Started     bool `json:"started,omitempty"`
+	PromptIndex int  `json:"prompt_index,omitempty"`
 }
 
 type McpServer struct {

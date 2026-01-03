@@ -7,15 +7,13 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-
-	"github.com/google/uuid"
 )
 
 // Options contains configuration for creating an Agent.
 type Options struct {
 	Cwd        string
 	Log        *slog.Logger
-	SessionID  string
+	Resume     bool
 	McpServers map[string]McpServer
 }
 
@@ -23,32 +21,19 @@ type Options struct {
 type Agent struct {
 	log        *slog.Logger
 	cwd        string
-	sessionID  string
 	mcpServers map[string]McpServer
-	prompted   bool
+	resume     bool
 }
 
 // Start creates and starts a new Agent.
 func Start(ctx context.Context, opts Options) (*Agent, error) {
 	log := cmp.Or(opts.Log, slog.Default())
-
-	sessionID := opts.SessionID
-	if sessionID == "" {
-		sessionID = uuid.New().String()
-		log.Info("generated session id", "id", sessionID)
-	}
-
 	return &Agent{
 		log:        log,
 		cwd:        cmp.Or(opts.Cwd, "."),
-		sessionID:  sessionID,
 		mcpServers: opts.McpServers,
+		resume:     opts.Resume,
 	}, nil
-}
-
-// SessionID returns the session ID.
-func (a *Agent) SessionID() string {
-	return a.sessionID
 }
 
 // Close shuts down the agent.
@@ -78,11 +63,10 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 	}
 
 	// Session handling
-	if a.prompted {
-		args = append(args, "--resume", a.sessionID)
-	} else {
-		args = append(args, "--session-id", a.sessionID)
+	if a.resume {
+		args = append(args, "--continue")
 	}
+	a.resume = true
 
 	args = append(args, prompt)
 
@@ -92,10 +76,5 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	a.prompted = true
-	return nil
+	return cmd.Run()
 }
