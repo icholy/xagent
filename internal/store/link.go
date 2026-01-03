@@ -65,8 +65,11 @@ func (r *LinkRepository) Delete(id int64) error {
 
 func (r *LinkRepository) FindByURL(url string) ([]*Link, error) {
 	rows, err := r.db.Query(`
-		SELECT id, task_id, type, url, title, created_at, created
-		FROM task_links WHERE url = ? ORDER BY created_at DESC
+		SELECT l.id, l.task_id, l.type, l.url, l.title, l.created_at, l.created
+		FROM task_links l
+		JOIN tasks t ON l.task_id = t.id
+		WHERE l.url = ? AND t.status != 'archived'
+		ORDER BY l.created_at DESC
 	`, url)
 	if err != nil {
 		return nil, err
