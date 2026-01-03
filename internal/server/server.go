@@ -189,6 +189,23 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 	return &xagentv1.UploadLogsResponse{}, nil
 }
 
+func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
+	logs, err := s.logs.ListByTask(req.TaskId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp := &xagentv1.ListLogsResponse{
+		Entries: make([]*xagentv1.LogEntry, len(logs)),
+	}
+	for i, l := range logs {
+		resp.Entries[i] = &xagentv1.LogEntry{
+			Type:    l.Type,
+			Content: l.Content,
+		}
+	}
+	return resp, nil
+}
+
 func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	link := &store.Link{
 		TaskID:    req.TaskId,

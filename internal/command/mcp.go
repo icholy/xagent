@@ -237,13 +237,7 @@ var McpCommand = &cli.Command{
 					return mcp.NewToolResultError(fmt.Sprintf("failed to list children: %v", err)), nil
 				}
 
-				marshalOpts := protojson.MarshalOptions{Indent: "  "}
-				tasks := make([]json.RawMessage, len(resp.Tasks))
-				for i, t := range resp.Tasks {
-					tasks[i], _ = marshalOpts.Marshal(t)
-				}
-
-				data, _ := json.MarshalIndent(map[string]any{"tasks": tasks}, "", "  ")
+				data, _ := protojson.MarshalOptions{Indent: "  "}.Marshal(resp)
 				return mcp.NewToolResultText(string(data)), nil
 			},
 		)
@@ -294,6 +288,76 @@ var McpCommand = &cli.Command{
 				}
 
 				return mcp.NewToolResultText(fmt.Sprintf("Instruction added to task %s", childTaskID)), nil
+			},
+		)
+
+		s.AddTool(
+			mcp.NewTool("list_child_task_logs",
+				mcp.WithDescription("List logs for a child task"),
+				mcp.WithString("task_id",
+					mcp.Required(),
+					mcp.Description("The child task ID"),
+				),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				args := req.GetArguments()
+				childTaskID, _ := args["task_id"].(string)
+
+				if childTaskID == "" {
+					return mcp.NewToolResultError("task_id is required"), nil
+				}
+
+				// Verify we are the parent
+				childResp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: childTaskID})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to get child task: %v", err)), nil
+				}
+				if childResp.Task.Parent != taskID {
+					return mcp.NewToolResultError("task is not a child of the current task"), nil
+				}
+
+				logsResp, err := client.ListLogs(ctx, &xagentv1.ListLogsRequest{TaskId: childTaskID})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to list logs: %v", err)), nil
+				}
+
+				data, _ := protojson.MarshalOptions{Indent: "  "}.Marshal(logsResp)
+				return mcp.NewToolResultText(string(data)), nil
+			},
+		)
+
+		s.AddTool(
+			mcp.NewTool("list_child_task_links",
+				mcp.WithDescription("List links for a child task"),
+				mcp.WithString("task_id",
+					mcp.Required(),
+					mcp.Description("The child task ID"),
+				),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				args := req.GetArguments()
+				childTaskID, _ := args["task_id"].(string)
+
+				if childTaskID == "" {
+					return mcp.NewToolResultError("task_id is required"), nil
+				}
+
+				// Verify we are the parent
+				childResp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: childTaskID})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to get child task: %v", err)), nil
+				}
+				if childResp.Task.Parent != taskID {
+					return mcp.NewToolResultError("task is not a child of the current task"), nil
+				}
+
+				linksResp, err := client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: childTaskID})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to list links: %v", err)), nil
+				}
+
+				data, _ := protojson.MarshalOptions{Indent: "  "}.Marshal(linksResp)
+				return mcp.NewToolResultText(string(data)), nil
 			},
 		)
 
