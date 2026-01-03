@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -91,7 +90,7 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if !a.handleStreamEvent(line) {
-			fmt.Println(string(line))
+			a.log.Info("output", "line", string(line))
 		}
 	}
 
@@ -110,26 +109,21 @@ func (a *Agent) handleStreamEvent(data []byte) bool {
 			} `json:"content"`
 		} `json:"message"`
 	}
-
 	if err := json.Unmarshal(data, &event); err != nil {
 		return false
 	}
-
 	switch event.Type {
 	case "assistant":
 		for _, block := range event.Message.Content {
 			switch block.Type {
 			case "text":
 				if block.Text != "" {
-					fmt.Print(block.Text)
+					a.log.Info("text", "content", block.Text)
 				}
 			case "tool_use":
-				fmt.Printf("\n→ %s\n", block.Name)
+				a.log.Info("tool", "name", block.Name)
 			}
 		}
-	case "result":
-		fmt.Println()
 	}
-
 	return true
 }
