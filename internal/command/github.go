@@ -146,7 +146,6 @@ var GithubCommand = &cli.Command{
 						reply(fmt.Sprintf("error: %v", err))
 						return
 					}
-					reply(fmt.Sprintf("task updated: %s", taskID))
 					slog.Info("task updated", "task", taskID)
 
 				case strings.HasPrefix(body, "xagent new"):
@@ -170,7 +169,6 @@ var GithubCommand = &cli.Command{
 					if err != nil {
 						slog.Error("failed to create link", "error", err)
 					}
-					reply(fmt.Sprintf("task created: %s", taskID))
 					slog.Info("task created", "task", taskID)
 				}
 			},
