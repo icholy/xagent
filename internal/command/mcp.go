@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/urfave/cli/v3"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var McpCommand = &cli.Command{
@@ -123,19 +124,23 @@ var McpCommand = &cli.Command{
 					return mcp.NewToolResultError(fmt.Sprintf("failed to get task: %v", err)), nil
 				}
 
-				links, _ := client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: taskID})
+				linksResp, _ := client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: taskID})
 
-				instructions := make([]map[string]string, len(resp.Task.Instructions))
+				marshalOpts := protojson.MarshalOptions{Indent: "  "}
+
+				instructions := make([]json.RawMessage, len(resp.Task.Instructions))
 				for i, inst := range resp.Task.Instructions {
-					instructions[i] = map[string]string{
-						"text": inst.Text,
-						"url":  inst.Url,
-					}
+					instructions[i], _ = marshalOpts.Marshal(inst)
+				}
+
+				links := make([]json.RawMessage, len(linksResp.GetLinks()))
+				for i, link := range linksResp.GetLinks() {
+					links[i], _ = marshalOpts.Marshal(link)
 				}
 
 				task := map[string]any{
 					"instructions": instructions,
-					"links":        links.GetLinks(),
+					"links":        links,
 				}
 
 				data, _ := json.MarshalIndent(task, "", "  ")
