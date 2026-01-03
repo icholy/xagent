@@ -50,8 +50,8 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		"Logs":  logs,
 		"Links": links,
 	}
-	// HTMX requests get partial, regular requests get full page
-	if r.Header.Get("HX-Request") == "true" {
+	// AJAX requests get partial, regular requests get full page
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
 		templates.ExecuteTemplate(w, "task-detail.html", data)
 	} else {
 		templates.ExecuteTemplate(w, "task-page.html", data)
