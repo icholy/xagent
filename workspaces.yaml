@@ -31,3 +31,29 @@ workspaces:
           headers:
             Authorization: "Bearer ${env:METAMCP_API_KEY}"
 
+  cdl:
+    commands:
+      - git -C /repo worktree add /home/vscode/worktree-$XAGENT_TASK_ID master
+    container:
+      image: containeragent
+      working_dir: /home/vscode
+      user: "${sh:id -u}:${sh:id -g}"
+      volumes:
+        - credentials:/mnt/credentials
+        - /var/run/docker.sock:/var/run/docker.sock
+        - /home/icholy/src/github.com/compassdigital/cdl:/repo
+      networks:
+        - metamcp_metamcp-network
+      group_add:
+        - "${sh:getent group docker | cut -d: -f3}"
+      environment:
+        CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
+    agent:
+      cwd: /home/vscode/worktree-$XAGENT_TASK_ID
+      mcp_servers:
+        meta:
+          type: "http"
+          url: "http://metamcp:12008/metamcp/Default/mcp"
+          headers:
+            Authorization: "Bearer ${env:METAMCP_API_KEY}"
+

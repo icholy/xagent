@@ -201,7 +201,8 @@ func (r *Runner) buildContainerConfig(task *xagentv1.Task, ws *workspace.Workspa
 	ctr := &ws.Container
 
 	// Build environment variables
-	env := make([]string, 0, len(ctr.Environment))
+	env := make([]string, 0, len(ctr.Environment)+1)
+	env = append(env, "XAGENT_TASK_ID="+task.Id)
 	for k, v := range ctr.Environment {
 		env = append(env, k+"="+v)
 	}
@@ -211,6 +212,7 @@ func (r *Runner) buildContainerConfig(task *xagentv1.Task, ws *workspace.Workspa
 
 	config := &container.Config{
 		Image: ctr.Image,
+		User:  ctr.User,
 		Labels: map[string]string{
 			"xagent":      "true",
 			"xagent.task": task.Id,

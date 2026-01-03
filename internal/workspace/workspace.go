@@ -60,6 +60,7 @@ func (a *Agent) Validate() error {
 type Container struct {
 	Image       string            `yaml:"image"`
 	WorkingDir  string            `yaml:"working_dir"`
+	User        string            `yaml:"user"`
 	Volumes     []string          `yaml:"volumes"`
 	Networks    []string          `yaml:"networks"`
 	GroupAdd    []string          `yaml:"group_add"`

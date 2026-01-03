@@ -76,7 +76,7 @@ var RunCommand = &cli.Command{
 
 		// Start agent
 		a, err := agent.Start(ctx, agent.Options{
-			Cwd:        cfg.Cwd,
+			Cwd:        os.ExpandEnv(cfg.Cwd),
 			Resume:     cfg.Started,
 			McpServers: cfg.McpServers,
 		})
