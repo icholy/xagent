@@ -85,10 +85,6 @@ var McpCommand = &cli.Command{
 		s.AddTool(
 			mcp.NewTool("report",
 				mcp.WithDescription("Report a problem or log message for the current task"),
-				mcp.WithString("type",
-					mcp.Required(),
-					mcp.Description("Type of report: 'error', 'warning', 'info'"),
-				),
 				mcp.WithString("message",
 					mcp.Required(),
 					mcp.Description("The message to report"),
@@ -96,17 +92,16 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				args := req.GetArguments()
-				logType, _ := args["type"].(string)
 				message, _ := args["message"].(string)
 
-				if logType == "" || message == "" {
-					return mcp.NewToolResultError("type and message are required"), nil
+				if message == "" {
+					return mcp.NewToolResultError("message is required"), nil
 				}
 
 				_, err := client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 					TaskId: taskID,
 					Entries: []*xagentv1.LogEntry{
-						{Type: logType, Content: message},
+						{Type: "llm", Content: message},
 					},
 				})
 				if err != nil {

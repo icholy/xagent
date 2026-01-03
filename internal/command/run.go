@@ -102,7 +102,7 @@ var RunCommand = &cli.Command{
 			"1. Use xagent:create_link for any URLs related to this task (PRs, Jira tickets, GitHub issues, docs).",
 			"   Set created=true if you created the resource, created=false if it already existed.",
 			"",
-			"2. Use xagent:report for any problems, blockers, assumptions, or important observations.",
+			"2. Use xagent:report to log any problems, blockers, assumptions, or important observations.",
 			"",
 			"Only information submitted via these tools will be visible in the task dashboard.",
 			"Do not write a summary - use the tools. If you have nothing to report, do nothing.",

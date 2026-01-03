@@ -12,7 +12,7 @@
     {{range .Logs}}
         <tr>
             <td>{{.CreatedAt.Format "15:04:05"}}</td>
-            <td><span class="status status-{{if eq .Type "error"}}failed{{else}}running{{end}}">{{.Type}}</span></td>
+            <td><span class="status status-{{.Type}}">{{.Type}}</span></td>
             <td>{{.Content}}</td>
         </tr>
     {{end}}
