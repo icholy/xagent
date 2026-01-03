@@ -80,6 +80,7 @@ var RunCommand = &cli.Command{
 		} else {
 			prompt = strings.Join([]string{
 				"Use xagent:get_task to fetch your task instructions and execute them.",
+				"If the task does not have a name, use xagent:update_task to set one.",
 				"",
 				"Each instruction has a 'text' field with the task and an optional 'url' field with the source URL.",
 				"If you have questions, problems, or take no action, respond on the platform from the most recent instruction's url.",
