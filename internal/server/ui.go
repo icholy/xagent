@@ -50,12 +50,23 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		"Logs":  logs,
 		"Links": links,
 	}
-	// AJAX requests get partial, regular requests get full page
-	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
-		templates.ExecuteTemplate(w, "task-detail.html", data)
-	} else {
-		templates.ExecuteTemplate(w, "task-page.html", data)
+	templates.ExecuteTemplate(w, "task-page.html", data)
+}
+
+func (s *Server) handleTaskDetailPartial(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, err := s.tasks.Get(id)
+	if err != nil {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
 	}
+	logs, _ := s.logs.ListByTask(id)
+	links, _ := s.links.ListByTask(id)
+	templates.ExecuteTemplate(w, "task-detail.html", map[string]any{
+		"Task":  task,
+		"Logs":  logs,
+		"Links": links,
+	})
 }
 
 func (s *Server) handleTaskStatus(w http.ResponseWriter, r *http.Request) {

@@ -93,9 +93,7 @@
         }
 
         async function refreshDetail() {
-            const resp = await fetch('/tasks/' + taskId, {
-                headers: {'X-Requested-With': 'XMLHttpRequest'}
-            });
+            const resp = await fetch('/tasks/' + taskId + '/detail');
             document.getElementById('task-detail').innerHTML = await resp.text();
         }
 

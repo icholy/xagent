@@ -52,6 +52,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /tasks", s.handleTaskList)
 	mux.HandleFunc("GET /tasks/{id}", s.handleTaskDetail)
+	mux.HandleFunc("GET /tasks/{id}/detail", s.handleTaskDetailPartial)
 	mux.HandleFunc("GET /tasks/{id}/status", s.handleTaskStatus)
 	mux.HandleFunc("GET /tasks/{id}/logs", s.handleTaskLogs)
 
