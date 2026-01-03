@@ -146,6 +146,7 @@ var McpCommand = &cli.Command{
 				}
 
 				task := map[string]any{
+					"name":         resp.Task.Name,
 					"instructions": instructions,
 					"links":        links,
 				}
@@ -192,6 +193,34 @@ var McpCommand = &cli.Command{
 				}
 
 				return mcp.NewToolResultText(fmt.Sprintf("Task created: %s", resp.Task.Id)), nil
+			},
+		)
+
+		s.AddTool(
+			mcp.NewTool("update_task",
+				mcp.WithDescription("Update the current task's name"),
+				mcp.WithString("name",
+					mcp.Required(),
+					mcp.Description("The new name for the task"),
+				),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				args := req.GetArguments()
+				name, _ := args["name"].(string)
+
+				if name == "" {
+					return mcp.NewToolResultError("name is required"), nil
+				}
+
+				_, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+					Id:   taskID,
+					Name: name,
+				})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to update task: %v", err)), nil
+				}
+
+				return mcp.NewToolResultText("Task updated"), nil
 			},
 		)
 
