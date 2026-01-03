@@ -1,10 +1,23 @@
 <h2>Task {{.Task.ID | printf "%.8s"}}</h2>
 
 <p><strong>Workspace:</strong> {{.Task.Workspace}}</p>
+<p><strong>Status:</strong> {{template "task-status.html" .Task}}</p>
 <p><strong>Created:</strong> {{.Task.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
 
+<div class="task-actions">
+{{if eq .Task.Status "running"}}
+    <button hx-patch="/tasks/{{.Task.ID}}" hx-vals='{"status":"cancelled"}' hx-target="#task-detail" hx-swap="innerHTML" class="btn-danger">Kill</button>
+{{end}}
+{{if or (eq .Task.Status "completed") (eq .Task.Status "failed")}}
+    <button hx-patch="/tasks/{{.Task.ID}}" hx-vals='{"status":"archived"}' hx-target="#task-detail" hx-swap="innerHTML" hx-on::after-request="window.location.href='/'">Archive</button>
+{{end}}
+</div>
+
+<hr>
+
+<h3>Update Task</h3>
 <form hx-patch="/tasks/{{.Task.ID}}" hx-target="#task-detail" hx-swap="innerHTML">
-    <label><strong>Status:</strong></label>
+    <label><strong>Set Status:</strong></label>
     <select name="status">
         <option value="pending" {{if eq .Task.Status "pending"}}selected{{end}}>pending</option>
         <option value="running" {{if eq .Task.Status "running"}}selected{{end}}>running</option>
@@ -19,15 +32,6 @@
 
     <button type="submit">Update Task</button>
 </form>
-
-<div class="task-actions">
-{{if eq .Task.Status "running"}}
-    <button hx-patch="/tasks/{{.Task.ID}}" hx-vals='{"status":"cancelled"}' hx-target="#task-detail" hx-swap="innerHTML" class="btn-danger">Kill</button>
-{{end}}
-{{if or (eq .Task.Status "completed") (eq .Task.Status "failed")}}
-    <button hx-patch="/tasks/{{.Task.ID}}" hx-vals='{"status":"archived"}' hx-target="#task-detail" hx-swap="innerHTML" hx-on::after-request="window.location.href='/'">Archive</button>
-{{end}}
-</div>
 
 <h3>Prompts</h3>
 <ul>
@@ -49,25 +53,4 @@
 {{end}}
 
 <h3>Logs</h3>
-{{if .Logs}}
-<table>
-    <thead>
-        <tr>
-            <th>Time</th>
-            <th>Type</th>
-            <th>Content</th>
-        </tr>
-    </thead>
-    <tbody>
-    {{range .Logs}}
-        <tr>
-            <td>{{.CreatedAt.Format "15:04:05"}}</td>
-            <td><span class="status status-{{if eq .Type "error"}}failed{{else}}running{{end}}">{{.Type}}</span></td>
-            <td>{{.Content}}</td>
-        </tr>
-    {{end}}
-    </tbody>
-</table>
-{{else}}
-<p>No logs yet.</p>
-{{end}}
+{{template "task-logs.html" (dict "TaskID" .Task.ID "Logs" .Logs)}}

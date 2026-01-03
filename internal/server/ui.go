@@ -12,7 +12,18 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
-var templates = template.Must(template.ParseFS(templateFS, "templates/*.html"))
+var templates = template.Must(
+	template.New("").Funcs(template.FuncMap{
+		"dict": func(values ...any) map[string]any {
+			m := make(map[string]any)
+			for i := 0; i < len(values); i += 2 {
+				key, _ := values[i].(string)
+				m[key] = values[i+1]
+			}
+			return m
+		},
+	}).ParseFS(templateFS, "templates/*.html"),
+)
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	tasks, _ := s.tasks.List()
@@ -113,5 +124,24 @@ func (s *Server) handleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 		"Task":  task,
 		"Logs":  logs,
 		"Links": links,
+	})
+}
+
+func (s *Server) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, err := s.tasks.Get(id)
+	if err != nil {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+	templates.ExecuteTemplate(w, "task-status.html", task)
+}
+
+func (s *Server) handleTaskLogs(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	logs, _ := s.logs.ListByTask(id)
+	templates.ExecuteTemplate(w, "task-logs.html", map[string]any{
+		"TaskID": id,
+		"Logs":   logs,
 	})
 }
