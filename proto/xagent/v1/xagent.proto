@@ -91,6 +91,7 @@ message TaskLink {
   string url = 4;
   string title = 5;
   string created_at = 6;
+  bool created = 7;
 }
 
 message CreateLinkRequest {
@@ -98,6 +99,7 @@ message CreateLinkRequest {
   string type = 2;
   string url = 3;
   string title = 4;
+  bool created = 5;
 }
 
 message CreateLinkResponse {

@@ -12,6 +12,7 @@ type Link struct {
 	URL       string    `json:"url"`
 	Title     string    `json:"title"`
 	CreatedAt time.Time `json:"created_at"`
+	Created   bool      `json:"created"`
 }
 
 type LinkRepository struct {
@@ -24,9 +25,9 @@ func NewLinkRepository(db *sql.DB) *LinkRepository {
 
 func (r *LinkRepository) Create(link *Link) error {
 	result, err := r.db.Exec(`
-		INSERT INTO task_links (task_id, type, url, title, created_at)
-		VALUES (?, ?, ?, ?, ?)
-	`, link.TaskID, link.Type, link.URL, link.Title, link.CreatedAt)
+		INSERT INTO task_links (task_id, type, url, title, created_at, created)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, link.TaskID, link.Type, link.URL, link.Title, link.CreatedAt, link.Created)
 	if err != nil {
 		return err
 	}
@@ -36,7 +37,7 @@ func (r *LinkRepository) Create(link *Link) error {
 
 func (r *LinkRepository) ListByTask(taskID string) ([]*Link, error) {
 	rows, err := r.db.Query(`
-		SELECT id, task_id, type, url, title, created_at
+		SELECT id, task_id, type, url, title, created_at, created
 		FROM task_links WHERE task_id = ? ORDER BY created_at ASC
 	`, taskID)
 	if err != nil {
@@ -48,7 +49,7 @@ func (r *LinkRepository) ListByTask(taskID string) ([]*Link, error) {
 	for rows.Next() {
 		var link Link
 		var title sql.NullString
-		if err := rows.Scan(&link.ID, &link.TaskID, &link.Type, &link.URL, &title, &link.CreatedAt); err != nil {
+		if err := rows.Scan(&link.ID, &link.TaskID, &link.Type, &link.URL, &title, &link.CreatedAt, &link.Created); err != nil {
 			return nil, err
 		}
 		link.Title = title.String
@@ -64,7 +65,7 @@ func (r *LinkRepository) Delete(id int64) error {
 
 func (r *LinkRepository) FindByURL(url string) ([]*Link, error) {
 	rows, err := r.db.Query(`
-		SELECT id, task_id, type, url, title, created_at
+		SELECT id, task_id, type, url, title, created_at, created
 		FROM task_links WHERE url = ? ORDER BY created_at DESC
 	`, url)
 	if err != nil {
@@ -76,7 +77,7 @@ func (r *LinkRepository) FindByURL(url string) ([]*Link, error) {
 	for rows.Next() {
 		var link Link
 		var title sql.NullString
-		if err := rows.Scan(&link.ID, &link.TaskID, &link.Type, &link.URL, &title, &link.CreatedAt); err != nil {
+		if err := rows.Scan(&link.ID, &link.TaskID, &link.Type, &link.URL, &title, &link.CreatedAt, &link.Created); err != nil {
 			return nil, err
 		}
 		link.Title = title.String

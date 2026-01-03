@@ -160,6 +160,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		URL:       req.Url,
 		Title:     req.Title,
 		CreatedAt: time.Now(),
+		Created:   req.Created,
 	}
 	if err := s.links.Create(link); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -217,5 +218,6 @@ func linkToProto(l *store.Link) *xagentv1.TaskLink {
 		Url:       l.URL,
 		Title:     l.Title,
 		CreatedAt: l.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Created:   l.Created,
 	}
 }

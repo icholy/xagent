@@ -117,7 +117,8 @@ var RunCommand = &cli.Command{
 		if err := a.Prompt(ctx, strings.Join([]string{
 			"Use the create_link tool to report any external resources related to this task:",
 			"PRs you created or modified, Jira tickets, GitHub issues, documentation pages,",
-			"or any other URLs that are relevant. Use the report tool to log any problems,",
+			"or any other URLs that are relevant. Set created=true if you created the resource,",
+			"or created=false if it already existed. Use the report tool to log any problems,",
 			"blockers, assumptions you made, or important observations.",
 			"If you have nothing to report, do nothing.",
 		}, " ")); err != nil {

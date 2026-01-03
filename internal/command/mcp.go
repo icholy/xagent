@@ -52,22 +52,27 @@ var McpCommand = &cli.Command{
 				mcp.WithString("title",
 					mcp.Description("Optional display title for the link"),
 				),
+				mcp.WithBoolean("created",
+					mcp.Description("True if this task created the resource, false if it's just related"),
+				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				args := req.GetArguments()
 				linkType, _ := args["type"].(string)
 				url, _ := args["url"].(string)
 				title, _ := args["title"].(string)
+				created, _ := args["created"].(bool)
 
 				if linkType == "" || url == "" {
 					return mcp.NewToolResultError("type and url are required"), nil
 				}
 
 				_, err := client.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-					TaskId: taskID,
-					Type:   linkType,
-					Url:    url,
-					Title:  title,
+					TaskId:  taskID,
+					Type:    linkType,
+					Url:     url,
+					Title:   title,
+					Created: created,
 				})
 				if err != nil {
 					return mcp.NewToolResultError(fmt.Sprintf("failed to create link: %v", err)), nil
