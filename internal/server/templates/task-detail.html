@@ -1,5 +1,5 @@
 <div class="task-header">
-    <h2>Task {{.Task.ID | printf "%.8s"}}</h2>
+    <h2>{{if .Task.Name}}{{.Task.Name}}{{else}}Task {{.Task.ID | printf "%.8s"}}{{end}}</h2>
     <div class="task-actions">
     {{if or (eq .Task.Status "running") (eq .Task.Status "pending")}}
         <button onclick="updateTask({status: 'cancelled'})" class="btn-danger">Cancel</button>

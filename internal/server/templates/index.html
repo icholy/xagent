@@ -73,6 +73,7 @@
     <div class="card">
         <h2>New Task</h2>
         <form id="create-form">
+            <input type="text" name="name" placeholder="Name (optional)">
             <input type="text" name="workspace" placeholder="Workspace (e.g. default)" required>
             <textarea name="prompt" placeholder="Prompt" required></textarea>
             <button type="submit">Create Task</button>
@@ -116,6 +117,7 @@
             e.preventDefault();
             const form = e.target;
             await rpc('CreateTask', {
+                name: form.name.value,
                 workspace: form.workspace.value,
                 instructions: [{text: form.prompt.value}]
             });
