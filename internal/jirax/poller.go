@@ -21,9 +21,8 @@ type Comment struct {
 
 type PollerOptions struct {
 	Client    *jira.Client
-	Project   string
 	Username  string
-	Label     string
+	JQL       JQL
 	Interval  time.Duration
 	StateFile string
 	OnComment func(Comment)
@@ -106,7 +105,7 @@ func (p *Poller) Run(ctx context.Context) error {
 }
 
 func (p *Poller) search(ctx context.Context) ([]Comment, error) {
-	jql := "project = " + p.opts.Project + " AND labels = " + p.opts.Label + " AND status != Done"
+	jql := p.opts.JQL.String()
 	issues, _, err := p.opts.Client.Issue.Search(ctx, jql, nil)
 	if err != nil {
 		return nil, err

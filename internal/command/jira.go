@@ -20,12 +20,6 @@ var JiraCommand = &cli.Command{
 	Usage: "Poll Jira for issue comments",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:     "project",
-			Aliases:  []string{"p"},
-			Usage:    "Jira project key",
-			Required: true,
-		},
-		&cli.StringFlag{
 			Name:  "label",
 			Usage: "Label to filter issues by",
 			Value: "xagent",
@@ -71,7 +65,6 @@ var JiraCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		project := cmd.String("project")
 		label := cmd.String("label")
 		interval := cmd.Duration("interval")
 		serverURL := cmd.String("server")
@@ -94,17 +87,18 @@ var JiraCommand = &cli.Command{
 		xagent := xagentclient.New(serverURL)
 
 		slog.Info("starting jira poller",
-			"project", project,
 			"username", username,
 			"label", label,
 			"interval", interval,
 		)
 
 		poller := jirax.NewPoller(jirax.PollerOptions{
-			Client:    jiraClient,
-			Project:   project,
-			Username:  username,
-			Label:     label,
+			Client:   jiraClient,
+			Username: username,
+			JQL: jirax.JQL{
+				Labels:    []string{label},
+				NotStatus: []string{"Done"},
+			},
 			Interval:  interval,
 			StateFile: filepath.Join(dataDir, "jira.json"),
 			OnComment: func(c jirax.Comment) {
