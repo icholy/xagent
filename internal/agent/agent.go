@@ -48,7 +48,7 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 	args := []string{
 		"@anthropic-ai/claude-code",
 		"--dangerously-skip-permissions",
-		"--output-format stream-json",
+		"--output-format", "stream-json",
 		"--strict-mcp-config",
 	}
 
