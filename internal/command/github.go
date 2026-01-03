@@ -114,15 +114,24 @@ var GithubCommand = &cli.Command{
 				body := strings.TrimSpace(c.Body)
 				prompt := fmt.Sprintf("A comment was left at %s: %s", c.PRURL, body)
 
+				reply := func(msg string) {
+					_, _, err := ghClient.Issues.CreateComment(ctx, owner, repoName, c.PRNumber, &github.IssueComment{Body: &msg})
+					if err != nil {
+						slog.Error("failed to reply", "error", err)
+					}
+				}
+
 				switch {
 				case strings.HasPrefix(body, "xagent task"):
 					links, err := xagent.FindLinksByURL(ctx, &xagentv1.FindLinksByURLRequest{Url: c.PRURL})
 					if err != nil {
 						slog.Error("failed to find links", "url", c.PRURL, "error", err)
+						reply(fmt.Sprintf("error: %v", err))
 						return
 					}
 					if len(links.Links) == 0 {
 						slog.Info("no tasks linked to PR", "url", c.PRURL)
+						reply("error: no tasks linked to this PR")
 						return
 					}
 					taskID := links.Links[0].TaskId
@@ -133,8 +142,10 @@ var GithubCommand = &cli.Command{
 					})
 					if err != nil {
 						slog.Error("failed to update task", "task", taskID, "error", err)
+						reply(fmt.Sprintf("error: %v", err))
 						return
 					}
+					reply(fmt.Sprintf("task updated: %s", taskID))
 					slog.Info("task updated", "task", taskID)
 
 				case strings.HasPrefix(body, "xagent new"):
@@ -144,6 +155,7 @@ var GithubCommand = &cli.Command{
 					})
 					if err != nil {
 						slog.Error("failed to create task", "error", err)
+						reply(fmt.Sprintf("error: %v", err))
 						return
 					}
 					taskID := resp.Task.Id
@@ -155,6 +167,7 @@ var GithubCommand = &cli.Command{
 					if err != nil {
 						slog.Error("failed to create link", "error", err)
 					}
+					reply(fmt.Sprintf("task created: %s", taskID))
 					slog.Info("task created", "task", taskID)
 				}
 			},
