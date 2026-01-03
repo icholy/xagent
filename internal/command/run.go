@@ -80,6 +80,7 @@ var RunCommand = &cli.Command{
 				"If you have questions or problems, respond on that platform using the appropriate MCP tools.",
 				"",
 				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
+				"Always use web URLs that users can visit, not API URLs.",
 				"Use xagent:report to log important observations.",
 				"",
 				"Your text responses are NOT visible to users - only tool calls matter.",
