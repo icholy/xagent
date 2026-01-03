@@ -282,6 +282,7 @@ func (r *Runner) copyBinary(ctx context.Context, containerID, image string) erro
 func (r *Runner) copyConfig(ctx context.Context, containerID, taskID string, ws *workspace.Workspace) error {
 	// Convert workspace to agent config format
 	cfg := agent.Config{
+		Cwd:        ws.Agent.Cwd,
 		McpServers: make(map[string]agent.McpServer),
 		Commands:   ws.Commands,
 	}
@@ -293,7 +294,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID, taskID string, ws 
 		Args:    []string{"mcp", "--server", "unix:///var/run/xagent.sock", "--task", taskID},
 	}
 
-	for name, srv := range ws.McpServers {
+	for name, srv := range ws.Agent.McpServers {
 		cfg.McpServers[name] = agent.McpServer{
 			Type:    srv.Type,
 			URL:     srv.URL,

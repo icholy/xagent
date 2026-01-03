@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -12,6 +13,7 @@ var ConfigDir = "/tmp/xagent"
 
 type Config struct {
 	// Runner-provided
+	Cwd        string               `json:"cwd,omitempty"`
 	McpServers map[string]McpServer `json:"mcp_servers,omitempty"`
 	Commands   []string             `json:"commands,omitempty"`
 
@@ -22,12 +24,31 @@ type Config struct {
 }
 
 type McpServer struct {
-	Type    string            `json:"type"`
-	URL     string            `json:"url,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Command string            `json:"command,omitempty"`
-	Args    []string          `json:"args,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
+	Type    string            `json:"type" yaml:"type"`
+	URL     string            `json:"url,omitempty" yaml:"url"`
+	Headers map[string]string `json:"headers,omitempty" yaml:"headers"`
+	Command string            `json:"command,omitempty" yaml:"command"`
+	Args    []string          `json:"args,omitempty" yaml:"args"`
+	Env     map[string]string `json:"env,omitempty" yaml:"env"`
+}
+
+func (m *McpServer) Validate() error {
+	if m.Type == "" {
+		return fmt.Errorf("type is required")
+	}
+	switch m.Type {
+	case "stdio":
+		if m.Command == "" {
+			return fmt.Errorf("command is required for stdio")
+		}
+	case "http", "sse":
+		if m.URL == "" {
+			return fmt.Errorf("url is required for %s", m.Type)
+		}
+	default:
+		return fmt.Errorf("unknown type: %s", m.Type)
+	}
+	return nil
 }
 
 func ConfigPath(taskID string) string {
@@ -43,7 +64,6 @@ func LoadConfig(taskID string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
@@ -56,12 +76,10 @@ func SaveConfig(taskID string, cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return err
 	}
-
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-
 	return os.WriteFile(path, data, 0o666)
 }
 
@@ -71,10 +89,8 @@ func (c *Config) Tar(taskID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-
 	// Create directory entry
 	if err := tw.WriteHeader(&tar.Header{
 		Name:     ConfigDir + "/",
@@ -83,7 +99,6 @@ func (c *Config) Tar(taskID string) ([]byte, error) {
 	}); err != nil {
 		return nil, err
 	}
-
 	// Create file entry
 	if err := tw.WriteHeader(&tar.Header{
 		Name: ConfigPath(taskID),
@@ -98,6 +113,5 @@ func (c *Config) Tar(taskID string) ([]byte, error) {
 	if err := tw.Close(); err != nil {
 		return nil, err
 	}
-
 	return buf.Bytes(), nil
 }

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/expandvar"
 	"gopkg.in/yaml.v3"
 )
@@ -27,16 +28,28 @@ func (c *Config) Validate() error {
 }
 
 type Workspace struct {
-	Container  Container            `yaml:"container"`
-	McpServers map[string]McpServer `yaml:"mcp_servers"`
-	Commands   []string             `yaml:"commands"`
+	Container Container `yaml:"container"`
+	Agent     Agent     `yaml:"agent"`
+	Commands  []string  `yaml:"commands"`
+}
+
+type Agent struct {
+	Cwd        string                    `yaml:"cwd"`
+	McpServers map[string]agent.McpServer `yaml:"mcp_servers"`
 }
 
 func (w *Workspace) Validate() error {
 	if err := w.Container.Validate(); err != nil {
 		return fmt.Errorf("container: %w", err)
 	}
-	for name, srv := range w.McpServers {
+	if err := w.Agent.Validate(); err != nil {
+		return fmt.Errorf("agent: %w", err)
+	}
+	return nil
+}
+
+func (a *Agent) Validate() error {
+	for name, srv := range a.McpServers {
 		if err := srv.Validate(); err != nil {
 			return fmt.Errorf("mcp_servers.%s: %w", name, err)
 		}
@@ -56,34 +69,6 @@ type Container struct {
 func (c *Container) Validate() error {
 	if c.Image == "" {
 		return fmt.Errorf("image is required")
-	}
-	return nil
-}
-
-type McpServer struct {
-	Type    string            `yaml:"type"`
-	URL     string            `yaml:"url"`
-	Headers map[string]string `yaml:"headers"`
-	Command string            `yaml:"command"`
-	Args    []string          `yaml:"args"`
-	Env     map[string]string `yaml:"env"`
-}
-
-func (m *McpServer) Validate() error {
-	if m.Type == "" {
-		return fmt.Errorf("type is required")
-	}
-	switch m.Type {
-	case "stdio":
-		if m.Command == "" {
-			return fmt.Errorf("command is required for stdio")
-		}
-	case "http", "sse":
-		if m.URL == "" {
-			return fmt.Errorf("url is required for %s", m.Type)
-		}
-	default:
-		return fmt.Errorf("unknown type: %s", m.Type)
 	}
 	return nil
 }

@@ -19,11 +19,6 @@ var RunCommand = &cli.Command{
 	Usage: "Run an agent for a task",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:    "cwd",
-			Aliases: []string{"C"},
-			Usage:   "Working directory for the agent",
-		},
-		&cli.StringFlag{
 			Name:    "server",
 			Aliases: []string{"s"},
 			Usage:   "C2 server URL",
@@ -37,11 +32,6 @@ var RunCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		cwd := cmd.String("cwd")
-		if cwd == "" {
-			cwd, _ = os.Getwd()
-		}
-
 		taskID := cmd.String("task")
 		client := xagentclient.New(cmd.String("server"))
 
@@ -50,7 +40,9 @@ var RunCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
+
 		slog.Info("loaded config",
+			"cwd", cfg.Cwd,
 			"commands", cfg.Commands,
 			"command_index", cfg.CommandIndex,
 			"session_id", cfg.SessionID,
@@ -88,7 +80,7 @@ var RunCommand = &cli.Command{
 
 		// Start agent
 		a, err := agent.Start(ctx, agent.Options{
-			Cwd:        cwd,
+			Cwd:        cfg.Cwd,
 			SessionID:  cfg.SessionID,
 			McpServers: cfg.McpServers,
 		})
