@@ -284,11 +284,6 @@ func (r *Runner) copyConfig(ctx context.Context, containerID, taskID string, ws 
 	cfg := agent.Config{
 		McpServers: make(map[string]agent.McpServer),
 		Commands:   ws.Commands,
-		ACP: agent.ACP{
-			Command:          ws.ACP.Command,
-			Cwd:              ws.ACP.Cwd,
-			ClaudeResumeHack: ws.ACP.ClaudeResumeHack,
-		},
 	}
 
 	// Inject xagent MCP server for link creation
@@ -299,9 +294,6 @@ func (r *Runner) copyConfig(ctx context.Context, containerID, taskID string, ws 
 
 	for name, srv := range ws.McpServers {
 		cfg.McpServers[name] = agent.McpServer{
-			Type:    srv.Type,
-			URL:     srv.URL,
-			Headers: srv.Headers,
 			Command: srv.Command,
 			Args:    srv.Args,
 			Env:     srv.Env,

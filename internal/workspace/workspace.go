@@ -29,16 +29,12 @@ func (c *Config) Validate() error {
 type Workspace struct {
 	Container  Container            `yaml:"container"`
 	McpServers map[string]McpServer `yaml:"mcp_servers"`
-	ACP        ACP                  `yaml:"acp"`
 	Commands   []string             `yaml:"commands"`
 }
 
 func (w *Workspace) Validate() error {
 	if err := w.Container.Validate(); err != nil {
 		return fmt.Errorf("container: %w", err)
-	}
-	if err := w.ACP.Validate(); err != nil {
-		return fmt.Errorf("acp: %w", err)
 	}
 	return nil
 }
@@ -55,19 +51,6 @@ type Container struct {
 func (c *Container) Validate() error {
 	if c.Image == "" {
 		return fmt.Errorf("image is required")
-	}
-	return nil
-}
-
-type ACP struct {
-	Command          []string `yaml:"command"`
-	Cwd              string   `yaml:"cwd"`
-	ClaudeResumeHack bool     `yaml:"claude_resume_hack"` // use _meta.claudeCode.options.resume
-}
-
-func (a *ACP) Validate() error {
-	if len(a.Command) == 0 {
-		return fmt.Errorf("command is required")
 	}
 	return nil
 }

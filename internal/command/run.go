@@ -10,7 +10,6 @@ import (
 
 	"github.com/icholy/xagent/internal/agent"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"github.com/icholy/xagent/internal/xacp"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
@@ -87,19 +86,11 @@ var RunCommand = &cli.Command{
 			return nil
 		}
 
-		// Setup logger
-		logger := xacp.NewUpdateLogger(xacp.UpdateLoggerOptions{
-			Log:       slog.Default(),
-			BatchSize: 1,
-		})
-
 		// Start agent
 		a, err := agent.Start(ctx, agent.Options{
 			Cwd:        cwd,
 			SessionID:  cfg.SessionID,
 			McpServers: cfg.McpServers,
-			ACP:        cfg.ACP,
-			OnUpdate:   logger.Update,
 		})
 		if err != nil {
 			return err
@@ -110,8 +101,6 @@ var RunCommand = &cli.Command{
 		if err := a.Prompt(ctx, prompt); err != nil {
 			return err
 		}
-
-		logger.Flush()
 
 		// Ask agent to report links and problems
 		if err := a.Prompt(ctx, strings.Join([]string{
