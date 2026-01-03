@@ -101,19 +101,13 @@
             document.getElementById('task-detail').innerHTML = await resp.text();
         }
 
-        async function refreshStatus() {
-            const resp = await fetch('/tasks/' + taskId + '/status');
-            const el = document.getElementById('task-status');
-            if (el) el.outerHTML = await resp.text();
-        }
-
         async function refreshLogs() {
             const resp = await fetch('/tasks/' + taskId + '/logs');
             const el = document.getElementById('task-logs');
             if (el) el.outerHTML = await resp.text();
         }
 
-        setInterval(refreshStatus, 3000);
+        setInterval(refreshDetail, 3000);
         setInterval(refreshLogs, 3000);
     </script>
 </body>

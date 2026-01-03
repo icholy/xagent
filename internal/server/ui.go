@@ -69,16 +69,6 @@ func (s *Server) handleTaskDetailPartial(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func (s *Server) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	task, err := s.tasks.Get(id)
-	if err != nil {
-		http.Error(w, "Task not found", http.StatusNotFound)
-		return
-	}
-	templates.ExecuteTemplate(w, "task-status.html", task)
-}
-
 func (s *Server) handleTaskLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	logs, _ := s.logs.ListByTask(id)
