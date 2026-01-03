@@ -113,6 +113,58 @@ func (r *Runner) Poll(ctx context.Context) error {
 	return nil
 }
 
+func (r *Runner) Reconcile(ctx context.Context) error {
+	// Find all exited xagent containers
+	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
+		All:     true,
+		Filters: filters.NewArgs(filters.Arg("label", "xagent=true"), filters.Arg("status", "exited")),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	for _, c := range containers {
+		taskID := c.Labels["xagent.task"]
+		if taskID == "" {
+			continue
+		}
+
+		// Check if task is still running
+		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+		if err != nil {
+			slog.Error("failed to get task", "task", taskID, "error", err)
+			continue
+		}
+		if task.Task.Status != "running" {
+			continue
+		}
+
+		// Inspect container to get exit code
+		info, err := r.docker.ContainerInspect(ctx, c.ID)
+		if err != nil {
+			slog.Error("failed to inspect container", "task", taskID, "error", err)
+			continue
+		}
+
+		exitCode := info.State.ExitCode
+		if exitCode == 0 {
+			slog.Info("reconcile: container exited successfully", "task", taskID)
+			r.log(ctx, taskID, "info", "container exited successfully (reconciled)")
+			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Status: "completed"}); err != nil {
+				slog.Error("failed to update task status", "task", taskID, "error", err)
+			}
+		} else {
+			slog.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
+			r.log(ctx, taskID, "error", fmt.Sprintf("container exited with code %d (reconciled)", exitCode))
+			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Status: "failed"}); err != nil {
+				slog.Error("failed to update task status", "task", taskID, "error", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task) error {
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,

@@ -80,6 +80,11 @@ var RunnerCommand = &cli.Command{
 			}
 		}()
 
+		// Reconcile any tasks that were running when the runner was stopped
+		if err := r.Reconcile(ctx); err != nil {
+			slog.Error("failed to reconcile", "error", err)
+		}
+
 		for {
 			if err := r.Poll(ctx); err != nil {
 				slog.Error("failed to poll tasks", "error", err)
