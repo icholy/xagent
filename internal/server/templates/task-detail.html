@@ -11,6 +11,7 @@
 </div>
 
 <p><strong>Workspace:</strong> {{.Task.Workspace}}</p>
+{{if .Parent}}<p><strong>Parent:</strong> <a href="/tasks/{{.Parent.ID}}">{{if .Parent.Name}}{{.Parent.Name}}{{else}}{{.Parent.ID | printf "%.8s"}}{{end}}</a></p>{{end}}
 <p><strong>Status:</strong> {{template "task-status.html" .Task}}</p>
 <p><strong>Created:</strong> {{.Task.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
 

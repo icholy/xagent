@@ -52,6 +52,9 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		"Links":    links,
 		"Children": children,
 	}
+	if task.Parent != "" {
+		data["Parent"], _ = s.tasks.Get(task.Parent)
+	}
 	templates.ExecuteTemplate(w, "task-page.html", data)
 }
 
@@ -64,11 +67,15 @@ func (s *Server) handleTaskDetailPartial(w http.ResponseWriter, r *http.Request)
 	}
 	logs, _ := s.logs.ListByTask(id)
 	links, _ := s.links.ListByTask(id)
-	templates.ExecuteTemplate(w, "task-detail.html", map[string]any{
+	data := map[string]any{
 		"Task":  task,
 		"Logs":  logs,
 		"Links": links,
-	})
+	}
+	if task.Parent != "" {
+		data["Parent"], _ = s.tasks.Get(task.Parent)
+	}
+	templates.ExecuteTemplate(w, "task-detail.html", data)
 }
 
 func (s *Server) handleTaskLogs(w http.ResponseWriter, r *http.Request) {
