@@ -4,7 +4,8 @@ client: Client
 c2: C2 Server
 runner: Runner
 agent: Agent\n(Container)
-claude: Claude Code
+claude: Claude CLI
+mcp: xagent MCP
 
 client -> c2: CreateTask
 c2 -> c2: Store task (pending)
@@ -18,12 +19,18 @@ runner -> c2: UpdateTask (running)
 agent -> c2: GetTask
 c2 -> agent: Task details
 
-agent -> claude: Create session
-claude -> agent: Session ID
+agent -> agent: Run setup commands
 
-agent -> claude: Execute prompt
-claude -> claude: Run tools, MCP, etc.
-claude -> agent: Result
+agent -> claude: npx claude-code --print "prompt"
+claude -> claude: Run tools
+claude -> mcp: create_link / report
+mcp -> c2: CreateLink / UploadLogs
+claude -> agent: Exit
 
-agent -> c2: UploadLogs
-agent -> c2: UpdateTask (completed)
+agent -> c2: GetTask (poll for new prompts)
+c2 -> agent: No new prompts
+
+agent -> agent: Exit (code 0)
+
+runner -> runner: Monitor detects container exit
+runner -> c2: UpdateTask (completed)
