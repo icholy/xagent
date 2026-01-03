@@ -101,6 +101,7 @@ func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) 
 }
 
 type TaskUpdate struct {
+	Name            string
 	Status          TaskStatus
 	AddInstructions []Instruction
 }
@@ -135,6 +136,16 @@ func (r *TaskRepository) Update(id string, update TaskUpdate) error {
 		_, err = tx.Exec(`
 			UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
 		`, data, time.Now(), id)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update name if provided
+	if update.Name != "" {
+		_, err = tx.Exec(`
+			UPDATE tasks SET name = ?, updated_at = ? WHERE id = ?
+		`, update.Name, time.Now(), id)
 		if err != nil {
 			return err
 		}

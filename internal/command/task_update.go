@@ -21,6 +21,11 @@ var TaskUpdateCommand = &cli.Command{
 			Value:   "http://localhost:8080",
 		},
 		&cli.StringFlag{
+			Name:    "name",
+			Aliases: []string{"n"},
+			Usage:   "Set task name",
+		},
+		&cli.StringFlag{
 			Name:  "status",
 			Usage: "Set task status (pending, running, completed, failed)",
 		},
@@ -36,10 +41,11 @@ var TaskUpdateCommand = &cli.Command{
 			return fmt.Errorf("task ID is required")
 		}
 
+		name := cmd.String("name")
 		status := cmd.String("status")
 		texts := cmd.StringSlice("add-instruction")
 
-		if status == "" && len(texts) == 0 {
+		if name == "" && status == "" && len(texts) == 0 {
 			return fmt.Errorf("nothing to update")
 		}
 
@@ -51,6 +57,7 @@ var TaskUpdateCommand = &cli.Command{
 		client := xagentclient.New(cmd.String("server"))
 		if _, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 			Id:              taskID,
+			Name:            name,
 			Status:          status,
 			AddInstructions: instructions,
 		}); err != nil {

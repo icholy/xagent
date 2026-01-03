@@ -137,13 +137,14 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 	}
 
 	if err := s.tasks.Update(req.Id, store.TaskUpdate{
+		Name:            req.Name,
 		Status:          store.TaskStatus(req.Status),
 		AddInstructions: instructions,
 	}); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	s.log.Info("task updated", "id", req.Id, "status", req.Status, "instructions_added", len(req.AddInstructions))
+	s.log.Info("task updated", "id", req.Id, "name", req.Name, "status", req.Status, "instructions_added", len(req.AddInstructions))
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 
