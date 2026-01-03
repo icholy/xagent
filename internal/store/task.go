@@ -27,6 +27,7 @@ type Instruction struct {
 type Task struct {
 	ID           string        `json:"id"`
 	Name         string        `json:"name"`
+	Parent       string        `json:"parent"`
 	Workspace    string        `json:"workspace"`
 	Instructions []Instruction `json:"instructions"`
 	Status       TaskStatus    `json:"status"`
@@ -50,15 +51,15 @@ func (r *TaskRepository) Create(task *Task) error {
 
 	now := time.Now()
 	_, err = r.db.Exec(`
-		INSERT INTO tasks (id, name, workspace, prompts, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, task.ID, task.Name, task.Workspace, instructions, task.Status, now, now)
+		INSERT INTO tasks (id, name, parent, workspace, prompts, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, task.ID, task.Name, task.Parent, task.Workspace, instructions, task.Status, now, now)
 	return err
 }
 
 func (r *TaskRepository) Get(id string) (*Task, error) {
 	row := r.db.QueryRow(`
-		SELECT id, name, workspace, prompts, status, created_at, updated_at
+		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE id = ?
 	`, id)
 	return r.scanTask(row)
@@ -66,7 +67,7 @@ func (r *TaskRepository) Get(id string) (*Task, error) {
 
 func (r *TaskRepository) List() ([]*Task, error) {
 	rows, err := r.db.Query(`
-		SELECT id, name, workspace, prompts, status, created_at, updated_at
+		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE status != 'archived' ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -88,7 +89,7 @@ func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) 
 		args[i] = s
 	}
 	query := fmt.Sprintf(`
-		SELECT id, name, workspace, prompts, status, created_at, updated_at
+		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE status IN (%s) ORDER BY created_at DESC
 	`, strings.Join(placeholders, ","))
 	rows, err := r.db.Query(query, args...)
@@ -176,6 +177,7 @@ func (r *TaskRepository) scanTask(row *sql.Row) (*Task, error) {
 	err := row.Scan(
 		&task.ID,
 		&task.Name,
+		&task.Parent,
 		&task.Workspace,
 		&instructions,
 		&task.Status,
@@ -202,6 +204,7 @@ func (r *TaskRepository) scanTasks(rows *sql.Rows) ([]*Task, error) {
 		err := rows.Scan(
 			&task.ID,
 			&task.Name,
+			&task.Parent,
 			&task.Workspace,
 			&instructions,
 			&task.Status,

@@ -183,6 +183,7 @@ var McpCommand = &cli.Command{
 
 				resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 					Name:      name,
+					Parent:    taskID,
 					Workspace: workspace,
 					Instructions: []*xagentv1.Instruction{
 						{Text: instruction, Url: url},

@@ -25,6 +25,7 @@ func migrate(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS tasks (
 			id            TEXT PRIMARY KEY,
 			name          TEXT NOT NULL DEFAULT '',
+			parent        TEXT NOT NULL DEFAULT '',
 			workspace     TEXT NOT NULL,
 			prompts       TEXT NOT NULL,
 			status        TEXT NOT NULL,

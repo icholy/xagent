@@ -26,11 +26,12 @@ message Instruction {
 message Task {
   string id = 1;
   string name = 2;
-  string workspace = 3;
-  repeated Instruction instructions = 4;
-  string status = 5;
-  google.protobuf.Timestamp created_at = 6;
-  google.protobuf.Timestamp updated_at = 7;
+  string parent = 3;
+  string workspace = 4;
+  repeated Instruction instructions = 5;
+  string status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
 }
 
 message McpServer {
@@ -51,8 +52,9 @@ message ListTasksResponse {
 message CreateTaskRequest {
   string id = 1;
   string name = 2;
-  string workspace = 3;
-  repeated Instruction instructions = 4;
+  string parent = 3;
+  string workspace = 4;
+  repeated Instruction instructions = 5;
 }
 
 message CreateTaskResponse {
