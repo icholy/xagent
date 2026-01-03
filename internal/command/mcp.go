@@ -225,6 +225,29 @@ var McpCommand = &cli.Command{
 			},
 		)
 
+		s.AddTool(
+			mcp.NewTool("list_child_tasks",
+				mcp.WithDescription("List child tasks spawned by the current task"),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				resp, err := client.ListChildTasks(ctx, &xagentv1.ListChildTasksRequest{
+					ParentId: taskID,
+				})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to list children: %v", err)), nil
+				}
+
+				marshalOpts := protojson.MarshalOptions{Indent: "  "}
+				tasks := make([]json.RawMessage, len(resp.Tasks))
+				for i, t := range resp.Tasks {
+					tasks[i], _ = marshalOpts.Marshal(t)
+				}
+
+				data, _ := json.MarshalIndent(map[string]any{"tasks": tasks}, "", "  ")
+				return mcp.NewToolResultText(string(data)), nil
+			},
+		)
+
 		return server.ServeStdio(s)
 	},
 }

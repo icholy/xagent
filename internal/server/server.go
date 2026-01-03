@@ -85,6 +85,21 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 	return resp, nil
 }
 
+func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
+	tasks, err := s.tasks.ListChildren(req.ParentId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	resp := &xagentv1.ListChildTasksResponse{
+		Tasks: make([]*xagentv1.Task, len(tasks)),
+	}
+	for i, t := range tasks {
+		resp.Tasks[i] = taskToProto(t)
+	}
+	return resp, nil
+}
+
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	id := req.Id
 	if id == "" {
