@@ -63,6 +63,12 @@ var GithubCommand = &cli.Command{
 			Usage:   "Data directory for state persistence",
 			Value:   "data",
 		},
+		&cli.StringFlag{
+			Name:     "workspace",
+			Aliases:  []string{"w"},
+			Usage:    "Workspace for new tasks",
+			Required: true,
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		repo := cmd.String("repo")
@@ -72,6 +78,7 @@ var GithubCommand = &cli.Command{
 		interval := cmd.Duration("interval")
 		serverURL := cmd.String("server")
 		dataDir := cmd.String("data")
+		workspace := cmd.String("workspace")
 
 		parts := strings.SplitN(repo, "/", 2)
 		if len(parts) != 2 {
@@ -104,36 +111,52 @@ var GithubCommand = &cli.Command{
 			Interval:  interval,
 			StateFile: filepath.Join(dataDir, "github.json"),
 			OnComment: func(c githubx.Comment) {
-				if !strings.HasPrefix(strings.TrimSpace(c.Body), "github fix") {
-					return
-				}
+				body := strings.TrimSpace(c.Body)
+				prompt := fmt.Sprintf("A comment was left at %s: %s", c.PRURL, body)
 
-				slog.Info("found fix command", "pr", c.PRNumber)
+				switch {
+				case strings.HasPrefix(body, "xagent task"):
+					links, err := xagent.FindLinksByURL(ctx, &xagentv1.FindLinksByURLRequest{Url: c.PRURL})
+					if err != nil {
+						slog.Error("failed to find links", "url", c.PRURL, "error", err)
+						return
+					}
+					if len(links.Links) == 0 {
+						slog.Info("no tasks linked to PR", "url", c.PRURL)
+						return
+					}
+					taskID := links.Links[0].TaskId
+					_, err = xagent.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+						Id:         taskID,
+						Status:     "pending",
+						AddPrompts: []string{prompt},
+					})
+					if err != nil {
+						slog.Error("failed to update task", "task", taskID, "error", err)
+						return
+					}
+					slog.Info("task updated", "task", taskID)
 
-				links, err := xagent.FindLinksByURL(ctx, &xagentv1.FindLinksByURLRequest{Url: c.PRURL})
-				if err != nil {
-					slog.Error("failed to find links", "url", c.PRURL, "error", err)
-					return
+				case strings.HasPrefix(body, "xagent new"):
+					resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+						Workspace: workspace,
+						Prompts:   []string{prompt},
+					})
+					if err != nil {
+						slog.Error("failed to create task", "error", err)
+						return
+					}
+					taskID := resp.Task.Id
+					_, err = xagent.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+						TaskId: taskID,
+						Type:   "pr",
+						Url:    c.PRURL,
+					})
+					if err != nil {
+						slog.Error("failed to create link", "error", err)
+					}
+					slog.Info("task created", "task", taskID)
 				}
-				if len(links.Links) == 0 {
-					slog.Info("no tasks linked to PR", "url", c.PRURL)
-					return
-				}
-
-				taskID := links.Links[0].TaskId
-				_, err = xagent.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-					Id:     taskID,
-					Status: "pending",
-					AddPrompts: []string{
-						fmt.Sprintf("The following linked PR contains comments indicating that it needs to be fixed: %s", c.PRURL),
-					},
-				})
-				if err != nil {
-					slog.Error("failed to update task", "task", taskID, "error", err)
-					return
-				}
-
-				slog.Info("task updated", "task", taskID)
 			},
 		})
 

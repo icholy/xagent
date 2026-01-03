@@ -73,6 +73,12 @@ var JiraCommand = &cli.Command{
 			Usage:   "Data directory for state persistence",
 			Value:   "data",
 		},
+		&cli.StringFlag{
+			Name:     "workspace",
+			Aliases:  []string{"w"},
+			Usage:    "Workspace for new tasks",
+			Required: true,
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		project := cmd.String("project")
@@ -85,6 +91,7 @@ var JiraCommand = &cli.Command{
 		email := cmd.String("email")
 		token := cmd.String("token")
 		dataDir := cmd.String("data")
+		workspace := cmd.String("workspace")
 
 		tp := jira.BasicAuthTransport{
 			Username: email,
@@ -115,36 +122,52 @@ var JiraCommand = &cli.Command{
 			Interval:  interval,
 			StateFile: filepath.Join(dataDir, "jira.json"),
 			OnComment: func(c jirax.Comment) {
-				if !strings.HasPrefix(strings.TrimSpace(c.Body), "jira fix") {
-					return
-				}
+				body := strings.TrimSpace(c.Body)
+				prompt := fmt.Sprintf("A comment was left at %s: %s", c.IssueURL, body)
 
-				slog.Info("found fix command", "issue", c.IssueKey)
+				switch {
+				case strings.HasPrefix(body, "xagent task"):
+					links, err := xagent.FindLinksByURL(ctx, &xagentv1.FindLinksByURLRequest{Url: c.IssueURL})
+					if err != nil {
+						slog.Error("failed to find links", "url", c.IssueURL, "error", err)
+						return
+					}
+					if len(links.Links) == 0 {
+						slog.Info("no tasks linked to issue", "url", c.IssueURL)
+						return
+					}
+					taskID := links.Links[0].TaskId
+					_, err = xagent.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+						Id:         taskID,
+						Status:     "pending",
+						AddPrompts: []string{prompt},
+					})
+					if err != nil {
+						slog.Error("failed to update task", "task", taskID, "error", err)
+						return
+					}
+					slog.Info("task updated", "task", taskID)
 
-				links, err := xagent.FindLinksByURL(ctx, &xagentv1.FindLinksByURLRequest{Url: c.IssueURL})
-				if err != nil {
-					slog.Error("failed to find links", "url", c.IssueURL, "error", err)
-					return
+				case strings.HasPrefix(body, "xagent new"):
+					resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+						Workspace: workspace,
+						Prompts:   []string{prompt},
+					})
+					if err != nil {
+						slog.Error("failed to create task", "error", err)
+						return
+					}
+					taskID := resp.Task.Id
+					_, err = xagent.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+						TaskId: taskID,
+						Type:   "jira",
+						Url:    c.IssueURL,
+					})
+					if err != nil {
+						slog.Error("failed to create link", "error", err)
+					}
+					slog.Info("task created", "task", taskID)
 				}
-				if len(links.Links) == 0 {
-					slog.Info("no tasks linked to issue", "url", c.IssueURL)
-					return
-				}
-
-				taskID := links.Links[0].TaskId
-				_, err = xagent.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-					Id:     taskID,
-					Status: "pending",
-					AddPrompts: []string{
-						fmt.Sprintf("The following linked Jira issue contains comments indicating that it needs to be fixed: %s", c.IssueURL),
-					},
-				})
-				if err != nil {
-					slog.Error("failed to update task", "task", taskID, "error", err)
-					return
-				}
-
-				slog.Info("task updated", "task", taskID)
 			},
 		})
 
