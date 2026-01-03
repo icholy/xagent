@@ -15,10 +15,9 @@
 
 <hr>
 
-<h3>Update Task</h3>
-<form hx-patch="/tasks/{{.Task.ID}}" hx-target="#task-detail" hx-swap="innerHTML">
-    <label><strong>Set Status:</strong></label>
-    <select name="status">
+<h3>Set Status</h3>
+<form hx-patch="/tasks/{{.Task.ID}}" hx-target="#task-detail" hx-swap="innerHTML" style="display: flex; gap: 10px; align-items: center;">
+    <select name="status" style="flex: 1; margin-bottom: 0;">
         <option value="pending" {{if eq .Task.Status "pending"}}selected{{end}}>pending</option>
         <option value="running" {{if eq .Task.Status "running"}}selected{{end}}>running</option>
         <option value="completed" {{if eq .Task.Status "completed"}}selected{{end}}>completed</option>
@@ -26,11 +25,14 @@
         <option value="cancelled" {{if eq .Task.Status "cancelled"}}selected{{end}}>cancelled</option>
         <option value="archived" {{if eq .Task.Status "archived"}}selected{{end}}>archived</option>
     </select>
+    <button type="submit">Set Status</button>
+</form>
 
-    <label><strong>Add Prompt:</strong></label>
-    <textarea name="prompt" placeholder="Add a new prompt (optional)"></textarea>
-
-    <button type="submit">Update Task</button>
+<h3>Add Prompt</h3>
+<form hx-patch="/tasks/{{.Task.ID}}" hx-target="#task-detail" hx-swap="innerHTML">
+    <input type="hidden" name="status" value="pending">
+    <textarea name="prompt" placeholder="Enter a new prompt..." required></textarea>
+    <button type="submit">Add Prompt</button>
 </form>
 
 <h3>Prompts</h3>

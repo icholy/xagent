@@ -145,3 +145,4 @@ func (s *Server) handleTaskLogs(w http.ResponseWriter, r *http.Request) {
 		"Logs":   logs,
 	})
 }
+
