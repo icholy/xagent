@@ -23,7 +23,6 @@ type PollerOptions struct {
 	Client    *jira.Client
 	Project   string
 	Username  string
-	Keyword   string
 	Label     string
 	Interval  time.Duration
 	StateFile string
@@ -131,9 +130,6 @@ func (p *Poller) search(ctx context.Context) ([]Comment, error) {
 		for _, c := range issueDetail.Fields.Comments.Comments {
 			if !strings.EqualFold(c.Author.DisplayName, p.opts.Username) &&
 				!strings.EqualFold(c.Author.EmailAddress, p.opts.Username) {
-				continue
-			}
-			if !strings.Contains(strings.ToLower(c.Body), strings.ToLower(p.opts.Keyword)) {
 				continue
 			}
 			comments = append(comments, Comment{

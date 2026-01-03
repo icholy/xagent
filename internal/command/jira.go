@@ -26,17 +26,6 @@ var JiraCommand = &cli.Command{
 			Required: true,
 		},
 		&cli.StringFlag{
-			Name:     "username",
-			Aliases:  []string{"u"},
-			Usage:    "Jira username to filter by",
-			Required: true,
-		},
-		&cli.StringFlag{
-			Name:  "keyword",
-			Usage: "Keyword to search for in comments",
-			Value: "xagent",
-		},
-		&cli.StringFlag{
 			Name:  "label",
 			Usage: "Label to filter issues by",
 			Value: "xagent",
@@ -58,8 +47,9 @@ var JiraCommand = &cli.Command{
 			Sources: cli.EnvVars("JIRA_BASE_URL"),
 		},
 		&cli.StringFlag{
-			Name:    "email",
-			Usage:   "Jira account email",
+			Name:    "username",
+			Aliases: []string{"u"},
+			Usage:   "Jira username (email)",
 			Sources: cli.EnvVars("JIRA_USERNAME"),
 		},
 		&cli.StringFlag{
@@ -82,19 +72,17 @@ var JiraCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		project := cmd.String("project")
-		username := cmd.String("username")
-		keyword := cmd.String("keyword")
 		label := cmd.String("label")
 		interval := cmd.Duration("interval")
 		serverURL := cmd.String("server")
 		jiraURL := cmd.String("url")
-		email := cmd.String("email")
+		username := cmd.String("username")
 		token := cmd.String("token")
 		dataDir := cmd.String("data")
 		workspace := cmd.String("workspace")
 
 		tp := jira.BasicAuthTransport{
-			Username: email,
+			Username: username,
 			APIToken: token,
 		}
 
@@ -108,7 +96,6 @@ var JiraCommand = &cli.Command{
 		slog.Info("starting jira poller",
 			"project", project,
 			"username", username,
-			"keyword", keyword,
 			"label", label,
 			"interval", interval,
 		)
@@ -117,7 +104,6 @@ var JiraCommand = &cli.Command{
 			Client:    jiraClient,
 			Project:   project,
 			Username:  username,
-			Keyword:   keyword,
 			Label:     label,
 			Interval:  interval,
 			StateFile: filepath.Join(dataDir, "jira.json"),
