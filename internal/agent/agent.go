@@ -60,7 +60,12 @@ func (a *Agent) Close() error {
 func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 	a.log.Info("sending prompt", "text", prompt)
 
-	args := []string{"-p", "--dangerously-skip-permissions"}
+	args := []string{
+		"@anthropic-ai/claude-code",
+		"--print",
+		"--dangerously-skip-permissions",
+		"--strict-mcp-config",
+	}
 
 	// Add MCP config if present
 	if len(a.mcpServers) > 0 {
@@ -80,7 +85,7 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 
 	args = append(args, prompt)
 
-	cmd := exec.CommandContext(ctx, "claude", args...)
+	cmd := exec.CommandContext(ctx, "npx", args...)
 	cmd.Dir = a.cwd
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
