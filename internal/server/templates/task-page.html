@@ -100,6 +100,10 @@
     </div>
 
     <div class="card">
+        {{template "task-children.html" .}}
+    </div>
+
+    <div class="card">
         <h3>Logs</h3>
         {{template "task-logs.html" (dict "TaskID" .Task.ID "Logs" .Logs)}}
     </div>
@@ -145,8 +149,15 @@
             if (el) el.outerHTML = await resp.text();
         }
 
+        async function refreshChildren() {
+            const resp = await fetch('/tasks/' + taskId + '/children');
+            const el = document.getElementById('task-children');
+            if (el) el.outerHTML = await resp.text();
+        }
+
         setInterval(refreshDetail, 3000);
         setInterval(refreshLogs, 3000);
+        setInterval(refreshChildren, 3000);
     </script>
 </body>
 </html>

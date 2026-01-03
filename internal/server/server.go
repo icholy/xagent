@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /tasks/{id}", s.handleTaskDetail)
 	mux.HandleFunc("GET /tasks/{id}/detail", s.handleTaskDetailPartial)
 	mux.HandleFunc("GET /tasks/{id}/logs", s.handleTaskLogs)
+	mux.HandleFunc("GET /tasks/{id}/children", s.handleTaskChildren)
 
 	return mux
 }

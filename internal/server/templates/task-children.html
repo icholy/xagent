@@ -1,0 +1,20 @@
+<div id="task-children">
+{{if .Children}}
+<h3>Child Tasks</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Workspace</th>
+            <th>Status</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Children}}
+        {{template "task-row.html" .}}
+        {{end}}
+    </tbody>
+</table>
+{{end}}
+</div>
