@@ -212,6 +212,13 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 		}
 		slog.Info("starting existing container", "task", task.Id, "container", containerName)
 		containerID = c.ID
+
+		// In debug mode, copy fresh binary each time
+		if r.debug {
+			if err := r.copyBinary(ctx, containerID, ws.Container.Image); err != nil {
+				return fmt.Errorf("failed to copy binary: %w", err)
+			}
+		}
 	} else {
 		// Build container config from workspace
 		config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
