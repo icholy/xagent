@@ -88,7 +88,7 @@ var RunCommand = &cli.Command{
 				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
 				"Always use web URLs that users can visit, not API URLs.",
 				"Use xagent:report to log important observations.",
-				"Only use xagent:create_task when explicitly instructed to create a new task.",
+				"Only use xagent:create_child_task when explicitly instructed to create a new task.",
 				"",
 				"Your text responses are NOT visible to users - only tool calls matter.",
 			}, "\n")

@@ -157,8 +157,8 @@ var McpCommand = &cli.Command{
 		)
 
 		s.AddTool(
-			mcp.NewTool("create_task",
-				mcp.WithDescription("Create a new task in the xagent system"),
+			mcp.NewTool("create_child_task",
+				mcp.WithDescription("Create a child task of the current task"),
 				mcp.WithString("name",
 					mcp.Required(),
 					mcp.Description("A short name for the task"),
