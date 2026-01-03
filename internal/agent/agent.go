@@ -47,7 +47,6 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 
 	args := []string{
 		"@anthropic-ai/claude-code",
-		"--print",
 		"--dangerously-skip-permissions",
 		"--strict-mcp-config",
 	}
@@ -68,7 +67,7 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 	}
 	a.resume = true
 
-	args = append(args, prompt)
+	args = append(args, "--print", prompt)
 
 	cmd := exec.CommandContext(ctx, "npx", args...)
 	cmd.Dir = a.cwd
