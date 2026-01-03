@@ -106,7 +106,9 @@ func (p *Poller) Run(ctx context.Context) error {
 
 func (p *Poller) search(ctx context.Context) ([]Comment, error) {
 	jql := p.opts.JQL.String()
-	issues, _, err := p.opts.Client.Issue.Search(ctx, jql, nil)
+	issues, _, err := p.opts.Client.Issue.SearchV2JQL(ctx, jql, &jira.SearchOptionsV2{
+		Fields: []string{"key"},
+	})
 	if err != nil {
 		return nil, err
 	}

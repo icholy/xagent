@@ -84,7 +84,7 @@ var JiraCommand = &cli.Command{
 			return fmt.Errorf("failed to create jira client: %w", err)
 		}
 
-		done, err := jirax.StatusList(ctx, jiraClient, "done")
+		done, err := jirax.StatusList(ctx, jiraClient, "Done")
 		if err != nil {
 			return fmt.Errorf("failed to get done statuses: %w", err)
 		}
@@ -95,7 +95,7 @@ var JiraCommand = &cli.Command{
 			"username", username,
 			"label", label,
 			"interval", interval,
-			"done_statuses", done,
+			"num_done_statuses", len(done),
 		)
 
 		poller := jirax.NewPoller(jirax.PollerOptions{
