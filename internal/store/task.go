@@ -11,12 +11,13 @@ import (
 type TaskStatus string
 
 const (
-	TaskStatusPending   TaskStatus = "pending"
-	TaskStatusRunning   TaskStatus = "running"
-	TaskStatusCompleted TaskStatus = "completed"
-	TaskStatusFailed    TaskStatus = "failed"
-	TaskStatusCancelled TaskStatus = "cancelled"
-	TaskStatusArchived  TaskStatus = "archived"
+	TaskStatusPending    TaskStatus = "pending"
+	TaskStatusRunning    TaskStatus = "running"
+	TaskStatusRestarting TaskStatus = "restarting"
+	TaskStatusCompleted  TaskStatus = "completed"
+	TaskStatusFailed     TaskStatus = "failed"
+	TaskStatusCancelled  TaskStatus = "cancelled"
+	TaskStatusArchived   TaskStatus = "archived"
 )
 
 type Instruction struct {

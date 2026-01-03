@@ -36,6 +36,7 @@
         .status-completed { background: #d1fae5; color: #065f46; }
         .status-failed { background: #fee2e2; color: #991b1b; }
         .status-cancelled { background: #fef3c7; color: #92400e; }
+        .status-restarting { background: #fce7f3; color: #9d174d; }
         .status-archived { background: #e5e7eb; color: #4b5563; }
         .status-llm { background: #ede9fe; color: #5b21b6; }
         .status-info { background: #dbeafe; color: #1e40af; }
@@ -84,6 +85,7 @@
             <select name="status" style="flex: 1; margin-bottom: 0;">
                 <option value="pending" {{if eq .Task.Status "pending"}}selected{{end}}>pending</option>
                 <option value="running" {{if eq .Task.Status "running"}}selected{{end}}>running</option>
+                <option value="restarting" {{if eq .Task.Status "restarting"}}selected{{end}}>restarting</option>
                 <option value="completed" {{if eq .Task.Status "completed"}}selected{{end}}>completed</option>
                 <option value="failed" {{if eq .Task.Status "failed"}}selected{{end}}>failed</option>
                 <option value="cancelled" {{if eq .Task.Status "cancelled"}}selected{{end}}>cancelled</option>
