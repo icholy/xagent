@@ -78,6 +78,44 @@
         {{template "task-detail.html" .}}
     </div>
 
+    <div class="card">
+        <h3>Set Status</h3>
+        <form id="status-form" style="display: flex; gap: 10px; align-items: center;">
+            <select name="status" style="flex: 1; margin-bottom: 0;">
+                <option value="pending" {{if eq .Task.Status "pending"}}selected{{end}}>pending</option>
+                <option value="running" {{if eq .Task.Status "running"}}selected{{end}}>running</option>
+                <option value="completed" {{if eq .Task.Status "completed"}}selected{{end}}>completed</option>
+                <option value="failed" {{if eq .Task.Status "failed"}}selected{{end}}>failed</option>
+                <option value="cancelled" {{if eq .Task.Status "cancelled"}}selected{{end}}>cancelled</option>
+                <option value="archived" {{if eq .Task.Status "archived"}}selected{{end}}>archived</option>
+            </select>
+            <button type="submit">Set Status</button>
+        </form>
+
+        <h3>Add Prompt</h3>
+        <form id="prompt-form">
+            <textarea name="prompt" placeholder="Enter a new prompt..." required></textarea>
+            <button type="submit">Add Prompt</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Logs</h3>
+        {{template "task-logs.html" (dict "TaskID" .Task.ID "Logs" .Logs)}}
+    </div>
+
+    <script>
+        document.getElementById('status-form').onsubmit = async (e) => {
+            e.preventDefault();
+            await updateTask({status: e.target.status.value});
+        };
+        document.getElementById('prompt-form').onsubmit = async (e) => {
+            e.preventDefault();
+            await updateTask({status: 'pending', addPrompts: [e.target.prompt.value]});
+            e.target.reset();
+        };
+    </script>
+
     <script>
         const taskId = '{{.Task.ID}}';
 
@@ -97,20 +135,8 @@
         }
 
         async function refreshDetail() {
-            // Preserve textarea content and focus during refresh
-            const textarea = document.querySelector('#prompt-form textarea');
-            const savedValue = textarea ? textarea.value : '';
-            const hadFocus = document.activeElement === textarea;
-
             const resp = await fetch('/tasks/' + taskId + '/detail');
             document.getElementById('task-detail').innerHTML = await resp.text();
-
-            // Restore textarea content and focus
-            const newTextarea = document.querySelector('#prompt-form textarea');
-            if (newTextarea) {
-                if (savedValue) newTextarea.value = savedValue;
-                if (hadFocus) newTextarea.focus();
-            }
         }
 
         async function refreshLogs() {

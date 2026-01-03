@@ -14,39 +14,6 @@
 <p><strong>Status:</strong> {{template "task-status.html" .Task}}</p>
 <p><strong>Created:</strong> {{.Task.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
 
-<hr>
-
-<h3>Set Status</h3>
-<form id="status-form" style="display: flex; gap: 10px; align-items: center;">
-    <select name="status" style="flex: 1; margin-bottom: 0;">
-        <option value="pending" {{if eq .Task.Status "pending"}}selected{{end}}>pending</option>
-        <option value="running" {{if eq .Task.Status "running"}}selected{{end}}>running</option>
-        <option value="completed" {{if eq .Task.Status "completed"}}selected{{end}}>completed</option>
-        <option value="failed" {{if eq .Task.Status "failed"}}selected{{end}}>failed</option>
-        <option value="cancelled" {{if eq .Task.Status "cancelled"}}selected{{end}}>cancelled</option>
-        <option value="archived" {{if eq .Task.Status "archived"}}selected{{end}}>archived</option>
-    </select>
-    <button type="submit">Set Status</button>
-</form>
-
-<h3>Add Prompt</h3>
-<form id="prompt-form">
-    <textarea name="prompt" placeholder="Enter a new prompt..." required></textarea>
-    <button type="submit">Add Prompt</button>
-</form>
-
-<script>
-    document.getElementById('status-form').onsubmit = async (e) => {
-        e.preventDefault();
-        await updateTask({status: e.target.status.value});
-    };
-    document.getElementById('prompt-form').onsubmit = async (e) => {
-        e.preventDefault();
-        await updateTask({status: 'pending', addPrompts: [e.target.prompt.value]});
-        e.target.reset();
-    };
-</script>
-
 <h3>Prompts</h3>
 <ul>
 {{range .Task.Prompts}}
@@ -66,5 +33,3 @@
 </ul>
 {{end}}
 
-<h3>Logs</h3>
-{{template "task-logs.html" (dict "TaskID" .Task.ID "Logs" .Logs)}}
