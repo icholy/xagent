@@ -89,11 +89,19 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		id = uuid.NewString()
 	}
 
+	instructions := make([]store.Instruction, len(req.Instructions))
+	for i, inst := range req.Instructions {
+		instructions[i] = store.Instruction{
+			Text:   inst.Text,
+			Origin: inst.Origin,
+		}
+	}
+
 	task := &store.Task{
-		ID:        id,
-		Workspace: req.Workspace,
-		Prompts:   req.Prompts,
-		Status:    store.TaskStatusPending,
+		ID:           id,
+		Workspace:    req.Workspace,
+		Instructions: instructions,
+		Status:       store.TaskStatusPending,
 	}
 
 	if err := s.tasks.Create(task); err != nil {
@@ -118,14 +126,22 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 }
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
+	instructions := make([]store.Instruction, len(req.AddInstructions))
+	for i, inst := range req.AddInstructions {
+		instructions[i] = store.Instruction{
+			Text:   inst.Text,
+			Origin: inst.Origin,
+		}
+	}
+
 	if err := s.tasks.Update(req.Id, store.TaskUpdate{
-		Status:     store.TaskStatus(req.Status),
-		AddPrompts: req.AddPrompts,
+		Status:          store.TaskStatus(req.Status),
+		AddInstructions: instructions,
 	}); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	s.log.Info("task updated", "id", req.Id, "status", req.Status, "prompts_added", len(req.AddPrompts))
+	s.log.Info("task updated", "id", req.Id, "status", req.Status, "instructions_added", len(req.AddInstructions))
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 
@@ -200,13 +216,20 @@ func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByUR
 }
 
 func taskToProto(t *store.Task) *xagentv1.Task {
+	instructions := make([]*xagentv1.Instruction, len(t.Instructions))
+	for i, inst := range t.Instructions {
+		instructions[i] = &xagentv1.Instruction{
+			Text:   inst.Text,
+			Origin: inst.Origin,
+		}
+	}
 	return &xagentv1.Task{
-		Id:        t.ID,
-		Workspace: t.Workspace,
-		Prompts:   t.Prompts,
-		Status:    string(t.Status),
-		CreatedAt: t.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt: t.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Id:           t.ID,
+		Workspace:    t.Workspace,
+		Instructions: instructions,
+		Status:       string(t.Status),
+		CreatedAt:    t.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:    t.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 

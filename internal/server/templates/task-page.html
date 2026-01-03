@@ -92,10 +92,10 @@
             <button type="submit">Set Status</button>
         </form>
 
-        <h3>Add Prompt</h3>
-        <form id="prompt-form">
-            <textarea name="prompt" placeholder="Enter a new prompt..." required></textarea>
-            <button type="submit">Add Prompt</button>
+        <h3>Add Instruction</h3>
+        <form id="instruction-form">
+            <textarea name="instruction" placeholder="Enter a new instruction..." required></textarea>
+            <button type="submit">Add Instruction</button>
         </form>
     </div>
 
@@ -109,9 +109,9 @@
             e.preventDefault();
             await updateTask({status: e.target.status.value});
         };
-        document.getElementById('prompt-form').onsubmit = async (e) => {
+        document.getElementById('instruction-form').onsubmit = async (e) => {
             e.preventDefault();
-            await updateTask({status: 'pending', addPrompts: [e.target.prompt.value]});
+            await updateTask({status: 'pending', addInstructions: [{text: e.target.instruction.value}]});
             e.target.reset();
         };
     </script>

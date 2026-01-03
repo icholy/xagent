@@ -19,13 +19,18 @@ const (
 	TaskStatusArchived  TaskStatus = "archived"
 )
 
+type Instruction struct {
+	Text   string `json:"text"`
+	Origin string `json:"origin,omitempty"`
+}
+
 type Task struct {
-	ID        string     `json:"id"`
-	Workspace string     `json:"workspace"`
-	Prompts   []string   `json:"prompts"`
-	Status    TaskStatus `json:"status"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	ID           string        `json:"id"`
+	Workspace    string        `json:"workspace"`
+	Instructions []Instruction `json:"instructions"`
+	Status       TaskStatus    `json:"status"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
 }
 
 type TaskRepository struct {
@@ -37,7 +42,7 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 }
 
 func (r *TaskRepository) Create(task *Task) error {
-	prompts, err := json.Marshal(task.Prompts)
+	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
 	}
@@ -46,7 +51,7 @@ func (r *TaskRepository) Create(task *Task) error {
 	_, err = r.db.Exec(`
 		INSERT INTO tasks (id, workspace, prompts, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, task.ID, task.Workspace, prompts, task.Status, now, now)
+	`, task.ID, task.Workspace, instructions, task.Status, now, now)
 	return err
 }
 
@@ -95,8 +100,8 @@ func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) 
 }
 
 type TaskUpdate struct {
-	Status     TaskStatus
-	AddPrompts []string
+	Status          TaskStatus
+	AddInstructions []Instruction
 }
 
 func (r *TaskRepository) Update(id string, update TaskUpdate) error {
@@ -106,29 +111,29 @@ func (r *TaskRepository) Update(id string, update TaskUpdate) error {
 	}
 	defer tx.Rollback()
 
-	// Add prompts if provided
-	if len(update.AddPrompts) > 0 {
+	// Add instructions if provided
+	if len(update.AddInstructions) > 0 {
 		row := tx.QueryRow(`SELECT prompts FROM tasks WHERE id = ?`, id)
 
-		var existingPrompts []byte
-		if err := row.Scan(&existingPrompts); err != nil {
+		var existing []byte
+		if err := row.Scan(&existing); err != nil {
 			return err
 		}
 
-		var allPrompts []string
-		if err := json.Unmarshal(existingPrompts, &allPrompts); err != nil {
+		var all []Instruction
+		if err := json.Unmarshal(existing, &all); err != nil {
 			return err
 		}
 
-		allPrompts = append(allPrompts, update.AddPrompts...)
-		newPrompts, err := json.Marshal(allPrompts)
+		all = append(all, update.AddInstructions...)
+		data, err := json.Marshal(all)
 		if err != nil {
 			return err
 		}
 
 		_, err = tx.Exec(`
 			UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
-		`, newPrompts, time.Now(), id)
+		`, data, time.Now(), id)
 		if err != nil {
 			return err
 		}
@@ -154,12 +159,12 @@ func (r *TaskRepository) Delete(id string) error {
 
 func (r *TaskRepository) scanTask(row *sql.Row) (*Task, error) {
 	var task Task
-	var prompts []byte
+	var instructions []byte
 
 	err := row.Scan(
 		&task.ID,
 		&task.Workspace,
-		&prompts,
+		&instructions,
 		&task.Status,
 		&task.CreatedAt,
 		&task.UpdatedAt,
@@ -168,7 +173,7 @@ func (r *TaskRepository) scanTask(row *sql.Row) (*Task, error) {
 		return nil, err
 	}
 
-	if err := json.Unmarshal(prompts, &task.Prompts); err != nil {
+	if err := json.Unmarshal(instructions, &task.Instructions); err != nil {
 		return nil, err
 	}
 
@@ -179,12 +184,12 @@ func (r *TaskRepository) scanTasks(rows *sql.Rows) ([]*Task, error) {
 	var tasks []*Task
 	for rows.Next() {
 		var task Task
-		var prompts []byte
+		var instructions []byte
 
 		err := rows.Scan(
 			&task.ID,
 			&task.Workspace,
-			&prompts,
+			&instructions,
 			&task.Status,
 			&task.CreatedAt,
 			&task.UpdatedAt,
@@ -193,7 +198,7 @@ func (r *TaskRepository) scanTasks(rows *sql.Rows) ([]*Task, error) {
 			return nil, err
 		}
 
-		if err := json.Unmarshal(prompts, &task.Prompts); err != nil {
+		if err := json.Unmarshal(instructions, &task.Instructions); err != nil {
 			return nil, err
 		}
 

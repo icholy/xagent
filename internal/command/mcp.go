@@ -115,7 +115,7 @@ var McpCommand = &cli.Command{
 
 		s.AddTool(
 			mcp.NewTool("get_task",
-				mcp.WithDescription("Get the current task prompts and links"),
+				mcp.WithDescription("Get the current task instructions and links"),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				resp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
@@ -125,9 +125,17 @@ var McpCommand = &cli.Command{
 
 				links, _ := client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: taskID})
 
+				instructions := make([]map[string]string, len(resp.Task.Instructions))
+				for i, inst := range resp.Task.Instructions {
+					instructions[i] = map[string]string{
+						"text":   inst.Text,
+						"origin": inst.Origin,
+					}
+				}
+
 				task := map[string]any{
-					"prompts": resp.Task.Prompts,
-					"links":   links.GetLinks(),
+					"instructions": instructions,
+					"links":        links.GetLinks(),
 				}
 
 				data, _ := json.MarshalIndent(task, "", "  ")

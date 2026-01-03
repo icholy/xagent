@@ -32,18 +32,24 @@ var TaskCreateCommand = &cli.Command{
 			Value:   "default",
 		},
 		&cli.StringSliceFlag{
-			Name:    "prompt",
-			Aliases: []string{"p"},
-			Usage:   "Prompt to execute (can be specified multiple times)",
+			Name:    "instruction",
+			Aliases: []string{"i"},
+			Usage:   "Instruction to execute (can be specified multiple times)",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		client := xagentclient.New(cmd.String("server"))
 
+		texts := cmd.StringSlice("instruction")
+		instructions := make([]*xagentv1.Instruction, len(texts))
+		for i, text := range texts {
+			instructions[i] = &xagentv1.Instruction{Text: text}
+		}
+
 		resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-			Id:        cmd.String("id"),
-			Workspace: cmd.String("workspace"),
-			Prompts:   cmd.StringSlice("prompt"),
+			Id:           cmd.String("id"),
+			Workspace:    cmd.String("workspace"),
+			Instructions: instructions,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create task: %w", err)

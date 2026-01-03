@@ -74,10 +74,10 @@ var RunCommand = &cli.Command{
 			prompt = "The task was updated. Check xagent:get_task and continue."
 		} else {
 			prompt = strings.Join([]string{
-				"Use xagent:get_task to fetch your task prompts and execute them.",
+				"Use xagent:get_task to fetch your task instructions and execute them.",
 				"",
-				"Prompts often include a URL indicating where they came from (Jira issue, GitHub PR, etc).",
-				"If you have questions or problems, respond on that platform using the appropriate MCP tools.",
+				"Each instruction has a 'text' field with the task and an 'origin' field with the source URL.",
+				"If you have questions or problems, respond on the platform from the most recent instruction's origin.",
 				"",
 				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
 				"Always use web URLs that users can visit, not API URLs.",

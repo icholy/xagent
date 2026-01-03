@@ -14,10 +14,13 @@
 <p><strong>Status:</strong> {{template "task-status.html" .Task}}</p>
 <p><strong>Created:</strong> {{.Task.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
 
-<h3>Prompts</h3>
+<h3>Instructions</h3>
 <ul>
-{{range .Task.Prompts}}
-    <li>{{.}}</li>
+{{range .Task.Instructions}}
+    <li>
+        {{.Text}}
+        {{if .Origin}}<br><small><a href="{{.Origin}}" target="_blank">{{.Origin}}</a></small>{{end}}
+    </li>
 {{end}}
 </ul>
 

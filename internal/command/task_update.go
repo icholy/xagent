@@ -25,9 +25,9 @@ var TaskUpdateCommand = &cli.Command{
 			Usage: "Set task status (pending, running, completed, failed)",
 		},
 		&cli.StringSliceFlag{
-			Name:    "add-prompt",
-			Aliases: []string{"p"},
-			Usage:   "Add prompt to task (can be specified multiple times)",
+			Name:    "add-instruction",
+			Aliases: []string{"i"},
+			Usage:   "Add instruction to task (can be specified multiple times)",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -37,17 +37,22 @@ var TaskUpdateCommand = &cli.Command{
 		}
 
 		status := cmd.String("status")
-		prompts := cmd.StringSlice("add-prompt")
+		texts := cmd.StringSlice("add-instruction")
 
-		if status == "" && len(prompts) == 0 {
+		if status == "" && len(texts) == 0 {
 			return fmt.Errorf("nothing to update")
+		}
+
+		instructions := make([]*xagentv1.Instruction, len(texts))
+		for i, text := range texts {
+			instructions[i] = &xagentv1.Instruction{Text: text}
 		}
 
 		client := xagentclient.New(cmd.String("server"))
 		if _, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-			Id:         taskID,
-			Status:     status,
-			AddPrompts: prompts,
+			Id:              taskID,
+			Status:          status,
+			AddInstructions: instructions,
 		}); err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
 		}

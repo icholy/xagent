@@ -112,7 +112,6 @@ var GithubCommand = &cli.Command{
 			StateFile: filepath.Join(dataDir, "github.json"),
 			OnComment: func(c githubx.Comment) {
 				body := strings.TrimSpace(c.Body)
-				prompt := fmt.Sprintf("A comment was left at %s: %s", c.PRURL, body)
 
 				reply := func(msg string) {
 					_, _, err := ghClient.Issues.CreateComment(ctx, owner, repoName, c.PRNumber, &github.IssueComment{Body: &msg})
@@ -136,9 +135,11 @@ var GithubCommand = &cli.Command{
 					}
 					taskID := links.Links[0].TaskId
 					_, err = xagent.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-						Id:         taskID,
-						Status:     "pending",
-						AddPrompts: []string{prompt},
+						Id:     taskID,
+						Status: "pending",
+						AddInstructions: []*xagentv1.Instruction{
+							{Text: body, Origin: c.PRURL},
+						},
 					})
 					if err != nil {
 						slog.Error("failed to update task", "task", taskID, "error", err)
@@ -151,7 +152,9 @@ var GithubCommand = &cli.Command{
 				case strings.HasPrefix(body, "xagent new"):
 					resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 						Workspace: workspace,
-						Prompts:   []string{prompt},
+						Instructions: []*xagentv1.Instruction{
+							{Text: body, Origin: c.PRURL},
+						},
 					})
 					if err != nil {
 						slog.Error("failed to create task", "error", err)

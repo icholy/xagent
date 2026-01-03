@@ -109,7 +109,6 @@ var JiraCommand = &cli.Command{
 			StateFile: filepath.Join(dataDir, "jira.json"),
 			OnComment: func(c jirax.Comment) {
 				body := strings.TrimSpace(c.Body)
-				prompt := fmt.Sprintf("A comment was left at %s: %s", c.IssueURL, body)
 
 				reply := func(msg string) {
 					_, _, err := jiraClient.Issue.AddComment(ctx, c.IssueKey, &jira.Comment{Body: msg})
@@ -133,9 +132,11 @@ var JiraCommand = &cli.Command{
 					}
 					taskID := links.Links[0].TaskId
 					_, err = xagent.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-						Id:         taskID,
-						Status:     "pending",
-						AddPrompts: []string{prompt},
+						Id:     taskID,
+						Status: "pending",
+						AddInstructions: []*xagentv1.Instruction{
+							{Text: body, Origin: c.IssueURL},
+						},
 					})
 					if err != nil {
 						slog.Error("failed to update task", "task", taskID, "error", err)
@@ -148,7 +149,9 @@ var JiraCommand = &cli.Command{
 				case strings.HasPrefix(body, "xagent new"):
 					resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 						Workspace: workspace,
-						Prompts:   []string{prompt},
+						Instructions: []*xagentv1.Instruction{
+							{Text: body, Origin: c.IssueURL},
+						},
 					})
 					if err != nil {
 						slog.Error("failed to create task", "error", err)

@@ -16,10 +16,15 @@ service XAgentService {
   rpc FindLinksByURL(FindLinksByURLRequest) returns (FindLinksByURLResponse);
 }
 
+message Instruction {
+  string text = 1;
+  string origin = 2;
+}
+
 message Task {
   string id = 1;
   string workspace = 2;
-  repeated string prompts = 3;
+  repeated Instruction instructions = 3;
   string status = 4;
   string created_at = 5;
   string updated_at = 6;
@@ -43,7 +48,7 @@ message ListTasksResponse {
 message CreateTaskRequest {
   string id = 1;
   string workspace = 2;
-  repeated string prompts = 3;
+  repeated Instruction instructions = 3;
 }
 
 message CreateTaskResponse {
@@ -61,7 +66,7 @@ message GetTaskResponse {
 message UpdateTaskRequest {
   string id = 1;
   string status = 2;
-  repeated string add_prompts = 3;
+  repeated Instruction add_instructions = 3;
 }
 
 message UpdateTaskResponse {}
