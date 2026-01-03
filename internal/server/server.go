@@ -11,6 +11,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Server struct {
@@ -228,8 +229,8 @@ func taskToProto(t *store.Task) *xagentv1.Task {
 		Workspace:    t.Workspace,
 		Instructions: instructions,
 		Status:       string(t.Status),
-		CreatedAt:    t.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:    t.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt:    timestamppb.New(t.CreatedAt),
+		UpdatedAt:    timestamppb.New(t.UpdatedAt),
 	}
 }
 
@@ -240,7 +241,7 @@ func linkToProto(l *store.Link) *xagentv1.TaskLink {
 		Relevance: l.Relevance,
 		Url:       l.URL,
 		Title:     l.Title,
-		CreatedAt: l.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt: timestamppb.New(l.CreatedAt),
 		Created:   l.Created,
 	}
 }
