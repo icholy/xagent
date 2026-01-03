@@ -159,9 +159,9 @@ var JiraCommand = &cli.Command{
 					}
 					taskID := resp.Task.Id
 					_, err = xagent.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-						TaskId: taskID,
-						Type:   "jira",
-						Url:    c.IssueURL,
+						TaskId:    taskID,
+						Relevance: "Task initiated from this Jira issue",
+						Url:       c.IssueURL,
 					})
 					if err != nil {
 						slog.Error("failed to create link", "error", err)

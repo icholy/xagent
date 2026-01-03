@@ -162,9 +162,9 @@ var GithubCommand = &cli.Command{
 					}
 					taskID := resp.Task.Id
 					_, err = xagent.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-						TaskId: taskID,
-						Type:   "pr",
-						Url:    c.PRURL,
+						TaskId:    taskID,
+						Relevance: "Task initiated from this PR",
+						Url:       c.PRURL,
 					})
 					if err != nil {
 						slog.Error("failed to create link", "error", err)

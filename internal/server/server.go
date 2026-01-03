@@ -172,7 +172,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	link := &store.Link{
 		TaskID:    req.TaskId,
-		Type:      req.Type,
+		Relevance: req.Relevance,
 		URL:       req.Url,
 		Title:     req.Title,
 		CreatedAt: time.Now(),
@@ -181,7 +181,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 	if err := s.links.Create(link); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("link created", "task", req.TaskId, "type", req.Type, "url", req.Url)
+	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
 	return &xagentv1.CreateLinkResponse{
 		Link: linkToProto(link),
 	}, nil
@@ -237,7 +237,7 @@ func linkToProto(l *store.Link) *xagentv1.TaskLink {
 	return &xagentv1.TaskLink{
 		Id:        l.ID,
 		TaskId:    l.TaskID,
-		Type:      l.Type,
+		Relevance: l.Relevance,
 		Url:       l.URL,
 		Title:     l.Title,
 		CreatedAt: l.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),

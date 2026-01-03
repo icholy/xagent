@@ -28,8 +28,8 @@
 <ul class="task-links">
 {{range .Links}}
     <li>
-        <span class="link-type">{{.Type}}</span>
         <a href="{{.URL}}" target="_blank" rel="noopener">{{if .Title}}{{.Title}}{{else}}{{.URL}}{{end}}</a>
+        {{if .Relevance}}<br><small>{{.Relevance}}</small>{{end}}
     </li>
 {{end}}
 </ul>

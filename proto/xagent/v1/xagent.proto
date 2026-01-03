@@ -92,7 +92,7 @@ message UploadLogsResponse {}
 message TaskLink {
   int64 id = 1;
   string task_id = 2;
-  string type = 3;
+  string relevance = 3;
   string url = 4;
   string title = 5;
   string created_at = 6;
@@ -101,7 +101,7 @@ message TaskLink {
 
 message CreateLinkRequest {
   string task_id = 1;
-  string type = 2;
+  string relevance = 2;
   string url = 3;
   string title = 4;
   bool created = 5;

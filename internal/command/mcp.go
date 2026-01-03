@@ -42,9 +42,9 @@ var McpCommand = &cli.Command{
 		s.AddTool(
 			mcp.NewTool("create_link",
 				mcp.WithDescription("Associate an external resource (PR, Jira ticket, etc.) with the current task"),
-				mcp.WithString("type",
+				mcp.WithString("relevance",
 					mcp.Required(),
-					mcp.Description("Type of link: 'pr', 'jira', 'issue', etc."),
+					mcp.Description("Describe how this link is relevant to the task"),
 				),
 				mcp.WithString("url",
 					mcp.Required(),
@@ -59,27 +59,27 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				args := req.GetArguments()
-				linkType, _ := args["type"].(string)
+				relevance, _ := args["relevance"].(string)
 				url, _ := args["url"].(string)
 				title, _ := args["title"].(string)
 				created, _ := args["created"].(bool)
 
-				if linkType == "" || url == "" {
-					return mcp.NewToolResultError("type and url are required"), nil
+				if relevance == "" || url == "" {
+					return mcp.NewToolResultError("relevance and url are required"), nil
 				}
 
 				_, err := client.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-					TaskId:  taskID,
-					Type:    linkType,
-					Url:     url,
-					Title:   title,
-					Created: created,
+					TaskId:    taskID,
+					Relevance: relevance,
+					Url:       url,
+					Title:     title,
+					Created:   created,
 				})
 				if err != nil {
 					return mcp.NewToolResultError(fmt.Sprintf("failed to create link: %v", err)), nil
 				}
 
-				return mcp.NewToolResultText(fmt.Sprintf("Link created: %s (%s)", url, linkType)), nil
+				return mcp.NewToolResultText(fmt.Sprintf("Link created: %s", url)), nil
 			},
 		)
 

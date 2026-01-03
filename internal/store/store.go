@@ -43,7 +43,7 @@ func migrate(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS task_links (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			task_id    TEXT NOT NULL,
-			type       TEXT NOT NULL,
+			relevance  TEXT NOT NULL,
 			url        TEXT NOT NULL,
 			title      TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
