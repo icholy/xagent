@@ -33,7 +33,7 @@ workspaces:
 
   cdl:
     commands:
-      - git -C /repo worktree add /home/vscode/worktree-$XAGENT_TASK_ID master
+      - git -C /repo worktree add -b task-$XAGENT_TASK_ID /home/vscode/worktree-$XAGENT_TASK_ID master
     container:
       image: containeragent
       working_dir: /home/vscode
