@@ -2,10 +2,13 @@
     <h2>{{if .Task.Name}}{{.Task.Name}}{{else}}Task {{.Task.ID | printf "%.8s"}}{{end}}</h2>
     <div class="task-actions">
     {{if or (eq .Task.Status "running") (eq .Task.Status "pending")}}
-        <button onclick="updateTask({status: 'cancelled'})" class="btn-danger">Cancel</button>
+        <button onclick="updateTask({status: 'cancelled'})" class="btn-danger btn-icon" title="Cancel">&#x2715;</button>
+    {{end}}
+    {{if or (eq .Task.Status "running") (eq .Task.Status "completed") (eq .Task.Status "failed")}}
+        <button onclick="updateTask({status: 'restarting'})" class="btn-icon" title="Restart">&#x21bb;</button>
     {{end}}
     {{if or (eq .Task.Status "completed") (eq .Task.Status "failed")}}
-        <button onclick="updateTask({status: 'archived'}).then(() => location.href='/')" class="btn-secondary">Archive</button>
+        <button onclick="updateTask({status: 'archived'}).then(() => location.href='/')" class="btn-secondary btn-icon" title="Archive">&#x1f4e6;</button>
     {{end}}
     </div>
 </div>
