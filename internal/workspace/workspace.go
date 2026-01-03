@@ -36,6 +36,11 @@ func (w *Workspace) Validate() error {
 	if err := w.Container.Validate(); err != nil {
 		return fmt.Errorf("container: %w", err)
 	}
+	for name, srv := range w.McpServers {
+		if err := srv.Validate(); err != nil {
+			return fmt.Errorf("mcp_servers.%s: %w", name, err)
+		}
+	}
 	return nil
 }
 
@@ -56,15 +61,31 @@ func (c *Container) Validate() error {
 }
 
 type McpServer struct {
-	// HTTP transport
 	Type    string            `yaml:"type"`
 	URL     string            `yaml:"url"`
 	Headers map[string]string `yaml:"headers"`
-
-	// Stdio transport
 	Command string            `yaml:"command"`
 	Args    []string          `yaml:"args"`
 	Env     map[string]string `yaml:"env"`
+}
+
+func (m *McpServer) Validate() error {
+	if m.Type == "" {
+		return fmt.Errorf("type is required")
+	}
+	switch m.Type {
+	case "stdio":
+		if m.Command == "" {
+			return fmt.Errorf("command is required for stdio")
+		}
+	case "http", "sse":
+		if m.URL == "" {
+			return fmt.Errorf("url is required for %s", m.Type)
+		}
+	default:
+		return fmt.Errorf("unknown type: %s", m.Type)
+	}
+	return nil
 }
 
 // ExpandFunc is called for each ${namespace:value} found in the config.

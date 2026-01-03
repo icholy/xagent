@@ -69,7 +69,8 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 
 	// Add MCP config if present
 	if len(a.mcpServers) > 0 {
-		mcpJSON, err := json.Marshal(a.mcpServers)
+		mcpConfig := map[string]any{"mcpServers": a.mcpServers}
+		mcpJSON, err := json.Marshal(mcpConfig)
 		if err != nil {
 			return err
 		}

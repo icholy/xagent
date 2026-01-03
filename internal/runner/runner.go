@@ -288,12 +288,16 @@ func (r *Runner) copyConfig(ctx context.Context, containerID, taskID string, ws 
 
 	// Inject xagent MCP server for link creation
 	cfg.McpServers["xagent"] = agent.McpServer{
+		Type:    "stdio",
 		Command: "/usr/local/bin/xagent",
 		Args:    []string{"mcp", "--server", "unix:///var/run/xagent.sock", "--task", taskID},
 	}
 
 	for name, srv := range ws.McpServers {
 		cfg.McpServers[name] = agent.McpServer{
+			Type:    srv.Type,
+			URL:     srv.URL,
+			Headers: srv.Headers,
 			Command: srv.Command,
 			Args:    srv.Args,
 			Env:     srv.Env,

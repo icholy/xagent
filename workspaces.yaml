@@ -1,8 +1,5 @@
 workspaces:
   default:
-    acp:
-      command: ["npx", "@zed-industries/claude-code-acp"]
-      claude_resume_hack: true
     container:
       image: node:alpine
       environment:
@@ -11,10 +8,6 @@ workspaces:
       - git clone git@github.com:icholy/llmpatch.git
 
   gomajor:
-    acp:
-      command: ["npx", "@zed-industries/claude-code-acp"]
-      claude_resume_hack: true
-      cwd: /home/vscode/llmpatch
     commands:
       - git clone git@github.com:icholy/llmpatch.git
     container:

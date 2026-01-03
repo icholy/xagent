@@ -22,6 +22,9 @@ type Config struct {
 }
 
 type McpServer struct {
+	Type    string            `json:"type"`
+	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
