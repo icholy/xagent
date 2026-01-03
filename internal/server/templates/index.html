@@ -66,6 +66,7 @@
         .task-actions { margin-top: 15px; display: flex; gap: 10px; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
+        #task-card:not(:has(#task-list tr)) { display: none; }
     </style>
 </head>
 <body>
@@ -81,7 +82,7 @@
         </form>
     </div>
 
-    <div class="card">
+    <div class="card" id="task-card">
         <h2>Tasks</h2>
         <table>
             <thead>
