@@ -248,6 +248,55 @@ var McpCommand = &cli.Command{
 			},
 		)
 
+		s.AddTool(
+			mcp.NewTool("add_child_task_instruction",
+				mcp.WithDescription("Add an instruction to a child task and restart it"),
+				mcp.WithString("task_id",
+					mcp.Required(),
+					mcp.Description("The child task ID"),
+				),
+				mcp.WithString("instruction",
+					mcp.Required(),
+					mcp.Description("The instruction text to add"),
+				),
+				mcp.WithString("url",
+					mcp.Description("Optional URL associated with the instruction"),
+				),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				args := req.GetArguments()
+				childTaskID, _ := args["task_id"].(string)
+				instruction, _ := args["instruction"].(string)
+				url, _ := args["url"].(string)
+
+				if childTaskID == "" || instruction == "" {
+					return mcp.NewToolResultError("task_id and instruction are required"), nil
+				}
+
+				// Verify we are the parent
+				childResp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: childTaskID})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to get child task: %v", err)), nil
+				}
+				if childResp.Task.Parent != taskID {
+					return mcp.NewToolResultError("task is not a child of the current task"), nil
+				}
+
+				_, err = client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+					Id:     childTaskID,
+					Status: "restarting",
+					AddInstructions: []*xagentv1.Instruction{
+						{Text: instruction, Url: url},
+					},
+				})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to add instruction: %v", err)), nil
+				}
+
+				return mcp.NewToolResultText(fmt.Sprintf("Instruction added to task %s", childTaskID)), nil
+			},
+		)
+
 		return server.ServeStdio(s)
 	},
 }
