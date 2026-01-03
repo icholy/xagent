@@ -97,8 +97,20 @@
         }
 
         async function refreshDetail() {
+            // Preserve textarea content and focus during refresh
+            const textarea = document.querySelector('#prompt-form textarea');
+            const savedValue = textarea ? textarea.value : '';
+            const hadFocus = document.activeElement === textarea;
+
             const resp = await fetch('/tasks/' + taskId + '/detail');
             document.getElementById('task-detail').innerHTML = await resp.text();
+
+            // Restore textarea content and focus
+            const newTextarea = document.querySelector('#prompt-form textarea');
+            if (newTextarea) {
+                if (savedValue) newTextarea.value = savedValue;
+                if (hadFocus) newTextarea.focus();
+            }
         }
 
         async function refreshLogs() {
