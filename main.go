@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 	"os"
 
-	"github.com/urfave/cli/v3"
 	"github.com/icholy/xagent/internal/command"
+	"github.com/urfave/cli/v3"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 	}
 
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		slog.Error("command failed", "error", err)
+		fmt.Printf("ERROR: %v\n", err)
 		os.Exit(1)
 	}
 }
