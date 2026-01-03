@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/icholy/xagent/internal/agent"
-	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
 
@@ -33,7 +31,6 @@ var RunCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		taskID := cmd.String("task")
-		client := xagentclient.New(cmd.String("server"))
 
 		// Load config
 		cfg, err := agent.LoadConfig(taskID)
@@ -45,7 +42,6 @@ var RunCommand = &cli.Command{
 			"cwd", cfg.Cwd,
 			"commands", cfg.Commands,
 			"started", cfg.Started,
-			"prompt_index", cfg.PromptIndex,
 		)
 
 		// Run setup commands if not started yet
@@ -61,19 +57,6 @@ var RunCommand = &cli.Command{
 			}
 		}
 
-		// Fetch task
-		resp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-		if err != nil {
-			return fmt.Errorf("failed to fetch task: %w", err)
-		}
-		task := resp.Task
-
-		prompt := combinedPrompt(task, cfg.PromptIndex)
-		if prompt == "" {
-			fmt.Println("No prompts to execute.")
-			return nil
-		}
-
 		// Start agent
 		a, err := agent.Start(ctx, agent.Options{
 			Cwd:        os.ExpandEnv(cfg.Cwd),
@@ -85,30 +68,22 @@ var RunCommand = &cli.Command{
 		}
 		defer a.Close()
 
-		// Run the prompt
+		// Bootstrap prompt
+		prompt := strings.Join([]string{
+			"Use the xagent:get_task tool to fetch your task prompts and execute them.",
+			"",
+			"When done, use xagent:create_link for any URLs you created or referenced (PRs, issues, etc).",
+			"Use xagent:report to log any problems, blockers, or important observations.",
+			"",
+			"Your text responses are NOT visible to users - only tool calls matter.",
+		}, "\n")
+
 		if err := a.Prompt(ctx, prompt); err != nil {
 			return err
 		}
 
-		// Ask agent to report links and problems
-		if err := a.Prompt(ctx, strings.Join([]string{
-			"IMPORTANT: Your text responses are NOT visible to end users.",
-			"You MUST use the xagent MCP server tools to report information:",
-			"",
-			"1. Use xagent:create_link for any URLs related to this task (PRs, Jira tickets, GitHub issues, docs).",
-			"   Set created=true if you created the resource, created=false if it already existed.",
-			"",
-			"2. Use xagent:report to log any problems, blockers, assumptions, or important observations.",
-			"",
-			"Only information submitted via these tools will be visible in the task dashboard.",
-			"Do not write a summary - use the tools. If you have nothing to report, do nothing.",
-		}, "\n")); err != nil {
-			slog.Error("report prompt failed", "error", err)
-		}
-
 		// Save config
 		cfg.Started = true
-		cfg.PromptIndex = len(task.Prompts)
 		if err := agent.SaveConfig(taskID, cfg); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
@@ -116,12 +91,4 @@ var RunCommand = &cli.Command{
 		fmt.Println("Task completed successfully.")
 		return nil
 	},
-}
-
-func combinedPrompt(t *xagentv1.Task, offset int) string {
-	prompts := t.GetPrompts()
-	if offset >= len(prompts) {
-		return ""
-	}
-	return strings.Join(prompts[offset:], "\n")
 }
