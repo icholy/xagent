@@ -21,8 +21,8 @@ type Comment struct {
 
 type PollerOptions struct {
 	Client    *jira.Client
-	Username  string
 	JQL       JQL
+	Username  string
 	Interval  time.Duration
 	StateFile string
 	OnComment func(Comment)

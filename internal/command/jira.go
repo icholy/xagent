@@ -84,12 +84,18 @@ var JiraCommand = &cli.Command{
 			return fmt.Errorf("failed to create jira client: %w", err)
 		}
 
+		done, err := jirax.StatusList(ctx, jiraClient, "done")
+		if err != nil {
+			return fmt.Errorf("failed to get done statuses: %w", err)
+		}
+
 		xagent := xagentclient.New(serverURL)
 
 		slog.Info("starting jira poller",
 			"username", username,
 			"label", label,
 			"interval", interval,
+			"done_statuses", done,
 		)
 
 		poller := jirax.NewPoller(jirax.PollerOptions{
@@ -97,7 +103,7 @@ var JiraCommand = &cli.Command{
 			Username: username,
 			JQL: jirax.JQL{
 				Labels:    []string{label},
-				NotStatus: []string{"Done"},
+				NotStatus: done,
 			},
 			Interval:  interval,
 			StateFile: filepath.Join(dataDir, "jira.json"),
