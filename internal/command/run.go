@@ -69,14 +69,22 @@ var RunCommand = &cli.Command{
 		defer a.Close()
 
 		// Bootstrap prompt
-		prompt := strings.Join([]string{
-			"Use the xagent:get_task tool to fetch your task prompts and execute them.",
-			"",
-			"When done, use xagent:create_link for any URLs you created or referenced (PRs, issues, etc).",
-			"Use xagent:report to log any problems, blockers, or important observations.",
-			"",
-			"Your text responses are NOT visible to users - only tool calls matter.",
-		}, "\n")
+		var prompt string
+		if cfg.Started {
+			prompt = "The task was updated. Check xagent:get_task and continue."
+		} else {
+			prompt = strings.Join([]string{
+				"Use xagent:get_task to fetch your task prompts and execute them.",
+				"",
+				"Prompts often include a URL indicating where they came from (Jira issue, GitHub PR, etc).",
+				"If you have questions or problems, respond on that platform using the appropriate MCP tools.",
+				"",
+				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
+				"Use xagent:report to log important observations.",
+				"",
+				"Your text responses are NOT visible to users - only tool calls matter.",
+			}, "\n")
+		}
 
 		if err := a.Prompt(ctx, prompt); err != nil {
 			return err
