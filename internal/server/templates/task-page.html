@@ -81,20 +81,6 @@
     </div>
 
     <div class="card">
-        <h3>Set Status</h3>
-        <form id="status-form" style="display: flex; gap: 10px; align-items: center;">
-            <select name="status" style="flex: 1; margin-bottom: 0;">
-                <option value="pending" {{if eq .Task.Status "pending"}}selected{{end}}>pending</option>
-                <option value="running" {{if eq .Task.Status "running"}}selected{{end}}>running</option>
-                <option value="restarting" {{if eq .Task.Status "restarting"}}selected{{end}}>restarting</option>
-                <option value="completed" {{if eq .Task.Status "completed"}}selected{{end}}>completed</option>
-                <option value="failed" {{if eq .Task.Status "failed"}}selected{{end}}>failed</option>
-                <option value="cancelled" {{if eq .Task.Status "cancelled"}}selected{{end}}>cancelled</option>
-                <option value="archived" {{if eq .Task.Status "archived"}}selected{{end}}>archived</option>
-            </select>
-            <button type="submit">Set Status</button>
-        </form>
-
         <h3>Add Instruction</h3>
         <form id="instruction-form">
             <textarea name="instruction" placeholder="Enter a new instruction..." required></textarea>
@@ -110,10 +96,6 @@
     </div>
 
     <script>
-        document.getElementById('status-form').onsubmit = async (e) => {
-            e.preventDefault();
-            await updateTask({status: e.target.status.value});
-        };
         document.getElementById('instruction-form').onsubmit = async (e) => {
             e.preventDefault();
             await updateTask({status: 'restarting', addInstructions: [{text: e.target.instruction.value}]});
