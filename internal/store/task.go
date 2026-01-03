@@ -101,6 +101,19 @@ func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) 
 	return r.scanTasks(rows)
 }
 
+func (r *TaskRepository) ListChildren(parentID string) ([]*Task, error) {
+	rows, err := r.db.Query(`
+		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
+		FROM tasks WHERE parent = ? ORDER BY created_at DESC
+	`, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanTasks(rows)
+}
+
 type TaskUpdate struct {
 	Name            string
 	Status          TaskStatus
