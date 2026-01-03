@@ -117,7 +117,7 @@
             const form = e.target;
             await rpc('CreateTask', {
                 workspace: form.workspace.value,
-                prompts: [form.prompt.value]
+                instructions: [{text: form.prompt.value}]
             });
             form.reset();
             refreshTaskList();
