@@ -6,17 +6,17 @@
 
 <div class="task-actions">
 {{if eq .Task.Status "running"}}
-    <button hx-patch="/tasks/{{.Task.ID}}" hx-vals='{"status":"cancelled"}' hx-target="#task-detail" hx-swap="innerHTML" class="btn-danger">Kill</button>
+    <button onclick="updateTask({status: 'cancelled'})" class="btn-danger">Kill</button>
 {{end}}
 {{if or (eq .Task.Status "completed") (eq .Task.Status "failed")}}
-    <button hx-patch="/tasks/{{.Task.ID}}" hx-vals='{"status":"archived"}' hx-target="#task-detail" hx-swap="innerHTML" hx-on::after-request="window.location.href='/'">Archive</button>
+    <button onclick="updateTask({status: 'archived'}).then(() => location.href='/')">Archive</button>
 {{end}}
 </div>
 
 <hr>
 
 <h3>Set Status</h3>
-<form hx-patch="/tasks/{{.Task.ID}}" hx-target="#task-detail" hx-swap="innerHTML" style="display: flex; gap: 10px; align-items: center;">
+<form id="status-form" style="display: flex; gap: 10px; align-items: center;">
     <select name="status" style="flex: 1; margin-bottom: 0;">
         <option value="pending" {{if eq .Task.Status "pending"}}selected{{end}}>pending</option>
         <option value="running" {{if eq .Task.Status "running"}}selected{{end}}>running</option>
@@ -29,11 +29,22 @@
 </form>
 
 <h3>Add Prompt</h3>
-<form hx-patch="/tasks/{{.Task.ID}}" hx-target="#task-detail" hx-swap="innerHTML">
-    <input type="hidden" name="status" value="pending">
+<form id="prompt-form">
     <textarea name="prompt" placeholder="Enter a new prompt..." required></textarea>
     <button type="submit">Add Prompt</button>
 </form>
+
+<script>
+    document.getElementById('status-form').onsubmit = async (e) => {
+        e.preventDefault();
+        await updateTask({status: e.target.status.value});
+    };
+    document.getElementById('prompt-form').onsubmit = async (e) => {
+        e.preventDefault();
+        await updateTask({status: 'pending', addPrompts: [e.target.prompt.value]});
+        e.target.reset();
+    };
+</script>
 
 <h3>Prompts</h3>
 <ul>

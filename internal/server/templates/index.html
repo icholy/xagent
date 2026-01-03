@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>XAgent</title>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -70,7 +69,7 @@
 
     <div class="card">
         <h2>New Task</h2>
-        <form hx-post="/tasks" hx-target="#task-list" hx-swap="afterbegin" hx-on::after-request="this.reset()">
+        <form id="create-form">
             <input type="text" name="workspace" placeholder="Workspace (e.g. default)" required>
             <textarea name="prompt" placeholder="Prompt" required></textarea>
             <button type="submit">Create Task</button>
@@ -88,11 +87,40 @@
                     <th>Created</th>
                 </tr>
             </thead>
-            <tbody id="task-list" hx-get="/tasks" hx-trigger="every 5s">
+            <tbody id="task-list">
                 {{template "task-list.html" .}}
             </tbody>
         </table>
     </div>
 
+    <script>
+        async function rpc(method, params) {
+            const resp = await fetch('/xagent.v1.XAgentService/' + method, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(params)
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            return resp.json();
+        }
+
+        async function refreshTaskList() {
+            const resp = await fetch('/tasks');
+            document.getElementById('task-list').innerHTML = await resp.text();
+        }
+
+        document.getElementById('create-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            await rpc('CreateTask', {
+                workspace: form.workspace.value,
+                prompts: [form.prompt.value]
+            });
+            form.reset();
+            refreshTaskList();
+        });
+
+        setInterval(refreshTaskList, 5000);
+    </script>
 </body>
 </html>

@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task {{.Task.ID | printf "%.8s"}} - XAgent</title>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -59,23 +58,56 @@
         button:hover { background: #1d4ed8; }
         .btn-danger { background: #dc2626; }
         .btn-danger:hover { background: #b91c1c; }
-        .btn-secondary { background: #6b7280; }
-        .btn-secondary:hover { background: #4b5563; }
         .task-actions { margin-top: 15px; display: flex; gap: 10px; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
         .back-link { margin-bottom: 20px; display: inline-block; }
-        .header { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
-        .header h1 { margin: 0; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <a href="/" class="back-link">&larr; Back to Tasks</a>
-    </div>
+    <a href="/" class="back-link">&larr; Back to Tasks</a>
 
     <div class="card" id="task-detail">
         {{template "task-detail.html" .}}
     </div>
+
+    <script>
+        const taskId = '{{.Task.ID}}';
+
+        async function rpc(method, params) {
+            const resp = await fetch('/xagent.v1.XAgentService/' + method, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(params)
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            return resp.json();
+        }
+
+        async function updateTask(params) {
+            await rpc('UpdateTask', {id: taskId, ...params});
+            refreshDetail();
+        }
+
+        async function refreshDetail() {
+            const resp = await fetch('/tasks/' + taskId);
+            document.getElementById('task-detail').innerHTML = await resp.text();
+        }
+
+        async function refreshStatus() {
+            const resp = await fetch('/tasks/' + taskId + '/status');
+            const el = document.getElementById('task-status');
+            if (el) el.outerHTML = await resp.text();
+        }
+
+        async function refreshLogs() {
+            const resp = await fetch('/tasks/' + taskId + '/logs');
+            const el = document.getElementById('task-logs');
+            if (el) el.outerHTML = await resp.text();
+        }
+
+        setInterval(refreshStatus, 3000);
+        setInterval(refreshLogs, 3000);
+    </script>
 </body>
 </html>

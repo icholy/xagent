@@ -1,1 +1,1 @@
-<span class="status status-{{.Status}}" hx-get="/tasks/{{.ID}}/status" hx-trigger="every 3s" hx-swap="outerHTML">{{.Status}}</span>
+<span id="task-status" class="status status-{{.Status}}">{{.Status}}</span>
