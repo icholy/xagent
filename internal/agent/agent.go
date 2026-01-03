@@ -88,6 +88,7 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 
 	cmd := exec.CommandContext(ctx, "npx", args...)
 	cmd.Dir = a.cwd
+	cmd.Env = append(os.Environ(), "DISABLE_AUTOUPDATER=1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
