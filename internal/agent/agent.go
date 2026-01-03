@@ -1,9 +1,12 @@
 package agent
 
 import (
+	"bufio"
 	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -74,8 +77,60 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 	cmd := exec.CommandContext(ctx, "npx", args...)
 	cmd.Dir = a.cwd
 	cmd.Env = append(os.Environ(), "DISABLE_AUTOUPDATER=1")
-	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if !a.handleStreamEvent(line) {
+			fmt.Println(string(line))
+		}
+	}
+
+	return cmd.Wait()
+}
+
+func (a *Agent) handleStreamEvent(data []byte) bool {
+	var event struct {
+		Type    string `json:"type"`
+		Message struct {
+			Content []struct {
+				Type  string `json:"type"`
+				Text  string `json:"text"`
+				Name  string `json:"name"`
+				Input any    `json:"input"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+
+	if err := json.Unmarshal(data, &event); err != nil {
+		return false
+	}
+
+	switch event.Type {
+	case "assistant":
+		for _, block := range event.Message.Content {
+			switch block.Type {
+			case "text":
+				if block.Text != "" {
+					fmt.Print(block.Text)
+				}
+			case "tool_use":
+				fmt.Printf("\n→ %s\n", block.Name)
+			}
+		}
+	case "result":
+		fmt.Println()
+	}
+
+	return true
 }
