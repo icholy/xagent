@@ -41,11 +41,12 @@ var RunCommand = &cli.Command{
 		slog.Info("loaded config",
 			"cwd", cfg.Cwd,
 			"commands", cfg.Commands,
+			"setup", cfg.Setup,
 			"started", cfg.Started,
 		)
 
-		// Run setup commands if not started yet
-		if !cfg.Started {
+		// Run setup commands if not already done
+		if !cfg.Setup {
 			for _, command := range cfg.Commands {
 				fmt.Printf("Running setup command: %s\n", command)
 				c := exec.CommandContext(ctx, "sh", "-c", command)
@@ -54,6 +55,10 @@ var RunCommand = &cli.Command{
 				if err := c.Run(); err != nil {
 					return fmt.Errorf("setup command failed: %w", err)
 				}
+			}
+			cfg.Setup = true
+			if err := agent.SaveConfig(taskID, cfg); err != nil {
+				return fmt.Errorf("failed to save config: %w", err)
 			}
 		}
 

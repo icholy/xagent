@@ -18,6 +18,7 @@ type Config struct {
 	Commands   []string             `json:"commands,omitempty"`
 
 	// Agent-managed state
+	Setup   bool `json:"setup,omitempty"`
 	Started bool `json:"started,omitempty"`
 }
 
