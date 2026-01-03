@@ -96,10 +96,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 				r.log(ctx, task.Id, "info", "task cancelled, container killed")
 			}
 		case "restarting":
+			r.log(ctx, task.Id, "info", "container restarting")
 			if err := r.killTask(ctx, task); err != nil {
 				slog.Error("failed to kill task for restart", "task", task.Id, "error", err)
 			}
-			r.log(ctx, task.Id, "info", "restarting task")
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to restart task", "task", task.Id, "error", err)
 				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to restart task: %v", err))
@@ -112,9 +112,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 				slog.Error("failed to update task status", "task", task.Id, "error", err)
 			}
 		case "pending":
+			r.log(ctx, task.Id, "info", "container starting")
 			if err := r.startTask(ctx, task); err != nil {
-				slog.Error("failed to start task", "task", task.Id, "error", err)
-				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to start task: %v", err))
+				slog.Error("failed to start container", "task", task.Id, "error", err)
+				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to start container: %v", err))
 				if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "failed"}); err != nil {
 					slog.Error("failed to update task status", "task", task.Id, "error", err)
 				}
@@ -278,7 +279,6 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 	}
 
 	slog.Info("container started", "task", task.Id, "container", containerName)
-	r.log(ctx, task.Id, "info", fmt.Sprintf("container %s started", containerName))
 	return nil
 }
 
