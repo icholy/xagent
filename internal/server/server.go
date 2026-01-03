@@ -100,6 +100,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 
 	task := &store.Task{
 		ID:           id,
+		Name:         req.Name,
 		Workspace:    req.Workspace,
 		Instructions: instructions,
 		Status:       store.TaskStatusPending,
@@ -226,6 +227,7 @@ func taskToProto(t *store.Task) *xagentv1.Task {
 	}
 	return &xagentv1.Task{
 		Id:           t.ID,
+		Name:         t.Name,
 		Workspace:    t.Workspace,
 		Instructions: instructions,
 		Status:       string(t.Status),

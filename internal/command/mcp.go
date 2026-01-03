@@ -158,6 +158,10 @@ var McpCommand = &cli.Command{
 		s.AddTool(
 			mcp.NewTool("create_task",
 				mcp.WithDescription("Create a new task in the xagent system"),
+				mcp.WithString("name",
+					mcp.Required(),
+					mcp.Description("A short name for the task"),
+				),
 				mcp.WithString("instruction",
 					mcp.Required(),
 					mcp.Description("The instruction text for the task"),
@@ -168,14 +172,16 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				args := req.GetArguments()
+				name, _ := args["name"].(string)
 				instruction, _ := args["instruction"].(string)
 				url, _ := args["url"].(string)
 
-				if instruction == "" {
-					return mcp.NewToolResultError("instruction is required"), nil
+				if name == "" || instruction == "" {
+					return mcp.NewToolResultError("name and instruction are required"), nil
 				}
 
 				resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+					Name:      name,
 					Workspace: workspace,
 					Instructions: []*xagentv1.Instruction{
 						{Text: instruction, Url: url},

@@ -26,6 +26,11 @@ var TaskCreateCommand = &cli.Command{
 			Usage: "Task ID (optional, auto-generated if not provided)",
 		},
 		&cli.StringFlag{
+			Name:    "name",
+			Aliases: []string{"n"},
+			Usage:   "Task name",
+		},
+		&cli.StringFlag{
 			Name:    "workspace",
 			Aliases: []string{"w"},
 			Usage:   "Workspace to use",
@@ -48,6 +53,7 @@ var TaskCreateCommand = &cli.Command{
 
 		resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 			Id:           cmd.String("id"),
+			Name:         cmd.String("name"),
 			Workspace:    cmd.String("workspace"),
 			Instructions: instructions,
 		})
