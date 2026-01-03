@@ -1,5 +1,5 @@
-<div id="task-children">
 {{if .Children}}
+<div id="task-children" class="card">
 <h3>Child Tasks</h3>
 <table>
     <thead>
@@ -16,5 +16,7 @@
         {{end}}
     </tbody>
 </table>
-{{end}}
 </div>
+{{else}}
+<div id="task-children"></div>
+{{end}}
