@@ -29,9 +29,16 @@ var McpCommand = &cli.Command{
 			Usage:    "Task ID",
 			Required: true,
 		},
+		&cli.StringFlag{
+			Name:     "workspace",
+			Aliases:  []string{"w"},
+			Usage:    "Workspace name",
+			Required: true,
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		taskID := cmd.String("task")
+		workspace := cmd.String("workspace")
 		client := xagentclient.New(cmd.String("server"))
 
 		s := server.NewMCPServer(
@@ -145,6 +152,40 @@ var McpCommand = &cli.Command{
 
 				data, _ := json.MarshalIndent(task, "", "  ")
 				return mcp.NewToolResultText(string(data)), nil
+			},
+		)
+
+		s.AddTool(
+			mcp.NewTool("create_task",
+				mcp.WithDescription("Create a new task in the xagent system"),
+				mcp.WithString("instruction",
+					mcp.Required(),
+					mcp.Description("The instruction text for the task"),
+				),
+				mcp.WithString("url",
+					mcp.Description("Optional URL associated with the instruction (e.g., GitHub issue, Jira ticket)"),
+				),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				args := req.GetArguments()
+				instruction, _ := args["instruction"].(string)
+				url, _ := args["url"].(string)
+
+				if instruction == "" {
+					return mcp.NewToolResultError("instruction is required"), nil
+				}
+
+				resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+					Workspace: workspace,
+					Instructions: []*xagentv1.Instruction{
+						{Text: instruction, Url: url},
+					},
+				})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to create task: %v", err)), nil
+				}
+
+				return mcp.NewToolResultText(fmt.Sprintf("Task created: %s", resp.Task.Id)), nil
 			},
 		)
 

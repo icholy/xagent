@@ -229,7 +229,7 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 		}
 
 		// Copy config into container
-		if err := r.copyConfig(ctx, resp.ID, task.Id, ws); err != nil {
+		if err := r.copyConfig(ctx, resp.ID, task, ws); err != nil {
 			return fmt.Errorf("failed to copy config: %w", err)
 		}
 
@@ -333,7 +333,7 @@ func (r *Runner) copyBinary(ctx context.Context, containerID, image string) erro
 	return r.docker.CopyToContainer(ctx, containerID, "/usr/local/bin", &buf, container.CopyToContainerOptions{})
 }
 
-func (r *Runner) copyConfig(ctx context.Context, containerID, taskID string, ws *workspace.Workspace) error {
+func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagentv1.Task, ws *workspace.Workspace) error {
 	// Convert workspace to agent config format
 	cfg := agent.Config{
 		Cwd:        ws.Agent.Cwd,
@@ -345,7 +345,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID, taskID string, ws 
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
 		Command: "/usr/local/bin/xagent",
-		Args:    []string{"mcp", "--server", "unix:///var/run/xagent.sock", "--task", taskID},
+		Args:    []string{"mcp", "--server", "unix:///var/run/xagent.sock", "--task", task.Id, "--workspace", task.Workspace},
 	}
 
 	for name, srv := range ws.Agent.McpServers {
@@ -359,7 +359,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID, taskID string, ws 
 		}
 	}
 
-	data, err := cfg.Tar(taskID)
+	data, err := cfg.Tar(task.Id)
 	if err != nil {
 		return err
 	}
