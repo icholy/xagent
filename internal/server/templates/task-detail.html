@@ -1,17 +1,18 @@
-<h2>Task {{.Task.ID | printf "%.8s"}}</h2>
+<div class="task-header">
+    <h2>Task {{.Task.ID | printf "%.8s"}}</h2>
+    <div class="task-actions">
+    {{if or (eq .Task.Status "running") (eq .Task.Status "pending")}}
+        <button onclick="updateTask({status: 'cancelled'})" class="btn-danger">Cancel</button>
+    {{end}}
+    {{if or (eq .Task.Status "completed") (eq .Task.Status "failed")}}
+        <button onclick="updateTask({status: 'archived'}).then(() => location.href='/')" class="btn-secondary">Archive</button>
+    {{end}}
+    </div>
+</div>
 
 <p><strong>Workspace:</strong> {{.Task.Workspace}}</p>
 <p><strong>Status:</strong> {{template "task-status.html" .Task}}</p>
 <p><strong>Created:</strong> {{.Task.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
-
-<div class="task-actions">
-{{if or (eq .Task.Status "running") (eq .Task.Status "pending")}}
-    <button onclick="updateTask({status: 'cancelled'})" class="btn-danger">Cancel</button>
-{{end}}
-{{if or (eq .Task.Status "completed") (eq .Task.Status "failed")}}
-    <button onclick="updateTask({status: 'archived'}).then(() => location.href='/')" class="btn-secondary">Archive</button>
-{{end}}
-</div>
 
 <hr>
 
