@@ -2,10 +2,11 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	"github.com/icholy/xagent/internal/xagentclient"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/urfave/cli/v3"
@@ -109,6 +110,28 @@ var McpCommand = &cli.Command{
 				}
 
 				return mcp.NewToolResultText("Report submitted"), nil
+			},
+		)
+
+		s.AddTool(
+			mcp.NewTool("get_task",
+				mcp.WithDescription("Get the current task prompts and links"),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				resp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to get task: %v", err)), nil
+				}
+
+				links, _ := client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: taskID})
+
+				task := map[string]any{
+					"prompts": resp.Task.Prompts,
+					"links":   links.GetLinks(),
+				}
+
+				data, _ := json.MarshalIndent(task, "", "  ")
+				return mcp.NewToolResultText(string(data)), nil
 			},
 		)
 
