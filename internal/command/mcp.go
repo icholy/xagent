@@ -128,8 +128,8 @@ var McpCommand = &cli.Command{
 				instructions := make([]map[string]string, len(resp.Task.Instructions))
 				for i, inst := range resp.Task.Instructions {
 					instructions[i] = map[string]string{
-						"text":   inst.Text,
-						"origin": inst.Origin,
+						"text": inst.Text,
+						"url":  inst.Url,
 					}
 				}
 

@@ -135,7 +135,7 @@ var JiraCommand = &cli.Command{
 						Id:     taskID,
 						Status: "pending",
 						AddInstructions: []*xagentv1.Instruction{
-							{Text: body, Origin: c.IssueURL},
+							{Text: body, Url: c.IssueURL},
 						},
 					})
 					if err != nil {
@@ -149,7 +149,7 @@ var JiraCommand = &cli.Command{
 					resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 						Workspace: workspace,
 						Instructions: []*xagentv1.Instruction{
-							{Text: body, Origin: c.IssueURL},
+							{Text: body, Url: c.IssueURL},
 						},
 					})
 					if err != nil {

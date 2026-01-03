@@ -20,8 +20,8 @@ const (
 )
 
 type Instruction struct {
-	Text   string `json:"text"`
-	Origin string `json:"origin,omitempty"`
+	Text string `json:"text"`
+	URL  string `json:"url,omitempty"`
 }
 
 type Task struct {

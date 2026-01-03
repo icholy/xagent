@@ -138,7 +138,7 @@ var GithubCommand = &cli.Command{
 						Id:     taskID,
 						Status: "pending",
 						AddInstructions: []*xagentv1.Instruction{
-							{Text: body, Origin: c.PRURL},
+							{Text: body, Url: c.PRURL},
 						},
 					})
 					if err != nil {
@@ -152,7 +152,7 @@ var GithubCommand = &cli.Command{
 					resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 						Workspace: workspace,
 						Instructions: []*xagentv1.Instruction{
-							{Text: body, Origin: c.PRURL},
+							{Text: body, Url: c.PRURL},
 						},
 					})
 					if err != nil {

@@ -92,8 +92,8 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	instructions := make([]store.Instruction, len(req.Instructions))
 	for i, inst := range req.Instructions {
 		instructions[i] = store.Instruction{
-			Text:   inst.Text,
-			Origin: inst.Origin,
+			Text: inst.Text,
+			URL:  inst.Url,
 		}
 	}
 
@@ -129,8 +129,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 	instructions := make([]store.Instruction, len(req.AddInstructions))
 	for i, inst := range req.AddInstructions {
 		instructions[i] = store.Instruction{
-			Text:   inst.Text,
-			Origin: inst.Origin,
+			Text: inst.Text,
+			URL:  inst.Url,
 		}
 	}
 
@@ -219,8 +219,8 @@ func taskToProto(t *store.Task) *xagentv1.Task {
 	instructions := make([]*xagentv1.Instruction, len(t.Instructions))
 	for i, inst := range t.Instructions {
 		instructions[i] = &xagentv1.Instruction{
-			Text:   inst.Text,
-			Origin: inst.Origin,
+			Text: inst.Text,
+			Url:  inst.URL,
 		}
 	}
 	return &xagentv1.Task{

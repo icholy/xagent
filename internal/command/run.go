@@ -76,8 +76,8 @@ var RunCommand = &cli.Command{
 			prompt = strings.Join([]string{
 				"Use xagent:get_task to fetch your task instructions and execute them.",
 				"",
-				"Each instruction has a 'text' field with the task and an optional 'origin' field with the source URL.",
-				"If you have questions, problems, or take no action, respond on the platform from the most recent instruction's origin.",
+				"Each instruction has a 'text' field with the task and an optional 'url' field with the source URL.",
+				"If you have questions, problems, or take no action, respond on the platform from the most recent instruction's url.",
 				"",
 				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
 				"Always use web URLs that users can visit, not API URLs.",
