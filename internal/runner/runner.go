@@ -198,6 +198,16 @@ func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task) error {
 		if err := r.docker.ContainerKill(ctx, c.ID, "SIGKILL"); err != nil {
 			return fmt.Errorf("failed to kill container: %w", err)
 		}
+		// Wait for the container to actually exit
+		waitCh, errCh := r.docker.ContainerWait(ctx, c.ID, container.WaitConditionNotRunning)
+		select {
+		case <-waitCh:
+			// Container has exited
+		case err := <-errCh:
+			return fmt.Errorf("failed to wait for container to exit: %w", err)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	return nil
 }
