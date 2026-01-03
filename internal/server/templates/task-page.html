@@ -117,7 +117,7 @@
         };
         document.getElementById('instruction-form').onsubmit = async (e) => {
             e.preventDefault();
-            await updateTask({status: 'pending', addInstructions: [{text: e.target.instruction.value}]});
+            await updateTask({status: 'restarting', addInstructions: [{text: e.target.instruction.value}]});
             e.target.reset();
         };
     </script>
