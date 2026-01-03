@@ -104,7 +104,7 @@ var GithubCommand = &cli.Command{
 			Interval:  interval,
 			StateFile: filepath.Join(dataDir, "github.json"),
 			OnComment: func(c githubx.Comment) {
-				if strings.TrimSpace(c.Body) != "xagent fix" {
+				if !strings.HasPrefix(strings.TrimSpace(c.Body), "github fix") {
 					return
 				}
 

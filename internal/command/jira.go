@@ -115,7 +115,7 @@ var JiraCommand = &cli.Command{
 			Interval:  interval,
 			StateFile: filepath.Join(dataDir, "jira.json"),
 			OnComment: func(c jirax.Comment) {
-				if strings.TrimSpace(c.Body) != "xagent fix" {
+				if !strings.HasPrefix(strings.TrimSpace(c.Body), "jira fix") {
 					return
 				}
 
