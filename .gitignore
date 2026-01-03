@@ -1,4 +1,5 @@
 /xagent
 /data/xagent.db*
+/data/*.json
 /prebuilt/
 /internal/proto/
