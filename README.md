@@ -1,21 +1,14 @@
-# XAGENT Design Document
+# XAGENT
 
-## Overview
+An async agent orchestrator that runs multiple Claude Code instances in parallel inside containers. Agents are non-interactive and task-driven, executing prompts like "Implement JIRA ticket X and open a draft PR".
 
-XAGENT is an async agent orchestrator that runs multiple Claude Code instances in parallel inside containers. Agents are non-interactive and task-driven, executing prompts like "Implement JIRA ticket X and open a draft PR".
+See [CLAUDE.md](CLAUDE.md) for architecture overview and development guidance.
 
 ## Architecture
 
 ![Architecture](diagrams/architecture.svg)
 
-## Core Concept: Botnet-Style Task Delegation
-
-XAGENT uses a botnet-style C2 (command & control) architecture for agent task delegation:
-
-- **C2 Server** stores tasks, dispatches work, collects logs
-- **Runner** polls for pending tasks, spawns agent containers, monitors container exits
-- **Agents** run in containers, pull tasks, execute prompts via Claude CLI, report results
-- **Communication** agents connect back to C2 via Unix socket proxy
+XAGENT uses a botnet-style C2 (command & control) architecture where a central server coordinates task execution across containerized agents that communicate via Unix socket proxy.
 
 ## Requirements
 
@@ -46,276 +39,74 @@ Containers communicate with the C2 server via a Unix socket proxy:
 
 ## Components
 
-### 1. C2 Server
+### C2 Server
 - Connect RPC API for task management
 - SQLite for task metadata and logs
 - Web UI for task monitoring
 
-### 2. Runner
-- Standalone process that polls the C2 server for pending tasks
-- Creates Unix socket proxy for container communication
-- Manages Docker containers:
-  - Starts containers named `xagent-{task-id}`
-  - Copies prebuilt xagent binary into container
-  - If container exists, restarts it; otherwise creates new
-  - Marks task as `running` when container starts
-  - When a prompt is added, task status set to `pending`, runner restarts container
-- **Reconciliation**: On startup, checks for exited containers and updates task status accordingly (handles runner restarts)
+### Runner
+- Polls C2 server for pending tasks
+- Creates Unix socket proxy for container-to-server communication
+- Manages Docker container lifecycle (start, restart, monitor exits)
+- **Reconciliation**: On startup, syncs task status with container state (handles runner restarts)
 - **Monitoring**: Watches for container `die` events and updates task status based on exit code
-- **Cancellation**: Kills containers for cancelled tasks and marks them as failed
+- **Cancellation**: Kills containers for cancelled tasks
 
-### 3. Agent (Bot)
+### Agent
 - Runs Claude Code via CLI (`npx @anthropic-ai/claude-code --print`)
-- Connects to C2 via Unix socket
-- Executes assigned tasks
-- Uses `--continue` flag to resume sessions for follow-up prompts
-- **MCP Proxy**: The runner automatically injects an `xagent` MCP server into the agent's config. This MCP server (`xagent mcp`) provides tools that Claude can use during execution:
-  - `create_link` - Link external resources (PRs, Jira issues) to the task
-  - `report` - Log messages visible in the Web UI
+- Executes tasks with `--continue` flag for resumption
+- Stores local state in `~/.xagent/{task-id}.json`
+- Accesses injected `xagent` MCP server for task communication tools
 
-### Tasks vs Agents vs Sessions
+### Conceptual Model
 
-There are three distinct concepts:
-
-- **Task** (server-side): The unit of work managed by the C2 server. Contains workspace reference and a sequence of prompts to execute.
-- **Agent** (runtime): The process running inside a container that executes a Task. One-to-one relationship with Task.
-- **Session** (Claude Code): The conversation session created by Claude Code. Owned by the agent process and resumed with `--continue`.
-
-The C2 server tracks Tasks. Each Task is executed by one Agent process which creates a Claude Code session.
-
-**Constraint:** If a container is lost, its session history is gone. The agent stores state locally (`~/.xagent/{task-id}.json`) for resumption.
-
-### 4. Agent Container
-- Base image with Node.js
-- Claude Code installed on demand via npx
-- Agent binary (prebuilt) copied in at container start
-- Sets `XAGENT_TASK_ID` environment variable
-- Minimal footprint
+- **Task** (server-side): Unit of work with workspace reference and prompts
+- **Agent** (runtime): Container process executing a task (1:1 relationship)
+- **Session** (Claude Code): Conversation state, lost if container is destroyed
 
 ## Data Flow
 
 ![Data Flow](diagrams/dataflow.svg)
 
-## CLI
-
-Single binary with subcommands:
-
-```
-xagent server        # Start C2 server (API + Web UI)
-xagent runner        # Start runner (monitors tasks, manages containers)
-xagent run           # Run agent process (inside container)
-xagent mcp           # Start MCP server (provides tools to agents)
-xagent task list     # List tasks
-xagent task create   # Create a new task
-xagent task update   # Update a task (status, add prompts)
-xagent task delete   # Delete a task
-xagent containers    # List xagent containers (docker ps wrapper)
-xagent jira          # Poll Jira for issue comments
-```
-
-### `xagent server`
-
-Starts the C2 server (API + Web UI).
-
-```
-xagent server [options]
-
-Options:
-  -a, --addr <addr>       Listen address (default: ":8080")
-  -d, --db <path>         Database file path (default: "xagent.db")
-```
-
-### `xagent runner`
-
-Starts the runner process that monitors pending tasks and manages Docker containers.
-
-```
-xagent runner [options]
-
-Options:
-  -s, --server <url>      C2 server URL (default: "http://localhost:8080")
-  -c, --config <path>     Workspace config file (default: "workspaces.yaml")
-      --poll <duration>   Poll interval for pending tasks (default: 5s)
-      --prebuilt <path>   Directory containing prebuilt binaries (default: "prebuilt")
-      --debug             Stream container logs to stdout/stderr
-```
-
-### `xagent run`
-
-Runs an agent process inside a container. Started by the runner.
-
-```
-xagent run [options]
-
-Options:
-  -s, --server <url>      C2 server URL (default: "http://localhost:8080")
-  -t, --task <task_id>    Task ID to execute (required)
-```
-
-### `xagent mcp`
-
-Starts an MCP server that provides tools to agents. Automatically injected by the runner.
-
-```
-xagent mcp [options]
-
-Options:
-  -s, --server <url>      C2 server URL (default: "http://localhost:8080")
-  -t, --task <task_id>    Task ID for context (required)
-```
-
-Provides tools:
-- `create_link`: Create a link between the task and an external resource (e.g., PR URL, Jira issue)
-- `report`: Log a message for the task (displayed in Web UI)
-
-### `xagent task list`
-
-Lists tasks from the C2 server (JSON output).
-
-```
-xagent task list [options]
-
-Options:
-  -s, --server <url>      C2 server URL (default: "http://localhost:8080")
-      --status <status>   Filter by status (pending, running, completed, failed)
-```
-
-### `xagent task create`
-
-Creates a new task (JSON output).
-
-```
-xagent task create [options]
-
-Options:
-  -s, --server <url>      C2 server URL (default: "http://localhost:8080")
-  -w, --workspace <name>  Workspace name (required)
-  -p, --prompt <text>     Prompt to execute (can be specified multiple times)
-```
-
-### `xagent task update`
-
-Updates a task.
-
-```
-xagent task update <task-id> [options]
-
-Options:
-  -s, --server <url>      C2 server URL (default: "http://localhost:8080")
-      --status <status>   Set task status (pending, running, completed, failed)
-  -p, --add-prompt <text> Add prompt to task (can be specified multiple times)
-```
-
-### `xagent task delete`
-
-Deletes a task.
-
-```
-xagent task delete <task-id> [options]
-
-Options:
-  -s, --server <url>      C2 server URL (default: "http://localhost:8080")
-```
-
-### `xagent containers`
-
-Lists xagent containers (wrapper around `docker ps`).
-
-```
-xagent containers
-```
-
-### `xagent jira`
-
-Polls Jira for issue comments and creates/updates tasks.
-
-```
-xagent jira [options]
-
-Options:
-  -s, --server <url>      C2 server URL (default: "http://localhost:8080")
-      --label <label>     Label to filter issues by (default: "xagent")
-      --interval <dur>    Poll interval (default: 30s)
-      --url <url>         Jira base URL (env: JIRA_BASE_URL)
-  -u, --username <email>  Jira username/email (env: JIRA_USERNAME)
-      --token <token>     Jira API token (env: JIRA_API_TOKEN)
-  -d, --data <dir>        Data directory for state persistence (default: "data")
-  -w, --workspace <name>  Workspace for new tasks (required)
-```
-
-Comment commands:
-- `xagent new` - Create a new task linked to the issue
-- `xagent task` - Add a prompt to an existing linked task
-
-### Usage Examples
+## Quick Start
 
 ```bash
-# Start server (API + Web UI)
-xagent server --addr :9000
+# Start server
+xagent server --addr :8080
 
-# Start runner (in separate process)
-xagent runner --server http://localhost:9000
-
-# Manual: run agent for a specific task (normally done by runner)
-xagent run --server unix:///var/run/xagent.sock --task abc-123
-
-# List all tasks
-xagent task list --server http://localhost:9000
-
-# List only running tasks
-xagent task list --status running
+# Start runner (separate terminal)
+xagent runner --server http://localhost:8080
 
 # Create a task
-xagent task create --workspace myworkspace --prompt "Implement JIRA-123"
+xagent task create --workspace myworkspace --prompt "Implement feature X"
 
-# Add a follow-up prompt
-xagent task update abc-123 --add-prompt "Also add tests"
-
-# Delete a task
-xagent task delete abc-123
-
-# List containers
-xagent containers
-
-# Start Jira poller
-xagent jira --workspace myworkspace --url https://company.atlassian.net
+# Monitor via Web UI
+open http://localhost:8080
 ```
 
-## Workspaces Configuration
+For detailed CLI reference, see [CLAUDE.md](CLAUDE.md).
 
-Workspaces are defined in `workspaces.yaml`:
+## Workspaces
 
+Workspaces define container environment and MCP servers in `workspaces.yaml`. The runner auto-injects an `xagent` MCP server for task communication tools.
+
+Example:
 ```yaml
 myworkspace:
-  # Setup commands run before agent starts
   commands:
     - git clone https://github.com/org/repo /workspace
-
-  # Container configuration
   container:
     image: node:20
     working_dir: /workspace
-    user: "1000:1000"  # Optional: run as specific UID:GID
     volumes:
       - /host/path:/container/path
-    networks:
-      - mynetwork
-    group_add:
-      - docker
-    environment:
-      MY_VAR: value
-
-  # Agent configuration
   agent:
-    cwd: /workspace  # Supports $XAGENT_TASK_ID expansion
+    cwd: /workspace
     mcp_servers:
       filesystem:
-        type: stdio
         command: npx
         args: ["-y", "@anthropic-ai/mcp-filesystem", "/workspace"]
 ```
-
-The runner automatically injects an `xagent` MCP server alongside any user-defined servers. This provides Claude with `create_link` and `report` tools for task communication.
 
 ## Authentication
 
@@ -383,41 +174,15 @@ CREATE TABLE logs (
 );
 ```
 
-## API Design (Connect RPC)
+## API Design
 
-Protocol Buffers definition at `proto/xagent/v1/xagent.proto`:
+Connect RPC API defined in `proto/xagent/v1/xagent.proto`. Generated Go code → `internal/proto/` (gitignored).
 
-```protobuf
-service XAgentService {
-  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
-  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
-  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
-  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
-  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
-  rpc UploadLogs(UploadLogsRequest) returns (UploadLogsResponse);
-  rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
-  rpc FindLinksByURL(FindLinksByURLRequest) returns (FindLinksByURLResponse);
-}
-```
+Core RPCs: `ListTasks`, `CreateTask`, `GetTask`, `UpdateTask`, `DeleteTask`, `UploadLogs`, `CreateLink`, `FindLinksByURL`
 
-Generated Go code is placed in `internal/proto/` (gitignored).
+### Agent State
 
-### Agent Local State
-
-The agent stores its local state in `~/.xagent/{task-id}.json`:
-
-```json
-{
-  "cwd": "/workspace",
-  "mcp_servers": {},
-  "commands": [],
-  "started": true,
-  "prompt_index": 1
-}
-```
-
-- `started`: Whether the Claude session has been started (use `--continue` if true)
-- `prompt_index`: Number of prompts already executed
+Stored in `~/.xagent/{task-id}.json` with session status (`started`) and prompt tracking (`prompt_index`).
 
 ### Task Lifecycle
 
@@ -446,23 +211,10 @@ The agent stores its local state in `~/.xagent/{task-id}.json`:
 
 ## Build
 
-Prebuilt binaries for containers:
-
 ```bash
-# Build for all architectures
-mise run build-prebuilt
-
-# Generates:
-# prebuilt/xagent-linux-amd64
-# prebuilt/xagent-linux-arm64
-```
-
-Generate protobuf code:
-
-```bash
-mise run generate
-# or
-go tool buf generate
+mise run build      # Build main + prebuilt binaries (linux amd64/arm64)
+mise run generate   # Generate protobuf code
+go build            # Build main binary only
 ```
 
 ## Open Questions
