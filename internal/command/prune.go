@@ -1,11 +1,14 @@
 package command
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -26,42 +29,79 @@ var PruneCommand = &cli.Command{
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		client := xagentclient.New(cmd.String("server"))
 
-		// Get all archived tasks
-		resp, err := client.ListTasks(ctx, &xagentv1.ListTasksRequest{
-			Statuses: []string{"archived"},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to list archived tasks: %w", err)
+		// List all xagent containers and extract task IDs
+		c := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter=label=xagent=true", "--format={{.Label \"xagent.task\"}}\t{{.Names}}")
+		var out bytes.Buffer
+		c.Stdout = &out
+		c.Stderr = os.Stderr
+		if err := c.Run(); err != nil {
+			return fmt.Errorf("failed to list containers: %w", err)
 		}
 
-		if len(resp.Tasks) == 0 {
-			fmt.Println("No archived tasks found.")
-			return nil
+		// Parse container list
+		var containersToRemove []struct {
+			taskID int64
+			name   string
 		}
 
-		// Build filter for docker rm command
-		// We'll use the xagent.task label to filter containers
-		var removed int
-		for _, task := range resp.Tasks {
-			taskIDStr := strconv.FormatInt(task.Id, 10)
-			containerName := "xagent-" + taskIDStr
+		scanner := bufio.NewScanner(&out)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "" {
+				continue
+			}
+			parts := strings.Split(line, "\t")
+			if len(parts) != 2 {
+				continue
+			}
 
-			// Try to remove the container
-			c := exec.CommandContext(ctx, "docker", "rm", "-f", containerName)
-			c.Stderr = os.Stderr
-			if err := c.Run(); err != nil {
-				// Container might not exist, which is fine
-				// Only show error if it's not a "no such container" error
-				if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-					fmt.Fprintf(os.Stderr, "Warning: failed to remove container %s: %v\n", containerName, err)
-				}
-			} else {
-				removed++
-				fmt.Printf("Removed container: %s (task %d)\n", containerName, task.Id)
+			taskIDStr := parts[0]
+			containerName := parts[1]
+
+			taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: invalid task ID %s for container %s\n", taskIDStr, containerName)
+				continue
+			}
+
+			// Check if task is archived
+			task, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to get task %d: %v\n", taskID, err)
+				continue
+			}
+
+			if task.Task.Status == "archived" {
+				containersToRemove = append(containersToRemove, struct {
+					taskID int64
+					name   string
+				}{taskID, containerName})
 			}
 		}
 
-		fmt.Printf("\nRemoved %d container(s) for %d archived task(s).\n", removed, len(resp.Tasks))
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("error reading container list: %w", err)
+		}
+
+		if len(containersToRemove) == 0 {
+			fmt.Println("No containers for archived tasks found.")
+			return nil
+		}
+
+		// Remove containers
+		var removed int
+		for _, container := range containersToRemove {
+			c := exec.CommandContext(ctx, "docker", "rm", "-f", container.name)
+			c.Stderr = os.Stderr
+			if err := c.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to remove container %s: %v\n", container.name, err)
+			} else {
+				removed++
+				fmt.Printf("Removed container: %s (task %d)\n", container.name, container.taskID)
+			}
+		}
+
+		fmt.Printf("\nRemoved %d container(s).\n", removed)
 		return nil
 	},
 }
