@@ -52,6 +52,7 @@ func (a *Agent) Prompt(ctx context.Context, prompt string) error {
 		"--verbose",
 		"--output-format", "stream-json",
 		"--strict-mcp-config",
+		"--model", "opus",
 	}
 
 	// Add MCP config if present
