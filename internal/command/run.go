@@ -88,7 +88,7 @@ var RunCommand = &cli.Command{
 				"The task may have linked events. Events provide additional context such as GitHub webhooks or external triggers.",
 				"Each event has a description, optional url, and optional data field with detailed payload information.",
 				"Events from child tasks are routed to the parent.",
-				"Decide whether to handle the event yourself or delegate to a child using xagent:add_child_task_instruction.",
+				"Decide whether to handle the event yourself or delegate to a child using xagent:add_child_task_event and xagent:add_child_task_instruction.",
 				"",
 				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
 				"Always use web URLs that users can visit, not API URLs.",
