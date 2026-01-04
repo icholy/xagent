@@ -5,6 +5,7 @@ go 1.25
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/andygrunwald/go-jira/v2 v2.0.0-20260101104437-351048edf719
+	github.com/aws/aws-lambda-go v1.47.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.6
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.20
 	github.com/docker/docker v28.5.2+incompatible
