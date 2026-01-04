@@ -74,7 +74,7 @@
     </style>
 </head>
 <body>
-    <a href="/" class="back-link">&larr; Back to Tasks</a>
+    <a href="/ui/tasks" class="back-link">&larr; Back to Tasks</a>
 
     <div class="card" id="task-detail">
         {{template "task-detail.html" .}}
@@ -113,7 +113,7 @@
             <tbody>
                 {{range .Events}}
                 <tr>
-                    <td><a href="/events/{{.ID}}">{{.ID}}</a></td>
+                    <td><a href="/ui/events/{{.ID}}">{{.ID}}</a></td>
                     <td>{{.Description}}</td>
                     <td>{{if .URL}}<a href="{{.URL}}" target="_blank">{{.URL}}</a>{{end}}</td>
                     <td><button onclick="unlinkEvent({{.ID}})" class="btn-danger" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
@@ -158,18 +158,18 @@
         }
 
         async function refreshDetail() {
-            const resp = await fetch('/tasks/' + taskId + '/detail');
+            const resp = await fetch('/ui/tasks/' + taskId + '/detail');
             document.getElementById('task-detail').innerHTML = await resp.text();
         }
 
         async function refreshLogs() {
-            const resp = await fetch('/tasks/' + taskId + '/logs');
+            const resp = await fetch('/ui/tasks/' + taskId + '/logs');
             const el = document.getElementById('task-logs');
             if (el) el.outerHTML = await resp.text();
         }
 
         async function refreshChildren() {
-            const resp = await fetch('/tasks/' + taskId + '/children');
+            const resp = await fetch('/ui/tasks/' + taskId + '/children');
             const el = document.getElementById('task-children');
             if (el) el.outerHTML = await resp.text();
         }

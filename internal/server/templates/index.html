@@ -73,8 +73,8 @@
 </head>
 <body>
     <div class="nav">
-        <a href="/">Tasks</a>
-        <a href="/events">Events</a>
+        <a href="/ui/tasks">Tasks</a>
+        <a href="/ui/events">Events</a>
     </div>
 
     <h1>XAgent</h1>
@@ -118,7 +118,7 @@
         }
 
         async function refreshTaskList() {
-            const resp = await fetch('/tasks');
+            const resp = await fetch('/ui/tasks/list');
             document.getElementById('task-list').innerHTML = await resp.text();
         }
 

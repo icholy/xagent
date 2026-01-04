@@ -8,13 +8,13 @@
         <button onclick="updateTask({status: 'restarting'})" class="btn-icon" title="Restart">&#x21bb;</button>
     {{end}}
     {{if or (eq .Task.Status "completed") (eq .Task.Status "failed")}}
-        <button onclick="updateTask({status: 'archived'}).then(() => location.href='/')" class="btn-secondary btn-icon" title="Archive">&#x1f4e6;</button>
+        <button onclick="updateTask({status: 'archived'}).then(() => location.href='/ui/tasks')" class="btn-secondary btn-icon" title="Archive">&#x1f4e6;</button>
     {{end}}
     </div>
 </div>
 
 <p><strong>Workspace:</strong> {{.Task.Workspace}}</p>
-{{if .Parent}}<p><strong>Parent:</strong> <a href="/tasks/{{.Parent.ID}}">{{if .Parent.Name}}{{.Parent.Name}}{{else}}{{.Parent.ID | printf "%.8s"}}{{end}}</a></p>{{end}}
+{{if .Parent}}<p><strong>Parent:</strong> <a href="/ui/tasks/{{.Parent.ID}}">{{if .Parent.Name}}{{.Parent.Name}}{{else}}{{.Parent.ID}}{{end}}</a></p>{{end}}
 <p><strong>Status:</strong> {{template "task-status.html" .Task}}</p>
 <p><strong>Created:</strong> {{.Task.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
 

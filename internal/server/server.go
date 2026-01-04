@@ -52,15 +52,18 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(path, handler)
 
 	// UI
-	mux.HandleFunc("GET /{$}", s.handleIndex)
-	mux.HandleFunc("GET /tasks", s.handleTaskList)
-	mux.HandleFunc("GET /tasks/{id}", s.handleTaskDetail)
-	mux.HandleFunc("GET /tasks/{id}/detail", s.handleTaskDetailPartial)
-	mux.HandleFunc("GET /tasks/{id}/logs", s.handleTaskLogs)
-	mux.HandleFunc("GET /tasks/{id}/children", s.handleTaskChildren)
-	mux.HandleFunc("GET /events", s.handleEvents)
-	mux.HandleFunc("GET /events/list", s.handleEventList)
-	mux.HandleFunc("GET /events/{id}", s.handleEventDetail)
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/ui/tasks", http.StatusFound)
+	})
+	mux.HandleFunc("GET /ui/tasks", s.handleIndex)
+	mux.HandleFunc("GET /ui/tasks/list", s.handleTaskList)
+	mux.HandleFunc("GET /ui/tasks/{id}", s.handleTaskDetail)
+	mux.HandleFunc("GET /ui/tasks/{id}/detail", s.handleTaskDetailPartial)
+	mux.HandleFunc("GET /ui/tasks/{id}/logs", s.handleTaskLogs)
+	mux.HandleFunc("GET /ui/tasks/{id}/children", s.handleTaskChildren)
+	mux.HandleFunc("GET /ui/events", s.handleEvents)
+	mux.HandleFunc("GET /ui/events/list", s.handleEventList)
+	mux.HandleFunc("GET /ui/events/{id}", s.handleEventDetail)
 
 	return mux
 }

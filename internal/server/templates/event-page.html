@@ -75,7 +75,7 @@
     </style>
 </head>
 <body>
-    <a href="/events" class="back-link">&larr; Back to Events</a>
+    <a href="/ui/events" class="back-link">&larr; Back to Events</a>
 
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -108,7 +108,7 @@
             <tbody>
                 {{range .Tasks}}
                 <tr>
-                    <td><a href="/tasks/{{.ID}}">{{.ID | printf "%.8s"}}</a></td>
+                    <td><a href="/ui/tasks/{{.ID}}">{{.ID}}</a></td>
                     <td>{{if .Name}}{{.Name}}{{else}}-{{end}}</td>
                     <td>{{.Workspace}}</td>
                     <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
@@ -137,7 +137,7 @@
         async function deleteEvent() {
             if (!confirm('Are you sure you want to delete this event?')) return;
             await rpc('DeleteEvent', {id: eventId});
-            window.location.href = '/events';
+            window.location.href = '/ui/events';
         }
     </script>
 </body>

@@ -54,8 +54,8 @@
 </head>
 <body>
     <div class="nav">
-        <a href="/">Tasks</a>
-        <a href="/events">Events</a>
+        <a href="/ui/tasks">Tasks</a>
+        <a href="/ui/events">Events</a>
     </div>
 
     <h1>Events</h1>
@@ -99,7 +99,7 @@
         }
 
         async function refreshEventList() {
-            const resp = await fetch('/events/list');
+            const resp = await fetch('/ui/events/list');
             document.getElementById('event-list').innerHTML = await resp.text();
         }
 
