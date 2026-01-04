@@ -9,7 +9,10 @@ run = [
 
 [tasks.generate]
 description = "Generate code from proto files"
-run = "go generate ./..."
+run = [
+	"go tool buf generate",
+	"go generate ./..."
+]
 
 [tasks.wipe]
 description = "Delete the database"
