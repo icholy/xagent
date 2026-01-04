@@ -80,7 +80,10 @@
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h2>Event #{{.Event.ID}}</h2>
-            <button onclick="deleteEvent()" class="btn-danger">Delete</button>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="processEvent()">Process</button>
+                <button onclick="deleteEvent()" class="btn-danger">Delete</button>
+            </div>
         </div>
         <div class="meta">
             <span><strong>Created:</strong> {{.Event.CreatedAt.Format "2006-01-02 15:04:05"}}</span>
@@ -138,6 +141,11 @@
             if (!confirm('Are you sure you want to delete this event?')) return;
             await rpc('DeleteEvent', {id: eventId});
             window.location.href = '/ui/events';
+        }
+
+        async function processEvent() {
+            await rpc('ProcessEvent', {id: eventId});
+            window.location.reload();
         }
     </script>
 </body>
