@@ -79,5 +79,8 @@ workspaces:
           url: "http://metamcp:12008/metamcp/Default/mcp"
           headers:
             Authorization: "Bearer ${env:METAMCP_API_KEY}"
+      prompt: |
+        You have the xagent repo cloned locally. When asked to make code changes, you should open a PR.
+        Never attribute yourself in the commit or the PR.
 
 

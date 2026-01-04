@@ -100,6 +100,9 @@ var RunCommand = &cli.Command{
 				"Your text responses are NOT visible to users - only tool calls matter.",
 			}, "\n")
 		}
+		if cfg.Prompt != "" {
+			prompt = prompt + "\n\n" + cfg.Prompt
+		}
 
 		if err := a.Prompt(ctx, prompt); err != nil {
 			return err
