@@ -150,6 +150,34 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 	}, nil
 }
 
+func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
+	task, err := s.tasks.Get(req.Id)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	children, _ := s.tasks.ListChildren(req.Id)
+	events, _ := s.events.ListByTask(req.Id)
+	links, _ := s.links.ListByTask(req.Id)
+
+	resp := &xagentv1.GetTaskDetailsResponse{
+		Task:     taskToProto(task),
+		Children: make([]*xagentv1.Task, len(children)),
+		Events:   make([]*xagentv1.Event, len(events)),
+		Links:    make([]*xagentv1.TaskLink, len(links)),
+	}
+	for i, c := range children {
+		resp.Children[i] = taskToProto(c)
+	}
+	for i, e := range events {
+		resp.Events[i] = eventToProto(e)
+	}
+	for i, l := range links {
+		resp.Links[i] = linkToProto(l)
+	}
+	return resp, nil
+}
+
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	instructions := make([]store.Instruction, len(req.AddInstructions))
 	for i, inst := range req.AddInstructions {
@@ -359,6 +387,20 @@ func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTask
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.ListEventTasksResponse{TaskIds: tasks}, nil
+}
+
+func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+	events, err := s.events.ListByTask(req.TaskId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp := &xagentv1.ListEventsByTaskResponse{
+		Events: make([]*xagentv1.Event, len(events)),
+	}
+	for i, e := range events {
+		resp.Events[i] = eventToProto(e)
+	}
+	return resp, nil
 }
 
 func eventToProto(e *store.Event) *xagentv1.Event {

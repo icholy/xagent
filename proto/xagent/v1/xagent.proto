@@ -11,6 +11,7 @@ service XAgentService {
   rpc ListChildTasks(ListChildTasksRequest) returns (ListChildTasksResponse);
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  rpc GetTaskDetails(GetTaskDetailsRequest) returns (GetTaskDetailsResponse);
   rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
   rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
   rpc UploadLogs(UploadLogsRequest) returns (UploadLogsResponse);
@@ -25,6 +26,7 @@ service XAgentService {
   rpc AddEventTask(AddEventTaskRequest) returns (AddEventTaskResponse);
   rpc RemoveEventTask(RemoveEventTaskRequest) returns (RemoveEventTaskResponse);
   rpc ListEventTasks(ListEventTasksRequest) returns (ListEventTasksResponse);
+  rpc ListEventsByTask(ListEventsByTaskRequest) returns (ListEventsByTaskResponse);
 }
 
 message Instruction {
@@ -84,6 +86,17 @@ message GetTaskRequest {
 
 message GetTaskResponse {
   Task task = 1;
+}
+
+message GetTaskDetailsRequest {
+  string id = 1;
+}
+
+message GetTaskDetailsResponse {
+  Task task = 1;
+  repeated Task children = 2;
+  repeated Event events = 3;
+  repeated TaskLink links = 4;
 }
 
 message UpdateTaskRequest {
@@ -217,4 +230,12 @@ message ListEventTasksRequest {
 
 message ListEventTasksResponse {
   repeated string task_ids = 1;
+}
+
+message ListEventsByTaskRequest {
+  string task_id = 1;
+}
+
+message ListEventsByTaskResponse {
+  repeated Event events = 1;
 }

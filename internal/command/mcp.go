@@ -123,15 +123,13 @@ var McpCommand = &cli.Command{
 
 		s.AddTool(
 			mcp.NewTool("get_task",
-				mcp.WithDescription("Get the current task instructions and links"),
+				mcp.WithDescription("Get the current task instructions, links, events, and children"),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				resp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+				resp, err := client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: taskID})
 				if err != nil {
 					return mcp.NewToolResultError(fmt.Sprintf("failed to get task: %v", err)), nil
 				}
-
-				linksResp, _ := client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: taskID})
 
 				marshalOpts := protojson.MarshalOptions{Indent: "  "}
 
@@ -140,15 +138,27 @@ var McpCommand = &cli.Command{
 					instructions[i], _ = marshalOpts.Marshal(inst)
 				}
 
-				links := make([]json.RawMessage, len(linksResp.GetLinks()))
-				for i, link := range linksResp.GetLinks() {
+				links := make([]json.RawMessage, len(resp.GetLinks()))
+				for i, link := range resp.GetLinks() {
 					links[i], _ = marshalOpts.Marshal(link)
+				}
+
+				events := make([]json.RawMessage, len(resp.GetEvents()))
+				for i, event := range resp.GetEvents() {
+					events[i], _ = marshalOpts.Marshal(event)
+				}
+
+				children := make([]json.RawMessage, len(resp.GetChildren()))
+				for i, child := range resp.GetChildren() {
+					children[i], _ = marshalOpts.Marshal(child)
 				}
 
 				task := map[string]any{
 					"name":         resp.Task.Name,
 					"instructions": instructions,
 					"links":        links,
+					"events":       events,
+					"children":     children,
 				}
 
 				data, _ := json.MarshalIndent(task, "", "  ")
