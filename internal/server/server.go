@@ -414,14 +414,40 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	taskIDs := make([]int64, 0, len(links))
+	// Build map of tasks by ID
+	byTaskID := make(map[int64]*store.Task)
 	for _, link := range links {
-		if err := s.events.AddTask(req.Id, link.TaskID); err != nil {
-			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
+		task, err := s.tasks.Get(link.TaskID)
+		if err != nil {
+			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
 		}
-		taskIDs = append(taskIDs, link.TaskID)
+		byTaskID[task.ID] = task
 	}
+
+	// Expand to include all ancestors
+	for {
+		added := false
+		for _, task := range byTaskID {
+			if task.Parent == 0 || byTaskID[task.Parent] != nil {
+				continue
+			}
+			parent, err := s.tasks.Get(task.Parent)
+			if err != nil {
+				s.log.Warn("failed to get parent task", "task_id", task.Parent, "error", err)
+				continue
+			}
+			byTaskID[parent.ID] = parent
+			added = true
+		}
+		if !added {
+			break
+		}
+	}
+
+	// TODO: find common ancestors and route event
+
+	taskIDs := make([]int64, 0)
 
 	s.log.Info("event processed", "id", req.Id, "tasks_linked", len(taskIDs))
 	return &xagentv1.ProcessEventResponse{TaskIds: taskIDs}, nil
