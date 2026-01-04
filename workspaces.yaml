@@ -81,7 +81,6 @@ workspaces:
             Authorization: "Bearer ${env:METAMCP_API_KEY}"
       prompt: |
         You have the xagent repo cloned locally. When asked to make code changes, you should open a PR.
-        Never attribute yourself in the commit or the PR.
 
         IMPORTANT: All git commits must use the following author information:
         - Name: Ilia Choly
@@ -90,5 +89,11 @@ workspaces:
         Before making any commits, ensure git is configured with:
         git config user.name "Ilia Choly"
         git config user.email "ilia.choly@gmail.com"
+
+        IMPORTANT: Never add attribution or credit lines to commits or PRs. This means:
+        - Do NOT add "Co-Authored-By:" lines in commit messages
+        - Do NOT add "🤖 Generated with Claude Code" or similar attribution
+        - Do NOT mention yourself, Claude, or AI in commits/PRs
+        - Keep commit messages focused on the technical changes only
 
 
