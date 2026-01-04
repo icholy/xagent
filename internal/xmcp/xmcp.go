@@ -72,7 +72,7 @@ func (s *Server) AddTools(server *mcp.Server) {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_child_task",
-		Description: "Update a child task by adding an instruction and/or events, then start it",
+		Description: "Update a child task by adding an instruction, then start it",
 	}, s.updateChildTask)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -246,17 +246,12 @@ func (s *Server) listChildTasks(ctx context.Context, req *mcp.CallToolRequest, i
 }
 
 type updateChildTaskInput struct {
-	TaskID      int64   `json:"task_id" jsonschema:"description=The child task ID,required"`
-	Instruction string  `json:"instruction,omitempty" jsonschema:"description=Optional instruction text to add"`
-	URL         string  `json:"url,omitempty" jsonschema:"description=Optional URL associated with the instruction"`
-	EventIDs    []int64 `json:"event_ids,omitempty" jsonschema:"description=Optional array of event IDs to add to the task"`
+	TaskID      int64  `json:"task_id" jsonschema:"description=The child task ID,required"`
+	Instruction string `json:"instruction" jsonschema:"description=Instruction text to add,required"`
+	URL         string `json:"url,omitempty" jsonschema:"description=Optional URL associated with the instruction"`
 }
 
 func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, input updateChildTaskInput) (*mcp.CallToolResult, any, error) {
-	if input.Instruction == "" && len(input.EventIDs) == 0 {
-		return errorResult("instruction or event_ids is required"), nil, nil
-	}
-
 	// Verify we are the parent
 	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
 	if err != nil {
@@ -266,29 +261,13 @@ func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 		return errorResult("task is not a child of the current task"), nil, nil
 	}
 
-	// Add events
-	for _, eventID := range input.EventIDs {
-		_, err = s.client.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-			EventId: eventID,
-			TaskId:  input.TaskID,
-		})
-		if err != nil {
-			return errorResult("failed to add event %d: %v", eventID, err), nil, nil
-		}
-	}
-
-	// Add instruction and restart
-	updateReq := &xagentv1.UpdateTaskRequest{
+	_, err = s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:     input.TaskID,
 		Status: "restarting",
-	}
-	if input.Instruction != "" {
-		updateReq.AddInstructions = []*xagentv1.Instruction{
+		AddInstructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
-		}
-	}
-
-	_, err = s.client.UpdateTask(ctx, updateReq)
+		},
+	})
 	if err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
