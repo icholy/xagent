@@ -96,21 +96,21 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Build GitHub Lambda function
-data "archive_file" "github_lambda" {
+# Build webhooks Lambda function
+data "archive_file" "webhooks_lambda" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda/github"
-  output_path = "${path.module}/builds/github-lambda.zip"
+  source_dir  = "${path.module}/../lambda/webhooks"
+  output_path = "${path.module}/builds/webhooks-lambda.zip"
   excludes    = ["go.sum"]
 }
 
-# GitHub Lambda function
-resource "aws_lambda_function" "github_webhook" {
-  filename         = data.archive_file.github_lambda.output_path
-  function_name    = "${var.project_name}-github-webhook"
+# Webhooks Lambda function
+resource "aws_lambda_function" "webhooks" {
+  filename         = data.archive_file.webhooks_lambda.output_path
+  function_name    = "${var.project_name}-webhooks"
   role             = aws_iam_role.lambda_exec.arn
   handler          = "bootstrap"
-  source_code_hash = data.archive_file.github_lambda.output_base64sha256
+  source_code_hash = data.archive_file.webhooks_lambda.output_base64sha256
   runtime          = "provided.al2023"
   timeout          = 30
 
@@ -118,55 +118,19 @@ resource "aws_lambda_function" "github_webhook" {
     variables = {
       SQS_QUEUE_URL         = aws_sqs_queue.xagent_events.url
       GITHUB_WEBHOOK_SECRET = var.github_webhook_secret
+      JIRA_WEBHOOK_SECRET   = var.jira_webhook_secret
+      JIRA_BASE_URL         = var.jira_base_url
     }
   }
 
   tags = {
-    Name    = "${var.project_name}-github-webhook"
+    Name    = "${var.project_name}-webhooks"
     Project = var.project_name
   }
 }
 
-# GitHub Lambda Function URL
-resource "aws_lambda_function_url" "github_webhook" {
-  function_name      = aws_lambda_function.github_webhook.function_name
-  authorization_type = "NONE"
-}
-
-# Build Jira Lambda function
-data "archive_file" "jira_lambda" {
-  type        = "zip"
-  source_dir  = "${path.module}/../lambda/jira"
-  output_path = "${path.module}/builds/jira-lambda.zip"
-  excludes    = ["go.sum"]
-}
-
-# Jira Lambda function
-resource "aws_lambda_function" "jira_webhook" {
-  filename         = data.archive_file.jira_lambda.output_path
-  function_name    = "${var.project_name}-jira-webhook"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "bootstrap"
-  source_code_hash = data.archive_file.jira_lambda.output_base64sha256
-  runtime          = "provided.al2023"
-  timeout          = 30
-
-  environment {
-    variables = {
-      SQS_QUEUE_URL       = aws_sqs_queue.xagent_events.url
-      JIRA_WEBHOOK_SECRET = var.jira_webhook_secret
-      JIRA_BASE_URL       = var.jira_base_url
-    }
-  }
-
-  tags = {
-    Name    = "${var.project_name}-jira-webhook"
-    Project = var.project_name
-  }
-}
-
-# Jira Lambda Function URL
-resource "aws_lambda_function_url" "jira_webhook" {
-  function_name      = aws_lambda_function.jira_webhook.function_name
+# Webhooks Lambda Function URL
+resource "aws_lambda_function_url" "webhooks" {
+  function_name      = aws_lambda_function.webhooks.function_name
   authorization_type = "NONE"
 }

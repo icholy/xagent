@@ -1,4 +1,4 @@
-module github.com/icholy/xagent/lambda/jira
+module github.com/icholy/xagent/lambda/webhooks
 
 go 1.23
 
@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-lambda-go v1.47.0
 	github.com/aws/aws-sdk-go-v2/config v1.28.6
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.37.2
+	github.com/google/go-github/v68 v68.0.0
 )
 
 require (
