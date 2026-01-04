@@ -86,13 +86,6 @@ type createLinkInput struct {
 }
 
 func (s *Server) createLink(ctx context.Context, req *mcp.CallToolRequest, input createLinkInput) (*mcp.CallToolResult, any, error) {
-	if input.Relevance == "" {
-		return errorResult("relevance is required"), nil, nil
-	}
-	if input.URL == "" {
-		return errorResult("url is required"), nil, nil
-	}
-
 	_, err := s.client.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId:    s.taskID,
 		Relevance: input.Relevance,
@@ -112,9 +105,6 @@ type reportInput struct {
 }
 
 func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input reportInput) (*mcp.CallToolResult, any, error) {
-	if input.Message == "" {
-		return errorResult("message is required"), nil, nil
-	}
 	_, err := s.client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 		TaskId: s.taskID,
 		Entries: []*xagentv1.LogEntry{
@@ -172,13 +162,6 @@ type createChildTaskInput struct {
 }
 
 func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
-	if input.Name == "" {
-		return errorResult("name is required"), nil, nil
-	}
-	if input.Instruction == "" {
-		return errorResult("instruction is required"), nil, nil
-	}
-
 	resp, err := s.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Parent:    s.taskID,
@@ -199,9 +182,6 @@ type updateTaskInput struct {
 }
 
 func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
-	if input.Name == "" {
-		return errorResult("name is required"), nil, nil
-	}
 	_, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:   s.taskID,
 		Name: input.Name,
@@ -231,13 +211,6 @@ type addChildTaskInstructionInput struct {
 }
 
 func (s *Server) addChildTaskInstruction(ctx context.Context, req *mcp.CallToolRequest, input addChildTaskInstructionInput) (*mcp.CallToolResult, any, error) {
-	if input.TaskID == 0 {
-		return errorResult("task_id is required"), nil, nil
-	}
-	if input.Instruction == "" {
-		return errorResult("instruction is required"), nil, nil
-	}
-
 	// Verify we are the parent
 	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
 	if err != nil {
@@ -266,10 +239,6 @@ type listChildTaskLogsInput struct {
 }
 
 func (s *Server) listChildTaskLogs(ctx context.Context, req *mcp.CallToolRequest, input listChildTaskLogsInput) (*mcp.CallToolResult, any, error) {
-	if input.TaskID == 0 {
-		return errorResult("task_id is required"), nil, nil
-	}
-
 	// Verify we are the parent
 	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
 	if err != nil {
@@ -292,10 +261,6 @@ type listChildTaskLinksInput struct {
 }
 
 func (s *Server) listChildTaskLinks(ctx context.Context, req *mcp.CallToolRequest, input listChildTaskLinksInput) (*mcp.CallToolResult, any, error) {
-	if input.TaskID == 0 {
-		return errorResult("task_id is required"), nil, nil
-	}
-
 	// Verify we are the parent
 	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
 	if err != nil {
@@ -319,13 +284,6 @@ type addChildTaskEventInput struct {
 }
 
 func (s *Server) addChildTaskEvent(ctx context.Context, req *mcp.CallToolRequest, input addChildTaskEventInput) (*mcp.CallToolResult, any, error) {
-	if input.TaskID == 0 {
-		return errorResult("task_id is required"), nil, nil
-	}
-	if input.EventID == 0 {
-		return errorResult("event_id is required"), nil, nil
-	}
-
 	// Verify we are the parent
 	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
 	if err != nil {
