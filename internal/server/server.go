@@ -307,7 +307,7 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
 	event := &store.Event{
 		Description: req.Description,
-		Data:        []byte(req.Data),
+		Data:        req.Data,
 		URL:         req.Url,
 	}
 	if err := s.events.Create(event); err != nil {
@@ -351,7 +351,7 @@ func eventToProto(e *store.Event) *xagentv1.Event {
 	return &xagentv1.Event{
 		Id:          e.ID,
 		Description: e.Description,
-		Data:        string(e.Data),
+		Data:        e.Data,
 		Url:         e.URL,
 		Tasks:       e.Tasks,
 		CreatedAt:   timestamppb.New(e.CreatedAt),

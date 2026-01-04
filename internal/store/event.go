@@ -7,12 +7,12 @@ import (
 )
 
 type Event struct {
-	ID          int64           `json:"id"`
-	Description string          `json:"description"`
-	Data        json.RawMessage `json:"data"`
-	URL         string          `json:"url,omitempty"`
-	Tasks       []string        `json:"tasks,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
+	ID          int64     `json:"id"`
+	Description string    `json:"description"`
+	Data        string    `json:"data"`
+	URL         string    `json:"url,omitempty"`
+	Tasks       []string  `json:"tasks,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type EventRepository struct {
@@ -28,13 +28,10 @@ func (r *EventRepository) Create(event *Event) error {
 	if err != nil {
 		return err
 	}
-	if event.Data == nil {
-		event.Data = json.RawMessage(`{}`)
-	}
 	result, err := r.db.Exec(`
 		INSERT INTO events (description, data, url, tasks, created_at)
 		VALUES (?, ?, ?, ?, ?)
-	`, event.Description, string(event.Data), event.URL, string(tasks), time.Now())
+	`, event.Description, event.Data, event.URL, string(tasks), time.Now())
 	if err != nil {
 		return err
 	}
