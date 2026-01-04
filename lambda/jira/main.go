@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/andygrunwald/go-jira/v2/cloud"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -18,32 +19,10 @@ import (
 )
 
 type JiraWebhookEvent struct {
-	WebhookEvent string       `json:"webhookEvent"`
-	Issue        *JiraIssue   `json:"issue"`
-	Comment      *JiraComment `json:"comment"`
-	User         *JiraUser    `json:"user"`
-}
-
-type JiraIssue struct {
-	Key  string     `json:"key"`
-	Self string     `json:"self"`
-	Fields *JiraFields `json:"fields"`
-}
-
-type JiraFields struct {
-	Summary string `json:"summary"`
-}
-
-type JiraComment struct {
-	ID      string    `json:"id"`
-	Body    string    `json:"body"`
-	Author  *JiraUser `json:"author"`
-}
-
-type JiraUser struct {
-	Name         string `json:"name"`
-	EmailAddress string `json:"emailAddress"`
-	DisplayName  string `json:"displayName"`
+	WebhookEvent string        `json:"webhookEvent"`
+	Issue        *cloud.Issue  `json:"issue"`
+	Comment      *cloud.Comment `json:"comment"`
+	User         *cloud.User   `json:"user"`
 }
 
 type XAgentEvent struct {

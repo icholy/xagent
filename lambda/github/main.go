@@ -15,42 +15,16 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/google/go-github/v68/github"
 )
 
 type GitHubWebhookEvent struct {
-	Action      string                 `json:"action"`
-	Issue       *GitHubIssue           `json:"issue"`
-	PullRequest *GitHubPullRequest     `json:"pull_request"`
-	Comment     *GitHubComment         `json:"comment"`
-	Repository  *GitHubRepository      `json:"repository"`
-	Sender      *GitHubUser            `json:"sender"`
-}
-
-type GitHubIssue struct {
-	Number  int    `json:"number"`
-	HTMLURL string `json:"html_url"`
-	Title   string `json:"title"`
-}
-
-type GitHubPullRequest struct {
-	Number  int    `json:"number"`
-	HTMLURL string `json:"html_url"`
-	Title   string `json:"title"`
-}
-
-type GitHubComment struct {
-	Body    string      `json:"body"`
-	HTMLURL string      `json:"html_url"`
-	User    *GitHubUser `json:"user"`
-}
-
-type GitHubRepository struct {
-	Name     string `json:"name"`
-	FullName string `json:"full_name"`
-}
-
-type GitHubUser struct {
-	Login string `json:"login"`
+	Action      *string              `json:"action"`
+	Issue       *github.Issue        `json:"issue"`
+	PullRequest *github.PullRequest  `json:"pull_request"`
+	Comment     *github.IssueComment `json:"comment"`
+	Repository  *github.Repository   `json:"repository"`
+	Sender      *github.User         `json:"sender"`
 }
 
 type XAgentEvent struct {
@@ -132,27 +106,29 @@ func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 
 	switch eventType {
 	case "issue_comment":
-		if webhookEvent.Comment != nil && webhookEvent.Issue != nil {
-			body := strings.TrimSpace(webhookEvent.Comment.Body)
+		if webhookEvent.Comment != nil && webhookEvent.Issue != nil &&
+			webhookEvent.Comment.Body != nil && webhookEvent.Issue.HTMLURL != nil {
+			body := strings.TrimSpace(*webhookEvent.Comment.Body)
 			// Only process comments that start with "xagent task" or "xagent new"
 			if strings.HasPrefix(body, "xagent task") || strings.HasPrefix(body, "xagent new") {
 				xagentEvent = &XAgentEvent{
 					Description: body,
 					Data:        request.Body,
-					URL:         webhookEvent.Issue.HTMLURL,
+					URL:         *webhookEvent.Issue.HTMLURL,
 				}
 			}
 		}
 
 	case "pull_request_review_comment", "pull_request":
-		if webhookEvent.Comment != nil && webhookEvent.PullRequest != nil {
-			body := strings.TrimSpace(webhookEvent.Comment.Body)
+		if webhookEvent.Comment != nil && webhookEvent.PullRequest != nil &&
+			webhookEvent.Comment.Body != nil && webhookEvent.PullRequest.HTMLURL != nil {
+			body := strings.TrimSpace(*webhookEvent.Comment.Body)
 			// Only process comments that start with "xagent task" or "xagent new"
 			if strings.HasPrefix(body, "xagent task") || strings.HasPrefix(body, "xagent new") {
 				xagentEvent = &XAgentEvent{
 					Description: body,
 					Data:        request.Body,
-					URL:         webhookEvent.PullRequest.HTMLURL,
+					URL:         *webhookEvent.PullRequest.HTMLURL,
 				}
 			}
 		}
