@@ -83,10 +83,10 @@ func (s *Server) AddTools(server *mcp.Server) {
 }
 
 type createLinkInput struct {
-	Relevance string `json:"relevance" jsonschema:"description=Describe how this link is relevant to the task,required"`
-	URL       string `json:"url" jsonschema:"description=URL of the external resource,required"`
-	Title     string `json:"title,omitempty" jsonschema:"description=Optional display title for the link"`
-	Notify    bool   `json:"notify,omitempty" jsonschema:"description=True to receive events for this link"`
+	Relevance string `json:"relevance" jsonschema:"Describe how this link is relevant to the task"`
+	URL       string `json:"url" jsonschema:"URL of the external resource"`
+	Title     string `json:"title,omitempty" jsonschema:"Optional display title for the link"`
+	Notify    bool   `json:"notify,omitempty" jsonschema:"True to receive events for this link"`
 }
 
 func (s *Server) createLink(ctx context.Context, req *mcp.CallToolRequest, input createLinkInput) (*mcp.CallToolResult, any, error) {
@@ -106,7 +106,7 @@ func (s *Server) createLink(ctx context.Context, req *mcp.CallToolRequest, input
 }
 
 type reportInput struct {
-	Message string `json:"message" jsonschema:"description=The message to report,required"`
+	Message string `json:"message" jsonschema:"The message to report"`
 }
 
 func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input reportInput) (*mcp.CallToolResult, any, error) {
@@ -161,9 +161,9 @@ func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input 
 }
 
 type createChildTaskInput struct {
-	Name        string `json:"name" jsonschema:"description=A short name for the task,required"`
-	Instruction string `json:"instruction" jsonschema:"description=The instruction text for the task,required"`
-	URL         string `json:"url,omitempty" jsonschema:"description=Optional URL associated with the instruction (e.g. GitHub issue Jira ticket)"`
+	Name        string `json:"name" jsonschema:"A short name for the task"`
+	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
+	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue Jira ticket)"`
 }
 
 func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
@@ -184,7 +184,7 @@ func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 }
 
 type updateMyTaskInput struct {
-	Name string `json:"name" jsonschema:"description=The new name for the task,required"`
+	Name string `json:"name" jsonschema:"The new name for the task"`
 }
 
 func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
@@ -246,9 +246,9 @@ func (s *Server) listChildTasks(ctx context.Context, req *mcp.CallToolRequest, i
 }
 
 type updateChildTaskInput struct {
-	TaskID      int64  `json:"task_id" jsonschema:"description=The child task ID,required"`
-	Instruction string `json:"instruction" jsonschema:"description=Instruction text to add,required"`
-	URL         string `json:"url,omitempty" jsonschema:"description=Optional URL associated with the instruction"`
+	TaskID      int64  `json:"task_id" jsonschema:"The child task ID"`
+	Instruction string `json:"instruction" jsonschema:"Instruction text to add"`
+	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction"`
 }
 
 func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, input updateChildTaskInput) (*mcp.CallToolResult, any, error) {
@@ -277,7 +277,7 @@ func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 }
 
 type listChildTaskLogsInput struct {
-	TaskID int64 `json:"task_id" jsonschema:"description=The child task ID,required"`
+	TaskID int64 `json:"task_id" jsonschema:"The child task ID"`
 }
 
 func (s *Server) listChildTaskLogs(ctx context.Context, req *mcp.CallToolRequest, input listChildTaskLogsInput) (*mcp.CallToolResult, any, error) {
