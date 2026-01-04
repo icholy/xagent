@@ -94,14 +94,6 @@
     </div>
 
     <div class="card">
-        <h3>Link Task</h3>
-        <form id="add-task-form">
-            <input type="text" name="task_id" placeholder="Task ID" required>
-            <button type="submit">Link Task</button>
-        </form>
-    </div>
-
-    <div class="card">
         <h3>Linked Tasks ({{len .Tasks}})</h3>
         {{if .Tasks}}
         <table>
@@ -111,7 +103,6 @@
                     <th>Name</th>
                     <th>Workspace</th>
                     <th>Status</th>
-                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -121,7 +112,6 @@
                     <td>{{if .Name}}{{.Name}}{{else}}-{{end}}</td>
                     <td>{{.Workspace}}</td>
                     <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
-                    <td><button onclick="removeTask('{{.ID}}')" class="btn-danger" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
                 </tr>
                 {{end}}
             </tbody>
@@ -149,20 +139,6 @@
             await rpc('DeleteEvent', {id: eventId});
             window.location.href = '/events';
         }
-
-        async function removeTask(taskId) {
-            await rpc('RemoveEventTask', {eventId: eventId, taskId: taskId});
-            location.reload();
-        }
-
-        document.getElementById('add-task-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const taskId = e.target.task_id.value.trim();
-            if (!taskId) return;
-            await rpc('AddEventTask', {eventId: eventId, taskId: taskId});
-            e.target.reset();
-            location.reload();
-        });
     </script>
 </body>
 </html>

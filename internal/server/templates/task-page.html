@@ -91,6 +91,42 @@
     {{template "task-children.html" .}}
 
     <div class="card">
+        <h3>Link Event</h3>
+        <form id="link-event-form">
+            <input type="number" name="event_id" placeholder="Event ID" required>
+            <button type="submit">Link Event</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Linked Events ({{len .Events}})</h3>
+        {{if .Events}}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Description</th>
+                    <th>URL</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Events}}
+                <tr>
+                    <td><a href="/events/{{.ID}}">{{.ID}}</a></td>
+                    <td>{{.Description}}</td>
+                    <td>{{if .URL}}<a href="{{.URL}}" target="_blank">{{.URL}}</a>{{end}}</td>
+                    <td><button onclick="unlinkEvent({{.ID}})" class="btn-danger" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p style="color: #666;">No events linked to this task.</p>
+        {{end}}
+    </div>
+
+    <div class="card">
         <h3>Logs</h3>
         {{template "task-logs.html" (dict "TaskID" .Task.ID "Logs" .Logs)}}
     </div>
@@ -141,6 +177,19 @@
         setInterval(refreshDetail, 3000);
         setInterval(refreshLogs, 3000);
         setInterval(refreshChildren, 3000);
+
+        document.getElementById('link-event-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const eventId = parseInt(e.target.event_id.value);
+            await rpc('AddEventTask', {eventId: eventId, taskId: taskId});
+            e.target.reset();
+            location.reload();
+        };
+
+        async function unlinkEvent(eventId) {
+            await rpc('RemoveEventTask', {eventId: eventId, taskId: taskId});
+            location.reload();
+        }
     </script>
 </body>
 </html>

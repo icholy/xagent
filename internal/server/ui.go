@@ -47,11 +47,13 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 	logs, _ := s.logs.ListByTask(id)
 	links, _ := s.links.ListByTask(id)
 	children, _ := s.tasks.ListChildren(id)
+	events, _ := s.events.ListByTask(id)
 	data := map[string]any{
 		"Task":     task,
 		"Logs":     logs,
 		"Links":    links,
 		"Children": children,
+		"Events":   events,
 	}
 	if task.Parent != "" {
 		data["Parent"], _ = s.tasks.Get(task.Parent)
