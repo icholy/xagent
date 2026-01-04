@@ -32,11 +32,6 @@ var GithubCommand = &cli.Command{
 			Required: true,
 		},
 		&cli.StringFlag{
-			Name:  "keyword",
-			Usage: "Keyword to search for in comments",
-			Value: "xagent",
-		},
-		&cli.StringFlag{
 			Name:  "label",
 			Usage: "Label to filter PRs by",
 			Value: "xagent",
@@ -73,7 +68,6 @@ var GithubCommand = &cli.Command{
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		repo := cmd.String("repo")
 		username := cmd.String("username")
-		keyword := cmd.String("keyword")
 		label := cmd.String("label")
 		interval := cmd.Duration("interval")
 		serverURL := cmd.String("server")
@@ -96,7 +90,6 @@ var GithubCommand = &cli.Command{
 		slog.Info("starting github poller",
 			"repo", repo,
 			"username", username,
-			"keyword", keyword,
 			"label", label,
 			"interval", interval,
 		)
@@ -106,7 +99,6 @@ var GithubCommand = &cli.Command{
 			Owner:     owner,
 			Repo:      repoName,
 			Username:  username,
-			Keyword:   keyword,
 			Label:     label,
 			Interval:  interval,
 			StateFile: filepath.Join(dataDir, "github.json"),

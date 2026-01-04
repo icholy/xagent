@@ -25,7 +25,6 @@ type PollerOptions struct {
 	Owner     string
 	Repo      string
 	Username  string
-	Keyword   string
 	Label     string
 	Interval  time.Duration
 	StateFile string
@@ -128,9 +127,6 @@ func (p *Poller) search(ctx context.Context) ([]Comment, error) {
 
 		for _, c := range issueComments {
 			if !strings.EqualFold(c.GetUser().GetLogin(), p.opts.Username) {
-				continue
-			}
-			if !strings.Contains(strings.ToLower(c.GetBody()), strings.ToLower(p.opts.Keyword)) {
 				continue
 			}
 			comments = append(comments, Comment{
