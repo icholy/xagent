@@ -36,8 +36,20 @@ var TaskListCommand = &cli.Command{
 			return fmt.Errorf("failed to list tasks: %w", err)
 		}
 
+		// Fetch detailed information for each task
+		var taskDetails []*xagentv1.GetTaskDetailsResponse
+		for _, task := range resp.Tasks {
+			detailResp, err := client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{
+				Id: task.Id,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to get task details for task %d: %w", task.Id, err)
+			}
+			taskDetails = append(taskDetails, detailResp)
+		}
+
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.Tasks)
+		return enc.Encode(taskDetails)
 	},
 }
