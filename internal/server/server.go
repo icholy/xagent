@@ -461,6 +461,9 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		if err := s.events.AddTask(req.Id, id); err != nil {
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", id, "error", err)
 		}
+		if err := s.tasks.Update(id, store.TaskUpdate{Status: store.TaskStatusRestarting}); err != nil {
+			s.log.Warn("failed to restart task", "task_id", id, "error", err)
+		}
 	}
 
 	s.log.Info("event processed", "id", req.Id, "tasks_routed", len(taskIDs))
