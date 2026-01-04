@@ -7,7 +7,7 @@ import (
 
 type Link struct {
 	ID        int64     `json:"id"`
-	TaskID    string    `json:"task_id"`
+	TaskID    int64     `json:"task_id"`
 	Relevance string    `json:"relevance"`
 	URL       string    `json:"url"`
 	Title     string    `json:"title"`
@@ -35,7 +35,7 @@ func (r *LinkRepository) Create(link *Link) error {
 	return nil
 }
 
-func (r *LinkRepository) ListByTask(taskID string) ([]*Link, error) {
+func (r *LinkRepository) ListByTask(taskID int64) ([]*Link, error) {
 	rows, err := r.db.Query(`
 		SELECT id, task_id, relevance, url, title, created_at, created
 		FROM task_links WHERE task_id = ? ORDER BY created_at ASC

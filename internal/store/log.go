@@ -7,7 +7,7 @@ import (
 
 type Log struct {
 	ID        int64     `json:"id"`
-	TaskID    string    `json:"task_id"`
+	TaskID    int64     `json:"task_id"`
 	Type      string    `json:"type"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
@@ -61,7 +61,7 @@ func (r *LogRepository) CreateBatch(logs []*Log) error {
 	return tx.Commit()
 }
 
-func (r *LogRepository) ListByTask(taskID string) ([]*Log, error) {
+func (r *LogRepository) ListByTask(taskID int64) ([]*Log, error) {
 	rows, err := r.db.Query(`
 		SELECT id, task_id, type, content, created_at
 		FROM logs WHERE task_id = ? ORDER BY created_at ASC

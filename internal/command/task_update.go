@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -36,9 +37,13 @@ var TaskUpdateCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		taskID := cmd.Args().First()
-		if taskID == "" {
+		taskIDStr := cmd.Args().First()
+		if taskIDStr == "" {
 			return fmt.Errorf("task ID is required")
+		}
+		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid task ID: %w", err)
 		}
 
 		name := cmd.String("name")

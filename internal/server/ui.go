@@ -38,7 +38,11 @@ func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid task ID", http.StatusBadRequest)
+		return
+	}
 	task, err := s.tasks.Get(id)
 	if err != nil {
 		http.Error(w, "Task not found", http.StatusNotFound)
@@ -55,14 +59,18 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		"Children": children,
 		"Events":   events,
 	}
-	if task.Parent != "" {
+	if task.Parent != 0 {
 		data["Parent"], _ = s.tasks.Get(task.Parent)
 	}
 	templates.ExecuteTemplate(w, "task-page.html", data)
 }
 
 func (s *Server) handleTaskDetailPartial(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid task ID", http.StatusBadRequest)
+		return
+	}
 	task, err := s.tasks.Get(id)
 	if err != nil {
 		http.Error(w, "Task not found", http.StatusNotFound)
@@ -75,14 +83,18 @@ func (s *Server) handleTaskDetailPartial(w http.ResponseWriter, r *http.Request)
 		"Logs":  logs,
 		"Links": links,
 	}
-	if task.Parent != "" {
+	if task.Parent != 0 {
 		data["Parent"], _ = s.tasks.Get(task.Parent)
 	}
 	templates.ExecuteTemplate(w, "task-detail.html", data)
 }
 
 func (s *Server) handleTaskLogs(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid task ID", http.StatusBadRequest)
+		return
+	}
 	logs, _ := s.logs.ListByTask(id)
 	templates.ExecuteTemplate(w, "task-logs.html", map[string]any{
 		"TaskID": id,
@@ -91,7 +103,11 @@ func (s *Server) handleTaskLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTaskChildren(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid task ID", http.StatusBadRequest)
+		return
+	}
 	children, _ := s.tasks.ListChildren(id)
 	templates.ExecuteTemplate(w, "task-children.html", map[string]any{
 		"Children": children,

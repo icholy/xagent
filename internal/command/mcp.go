@@ -23,7 +23,7 @@ var McpCommand = &cli.Command{
 			Usage:   "C2 server URL",
 			Value:   "http://localhost:8080",
 		},
-		&cli.StringFlag{
+		&cli.Int64Flag{
 			Name:     "task",
 			Aliases:  []string{"t"},
 			Usage:    "Task ID",
@@ -37,7 +37,7 @@ var McpCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		taskID := cmd.String("task")
+		taskID := cmd.Int64("task")
 		workspace := cmd.String("workspace")
 		client := xagentclient.New(cmd.String("server"))
 
@@ -203,7 +203,7 @@ var McpCommand = &cli.Command{
 					return mcp.NewToolResultError(fmt.Sprintf("failed to create task: %v", err)), nil
 				}
 
-				return mcp.NewToolResultText(fmt.Sprintf("Task created: %s", resp.Task.Id)), nil
+				return mcp.NewToolResultText(fmt.Sprintf("Task created: %d", resp.Task.Id)), nil
 			},
 		)
 
@@ -255,7 +255,7 @@ var McpCommand = &cli.Command{
 		s.AddTool(
 			mcp.NewTool("add_child_task_instruction",
 				mcp.WithDescription("Add an instruction to a child task and restart it"),
-				mcp.WithString("task_id",
+				mcp.WithNumber("task_id",
 					mcp.Required(),
 					mcp.Description("The child task ID"),
 				),
@@ -269,11 +269,12 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				args := req.GetArguments()
-				childTaskID, _ := args["task_id"].(string)
+				childTaskIDFloat, _ := args["task_id"].(float64)
+				childTaskID := int64(childTaskIDFloat)
 				instruction, _ := args["instruction"].(string)
 				url, _ := args["url"].(string)
 
-				if childTaskID == "" || instruction == "" {
+				if childTaskID == 0 || instruction == "" {
 					return mcp.NewToolResultError("task_id and instruction are required"), nil
 				}
 
@@ -297,23 +298,24 @@ var McpCommand = &cli.Command{
 					return mcp.NewToolResultError(fmt.Sprintf("failed to add instruction: %v", err)), nil
 				}
 
-				return mcp.NewToolResultText(fmt.Sprintf("Instruction added to task %s", childTaskID)), nil
+				return mcp.NewToolResultText(fmt.Sprintf("Instruction added to task %d", childTaskID)), nil
 			},
 		)
 
 		s.AddTool(
 			mcp.NewTool("list_child_task_logs",
 				mcp.WithDescription("List logs for a child task"),
-				mcp.WithString("task_id",
+				mcp.WithNumber("task_id",
 					mcp.Required(),
 					mcp.Description("The child task ID"),
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				args := req.GetArguments()
-				childTaskID, _ := args["task_id"].(string)
+				childTaskIDFloat, _ := args["task_id"].(float64)
+				childTaskID := int64(childTaskIDFloat)
 
-				if childTaskID == "" {
+				if childTaskID == 0 {
 					return mcp.NewToolResultError("task_id is required"), nil
 				}
 
@@ -339,16 +341,17 @@ var McpCommand = &cli.Command{
 		s.AddTool(
 			mcp.NewTool("list_child_task_links",
 				mcp.WithDescription("List links for a child task"),
-				mcp.WithString("task_id",
+				mcp.WithNumber("task_id",
 					mcp.Required(),
 					mcp.Description("The child task ID"),
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				args := req.GetArguments()
-				childTaskID, _ := args["task_id"].(string)
+				childTaskIDFloat, _ := args["task_id"].(float64)
+				childTaskID := int64(childTaskIDFloat)
 
-				if childTaskID == "" {
+				if childTaskID == 0 {
 					return mcp.NewToolResultError("task_id is required"), nil
 				}
 

@@ -23,9 +23,9 @@ func Open(path string) (*sql.DB, error) {
 func migrate(db *sql.DB) error {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS tasks (
-			id            TEXT PRIMARY KEY,
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
 			name          TEXT NOT NULL DEFAULT '',
-			parent        TEXT NOT NULL DEFAULT '',
+			parent        INTEGER NOT NULL DEFAULT 0,
 			workspace     TEXT NOT NULL,
 			prompts       TEXT NOT NULL,
 			status        TEXT NOT NULL,
@@ -34,7 +34,7 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE TABLE IF NOT EXISTS logs (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
-			task_id    TEXT NOT NULL,
+			task_id    INTEGER NOT NULL,
 			type       TEXT NOT NULL,
 			content    TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -44,7 +44,7 @@ func migrate(db *sql.DB) error {
 
 		CREATE TABLE IF NOT EXISTS task_links (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
-			task_id    TEXT NOT NULL,
+			task_id    INTEGER NOT NULL,
 			relevance  TEXT NOT NULL,
 			url        TEXT NOT NULL,
 			title      TEXT,
@@ -65,7 +65,7 @@ func migrate(db *sql.DB) error {
 
 		CREATE TABLE IF NOT EXISTS event_tasks (
 			event_id INTEGER NOT NULL,
-			task_id  TEXT NOT NULL,
+			task_id  INTEGER NOT NULL,
 			PRIMARY KEY (event_id, task_id),
 			FOREIGN KEY (event_id) REFERENCES events(id),
 			FOREIGN KEY (task_id) REFERENCES tasks(id)

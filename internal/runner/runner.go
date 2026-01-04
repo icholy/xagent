@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -69,7 +70,7 @@ func (r *Runner) Close() error {
 	return r.docker.Close()
 }
 
-func (r *Runner) log(ctx context.Context, taskID, typ, content string) {
+func (r *Runner) log(ctx context.Context, taskID int64, typ, content string) {
 	_, err := r.client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 		TaskId: taskID,
 		Entries: []*xagentv1.LogEntry{
@@ -141,8 +142,13 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	}
 
 	for _, c := range containers {
-		taskID := c.Labels["xagent.task"]
-		if taskID == "" {
+		taskIDStr := c.Labels["xagent.task"]
+		if taskIDStr == "" {
+			continue
+		}
+		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+		if err != nil {
+			slog.Error("invalid task ID in container label", "task", taskIDStr, "error", err)
 			continue
 		}
 
@@ -183,9 +189,10 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 }
 
 func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task) error {
+	taskIDStr := strconv.FormatInt(task.Id, 10)
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
-		Filters: filters.NewArgs(filters.Arg("label", "xagent.task="+task.Id)),
+		Filters: filters.NewArgs(filters.Arg("label", "xagent.task="+taskIDStr)),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -219,12 +226,13 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	containerName := "xagent-" + task.Id
+	taskIDStr := strconv.FormatInt(task.Id, 10)
+	containerName := "xagent-" + taskIDStr
 
 	// Look up existing container
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
-		Filters: filters.NewArgs(filters.Arg("label", "xagent.task="+task.Id)),
+		Filters: filters.NewArgs(filters.Arg("label", "xagent.task="+taskIDStr)),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -284,10 +292,11 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 
 func (r *Runner) buildContainerConfig(task *xagentv1.Task, ws *workspace.Workspace) (*container.Config, *container.HostConfig, *network.NetworkingConfig) {
 	ctr := &ws.Container
+	taskIDStr := strconv.FormatInt(task.Id, 10)
 
 	// Build environment variables
 	env := make([]string, 0, len(ctr.Environment)+1)
-	env = append(env, "XAGENT_TASK_ID="+task.Id)
+	env = append(env, "XAGENT_TASK_ID="+taskIDStr)
 	for k, v := range ctr.Environment {
 		env = append(env, k+"="+v)
 	}
@@ -300,12 +309,12 @@ func (r *Runner) buildContainerConfig(task *xagentv1.Task, ws *workspace.Workspa
 		User:  ctr.User,
 		Labels: map[string]string{
 			"xagent":      "true",
-			"xagent.task": task.Id,
+			"xagent.task": taskIDStr,
 		},
 		Cmd: []string{
 			"/usr/local/bin/xagent", "run",
 			"--server", "unix:///var/run/xagent.sock",
-			"--task", task.Id,
+			"--task", taskIDStr,
 		},
 		Env:        env,
 		WorkingDir: ctr.WorkingDir,
@@ -367,6 +376,8 @@ func (r *Runner) copyBinary(ctx context.Context, containerID, image string) erro
 }
 
 func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagentv1.Task, ws *workspace.Workspace) error {
+	taskIDStr := strconv.FormatInt(task.Id, 10)
+
 	// Convert workspace to agent config format
 	cfg := agent.Config{
 		Cwd:        ws.Agent.Cwd,
@@ -378,7 +389,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagen
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
 		Command: "/usr/local/bin/xagent",
-		Args:    []string{"mcp", "--server", "unix:///var/run/xagent.sock", "--task", task.Id, "--workspace", task.Workspace},
+		Args:    []string{"mcp", "--server", "unix:///var/run/xagent.sock", "--task", taskIDStr, "--workspace", task.Workspace},
 	}
 
 	for name, srv := range ws.Agent.McpServers {
@@ -392,7 +403,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagen
 		}
 	}
 
-	data, err := cfg.Tar(task.Id)
+	data, err := cfg.Tar(taskIDStr)
 	if err != nil {
 		return err
 	}
@@ -430,7 +441,12 @@ func (r *Runner) Monitor(ctx context.Context) error {
 	for {
 		select {
 		case event := <-eventCh:
-			taskID := event.Actor.Attributes["xagent.task"]
+			taskIDStr := event.Actor.Attributes["xagent.task"]
+			taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+			if err != nil {
+				slog.Error("invalid task ID in container event", "task", taskIDStr, "error", err)
+				continue
+			}
 			exitCode := event.Actor.Attributes["exitCode"]
 			if exitCode == "0" {
 				slog.Info("container exited successfully", "task", taskID)

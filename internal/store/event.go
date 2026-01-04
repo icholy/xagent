@@ -87,21 +87,21 @@ func (r *EventRepository) Delete(id int64) error {
 	return tx.Commit()
 }
 
-func (r *EventRepository) AddTask(eventID int64, taskID string) error {
+func (r *EventRepository) AddTask(eventID int64, taskID int64) error {
 	_, err := r.db.Exec(`
 		INSERT OR IGNORE INTO event_tasks (event_id, task_id) VALUES (?, ?)
 	`, eventID, taskID)
 	return err
 }
 
-func (r *EventRepository) RemoveTask(eventID int64, taskID string) error {
+func (r *EventRepository) RemoveTask(eventID int64, taskID int64) error {
 	_, err := r.db.Exec(`
 		DELETE FROM event_tasks WHERE event_id = ? AND task_id = ?
 	`, eventID, taskID)
 	return err
 }
 
-func (r *EventRepository) ListTasks(eventID int64) ([]string, error) {
+func (r *EventRepository) ListTasks(eventID int64) ([]int64, error) {
 	rows, err := r.db.Query(`
 		SELECT task_id FROM event_tasks WHERE event_id = ?
 	`, eventID)
@@ -110,9 +110,9 @@ func (r *EventRepository) ListTasks(eventID int64) ([]string, error) {
 	}
 	defer rows.Close()
 
-	var tasks []string
+	var tasks []int64
 	for rows.Next() {
-		var taskID string
+		var taskID int64
 		if err := rows.Scan(&taskID); err != nil {
 			return nil, err
 		}
@@ -121,7 +121,7 @@ func (r *EventRepository) ListTasks(eventID int64) ([]string, error) {
 	return tasks, rows.Err()
 }
 
-func (r *EventRepository) ListByTask(taskID string) ([]*Event, error) {
+func (r *EventRepository) ListByTask(taskID int64) ([]*Event, error) {
 	rows, err := r.db.Query(`
 		SELECT e.id, e.description, e.data, e.url, e.created_at
 		FROM events e

@@ -26,9 +26,9 @@ type Instruction struct {
 }
 
 type Task struct {
-	ID           string        `json:"id"`
+	ID           int64         `json:"id"`
 	Name         string        `json:"name"`
-	Parent       string        `json:"parent"`
+	Parent       int64         `json:"parent"`
 	Workspace    string        `json:"workspace"`
 	Instructions []Instruction `json:"instructions"`
 	Status       TaskStatus    `json:"status"`
@@ -51,14 +51,25 @@ func (r *TaskRepository) Create(task *Task) error {
 	}
 
 	now := time.Now()
-	_, err = r.db.Exec(`
-		INSERT INTO tasks (id, name, parent, workspace, prompts, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, task.ID, task.Name, task.Parent, task.Workspace, instructions, task.Status, now, now)
-	return err
+	result, err := r.db.Exec(`
+		INSERT INTO tasks (name, parent, workspace, prompts, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, task.Name, task.Parent, task.Workspace, instructions, task.Status, now, now)
+	if err != nil {
+		return err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return err
+	}
+	task.ID = id
+	task.CreatedAt = now
+	task.UpdatedAt = now
+	return nil
 }
 
-func (r *TaskRepository) Get(id string) (*Task, error) {
+func (r *TaskRepository) Get(id int64) (*Task, error) {
 	row := r.db.QueryRow(`
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE id = ?
@@ -102,7 +113,7 @@ func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) 
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListChildren(parentID string) ([]*Task, error) {
+func (r *TaskRepository) ListChildren(parentID int64) ([]*Task, error) {
 	rows, err := r.db.Query(`
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE parent = ? ORDER BY created_at DESC
@@ -137,7 +148,7 @@ type TaskUpdate struct {
 	AddInstructions []Instruction
 }
 
-func (r *TaskRepository) Update(id string, update TaskUpdate) error {
+func (r *TaskRepository) Update(id int64, update TaskUpdate) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -195,7 +206,7 @@ func (r *TaskRepository) Update(id string, update TaskUpdate) error {
 	return tx.Commit()
 }
 
-func (r *TaskRepository) Delete(id string) error {
+func (r *TaskRepository) Delete(id int64) error {
 	_, err := r.db.Exec(`DELETE FROM tasks WHERE id = ?`, id)
 	return err
 }

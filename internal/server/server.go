@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/google/uuid"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
@@ -107,11 +106,6 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 }
 
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
-	id := req.Id
-	if id == "" {
-		id = uuid.NewString()
-	}
-
 	instructions := make([]store.Instruction, len(req.Instructions))
 	for i, inst := range req.Instructions {
 		instructions[i] = store.Instruction{
@@ -121,7 +115,6 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	}
 
 	task := &store.Task{
-		ID:           id,
 		Name:         req.Name,
 		Parent:       req.Parent,
 		Workspace:    req.Workspace,

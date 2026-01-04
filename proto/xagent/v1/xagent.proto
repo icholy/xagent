@@ -35,9 +35,9 @@ message Instruction {
 }
 
 message Task {
-  string id = 1;
+  int64 id = 1;
   string name = 2;
-  string parent = 3;
+  int64 parent = 3;
   string workspace = 4;
   repeated Instruction instructions = 5;
   string status = 6;
@@ -61,7 +61,7 @@ message ListTasksResponse {
 }
 
 message ListChildTasksRequest {
-  string parent_id = 1;
+  int64 parent_id = 1;
 }
 
 message ListChildTasksResponse {
@@ -69,11 +69,10 @@ message ListChildTasksResponse {
 }
 
 message CreateTaskRequest {
-  string id = 1;
-  string name = 2;
-  string parent = 3;
-  string workspace = 4;
-  repeated Instruction instructions = 5;
+  string name = 1;
+  int64 parent = 2;
+  string workspace = 3;
+  repeated Instruction instructions = 4;
 }
 
 message CreateTaskResponse {
@@ -81,7 +80,7 @@ message CreateTaskResponse {
 }
 
 message GetTaskRequest {
-  string id = 1;
+  int64 id = 1;
 }
 
 message GetTaskResponse {
@@ -89,7 +88,7 @@ message GetTaskResponse {
 }
 
 message GetTaskDetailsRequest {
-  string id = 1;
+  int64 id = 1;
 }
 
 message GetTaskDetailsResponse {
@@ -100,7 +99,7 @@ message GetTaskDetailsResponse {
 }
 
 message UpdateTaskRequest {
-  string id = 1;
+  int64 id = 1;
   string name = 2;
   string status = 3;
   repeated Instruction add_instructions = 4;
@@ -109,7 +108,7 @@ message UpdateTaskRequest {
 message UpdateTaskResponse {}
 
 message DeleteTaskRequest {
-  string id = 1;
+  int64 id = 1;
 }
 
 message DeleteTaskResponse {}
@@ -120,14 +119,14 @@ message LogEntry {
 }
 
 message UploadLogsRequest {
-  string task_id = 1;
+  int64 task_id = 1;
   repeated LogEntry entries = 2;
 }
 
 message UploadLogsResponse {}
 
 message ListLogsRequest {
-  string task_id = 1;
+  int64 task_id = 1;
 }
 
 message ListLogsResponse {
@@ -136,7 +135,7 @@ message ListLogsResponse {
 
 message TaskLink {
   int64 id = 1;
-  string task_id = 2;
+  int64 task_id = 2;
   string relevance = 3;
   string url = 4;
   string title = 5;
@@ -145,7 +144,7 @@ message TaskLink {
 }
 
 message CreateLinkRequest {
-  string task_id = 1;
+  int64 task_id = 1;
   string relevance = 2;
   string url = 3;
   string title = 4;
@@ -157,7 +156,7 @@ message CreateLinkResponse {
 }
 
 message ListLinksRequest {
-  string task_id = 1;
+  int64 task_id = 1;
 }
 
 message ListLinksResponse {
@@ -212,14 +211,14 @@ message DeleteEventResponse {}
 
 message AddEventTaskRequest {
   int64 event_id = 1;
-  string task_id = 2;
+  int64 task_id = 2;
 }
 
 message AddEventTaskResponse {}
 
 message RemoveEventTaskRequest {
   int64 event_id = 1;
-  string task_id = 2;
+  int64 task_id = 2;
 }
 
 message RemoveEventTaskResponse {}
@@ -229,11 +228,11 @@ message ListEventTasksRequest {
 }
 
 message ListEventTasksResponse {
-  repeated string task_ids = 1;
+  repeated int64 task_ids = 1;
 }
 
 message ListEventsByTaskRequest {
-  string task_id = 1;
+  int64 task_id = 1;
 }
 
 message ListEventsByTaskResponse {
