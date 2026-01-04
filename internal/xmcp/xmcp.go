@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -23,6 +24,18 @@ func NewServer(client xagentclient.Client, taskID int64, workspace string) *Serv
 		client:    client,
 		taskID:    taskID,
 		workspace: workspace,
+	}
+}
+
+func (s *Server) log(ctx context.Context, format string, args ...any) {
+	_, err := s.client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
+		TaskId: s.taskID,
+		Entries: []*xagentv1.LogEntry{
+			{Type: "mcp", Content: fmt.Sprintf(format, args...)},
+		},
+	})
+	if err != nil {
+		slog.Warn("failed to upload log", "error", err)
 	}
 }
 
@@ -88,6 +101,7 @@ func (s *Server) createLink(ctx context.Context, req *mcp.CallToolRequest, input
 		return errorResult("failed to create link: %v", err), nil, nil
 	}
 
+	s.log(ctx, "created link: %s", input.URL)
 	return textResult("Link created: %s", input.URL), nil, nil
 }
 
@@ -165,6 +179,7 @@ func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 		return errorResult("failed to create task: %v", err), nil, nil
 	}
 
+	s.log(ctx, "created child task: %d (%s)", resp.Task.Id, input.Name)
 	return textResult("Task created: %d", resp.Task.Id), nil, nil
 }
 
@@ -181,6 +196,7 @@ func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, inp
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
 
+	s.log(ctx, "updated task name: %s", input.Name)
 	return textResult("Task updated"), nil, nil
 }
 
@@ -277,6 +293,7 @@ func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
 
+	s.log(ctx, "updated child task: %d", input.TaskID)
 	return textResult("Task %d updated and started", input.TaskID), nil, nil
 }
 
