@@ -415,21 +415,21 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 	}
 
 	// Build map of tasks by ID
-	byTaskID := make(map[int64]*store.Task)
+	tasks := map[int64]*store.Task{}
 	for _, link := range links {
 		task, err := s.tasks.Get(link.TaskID)
 		if err != nil {
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
 		}
-		byTaskID[task.ID] = task
+		tasks[task.ID] = task
 	}
 
 	// Expand to include all ancestors
 	for {
 		added := false
-		for _, task := range byTaskID {
-			if task.Parent == 0 || byTaskID[task.Parent] != nil {
+		for _, task := range tasks {
+			if task.Parent == 0 || tasks[task.Parent] != nil {
 				continue
 			}
 			parent, err := s.tasks.Get(task.Parent)
@@ -437,7 +437,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 				s.log.Warn("failed to get parent task", "task_id", task.Parent, "error", err)
 				continue
 			}
-			byTaskID[parent.ID] = parent
+			tasks[parent.ID] = parent
 			added = true
 		}
 		if !added {
@@ -445,12 +445,41 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		}
 	}
 
-	// TODO: find common ancestors and route event
+	// Find unique roots and route event to them
+	roots := map[int64]*store.Task{}
+	for _, link := range links {
+		root, ok := findRoot(link.TaskID, tasks)
+		if !ok {
+			continue
+		}
+		roots[root.ID] = root
+	}
 
-	taskIDs := make([]int64, 0)
+	taskIDs := make([]int64, 0, len(roots))
+	for id := range roots {
+		taskIDs = append(taskIDs, id)
+		if err := s.events.AddTask(req.Id, id); err != nil {
+			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", id, "error", err)
+		}
+	}
 
-	s.log.Info("event processed", "id", req.Id, "tasks_linked", len(taskIDs))
+	s.log.Info("event processed", "id", req.Id, "tasks_routed", len(taskIDs))
 	return &xagentv1.ProcessEventResponse{TaskIds: taskIDs}, nil
+}
+
+func findRoot(id int64, tasks map[int64]*store.Task) (*store.Task, bool) {
+	task, ok := tasks[id]
+	if !ok {
+		return nil, false
+	}
+	for task.Parent != 0 {
+		parent, ok := tasks[task.Parent]
+		if !ok {
+			break
+		}
+		task = parent
+	}
+	return task, true
 }
 
 func eventToProto(e *store.Event) *xagentv1.Event {
