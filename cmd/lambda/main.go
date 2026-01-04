@@ -18,6 +18,7 @@ import (
 	"github.com/andygrunwald/go-jira/v2/cloud"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/go-github/v68/github"
@@ -57,7 +58,7 @@ type JiraWebhookEvent struct {
 	User         *cloud.User    `json:"user"`
 }
 
-func NewConfig(ctx context.Context) (*Config, error) {
+func NewEnvConfig(ctx context.Context) (*Config, error) {
 	queueURL := os.Getenv("SQS_QUEUE_URL")
 	if queueURL == "" {
 		return nil, fmt.Errorf("SQS_QUEUE_URL environment variable is required")
@@ -97,14 +98,10 @@ func NewHandler(config *Config) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case "/webhook/github":
-		h.handleGitHub(w, r)
-	case "/webhook/jira":
-		h.handleJira(w, r)
-	default:
-		http.Error(w, "Not found", http.StatusNotFound)
-	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/webhook/github", h.handleGitHub)
+	mux.HandleFunc("/webhook/jira", h.handleJira)
+	mux.ServeHTTP(w, r)
 }
 
 func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
@@ -281,17 +278,13 @@ func (h *Handler) publishToSQS(ctx context.Context, event *XAgentEvent) error {
 	queueURL := h.config.SQSQueueURL
 	_, err = h.config.SQSClient.SendMessage(ctx, &sqs.SendMessageInput{
 		QueueUrl:    &queueURL,
-		MessageBody: stringPtr(string(eventJSON)),
+		MessageBody: aws.String(string(eventJSON)),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to send message to SQS: %w", err)
 	}
 
 	return nil
-}
-
-func stringPtr(s string) *string {
-	return &s
 }
 
 // lambdaHandler adapts HTTP handler to Lambda events
@@ -357,7 +350,7 @@ func (w *responseWriter) WriteHeader(statusCode int) {
 
 func main() {
 	ctx := context.Background()
-	cfg, err := NewConfig(ctx)
+	cfg, err := NewEnvConfig(ctx)
 	if err != nil {
 		log.Fatalf("failed to initialize config: %v", err)
 	}
