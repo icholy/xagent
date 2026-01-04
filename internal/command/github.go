@@ -122,31 +122,29 @@ var GithubCommand = &cli.Command{
 
 				switch {
 				case strings.HasPrefix(body, "xagent task"):
-					links, err := xagent.FindLinksByURL(ctx, &xagentv1.FindLinksByURLRequest{Url: c.PRURL})
+					eventResp, err := xagent.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+						Description: body,
+						Url:         c.PRURL,
+					})
 					if err != nil {
-						slog.Error("failed to find links", "url", c.PRURL, "error", err)
+						slog.Error("failed to create event", "error", err)
 						reply(fmt.Sprintf("error: %v", err))
 						return
 					}
-					if len(links.Links) == 0 {
+					processResp, err := xagent.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
+						Id: eventResp.Event.Id,
+					})
+					if err != nil {
+						slog.Error("failed to process event", "error", err)
+						reply(fmt.Sprintf("error: %v", err))
+						return
+					}
+					if len(processResp.TaskIds) == 0 {
 						slog.Info("no tasks linked to PR", "url", c.PRURL)
 						reply("error: no tasks linked to this PR")
 						return
 					}
-					taskID := links.Links[0].TaskId
-					_, err = xagent.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-						Id:     taskID,
-						Status: "pending",
-						AddInstructions: []*xagentv1.Instruction{
-							{Text: body, Url: c.PRURL},
-						},
-					})
-					if err != nil {
-						slog.Error("failed to update task", "task", taskID, "error", err)
-						reply(fmt.Sprintf("error: %v", err))
-						return
-					}
-					slog.Info("task updated", "task", taskID)
+					slog.Info("event processed", "event", eventResp.Event.Id, "tasks", processResp.TaskIds)
 
 				case strings.HasPrefix(body, "xagent new"):
 					resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
