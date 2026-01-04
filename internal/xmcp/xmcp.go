@@ -1,5 +1,7 @@
 package xmcp
 
+//go:generate go tool moq -pkg xmcp -out client_moq_test.go ../xagentclient Client
+
 import (
 	"context"
 	"encoding/json"
