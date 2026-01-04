@@ -89,7 +89,7 @@ var RunCommand = &cli.Command{
 				"",
 				"The task may have linked events. Events provide additional context such as GitHub webhooks or external triggers.",
 				"Events are routed to tasks that have a link with notify=true matching the event URL.",
-				"When creating links with xagent:create_link, set notify=true if you want to receive events for that URL.",
+				"When creating links with xagent:create_link, set notify=true for resources that may need follow-up (PRs awaiting review, issues awaiting response, etc).",
 				"Use xagent:update_child_task to delegate work to child tasks.",
 				"",
 				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
