@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"net/http"
+	"slices"
 	"time"
 
 	"connectrpc.com/connect"
@@ -415,14 +417,12 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 	}
 
 	// Build set of tasks that want notifications
-	taskIDs := []int64{}
-	seen := map[int64]bool{}
+	taskIDs := map[int64]bool{}
 	for _, link := range links {
-		if !link.Notify || seen[link.TaskID] {
+		if !link.Notify || taskIDs[link.TaskID] {
 			continue
 		}
-		seen[link.TaskID] = true
-		taskIDs = append(taskIDs, link.TaskID)
+		taskIDs[link.TaskID] = true
 		if err := s.events.AddTask(req.Id, link.TaskID); err != nil {
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
 		}
@@ -431,8 +431,9 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		}
 	}
 
-	s.log.Info("event processed", "id", req.Id, "tasks_routed", len(taskIDs))
-	return &xagentv1.ProcessEventResponse{TaskIds: taskIDs}, nil
+	ids := slices.Collect(maps.Keys(taskIDs))
+	s.log.Info("event processed", "id", req.Id, "tasks_routed", len(ids))
+	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
 }
 
 func eventToProto(e *store.Event) *xagentv1.Event {
