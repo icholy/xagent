@@ -11,16 +11,15 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 
 	"github.com/andygrunwald/go-jira/v2/cloud"
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"github.com/google/go-github/v68/github"
 )
 
@@ -287,67 +286,6 @@ func (h *Handler) publishToSQS(ctx context.Context, event *XAgentEvent) error {
 	return nil
 }
 
-// lambdaHandler adapts HTTP handler to Lambda events
-func lambdaHandler(ctx context.Context, cfg *Config) func(context.Context, events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	handler := NewHandler(cfg)
-
-	return func(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-		// Convert API Gateway event to HTTP request
-		req := &http.Request{
-			Method: request.HTTPMethod,
-			URL:    &url.URL{Path: request.Path},
-			Header: make(http.Header),
-			Body:   io.NopCloser(strings.NewReader(request.Body)),
-		}
-
-		// Copy headers (case-insensitive)
-		for k, v := range request.Headers {
-			req.Header.Set(k, v)
-		}
-
-		// Create response writer
-		w := &responseWriter{
-			statusCode: 200,
-			headers:    make(http.Header),
-		}
-
-		// Handle request
-		handler.ServeHTTP(w, req)
-
-		// Convert response
-		headers := make(map[string]string)
-		for k, v := range w.headers {
-			if len(v) > 0 {
-				headers[k] = v[0]
-			}
-		}
-
-		return events.APIGatewayProxyResponse{
-			StatusCode: w.statusCode,
-			Headers:    headers,
-			Body:       w.body.String(),
-		}, nil
-	}
-}
-
-type responseWriter struct {
-	statusCode int
-	headers    http.Header
-	body       strings.Builder
-}
-
-func (w *responseWriter) Header() http.Header {
-	return w.headers
-}
-
-func (w *responseWriter) Write(b []byte) (int, error) {
-	return w.body.Write(b)
-}
-
-func (w *responseWriter) WriteHeader(statusCode int) {
-	w.statusCode = statusCode
-}
-
 func main() {
 	ctx := context.Background()
 	cfg, err := NewEnvConfig(ctx)
@@ -355,5 +293,6 @@ func main() {
 		log.Fatalf("failed to initialize config: %v", err)
 	}
 
-	lambda.Start(lambdaHandler(ctx, cfg))
+	handler := NewHandler(cfg)
+	lambda.Start(httpadapter.New(handler).ProxyWithContext)
 }
