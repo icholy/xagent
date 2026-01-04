@@ -68,13 +68,15 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				relevance, _ := mcpx.StringArgument(req, "relevance")
+				if relevance == "" {
+					return mcp.NewToolResultErrorf("relevance is required"), nil
+				}
 				url, _ := mcpx.StringArgument(req, "url")
+				if url == "" {
+					return mcp.NewToolResultErrorf("url is required"), nil
+				}
 				title, _ := mcpx.StringArgument(req, "title")
 				created, _ := mcpx.BoolArgument(req, "created")
-
-				if relevance == "" || url == "" {
-					return mcp.NewToolResultErrorf("relevance and url are required"), nil
-				}
 
 				_, err := client.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 					TaskId:    taskID,
@@ -101,11 +103,9 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				message, _ := mcpx.StringArgument(req, "message")
-
 				if message == "" {
 					return mcp.NewToolResultErrorf("message is required"), nil
 				}
-
 				_, err := client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 					TaskId: taskID,
 					Entries: []*xagentv1.LogEntry{
@@ -182,12 +182,14 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				name, _ := mcpx.StringArgument(req, "name")
-				instruction, _ := mcpx.StringArgument(req, "instruction")
-				url, _ := mcpx.StringArgument(req, "url")
-
-				if name == "" || instruction == "" {
-					return mcp.NewToolResultErrorf("name and instruction are required"), nil
+				if name == "" {
+					return mcp.NewToolResultErrorf("name is required"), nil
 				}
+				instruction, _ := mcpx.StringArgument(req, "instruction")
+				if instruction == "" {
+					return mcp.NewToolResultErrorf("instruction is required"), nil
+				}
+				url, _ := mcpx.StringArgument(req, "url")
 
 				resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 					Name:      name,
@@ -215,11 +217,9 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				name, _ := mcpx.StringArgument(req, "name")
-
 				if name == "" {
 					return mcp.NewToolResultErrorf("name is required"), nil
 				}
-
 				_, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 					Id:   taskID,
 					Name: name,
@@ -266,12 +266,14 @@ var McpCommand = &cli.Command{
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				childTaskID, ok := mcpx.Int64Argument(req, "task_id")
-				instruction, _ := mcpx.StringArgument(req, "instruction")
-				url, _ := mcpx.StringArgument(req, "url")
-
-				if !ok || instruction == "" {
-					return mcp.NewToolResultErrorf("task_id and instruction are required"), nil
+				if !ok {
+					return mcp.NewToolResultErrorf("task_id is required"), nil
 				}
+				instruction, _ := mcpx.StringArgument(req, "instruction")
+				if instruction == "" {
+					return mcp.NewToolResultErrorf("instruction is required"), nil
+				}
+				url, _ := mcpx.StringArgument(req, "url")
 
 				// Verify we are the parent
 				childResp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: childTaskID})
