@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/icholy/xagent/internal/mcpx"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -66,11 +67,10 @@ var McpCommand = &cli.Command{
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				args := req.GetArguments()
-				relevance, _ := args["relevance"].(string)
-				url, _ := args["url"].(string)
-				title, _ := args["title"].(string)
-				created, _ := args["created"].(bool)
+				relevance, _ := mcpx.StringArgument(req, "relevance")
+				url, _ := mcpx.StringArgument(req, "url")
+				title, _ := mcpx.StringArgument(req, "title")
+				created, _ := mcpx.BoolArgument(req, "created")
 
 				if relevance == "" || url == "" {
 					return mcp.NewToolResultErrorf("relevance and url are required"), nil
@@ -100,8 +100,7 @@ var McpCommand = &cli.Command{
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				args := req.GetArguments()
-				message, _ := args["message"].(string)
+				message, _ := mcpx.StringArgument(req, "message")
 
 				if message == "" {
 					return mcp.NewToolResultErrorf("message is required"), nil
@@ -182,10 +181,9 @@ var McpCommand = &cli.Command{
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				args := req.GetArguments()
-				name, _ := args["name"].(string)
-				instruction, _ := args["instruction"].(string)
-				url, _ := args["url"].(string)
+				name, _ := mcpx.StringArgument(req, "name")
+				instruction, _ := mcpx.StringArgument(req, "instruction")
+				url, _ := mcpx.StringArgument(req, "url")
 
 				if name == "" || instruction == "" {
 					return mcp.NewToolResultErrorf("name and instruction are required"), nil
@@ -216,8 +214,7 @@ var McpCommand = &cli.Command{
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				args := req.GetArguments()
-				name, _ := args["name"].(string)
+				name, _ := mcpx.StringArgument(req, "name")
 
 				if name == "" {
 					return mcp.NewToolResultErrorf("name is required"), nil
@@ -268,13 +265,11 @@ var McpCommand = &cli.Command{
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				args := req.GetArguments()
-				childTaskIDFloat, _ := args["task_id"].(float64)
-				childTaskID := int64(childTaskIDFloat)
-				instruction, _ := args["instruction"].(string)
-				url, _ := args["url"].(string)
+				childTaskID, ok := mcpx.Int64Argument(req, "task_id")
+				instruction, _ := mcpx.StringArgument(req, "instruction")
+				url, _ := mcpx.StringArgument(req, "url")
 
-				if childTaskID == 0 || instruction == "" {
+				if !ok || instruction == "" {
 					return mcp.NewToolResultErrorf("task_id and instruction are required"), nil
 				}
 
@@ -311,11 +306,8 @@ var McpCommand = &cli.Command{
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				args := req.GetArguments()
-				childTaskIDFloat, _ := args["task_id"].(float64)
-				childTaskID := int64(childTaskIDFloat)
-
-				if childTaskID == 0 {
+				childTaskID, ok := mcpx.Int64Argument(req, "task_id")
+				if !ok {
 					return mcp.NewToolResultErrorf("task_id is required"), nil
 				}
 
@@ -347,11 +339,8 @@ var McpCommand = &cli.Command{
 				),
 			),
 			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				args := req.GetArguments()
-				childTaskIDFloat, _ := args["task_id"].(float64)
-				childTaskID := int64(childTaskIDFloat)
-
-				if childTaskID == 0 {
+				childTaskID, ok := mcpx.Int64Argument(req, "task_id")
+				if !ok {
 					return mcp.NewToolResultErrorf("task_id is required"), nil
 				}
 
