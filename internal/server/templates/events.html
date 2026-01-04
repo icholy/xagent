@@ -65,7 +65,7 @@
         <form id="create-form">
             <input type="text" name="description" placeholder="Description" required>
             <input type="text" name="url" placeholder="URL (optional)">
-            <textarea name="data" placeholder='Data (JSON, e.g. {"key": "value"})'></textarea>
+            <textarea name="data" placeholder="Data (optional)"></textarea>
             <button type="submit">Create Event</button>
         </form>
     </div>
@@ -107,17 +107,10 @@
         document.getElementById('create-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
-            const data = form.data.value || '{}';
-            try {
-                JSON.parse(data);
-            } catch {
-                alert('Invalid JSON in data field');
-                return;
-            }
             await rpc('CreateEvent', {
                 description: form.description.value,
                 url: form.url.value,
-                data: data
+                data: form.data.value
             });
             form.reset();
             refreshEventList();
