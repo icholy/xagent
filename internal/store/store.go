@@ -50,6 +50,7 @@ func migrate(db *sql.DB) error {
 			title      TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			created    BOOLEAN DEFAULT FALSE,
+			notify     BOOLEAN DEFAULT FALSE,
 			FOREIGN KEY (task_id) REFERENCES tasks(id)
 		);
 		CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);

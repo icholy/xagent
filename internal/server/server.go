@@ -244,6 +244,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		Title:     req.Title,
 		CreatedAt: time.Now(),
 		Created:   req.Created,
+		Notify:    req.Notify,
 	}
 	if err := s.links.Create(link); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -311,6 +312,7 @@ func linkToProto(l *store.Link) *xagentv1.TaskLink {
 		Title:     l.Title,
 		CreatedAt: timestamppb.New(l.CreatedAt),
 		Created:   l.Created,
+		Notify:    l.Notify,
 	}
 }
 
@@ -414,9 +416,12 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// Build map of tasks by ID
+	// Build map of tasks by ID (only for links with notify=true)
 	tasks := map[int64]*store.Task{}
 	for _, link := range links {
+		if !link.Notify {
+			continue
+		}
 		task, err := s.tasks.Get(link.TaskID)
 		if err != nil {
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)

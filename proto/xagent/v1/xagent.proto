@@ -142,6 +142,7 @@ message TaskLink {
   string title = 5;
   google.protobuf.Timestamp created_at = 6;
   bool created = 7;
+  bool notify = 8;
 }
 
 message CreateLinkRequest {
@@ -150,6 +151,7 @@ message CreateLinkRequest {
   string url = 3;
   string title = 4;
   bool created = 5;
+  bool notify = 6;
 }
 
 message CreateLinkResponse {
