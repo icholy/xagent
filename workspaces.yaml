@@ -60,6 +60,19 @@ workspaces:
     commands:
       - git clone git@github.com:icholy/xagent.git
       - mise trust -y /home/vscode/xagent/mise.toml
+      - |
+        cat > /home/vscode/xagent/.git/hooks/commit-msg << 'EOF'
+        #!/bin/sh
+        if grep -qE "🤖 Generated with|Co-Authored-By" "$1"; then
+          echo "ERROR: Never add attribution or credit lines to commits or PRs. This means:"
+          echo "- Do NOT add \"Co-Authored-By:\" lines in commit messages"
+          echo "- Do NOT add \"🤖 Generated with Claude Code\" or similar attribution"
+          echo "- Do NOT mention yourself, Claude, or AI in commits/PRs"
+          echo "- Keep commit messages focused on the technical changes only"
+          exit 1
+        fi
+        EOF
+        chmod +x /home/vscode/xagent/.git/hooks/commit-msg
     container:
       image: containeragent
       working_dir: /home/vscode
