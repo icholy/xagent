@@ -48,9 +48,8 @@ func migrate(db *sql.DB) error {
 			relevance  TEXT NOT NULL,
 			url        TEXT NOT NULL,
 			title      TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			created    BOOLEAN DEFAULT FALSE,
 			notify     BOOLEAN DEFAULT FALSE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (task_id) REFERENCES tasks(id)
 		);
 		CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);

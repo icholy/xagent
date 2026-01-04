@@ -86,7 +86,6 @@ type createLinkInput struct {
 	Relevance string `json:"relevance" jsonschema:"description=Describe how this link is relevant to the task,required"`
 	URL       string `json:"url" jsonschema:"description=URL of the external resource,required"`
 	Title     string `json:"title,omitempty" jsonschema:"description=Optional display title for the link"`
-	Created   bool   `json:"created,omitempty" jsonschema:"description=True if this task created the resource false if it's just related"`
 	Notify    bool   `json:"notify,omitempty" jsonschema:"description=True to receive events for this link"`
 }
 
@@ -96,7 +95,6 @@ func (s *Server) createLink(ctx context.Context, req *mcp.CallToolRequest, input
 		Relevance: input.Relevance,
 		Url:       input.URL,
 		Title:     input.Title,
-		Created:   input.Created,
 		Notify:    input.Notify,
 	})
 	if err != nil {
