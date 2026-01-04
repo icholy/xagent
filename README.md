@@ -140,7 +140,9 @@ xagent.db              # SQLite database
 
 ```sql
 CREATE TABLE tasks (
-    id            TEXT PRIMARY KEY,
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL DEFAULT '',
+    parent        INTEGER NOT NULL DEFAULT 0,
     workspace     TEXT NOT NULL,
     prompts       TEXT NOT NULL,  -- JSON array of prompts
     status        TEXT NOT NULL,  -- pending, running, completed, failed, cancelled, archived
@@ -149,16 +151,18 @@ CREATE TABLE tasks (
 );
 ```
 
-### Links Table
+### Task Links Table
 
 ```sql
-CREATE TABLE links (
-    id         TEXT PRIMARY KEY,
-    task_id    TEXT NOT NULL,
-    type       TEXT NOT NULL,     -- e.g., "github", "jira"
+CREATE TABLE task_links (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id    INTEGER NOT NULL,
+    relevance  TEXT NOT NULL,
     url        TEXT NOT NULL,
     title      TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    notify     BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 ```
 
@@ -166,11 +170,36 @@ CREATE TABLE links (
 
 ```sql
 CREATE TABLE logs (
-    id         TEXT PRIMARY KEY,
-    task_id    TEXT NOT NULL,
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id    INTEGER NOT NULL,
     type       TEXT NOT NULL,     -- "info", "error", "llm"
     content    TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
+);
+```
+
+### Events Table
+
+```sql
+CREATE TABLE events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    description TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    url         TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Event Tasks Table
+
+```sql
+CREATE TABLE event_tasks (
+    event_id INTEGER NOT NULL,
+    task_id  INTEGER NOT NULL,
+    PRIMARY KEY (event_id, task_id),
+    FOREIGN KEY (event_id) REFERENCES events(id),
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 ```
 
