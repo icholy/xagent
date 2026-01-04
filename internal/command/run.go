@@ -84,6 +84,7 @@ var RunCommand = &cli.Command{
 				"",
 				"Each instruction has a 'text' field with the task and an optional 'url' field with the source URL.",
 				"If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.",
+				"When responding on external platforms, always suffix your message with (task {id}) with your task id.",
 				"",
 				"The task may have linked events. Events provide additional context such as GitHub webhooks or external triggers.",
 				"Events from child tasks are routed to the parent. This means that the event may not be directly intended for you.",
