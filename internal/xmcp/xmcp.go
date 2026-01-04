@@ -58,9 +58,9 @@ func (s *Server) AddTools(server *mcp.Server) {
 	}, s.listChildTasks)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "add_child_task_instruction",
-		Description: "Add an instruction to a child task and restart it",
-	}, s.addChildTaskInstruction)
+		Name:        "update_child_task",
+		Description: "Update a child task by adding an instruction and/or events, then start it",
+	}, s.updateChildTask)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_child_task_logs",
@@ -71,11 +71,6 @@ func (s *Server) AddTools(server *mcp.Server) {
 		Name:        "list_child_task_links",
 		Description: "List links for a child task",
 	}, s.listChildTaskLinks)
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "add_child_task_event",
-		Description: "Add an event to a child task",
-	}, s.addChildTaskEvent)
 }
 
 type createLinkInput struct {
@@ -204,13 +199,18 @@ func (s *Server) listChildTasks(ctx context.Context, req *mcp.CallToolRequest, i
 	return protojsonResult(resp), nil, nil
 }
 
-type addChildTaskInstructionInput struct {
-	TaskID      int64  `json:"task_id" jsonschema:"description=The child task ID,required"`
-	Instruction string `json:"instruction" jsonschema:"description=The instruction text to add,required"`
-	URL         string `json:"url,omitempty" jsonschema:"description=Optional URL associated with the instruction"`
+type updateChildTaskInput struct {
+	TaskID      int64   `json:"task_id" jsonschema:"description=The child task ID,required"`
+	Instruction string  `json:"instruction,omitempty" jsonschema:"description=Optional instruction text to add"`
+	URL         string  `json:"url,omitempty" jsonschema:"description=Optional URL associated with the instruction"`
+	EventIDs    []int64 `json:"event_ids,omitempty" jsonschema:"description=Optional array of event IDs to add to the task"`
 }
 
-func (s *Server) addChildTaskInstruction(ctx context.Context, req *mcp.CallToolRequest, input addChildTaskInstructionInput) (*mcp.CallToolResult, any, error) {
+func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, input updateChildTaskInput) (*mcp.CallToolResult, any, error) {
+	if input.Instruction == "" && len(input.EventIDs) == 0 {
+		return errorResult("instruction or event_ids is required"), nil, nil
+	}
+
 	// Verify we are the parent
 	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
 	if err != nil {
@@ -220,18 +220,34 @@ func (s *Server) addChildTaskInstruction(ctx context.Context, req *mcp.CallToolR
 		return errorResult("task is not a child of the current task"), nil, nil
 	}
 
-	_, err = s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     input.TaskID,
-		Status: "restarting",
-		AddInstructions: []*xagentv1.Instruction{
-			{Text: input.Instruction, Url: input.URL},
-		},
-	})
-	if err != nil {
-		return errorResult("failed to add instruction: %v", err), nil, nil
+	// Add events
+	for _, eventID := range input.EventIDs {
+		_, err = s.client.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
+			EventId: eventID,
+			TaskId:  input.TaskID,
+		})
+		if err != nil {
+			return errorResult("failed to add event %d: %v", eventID, err), nil, nil
+		}
 	}
 
-	return textResult("Instruction added to task %d", input.TaskID), nil, nil
+	// Add instruction and restart
+	updateReq := &xagentv1.UpdateTaskRequest{
+		Id:     input.TaskID,
+		Status: "restarting",
+	}
+	if input.Instruction != "" {
+		updateReq.AddInstructions = []*xagentv1.Instruction{
+			{Text: input.Instruction, Url: input.URL},
+		}
+	}
+
+	_, err = s.client.UpdateTask(ctx, updateReq)
+	if err != nil {
+		return errorResult("failed to update task: %v", err), nil, nil
+	}
+
+	return textResult("Task %d updated and started", input.TaskID), nil, nil
 }
 
 type listChildTaskLogsInput struct {
@@ -276,32 +292,6 @@ func (s *Server) listChildTaskLinks(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	return protojsonResult(linksResp), nil, nil
-}
-
-type addChildTaskEventInput struct {
-	TaskID  int64 `json:"task_id" jsonschema:"description=The child task ID,required"`
-	EventID int64 `json:"event_id" jsonschema:"description=The event ID to add,required"`
-}
-
-func (s *Server) addChildTaskEvent(ctx context.Context, req *mcp.CallToolRequest, input addChildTaskEventInput) (*mcp.CallToolResult, any, error) {
-	// Verify we are the parent
-	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
-	if err != nil {
-		return errorResult("failed to get child task: %v", err), nil, nil
-	}
-	if childResp.Task.Parent != s.taskID {
-		return errorResult("task is not a child of the current task"), nil, nil
-	}
-
-	_, err = s.client.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-		EventId: input.EventID,
-		TaskId:  input.TaskID,
-	})
-	if err != nil {
-		return errorResult("failed to add event to task: %v", err), nil, nil
-	}
-
-	return textResult("Event %d added to task %d", input.EventID, input.TaskID), nil, nil
 }
 
 func textResult(format string, args ...any) *mcp.CallToolResult {
