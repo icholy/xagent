@@ -399,6 +399,34 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 	return resp, nil
 }
 
+func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
+	event, err := s.events.Get(req.Id)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	if event.URL == "" {
+		return &xagentv1.ProcessEventResponse{}, nil
+	}
+
+	links, err := s.links.FindByURL(event.URL)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	taskIDs := make([]int64, 0, len(links))
+	for _, link := range links {
+		if err := s.events.AddTask(req.Id, link.TaskID); err != nil {
+			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
+			continue
+		}
+		taskIDs = append(taskIDs, link.TaskID)
+	}
+
+	s.log.Info("event processed", "id", req.Id, "tasks_linked", len(taskIDs))
+	return &xagentv1.ProcessEventResponse{TaskIds: taskIDs}, nil
+}
+
 func eventToProto(e *store.Event) *xagentv1.Event {
 	return &xagentv1.Event{
 		Id:          e.ID,
