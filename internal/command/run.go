@@ -41,6 +41,7 @@ var RunCommand = &cli.Command{
 		slog.Info("loaded config",
 			"cwd", cfg.Cwd,
 			"commands", cfg.Commands,
+			"mcp_servers", len(cfg.McpServers),
 			"setup", cfg.Setup,
 			"started", cfg.Started,
 		)
