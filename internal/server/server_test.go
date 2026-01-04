@@ -48,34 +48,31 @@ func TestGetTask(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := context.Background()
 
-	// Create a task directly in the database
-	task := &store.Task{
+	// Create a task using the API
+	createResp, _ := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
-		Instructions: []store.Instruction{
+		Instructions: []*xagentv1.Instruction{
 			{
 				Text: "Do something important",
-				URL:  "https://example.com/issue/1",
+				Url:  "https://example.com/issue/1",
 			},
 			{
 				Text: "Do something else",
-				URL:  "https://example.com/issue/2",
+				Url:  "https://example.com/issue/2",
 			},
 		},
-		Status: store.TaskStatusPending,
-	}
-	err := srv.tasks.Create(task)
-	assert.NilError(t, err)
+	})
 
 	// Get the task via the API
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{
-		Id: task.ID,
+		Id: createResp.Task.Id,
 	})
 	assert.NilError(t, err)
 
 	// Verify the task matches what we created
 	expected := &xagentv1.Task{
-		Id:        task.ID,
+		Id:        createResp.Task.Id,
 		Name:      "Test Task",
 		Parent:    0,
 		Workspace: "test-workspace",
