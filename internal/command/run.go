@@ -76,19 +76,18 @@ var RunCommand = &cli.Command{
 		// Bootstrap prompt
 		var prompt string
 		if cfg.Started {
-			prompt = "The task was updated. Check xagent:get_task and continue."
+			prompt = "The task was updated. Check xagent:get_my_task and continue."
 		} else {
 			prompt = strings.Join([]string{
-				"Use xagent:get_task to fetch your task instructions and execute them.",
-				"If the task does not have a name, use xagent:update_task to set one.",
+				"Use xagent:get_my_task to fetch your task instructions and execute them.",
+				"If the task does not have a name, use xagent:update_my_task to set one.",
 				"",
 				"Each instruction has a 'text' field with the task and an optional 'url' field with the source URL.",
-				"If you have questions, problems, or take no action, respond on the platform from the most recent instruction's url.",
+				"If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.",
 				"",
 				"The task may have linked events. Events provide additional context such as GitHub webhooks or external triggers.",
-				"Each event has a description, optional url, and optional data field with detailed payload information.",
-				"Events from child tasks are routed to the parent.",
-				"Decide whether to handle the event yourself or delegate to a child using xagent:add_child_task_event and xagent:add_child_task_instruction.",
+				"Events from child tasks are routed to the parent. This means that the event may not be directly intended for you.",
+				"Decide whether to handle the event yourself or delegate to a child using xagent:update_child_task.",
 				"",
 				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
 				"Always use web URLs that users can visit, not API URLs.",

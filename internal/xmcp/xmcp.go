@@ -38,9 +38,9 @@ func (s *Server) AddTools(server *mcp.Server) {
 	}, s.report)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_task",
+		Name:        "get_my_task",
 		Description: "Get the current task instructions, links, events, and children",
-	}, s.getTask)
+	}, s.getMyTask)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_child_task",
@@ -48,9 +48,9 @@ func (s *Server) AddTools(server *mcp.Server) {
 	}, s.createChildTask)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "update_task",
+		Name:        "update_my_task",
 		Description: "Update the current task's name",
-	}, s.updateTask)
+	}, s.updateMyTask)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_child_tasks",
@@ -113,7 +113,7 @@ func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input rep
 	return textResult("Report submitted"), nil, nil
 }
 
-func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input any) (*mcp.CallToolResult, any, error) {
+func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input any) (*mcp.CallToolResult, any, error) {
 	resp, err := s.client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: s.taskID})
 	if err != nil {
 		return errorResult("failed to get task: %v", err), nil, nil
@@ -172,11 +172,11 @@ func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 	return textResult("Task created: %d", resp.Task.Id), nil, nil
 }
 
-type updateTaskInput struct {
+type updateMyTaskInput struct {
 	Name string `json:"name" jsonschema:"description=The new name for the task,required"`
 }
 
-func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
+func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
 	_, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:   s.taskID,
 		Name: input.Name,
