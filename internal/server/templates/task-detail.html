@@ -33,6 +33,7 @@
 {{range .Links}}
     <li>
         <a href="{{.URL}}" target="_blank" rel="noopener">{{if .Title}}{{.Title}}{{else}}{{.URL}}{{end}}</a>
+        {{if .Notify}}<span class="notify-badge">notify</span>{{end}}
         {{if .Relevance}}<br><small>{{.Relevance}}</small>{{end}}
     </li>
 {{end}}
