@@ -34,15 +34,14 @@ XAGENT is an async agent orchestrator using a botnet-style C2 (command & control
 
 The runner injects an `xagent` MCP server into each agent, providing these tools:
 
-- `get_task` - Get current task instructions and links
-- `update_task` - Update the current task's name
+- `get_my_task` - Get current task instructions, links, events, and children
+- `update_my_task` - Update the current task's name
 - `create_link` - Associate external resources (PRs, Jira tickets) with the task
 - `report` - Log messages visible in the Web UI
 - `create_child_task` - Spawn a child task in the same workspace
 - `list_child_tasks` - List child tasks spawned by this task
-- `add_child_task_instruction` - Add instruction to a child task and restart it
+- `update_child_task` - Add instruction to a child task and restart it
 - `list_child_task_logs` - View logs from a child task
-- `list_child_task_links` - View links from a child task
 
 ### Parent/Child Tasks
 
@@ -53,6 +52,18 @@ Tasks can spawn child tasks to delegate work. The parent task can monitor and in
 - Parent can read child logs and links
 - Tasks track their parent via `parent` field in the database
 - Web UI shows child tasks under their parent
+
+### Event System
+
+Tasks can be notified about external events through the event system:
+
+- **Events** represent external triggers (GitHub PR comments, Jira issue updates, etc.)
+- **Links** created with `notify=true` route events to tasks when the event URL matches the link URL
+- When an event is processed, all tasks with matching notify links receive the event
+- Events appear in `get_my_task` output and provide additional context to agents
+- External pollers (GitHub, Jira) create events and process them to notify linked tasks
+
+Use `create_link` with `notify=true` for resources that may need follow-up (PRs awaiting review, issues awaiting response, etc.)
 
 ### CLI Subcommands
 
