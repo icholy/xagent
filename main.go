@@ -24,6 +24,7 @@ func main() {
 			command.GithubCommand,
 			command.JiraCommand,
 			command.ShellCommand,
+			command.PruneCommand,
 		},
 	}
 
