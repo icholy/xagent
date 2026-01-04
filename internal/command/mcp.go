@@ -365,6 +365,49 @@ var McpCommand = &cli.Command{
 			},
 		)
 
+		s.AddTool(
+			mcp.NewTool("add_child_task_event",
+				mcp.WithDescription("Add an event to a child task"),
+				mcp.WithNumber("task_id",
+					mcp.Required(),
+					mcp.Description("The child task ID"),
+				),
+				mcp.WithNumber("event_id",
+					mcp.Required(),
+					mcp.Description("The event ID to add"),
+				),
+			),
+			func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				childTaskID, ok := mcpx.Int64Argument(req, "task_id")
+				if !ok {
+					return mcp.NewToolResultErrorf("task_id is required"), nil
+				}
+				eventID, ok := mcpx.Int64Argument(req, "event_id")
+				if !ok {
+					return mcp.NewToolResultErrorf("event_id is required"), nil
+				}
+
+				// Verify we are the parent
+				childResp, err := client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: childTaskID})
+				if err != nil {
+					return mcp.NewToolResultErrorf("failed to get child task: %v", err), nil
+				}
+				if childResp.Task.Parent != taskID {
+					return mcp.NewToolResultErrorf("task is not a child of the current task"), nil
+				}
+
+				_, err = client.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
+					EventId: eventID,
+					TaskId:  childTaskID,
+				})
+				if err != nil {
+					return mcp.NewToolResultErrorf("failed to add event to task: %v", err), nil
+				}
+
+				return mcp.NewToolResultText(fmt.Sprintf("Event %d added to task %d", eventID, childTaskID)), nil
+			},
+		)
+
 		return server.ServeStdio(s)
 	},
 }
