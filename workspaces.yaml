@@ -83,4 +83,12 @@ workspaces:
         You have the xagent repo cloned locally. When asked to make code changes, you should open a PR.
         Never attribute yourself in the commit or the PR.
 
+        IMPORTANT: All git commits must use the following author information:
+        - Name: Ilia Choly
+        - Email: ilia.choly@gmail.com
+
+        Before making any commits, ensure git is configured with:
+        git config user.name "Ilia Choly"
+        git config user.email "ilia.choly@gmail.com"
+
 
