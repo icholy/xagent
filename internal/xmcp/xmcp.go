@@ -54,7 +54,7 @@ func (s *Server) AddTools(server *mcp.Server) {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_child_tasks",
-		Description: "List child tasks spawned by the current task",
+		Description: "Get details of child tasks spawned by the current task",
 	}, s.listChildTasks)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -67,10 +67,6 @@ func (s *Server) AddTools(server *mcp.Server) {
 		Description: "List logs for a child task",
 	}, s.listChildTaskLogs)
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_child_task_links",
-		Description: "List links for a child task",
-	}, s.listChildTaskLinks)
 }
 
 type createLinkInput struct {
@@ -196,7 +192,41 @@ func (s *Server) listChildTasks(ctx context.Context, req *mcp.CallToolRequest, i
 		return errorResult("failed to list children: %v", err), nil, nil
 	}
 
-	return protojsonResult(resp), nil, nil
+	marshalOpts := protojson.MarshalOptions{Indent: "  "}
+	children := make([]map[string]any, 0, len(resp.Tasks))
+
+	for _, task := range resp.Tasks {
+		details, err := s.client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: task.Id})
+		if err != nil {
+			return errorResult("failed to get child task %d: %v", task.Id, err), nil, nil
+		}
+
+		instructions := make([]json.RawMessage, len(details.Task.Instructions))
+		for i, inst := range details.Task.Instructions {
+			instructions[i], _ = marshalOpts.Marshal(inst)
+		}
+
+		links := make([]json.RawMessage, len(details.GetLinks()))
+		for i, link := range details.GetLinks() {
+			links[i], _ = marshalOpts.Marshal(link)
+		}
+
+		events := make([]json.RawMessage, len(details.GetEvents()))
+		for i, event := range details.GetEvents() {
+			events[i], _ = marshalOpts.Marshal(event)
+		}
+
+		children = append(children, map[string]any{
+			"id":           task.Id,
+			"name":         details.Task.Name,
+			"status":       details.Task.Status,
+			"instructions": instructions,
+			"links":        links,
+			"events":       events,
+		})
+	}
+
+	return jsonResult(children), nil, nil
 }
 
 type updateChildTaskInput struct {
@@ -270,28 +300,6 @@ func (s *Server) listChildTaskLogs(ctx context.Context, req *mcp.CallToolRequest
 	}
 
 	return protojsonResult(logsResp), nil, nil
-}
-
-type listChildTaskLinksInput struct {
-	TaskID int64 `json:"task_id" jsonschema:"description=The child task ID,required"`
-}
-
-func (s *Server) listChildTaskLinks(ctx context.Context, req *mcp.CallToolRequest, input listChildTaskLinksInput) (*mcp.CallToolResult, any, error) {
-	// Verify we are the parent
-	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
-	if err != nil {
-		return errorResult("failed to get child task: %v", err), nil, nil
-	}
-	if childResp.Task.Parent != s.taskID {
-		return errorResult("task is not a child of the current task"), nil, nil
-	}
-
-	linksResp, err := s.client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: input.TaskID})
-	if err != nil {
-		return errorResult("failed to list links: %v", err), nil, nil
-	}
-
-	return protojsonResult(linksResp), nil, nil
 }
 
 func textResult(format string, args ...any) *mcp.CallToolResult {
