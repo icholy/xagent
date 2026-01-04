@@ -41,10 +41,12 @@ var ServerCommand = &cli.Command{
 		tasks := store.NewTaskRepository(db)
 		logs := store.NewLogRepository(db)
 		links := store.NewLinkRepository(db)
+		events := store.NewEventRepository(db)
 		srv := server.New(server.Options{
-			Tasks: tasks,
-			Logs:  logs,
-			Links: links,
+			Tasks:  tasks,
+			Logs:   logs,
+			Links:  links,
+			Events: events,
 		})
 
 		slog.Info("starting server", "addr", addr, "db", dbPath)

@@ -18,6 +18,11 @@ service XAgentService {
   rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
   rpc ListLinks(ListLinksRequest) returns (ListLinksResponse);
   rpc FindLinksByURL(FindLinksByURLRequest) returns (FindLinksByURLResponse);
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+  rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
+  rpc GetEvent(GetEventRequest) returns (GetEventResponse);
+  rpc UpdateEvent(UpdateEventRequest) returns (UpdateEventResponse);
+  rpc DeleteEvent(DeleteEventRequest) returns (DeleteEventResponse);
 }
 
 message Instruction {
@@ -151,3 +156,49 @@ message FindLinksByURLRequest {
 message FindLinksByURLResponse {
   repeated TaskLink links = 1;
 }
+
+message Event {
+  int64 id = 1;
+  string description = 2;
+  string data = 3;
+  string url = 4;
+  repeated string tasks = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message ListEventsRequest {}
+
+message ListEventsResponse {
+  repeated Event events = 1;
+}
+
+message CreateEventRequest {
+  string description = 1;
+  string data = 2;
+  string url = 3;
+}
+
+message CreateEventResponse {
+  Event event = 1;
+}
+
+message GetEventRequest {
+  int64 id = 1;
+}
+
+message GetEventResponse {
+  Event event = 1;
+}
+
+message UpdateEventRequest {
+  int64 id = 1;
+  repeated string tasks = 2;
+}
+
+message UpdateEventResponse {}
+
+message DeleteEventRequest {
+  int64 id = 1;
+}
+
+message DeleteEventResponse {}

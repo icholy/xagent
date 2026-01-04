@@ -16,17 +16,19 @@ import (
 
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
-	log   *slog.Logger
-	tasks *store.TaskRepository
-	logs  *store.LogRepository
-	links *store.LinkRepository
+	log    *slog.Logger
+	tasks  *store.TaskRepository
+	logs   *store.LogRepository
+	links  *store.LinkRepository
+	events *store.EventRepository
 }
 
 type Options struct {
-	Log   *slog.Logger
-	Tasks *store.TaskRepository
-	Logs  *store.LogRepository
-	Links *store.LinkRepository
+	Log    *slog.Logger
+	Tasks  *store.TaskRepository
+	Logs   *store.LogRepository
+	Links  *store.LinkRepository
+	Events *store.EventRepository
 }
 
 func New(opts Options) *Server {
@@ -35,10 +37,11 @@ func New(opts Options) *Server {
 		log = slog.Default()
 	}
 	return &Server{
-		log:   log,
-		tasks: opts.Tasks,
-		logs:  opts.Logs,
-		links: opts.Links,
+		log:    log,
+		tasks:  opts.Tasks,
+		logs:   opts.Logs,
+		links:  opts.Links,
+		events: opts.Events,
 	}
 }
 
@@ -56,6 +59,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /tasks/{id}/detail", s.handleTaskDetailPartial)
 	mux.HandleFunc("GET /tasks/{id}/logs", s.handleTaskLogs)
 	mux.HandleFunc("GET /tasks/{id}/children", s.handleTaskChildren)
+	mux.HandleFunc("GET /events", s.handleEvents)
+	mux.HandleFunc("GET /events/list", s.handleEventList)
+	mux.HandleFunc("GET /events/{id}", s.handleEventDetail)
 
 	return mux
 }
@@ -281,5 +287,73 @@ func linkToProto(l *store.Link) *xagentv1.TaskLink {
 		Title:     l.Title,
 		CreatedAt: timestamppb.New(l.CreatedAt),
 		Created:   l.Created,
+	}
+}
+
+func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
+	events, err := s.events.List()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp := &xagentv1.ListEventsResponse{
+		Events: make([]*xagentv1.Event, len(events)),
+	}
+	for i, e := range events {
+		resp.Events[i] = eventToProto(e)
+	}
+	return resp, nil
+}
+
+func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
+	event := &store.Event{
+		Description: req.Description,
+		Data:        []byte(req.Data),
+		URL:         req.Url,
+	}
+	if err := s.events.Create(event); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("event created", "id", event.ID, "description", event.Description)
+	return &xagentv1.CreateEventResponse{
+		Event: eventToProto(event),
+	}, nil
+}
+
+func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
+	event, err := s.events.Get(req.Id)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+	return &xagentv1.GetEventResponse{
+		Event: eventToProto(event),
+	}, nil
+}
+
+func (s *Server) UpdateEvent(ctx context.Context, req *xagentv1.UpdateEventRequest) (*xagentv1.UpdateEventResponse, error) {
+	if err := s.events.Update(req.Id, store.EventUpdate{
+		Tasks: req.Tasks,
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("event updated", "id", req.Id)
+	return &xagentv1.UpdateEventResponse{}, nil
+}
+
+func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
+	if err := s.events.Delete(req.Id); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("event deleted", "id", req.Id)
+	return &xagentv1.DeleteEventResponse{}, nil
+}
+
+func eventToProto(e *store.Event) *xagentv1.Event {
+	return &xagentv1.Event{
+		Id:          e.ID,
+		Description: e.Description,
+		Data:        string(e.Data),
+		Url:         e.URL,
+		Tasks:       e.Tasks,
+		CreatedAt:   timestamppb.New(e.CreatedAt),
 	}
 }

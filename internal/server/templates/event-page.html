@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XAgent</title>
+    <title>Event {{.Event.ID}} - XAgent</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -13,7 +13,7 @@
             padding: 20px;
             background: #f5f5f5;
         }
-        h1 { color: #333; }
+        h1, h2, h3 { color: #333; }
         .card {
             background: white;
             border-radius: 8px;
@@ -39,18 +39,6 @@
         .status-cancelled { background: #fef3c7; color: #92400e; }
         .status-restarting { background: #fce7f3; color: #9d174d; }
         .status-archived { background: #e5e7eb; color: #4b5563; }
-        .status-llm { background: #ede9fe; color: #5b21b6; }
-        .status-info { background: #dbeafe; color: #1e40af; }
-        .status-error { background: #fee2e2; color: #991b1b; }
-        input, textarea, select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        textarea { min-height: 100px; resize: vertical; }
         button {
             background: #2563eb;
             color: white;
@@ -63,50 +51,71 @@
         button:hover { background: #1d4ed8; }
         .btn-danger { background: #dc2626; }
         .btn-danger:hover { background: #b91c1c; }
-        .task-actions { margin-top: 15px; display: flex; gap: 10px; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        .nav { margin-bottom: 20px; }
-        .nav a { margin-right: 15px; }
-        #task-card:not(:has(#task-list tr)) { display: none; }
+        .back-link { margin-bottom: 20px; display: inline-block; }
+        .meta { color: #666; margin-bottom: 10px; }
+        .meta span { margin-right: 20px; }
+        pre {
+            background: #f8f8f8;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        .task-actions { display: flex; gap: 10px; margin-top: 15px; }
     </style>
 </head>
 <body>
-    <div class="nav">
-        <a href="/">Tasks</a>
-        <a href="/events">Events</a>
-    </div>
-
-    <h1>XAgent</h1>
+    <a href="/events" class="back-link">&larr; Back to Events</a>
 
     <div class="card">
-        <h2>New Task</h2>
-        <form id="create-form">
-            <input type="text" name="name" placeholder="Name (optional)">
-            <input type="text" name="workspace" placeholder="Workspace (e.g. default)" required>
-            <textarea name="prompt" placeholder="Prompt" required></textarea>
-            <button type="submit">Create Task</button>
-        </form>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Event #{{.Event.ID}}</h2>
+            <button onclick="deleteEvent()" class="btn-danger">Delete</button>
+        </div>
+        <div class="meta">
+            <span><strong>Created:</strong> {{.Event.CreatedAt.Format "2006-01-02 15:04:05"}}</span>
+        </div>
+        <p><strong>Description:</strong> {{.Event.Description}}</p>
+        {{if .Event.URL}}
+        <p><strong>URL:</strong> <a href="{{.Event.URL}}" target="_blank">{{.Event.URL}}</a></p>
+        {{end}}
+        <h3>Data</h3>
+        <pre>{{.Event.Data}}</pre>
     </div>
 
-    <div class="card" id="task-card">
-        <h2>Tasks</h2>
+    <div class="card">
+        <h3>Linked Tasks ({{len .Tasks}})</h3>
+        {{if .Tasks}}
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
+                    <th>Name</th>
                     <th>Workspace</th>
                     <th>Status</th>
-                    <th>Created</th>
                 </tr>
             </thead>
-            <tbody id="task-list">
-                {{template "task-list.html" .}}
+            <tbody>
+                {{range .Tasks}}
+                <tr>
+                    <td><a href="/tasks/{{.ID}}">{{.ID | printf "%.8s"}}</a></td>
+                    <td>{{if .Name}}{{.Name}}{{else}}-{{end}}</td>
+                    <td>{{.Workspace}}</td>
+                    <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
+                </tr>
+                {{end}}
             </tbody>
         </table>
+        {{else}}
+        <p style="color: #666;">No tasks linked to this event yet.</p>
+        {{end}}
     </div>
 
     <script>
+        const eventId = {{.Event.ID}};
+
         async function rpc(method, params) {
             const resp = await fetch('/xagent.v1.XAgentService/' + method, {
                 method: 'POST',
@@ -117,24 +126,11 @@
             return resp.json();
         }
 
-        async function refreshTaskList() {
-            const resp = await fetch('/tasks');
-            document.getElementById('task-list').innerHTML = await resp.text();
+        async function deleteEvent() {
+            if (!confirm('Are you sure you want to delete this event?')) return;
+            await rpc('DeleteEvent', {id: eventId});
+            window.location.href = '/events';
         }
-
-        document.getElementById('create-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            await rpc('CreateTask', {
-                name: form.name.value,
-                workspace: form.workspace.value,
-                instructions: [{text: form.prompt.value}]
-            });
-            form.reset();
-            refreshTaskList();
-        });
-
-        setInterval(refreshTaskList, 5000);
     </script>
 </body>
 </html>

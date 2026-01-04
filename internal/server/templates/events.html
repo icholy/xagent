@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XAgent</title>
+    <title>Events - XAgent</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -13,7 +13,7 @@
             padding: 20px;
             background: #f5f5f5;
         }
-        h1 { color: #333; }
+        h1, h2 { color: #333; }
         .card {
             background: white;
             border-radius: 8px;
@@ -25,24 +25,7 @@
         th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #eee; }
         th { font-weight: 600; color: #666; }
         tr:hover { background: #f9f9f9; }
-        .status {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        .status-pending { background: #fef3c7; color: #92400e; }
-        .status-running { background: #dbeafe; color: #1e40af; }
-        .status-completed { background: #d1fae5; color: #065f46; }
-        .status-failed { background: #fee2e2; color: #991b1b; }
-        .status-cancelled { background: #fef3c7; color: #92400e; }
-        .status-restarting { background: #fce7f3; color: #9d174d; }
-        .status-archived { background: #e5e7eb; color: #4b5563; }
-        .status-llm { background: #ede9fe; color: #5b21b6; }
-        .status-info { background: #dbeafe; color: #1e40af; }
-        .status-error { background: #fee2e2; color: #991b1b; }
-        input, textarea, select {
+        input, textarea {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -50,7 +33,7 @@
             margin-bottom: 10px;
             font-size: 14px;
         }
-        textarea { min-height: 100px; resize: vertical; }
+        textarea { min-height: 100px; resize: vertical; font-family: monospace; }
         button {
             background: #2563eb;
             color: white;
@@ -61,14 +44,12 @@
             font-size: 14px;
         }
         button:hover { background: #1d4ed8; }
-        .btn-danger { background: #dc2626; }
-        .btn-danger:hover { background: #b91c1c; }
-        .task-actions { margin-top: 15px; display: flex; gap: 10px; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
+        .back-link { margin-bottom: 20px; display: inline-block; }
         .nav { margin-bottom: 20px; }
         .nav a { margin-right: 15px; }
-        #task-card:not(:has(#task-list tr)) { display: none; }
+        #event-card:not(:has(#event-list tr)) { display: none; }
     </style>
 </head>
 <body>
@@ -77,31 +58,32 @@
         <a href="/events">Events</a>
     </div>
 
-    <h1>XAgent</h1>
+    <h1>Events</h1>
 
     <div class="card">
-        <h2>New Task</h2>
+        <h2>New Event</h2>
         <form id="create-form">
-            <input type="text" name="name" placeholder="Name (optional)">
-            <input type="text" name="workspace" placeholder="Workspace (e.g. default)" required>
-            <textarea name="prompt" placeholder="Prompt" required></textarea>
-            <button type="submit">Create Task</button>
+            <input type="text" name="description" placeholder="Description" required>
+            <input type="text" name="url" placeholder="URL (optional)">
+            <textarea name="data" placeholder='Data (JSON, e.g. {"key": "value"})'></textarea>
+            <button type="submit">Create Event</button>
         </form>
     </div>
 
-    <div class="card" id="task-card">
-        <h2>Tasks</h2>
+    <div class="card" id="event-card">
+        <h2>Event List</h2>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
-                    <th>Workspace</th>
-                    <th>Status</th>
+                    <th>Description</th>
+                    <th>URL</th>
+                    <th>Tasks</th>
                     <th>Created</th>
                 </tr>
             </thead>
-            <tbody id="task-list">
-                {{template "task-list.html" .}}
+            <tbody id="event-list">
+                {{template "event-list.html" .}}
             </tbody>
         </table>
     </div>
@@ -117,24 +99,31 @@
             return resp.json();
         }
 
-        async function refreshTaskList() {
-            const resp = await fetch('/tasks');
-            document.getElementById('task-list').innerHTML = await resp.text();
+        async function refreshEventList() {
+            const resp = await fetch('/events/list');
+            document.getElementById('event-list').innerHTML = await resp.text();
         }
 
         document.getElementById('create-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
-            await rpc('CreateTask', {
-                name: form.name.value,
-                workspace: form.workspace.value,
-                instructions: [{text: form.prompt.value}]
+            const data = form.data.value || '{}';
+            try {
+                JSON.parse(data);
+            } catch {
+                alert('Invalid JSON in data field');
+                return;
+            }
+            await rpc('CreateEvent', {
+                description: form.description.value,
+                url: form.url.value,
+                data: data
             });
             form.reset();
-            refreshTaskList();
+            refreshEventList();
         });
 
-        setInterval(refreshTaskList, 5000);
+        setInterval(refreshEventList, 5000);
     </script>
 </body>
 </html>
