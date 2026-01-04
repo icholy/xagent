@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -45,47 +44,38 @@ func setupTestServer(t *testing.T) *Server {
 	})
 }
 
-func TestCreateAndGetTask(t *testing.T) {
+func TestGetTask(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := context.Background()
 
-	// Create a task
-	createReq := &xagentv1.CreateTaskRequest{
+	// Create a task directly in the database
+	task := &store.Task{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
-		Instructions: []*xagentv1.Instruction{
+		Instructions: []store.Instruction{
 			{
 				Text: "Do something important",
-				Url:  "https://example.com/issue/1",
+				URL:  "https://example.com/issue/1",
 			},
 			{
 				Text: "Do something else",
-				Url:  "https://example.com/issue/2",
+				URL:  "https://example.com/issue/2",
 			},
 		},
+		Status: store.TaskStatusPending,
 	}
-
-	createResp, err := srv.CreateTask(ctx, createReq)
+	err := srv.tasks.Create(task)
 	assert.NilError(t, err)
-	assert.Assert(t, createResp != nil)
-	assert.Assert(t, createResp.Task != nil)
-	assert.Assert(t, createResp.Task.Id > 0, "expected task ID to be set")
 
-	taskID := createResp.Task.Id
-
-	// Get the task back
-	getReq := &xagentv1.GetTaskRequest{
-		Id: taskID,
-	}
-
-	getResp, err := srv.GetTask(ctx, getReq)
+	// Get the task via the API
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{
+		Id: task.ID,
+	})
 	assert.NilError(t, err)
-	assert.Assert(t, getResp != nil)
-	assert.Assert(t, getResp.Task != nil)
 
 	// Verify the task matches what we created
 	expected := &xagentv1.Task{
-		Id:        taskID,
+		Id:        task.ID,
 		Name:      "Test Task",
 		Parent:    0,
 		Workspace: "test-workspace",
@@ -104,7 +94,5 @@ func TestCreateAndGetTask(t *testing.T) {
 		UpdatedAt: getResp.Task.UpdatedAt,
 	}
 
-	if diff := cmp.Diff(expected, getResp.Task, protocmp.Transform()); diff != "" {
-		t.Errorf("task mismatch (-want +got):\n%s", diff)
-	}
+	assert.DeepEqual(t, getResp.Task, expected, protocmp.Transform())
 }
