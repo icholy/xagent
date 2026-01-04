@@ -53,6 +53,16 @@ func migrate(db *sql.DB) error {
 			FOREIGN KEY (task_id) REFERENCES tasks(id)
 		);
 		CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);
+
+		CREATE TABLE IF NOT EXISTS events (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			description TEXT NOT NULL,
+			data        TEXT NOT NULL,
+			url         TEXT,
+			tasks       TEXT NOT NULL DEFAULT '[]',
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_events_url ON events(url);
 	`)
 	return err
 }
