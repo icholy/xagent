@@ -3,7 +3,6 @@
     <td><a href="/events/{{.ID}}">{{.ID}}</a></td>
     <td>{{.Description}}</td>
     <td>{{if .URL}}<a href="{{.URL}}" target="_blank">{{.URL}}</a>{{end}}</td>
-    <td>{{len .Tasks}}</td>
     <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
 </tr>
 {{end}}

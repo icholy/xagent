@@ -115,6 +115,22 @@ func (r *TaskRepository) ListChildren(parentID string) ([]*Task, error) {
 	return r.scanTasks(rows)
 }
 
+func (r *TaskRepository) ListByEvent(eventID int64) ([]*Task, error) {
+	rows, err := r.db.Query(`
+		SELECT t.id, t.name, t.parent, t.workspace, t.prompts, t.status, t.created_at, t.updated_at
+		FROM tasks t
+		JOIN event_tasks et ON t.id = et.task_id
+		WHERE et.event_id = ?
+		ORDER BY t.created_at DESC
+	`, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanTasks(rows)
+}
+
 type TaskUpdate struct {
 	Name            string
 	Status          TaskStatus

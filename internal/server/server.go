@@ -329,16 +329,6 @@ func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*
 	}, nil
 }
 
-func (s *Server) UpdateEvent(ctx context.Context, req *xagentv1.UpdateEventRequest) (*xagentv1.UpdateEventResponse, error) {
-	if err := s.events.Update(req.Id, store.EventUpdate{
-		Tasks: req.Tasks,
-	}); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	s.log.Info("event updated", "id", req.Id)
-	return &xagentv1.UpdateEventResponse{}, nil
-}
-
 func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
 	if err := s.events.Delete(req.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -347,13 +337,36 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 	return &xagentv1.DeleteEventResponse{}, nil
 }
 
+func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error) {
+	if err := s.events.AddTask(req.EventId, req.TaskId); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("event task added", "event_id", req.EventId, "task_id", req.TaskId)
+	return &xagentv1.AddEventTaskResponse{}, nil
+}
+
+func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
+	if err := s.events.RemoveTask(req.EventId, req.TaskId); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("event task removed", "event_id", req.EventId, "task_id", req.TaskId)
+	return &xagentv1.RemoveEventTaskResponse{}, nil
+}
+
+func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
+	tasks, err := s.events.ListTasks(req.EventId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return &xagentv1.ListEventTasksResponse{TaskIds: tasks}, nil
+}
+
 func eventToProto(e *store.Event) *xagentv1.Event {
 	return &xagentv1.Event{
 		Id:          e.ID,
 		Description: e.Description,
 		Data:        e.Data,
 		Url:         e.URL,
-		Tasks:       e.Tasks,
 		CreatedAt:   timestamppb.New(e.CreatedAt),
 	}
 }

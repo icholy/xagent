@@ -5,8 +5,6 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
-
-	"github.com/icholy/xagent/internal/store"
 )
 
 //go:embed templates/*.html
@@ -123,13 +121,7 @@ func (s *Server) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Event not found", http.StatusNotFound)
 		return
 	}
-	// Fetch linked tasks
-	var tasks []*store.Task
-	for _, taskID := range event.Tasks {
-		if task, err := s.tasks.Get(taskID); err == nil {
-			tasks = append(tasks, task)
-		}
-	}
+	tasks, _ := s.tasks.ListByEvent(id)
 	templates.ExecuteTemplate(w, "event-page.html", map[string]any{
 		"Event": event,
 		"Tasks": tasks,
