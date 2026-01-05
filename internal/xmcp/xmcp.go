@@ -262,6 +262,9 @@ func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 	if childResp.Task.Parent != s.taskID {
 		return errorResult("task is not a child of the current task"), nil, nil
 	}
+	if childResp.Task.Status == "archived" {
+		return errorResult("cannot update archived task"), nil, nil
+	}
 
 	_, err = s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:     input.TaskID,

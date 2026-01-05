@@ -70,6 +70,41 @@ func TestGetMyTask(t *testing.T) {
 	})
 }
 
+func TestUpdateChildTask_ArchivedTask(t *testing.T) {
+	parentTaskID := int64(123)
+	childTaskID := int64(456)
+
+	client := &ClientMock{
+		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+			assert.Equal(t, req.Id, childTaskID)
+			return &xagentv1.GetTaskResponse{
+				Task: &xagentv1.Task{
+					Id:     childTaskID,
+					Parent: parentTaskID,
+					Status: "archived",
+				},
+			}, nil
+		},
+	}
+
+	srv := NewServer(client, parentTaskID, "test-workspace")
+	session := setupTestSession(t, srv)
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "update_child_task",
+		Arguments: map[string]any{
+			"task_id":     float64(childTaskID),
+			"instruction": "do something",
+		},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, result.IsError, "expected error result")
+
+	text, ok := result.Content[0].(*mcp.TextContent)
+	assert.Assert(t, ok, "expected TextContent")
+	assert.Assert(t, text.Text == "cannot update archived task", "expected archived error message, got: %s", text.Text)
+}
+
 func assertTextResult(t *testing.T, result *mcp.CallToolResult, want map[string]any) {
 	t.Helper()
 	assert.Assert(t, result != nil, "CallTool returned nil result")
