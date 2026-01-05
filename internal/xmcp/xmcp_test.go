@@ -21,12 +21,12 @@ func setupTestSession(t *testing.T, srv *Server) *mcp.ClientSession {
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 
 	// Connect server
-	_, err := mcpServer.Connect(context.Background(), serverTransport, nil)
+	_, err := mcpServer.Connect(t.Context(), serverTransport, nil)
 	assert.NilError(t, err)
 
 	// Create and connect client
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
-	clientSession, err := mcpClient.Connect(context.Background(), clientTransport, nil)
+	clientSession, err := mcpClient.Connect(t.Context(), clientTransport, nil)
 	assert.NilError(t, err)
 	t.Cleanup(func() { clientSession.Close() })
 
@@ -53,7 +53,7 @@ func TestGetMyTask(t *testing.T) {
 	session := setupTestSession(t, srv)
 
 	// Call the tool through the MCP framework
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "get_my_task",
 		Arguments: map[string]any{},
 	})
