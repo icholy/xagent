@@ -422,6 +422,16 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		if !link.Notify || taskIDs[link.TaskID] {
 			continue
 		}
+		// Skip archived tasks
+		task, err := s.tasks.Get(link.TaskID)
+		if err != nil {
+			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
+			continue
+		}
+		if task.Status == store.TaskStatusArchived {
+			s.log.Info("skipping archived task", "task_id", link.TaskID)
+			continue
+		}
 		taskIDs[link.TaskID] = true
 		if err := s.events.AddTask(req.Id, link.TaskID); err != nil {
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
