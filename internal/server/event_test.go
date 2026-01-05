@@ -497,3 +497,86 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 	assert.Equal(t, len(processResp.TaskIds), 1)
 	assert.Equal(t, processResp.TaskIds[0], task.Task.Id)
 }
+
+func TestProcessEventSkipsArchivedTasks(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	ctx := context.Background()
+
+	// Create two tasks with links to the same URL with notify=true
+	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Active Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	archivedTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Archived Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	// Archive the second task
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:     archivedTask.Task.Id,
+		Status: "archived",
+	})
+	assert.NilError(t, err)
+
+	// Create links with notify=true for both tasks
+	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId:    activeTask.Task.Id,
+		Url:       "https://github.com/example/repo/pull/123",
+		Relevance: "PR to monitor",
+		Notify:    true,
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId:    archivedTask.Task.Id,
+		Url:       "https://github.com/example/repo/pull/123",
+		Relevance: "PR to monitor",
+		Notify:    true,
+	})
+	assert.NilError(t, err)
+
+	// Create an event with matching URL
+	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+		Description: "PR comment added",
+		Data:        `{"comment": "Please review"}`,
+		Url:         "https://github.com/example/repo/pull/123",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	processResp, err := srv.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
+		Id: eventResp.Event.Id,
+	})
+
+	// Assert - should only route to the active task, not the archived one
+	assert.NilError(t, err)
+	assert.Equal(t, len(processResp.TaskIds), 1)
+	assert.Equal(t, processResp.TaskIds[0], activeTask.Task.Id)
+
+	// Verify active task received the event and was set to restarting
+	events1, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: activeTask.Task.Id,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(events1.Events), 1)
+
+	getActiveTask, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: activeTask.Task.Id})
+	assert.NilError(t, err)
+	assert.Equal(t, getActiveTask.Task.Status, "restarting")
+
+	// Verify archived task did NOT receive the event and remains archived
+	events2, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: archivedTask.Task.Id,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(events2.Events), 0)
+
+	getArchivedTask, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: archivedTask.Task.Id})
+	assert.NilError(t, err)
+	assert.Equal(t, getArchivedTask.Task.Status, "archived")
+}
