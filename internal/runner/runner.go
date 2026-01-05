@@ -32,6 +32,7 @@ type Runner struct {
 	prebuiltDir string
 	workspaces  *workspace.Config
 	debug       bool
+	concurrency int
 }
 
 type Options struct {
@@ -39,6 +40,7 @@ type Options struct {
 	PrebuiltDir string
 	Workspaces  *workspace.Config
 	Debug       bool
+	Concurrency int
 }
 
 func New(opts Options) (*Runner, error) {
@@ -62,6 +64,7 @@ func New(opts Options) (*Runner, error) {
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
 		debug:       opts.Debug,
+		concurrency: opts.Concurrency,
 	}, nil
 }
 
@@ -82,10 +85,31 @@ func (r *Runner) log(ctx context.Context, taskID int64, typ, content string) {
 	}
 }
 
+func (r *Runner) runningContainerCount(ctx context.Context) (int, error) {
+	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
+		Filters: filters.NewArgs(
+			filters.Arg("label", "xagent=true"),
+			filters.Arg("status", "running"),
+		),
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(containers), nil
+}
+
 func (r *Runner) Poll(ctx context.Context) error {
 	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{Statuses: []string{"pending", "cancelled", "restarting"}})
 	if err != nil {
 		return err
+	}
+
+	var runningCount int
+	if r.concurrency > 0 {
+		runningCount, err = r.runningContainerCount(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to count running containers: %w", err)
+		}
 	}
 
 	for _, task := range resp.Tasks {
@@ -113,6 +137,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 				slog.Error("failed to update task status", "task", task.Id, "error", err)
 			}
 		case "pending":
+			if r.concurrency > 0 && runningCount >= r.concurrency {
+				slog.Debug("concurrency limit reached, skipping pending task", "task", task.Id, "running", runningCount, "limit", r.concurrency)
+				continue
+			}
 			r.log(ctx, task.Id, "info", "container starting")
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to start container", "task", task.Id, "error", err)
@@ -125,6 +153,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "running"}); err != nil {
 				slog.Error("failed to update task status", "task", task.Id, "error", err)
 			}
+			runningCount++
 		}
 	}
 
