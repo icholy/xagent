@@ -1,4 +1,4 @@
-<tr>
+<tr{{if .Parent}} class="child-task"{{end}}>
     <td><a href="/ui/tasks/{{.ID}}">{{if .Name}}{{.Name}}{{else}}<code>{{.ID}}</code>{{end}}</a></td>
     <td>{{.Workspace}}</td>
     <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
