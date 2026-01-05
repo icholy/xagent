@@ -90,6 +90,7 @@
         {{template "task-detail.html" .}}
     </div>
 
+    {{if ne .Task.Status "archived"}}
     <div class="card">
         <h3>Add Instruction</h3>
         <form id="instruction-form">
@@ -97,6 +98,7 @@
             <button type="submit">Add Instruction</button>
         </form>
     </div>
+    {{end}}
 
     {{template "task-children.html" .}}
 
@@ -141,6 +143,7 @@
         {{template "task-logs.html" (dict "TaskID" .Task.ID "Logs" .Logs)}}
     </div>
 
+    {{if ne .Task.Status "archived"}}
     <script>
         document.getElementById('instruction-form').onsubmit = async (e) => {
             e.preventDefault();
@@ -148,6 +151,7 @@
             e.target.reset();
         };
     </script>
+    {{end}}
 
     <script>
         const taskId = '{{.Task.ID}}';
