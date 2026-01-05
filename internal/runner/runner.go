@@ -98,6 +98,20 @@ func (r *Runner) runningContainerCount(ctx context.Context) (int, error) {
 	return len(containers), nil
 }
 
+func (r *Runner) isContainerRunning(ctx context.Context, task *xagentv1.Task) bool {
+	taskIDStr := strconv.FormatInt(task.Id, 10)
+	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
+		Filters: filters.NewArgs(
+			filters.Arg("label", "xagent.task="+taskIDStr),
+			filters.Arg("status", "running"),
+		),
+	})
+	if err != nil {
+		return false
+	}
+	return len(containers) > 0
+}
+
 func (r *Runner) Poll(ctx context.Context) error {
 	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{Statuses: []string{"pending", "cancelled", "restarting"}})
 	if err != nil {
@@ -122,8 +136,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 			}
 		case "restarting":
 			r.log(ctx, task.Id, "info", "container restarting")
+			wasRunning := r.isContainerRunning(ctx, task)
 			if err := r.killTask(ctx, task); err != nil {
 				slog.Error("failed to kill task for restart", "task", task.Id, "error", err)
+			}
+			// If container wasn't running, starting it requires a slot
+			if !wasRunning && r.concurrency > 0 && runningCount >= r.concurrency {
+				slog.Debug("concurrency limit reached, skipping restarting task", "task", task.Id, "running", runningCount, "limit", r.concurrency)
+				continue
 			}
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to restart task", "task", task.Id, "error", err)
@@ -135,6 +155,9 @@ func (r *Runner) Poll(ctx context.Context) error {
 			}
 			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "running"}); err != nil {
 				slog.Error("failed to update task status", "task", task.Id, "error", err)
+			}
+			if !wasRunning {
+				runningCount++
 			}
 		case "pending":
 			if r.concurrency > 0 && runningCount >= r.concurrency {
