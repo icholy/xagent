@@ -49,7 +49,7 @@ func TestGetTask(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a task using the API
-	createResp, _ := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
 		Instructions: []*xagentv1.Instruction{
@@ -63,6 +63,7 @@ func TestGetTask(t *testing.T) {
 			},
 		},
 	})
+	assert.NilError(t, err)
 
 	// Get the task via the API
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{
@@ -135,14 +136,16 @@ func TestListTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := context.Background()
-	srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
 		Workspace: "workspace-1",
 	})
-	srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	assert.NilError(t, err)
+	_, err = srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 2",
 		Workspace: "workspace-2",
 	})
+	assert.NilError(t, err)
 
 	// Act
 	resp, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{})
@@ -156,20 +159,22 @@ func TestUpdateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := context.Background()
-	createResp, _ := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Original Name",
 		Workspace: "test-workspace",
 	})
+	assert.NilError(t, err)
 
 	// Act
-	_, err := srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:   createResp.Task.Id,
 		Name: "Updated Name",
 	})
 
 	// Assert
 	assert.NilError(t, err)
-	getResp, _ := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.Name, "Updated Name")
 }
 
@@ -177,13 +182,14 @@ func TestDeleteTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := context.Background()
-	createResp, _ := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task to Delete",
 		Workspace: "test-workspace",
 	})
+	assert.NilError(t, err)
 
 	// Act
-	_, err := srv.DeleteTask(ctx, &xagentv1.DeleteTaskRequest{
+	_, err = srv.DeleteTask(ctx, &xagentv1.DeleteTaskRequest{
 		Id: createResp.Task.Id,
 	})
 
@@ -197,10 +203,11 @@ func TestCreateLink(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := context.Background()
-	taskResp, _ := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Link",
 		Workspace: "test-workspace",
 	})
+	assert.NilError(t, err)
 
 	// Act
 	resp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
@@ -222,17 +229,19 @@ func TestUploadAndListLogs(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := context.Background()
-	taskResp, _ := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
 		Workspace: "test-workspace",
 	})
-	srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
+	assert.NilError(t, err)
+	_, err = srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 		TaskId: taskResp.Task.Id,
 		Entries: []*xagentv1.LogEntry{
 			{Type: "info", Content: "First log entry"},
 			{Type: "error", Content: "Second log entry"},
 		},
 	})
+	assert.NilError(t, err)
 
 	// Act
 	resp, err := srv.ListLogs(ctx, &xagentv1.ListLogsRequest{
