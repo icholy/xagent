@@ -80,7 +80,17 @@ func SaveConfig(taskID string, cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o666)
+
+	// Write to a temporary file first, then rename atomically.
+	// This ensures that if the container is killed mid-write,
+	// the original config file remains intact.
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o666); err != nil {
+		return err
+	}
+
+	// Rename is atomic on POSIX systems
+	return os.Rename(tmpPath, path)
 }
 
 // Tar returns a tar archive containing the config file for the given task ID.
