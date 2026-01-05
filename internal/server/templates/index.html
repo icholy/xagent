@@ -91,6 +91,12 @@
 
     <div class="card" id="task-card">
         <h2>Tasks</h2>
+        <div style="margin-bottom: 10px;">
+            <label>
+                <input type="checkbox" id="show-children" {{if .ShowChildren}}checked{{end}}>
+                Show child tasks
+            </label>
+        </div>
         <table>
             <thead>
                 <tr>
@@ -117,8 +123,13 @@
             return resp.json();
         }
 
+        function getShowChildren() {
+            return document.getElementById('show-children').checked;
+        }
+
         async function refreshTaskList() {
-            const resp = await fetch('/ui/tasks/list');
+            const showChildren = getShowChildren();
+            const resp = await fetch('/ui/tasks/list?children=' + showChildren);
             document.getElementById('task-list').innerHTML = await resp.text();
         }
 
@@ -131,6 +142,17 @@
                 instructions: [{text: form.prompt.value}]
             });
             form.reset();
+            refreshTaskList();
+        });
+
+        document.getElementById('show-children').addEventListener('change', (e) => {
+            const url = new URL(window.location);
+            if (e.target.checked) {
+                url.searchParams.set('children', 'true');
+            } else {
+                url.searchParams.delete('children');
+            }
+            window.history.replaceState({}, '', url);
             refreshTaskList();
         });
 

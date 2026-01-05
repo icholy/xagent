@@ -55,6 +55,7 @@ message McpServer {
 
 message ListTasksRequest {
   repeated string statuses = 1;
+  bool include_children = 2;
 }
 
 message ListTasksResponse {

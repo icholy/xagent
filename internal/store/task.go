@@ -77,11 +77,15 @@ func (r *TaskRepository) Get(id int64) (*Task, error) {
 	return r.scanTask(row)
 }
 
-func (r *TaskRepository) List() ([]*Task, error) {
-	rows, err := r.db.Query(`
+func (r *TaskRepository) List(includeChildren bool) ([]*Task, error) {
+	query := `
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
-		FROM tasks WHERE status != 'archived' ORDER BY created_at DESC
-	`)
+		FROM tasks WHERE status != 'archived'`
+	if !includeChildren {
+		query += ` AND parent = 0`
+	}
+	query += ` ORDER BY created_at DESC`
+	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -90,9 +94,9 @@ func (r *TaskRepository) List() ([]*Task, error) {
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) {
+func (r *TaskRepository) ListByStatuses(statuses []TaskStatus, includeChildren bool) ([]*Task, error) {
 	if len(statuses) == 0 {
-		return r.List()
+		return r.List(includeChildren)
 	}
 	placeholders := make([]string, len(statuses))
 	args := make([]any, len(statuses))
@@ -102,8 +106,11 @@ func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) 
 	}
 	query := fmt.Sprintf(`
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
-		FROM tasks WHERE status IN (%s) ORDER BY created_at DESC
-	`, strings.Join(placeholders, ","))
+		FROM tasks WHERE status IN (%s)`, strings.Join(placeholders, ","))
+	if !includeChildren {
+		query += ` AND parent = 0`
+	}
+	query += ` ORDER BY created_at DESC`
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, err

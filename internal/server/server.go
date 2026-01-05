@@ -78,9 +78,9 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 		for i, s := range req.Statuses {
 			statuses[i] = store.TaskStatus(s)
 		}
-		tasks, err = s.tasks.ListByStatuses(statuses)
+		tasks, err = s.tasks.ListByStatuses(statuses, req.IncludeChildren)
 	} else {
-		tasks, err = s.tasks.List()
+		tasks, err = s.tasks.List(req.IncludeChildren)
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

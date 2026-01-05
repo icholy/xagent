@@ -243,10 +243,11 @@ func (x *McpServer) GetEnv() map[string]string {
 }
 
 type ListTasksRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Statuses      []string               `protobuf:"bytes,1,rep,name=statuses,proto3" json:"statuses,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Statuses        []string               `protobuf:"bytes,1,rep,name=statuses,proto3" json:"statuses,omitempty"`
+	IncludeChildren bool                   `protobuf:"varint,2,opt,name=include_children,json=includeChildren,proto3" json:"include_children,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ListTasksRequest) Reset() {
@@ -284,6 +285,13 @@ func (x *ListTasksRequest) GetStatuses() []string {
 		return x.Statuses
 	}
 	return nil
+}
+
+func (x *ListTasksRequest) GetIncludeChildren() bool {
+	if x != nil {
+		return x.IncludeChildren
+	}
+	return false
 }
 
 type ListTasksResponse struct {
@@ -2424,9 +2432,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x03env\x18\x04 \x03(\v2\x1d.xagent.v1.McpServer.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\".\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"Y\n" +
 	"\x10ListTasksRequest\x12\x1a\n" +
-	"\bstatuses\x18\x01 \x03(\tR\bstatuses\":\n" +
+	"\bstatuses\x18\x01 \x03(\tR\bstatuses\x12)\n" +
+	"\x10include_children\x18\x02 \x01(\bR\x0fincludeChildren\":\n" +
 	"\x11ListTasksResponse\x12%\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"4\n" +
 	"\x15ListChildTasksRequest\x12\x1b\n" +

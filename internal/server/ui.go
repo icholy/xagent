@@ -24,14 +24,17 @@ var templates = template.Must(
 )
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	tasks, _ := s.tasks.List()
+	showChildren := r.URL.Query().Get("children") == "true"
+	tasks, _ := s.tasks.List(showChildren)
 	templates.ExecuteTemplate(w, "index.html", map[string]any{
-		"Tasks": tasks,
+		"Tasks":        tasks,
+		"ShowChildren": showChildren,
 	})
 }
 
 func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
-	tasks, _ := s.tasks.List()
+	showChildren := r.URL.Query().Get("children") == "true"
+	tasks, _ := s.tasks.List(showChildren)
 	templates.ExecuteTemplate(w, "task-list.html", map[string]any{
 		"Tasks": tasks,
 	})
