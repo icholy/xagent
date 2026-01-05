@@ -69,6 +69,7 @@
         .nav { margin-bottom: 20px; }
         .nav a { margin-right: 15px; }
         #task-card:not(:has(#task-list tr)) { display: none; }
+        #task-list:not(.show-children) .child-task { display: none; }
     </style>
 </head>
 <body>
@@ -91,6 +92,12 @@
 
     <div class="card" id="task-card">
         <h2>Tasks</h2>
+        <div style="margin-bottom: 10px;">
+            <label>
+                <input type="checkbox" id="show-children">
+                Show child tasks
+            </label>
+        </div>
         <table>
             <thead>
                 <tr>
@@ -132,6 +139,10 @@
             });
             form.reset();
             refreshTaskList();
+        });
+
+        document.getElementById('show-children').addEventListener('change', (e) => {
+            document.getElementById('task-list').classList.toggle('show-children', e.target.checked);
         });
 
         setInterval(refreshTaskList, 5000);
