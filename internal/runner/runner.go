@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -26,12 +27,14 @@ import (
 const socketPath = "/tmp/xagent.sock"
 
 type Runner struct {
-	docker      *client.Client
-	client      xagentclient.Client
-	proxy       *xagentclient.UnixProxy
-	prebuiltDir string
-	workspaces  *workspace.Config
-	debug       bool
+	docker       *client.Client
+	client       xagentclient.Client
+	proxy        *xagentclient.UnixProxy
+	prebuiltDir  string
+	workspaces   *workspace.Config
+	debug        bool
+	concurrency  int
+	runningCount atomic.Int32
 }
 
 type Options struct {
@@ -39,6 +42,7 @@ type Options struct {
 	PrebuiltDir string
 	Workspaces  *workspace.Config
 	Debug       bool
+	Concurrency int
 }
 
 func New(opts Options) (*Runner, error) {
@@ -62,6 +66,7 @@ func New(opts Options) (*Runner, error) {
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
 		debug:       opts.Debug,
+		concurrency: opts.Concurrency,
 	}, nil
 }
 
@@ -101,6 +106,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 			if err := r.killTask(ctx, task); err != nil {
 				slog.Error("failed to kill task for restart", "task", task.Id, "error", err)
 			}
+			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
+				slog.Debug("concurrency limit reached, skipping restarting task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
+				continue
+			}
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to restart task", "task", task.Id, "error", err)
 				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to restart task: %v", err))
@@ -113,6 +122,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 				slog.Error("failed to update task status", "task", task.Id, "error", err)
 			}
 		case "pending":
+			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
+				slog.Debug("concurrency limit reached, skipping pending task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
+				continue
+			}
 			r.log(ctx, task.Id, "info", "container starting")
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to start container", "task", task.Id, "error", err)
@@ -132,6 +145,19 @@ func (r *Runner) Poll(ctx context.Context) error {
 }
 
 func (r *Runner) Reconcile(ctx context.Context) error {
+	// Initialize running container count
+	runningContainers, err := r.docker.ContainerList(ctx, container.ListOptions{
+		Filters: filters.NewArgs(
+			filters.Arg("label", "xagent=true"),
+			filters.Arg("status", "running"),
+		),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list running containers: %w", err)
+	}
+	r.runningCount.Store(int32(len(runningContainers)))
+	slog.Info("initialized running container count", "count", len(runningContainers))
+
 	// Find all exited xagent containers
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
@@ -281,6 +307,8 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 	if err := r.docker.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
+
+	r.runningCount.Add(1)
 
 	if r.debug {
 		go r.streamContainerLogs(ctx, containerID)
@@ -442,6 +470,7 @@ func (r *Runner) Monitor(ctx context.Context) error {
 	for {
 		select {
 		case event := <-eventCh:
+			r.runningCount.Add(-1)
 			taskIDStr := event.Actor.Attributes["xagent.task"]
 			taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
 			if err != nil {

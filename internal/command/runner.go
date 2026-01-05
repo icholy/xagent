@@ -42,6 +42,11 @@ var RunnerCommand = &cli.Command{
 			Name:  "debug",
 			Usage: "Stream container logs to stdout/stderr",
 		},
+		&cli.IntFlag{
+			Name:  "concurrency",
+			Usage: "Maximum number of concurrent tasks (0 for unlimited)",
+			Value: 0,
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -49,6 +54,7 @@ var RunnerCommand = &cli.Command{
 		pollInterval := cmd.Duration("poll")
 		prebuiltDir := cmd.String("prebuilt")
 		debug := cmd.Bool("debug")
+		concurrency := cmd.Int("concurrency")
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
 		if err != nil {
@@ -60,13 +66,14 @@ var RunnerCommand = &cli.Command{
 			PrebuiltDir: prebuiltDir,
 			Workspaces:  workspaces,
 			Debug:       debug,
+			Concurrency: int(concurrency),
 		})
 		if err != nil {
 			return err
 		}
 		defer r.Close()
 
-		slog.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir)
+		slog.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency)
 
 		// Start container monitor in background
 		go func() {
