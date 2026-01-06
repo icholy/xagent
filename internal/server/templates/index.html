@@ -124,9 +124,15 @@
             return resp.json();
         }
 
+        function syncChildrenCheckbox() {
+            const checked = document.getElementById('show-children').checked;
+            document.getElementById('task-list').classList.toggle('show-children', checked);
+        }
+
         async function refreshTaskList() {
             const resp = await fetch('/ui/tasks/list');
             document.getElementById('task-list').innerHTML = await resp.text();
+            syncChildrenCheckbox();
         }
 
         document.getElementById('create-form').addEventListener('submit', async (e) => {
@@ -141,10 +147,9 @@
             refreshTaskList();
         });
 
-        document.getElementById('show-children').addEventListener('change', (e) => {
-            document.getElementById('task-list').classList.toggle('show-children', e.target.checked);
-        });
+        document.getElementById('show-children').addEventListener('change', syncChildrenCheckbox);
 
+        syncChildrenCheckbox();
         setInterval(refreshTaskList, 5000);
     </script>
 </body>
