@@ -18,16 +18,6 @@
 <p><strong>Status:</strong> {{template "task-status.html" .Task}}</p>
 <p><strong>Created:</strong> {{.Task.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
 
-<h3>Instructions</h3>
-<div class="instructions-list">
-{{range .Task.Instructions}}
-    <div class="instruction-card">
-        <div class="instruction-text">{{.Text}}</div>
-        {{if .URL}}<a href="{{.URL}}" target="_blank" class="instruction-link">{{.URL}}</a>{{end}}
-    </div>
-{{end}}
-</div>
-
 {{if .Links}}
 <h3>Links</h3>
 <ul class="task-links">
@@ -40,4 +30,14 @@
 {{end}}
 </ul>
 {{end}}
+
+<h3>Instructions</h3>
+<div class="instructions-list">
+{{range .Task.Instructions}}
+    <div class="instruction-card">
+        <div class="instruction-text">{{.Text}}</div>
+        {{if .URL}}<a href="{{.URL}}" target="_blank" class="instruction-link">{{.URL}}</a>{{end}}
+    </div>
+{{end}}
+</div>
 
