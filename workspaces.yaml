@@ -34,7 +34,7 @@ workspaces:
   cdl:
     commands:
       - git clone --local /repo /home/vscode/cdl
-      - git -C /home/vscode/cdl checkout -b task-$XAGENT_TASK_ID
+      - git -C /home/vscode/cdl switch -c task-$XAGENT_TASK_ID
     container:
       image: containeragent
       working_dir: /home/vscode
