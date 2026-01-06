@@ -33,7 +33,8 @@ workspaces:
 
   cdl:
     commands:
-      - git -C /repo worktree add -b task-$XAGENT_TASK_ID /home/vscode/worktree-$XAGENT_TASK_ID master
+      - git clone --local /repo /home/vscode/cdl
+      - git -C /home/vscode/cdl switch -c task-$XAGENT_TASK_ID
     container:
       image: containeragent
       working_dir: /home/vscode
@@ -41,7 +42,7 @@ workspaces:
       volumes:
         - credentials:/mnt/credentials
         - /var/run/docker.sock:/var/run/docker.sock
-        - /home/icholy/src/github.com/compassdigital/cdl:/repo
+        - /home/icholy/src/github.com/compassdigital/cdl:/repo:ro
       networks:
         - metamcp_metamcp-network
       group_add:
@@ -49,7 +50,7 @@ workspaces:
       environment:
         CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
     agent:
-      cwd: /home/vscode/worktree-$XAGENT_TASK_ID
+      cwd: /home/vscode/cdl
       mcp_servers:
         meta:
           type: "http"
