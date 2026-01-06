@@ -19,13 +19,14 @@
 <p><strong>Created:</strong> {{.Task.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
 
 <h3>Instructions</h3>
-<ul>
+<div class="instructions-list">
 {{range .Task.Instructions}}
-    <li>
-        {{if .URL}}<a href="{{.URL}}" target="_blank">{{.Text}}</a>{{else}}{{.Text}}{{end}}
-    </li>
+    <div class="instruction-card">
+        <div class="instruction-text">{{.Text}}</div>
+        {{if .URL}}<a href="{{.URL}}" target="_blank" class="instruction-link">{{.URL}}</a>{{end}}
+    </div>
 {{end}}
-</ul>
+</div>
 
 {{if .Links}}
 <h3>Links</h3>
