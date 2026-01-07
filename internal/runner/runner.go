@@ -91,6 +91,17 @@ func (r *Runner) log(ctx context.Context, taskID int64, typ, content string) {
 	}
 }
 
+func (r *Runner) taskDisplayName(ctx context.Context, taskID int64) string {
+	resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	if err != nil {
+		return fmt.Sprintf("Task %d", taskID)
+	}
+	if resp.Task.Name == "" {
+		return fmt.Sprintf("Task %d", taskID)
+	}
+	return resp.Task.Name
+}
+
 func (r *Runner) Poll(ctx context.Context) error {
 	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{Statuses: []string{"pending", "cancelled", "restarting"}})
 	if err != nil {
@@ -489,7 +500,7 @@ func (r *Runner) Monitor(ctx context.Context) error {
 					slog.Error("failed to update task status", "task", taskID, "error", err)
 				}
 				if r.notify {
-					if err := notify.Send("xagent", fmt.Sprintf("Task %d completed", taskID)); err != nil {
+					if err := notify.Send("xagent", fmt.Sprintf("%s completed", r.taskDisplayName(ctx, taskID))); err != nil {
 						slog.Error("failed to send notification", "task", taskID, "error", err)
 					}
 				}
@@ -500,7 +511,7 @@ func (r *Runner) Monitor(ctx context.Context) error {
 					slog.Error("failed to update task status", "task", taskID, "error", err)
 				}
 				if r.notify {
-					if err := notify.Send("xagent", fmt.Sprintf("Task %d failed (exit code %s)", taskID, exitCode)); err != nil {
+					if err := notify.Send("xagent", fmt.Sprintf("%s failed (exit code %s)", r.taskDisplayName(ctx, taskID), exitCode)); err != nil {
 						slog.Error("failed to send notification", "task", taskID, "error", err)
 					}
 				}
