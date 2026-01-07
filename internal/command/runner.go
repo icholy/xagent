@@ -47,6 +47,10 @@ var RunnerCommand = &cli.Command{
 			Usage: "Maximum number of concurrent tasks (0 for unlimited)",
 			Value: 0,
 		},
+		&cli.BoolFlag{
+			Name:  "notify",
+			Usage: "Send system notification when a task finishes",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -55,6 +59,7 @@ var RunnerCommand = &cli.Command{
 		prebuiltDir := cmd.String("prebuilt")
 		debug := cmd.Bool("debug")
 		concurrency := cmd.Int("concurrency")
+		notifyFlag := cmd.Bool("notify")
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
 		if err != nil {
@@ -67,6 +72,7 @@ var RunnerCommand = &cli.Command{
 			Workspaces:  workspaces,
 			Debug:       debug,
 			Concurrency: int(concurrency),
+			Notify:      notifyFlag,
 		})
 		if err != nil {
 			return err
