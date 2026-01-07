@@ -51,6 +51,10 @@ var RunnerCommand = &cli.Command{
 			Name:  "notify",
 			Usage: "Send system notification when a task finishes",
 		},
+		&cli.BoolFlag{
+			Name:  "autoprune",
+			Usage: "Automatically remove containers for archived tasks",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -60,6 +64,7 @@ var RunnerCommand = &cli.Command{
 		debug := cmd.Bool("debug")
 		concurrency := cmd.Int("concurrency")
 		notifyFlag := cmd.Bool("notify")
+		autoprune := cmd.Bool("autoprune")
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
 		if err != nil {
@@ -92,6 +97,22 @@ var RunnerCommand = &cli.Command{
 				time.Sleep(time.Second)
 			}
 		}()
+
+		// Start autoprune goroutine if enabled
+		if autoprune {
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(pollInterval):
+						if err := r.Prune(ctx); err != nil {
+							slog.Error("failed to prune containers", "error", err)
+						}
+					}
+				}
+			}()
+		}
 
 		// Reconcile any tasks that were running when the runner was stopped
 		if err := r.Reconcile(ctx); err != nil {
