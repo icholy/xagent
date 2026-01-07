@@ -99,7 +99,7 @@ func (r *Runner) taskDisplayName(ctx context.Context, taskID int64) string {
 	if resp.Task.Name == "" {
 		return fmt.Sprintf("Task %d", taskID)
 	}
-	return resp.Task.Name
+	return fmt.Sprintf("%q", resp.Task.Name)
 }
 
 func (r *Runner) Poll(ctx context.Context) error {
