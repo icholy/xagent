@@ -117,7 +117,6 @@ func (r *Runner) Poll(ctx context.Context) error {
 				r.log(ctx, task.Id, "info", "task cancelled, container killed")
 			}
 		case "restarting":
-			r.log(ctx, task.Id, "info", "container restarting")
 			if err := r.killTask(ctx, task); err != nil {
 				slog.Error("failed to kill task for restart", "task", task.Id, "error", err)
 			}
@@ -125,6 +124,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				slog.Debug("concurrency limit reached, skipping restarting task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
 				continue
 			}
+			r.log(ctx, task.Id, "info", "container restarting")
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to restart task", "task", task.Id, "error", err)
 				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to restart task: %v", err))
