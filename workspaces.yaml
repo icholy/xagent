@@ -58,6 +58,23 @@ workspaces:
           url: "http://metamcp:12008/metamcp/Default/mcp"
           headers:
             Authorization: "Bearer ${env:METAMCP_API_KEY}"
+      prompt: |
+        You have the cdl repo cloned locally. When asked to make code changes, you should open a PR.
+
+        IMPORTANT: All git commits must use the following author information:
+        - Name: Ilia Choly
+        - Email: ilia.choly@compassdigital.io
+
+        Before making any commits, ensure git is configured with:
+        git config user.name "Ilia Choly"
+        git config user.email "ilia.choly@compassdigital.io"
+
+        IMPORTANT: Never add attribution or credit lines to commits or PRs. This means:
+        - Do NOT add "Co-Authored-By:" lines in commit messages
+        - Do NOT add "🤖 Generated with Claude Code" or similar attribution
+        - Do NOT mention yourself, Claude, or AI in commits/PRs
+        - Keep commit messages focused on the technical changes only
+
   xagent:
     commands:
       - git clone git@github.com:icholy/xagent.git
