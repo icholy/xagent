@@ -525,3 +525,50 @@ func (r *Runner) Monitor(ctx context.Context) error {
 		}
 	}
 }
+
+// Prune removes containers for archived tasks.
+func (r *Runner) Prune(ctx context.Context) error {
+	// List all stopped xagent containers
+	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
+		All: true,
+		Filters: filters.NewArgs(
+			filters.Arg("label", "xagent=true"),
+			filters.Arg("status", "exited"),
+		),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	// Check each container's task status and remove if archived
+	for _, c := range containers {
+		taskIDStr := c.Labels["xagent.task"]
+		if taskIDStr == "" {
+			continue
+		}
+
+		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+		if err != nil {
+			slog.Error("invalid task ID in container label", "task", taskIDStr, "error", err)
+			continue
+		}
+
+		// Fetch task status
+		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+		if err != nil {
+			slog.Error("failed to get task", "task", taskID, "error", err)
+			continue
+		}
+
+		// Remove container if task is archived
+		if task.Task.Status == "archived" {
+			if err := r.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
+				slog.Error("failed to remove container", "task", taskID, "error", err)
+			} else {
+				slog.Info("container removed (task archived)", "task", taskID)
+			}
+		}
+	}
+
+	return nil
+}
