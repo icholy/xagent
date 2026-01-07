@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -34,6 +35,7 @@ type Runner struct {
 	workspaces   *workspace.Config
 	debug        bool
 	concurrency  int
+	notify       bool
 	runningCount atomic.Int32
 }
 
@@ -43,6 +45,7 @@ type Options struct {
 	Workspaces  *workspace.Config
 	Debug       bool
 	Concurrency int
+	Notify      bool
 }
 
 func New(opts Options) (*Runner, error) {
@@ -67,6 +70,7 @@ func New(opts Options) (*Runner, error) {
 		workspaces:  opts.Workspaces,
 		debug:       opts.Debug,
 		concurrency: opts.Concurrency,
+		notify:      opts.Notify,
 	}, nil
 }
 
@@ -484,11 +488,21 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Status: "completed"}); err != nil {
 					slog.Error("failed to update task status", "task", taskID, "error", err)
 				}
+				if r.notify {
+					if err := notify.Send("xagent", fmt.Sprintf("Task %d completed", taskID)); err != nil {
+						slog.Error("failed to send notification", "task", taskID, "error", err)
+					}
+				}
 			} else {
 				slog.Error("container exited with error", "task", taskID, "exitCode", exitCode)
 				r.log(ctx, taskID, "error", fmt.Sprintf("container exited with code %s", exitCode))
 				if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Status: "failed"}); err != nil {
 					slog.Error("failed to update task status", "task", taskID, "error", err)
+				}
+				if r.notify {
+					if err := notify.Send("xagent", fmt.Sprintf("Task %d failed (exit code %s)", taskID, exitCode)); err != nil {
+						slog.Error("failed to send notification", "task", taskID, "error", err)
+					}
 				}
 			}
 
