@@ -9,8 +9,9 @@ import (
 
 // Agent type constants.
 const (
-	TypeClaude = "claude"
-	TypeDummy  = "dummy"
+	TypeClaude  = "claude"
+	TypeCopilot = "copilot"
+	TypeDummy   = "dummy"
 )
 
 // Agent abstracts the underlying agent implementation (e.g., Claude Code, Cursor).
@@ -39,6 +40,12 @@ func NewAgent(opts Options) (Agent, error) {
 	switch cmp.Or(opts.Type, TypeClaude) {
 	case TypeClaude:
 		return &ClaudeAgent{
+			log:        log,
+			cwd:        cmp.Or(opts.Cwd, "."),
+			mcpServers: opts.McpServers,
+		}, nil
+	case TypeCopilot:
+		return &CopilotAgent{
 			log:        log,
 			cwd:        cmp.Or(opts.Cwd, "."),
 			mcpServers: opts.McpServers,
