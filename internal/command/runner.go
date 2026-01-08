@@ -38,10 +38,6 @@ var RunnerCommand = &cli.Command{
 			Usage: "Directory containing prebuilt xagent binaries",
 			Value: "prebuilt",
 		},
-		&cli.BoolFlag{
-			Name:  "debug",
-			Usage: "Stream container logs to stdout/stderr",
-		},
 		&cli.IntFlag{
 			Name:  "concurrency",
 			Usage: "Maximum number of concurrent tasks (0 for unlimited)",
@@ -61,7 +57,6 @@ var RunnerCommand = &cli.Command{
 		configPath := cmd.String("config")
 		pollInterval := cmd.Duration("poll")
 		prebuiltDir := cmd.String("prebuilt")
-		debug := cmd.Bool("debug")
 		concurrency := cmd.Int("concurrency")
 		notifyFlag := cmd.Bool("notify")
 		autoprune := cmd.Bool("autoprune")
@@ -75,7 +70,6 @@ var RunnerCommand = &cli.Command{
 			ServerURL:   serverAddr,
 			PrebuiltDir: prebuiltDir,
 			Workspaces:  workspaces,
-			Debug:       debug,
 			Concurrency: int(concurrency),
 			Notify:      notifyFlag,
 		})

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -17,7 +16,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -33,7 +31,6 @@ type Runner struct {
 	proxy        *xagentclient.UnixProxy
 	prebuiltDir  string
 	workspaces   *workspace.Config
-	debug        bool
 	concurrency  int
 	notify       bool
 	runningCount atomic.Int32
@@ -43,7 +40,6 @@ type Options struct {
 	ServerURL   string
 	PrebuiltDir string
 	Workspaces  *workspace.Config
-	Debug       bool
 	Concurrency int
 	Notify      bool
 }
@@ -68,7 +64,6 @@ func New(opts Options) (*Runner, error) {
 		proxy:       p,
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
-		debug:       opts.Debug,
 		concurrency: opts.Concurrency,
 		notify:      opts.Notify,
 	}, nil
@@ -288,13 +283,6 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 		}
 		slog.Info("starting existing container", "task", task.Id, "container", containerName)
 		containerID = c.ID
-
-		// In debug mode, copy fresh binary each time
-		if r.debug {
-			if err := r.copyBinary(ctx, containerID, ws.Container.Image); err != nil {
-				return fmt.Errorf("failed to copy binary: %w", err)
-			}
-		}
 	} else {
 		// Build container config from workspace
 		config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
@@ -324,10 +312,6 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 	}
 
 	r.runningCount.Add(1)
-
-	if r.debug {
-		go r.streamContainerLogs(ctx, containerID)
-	}
 
 	slog.Info("container started", "task", task.Id, "container", containerName)
 	return nil
@@ -453,23 +437,6 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagen
 	}
 
 	return r.docker.CopyToContainer(ctx, containerID, "/", bytes.NewReader(data), container.CopyToContainerOptions{})
-}
-
-func (r *Runner) streamContainerLogs(ctx context.Context, containerID string) {
-	logs, err := r.docker.ContainerLogs(ctx, containerID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-	})
-	if err != nil {
-		slog.Error("failed to get container logs", "container", containerID, "error", err)
-		return
-	}
-	defer logs.Close()
-
-	if _, err := stdcopy.StdCopy(os.Stdout, os.Stderr, logs); err != nil && err != io.EOF {
-		slog.Error("failed to stream container logs", "container", containerID, "error", err)
-	}
 }
 
 // Monitor watches for container exits and updates task status accordingly.
