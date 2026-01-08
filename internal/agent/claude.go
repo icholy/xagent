@@ -14,7 +14,6 @@ import (
 type ClaudeOptions struct {
 	Cwd        string
 	Log        *slog.Logger
-	Resume     bool
 	McpServers map[string]McpServer
 }
 
@@ -23,7 +22,6 @@ type ClaudeDriver struct {
 	log        *slog.Logger
 	cwd        string
 	mcpServers map[string]McpServer
-	resume     bool
 }
 
 // NewClaudeDriver creates a new ClaudeDriver.
@@ -32,12 +30,11 @@ func NewClaudeDriver(opts ClaudeOptions) *ClaudeDriver {
 		log:        cmp.Or(opts.Log, slog.Default()),
 		cwd:        cmp.Or(opts.Cwd, "."),
 		mcpServers: opts.McpServers,
-		resume:     opts.Resume,
 	}
 }
 
 // Prompt sends a prompt to Claude and waits for completion.
-func (d *ClaudeDriver) Prompt(ctx context.Context, prompt string) error {
+func (d *ClaudeDriver) Prompt(ctx context.Context, prompt string, resume bool) error {
 	d.log.Info("sending prompt", "text", prompt)
 
 	args := []string{
@@ -59,11 +56,10 @@ func (d *ClaudeDriver) Prompt(ctx context.Context, prompt string) error {
 		args = append(args, "--mcp-config", string(mcpJSON))
 	}
 
-	// Session handling
-	if d.resume {
+	// Resume previous session if requested
+	if resume {
 		args = append(args, "--continue")
 	}
-	d.resume = true
 
 	args = append(args, "--print", prompt)
 

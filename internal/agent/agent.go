@@ -10,7 +10,6 @@ import (
 type Options struct {
 	Cwd        string
 	Log        *slog.Logger
-	Resume     bool
 	McpServers map[string]McpServer
 }
 
@@ -24,7 +23,6 @@ func Start(ctx context.Context, opts Options) (*Agent, error) {
 	driver := NewClaudeDriver(ClaudeOptions{
 		Cwd:        cmp.Or(opts.Cwd, "."),
 		Log:        cmp.Or(opts.Log, slog.Default()),
-		Resume:     opts.Resume,
 		McpServers: opts.McpServers,
 	})
 	return &Agent{driver: driver}, nil
@@ -36,6 +34,6 @@ func (a *Agent) Close() error {
 }
 
 // Prompt sends a prompt to the agent and waits for completion.
-func (a *Agent) Prompt(ctx context.Context, prompt string) error {
-	return a.driver.Prompt(ctx, prompt)
+func (a *Agent) Prompt(ctx context.Context, prompt string, resume bool) error {
+	return a.driver.Prompt(ctx, prompt, resume)
 }
