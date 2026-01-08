@@ -37,6 +37,7 @@ type Agent struct {
 	Cwd        string                     `yaml:"cwd"`
 	Prompt     string                     `yaml:"prompt"`
 	McpServers map[string]agent.McpServer `yaml:"mcp_servers"`
+	MainBranch string                     `yaml:"main_branch"`
 }
 
 func (w *Workspace) Validate() error {

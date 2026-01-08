@@ -421,12 +421,19 @@ func (r *Runner) copyBinary(ctx context.Context, containerID, image string) erro
 func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagentv1.Task, ws *workspace.Workspace) error {
 	taskIDStr := strconv.FormatInt(task.Id, 10)
 
+	// Build commands list, prepending main branch checkout if configured
+	var commands []string
+	if ws.Agent.MainBranch != "" {
+		commands = append(commands, fmt.Sprintf("git checkout %s", ws.Agent.MainBranch))
+	}
+	commands = append(commands, ws.Commands...)
+
 	// Convert workspace to agent config format
 	cfg := agent.Config{
 		Cwd:        ws.Agent.Cwd,
 		Prompt:     ws.Agent.Prompt,
 		McpServers: make(map[string]agent.McpServer),
-		Commands:   ws.Commands,
+		Commands:   commands,
 	}
 
 	// Inject xagent MCP server for link creation
