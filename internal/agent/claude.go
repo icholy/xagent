@@ -2,7 +2,6 @@ package agent
 
 import (
 	"bufio"
-	"cmp"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -10,27 +9,11 @@ import (
 	"os/exec"
 )
 
-// ClaudeAgentOptions contains configuration for creating a ClaudeAgent.
-type ClaudeAgentOptions struct {
-	Cwd        string
-	Log        *slog.Logger
-	McpServers map[string]McpServer
-}
-
 // ClaudeAgent implements Agent using Claude Code CLI.
 type ClaudeAgent struct {
 	log        *slog.Logger
 	cwd        string
 	mcpServers map[string]McpServer
-}
-
-// NewClaudeAgent creates a new ClaudeAgent.
-func NewClaudeAgent(opts ClaudeAgentOptions) *ClaudeAgent {
-	return &ClaudeAgent{
-		log:        cmp.Or(opts.Log, slog.Default()),
-		cwd:        cmp.Or(opts.Cwd, "."),
-		mcpServers: opts.McpServers,
-	}
 }
 
 // Prompt sends a prompt to Claude and waits for completion.

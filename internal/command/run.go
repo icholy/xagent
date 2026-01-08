@@ -64,10 +64,14 @@ var RunCommand = &cli.Command{
 		}
 
 		// Start agent
-		a := agent.NewClaudeAgent(agent.ClaudeAgentOptions{
+		a, err := agent.NewAgent(agent.Options{
+			Type:       cfg.Type,
 			Cwd:        os.ExpandEnv(cfg.Cwd),
 			McpServers: cfg.McpServers,
 		})
+		if err != nil {
+			return fmt.Errorf("failed to create agent: %w", err)
+		}
 		defer a.Close()
 
 		// Bootstrap prompt

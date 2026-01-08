@@ -407,6 +407,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagen
 
 	// Convert workspace to agent config format
 	cfg := agent.Config{
+		Type:       ws.Agent.Type,
 		Cwd:        ws.Agent.Cwd,
 		Prompt:     ws.Agent.Prompt,
 		McpServers: make(map[string]agent.McpServer),
