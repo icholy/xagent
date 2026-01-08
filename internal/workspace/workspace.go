@@ -34,6 +34,7 @@ type Workspace struct {
 }
 
 type Agent struct {
+	Type       string                     `yaml:"type"`
 	Cwd        string                     `yaml:"cwd"`
 	Prompt     string                     `yaml:"prompt"`
 	McpServers map[string]agent.McpServer `yaml:"mcp_servers"`

@@ -13,6 +13,7 @@ var ConfigDir = "/tmp/xagent"
 
 type Config struct {
 	// Runner-provided
+	Type       string               `json:"type,omitempty"`
 	Cwd        string               `json:"cwd,omitempty"`
 	Prompt     string               `json:"prompt,omitempty"`
 	McpServers map[string]McpServer `json:"mcp_servers,omitempty"`
