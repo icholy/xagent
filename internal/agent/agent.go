@@ -1,13 +1,9 @@
 package agent
 
 import (
-	"bufio"
 	"cmp"
 	"context"
-	"encoding/json"
 	"log/slog"
-	"os"
-	"os/exec"
 )
 
 // Options contains configuration for creating an Agent.
@@ -18,113 +14,28 @@ type Options struct {
 	McpServers map[string]McpServer
 }
 
-// Agent manages Claude CLI interactions.
+// Agent manages agent interactions via a Driver.
 type Agent struct {
-	log        *slog.Logger
-	cwd        string
-	mcpServers map[string]McpServer
-	resume     bool
+	driver Driver
 }
 
-// Start creates and starts a new Agent.
+// Start creates and starts a new Agent with a ClaudeDriver.
 func Start(ctx context.Context, opts Options) (*Agent, error) {
-	log := cmp.Or(opts.Log, slog.Default())
-	return &Agent{
-		log:        log,
-		cwd:        cmp.Or(opts.Cwd, "."),
-		mcpServers: opts.McpServers,
-		resume:     opts.Resume,
-	}, nil
+	driver := NewClaudeDriver(ClaudeOptions{
+		Cwd:        cmp.Or(opts.Cwd, "."),
+		Log:        cmp.Or(opts.Log, slog.Default()),
+		Resume:     opts.Resume,
+		McpServers: opts.McpServers,
+	})
+	return &Agent{driver: driver}, nil
 }
 
 // Close shuts down the agent.
 func (a *Agent) Close() error {
-	return nil
+	return a.driver.Close()
 }
 
-// Prompt sends a prompt to Claude and waits for completion.
+// Prompt sends a prompt to the agent and waits for completion.
 func (a *Agent) Prompt(ctx context.Context, prompt string) error {
-	a.log.Info("sending prompt", "text", prompt)
-
-	args := []string{
-		"@anthropic-ai/claude-code",
-		"--dangerously-skip-permissions",
-		"--verbose",
-		"--output-format", "stream-json",
-		"--strict-mcp-config",
-		"--model", "opus",
-	}
-
-	// Add MCP config if present
-	if len(a.mcpServers) > 0 {
-		mcpConfig := map[string]any{"mcpServers": a.mcpServers}
-		mcpJSON, err := json.Marshal(mcpConfig)
-		if err != nil {
-			return err
-		}
-		args = append(args, "--mcp-config", string(mcpJSON))
-	}
-
-	// Session handling
-	if a.resume {
-		args = append(args, "--continue")
-	}
-	a.resume = true
-
-	args = append(args, "--print", prompt)
-
-	cmd := exec.CommandContext(ctx, "npx", args...)
-	cmd.Dir = a.cwd
-	cmd.Env = append(os.Environ(), "DISABLE_AUTOUPDATER=1")
-	cmd.Stderr = os.Stderr
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if !a.handleStreamEvent(line) {
-			a.log.Info("output", "line", string(line))
-		}
-	}
-
-	return cmd.Wait()
-}
-
-func (a *Agent) handleStreamEvent(data []byte) bool {
-	var event struct {
-		Type    string `json:"type"`
-		Message struct {
-			Content []struct {
-				Type  string `json:"type"`
-				Text  string `json:"text"`
-				Name  string `json:"name"`
-				Input any    `json:"input"`
-			} `json:"content"`
-		} `json:"message"`
-	}
-	if err := json.Unmarshal(data, &event); err != nil {
-		return false
-	}
-	switch event.Type {
-	case "assistant":
-		for _, block := range event.Message.Content {
-			switch block.Type {
-			case "text":
-				if block.Text != "" {
-					a.log.Info("text", "content", block.Text)
-				}
-			case "tool_use":
-				a.log.Info("tool", "name", block.Name)
-			}
-		}
-	}
-	return true
+	return a.driver.Prompt(ctx, prompt)
 }
