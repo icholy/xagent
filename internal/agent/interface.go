@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -33,21 +34,18 @@ type Options struct {
 // NewAgent creates an Agent based on the type specified in options.
 // If Type is empty, it defaults to TypeClaude.
 func NewAgent(opts Options) (Agent, error) {
-	agentType := opts.Type
-	if agentType == "" {
-		agentType = TypeClaude
-	}
+	log := cmp.Or(opts.Log, slog.Default())
 
-	switch agentType {
+	switch cmp.Or(opts.Type, TypeClaude) {
 	case TypeClaude:
-		return NewClaudeAgent(ClaudeAgentOptions{
-			Cwd:        opts.Cwd,
-			Log:        opts.Log,
-			McpServers: opts.McpServers,
-		}), nil
+		return &ClaudeAgent{
+			log:        log,
+			cwd:        cmp.Or(opts.Cwd, "."),
+			mcpServers: opts.McpServers,
+		}, nil
 	case TypeDummy:
-		return NewDummyAgent(opts.Log), nil
+		return &DummyAgent{log: log}, nil
 	default:
-		return nil, fmt.Errorf("unknown agent type: %s", agentType)
+		return nil, fmt.Errorf("unknown agent type: %s", opts.Type)
 	}
 }
