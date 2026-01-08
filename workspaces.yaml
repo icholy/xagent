@@ -128,4 +128,7 @@ workspaces:
         - Do NOT mention yourself, Claude, or AI in commits/PRs
         - Keep commit messages focused on the technical changes only
 
+        IMPORTANT: When creating GitHub issues, you must ONLY create issues in the icholy/xagent repository.
+        Do NOT create issues in any other repository.
+
 
