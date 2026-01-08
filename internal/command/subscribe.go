@@ -39,11 +39,11 @@ var SubscribeCommand = &cli.Command{
 			Usage:   "Maximum number of messages to receive per poll",
 			Value:   10,
 		},
-		&cli.IntFlag{
+		&cli.DurationFlag{
 			Name:    "wait-time",
 			Aliases: []string{"w"},
-			Usage:   "Wait time in seconds for long polling",
-			Value:   20,
+			Usage:   "Wait time for long polling",
+			Value:   20 * time.Second,
 		},
 		&cli.DurationFlag{
 			Name:  "poll-interval",
@@ -72,7 +72,7 @@ var SubscribeCommand = &cli.Command{
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		queueURL := cmd.String("queue-url")
 		maxMessages := int32(cmd.Int("max-messages"))
-		waitTime := int32(cmd.Int("wait-time"))
+		waitTime := cmd.Duration("wait-time")
 		pollInterval := cmd.Duration("poll-interval")
 		serverURL := cmd.String("server")
 		workspace := cmd.String("workspace")
@@ -95,15 +95,18 @@ var SubscribeCommand = &cli.Command{
 			"queue_url", queueURL,
 			"max_messages", maxMessages,
 			"wait_time", waitTime,
+			"poll_interval", pollInterval,
 			"workspace", workspace,
 		)
+
+		waitTimeSeconds := int32(waitTime.Seconds())
 
 		for {
 			// Receive messages from SQS
 			result, err := sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 				QueueUrl:            &queueURL,
 				MaxNumberOfMessages: maxMessages,
-				WaitTimeSeconds:     waitTime,
+				WaitTimeSeconds:     waitTimeSeconds,
 				VisibilityTimeout:   60, // 60 seconds to process message
 			})
 			if err != nil {
