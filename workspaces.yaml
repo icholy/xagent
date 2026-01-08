@@ -51,6 +51,7 @@ workspaces:
         - "${sh:getent group docker | cut -d: -f3}"
       environment:
         CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
+        DISABLE_AUTOUPDATER: 1
     agent:
       cwd: /home/vscode/cdl
       mcp_servers:
@@ -104,6 +105,7 @@ workspaces:
         - metamcp_metamcp-network
       environment:
         CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
+        DISABLE_AUTOUPDATER: 1
     agent:
       cwd: /home/vscode/xagent
       mcp_servers:
