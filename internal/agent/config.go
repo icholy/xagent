@@ -18,6 +18,8 @@ type Config struct {
 	Prompt     string               `json:"prompt,omitempty"`
 	McpServers map[string]McpServer `json:"mcp_servers,omitempty"`
 	Commands   []string             `json:"commands,omitempty"`
+	Claude     *ClaudeOptions       `json:"claude,omitempty"`
+	Copilot    *CopilotOptions      `json:"copilot,omitempty"`
 
 	// Agent-managed state
 	Setup   bool `json:"setup,omitempty"`

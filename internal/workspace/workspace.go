@@ -38,6 +38,18 @@ type Agent struct {
 	Cwd        string                     `yaml:"cwd"`
 	Prompt     string                     `yaml:"prompt"`
 	McpServers map[string]agent.McpServer `yaml:"mcp_servers"`
+	Claude     *ClaudeConfig              `yaml:"claude,omitempty"`
+	Copilot    *CopilotConfig             `yaml:"copilot,omitempty"`
+}
+
+// ClaudeConfig contains Claude-specific agent configuration.
+type ClaudeConfig struct {
+	Model string `yaml:"model"`
+}
+
+// CopilotConfig contains Copilot-specific agent configuration.
+type CopilotConfig struct {
+	Model string `yaml:"model"`
 }
 
 func (w *Workspace) Validate() error {

@@ -414,6 +414,18 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagen
 		Commands:   ws.Commands,
 	}
 
+	// Copy agent-specific config
+	if ws.Agent.Claude != nil {
+		cfg.Claude = &agent.ClaudeOptions{
+			Model: ws.Agent.Claude.Model,
+		}
+	}
+	if ws.Agent.Copilot != nil {
+		cfg.Copilot = &agent.CopilotOptions{
+			Model: ws.Agent.Copilot.Model,
+		}
+	}
+
 	// Inject xagent MCP server for link creation
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
