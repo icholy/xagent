@@ -64,13 +64,10 @@ var RunCommand = &cli.Command{
 		}
 
 		// Start agent
-		a, err := agent.Start(ctx, agent.Options{
+		a := agent.NewClaudeAgent(agent.ClaudeAgentOptions{
 			Cwd:        os.ExpandEnv(cfg.Cwd),
 			McpServers: cfg.McpServers,
 		})
-		if err != nil {
-			return err
-		}
 		defer a.Close()
 
 		// Bootstrap prompt
