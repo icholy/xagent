@@ -10,23 +10,23 @@ import (
 	"os/exec"
 )
 
-// ClaudeOptions contains configuration for creating a ClaudeDriver.
-type ClaudeOptions struct {
+// ClaudeAgentOptions contains configuration for creating a ClaudeAgent.
+type ClaudeAgentOptions struct {
 	Cwd        string
 	Log        *slog.Logger
 	McpServers map[string]McpServer
 }
 
-// ClaudeDriver implements Driver using Claude Code CLI.
-type ClaudeDriver struct {
+// ClaudeAgent implements Agent using Claude Code CLI.
+type ClaudeAgent struct {
 	log        *slog.Logger
 	cwd        string
 	mcpServers map[string]McpServer
 }
 
-// NewClaudeDriver creates a new ClaudeDriver.
-func NewClaudeDriver(opts ClaudeOptions) *ClaudeDriver {
-	return &ClaudeDriver{
+// NewClaudeAgent creates a new ClaudeAgent.
+func NewClaudeAgent(opts ClaudeAgentOptions) *ClaudeAgent {
+	return &ClaudeAgent{
 		log:        cmp.Or(opts.Log, slog.Default()),
 		cwd:        cmp.Or(opts.Cwd, "."),
 		mcpServers: opts.McpServers,
@@ -34,8 +34,8 @@ func NewClaudeDriver(opts ClaudeOptions) *ClaudeDriver {
 }
 
 // Prompt sends a prompt to Claude and waits for completion.
-func (d *ClaudeDriver) Prompt(ctx context.Context, prompt string, resume bool) error {
-	d.log.Info("sending prompt", "text", prompt)
+func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) error {
+	a.log.Info("sending prompt", "text", prompt)
 
 	args := []string{
 		"@anthropic-ai/claude-code",
@@ -47,8 +47,8 @@ func (d *ClaudeDriver) Prompt(ctx context.Context, prompt string, resume bool) e
 	}
 
 	// Add MCP config if present
-	if len(d.mcpServers) > 0 {
-		mcpConfig := map[string]any{"mcpServers": d.mcpServers}
+	if len(a.mcpServers) > 0 {
+		mcpConfig := map[string]any{"mcpServers": a.mcpServers}
 		mcpJSON, err := json.Marshal(mcpConfig)
 		if err != nil {
 			return err
@@ -64,7 +64,7 @@ func (d *ClaudeDriver) Prompt(ctx context.Context, prompt string, resume bool) e
 	args = append(args, "--print", prompt)
 
 	cmd := exec.CommandContext(ctx, "npx", args...)
-	cmd.Dir = d.cwd
+	cmd.Dir = a.cwd
 	cmd.Env = append(os.Environ(), "DISABLE_AUTOUPDATER=1")
 	cmd.Stderr = os.Stderr
 
@@ -80,20 +80,20 @@ func (d *ClaudeDriver) Prompt(ctx context.Context, prompt string, resume bool) e
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if !d.handleStreamEvent(line) {
-			d.log.Info("output", "line", string(line))
+		if !a.handleStreamEvent(line) {
+			a.log.Info("output", "line", string(line))
 		}
 	}
 
 	return cmd.Wait()
 }
 
-// Close releases any resources held by the driver.
-func (d *ClaudeDriver) Close() error {
+// Close releases any resources held by the agent.
+func (a *ClaudeAgent) Close() error {
 	return nil
 }
 
-func (d *ClaudeDriver) handleStreamEvent(data []byte) bool {
+func (a *ClaudeAgent) handleStreamEvent(data []byte) bool {
 	var event struct {
 		Type    string `json:"type"`
 		Message struct {
@@ -114,10 +114,10 @@ func (d *ClaudeDriver) handleStreamEvent(data []byte) bool {
 			switch block.Type {
 			case "text":
 				if block.Text != "" {
-					d.log.Info("text", "content", block.Text)
+					a.log.Info("text", "content", block.Text)
 				}
 			case "tool_use":
-				d.log.Info("tool", "name", block.Name)
+				a.log.Info("tool", "name", block.Name)
 			}
 		}
 	}
