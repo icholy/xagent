@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -13,6 +14,8 @@ import (
 	"strings"
 
 	"github.com/andygrunwald/go-jira/v2/cloud"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/go-github/v68/github"
 )
 
@@ -26,6 +29,30 @@ type Event struct {
 // Publisher is the interface for publishing webhook events.
 type Publisher interface {
 	Publish(event *Event) error
+}
+
+// SQSPublisher publishes events to an SQS queue.
+type SQSPublisher struct {
+	Client   *sqs.Client
+	QueueURL string
+}
+
+// Publish sends an event to the SQS queue.
+func (p *SQSPublisher) Publish(event *Event) error {
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event: %w", err)
+	}
+
+	_, err = p.Client.SendMessage(context.Background(), &sqs.SendMessageInput{
+		QueueUrl:    &p.QueueURL,
+		MessageBody: aws.String(string(eventJSON)),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to send message to SQS: %w", err)
+	}
+
+	return nil
 }
 
 // Config holds the webhook handler configuration.
