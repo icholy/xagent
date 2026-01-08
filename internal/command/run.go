@@ -66,7 +66,6 @@ var RunCommand = &cli.Command{
 		// Start agent
 		a, err := agent.Start(ctx, agent.Options{
 			Cwd:        os.ExpandEnv(cfg.Cwd),
-			Resume:     cfg.Started,
 			McpServers: cfg.McpServers,
 		})
 		if err != nil {
@@ -104,7 +103,7 @@ var RunCommand = &cli.Command{
 			prompt = prompt + "\n\n" + cfg.Prompt
 		}
 
-		if err := a.Prompt(ctx, prompt); err != nil {
+		if err := a.Prompt(ctx, prompt, cfg.Started); err != nil {
 			return err
 		}
 
