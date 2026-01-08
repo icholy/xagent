@@ -2,25 +2,17 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/webhook"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
-
-type SQSEvent struct {
-	Description string `json:"description"`
-	Data        string `json:"data"`
-	URL         string `json:"url"`
-}
 
 var SubscribeCommand = &cli.Command{
 	Name:  "subscribe",
@@ -78,7 +70,6 @@ var SubscribeCommand = &cli.Command{
 		workspace := cmd.String("workspace")
 		region := cmd.String("region")
 
-		// Load AWS config
 		var cfg config.LoadOptionsFunc
 		if region != "" {
 			cfg = config.WithRegion(region)
@@ -91,74 +82,35 @@ var SubscribeCommand = &cli.Command{
 		sqsClient := sqs.NewFromConfig(awsConfig)
 		xagent := xagentclient.New(serverURL)
 
-		slog.Info("starting SQS subscriber",
-			"queue_url", queueURL,
-			"max_messages", maxMessages,
-			"wait_time", waitTime,
-			"poll_interval", pollInterval,
-			"workspace", workspace,
-		)
-
-		waitTimeSeconds := int32(waitTime.Seconds())
-
-		for {
-			// Receive messages from SQS
-			result, err := sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
-				QueueUrl:            &queueURL,
-				MaxNumberOfMessages: maxMessages,
-				WaitTimeSeconds:     waitTimeSeconds,
-				VisibilityTimeout:   60, // 60 seconds to process message
-			})
-			if err != nil {
-				slog.Error("failed to receive messages from SQS", "error", err)
-				time.Sleep(pollInterval)
-				continue
-			}
-
-			if len(result.Messages) == 0 {
-				slog.Debug("no messages received, continuing to poll")
-				continue
-			}
-
-			slog.Info("received messages", "count", len(result.Messages))
-
-			for _, msg := range result.Messages {
-				if err := processMessage(ctx, xagent, workspace, msg); err != nil {
-					slog.Error("failed to process message", "error", err, "message_id", *msg.MessageId)
-					// Don't delete the message so it can be retried
-					continue
-				}
-
-				// Delete message from queue
-				_, err := sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
-					QueueUrl:      &queueURL,
-					ReceiptHandle: msg.ReceiptHandle,
-				})
-				if err != nil {
-					slog.Error("failed to delete message from SQS", "error", err, "message_id", *msg.MessageId)
-				} else {
-					slog.Info("message processed and deleted", "message_id", *msg.MessageId)
-				}
-			}
+		handler := &xagentEventHandler{
+			client:    xagent,
+			workspace: workspace,
 		}
+
+		subscriber := webhook.NewSQSSubscriber(&webhook.SQSSubscriberConfig{
+			Client:       sqsClient,
+			QueueURL:     queueURL,
+			MaxMessages:  maxMessages,
+			WaitTime:     waitTime,
+			PollInterval: pollInterval,
+			Handler:      handler,
+		})
+
+		return subscriber.Run(ctx)
 	},
 }
 
-func processMessage(ctx context.Context, xagent xagentclient.Client, workspace string, msg types.Message) error {
-	// Parse event from message body
-	var event SQSEvent
-	if err := json.Unmarshal([]byte(*msg.Body), &event); err != nil {
-		return fmt.Errorf("failed to parse event: %w", err)
-	}
+type xagentEventHandler struct {
+	client    xagentclient.Client
+	workspace string
+}
 
-	slog.Info("processing event", "url", event.URL, "description", event.Description)
+func (h *xagentEventHandler) HandleEvent(ctx context.Context, event *webhook.Event) error {
+	cmd, _ := webhook.ParseCommand(event.Description)
 
-	body := strings.TrimSpace(event.Description)
-
-	switch {
-	case strings.HasPrefix(body, "xagent task"):
-		// Create event and process it
-		eventResp, err := xagent.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+	switch cmd {
+	case "task":
+		eventResp, err := h.client.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 			Description: event.Description,
 			Data:        event.Data,
 			Url:         event.URL,
@@ -167,7 +119,7 @@ func processMessage(ctx context.Context, xagent xagentclient.Client, workspace s
 			return fmt.Errorf("failed to create event: %w", err)
 		}
 
-		processResp, err := xagent.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
+		processResp, err := h.client.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
 			Id: eventResp.Event.Id,
 		})
 		if err != nil {
@@ -181,10 +133,9 @@ func processMessage(ctx context.Context, xagent xagentclient.Client, workspace s
 
 		slog.Info("event processed", "event_id", eventResp.Event.Id, "task_ids", processResp.TaskIds)
 
-	case strings.HasPrefix(body, "xagent new"):
-		// Create new task
-		resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-			Workspace: workspace,
+	case "new":
+		resp, err := h.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+			Workspace: h.workspace,
 			Instructions: []*xagentv1.Instruction{
 				{Text: event.Description, Url: event.URL},
 			},
@@ -195,8 +146,7 @@ func processMessage(ctx context.Context, xagent xagentclient.Client, workspace s
 
 		taskID := resp.Task.Id
 
-		// Create link to the source URL
-		_, err = xagent.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		_, err = h.client.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 			TaskId:    taskID,
 			Relevance: "Task initiated from this event",
 			Url:       event.URL,
@@ -206,7 +156,7 @@ func processMessage(ctx context.Context, xagent xagentclient.Client, workspace s
 			slog.Error("failed to create link", "error", err, "task_id", taskID)
 		}
 
-		slog.Info("task created", "task_id", taskID, "workspace", workspace)
+		slog.Info("task created", "task_id", taskID, "workspace", h.workspace)
 
 	default:
 		slog.Warn("unknown command prefix", "description", event.Description)
