@@ -76,6 +76,16 @@ workspaces:
         - Do NOT mention yourself, Claude, or AI in commits/PRs
         - Keep commit messages focused on the technical changes only
 
+        IMPORTANT: When delegating work to child tasks via create_child_task:
+        - Do NOT repeat information that is already in the linked JIRA ticket
+        - Child tasks have access to JIRA via MCP tools and can read the ticket directly
+        - Only include additional context that is NOT in the ticket, such as:
+          - Implementation decisions you've made
+          - Relevant code locations you've discovered
+          - Dependencies between tasks
+          - Specific approaches or constraints
+        - Keep instructions concise and focused on what's NOT obvious from the ticket
+
   xagent:
     commands:
       - git clone git@github.com:icholy/xagent.git
