@@ -14,6 +14,7 @@ type CopilotAgent struct {
 	log        *slog.Logger
 	cwd        string
 	mcpServers map[string]McpServer
+	options    *CopilotOptions
 }
 
 // Prompt sends a prompt to Copilot and waits for completion.
@@ -22,6 +23,11 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 
 	args := []string{
 		"--silent",
+	}
+
+	// Add model if specified in options
+	if a.options != nil && a.options.Model != "" {
+		args = append(args, "--model", a.options.Model)
 	}
 
 	// Add MCP config if present

@@ -30,6 +30,18 @@ type Options struct {
 	Cwd        string
 	Log        *slog.Logger
 	McpServers map[string]McpServer
+	Claude     *ClaudeOptions
+	Copilot    *CopilotOptions
+}
+
+// ClaudeOptions contains Claude-specific agent options.
+type ClaudeOptions struct {
+	Model string
+}
+
+// CopilotOptions contains Copilot-specific agent options.
+type CopilotOptions struct {
+	Model string
 }
 
 // NewAgent creates an Agent based on the type specified in options.
@@ -43,12 +55,14 @@ func NewAgent(opts Options) (Agent, error) {
 			log:        log,
 			cwd:        cmp.Or(opts.Cwd, "."),
 			mcpServers: opts.McpServers,
+			options:    opts.Claude,
 		}, nil
 	case TypeCopilot:
 		return &CopilotAgent{
 			log:        log,
 			cwd:        cmp.Or(opts.Cwd, "."),
 			mcpServers: opts.McpServers,
+			options:    opts.Copilot,
 		}, nil
 	case TypeDummy:
 		return &DummyAgent{log: log}, nil

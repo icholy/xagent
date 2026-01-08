@@ -14,11 +14,18 @@ type ClaudeAgent struct {
 	log        *slog.Logger
 	cwd        string
 	mcpServers map[string]McpServer
+	options    *ClaudeOptions
 }
 
 // Prompt sends a prompt to Claude and waits for completion.
 func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) error {
 	a.log.Info("sending prompt", "text", prompt)
+
+	// Use model from options, defaulting to "opus"
+	model := "opus"
+	if a.options != nil && a.options.Model != "" {
+		model = a.options.Model
+	}
 
 	args := []string{
 		"@anthropic-ai/claude-code",
@@ -26,7 +33,7 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		"--verbose",
 		"--output-format", "stream-json",
 		"--strict-mcp-config",
-		"--model", "opus",
+		"--model", model,
 	}
 
 	// Add MCP config if present
