@@ -86,6 +86,43 @@ open http://localhost:8080
 
 For detailed CLI reference, see [CLAUDE.md](CLAUDE.md).
 
+## Webhook Integration
+
+XAGENT supports webhook-based event integration with GitHub and Jira using AWS Lambda and SQS. This replaces the legacy polling approach with a more reliable, event-driven architecture.
+
+### Architecture
+
+```
+GitHub/Jira Webhook → Lambda Function URL → SQS → xagent subscribe → xagent server
+```
+
+### Quick Setup
+
+1. Deploy infrastructure using Terraform (see `terraform/` directory)
+2. Configure webhooks in GitHub/Jira with the Lambda Function URLs
+3. Start the subscriber:
+
+```bash
+export SQS_QUEUE_URL="<from terraform output>"
+xagent subscribe --workspace myworkspace
+```
+
+For detailed setup instructions, see [docs/WEBHOOK_SETUP.md](docs/WEBHOOK_SETUP.md).
+
+### Usage
+
+**Create new tasks from comments:**
+```
+xagent new Implement feature X and open a PR
+```
+
+**Notify existing tasks:**
+```
+xagent task Update the implementation based on review feedback
+```
+
+The webhook system automatically creates events and routes them to linked tasks.
+
 ## Workspaces
 
 Workspaces define container environment and MCP servers in `workspaces.yaml`. The runner auto-injects an `xagent` MCP server for task communication tools.

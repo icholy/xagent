@@ -23,6 +23,7 @@ func main() {
 			command.McpCommand,
 			command.GithubCommand,
 			command.JiraCommand,
+			command.SubscribeCommand,
 			command.ShellCommand,
 			command.PruneCommand,
 			command.LogsCommand,
