@@ -2,11 +2,15 @@ package agent
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 // CursorAgent implements Agent using the Cursor Agent CLI.
@@ -20,6 +24,19 @@ type CursorAgent struct {
 // Prompt sends a prompt to Cursor and waits for completion.
 func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) error {
 	a.log.Info("sending prompt", "text", prompt)
+
+	// Write MCP config file if we have MCP servers
+	if len(a.mcpServers) > 0 {
+		if err := a.writeMcpConfig(); err != nil {
+			return fmt.Errorf("failed to write MCP config: %w", err)
+		}
+	}
+
+	// Get or create chat ID for session management
+	chatID, err := a.getOrCreateChatID(ctx, resume)
+	if err != nil {
+		return fmt.Errorf("failed to get chat ID: %w", err)
+	}
 
 	args := []string{
 		"--print",
@@ -38,9 +55,9 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		args = append(args, "--workspace", a.cwd)
 	}
 
-	// Resume previous session if requested
-	if resume {
-		args = append(args, "--resume")
+	// Resume with chat ID
+	if chatID != "" {
+		args = append(args, "--resume", chatID)
 	}
 
 	args = append(args, prompt)
@@ -73,6 +90,101 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 // Close releases any resources held by the agent.
 func (a *CursorAgent) Close() error {
 	return nil
+}
+
+// writeMcpConfig writes the MCP servers configuration to the workspace .cursor/mcp.json file.
+func (a *CursorAgent) writeMcpConfig() error {
+	// Cursor expects MCP config in .cursor/mcp.json in the workspace directory
+	cursorDir := filepath.Join(a.cwd, ".cursor")
+	if err := os.MkdirAll(cursorDir, 0755); err != nil {
+		return err
+	}
+
+	// Convert our McpServer format to Cursor's expected format
+	mcpServers := make(map[string]any)
+	for name, srv := range a.mcpServers {
+		server := make(map[string]any)
+		switch srv.Type {
+		case "stdio":
+			server["command"] = srv.Command
+			if len(srv.Args) > 0 {
+				server["args"] = srv.Args
+			}
+			if len(srv.Env) > 0 {
+				server["env"] = srv.Env
+			}
+		case "http", "sse":
+			server["transport"] = srv.Type
+			server["url"] = srv.URL
+			if len(srv.Headers) > 0 {
+				server["headers"] = srv.Headers
+			}
+		}
+		mcpServers[name] = server
+	}
+
+	config := map[string]any{
+		"mcpServers": mcpServers,
+	}
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	mcpConfigPath := filepath.Join(cursorDir, "mcp.json")
+	return os.WriteFile(mcpConfigPath, data, 0644)
+}
+
+// chatIDPath returns the path to the chat ID file for session persistence.
+func (a *CursorAgent) chatIDPath() string {
+	return filepath.Join(a.cwd, ".cursor", "chat_id")
+}
+
+// getOrCreateChatID gets an existing chat ID or creates a new one.
+func (a *CursorAgent) getOrCreateChatID(ctx context.Context, resume bool) (string, error) {
+	chatIDPath := a.chatIDPath()
+
+	// If resuming, try to load existing chat ID
+	if resume {
+		data, err := os.ReadFile(chatIDPath)
+		if err == nil {
+			chatID := strings.TrimSpace(string(data))
+			if chatID != "" {
+				a.log.Info("resuming chat", "chatID", chatID)
+				return chatID, nil
+			}
+		}
+	}
+
+	// Create a new chat ID
+	cmd := exec.CommandContext(ctx, "cursor-agent", "create-chat")
+	cmd.Dir = a.cwd
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to create chat: %w", err)
+	}
+
+	chatID := strings.TrimSpace(out.String())
+	if chatID == "" {
+		return "", fmt.Errorf("cursor-agent create-chat returned empty chat ID")
+	}
+
+	a.log.Info("created new chat", "chatID", chatID)
+
+	// Save the chat ID for future resume
+	cursorDir := filepath.Dir(chatIDPath)
+	if err := os.MkdirAll(cursorDir, 0755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(chatIDPath, []byte(chatID), 0644); err != nil {
+		return "", err
+	}
+
+	return chatID, nil
 }
 
 func (a *CursorAgent) handleStreamEvent(data []byte) bool {
