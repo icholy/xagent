@@ -11,6 +11,7 @@ import (
 const (
 	TypeClaude  = "claude"
 	TypeCopilot = "copilot"
+	TypeCursor  = "cursor"
 	TypeDummy   = "dummy"
 )
 
@@ -32,6 +33,7 @@ type Options struct {
 	McpServers map[string]McpServer
 	Claude     *ClaudeOptions
 	Copilot    *CopilotOptions
+	Cursor     *CursorOptions
 }
 
 // ClaudeOptions contains Claude-specific agent options.
@@ -41,6 +43,11 @@ type ClaudeOptions struct {
 
 // CopilotOptions contains Copilot-specific agent options.
 type CopilotOptions struct {
+	Model string
+}
+
+// CursorOptions contains Cursor-specific agent options.
+type CursorOptions struct {
 	Model string
 }
 
@@ -63,6 +70,13 @@ func NewAgent(opts Options) (Agent, error) {
 			cwd:        cmp.Or(opts.Cwd, "."),
 			mcpServers: opts.McpServers,
 			options:    opts.Copilot,
+		}, nil
+	case TypeCursor:
+		return &CursorAgent{
+			log:        log,
+			cwd:        cmp.Or(opts.Cwd, "."),
+			mcpServers: opts.McpServers,
+			options:    opts.Cursor,
 		}, nil
 	case TypeDummy:
 		return &DummyAgent{log: log}, nil

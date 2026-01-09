@@ -40,6 +40,7 @@ type Agent struct {
 	McpServers map[string]agent.McpServer `yaml:"mcp_servers"`
 	Claude     *ClaudeConfig              `yaml:"claude,omitempty"`
 	Copilot    *CopilotConfig             `yaml:"copilot,omitempty"`
+	Cursor     *CursorConfig              `yaml:"cursor,omitempty"`
 }
 
 // ClaudeConfig contains Claude-specific agent configuration.
@@ -49,6 +50,11 @@ type ClaudeConfig struct {
 
 // CopilotConfig contains Copilot-specific agent configuration.
 type CopilotConfig struct {
+	Model string `yaml:"model"`
+}
+
+// CursorConfig contains Cursor-specific agent configuration.
+type CursorConfig struct {
 	Model string `yaml:"model"`
 }
 
