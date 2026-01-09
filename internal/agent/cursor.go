@@ -25,6 +25,7 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		"--print",
 		"--output-format", "stream-json",
 		"--force",
+		"--approve-mcps",
 	}
 
 	// Add model if specified in options
@@ -32,15 +33,9 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		args = append(args, "--model", a.options.Model)
 	}
 
-	// Add MCP config if present
-	// Note: cursor-agent uses .cursor/mcp.json by default, but we pass additional config
-	if len(a.mcpServers) > 0 {
-		mcpConfig := map[string]any{"mcpServers": a.mcpServers}
-		mcpJSON, err := json.Marshal(mcpConfig)
-		if err != nil {
-			return err
-		}
-		args = append(args, "--mcp-config", string(mcpJSON))
+	// Set workspace directory
+	if a.cwd != "" && a.cwd != "." {
+		args = append(args, "--workspace", a.cwd)
 	}
 
 	// Resume previous session if requested
