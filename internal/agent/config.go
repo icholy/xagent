@@ -20,6 +20,7 @@ type Config struct {
 	Commands   []string             `json:"commands,omitempty"`
 	Claude     *ClaudeOptions       `json:"claude,omitempty"`
 	Copilot    *CopilotOptions      `json:"copilot,omitempty"`
+	Cursor     *CursorOptions       `json:"cursor,omitempty"`
 
 	// Agent-managed state
 	Setup   bool `json:"setup,omitempty"`

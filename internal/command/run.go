@@ -70,6 +70,7 @@ var RunCommand = &cli.Command{
 			McpServers: cfg.McpServers,
 			Claude:     cfg.Claude,
 			Copilot:    cfg.Copilot,
+			Cursor:     cfg.Cursor,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create agent: %w", err)
