@@ -53,6 +53,9 @@ workspaces:
         CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
         DISABLE_AUTOUPDATER: 1
     agent:
+      type: "claude"
+      claude:
+        model: "opus"
       cwd: /home/vscode/cdl
       mcp_servers:
         meta:
