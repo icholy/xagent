@@ -112,8 +112,8 @@ func (r *Runner) Poll(ctx context.Context) error {
 				slog.Error("failed to cancel task", "task", task.Id, "error", err)
 			}
 			r.log(ctx, task.Id, "info", "task cancelled")
-			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "archived"}); err != nil {
-				slog.Error("failed to archive cancelled task", "task", task.Id, "error", err)
+			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "failed"}); err != nil {
+				slog.Error("failed to update cancelled task", "task", task.Id, "error", err)
 			}
 		case "restarting":
 			if err := r.killTask(ctx, task); err != nil {
