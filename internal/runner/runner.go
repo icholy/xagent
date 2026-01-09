@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/docker/docker/api/types/container"
@@ -16,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -108,8 +110,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 		case "cancelled":
 			if err := r.killTask(ctx, task); err != nil {
 				slog.Error("failed to cancel task", "task", task.Id, "error", err)
-			} else {
-				r.log(ctx, task.Id, "info", "task cancelled, container killed")
+			}
+			r.log(ctx, task.Id, "info", "task cancelled")
+			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "archived"}); err != nil {
+				slog.Error("failed to archive cancelled task", "task", task.Id, "error", err)
 			}
 		case "restarting":
 			if err := r.killTask(ctx, task); err != nil {
@@ -237,21 +241,26 @@ func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task) error {
 		return nil
 	}
 	c := containers[0]
-	if c.State == "running" {
-		slog.Info("killing cancelled task container", "task", task.Id)
-		if err := r.docker.ContainerKill(ctx, c.ID, "SIGKILL"); err != nil {
-			return fmt.Errorf("failed to kill container: %w", err)
+	if c.State != "running" {
+		return nil
+	}
+	slog.Info("killing cancelled task container", "task", task.Id)
+	if err := r.docker.ContainerKill(ctx, c.ID, "SIGKILL"); err != nil {
+		// Container may have stopped between our check and the kill call
+		if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
+			return nil
 		}
-		// Wait for the container to actually exit
-		waitCh, errCh := r.docker.ContainerWait(ctx, c.ID, container.WaitConditionNotRunning)
-		select {
-		case <-waitCh:
-			// Container has exited
-		case err := <-errCh:
-			return fmt.Errorf("failed to wait for container to exit: %w", err)
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		return fmt.Errorf("failed to kill container: %w", err)
+	}
+	// Wait for the container to actually exit
+	waitCh, errCh := r.docker.ContainerWait(ctx, c.ID, container.WaitConditionNotRunning)
+	select {
+	case <-waitCh:
+		// Container has exited
+	case err := <-errCh:
+		return fmt.Errorf("failed to wait for container to exit: %w", err)
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }
