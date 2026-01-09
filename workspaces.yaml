@@ -151,7 +151,7 @@ workspaces:
     commands:
       - git clone git@github.com:icholy/containeragent.git
       - |
-        cat > /home/vscode/xagent/.git/hooks/commit-msg << 'EOF'
+        cat > /home/vscode/containeragent/.git/hooks/commit-msg << 'EOF'
         #!/bin/sh
         if grep -qE "🤖 Generated with|Co-Authored-By" "$1"; then
           echo "ERROR: Never add attribution or credit lines to commits or PRs. This means:"
@@ -162,7 +162,7 @@ workspaces:
           exit 1
         fi
         EOF
-        chmod +x /home/vscode/xagent/.git/hooks/commit-msg
+        chmod +x /home/vscode/containeragent/.git/hooks/commit-msg
     container:
       image: containeragent
       working_dir: /home/vscode
@@ -176,7 +176,7 @@ workspaces:
         CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
         DISABLE_AUTOUPDATER: 1
     agent:
-      cwd: /home/vscode/xagent
+      cwd: /home/vscode/containeragent
       mcp_servers:
         meta:
           type: "http"
@@ -184,7 +184,7 @@ workspaces:
           headers:
             Authorization: "Bearer ${env:METAMCP_API_KEY}"
       prompt: |
-        You have the xagent repo cloned locally. When asked to make code changes, you should open a PR.
+        You have the containeragent repo cloned locally. When asked to make code changes, you should open a PR.
 
         IMPORTANT: All git commits must use the following author information:
         - Name: Ilia Choly
@@ -200,7 +200,5 @@ workspaces:
         - Do NOT mention yourself, Claude, or AI in commits/PRs
         - Keep commit messages focused on the technical changes only
 
-        IMPORTANT: When creating GitHub issues, you must ONLY create issues in the icholy/xagent repository.
+        IMPORTANT: When creating GitHub issues, you must ONLY create issues in the icholy/containeragent repository.
         Do NOT create issues in any other repository.
-
-
