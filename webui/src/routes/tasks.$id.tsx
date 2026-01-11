@@ -245,9 +245,11 @@ function TaskDetail() {
                 onChange={(e) => setInstruction(e.target.value)}
                 required
               />
-              <Button type="submit" disabled={updateMutation.isPending}>
-                Add Instruction
-              </Button>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={updateMutation.isPending}>
+                  Add Instruction
+                </Button>
+              </div>
             </form>
           )}
         </CardContent>
