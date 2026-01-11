@@ -12,8 +12,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { RelativeTime } from '@/components/ui/relative-time'
-import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
 
 export const Route = createFileRoute('/events/')({
   component: EventsPage,
@@ -44,14 +42,8 @@ function EventsPage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold">Events</h1>
-        <Link to="/events/new">
-          <Button>
-            <Plus className="h-4 w-4" />
-            Event
-          </Button>
-        </Link>
       </div>
       {events.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">

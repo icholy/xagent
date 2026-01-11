@@ -18,7 +18,6 @@ import { Switch } from '@/components/ui/switch'
 import { RelativeTime } from '@/components/ui/relative-time'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { Plus } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
@@ -65,23 +64,15 @@ function TasksPage() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
-              Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
-            </Label>
-            <Switch
-              id="show-child-tasks"
-              checked={showChildTasks}
-              onCheckedChange={handleToggleChildTasks}
-            />
-          </div>
-          <Link to="/tasks/new">
-            <Button>
-              <Plus className="h-4 w-4" />
-              Task
-            </Button>
-          </Link>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
+            Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
+          </Label>
+          <Switch
+            id="show-child-tasks"
+            checked={showChildTasks}
+            onCheckedChange={handleToggleChildTasks}
+          />
         </div>
       </div>
       {tasks.length === 0 ? (
