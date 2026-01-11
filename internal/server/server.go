@@ -54,7 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(path, handler)
 
 	// React UI (SPA with client-side routing)
-	mux.Handle("/", staticHandler())
+	mux.Handle("/", WebUI())
 
 	return mux
 }

@@ -8,7 +8,7 @@ import { defineConfig } from "vite"
 export default defineConfig({
   plugins: [TanStackRouterVite(), react(), tailwindcss()],
   build: {
-    outDir: "../internal/server/dist",
+    outDir: "../internal/server/webui",
     emptyOutDir: true,
   },
   resolve: {
