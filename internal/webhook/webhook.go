@@ -105,7 +105,7 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event := h.extractGitHubEvent(webhookEvent, string(body))
+	event := h.extractGitHubEvent(webhookEvent)
 
 	if event == nil {
 		eventType := r.Header.Get("X-GitHub-Event")
@@ -175,7 +175,7 @@ func (h *Handler) verifyJiraSignature(payload []byte, signature string) bool {
 	return hmac.Equal([]byte(expectedMAC), []byte(signature))
 }
 
-func (h *Handler) extractGitHubEvent(webhookEvent any, rawBody string) *Event {
+func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
 		if event.Comment != nil && event.Issue != nil &&
