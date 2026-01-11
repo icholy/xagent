@@ -18,19 +18,17 @@ The infrastructure includes:
 1. **AWS Account** with appropriate permissions
 2. **Terraform** >= 1.0 installed
 3. **AWS CLI** configured with credentials
-4. **Lambda Functions** built (see `../lambda/README.md`)
+4. **Lambda Functions** built (run `mise run build` from repo root)
 5. **SOPS** installed for secrets management (https://github.com/getsops/sops)
 
 ## Quick Start
 
 ### 1. Build Lambda Functions
 
-First, build the Lambda functions:
+First, build the Lambda functions from the repo root:
 
 ```bash
-cd ../lambda
-make all
-cd ../terraform
+mise run build
 ```
 
 ### 2. Configure Secrets
@@ -155,13 +153,11 @@ Lambda functions have minimal permissions:
 To update Lambda function code:
 
 ```bash
-# Rebuild Lambda functions
-cd ../lambda
-make clean
-make all
+# Rebuild Lambda functions from repo root
+mise run build
 
 # Update infrastructure
-cd ../terraform
+cd terraform
 terraform apply
 ```
 
@@ -220,13 +216,13 @@ Typical monthly costs for moderate usage (< 10,000 events/month):
 
 ```bash
 # Check build artifacts exist
-ls -lh builds/
+ls -lh ../lambda/bootstrap
 
-# Verify Lambda function package
-unzip -l builds/github-lambda.zip
+# Verify Lambda function package (after terraform apply creates it)
+unzip -l builds/webhooks-lambda.zip
 ```
 
-**Solution**: Rebuild Lambda functions using `make all` in the lambda directory.
+**Solution**: Rebuild Lambda functions using `mise run build` from the repo root.
 
 ### Permission Errors
 
