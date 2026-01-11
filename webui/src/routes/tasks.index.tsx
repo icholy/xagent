@@ -29,7 +29,7 @@ function TasksPage() {
     return stored !== null ? stored === 'true' : false
   })
 
-  const { data, isLoading, error } = useQuery(listTasks, {}, {
+  const { data, isLoading, error, refetch } = useQuery(listTasks, {}, {
     refetchInterval: 3000,
   })
 
@@ -97,7 +97,7 @@ function TasksPage() {
           </TableHeader>
           <TableBody>
             {tasks.map((task) => (
-              <TaskRow key={String(task.id)} task={task} />
+              <TaskRow key={String(task.id)} task={task} onUpdate={refetch} />
             ))}
           </TableBody>
         </Table>
@@ -106,13 +106,14 @@ function TasksPage() {
   )
 }
 
-function TaskRow({ task }: { task: Task }) {
+function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   const isChild = task.parent !== 0n
   const updateMutation = useMutation(updateTask)
   const canArchive = task.status === 'completed' || task.status === 'failed'
 
   const handleArchive = async () => {
     await updateMutation.mutateAsync({ id: task.id, status: 'archived' })
+    onUpdate()
   }
 
   return (
