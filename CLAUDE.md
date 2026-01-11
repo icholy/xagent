@@ -117,3 +117,37 @@ The v2 UI runs independently on the Vite dev server and can be developed increme
 **Do NOT copy v1 implementation** - Do not replicate v1's layout, styles, HTML structure, or templates. The v2 is a complete rewrite with modern components and UX patterns.
 
 **API Access** - The v2 UI will call the same Connect RPC API at `/xagent.v1.XAgentService/*` that the v1 UI uses.
+
+### Component Customization
+
+**shadcn/ui philosophy** - shadcn/ui is NOT a traditional npm package. It's a code distribution system that copies component source code into your project (`src/components/ui/`). You own the code and can modify it directly.
+
+**One component, multiple variants** - Do NOT create multiple copies of the same component (e.g., `button-primary.tsx`, `button-secondary.tsx`). Instead, use class-variance-authority (CVA) to add variants to a single component:
+
+```tsx
+// src/components/ui/button.tsx
+const buttonVariants = cva(
+  "inline-flex items-center justify-center...",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground...",
+        destructive: "bg-destructive text-destructive-foreground...",
+        success: "bg-green-600 text-white hover:bg-green-700", // Custom variant
+      }
+    }
+  }
+)
+```
+
+Usage: `<Button variant="success">Save</Button>`
+
+**When to create new components**:
+- Building composite/wrapper components (e.g., `TaskCard` that uses `Card` + `Badge` + `Button`)
+- Creating domain-specific components (e.g., `TaskStatusBadge`)
+
+**Don't create**:
+- Multiple variations of the same primitive component
+- Wrapper components just to override styles (edit the source directly instead)
+
+**Pattern**: One source of truth per primitive component, compose for complexity.
