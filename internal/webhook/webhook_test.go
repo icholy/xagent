@@ -55,7 +55,7 @@ func TestGitHubPullRequestReviewComment(t *testing.T) {
 		{
 			Event: &webhook.Event{
 				URL:         "https://github.com/icholy/xagent/pull/83",
-				Description: "A comment was made on a pull request",
+				Description: "A review comment was made on a pull request",
 				Data:        "xagent: test comment",
 			},
 		},
