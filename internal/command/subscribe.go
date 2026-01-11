@@ -63,11 +63,11 @@ var SubscribeCommand = &cli.Command{
 		serverURL := cmd.String("server")
 		region := cmd.String("region")
 
-		var cfg config.LoadOptionsFunc
+		var opts []func(*config.LoadOptions) error
 		if region != "" {
-			cfg = config.WithRegion(region)
+			opts = append(opts, config.WithRegion(region))
 		}
-		awsConfig, err := config.LoadDefaultConfig(ctx, cfg)
+		awsConfig, err := config.LoadDefaultConfig(ctx, opts...)
 		if err != nil {
 			return fmt.Errorf("failed to load AWS config: %w", err)
 		}
