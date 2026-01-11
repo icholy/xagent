@@ -57,9 +57,8 @@ function EventsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
               <TableHead>Description</TableHead>
-              <TableHead>URL</TableHead>
+              <TableHead>Data</TableHead>
               <TableHead>Created</TableHead>
             </TableRow>
           </TableHeader>
@@ -75,6 +74,9 @@ function EventsPage() {
 }
 
 function EventRow({ event }: { event: Event }) {
+  const dataContent = event.data || '-'
+  const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
+
   return (
     <TableRow>
       <TableCell>
@@ -83,10 +85,9 @@ function EventRow({ event }: { event: Event }) {
           params={{ id: String(event.id) }}
           className="text-primary hover:underline"
         >
-          {String(event.id)}
+          {event.description || '-'}
         </Link>
       </TableCell>
-      <TableCell>{event.description || '-'}</TableCell>
       <TableCell className="max-w-xs truncate">
         {event.url ? (
           <a
@@ -95,10 +96,10 @@ function EventRow({ event }: { event: Event }) {
             rel="noopener noreferrer"
             className="text-primary hover:underline"
           >
-            {event.url}
+            {truncatedData}
           </a>
         ) : (
-          '-'
+          truncatedData
         )}
       </TableCell>
       <TableCell className="text-muted-foreground">
