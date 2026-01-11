@@ -2,7 +2,7 @@ import { Outlet, createRootRouteWithContext, Link } from '@tanstack/react-router
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { QueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 
 export const Route = createRootRouteWithContext<{
@@ -32,11 +32,9 @@ function RootComponent() {
             >
               Events
             </Link>
-            <Link to="/tasks/new">
-              <Button size="sm">
-                <Plus className="h-4 w-4" />
-                Task
-              </Button>
+            <Link to="/tasks/new" className={buttonVariants({ size: 'sm' })}>
+              <Plus className="h-4 w-4" />
+              Task
             </Link>
           </div>
         </div>
