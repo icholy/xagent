@@ -49,7 +49,7 @@ function CreateEventPage() {
 
       <h1 className="text-2xl font-bold mb-6">Create Event</h1>
 
-      <Card className="max-w-2xl">
+      <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
