@@ -81,3 +81,39 @@ xagent github     # GitHub integration
 ### Protobuf
 
 Service definitions in `proto/xagent/v1/xagent.proto`, generated code goes to `internal/proto/` (gitignored).
+
+## Web UI v2
+
+A modern React-based UI is being developed in `webui/` to replace the Go template-based UI in `internal/server/templates/`.
+
+### Stack
+
+- **React 19** with TypeScript
+- **Vite** for development and build tooling
+- **Tailwind CSS v4** for styling
+- **shadcn/ui** for component library
+
+### Development
+
+```bash
+cd webui
+npm install
+npm run dev  # Runs on http://localhost:5173
+```
+
+The v2 UI runs independently on the Vite dev server and can be developed incrementally alongside the existing Go template UI.
+
+### UI Development Guidelines
+
+**Use shadcn/ui components** - Always prefer off-the-shelf shadcn components with their default styles. Avoid writing custom UI components unless absolutely necessary. Browse available components at https://ui.shadcn.com/docs/components
+
+**Add components as needed** - Install shadcn components with `npx shadcn@latest add <component-name>` (e.g., `button`, `card`, `table`, `dialog`)
+
+**Reference v1 for data, not design** - The Go template UI in `internal/server/templates/` can be referenced to understand:
+- What API calls are made
+- What data is displayed
+- What information appears on each page
+
+**Do NOT copy v1 implementation** - Do not replicate v1's layout, styles, HTML structure, or templates. The v2 is a complete rewrite with modern components and UX patterns.
+
+**API Access** - The v2 UI will call the same Connect RPC API at `/xagent.v1.XAgentService/*` that the v1 UI uses.

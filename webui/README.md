@@ -1,0 +1,49 @@
+# XAgent UI v2
+
+Modern React + TypeScript + Vite + shadcn/ui frontend for XAgent.
+
+## Development
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173) to view the app.
+
+## Stack
+
+- **React 19** - UI framework
+- **TypeScript** - Type safety
+- **Vite** - Build tool and dev server
+- **Tailwind CSS v4** - Styling
+- **shadcn/ui** - Component library
+
+## Project Structure
+
+```
+webui/
+├── src/
+│   ├── components/     # React components
+│   │   └── ui/        # shadcn/ui components
+│   ├── lib/           # Utilities
+│   ├── App.tsx        # Main app component
+│   └── main.tsx       # Entry point
+├── public/            # Static assets
+└── package.json       # Dependencies
+```
+
+## Adding Components
+
+Use the shadcn CLI to add components:
+
+```bash
+npx shadcn@latest add button
+npx shadcn@latest add card
+```
+
+## Build
+
+```bash
+npm run build
+npm run preview
+```
