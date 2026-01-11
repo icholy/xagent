@@ -2,6 +2,8 @@ import { Outlet, createRootRouteWithContext, Link } from '@tanstack/react-router
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { QueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -30,11 +32,11 @@ function RootComponent() {
             >
               Events
             </Link>
-            <Link
-              to="/tasks/new"
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Create Task
+            <Link to="/tasks/new">
+              <Button size="sm">
+                <Plus className="h-4 w-4" />
+                Task
+              </Button>
             </Link>
           </div>
         </div>
