@@ -261,7 +261,7 @@ function TaskDetail() {
       {children.length > 0 && (
         <div className="rounded-lg border p-6">
           <h2 className="text-lg font-semibold mb-4">Child Tasks</h2>
-          <ChildTasksTable tasks={children} />
+          <ChildTasksTable tasks={children} onUpdate={refetch} />
         </div>
       )}
 
@@ -342,7 +342,7 @@ function LinksSection({ links }: { links: TaskLink[] }) {
   )
 }
 
-function ChildTasksTable({ tasks }: { tasks: Task[] }) {
+function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => void }) {
   return (
     <Table>
       <TableHeader>
@@ -351,31 +351,58 @@ function ChildTasksTable({ tasks }: { tasks: Task[] }) {
           <TableHead>Workspace</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Created</TableHead>
+          <TableHead></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {tasks.map((task) => (
-          <TableRow key={String(task.id)}>
-            <TableCell>
-              <Link
-                to="/tasks/$id"
-                params={{ id: String(task.id) }}
-                className="text-primary hover:underline"
-              >
-                {task.name || `Unnamed - ${task.id}`}
-              </Link>
-            </TableCell>
-            <TableCell>{task.workspace}</TableCell>
-            <TableCell>
-              <StatusBadge status={task.status} />
-            </TableCell>
-            <TableCell className="text-muted-foreground">
-              {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
-            </TableCell>
-          </TableRow>
+          <ChildTaskRow key={String(task.id)} task={task} onUpdate={onUpdate} />
         ))}
       </TableBody>
     </Table>
+  )
+}
+
+function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
+  const updateMutation = useMutation(updateTask)
+  const canArchive = task.status === 'completed' || task.status === 'failed'
+
+  const handleArchive = async () => {
+    await updateMutation.mutateAsync({ id: task.id, status: 'archived' })
+    onUpdate()
+  }
+
+  return (
+    <TableRow>
+      <TableCell>
+        <Link
+          to="/tasks/$id"
+          params={{ id: String(task.id) }}
+          className="text-primary hover:underline"
+        >
+          {task.name || `Unnamed - ${task.id}`}
+        </Link>
+      </TableCell>
+      <TableCell>{task.workspace}</TableCell>
+      <TableCell>
+        <StatusBadge status={task.status} />
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
+      </TableCell>
+      <TableCell>
+        {canArchive && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleArchive}
+            disabled={updateMutation.isPending}
+          >
+            Archive
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
   )
 }
 
