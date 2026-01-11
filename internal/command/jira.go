@@ -57,12 +57,6 @@ var JiraCommand = &cli.Command{
 			Usage:   "Data directory for state persistence",
 			Value:   "data",
 		},
-		&cli.StringFlag{
-			Name:     "workspace",
-			Aliases:  []string{"w"},
-			Usage:    "Workspace for new tasks",
-			Required: true,
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		label := cmd.String("label")
@@ -72,7 +66,6 @@ var JiraCommand = &cli.Command{
 		username := cmd.String("username")
 		token := cmd.String("token")
 		dataDir := cmd.String("data")
-		workspace := cmd.String("workspace")
 
 		tp := jira.BasicAuthTransport{
 			Username: username,
@@ -110,6 +103,10 @@ var JiraCommand = &cli.Command{
 			OnComment: func(c jirax.Comment) {
 				body := strings.TrimSpace(c.Body)
 
+				if !strings.HasPrefix(body, "xagent:") {
+					return
+				}
+
 				reply := func(msg string) {
 					_, _, err := jiraClient.Issue.AddComment(ctx, c.IssueKey, &jira.Comment{Body: msg})
 					if err != nil {
@@ -117,55 +114,29 @@ var JiraCommand = &cli.Command{
 					}
 				}
 
-				switch {
-				case strings.HasPrefix(body, "xagent task"):
-					eventResp, err := xagent.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-						Description: body,
-						Url:         c.IssueURL,
-					})
-					if err != nil {
-						slog.Error("failed to create event", "error", err)
-						reply(fmt.Sprintf("error: %v", err))
-						return
-					}
-					processResp, err := xagent.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
-						Id: eventResp.Event.Id,
-					})
-					if err != nil {
-						slog.Error("failed to process event", "error", err)
-						reply(fmt.Sprintf("error: %v", err))
-						return
-					}
-					if len(processResp.TaskIds) == 0 {
-						slog.Info("no tasks linked to issue", "url", c.IssueURL)
-						reply("error: no tasks linked to this issue")
-						return
-					}
-					slog.Info("event processed", "event", eventResp.Event.Id, "tasks", processResp.TaskIds)
-
-				case strings.HasPrefix(body, "xagent new"):
-					resp, err := xagent.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-						Workspace: workspace,
-						Instructions: []*xagentv1.Instruction{
-							{Text: body, Url: c.IssueURL},
-						},
-					})
-					if err != nil {
-						slog.Error("failed to create task", "error", err)
-						reply(fmt.Sprintf("error: %v", err))
-						return
-					}
-					taskID := resp.Task.Id
-					_, err = xagent.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-						TaskId:    taskID,
-						Relevance: "Task initiated from this Jira issue",
-						Url:       c.IssueURL,
-					})
-					if err != nil {
-						slog.Error("failed to create link", "error", err)
-					}
-					slog.Info("task created", "task", taskID)
+				eventResp, err := xagent.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+					Description: body,
+					Url:         c.IssueURL,
+				})
+				if err != nil {
+					slog.Error("failed to create event", "error", err)
+					reply(fmt.Sprintf("error: %v", err))
+					return
 				}
+				processResp, err := xagent.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
+					Id: eventResp.Event.Id,
+				})
+				if err != nil {
+					slog.Error("failed to process event", "error", err)
+					reply(fmt.Sprintf("error: %v", err))
+					return
+				}
+				if len(processResp.TaskIds) == 0 {
+					slog.Info("no tasks linked to issue", "url", c.IssueURL)
+					reply("error: no tasks linked to this issue")
+					return
+				}
+				slog.Info("event processed", "event", eventResp.Event.Id, "tasks", processResp.TaskIds)
 			},
 		})
 
