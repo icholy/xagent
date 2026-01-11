@@ -9,20 +9,3 @@ variable "project_name" {
   type        = string
   default     = "xagent"
 }
-
-variable "github_webhook_secret" {
-  description = "Secret for GitHub webhook signature verification"
-  type        = string
-  sensitive   = true
-}
-
-variable "jira_webhook_secret" {
-  description = "Secret for Jira webhook signature verification"
-  type        = string
-  sensitive   = true
-}
-
-variable "jira_base_url" {
-  description = "Base URL for Jira instance (e.g., https://your-domain.atlassian.net)"
-  type        = string
-}

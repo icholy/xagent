@@ -10,11 +10,22 @@ terraform {
       source  = "hashicorp/archive"
       version = "~> 2.0"
     }
+    sops = {
+      source  = "carlpett/sops"
+      version = "~> 1.0"
+    }
   }
 }
 
 provider "aws" {
   region = var.aws_region
+}
+
+provider "sops" {}
+
+# Load secrets from SOPS encrypted file
+data "sops_file" "secrets" {
+  source_file = "${path.module}/secrets.yaml"
 }
 
 # SQS Queue for xagent events
@@ -117,9 +128,9 @@ resource "aws_lambda_function" "webhooks" {
   environment {
     variables = {
       SQS_QUEUE_URL         = aws_sqs_queue.xagent_events.url
-      GITHUB_WEBHOOK_SECRET = var.github_webhook_secret
-      JIRA_WEBHOOK_SECRET   = var.jira_webhook_secret
-      JIRA_BASE_URL         = var.jira_base_url
+      GITHUB_WEBHOOK_SECRET = data.sops_file.secrets.data["github_webhook_secret"]
+      JIRA_WEBHOOK_SECRET   = data.sops_file.secrets.data["jira_webhook_secret"]
+      JIRA_BASE_URL         = data.sops_file.secrets.data["jira_base_url"]
     }
   }
 
