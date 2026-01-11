@@ -1,3 +1,8 @@
+[tools]
+sops = "latest"
+terraform = "latest"
+age = "latest"
+
 [tasks.build]
 description = "Build xagent binaries for all architectures"
 run = [
