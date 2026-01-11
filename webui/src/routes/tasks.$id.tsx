@@ -143,7 +143,7 @@ function TaskDetail() {
       </div>
 
       <div className="flex justify-between items-start mb-6">
-        <h1 className="text-2xl font-bold">{task.name || `Task ${id}`}</h1>
+        <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
         <div className="flex gap-2">
           {canCancel && (
             <Button
@@ -366,7 +366,7 @@ function ChildTasksTable({ tasks }: { tasks: Task[] }) {
                 params={{ id: String(task.id) }}
                 className="text-primary hover:underline"
               >
-                {task.name || <code className="text-xs">{String(task.id)}</code>}
+                {task.name || `Unnamed - ${task.id}`}
               </Link>
             </TableCell>
             <TableCell>{task.workspace}</TableCell>
