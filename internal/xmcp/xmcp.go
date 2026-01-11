@@ -131,35 +131,7 @@ func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input 
 		return errorResult("failed to get task: %v", err), nil, nil
 	}
 
-	marshalOpts := protojson.MarshalOptions{Indent: "  "}
-
-	instructions := make([]json.RawMessage, len(resp.Task.Instructions))
-	for i, inst := range resp.Task.Instructions {
-		instructions[i], _ = marshalOpts.Marshal(inst)
-	}
-
-	links := make([]json.RawMessage, len(resp.GetLinks()))
-	for i, link := range resp.GetLinks() {
-		links[i], _ = marshalOpts.Marshal(link)
-	}
-
-	events := make([]json.RawMessage, len(resp.GetEvents()))
-	for i, event := range resp.GetEvents() {
-		events[i], _ = marshalOpts.Marshal(event)
-	}
-
-	children := make([]json.RawMessage, len(resp.GetChildren()))
-	for i, child := range resp.GetChildren() {
-		children[i], _ = marshalOpts.Marshal(child)
-	}
-
-	return jsonResult(map[string]any{
-		"name":         resp.Task.Name,
-		"instructions": instructions,
-		"links":        links,
-		"events":       events,
-		"children":     children,
-	}), nil, nil
+	return jsonResult(taskDetailsToMap(resp)), nil, nil
 }
 
 type createChildTaskInput struct {
@@ -210,38 +182,13 @@ func (s *Server) listChildTasks(ctx context.Context, req *mcp.CallToolRequest, i
 		return errorResult("failed to list children: %v", err), nil, nil
 	}
 
-	marshalOpts := protojson.MarshalOptions{Indent: "  "}
 	children := make([]map[string]any, 0, len(resp.Tasks))
-
 	for _, task := range resp.Tasks {
 		details, err := s.client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: task.Id})
 		if err != nil {
 			return errorResult("failed to get child task %d: %v", task.Id, err), nil, nil
 		}
-
-		instructions := make([]json.RawMessage, len(details.Task.Instructions))
-		for i, inst := range details.Task.Instructions {
-			instructions[i], _ = marshalOpts.Marshal(inst)
-		}
-
-		links := make([]json.RawMessage, len(details.GetLinks()))
-		for i, link := range details.GetLinks() {
-			links[i], _ = marshalOpts.Marshal(link)
-		}
-
-		events := make([]json.RawMessage, len(details.GetEvents()))
-		for i, event := range details.GetEvents() {
-			events[i], _ = marshalOpts.Marshal(event)
-		}
-
-		children = append(children, map[string]any{
-			"id":           task.Id,
-			"name":         details.Task.Name,
-			"status":       details.Task.Status,
-			"instructions": instructions,
-			"links":        links,
-			"events":       events,
-		})
+		children = append(children, taskDetailsToMap(details))
 	}
 
 	return jsonResult(children), nil, nil
@@ -341,5 +288,41 @@ func jsonResult(v any) *mcp.CallToolResult {
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(data)},
 		},
+	}
+}
+
+// taskDetailsToMap converts a GetTaskDetailsResponse to a map for JSON output.
+func taskDetailsToMap(resp *xagentv1.GetTaskDetailsResponse) map[string]any {
+	marshalOpts := protojson.MarshalOptions{Indent: "  "}
+
+	instructions := make([]json.RawMessage, len(resp.Task.Instructions))
+	for i, inst := range resp.Task.Instructions {
+		instructions[i], _ = marshalOpts.Marshal(inst)
+	}
+
+	links := make([]json.RawMessage, len(resp.GetLinks()))
+	for i, link := range resp.GetLinks() {
+		links[i], _ = marshalOpts.Marshal(link)
+	}
+
+	events := make([]json.RawMessage, len(resp.GetEvents()))
+	for i, event := range resp.GetEvents() {
+		events[i], _ = marshalOpts.Marshal(event)
+	}
+
+	children := make([]json.RawMessage, len(resp.GetChildren()))
+	for i, child := range resp.GetChildren() {
+		children[i], _ = marshalOpts.Marshal(child)
+	}
+
+	return map[string]any{
+		"id":           resp.Task.Id,
+		"name":         resp.Task.Name,
+		"status":       resp.Task.Status,
+		"workspace":    resp.Task.Workspace,
+		"instructions": instructions,
+		"links":        links,
+		"events":       events,
+		"children":     children,
 	}
 }
