@@ -90,6 +90,8 @@ A modern React-based UI is being developed in `webui/` to replace the Go templat
 
 - **React 19** with TypeScript
 - **Vite** for development and build tooling
+- **TanStack Router** for file-based routing
+- **TanStack Query** for server state management
 - **Tailwind CSS v4** for styling
 - **shadcn/ui** for component library
 
@@ -102,6 +104,124 @@ npm run dev  # Runs on http://localhost:5173
 ```
 
 The v2 UI runs independently on the Vite dev server and can be developed incrementally alongside the existing Go template UI.
+
+### Routing (TanStack Router)
+
+**File-based routing** - Routes are defined as files in `src/routes/`. The TanStack Router Vite plugin auto-generates `routeTree.gen.ts` (gitignored).
+
+**Route file naming**:
+- `index.tsx` → `/`
+- `tasks.tsx` → `/tasks`
+- `tasks/$id.tsx` → `/tasks/:id` (dynamic param)
+- `tasks.$id.edit.tsx` → `/tasks/:id/edit`
+- `__root.tsx` → Root layout (wraps all routes)
+
+**Creating a route**:
+```tsx
+// src/routes/tasks.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/tasks')({
+  component: TasksPage,
+})
+
+function TasksPage() {
+  return <div>Tasks</div>
+}
+```
+
+**Accessing route params**:
+```tsx
+// src/routes/tasks/$id.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/tasks/$id')({
+  component: TaskDetail,
+})
+
+function TaskDetail() {
+  const { id } = Route.useParams()
+  return <div>Task {id}</div>
+}
+```
+
+**Navigation**:
+```tsx
+import { Link, useNavigate } from '@tanstack/react-router'
+
+// Declarative
+<Link to="/tasks/$id" params={{ id: '123' }}>View Task</Link>
+
+// Programmatic
+const navigate = useNavigate()
+navigate({ to: '/tasks/$id', params: { id: '123' } })
+```
+
+**Type safety** - The router instance is registered via module augmentation in `main.tsx`, enabling full TypeScript autocomplete for routes, params, and navigation throughout the app.
+
+### State Management (TanStack Query)
+
+**Use TanStack Query for ALL server state** - Tasks, logs, events, and any data from the API should be fetched with TanStack Query. Do NOT use `useState` + `useEffect` for API calls.
+
+**QueryClient is available everywhere** - The QueryClient is provided via router context and available in all routes and components.
+
+**Fetching data**:
+```tsx
+import { useQuery } from '@tanstack/react-query'
+
+function TaskList() {
+  const { data: tasks, isLoading, error } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
+      const res = await fetch('/xagent.v1.XAgentService/ListTasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      return res.json()
+    },
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
+  })
+
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+
+  return <div>{/* Render tasks */}</div>
+}
+```
+
+**Mutations** (create/update/delete):
+```tsx
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+function CreateTaskButton() {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (taskData) => {
+      const res = await fetch('/xagent.v1.XAgentService/CreateTask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(taskData),
+      })
+      return res.json()
+    },
+    onSuccess: () => {
+      // Invalidate and refetch tasks list
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+
+  return <button onClick={() => mutation.mutate({...})}>Create</button>
+}
+```
+
+**Benefits**:
+- Automatic caching and background updates
+- No more polling issues (updates without losing UI state)
+- Built-in loading and error states
+- Request deduplication
+- Optimistic updates
 
 ### UI Development Guidelines
 
