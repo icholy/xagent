@@ -35,7 +35,13 @@ cd ../terraform
 
 ### 2. Configure Secrets
 
-Edit `secrets.yaml` with your configuration:
+Edit the encrypted secrets file using SOPS:
+
+```bash
+sops secrets.yaml
+```
+
+Example configuration:
 
 ```yaml
 aws_region: "us-east-1"
@@ -43,30 +49,6 @@ project_name: "xagent"
 github_webhook_secret: "your-github-webhook-secret-here"
 jira_webhook_secret: "your-jira-webhook-secret-here"
 jira_base_url: "https://your-domain.atlassian.net"
-```
-
-**Important:** Generate strong secrets using:
-
-```bash
-openssl rand -hex 32
-```
-
-Then encrypt the file using SOPS:
-
-```bash
-# Using age (recommended)
-sops --encrypt --age <your-age-public-key> secrets.yaml > secrets.yaml.enc
-mv secrets.yaml.enc secrets.yaml
-
-# Or using AWS KMS
-sops --encrypt --kms arn:aws:kms:us-east-1:123456789:key/your-key-id secrets.yaml > secrets.yaml.enc
-mv secrets.yaml.enc secrets.yaml
-```
-
-To edit encrypted secrets later:
-
-```bash
-sops secrets.yaml
 ```
 
 ### 3. Deploy Infrastructure
@@ -253,22 +235,7 @@ terraform plan
 
 ### Secrets Management
 
-Secrets are managed using [SOPS](https://github.com/getsops/sops), which encrypts the `secrets.yaml` file so it can be safely committed to version control.
-
-Supported encryption backends:
-- **age** - Simple and modern encryption (recommended for personal use)
-- **AWS KMS** - Use for team access via IAM policies
-- **GCP KMS** - Google Cloud Key Management Service
-- **Azure Key Vault** - Azure's key management solution
-- **PGP** - Traditional GPG/PGP encryption
-
-Example `.sops.yaml` configuration for a team:
-
-```yaml
-creation_rules:
-  - path_regex: secrets\.yaml$
-    kms: arn:aws:kms:us-east-1:123456789:key/your-key-id
-```
+Secrets are managed using [SOPS](https://github.com/getsops/sops). Use `sops secrets.yaml` to edit the encrypted file.
 
 ### Function URLs
 
