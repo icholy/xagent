@@ -10,7 +10,8 @@ export function RelativeTime({ date }: { date: Date }) {
   const diff = now.getTime() - date.getTime()
   const duration = new Duration(diff)
 
-  const relativeText = diff < 1000 ? 'just now' : `${duration.toString()} ago`
+  const relativeText =
+    diff < 1000 ? 'just now' : `${duration.truncate('1s').toString()} ago`
   const absoluteText = date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
