@@ -99,8 +99,7 @@ All configuration is stored in `secrets.yaml` and managed with SOPS:
 | `sqs_dlq_url` | Dead letter queue URL |
 | `github_webhook_url` | URL to configure in GitHub |
 | `jira_webhook_url` | URL to configure in Jira |
-| `github_lambda_function_name` | GitHub Lambda function name |
-| `jira_lambda_function_name` | Jira Lambda function name |
+| `lambda_function_name` | Lambda function name |
 
 ## Infrastructure Components
 
@@ -198,7 +197,7 @@ Typical monthly costs for moderate usage (< 10,000 events/month):
 
 ```bash
 # Check build artifacts exist
-ls -lh ../lambda/bootstrap
+ls -lh ../webhook/bootstrap
 
 # Verify Lambda function package (after terraform apply creates it)
 unzip -l builds/webhooks-lambda.zip
