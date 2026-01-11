@@ -6,10 +6,13 @@ import {
 } from '@/components/ui/tooltip'
 
 function formatDuration(duration: Duration): string {
-  const truncatedDuration = duration.isGreaterThan('1h')
-    ? duration.truncate('1m')
-    : duration.truncate('1s')
-  return truncatedDuration.toString()
+  if (duration.isLessThan('1s')) {
+    return 'just now'
+  }
+  if (duration.isGreaterThan('1h')) {
+    return `${duration.truncate('1m').toString()} ago`
+  }
+  return `${duration.truncate('1s').toString()} ago`
 }
 
 export function RelativeTime({ date }: { date: Date }) {
@@ -17,8 +20,6 @@ export function RelativeTime({ date }: { date: Date }) {
   const diff = now.getTime() - date.getTime()
   const duration = new Duration(diff)
 
-  const relativeText =
-    diff < 1000 ? 'just now' : `${formatDuration(duration)} ago`
   const absoluteText = date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -31,7 +32,7 @@ export function RelativeTime({ date }: { date: Date }) {
   return (
     <Tooltip>
       <TooltipTrigger className="cursor-default">
-        {relativeText}
+        {formatDuration(duration)}
       </TooltipTrigger>
       <TooltipContent>
         {absoluteText}
