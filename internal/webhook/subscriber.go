@@ -96,7 +96,7 @@ type LogOnlyHandler struct{}
 
 // HandleEvent logs the event without taking action.
 func (h *LogOnlyHandler) HandleEvent(ctx context.Context, event *Event) error {
-	slog.Info("received command", "event", event, "url")
+	slog.Info("received command", "event", event)
 	return nil
 }
 
