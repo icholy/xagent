@@ -6,6 +6,8 @@ age = "latest"
 [tasks.build]
 description = "Build xagent binaries for all architectures and webhook"
 run = [
+	"cd webui && npm ci && npx vite build",
+	"rm -rf internal/server/dist && cp -r webui/dist internal/server/dist",
 	"go build -o xagent ./cmd/xagent",
 	"mkdir -p prebuilt",
 	"CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 ./cmd/xagent",

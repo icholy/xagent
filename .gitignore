@@ -3,3 +3,6 @@
 /data/*.json
 /prebuilt/
 /webhook
+/internal/server/dist/
+/webui/dist/
+/webui/node_modules/
