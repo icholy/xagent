@@ -49,10 +49,15 @@ func TestGitHubPullRequestReviewComment(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, rec.Code, http.StatusOK)
-	assert.Equal(t, len(publisher.PublishCalls()), 1)
-	assert.DeepEqual(t, publisher.PublishCalls()[0].Event, &webhook.Event{
-		URL:         "https://github.com/icholy/xagent/pull/83",
-		Description: "A review comment was made on a pull request",
-		Data:        "xagent: test comment",
+	assert.DeepEqual(t, publisher.PublishCalls(), []struct {
+		Event *webhook.Event
+	}{
+		{
+			Event: &webhook.Event{
+				URL:         "https://github.com/icholy/xagent/pull/83",
+				Description: "A comment was made on a pull request",
+				Data:        "xagent: test comment",
+			},
+		},
 	})
 }
