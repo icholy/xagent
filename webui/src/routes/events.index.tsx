@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table'
 import { RelativeTime } from '@/components/ui/relative-time'
 
-export const Route = createFileRoute('/events')({
+export const Route = createFileRoute('/events/')({
   component: EventsPage,
 })
 
