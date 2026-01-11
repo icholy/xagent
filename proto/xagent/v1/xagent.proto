@@ -180,7 +180,9 @@ message Event {
   google.protobuf.Timestamp created_at = 5;
 }
 
-message ListEventsRequest {}
+message ListEventsRequest {
+  int32 limit = 1;  // Max events to return (default: 100, max: 100)
+}
 
 message ListEventsResponse {
   repeated Event events = 1;
