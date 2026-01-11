@@ -1,5 +1,7 @@
 package webhook
 
+//go:generate go tool moq -pkg webhook_test -out publisher_moq_test.go . Publisher
+
 import (
 	"context"
 	"crypto/hmac"
@@ -61,6 +63,7 @@ type Config struct {
 	JiraSecret   string
 	JiraBaseURL  string
 	Publisher    Publisher
+	NoVerify     bool
 }
 
 // Handler is an http.Handler that processes GitHub and Jira webhooks.
@@ -164,6 +167,9 @@ func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) verifyGitHubSignature(payload []byte, signature string) bool {
+	if h.config.NoVerify {
+		return true
+	}
 	if !strings.HasPrefix(signature, "sha256=") {
 		return false
 	}
@@ -177,6 +183,9 @@ func (h *Handler) verifyGitHubSignature(payload []byte, signature string) bool {
 }
 
 func (h *Handler) verifyJiraSignature(payload []byte, signature string) bool {
+	if h.config.NoVerify {
+		return true
+	}
 	mac := hmac.New(sha256.New, []byte(h.config.JiraSecret))
 	mac.Write(payload)
 	expectedMAC := base64.StdEncoding.EncodeToString(mac.Sum(nil))
