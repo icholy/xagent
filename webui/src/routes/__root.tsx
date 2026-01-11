@@ -19,7 +19,7 @@ function RootComponent() {
           <Link to="/" className="font-semibold text-lg">
             XAgent
           </Link>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-4">
             <Link
               to="/tasks"
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
