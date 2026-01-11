@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table'
 import { RelativeTime } from '@/components/ui/relative-time'
 import { Button } from '@/components/ui/button'
+import { TruncatedText } from '@/components/ui/truncated-text'
 import { Plus } from 'lucide-react'
 
 export const Route = createFileRoute('/events/')({
@@ -80,7 +81,6 @@ function EventsPage() {
 
 function EventRow({ event }: { event: Event }) {
   const dataContent = event.data || '-'
-  const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
 
   return (
     <TableRow>
@@ -94,18 +94,20 @@ function EventRow({ event }: { event: Event }) {
           {event.description || '-'}
         </Link>
       </TableCell>
-      <TableCell className="max-w-xs truncate">
+      <TableCell className="max-w-xs">
         {event.url ? (
-          <a
-            href={event.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            {truncatedData}
-          </a>
+          <TruncatedText
+            text={dataContent}
+            as="a"
+            asProps={{
+              href: event.url,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              className: 'text-primary hover:underline',
+            }}
+          />
         ) : (
-          truncatedData
+          <TruncatedText text={dataContent} />
         )}
       </TableCell>
       <TableCell className="text-muted-foreground">
