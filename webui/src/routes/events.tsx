@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { RelativeTime } from '@/components/ui/relative-time'
 
 export const Route = createFileRoute('/events')({
   component: EventsPage,
@@ -95,18 +96,9 @@ function EventRow({ event }: { event: Event }) {
         )}
       </TableCell>
       <TableCell className="text-muted-foreground">
-        {event.createdAt ? formatDate(timestampDate(event.createdAt)) : '-'}
+        {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
       </TableCell>
     </TableRow>
   )
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}

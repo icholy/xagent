@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@connectrpc/connect-query'
 import { getEvent, listEventTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
+import { RelativeTime } from '@/components/ui/relative-time'
 
 export const Route = createFileRoute('/events/$id')({
   component: EventDetail,
@@ -89,7 +90,7 @@ function EventDetail() {
           <div>
             <h2 className="text-sm font-medium text-muted-foreground">Created</h2>
             <p className="mt-1">
-              {event.createdAt ? formatDate(timestampDate(event.createdAt)) : '-'}
+              {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
             </p>
           </div>
 
@@ -128,17 +129,6 @@ function EventDetail() {
       </div>
     </div>
   )
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
 }
 
 function formatJson(data: string): string {

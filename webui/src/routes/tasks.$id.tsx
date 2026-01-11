@@ -26,6 +26,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { RelativeTime } from '@/components/ui/relative-time'
 
 export const Route = createFileRoute('/tasks/$id')({
   component: TaskDetail,
@@ -58,15 +59,6 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
 
 function TaskDetail() {
   const { id } = Route.useParams()
@@ -217,14 +209,14 @@ function TaskDetail() {
             <strong>Status:</strong>
             <StatusBadge status={task.status} />
           </div>
-          <div>
+          <div className="flex items-center gap-2">
             <strong>Created:</strong>{' '}
-            {task.createdAt ? formatDate(timestampDate(task.createdAt)) : '-'}
+            {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
           </div>
           {task.updatedAt && (
-            <div>
+            <div className="flex items-center gap-2">
               <strong>Updated:</strong>{' '}
-              {formatDate(timestampDate(task.updatedAt))}
+              <RelativeTime date={timestampDate(task.updatedAt)} />
             </div>
           )}
         </CardContent>
@@ -409,7 +401,7 @@ function ChildTasksTable({ tasks }: { tasks: Task[] }) {
               <StatusBadge status={task.status} />
             </TableCell>
             <TableCell className="text-muted-foreground">
-              {task.createdAt ? formatDate(timestampDate(task.createdAt)) : '-'}
+              {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
             </TableCell>
           </TableRow>
         ))}
