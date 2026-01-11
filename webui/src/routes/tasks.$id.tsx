@@ -227,7 +227,7 @@ function TaskDetail() {
         <CardHeader>
           <CardTitle>Instructions</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {task.instructions.length === 0 ? (
             <div className="text-muted-foreground">No instructions</div>
           ) : (
@@ -237,17 +237,8 @@ function TaskDetail() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Add Instruction Form */}
-      {!isArchived && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Add Instruction</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleAddInstruction} className="space-y-4">
+          {!isArchived && (
+            <form onSubmit={handleAddInstruction} className="space-y-4 pt-4 border-t">
               <Textarea
                 placeholder="Enter a new instruction..."
                 value={instruction}
@@ -258,9 +249,9 @@ function TaskDetail() {
                 Add Instruction
               </Button>
             </form>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* Links */}
       {links.length > 0 && (
