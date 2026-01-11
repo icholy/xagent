@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@connectrpc/connect-query'
 import { listEvents } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
@@ -13,6 +14,13 @@ import {
 } from '@/components/ui/table'
 import { RelativeTime } from '@/components/ui/relative-time'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Plus } from 'lucide-react'
 
 export const Route = createFileRoute('/events/')({
@@ -20,7 +28,8 @@ export const Route = createFileRoute('/events/')({
 })
 
 function EventsPage() {
-  const { data, isLoading, error } = useQuery(listEvents, {}, {
+  const [limit, setLimit] = useState(25)
+  const { data, isLoading, error } = useQuery(listEvents, { limit }, {
     refetchInterval: 3000,
   })
 
@@ -45,13 +54,29 @@ function EventsPage() {
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Events</h1>
-        <Link to="/events/new">
-          <Button>
-            <Plus className="h-4 w-4" />
-            Event
-          </Button>
-        </Link>
+        <h1 className="text-2xl font-bold">Recent Events</h1>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Show</span>
+            <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="75">75</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Link to="/events/new">
+            <Button>
+              <Plus className="h-4 w-4" />
+              Event
+            </Button>
+          </Link>
+        </div>
       </div>
       {events.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">
