@@ -1,5 +1,14 @@
 {
-	"headers": {},
+	"headers": {
+		"Accept": "*/*",
+		"Content-Type": "application/json",
+		"User-Agent": "GitHub-Hookshot/096674c",
+		"X-GitHub-Delivery": "b0d85030-d05a-11ef-8c73-8b2e5282a8f8",
+		"X-GitHub-Event": "pull_request_review",
+		"X-GitHub-Hook-ID": "591052633",
+		"X-GitHub-Hook-Installation-Target-ID": "1126947517",
+		"X-GitHub-Hook-Installation-Target-Type": "repository"
+	},
 	"payload": {
 		"action": "submitted",
 		"review": {

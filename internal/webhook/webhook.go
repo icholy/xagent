@@ -206,6 +206,20 @@ func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 				}
 			}
 		}
+
+	case *github.PullRequestReviewEvent:
+		if event.Action != nil && *event.Action == "submitted" &&
+			event.Review != nil && event.PullRequest != nil &&
+			event.Review.Body != nil && event.PullRequest.HTMLURL != nil {
+			body := strings.TrimSpace(*event.Review.Body)
+			if strings.HasPrefix(body, "xagent:") {
+				return &Event{
+					Description: "A review was submitted on a pull request",
+					Data:        body,
+					URL:         *event.PullRequest.HTMLURL,
+				}
+			}
+		}
 	}
 
 	return nil
