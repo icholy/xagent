@@ -82,8 +82,8 @@ xagent github     # GitHub integration
 
 Service definitions in `proto/xagent/v1/xagent.proto`, generated code goes to `internal/proto/` (gitignored).
 
-## Web UI v2
+## Web UI
 
-A modern React-based UI is being developed in `webui/` to replace the Go template-based UI in `internal/server/templates/`.
+The web interface is a React-based UI in `webui/` using TanStack Router, TanStack Query, and shadcn/ui components.
 
-For detailed development guidelines including TanStack Router, TanStack Query, and shadcn/ui component patterns, see the `webui` skill in `.claude/skills/webui/`.
+For detailed development guidelines, see the `webui` skill in `.claude/skills/webui/`.
