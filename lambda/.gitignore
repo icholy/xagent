@@ -1,7 +1,0 @@
-# Build artifacts
-bootstrap
-*.zip
-function.zip
-
-# Go artifacts
-go.sum
