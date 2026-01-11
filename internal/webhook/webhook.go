@@ -109,8 +109,7 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 
 	if event == nil {
 		log.Printf("ignoring GitHub event type: %s", eventType)
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ignored"})
+		fmt.Fprintf(w, "ignored GitHub event type: %s", eventType)
 		return
 	}
 
@@ -121,8 +120,7 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("GitHub event published: %s", event.URL)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "processed"})
+	fmt.Fprintf(w, "processed GitHub event: %s", event.URL)
 }
 
 func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
@@ -151,8 +149,7 @@ func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
 
 	if event == nil {
 		log.Printf("ignoring Jira event type: %s", webhookEvent.WebhookEvent)
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ignored"})
+		fmt.Fprintf(w, "ignored Jira event type: %s", webhookEvent.WebhookEvent)
 		return
 	}
 
@@ -163,8 +160,7 @@ func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Jira event published: %s", event.URL)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "processed"})
+	fmt.Fprintf(w, "processed Jira event: %s", event.URL)
 }
 
 func (h *Handler) verifyGitHubSignature(payload []byte, signature string) bool {
