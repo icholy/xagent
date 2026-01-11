@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -45,19 +44,11 @@ func (s *SQSSubscriber) Run(ctx context.Context) error {
 		"poll_interval", s.config.PollInterval,
 	)
 
-	waitTimeSeconds := int32(s.config.WaitTime.Seconds())
-
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
 		result, err := s.config.Client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 			QueueUrl:            &s.config.QueueURL,
 			MaxNumberOfMessages: s.config.MaxMessages,
-			WaitTimeSeconds:     waitTimeSeconds,
+			WaitTimeSeconds:     int32(s.config.WaitTime.Seconds()),
 			VisibilityTimeout:   60,
 		})
 		if err != nil {
@@ -100,27 +91,12 @@ func (s *SQSSubscriber) Run(ctx context.Context) error {
 	}
 }
 
-// ParseCommand extracts the content from an event description.
-// Returns the content after "xagent:" prefix if present, or empty string otherwise.
-func ParseCommand(description string) string {
-	body := strings.TrimSpace(description)
-	if strings.HasPrefix(body, "xagent:") {
-		return strings.TrimSpace(strings.TrimPrefix(body, "xagent:"))
-	}
-	return ""
-}
-
 // LogOnlyHandler is an EventHandler that only logs events (useful for testing).
 type LogOnlyHandler struct{}
 
 // HandleEvent logs the event without taking action.
 func (h *LogOnlyHandler) HandleEvent(ctx context.Context, event *Event) error {
-	content := ParseCommand(event.Description)
-	if content == "" {
-		slog.Warn("unknown command prefix", "description", event.Description)
-		return nil
-	}
-	slog.Info("received command", "content", content, "url", event.URL)
+	slog.Info("received command", "event", event, "url")
 	return nil
 }
 
