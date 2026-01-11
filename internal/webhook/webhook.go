@@ -208,7 +208,8 @@ func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 		}
 
 	case *github.PullRequestReviewEvent:
-		if event.Review != nil && event.PullRequest != nil &&
+		if event.Action != nil && *event.Action == "submitted" &&
+			event.Review != nil && event.PullRequest != nil &&
 			event.Review.Body != nil && event.PullRequest.HTMLURL != nil {
 			body := strings.TrimSpace(*event.Review.Body)
 			if strings.HasPrefix(body, "xagent:") {
