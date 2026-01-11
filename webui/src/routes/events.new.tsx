@@ -69,10 +69,10 @@ function CreateEventPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="data">Data (JSON)</Label>
+              <Label htmlFor="data">Data</Label>
               <Textarea
                 id="data"
-                placeholder='{"key": "value"}'
+                placeholder="Event data (text, JSON, etc.)"
                 value={data}
                 onChange={(e) => setData(e.target.value)}
                 rows={6}
