@@ -10,9 +10,11 @@ XAGENT uses [Connect RPC](https://connectrpc.com/) for its API, providing protoc
 ## Architecture Overview
 
 - **Proto definitions**: `proto/xagent/v1/xagent.proto`
-- **Generated code**: `internal/proto/xagent/v1/` (gitignored)
+- **Generated Go code**: `internal/proto/xagent/v1/` (gitignored)
+- **Generated TypeScript code**: `webui/src/gen/` (committed)
 - **Server implementation**: `internal/server/server.go`
-- **Client package**: `internal/xagentclient/`
+- **Go client package**: `internal/xagentclient/`
+- **TypeScript client**: Uses `@connectrpc/connect-query` with TanStack Query
 
 ## Adding a New RPC
 
@@ -43,8 +45,18 @@ mise run generate
 ```
 
 This runs:
-- `go tool buf generate` - generates protobuf messages and Connect client/server interfaces
+- `go tool buf generate` - generates protobuf messages and Connect client/server interfaces (Go)
 - `go generate ./...` - runs any other code generators
+
+For the frontend TypeScript client, run:
+
+```bash
+cd webui && npm run generate
+```
+
+This generates:
+- `webui/src/gen/xagent/v1/xagent_pb.ts` - TypeScript types and message schemas
+- `webui/src/gen/xagent/v1/xagent-XAgentService_connectquery.ts` - Connect-Query method exports
 
 ### 3. Implement the server handler
 
@@ -288,4 +300,120 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
     }
     return &xagentv1.UploadLogsResponse{}, nil
 }
+```
+
+## TypeScript Client (Web UI)
+
+The web UI uses [@connectrpc/connect-query](https://github.com/connectrpc/connect-query-es) for type-safe API calls with TanStack Query integration.
+
+### Setup
+
+The transport is configured in `webui/src/lib/transport.ts` and provided via `TransportProvider` in `main.tsx`. This is already set up.
+
+### Fetching data with useQuery
+
+Import the generated method descriptor and use it with `useQuery` from `@connectrpc/connect-query`:
+
+```tsx
+import { useQuery } from '@connectrpc/connect-query'
+import { listTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+
+function TaskList() {
+  const { data, isLoading, error } = useQuery(listTasks, {
+    statuses: ['pending', 'running'],
+  })
+
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+
+  return (
+    <ul>
+      {data?.tasks.map(task => (
+        <li key={String(task.id)}>{task.name}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Mutations with useMutation
+
+```tsx
+import { useMutation, useQueryClient } from '@connectrpc/connect-query'
+import { createTask, listTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { create } from '@bufbuild/protobuf'
+import { InstructionSchema } from '@/gen/xagent/v1/xagent_pb'
+
+function CreateTaskButton() {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation(createTask, {
+    onSuccess: () => {
+      // Invalidate and refetch tasks list
+      queryClient.invalidateQueries({ queryKey: [listTasks.service.typeName] })
+    },
+  })
+
+  const handleCreate = () => {
+    mutation.mutate({
+      name: 'New Task',
+      workspace: 'default',
+      instructions: [
+        create(InstructionSchema, { text: 'Do something', url: '' }),
+      ],
+    })
+  }
+
+  return <button onClick={handleCreate}>Create Task</button>
+}
+```
+
+### Important: bigint handling
+
+Protobuf `int64` fields are generated as TypeScript `bigint`. When displaying or using these values:
+
+```tsx
+// Convert to string for display
+<span>Task ID: {String(task.id)}</span>
+
+// Convert to number if needed (be careful with large values)
+const numId = Number(task.id)
+
+// Pass bigint directly to other proto messages
+const request = { id: task.id }  // OK - keeps bigint type
+```
+
+### TypeScript types
+
+The generated types are in `webui/src/gen/xagent/v1/xagent_pb.ts`:
+
+```tsx
+import type { Task, Event, TaskLink } from '@/gen/xagent/v1/xagent_pb'
+
+function TaskCard({ task }: { task: Task }) {
+  return (
+    <div>
+      <h3>{task.name}</h3>
+      <p>Status: {task.status}</p>
+      <p>Workspace: {task.workspace}</p>
+    </div>
+  )
+}
+```
+
+### webui/buf.gen.yaml
+
+The TypeScript code generation is configured in `webui/buf.gen.yaml`:
+
+```yaml
+version: v2
+inputs:
+  - directory: ../proto
+plugins:
+  - local: protoc-gen-es
+    out: src/gen
+    opt: target=ts
+  - local: protoc-gen-connect-query
+    out: src/gen
+    opt: target=ts
 ```
