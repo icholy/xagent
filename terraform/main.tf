@@ -25,8 +25,8 @@ data "sops_file" "secrets" {
 }
 
 locals {
-  aws_region   = data.sops_file.secrets.data["aws_region"]
-  project_name = data.sops_file.secrets.data["project_name"]
+  aws_region   = nonsensitive(data.sops_file.secrets.data["aws_region"])
+  project_name = nonsensitive(data.sops_file.secrets.data["project_name"])
 }
 
 provider "aws" {
