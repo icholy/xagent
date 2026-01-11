@@ -1,5 +1,14 @@
+[tasks.webui]
+description = "Build the React web UI"
+run = [
+	"cd webui && npm install && npm run build",
+	"rm -rf internal/server/webui/dist",
+	"cp -r webui/dist internal/server/webui/"
+]
+
 [tasks.build]
 description = "Build xagent binaries for all architectures"
+depends = ["webui"]
 run = [
 	"go build",
 	"mkdir -p prebuilt",

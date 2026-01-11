@@ -117,6 +117,7 @@ message DeleteTaskResponse {}
 message LogEntry {
   string type = 1;
   string content = 2;
+  google.protobuf.Timestamp created_at = 3;
 }
 
 message UploadLogsRequest {

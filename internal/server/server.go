@@ -53,19 +53,11 @@ func (s *Server) Handler() http.Handler {
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s)
 	mux.Handle(path, handler)
 
-	// UI
+	// UI - React SPA
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/ui/tasks", http.StatusFound)
+		http.Redirect(w, r, "/ui/", http.StatusFound)
 	})
-	mux.HandleFunc("GET /ui/tasks", s.handleIndex)
-	mux.HandleFunc("GET /ui/tasks/list", s.handleTaskList)
-	mux.HandleFunc("GET /ui/tasks/{id}", s.handleTaskDetail)
-	mux.HandleFunc("GET /ui/tasks/{id}/detail", s.handleTaskDetailPartial)
-	mux.HandleFunc("GET /ui/tasks/{id}/logs", s.handleTaskLogs)
-	mux.HandleFunc("GET /ui/tasks/{id}/children", s.handleTaskChildren)
-	mux.HandleFunc("GET /ui/events", s.handleEvents)
-	mux.HandleFunc("GET /ui/events/list", s.handleEventList)
-	mux.HandleFunc("GET /ui/events/{id}", s.handleEventDetail)
+	mux.HandleFunc("GET /ui/", s.handleUI)
 
 	return mux
 }
@@ -231,8 +223,9 @@ func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*
 	}
 	for i, l := range logs {
 		resp.Entries[i] = &xagentv1.LogEntry{
-			Type:    l.Type,
-			Content: l.Content,
+			Type:      l.Type,
+			Content:   l.Content,
+			CreatedAt: timestamppb.New(l.CreatedAt),
 		}
 	}
 	return resp, nil
