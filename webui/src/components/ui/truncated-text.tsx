@@ -31,13 +31,13 @@ export function TruncatedText({
   )
 
   if (!isTruncated) {
-    return <span className={className}>{content}</span>
+    return <span className={cn('block truncate', className)}>{content}</span>
   }
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={cn('cursor-help', className)}>{content}</span>
+        <span className={cn('block truncate cursor-help', className)}>{content}</span>
       </TooltipTrigger>
       <TooltipContent className="max-w-md whitespace-pre-wrap break-words">
         {text}
