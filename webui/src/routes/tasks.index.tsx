@@ -14,7 +14,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
-export const Route = createFileRoute('/tasks')({
+export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
 })
 
