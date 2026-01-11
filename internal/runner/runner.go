@@ -444,7 +444,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagen
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
 		Command: "/usr/local/bin/xagent",
-		Args:    []string{"mcp", "--server", "unix:///var/run/xagent.sock", "--task", taskIDStr, "--workspace", task.Workspace},
+		Args:    []string{"mcp", "--mode", "container", "--server", "unix:///var/run/xagent.sock", "--task", taskIDStr, "--workspace", task.Workspace},
 	}
 
 	for name, srv := range ws.Agent.McpServers {

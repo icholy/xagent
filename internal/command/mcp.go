@@ -17,8 +17,8 @@ var McpCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "mode",
 			Aliases: []string{"m"},
-			Usage:   "MCP mode: container (for xagent-managed agents) or external (for external agents)",
-			Value:   "container",
+			Usage:   "MCP mode: external (for external agents) or container (for xagent-managed agents)",
+			Value:   "external",
 		},
 		&cli.StringFlag{
 			Name:    "server",
