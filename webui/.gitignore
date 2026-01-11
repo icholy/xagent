@@ -15,9 +15,6 @@ dist-ssr
 # TanStack Router
 routeTree.gen.ts
 
-# Generated protobuf code
-src/gen/
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

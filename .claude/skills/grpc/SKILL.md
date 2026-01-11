@@ -11,7 +11,7 @@ XAGENT uses [Connect RPC](https://connectrpc.com/) for its API, providing protoc
 
 - **Proto definitions**: `proto/xagent/v1/xagent.proto`
 - **Generated Go code**: `internal/proto/xagent/v1/` (gitignored)
-- **Generated TypeScript code**: `webui/src/gen/` (gitignored)
+- **Generated TypeScript code**: `webui/src/gen/` (committed)
 - **Server implementation**: `internal/server/server.go`
 - **Go client package**: `internal/xagentclient/`
 - **TypeScript client**: Uses `@connectrpc/connect-query` with TanStack Query
