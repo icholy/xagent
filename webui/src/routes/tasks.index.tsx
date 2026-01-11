@@ -30,7 +30,7 @@ export const Route = createFileRoute('/tasks/')({
 function TasksPage() {
   const [showChildTasks, setShowChildTasks] = useState(() => {
     const stored = localStorage.getItem('showChildTasks')
-    return stored !== null ? stored === 'true' : true
+    return stored !== null ? stored === 'true' : false
   })
 
   const { data, isLoading, error } = useQuery(listTasks, {}, {
