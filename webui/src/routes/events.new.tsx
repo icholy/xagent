@@ -41,11 +41,13 @@ function CreateEventPage() {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
-      <Link to="/events" className="text-primary hover:underline">
-        &larr; Back to Events
-      </Link>
+      <div className="mb-6">
+        <Link to="/events" className="text-primary hover:underline">
+          &larr; Back to Events
+        </Link>
+      </div>
 
-      <h1 className="text-2xl font-bold">Create Event</h1>
+      <h1 className="text-2xl font-bold mb-6">Create Event</h1>
 
       <Card className="max-w-2xl">
         <CardContent className="pt-6">

@@ -43,11 +43,13 @@ function NewTaskPage() {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
-      <Link to="/tasks" className="text-primary hover:underline">
-        &larr; Back to Tasks
-      </Link>
+      <div className="mb-6">
+        <Link to="/tasks" className="text-primary hover:underline">
+          &larr; Back to Tasks
+        </Link>
+      </div>
 
-      <h1 className="text-2xl font-bold">Create New Task</h1>
+      <h1 className="text-2xl font-bold mb-6">Create New Task</h1>
 
       <Card>
         <CardContent className="pt-6">
