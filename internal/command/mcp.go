@@ -48,14 +48,14 @@ var McpCommand = &cli.Command{
 
 		switch mode {
 		case "container":
-			taskID := cmd.Int64("task")
-			workspace := cmd.String("workspace")
-			if taskID == 0 {
+			if !cmd.IsSet("task") {
 				return fmt.Errorf("--task is required for container mode")
 			}
-			if workspace == "" {
+			if !cmd.IsSet("workspace") {
 				return fmt.Errorf("--workspace is required for container mode")
 			}
+			taskID := cmd.Int64("task")
+			workspace := cmd.String("workspace")
 			xmcp.NewServer(client, taskID, workspace).AddTools(server)
 		case "external":
 			xmcp.NewExternalServer(client).AddTools(server)
