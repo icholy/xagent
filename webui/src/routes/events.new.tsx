@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@connectrpc/connect-query'
 import { createEvent } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -40,16 +40,17 @@ function CreateEventPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <Link to="/events" className="text-primary hover:underline">
-        &larr; Back to Events
-      </Link>
+    <div className="container mx-auto py-8 px-4 space-y-6">
+      <div className="mb-6">
+        <Link to="/events" className="text-primary hover:underline">
+          &larr; Back to Events
+        </Link>
+      </div>
 
-      <Card className="mt-6 max-w-2xl">
-        <CardHeader>
-          <CardTitle>Create Event</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <h1 className="text-2xl font-bold mb-6">Create Event</h1>
+
+      <Card className="max-w-2xl">
+        <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
