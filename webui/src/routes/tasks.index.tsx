@@ -116,7 +116,7 @@ function TaskRow({ task }: { task: Task }) {
           params={{ id: String(task.id) }}
           className="text-primary hover:underline"
         >
-          {task.name || <code className="text-xs">{String(task.id)}</code>}
+          {task.name || `Unnamed - ${task.id}`}
         </Link>
       </TableCell>
       <TableCell>{task.workspace}</TableCell>
