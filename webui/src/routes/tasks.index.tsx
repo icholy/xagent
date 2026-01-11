@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@connectrpc/connect-query'
 import { listTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
@@ -12,6 +13,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/tasks/')({
@@ -19,9 +22,19 @@ export const Route = createFileRoute('/tasks/')({
 })
 
 function TasksPage() {
+  const [showChildTasks, setShowChildTasks] = useState(() => {
+    const stored = localStorage.getItem('showChildTasks')
+    return stored !== null ? stored === 'true' : true
+  })
+
   const { data, isLoading, error } = useQuery(listTasks, {}, {
     refetchInterval: 3000,
   })
+
+  const handleToggleChildTasks = (checked: boolean) => {
+    setShowChildTasks(checked)
+    localStorage.setItem('showChildTasks', String(checked))
+  }
 
   if (isLoading) {
     return (
@@ -39,11 +52,27 @@ function TasksPage() {
     )
   }
 
-  const tasks = data?.tasks ?? []
+  const allTasks = data?.tasks ?? []
+  const tasks = showChildTasks
+    ? allTasks
+    : allTasks.filter((task) => task.parent === 0n)
+  const hiddenCount = allTasks.length - tasks.length
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-6">Tasks</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Tasks</h1>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show-child-tasks"
+            checked={showChildTasks}
+            onCheckedChange={handleToggleChildTasks}
+          />
+          <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
+            Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
+          </Label>
+        </div>
+      </div>
       {tasks.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">
           No tasks found
