@@ -1,5 +1,6 @@
 ---
-description: Web UI development guidelines for the v2 React UI in webui/
+name: webui
+description: Web UI development guidelines for the v2 React UI in webui/. Apply when working on files in webui/, creating React components, or using TanStack Router/Query.
 ---
 
 # Web UI v2 Development Guide

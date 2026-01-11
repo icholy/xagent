@@ -86,4 +86,4 @@ Service definitions in `proto/xagent/v1/xagent.proto`, generated code goes to `i
 
 A modern React-based UI is being developed in `webui/` to replace the Go template-based UI in `internal/server/templates/`.
 
-For detailed development guidelines including TanStack Router, TanStack Query, and shadcn/ui component patterns, run `/webui`.
+For detailed development guidelines including TanStack Router, TanStack Query, and shadcn/ui component patterns, see the `webui` skill in `.claude/skills/webui/`.
