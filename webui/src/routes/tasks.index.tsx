@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@connectrpc/connect-query'
-import { listTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { useQuery, useMutation } from '@connectrpc/connect-query'
+import { listTasks, updateTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import {
@@ -92,6 +92,7 @@ function TasksPage() {
               <TableHead>Workspace</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Created</TableHead>
+              <TableHead></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -107,6 +108,12 @@ function TasksPage() {
 
 function TaskRow({ task }: { task: Task }) {
   const isChild = task.parent !== 0n
+  const updateMutation = useMutation(updateTask)
+  const canArchive = task.status === 'completed' || task.status === 'failed'
+
+  const handleArchive = async () => {
+    await updateMutation.mutateAsync({ id: task.id, status: 'archived' })
+  }
 
   return (
     <TableRow className={cn(isChild && 'bg-muted/30')}>
@@ -125,6 +132,18 @@ function TaskRow({ task }: { task: Task }) {
       </TableCell>
       <TableCell className="text-muted-foreground">
         {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
+      </TableCell>
+      <TableCell>
+        {canArchive && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleArchive}
+            disabled={updateMutation.isPending}
+          >
+            Archive
+          </Button>
+        )}
       </TableCell>
     </TableRow>
   )
