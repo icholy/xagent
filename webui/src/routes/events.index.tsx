@@ -57,6 +57,7 @@ function EventsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>ID</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Data</TableHead>
               <TableHead>Created</TableHead>
@@ -79,6 +80,7 @@ function EventRow({ event }: { event: Event }) {
 
   return (
     <TableRow>
+      <TableCell>{String(event.id)}</TableCell>
       <TableCell>
         <Link
           to="/events/$id"
