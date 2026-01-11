@@ -63,14 +63,14 @@ function TasksPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex items-center gap-2">
+          <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
+            Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
+          </Label>
           <Switch
             id="show-child-tasks"
             checked={showChildTasks}
             onCheckedChange={handleToggleChildTasks}
           />
-          <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
-            Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
-          </Label>
         </div>
       </div>
       {tasks.length === 0 ? (
