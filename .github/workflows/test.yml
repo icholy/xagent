@@ -17,8 +17,8 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Create empty webui directory for go:embed
-        run: mkdir -p internal/server/webui && touch internal/server/webui/.gitkeep
+      - name: Create placeholder index.html for go:embed
+        run: mkdir -p internal/server/webui && echo '<!DOCTYPE html><html><body>placeholder</body></html>' > internal/server/webui/index.html
 
       - name: Download dependencies
         run: go mod download
