@@ -224,6 +224,14 @@ function TaskDetail() {
         )}
       </div>
 
+      {/* Links */}
+      {links.length > 0 && (
+        <div className="rounded-lg border p-6">
+          <h2 className="text-lg font-semibold mb-4">Links</h2>
+          <LinksSection links={links} />
+        </div>
+      )}
+
       {/* Instructions */}
       <div className="rounded-lg border p-6">
         <h2 className="text-lg font-semibold mb-4">Instructions</h2>
@@ -252,14 +260,6 @@ function TaskDetail() {
           </form>
         )}
       </div>
-
-      {/* Links */}
-      {links.length > 0 && (
-        <div className="rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Links</h2>
-          <LinksSection links={links} />
-        </div>
-      )}
 
       {/* Child Tasks */}
       {children.length > 0 && (
