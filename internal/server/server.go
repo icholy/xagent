@@ -53,19 +53,8 @@ func (s *Server) Handler() http.Handler {
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s)
 	mux.Handle(path, handler)
 
-	// UI
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/ui/tasks", http.StatusFound)
-	})
-	mux.HandleFunc("GET /ui/tasks", s.handleIndex)
-	mux.HandleFunc("GET /ui/tasks/list", s.handleTaskList)
-	mux.HandleFunc("GET /ui/tasks/{id}", s.handleTaskDetail)
-	mux.HandleFunc("GET /ui/tasks/{id}/detail", s.handleTaskDetailPartial)
-	mux.HandleFunc("GET /ui/tasks/{id}/logs", s.handleTaskLogs)
-	mux.HandleFunc("GET /ui/tasks/{id}/children", s.handleTaskChildren)
-	mux.HandleFunc("GET /ui/events", s.handleEvents)
-	mux.HandleFunc("GET /ui/events/list", s.handleEventList)
-	mux.HandleFunc("GET /ui/events/{id}", s.handleEventDetail)
+	// React UI (SPA with client-side routing)
+	mux.Handle("/", WebUI())
 
 	return mux
 }
