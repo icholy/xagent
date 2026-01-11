@@ -61,3 +61,34 @@ func TestGitHubPullRequestReviewComment(t *testing.T) {
 		},
 	})
 }
+
+func TestGitHubPullRequestReviewSubmitted(t *testing.T) {
+	req := loadGithubWebhook(t, "pr_review_submitted.json")
+
+	publisher := &PublisherMock{
+		PublishFunc: func(event *webhook.Event) error {
+			return nil
+		},
+	}
+
+	handler := webhook.NewHandler(&webhook.Config{
+		Publisher: publisher,
+		NoVerify:  true,
+	})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, rec.Code, http.StatusOK)
+	assert.DeepEqual(t, publisher.PublishCalls(), []struct {
+		Event *webhook.Event
+	}{
+		{
+			Event: &webhook.Event{
+				URL:         "https://github.com/icholy/xagent/pull/142",
+				Description: "A review was submitted on a pull request",
+				Data:        "xagent: please address the review comments",
+			},
+		},
+	})
+}
