@@ -117,7 +117,7 @@ data "archive_file" "webhooks_lambda" {
   type        = "zip"
   source_dir  = "${path.module}/../lambda"
   output_path = "${path.module}/builds/webhooks-lambda.zip"
-  excludes    = ["go.sum", "Makefile", "README.md", ".gitignore", "webhooks"]
+  excludes    = []
 }
 
 # Webhooks Lambda function
