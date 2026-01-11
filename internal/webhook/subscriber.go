@@ -3,7 +3,6 @@ package webhook
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -106,15 +105,4 @@ type FuncHandler func(ctx context.Context, event *Event) error
 // HandleEvent calls the underlying function.
 func (f FuncHandler) HandleEvent(ctx context.Context, event *Event) error {
 	return f(ctx, event)
-}
-
-// ValidateEvent checks if an event has the required fields.
-func ValidateEvent(event *Event) error {
-	if event.Description == "" {
-		return fmt.Errorf("event description is required")
-	}
-	if event.URL == "" {
-		return fmt.Errorf("event URL is required")
-	}
-	return nil
 }

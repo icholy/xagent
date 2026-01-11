@@ -97,12 +97,6 @@ type xagentEventHandler struct {
 }
 
 func (h *xagentEventHandler) HandleEvent(ctx context.Context, event *webhook.Event) error {
-	content := webhook.ParseCommand(event.Description)
-	if content == "" {
-		slog.Warn("unknown command prefix", "description", event.Description)
-		return nil
-	}
-
 	eventResp, err := h.client.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: event.Description,
 		Data:        event.Data,
