@@ -21,8 +21,6 @@ func main() {
 			command.ContainersCommand,
 			command.WorkspacesCommand,
 			command.McpCommand,
-			command.GithubCommand,
-			command.JiraCommand,
 			command.SubscribeCommand,
 			command.ShellCommand,
 			command.PruneCommand,
