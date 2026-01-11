@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@connectrpc/connect-query'
 import { createTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { Button } from '@/components/ui/button'
@@ -43,12 +43,6 @@ function NewTaskPage() {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
-      <div className="mb-6">
-        <Link to="/tasks" className="text-primary hover:underline">
-          &larr; Back to Tasks
-        </Link>
-      </div>
-
       <h1 className="text-2xl font-bold mb-6">Create New Task</h1>
 
       <Card>
