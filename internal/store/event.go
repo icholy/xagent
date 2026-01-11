@@ -47,11 +47,12 @@ func (r *EventRepository) Get(id int64) (*Event, error) {
 	return &event, nil
 }
 
-func (r *EventRepository) List() ([]*Event, error) {
+func (r *EventRepository) List(limit int) ([]*Event, error) {
 	rows, err := r.db.Query(`
 		SELECT id, description, data, url, created_at
 		FROM events ORDER BY created_at DESC
-	`)
+		LIMIT ?
+	`, limit)
 	if err != nil {
 		return nil, err
 	}

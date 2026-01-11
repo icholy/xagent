@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -76,7 +77,7 @@ func TestListEvents(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Act
+	// Act - uses default limit (100)
 	resp, err := srv.ListEvents(ctx, &xagentv1.ListEventsRequest{})
 
 	// Assert
@@ -85,6 +86,33 @@ func TestListEvents(t *testing.T) {
 	// Events are ordered by created_at DESC (newest first)
 	assert.Equal(t, resp.Events[0].Description, "Event 2")
 	assert.Equal(t, resp.Events[1].Description, "Event 1")
+}
+
+func TestListEventsWithLimit(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	ctx := context.Background()
+
+	// Create 5 events
+	for i := range 5 {
+		_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+			Description: fmt.Sprintf("Event %d", i+1),
+			Data:        `{}`,
+		})
+		assert.NilError(t, err)
+	}
+
+	// Act - Get only 2 most recent events
+	resp, err := srv.ListEvents(ctx, &xagentv1.ListEventsRequest{
+		Limit: 2,
+	})
+	assert.NilError(t, err)
+
+	// Assert
+	assert.Equal(t, len(resp.Events), 2)
+	// Events are ordered by created_at DESC (newest first)
+	assert.Equal(t, resp.Events[0].Description, "Event 5")
+	assert.Equal(t, resp.Events[1].Description, "Event 4")
 }
 
 func TestDeleteEvent(t *testing.T) {

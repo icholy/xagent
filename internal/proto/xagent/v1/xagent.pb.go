@@ -1608,6 +1608,7 @@ func (x *Event) GetCreatedAt() *timestamppb.Timestamp {
 
 type ListEventsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"` // Max events to return (default: 100, max: 100)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1640,6 +1641,13 @@ func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListEventsRequest) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ListEventsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
 }
 
 type ListEventsResponse struct {
@@ -2502,8 +2510,9 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04data\x18\x03 \x01(\tR\x04data\x12\x10\n" +
 	"\x03url\x18\x04 \x01(\tR\x03url\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x13\n" +
-	"\x11ListEventsRequest\">\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\")\n" +
+	"\x11ListEventsRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\">\n" +
 	"\x12ListEventsResponse\x12(\n" +
 	"\x06events\x18\x01 \x03(\v2\x10.xagent.v1.EventR\x06events\"\\\n" +
 	"\x12CreateEventRequest\x12 \n" +

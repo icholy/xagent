@@ -1,7 +1,9 @@
 package server
 
 import (
+	"cmp"
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -305,8 +307,14 @@ func linkToProto(l *store.Link) *xagentv1.TaskLink {
 	}
 }
 
+const maxLimit = 100
+
 func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
-	events, err := s.events.List()
+	limit := cmp.Or(int(req.Limit), maxLimit)
+	if limit < 0 || limit > maxLimit {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be at most %d", maxLimit))
+	}
+	events, err := s.events.List(limit)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
