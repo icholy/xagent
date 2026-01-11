@@ -1,5 +1,7 @@
 package webhook
 
+//go:generate go tool moq -pkg webhook_test -out publisher_moq_test.go . Publisher
+
 import (
 	"context"
 	"crypto/hmac"
@@ -61,6 +63,7 @@ type Config struct {
 	JiraSecret   string
 	JiraBaseURL  string
 	Publisher    Publisher
+	NoVerify     bool
 }
 
 // Handler is an http.Handler that processes GitHub and Jira webhooks.
@@ -109,8 +112,7 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 
 	if event == nil {
 		slog.Debug("ignoring GitHub event type", "event_type", eventType)
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ignored"})
+		fmt.Fprintf(w, "ignored GitHub event type: %s", eventType)
 		return
 	}
 
@@ -121,8 +123,7 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("GitHub event published", "url", event.URL)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "processed"})
+	fmt.Fprintf(w, "processed GitHub event: %s", event.URL)
 }
 
 func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
@@ -151,8 +152,7 @@ func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
 
 	if event == nil {
 		slog.Debug("ignoring Jira event type", "event_type", webhookEvent.WebhookEvent)
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ignored"})
+		fmt.Fprintf(w, "ignored Jira event type: %s", webhookEvent.WebhookEvent)
 		return
 	}
 
@@ -163,11 +163,13 @@ func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("Jira event published", "url", event.URL)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "processed"})
+	fmt.Fprintf(w, "processed Jira event: %s", event.URL)
 }
 
 func (h *Handler) verifyGitHubSignature(payload []byte, signature string) bool {
+	if h.config.NoVerify {
+		return true
+	}
 	if !strings.HasPrefix(signature, "sha256=") {
 		return false
 	}
@@ -181,6 +183,9 @@ func (h *Handler) verifyGitHubSignature(payload []byte, signature string) bool {
 }
 
 func (h *Handler) verifyJiraSignature(payload []byte, signature string) bool {
+	if h.config.NoVerify {
+		return true
+	}
 	mac := hmac.New(sha256.New, []byte(h.config.JiraSecret))
 	mac.Write(payload)
 	expectedMAC := base64.StdEncoding.EncodeToString(mac.Sum(nil))
