@@ -55,6 +55,16 @@ function NewTaskPage() {
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
+              <Label htmlFor="name">Name (optional)</Label>
+              <Input
+                id="name"
+                placeholder="Enter task name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="workspace">Workspace</Label>
               <Input
                 id="workspace"
@@ -66,16 +76,6 @@ function NewTaskPage() {
               <p className="text-sm text-muted-foreground">
                 The workspace defines the container configuration for the task
               </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="name">Name (optional)</Label>
-              <Input
-                id="name"
-                placeholder="Enter task name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
             </div>
 
             <div className="space-y-2">
