@@ -40,5 +40,5 @@ func main() {
 		Publisher:    publisher,
 	})
 
-	lambda.Start(httpadapter.New(handler).ProxyWithContext)
+	lambda.Start(httpadapter.NewV2(handler).ProxyWithContext)
 }
