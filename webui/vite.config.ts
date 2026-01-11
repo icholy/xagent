@@ -12,4 +12,13 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      // Proxy Connect RPC requests to the backend server
+      "/xagent.v1.XAgentService": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
+  },
 })
