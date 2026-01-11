@@ -13,15 +13,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { Switch } from '@/components/ui/switch'
+import { RelativeTime } from '@/components/ui/relative-time'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { Duration } from '@icholy/duration'
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
@@ -150,29 +145,3 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function RelativeTime({ date }: { date: Date }) {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const duration = new Duration(diff)
-
-  const relativeText = diff < 1000 ? 'just now' : `${duration.toString()} ago`
-  const absoluteText = date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-
-  return (
-    <Tooltip>
-      <TooltipTrigger className="cursor-default">
-        {relativeText}
-      </TooltipTrigger>
-      <TooltipContent>
-        {absoluteText}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
