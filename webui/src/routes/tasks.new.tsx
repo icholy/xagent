@@ -6,12 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 
 export const Route = createFileRoute('/tasks/new')({
   component: NewTaskPage,
@@ -52,11 +47,10 @@ function NewTaskPage() {
         &larr; Back to Tasks
       </Link>
 
+      <h1 className="text-2xl font-bold">Create New Task</h1>
+
       <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Create New Task</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="workspace">Workspace</Label>
