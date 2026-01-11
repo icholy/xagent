@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -88,21 +88,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("failed to read body: %v", err)
+		slog.Error("failed to read body", "error", err)
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
 
 	signature := r.Header.Get("X-Hub-Signature-256")
 	if !h.verifyGitHubSignature(body, signature) {
-		log.Printf("invalid GitHub signature")
+		slog.Warn("invalid GitHub signature")
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 		return
 	}
 
 	var webhookEvent gitHubWebhookEvent
 	if err := json.Unmarshal(body, &webhookEvent); err != nil {
-		log.Printf("failed to parse GitHub webhook: %v", err)
+		slog.Error("failed to parse GitHub webhook", "error", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -111,39 +111,39 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 	event := h.extractGitHubEvent(&webhookEvent, eventType, string(body))
 
 	if event == nil {
-		log.Printf("ignoring GitHub event type: %s", eventType)
+		slog.Debug("ignoring GitHub event type", "event_type", eventType)
 		fmt.Fprintf(w, "ignored GitHub event type: %s", eventType)
 		return
 	}
 
 	if err := h.config.Publisher.Publish(event); err != nil {
-		log.Printf("failed to publish event: %v", err)
+		slog.Error("failed to publish event", "error", err)
 		http.Error(w, "Failed to publish event", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("GitHub event published: %s", event.URL)
+	slog.Info("GitHub event published", "url", event.URL)
 	fmt.Fprintf(w, "processed GitHub event: %s", event.URL)
 }
 
 func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("failed to read body: %v", err)
+		slog.Error("failed to read body", "error", err)
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
 
 	signature := r.Header.Get("X-Hub-Signature")
 	if signature != "" && !h.verifyJiraSignature(body, signature) {
-		log.Printf("invalid Jira signature")
+		slog.Warn("invalid Jira signature")
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 		return
 	}
 
 	var webhookEvent jiraWebhookEvent
 	if err := json.Unmarshal(body, &webhookEvent); err != nil {
-		log.Printf("failed to parse Jira webhook: %v", err)
+		slog.Error("failed to parse Jira webhook", "error", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -151,18 +151,18 @@ func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
 	event := h.extractJiraEvent(&webhookEvent, string(body))
 
 	if event == nil {
-		log.Printf("ignoring Jira event type: %s", webhookEvent.WebhookEvent)
+		slog.Debug("ignoring Jira event type", "event_type", webhookEvent.WebhookEvent)
 		fmt.Fprintf(w, "ignored Jira event type: %s", webhookEvent.WebhookEvent)
 		return
 	}
 
 	if err := h.config.Publisher.Publish(event); err != nil {
-		log.Printf("failed to publish event: %v", err)
+		slog.Error("failed to publish event", "error", err)
 		http.Error(w, "Failed to publish event", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("Jira event published: %s", event.URL)
+	slog.Info("Jira event published", "url", event.URL)
 	fmt.Fprintf(w, "processed Jira event: %s", event.URL)
 }
 

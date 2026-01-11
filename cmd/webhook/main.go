@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -15,7 +15,8 @@ import (
 func mustEnv(name string) string {
 	value := os.Getenv(name)
 	if value == "" {
-		log.Fatalf("%s environment variable is required", name)
+		slog.Error("environment variable is required", "name", name)
+		os.Exit(1)
 	}
 	return value
 }
@@ -25,7 +26,8 @@ func main() {
 
 	awsCfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		log.Fatalf("failed to load AWS config: %v", err)
+		slog.Error("failed to load AWS config", "error", err)
+		os.Exit(1)
 	}
 
 	publisher := &webhook.SQSPublisher{
