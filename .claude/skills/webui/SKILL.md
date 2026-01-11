@@ -13,6 +13,7 @@ A modern React-based UI is being developed in `webui/` to replace the Go templat
 - **Vite** for development and build tooling
 - **TanStack Router** for file-based routing
 - **TanStack Query** for server state management
+- **Connect-Query** for type-safe API calls (see `grpc` skill for details)
 - **Tailwind CSS v4** for styling
 - **shadcn/ui** for component library
 
@@ -80,69 +81,63 @@ navigate({ to: '/tasks/$id', params: { id: '123' } })
 
 **Type safety** - The router instance is registered via module augmentation in `main.tsx`, enabling full TypeScript autocomplete for routes, params, and navigation throughout the app.
 
-## State Management (TanStack Query)
+## State Management (TanStack Query + Connect-Query)
 
-**Use TanStack Query for ALL server state** - Tasks, logs, events, and any data from the API should be fetched with TanStack Query. Do NOT use `useState` + `useEffect` for API calls.
+**Use Connect-Query for ALL API calls** - The webui uses `@connectrpc/connect-query` which provides type-safe hooks generated from protobuf definitions. Do NOT use raw `fetch` or manual `useQuery` with fetch.
 
-**QueryClient is available everywhere** - The QueryClient is provided via router context and available in all routes and components.
+**Generated code** - Run `npm run generate` in the `webui/` directory to regenerate TypeScript types and hooks from proto definitions. Generated files are in `src/gen/` (gitignored).
 
-**Fetching data**:
+**Fetching data with useQuery**:
 ```tsx
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from '@connectrpc/connect-query'
+import { listTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 
 function TaskList() {
-  const { data: tasks, isLoading, error } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: async () => {
-      const res = await fetch('/xagent.v1.XAgentService/ListTasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      return res.json()
-    },
-    refetchInterval: 5000, // Auto-refresh every 5 seconds
+  const { data, isLoading, error } = useQuery(listTasks, {
+    statuses: ['pending', 'running'],
   })
 
   if (isLoading) return <div>Loading...</div>
   if (error) return <div>Error: {error.message}</div>
 
-  return <div>{/* Render tasks */}</div>
+  return (
+    <ul>
+      {data?.tasks.map(task => (
+        <li key={String(task.id)}>{task.name}</li>
+      ))}
+    </ul>
+  )
 }
 ```
 
-**Mutations** (create/update/delete):
+**Mutations with useMutation**:
 ```tsx
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@connectrpc/connect-query'
+import { createTask, listTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 
 function CreateTaskButton() {
   const queryClient = useQueryClient()
 
-  const mutation = useMutation({
-    mutationFn: async (taskData) => {
-      const res = await fetch('/xagent.v1.XAgentService/CreateTask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskData),
-      })
-      return res.json()
-    },
+  const mutation = useMutation(createTask, {
     onSuccess: () => {
-      // Invalidate and refetch tasks list
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: [listTasks.service.typeName] })
     },
   })
 
-  return <button onClick={() => mutation.mutate({...})}>Create</button>
+  return (
+    <button onClick={() => mutation.mutate({ name: 'New Task', workspace: 'default' })}>
+      Create
+    </button>
+  )
 }
 ```
 
 **Benefits**:
+- Full type safety from proto → TypeScript → React
 - Automatic caching and background updates
-- No more polling issues (updates without losing UI state)
 - Built-in loading and error states
 - Request deduplication
-- Optimistic updates
+- See the `grpc` skill for complete documentation on TypeScript client usage
 
 ## UI Development Guidelines
 
