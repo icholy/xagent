@@ -17,6 +17,20 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: Create empty webui directory for go:embed
+        run: mkdir -p internal/server/webui && touch internal/server/webui/.gitkeep
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v ./...
+
+  webui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -27,9 +41,3 @@ jobs:
       - name: Build webui
         run: npm ci && npm run build
         working-directory: webui
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run tests
-        run: go test -v ./...
