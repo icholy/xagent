@@ -17,8 +17,16 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Create empty webui directory for go:embed
-        run: mkdir -p internal/server/webui && touch internal/server/webui/.gitkeep
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Build webui
+        run: npm ci && npm run build
+        working-directory: webui
 
       - name: Download dependencies
         run: go mod download
