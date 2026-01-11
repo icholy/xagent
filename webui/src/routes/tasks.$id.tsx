@@ -19,12 +19,6 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/ui/relative-time'
 
@@ -142,60 +136,59 @@ function TaskDetail() {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
-      <Link to="/tasks" className="text-primary hover:underline">
-        &larr; Back to Tasks
-      </Link>
+      <div className="mb-6">
+        <Link to="/tasks" className="text-primary hover:underline">
+          &larr; Back to Tasks
+        </Link>
+      </div>
 
-      {/* Task Header */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-start">
-            <div>
-              <CardTitle className="text-2xl">
-                {task.name || `Task ${id}`}
-              </CardTitle>
-              <div className="text-muted-foreground mt-1">
-                Workspace: {task.workspace}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              {canCancel && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleUpdateStatus('cancelled')}
-                  disabled={updateMutation.isPending}
-                >
-                  Cancel
-                </Button>
-              )}
-              {canRestart && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleUpdateStatus('restarting')}
-                  disabled={updateMutation.isPending}
-                >
-                  Restart
-                </Button>
-              )}
-              {canArchive && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleUpdateStatus('archived')}
-                  disabled={updateMutation.isPending}
-                >
-                  Archive
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {task.parent !== 0n && (
-            <div>
-              <strong>Parent:</strong>{' '}
+      <div className="flex justify-between items-start mb-6">
+        <h1 className="text-2xl font-bold">{task.name || `Task ${id}`}</h1>
+        <div className="flex gap-2">
+          {canCancel && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleUpdateStatus('cancelled')}
+              disabled={updateMutation.isPending}
+            >
+              Cancel
+            </Button>
+          )}
+          {canRestart && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleUpdateStatus('restarting')}
+              disabled={updateMutation.isPending}
+            >
+              Restart
+            </Button>
+          )}
+          {canArchive && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleUpdateStatus('archived')}
+              disabled={updateMutation.isPending}
+            >
+              Archive
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Task Details */}
+      <div className="rounded-lg border p-6 space-y-4">
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">Workspace</h2>
+          <p className="mt-1">{task.workspace}</p>
+        </div>
+
+        {task.parent !== 0n && (
+          <div>
+            <h2 className="text-sm font-medium text-muted-foreground">Parent</h2>
+            <p className="mt-1">
               <Link
                 to="/tasks/$id"
                 params={{ id: String(task.parent) }}
@@ -203,111 +196,98 @@ function TaskDetail() {
               >
                 Task {String(task.parent)}
               </Link>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <strong>Status:</strong>
+            </p>
+          </div>
+        )}
+
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">Status</h2>
+          <p className="mt-1">
             <StatusBadge status={task.status} />
-          </div>
-          <div className="flex items-center gap-2">
-            <strong>Created:</strong>{' '}
+          </p>
+        </div>
+
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">Created</h2>
+          <p className="mt-1">
             {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
-          </div>
-          {task.updatedAt && (
-            <div className="flex items-center gap-2">
-              <strong>Updated:</strong>{' '}
+          </p>
+        </div>
+
+        {task.updatedAt && (
+          <div>
+            <h2 className="text-sm font-medium text-muted-foreground">Updated</h2>
+            <p className="mt-1">
               <RelativeTime date={timestampDate(task.updatedAt)} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Instructions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Instructions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {task.instructions.length === 0 ? (
-            <div className="text-muted-foreground">No instructions</div>
-          ) : (
-            <div className="space-y-3">
-              {task.instructions.map((inst, index) => (
-                <InstructionCard key={index} text={inst.text} url={inst.url} />
-              ))}
+      <div className="rounded-lg border p-6">
+        <h2 className="text-lg font-semibold mb-4">Instructions</h2>
+        {task.instructions.length === 0 ? (
+          <p className="text-muted-foreground">No instructions</p>
+        ) : (
+          <div className="space-y-3">
+            {task.instructions.map((inst, index) => (
+              <InstructionCard key={index} text={inst.text} url={inst.url} />
+            ))}
+          </div>
+        )}
+        {!isArchived && (
+          <form onSubmit={handleAddInstruction} className="space-y-4 pt-4 mt-4 border-t">
+            <Textarea
+              placeholder="Enter a new instruction..."
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              required
+            />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={updateMutation.isPending}>
+                Add Instruction
+              </Button>
             </div>
-          )}
-          {!isArchived && (
-            <form onSubmit={handleAddInstruction} className="space-y-4 pt-4 border-t">
-              <Textarea
-                placeholder="Enter a new instruction..."
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                required
-              />
-              <div className="flex justify-end">
-                <Button type="submit" disabled={updateMutation.isPending}>
-                  Add Instruction
-                </Button>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+          </form>
+        )}
+      </div>
 
       {/* Links */}
       {links.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Links</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LinksSection links={links} />
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border p-6">
+          <h2 className="text-lg font-semibold mb-4">Links</h2>
+          <LinksSection links={links} />
+        </div>
       )}
 
       {/* Child Tasks */}
       {children.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Child Tasks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ChildTasksTable tasks={children} />
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border p-6">
+          <h2 className="text-lg font-semibold mb-4">Child Tasks</h2>
+          <ChildTasksTable tasks={children} />
+        </div>
       )}
 
       {/* Events */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Events</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {events.length === 0 ? (
-            <div className="text-muted-foreground">
-              No events linked to this task.
-            </div>
-          ) : (
-            <EventsTable
-              events={events}
-              onUnlink={handleUnlinkEvent}
-              isUnlinking={removeEventMutation.isPending}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <div className="rounded-lg border p-6">
+        <h2 className="text-lg font-semibold mb-4">Events</h2>
+        {events.length === 0 ? (
+          <p className="text-muted-foreground">No events linked to this task.</p>
+        ) : (
+          <EventsTable
+            events={events}
+            onUnlink={handleUnlinkEvent}
+            isUnlinking={removeEventMutation.isPending}
+          />
+        )}
+      </div>
 
       {/* Logs */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Logs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LogsTable logs={logs} />
-        </CardContent>
-      </Card>
+      <div className="rounded-lg border p-6">
+        <h2 className="text-lg font-semibold mb-4">Logs</h2>
+        <LogsTable logs={logs} />
+      </div>
     </div>
   )
 }
