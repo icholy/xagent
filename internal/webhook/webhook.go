@@ -182,9 +182,13 @@ func (h *Handler) extractGitHubEvent(webhookEvent any, rawBody string) *Event {
 			event.Comment.Body != nil && event.Issue.HTMLURL != nil {
 			body := strings.TrimSpace(*event.Comment.Body)
 			if strings.HasPrefix(body, "xagent:") {
+				description := "A comment was made on an issue"
+				if event.Issue.IsPullRequest() {
+					description = "A comment was made on a pull request"
+				}
 				return &Event{
-					Description: body,
-					Data:        rawBody,
+					Description: description,
+					Data:        body,
 					URL:         *event.Issue.HTMLURL,
 				}
 			}
@@ -196,8 +200,8 @@ func (h *Handler) extractGitHubEvent(webhookEvent any, rawBody string) *Event {
 			body := strings.TrimSpace(*event.Comment.Body)
 			if strings.HasPrefix(body, "xagent:") {
 				return &Event{
-					Description: body,
-					Data:        rawBody,
+					Description: "A review comment was made on a pull request",
+					Data:        body,
 					URL:         *event.PullRequest.HTMLURL,
 				}
 			}
@@ -231,8 +235,8 @@ func (h *Handler) extractJiraEvent(event *jiraWebhookEvent, rawBody string) *Eve
 	issueURL := fmt.Sprintf("%s/browse/%s", strings.TrimSuffix(h.config.JiraBaseURL, "/"), event.Issue.Key)
 
 	return &Event{
-		Description: body,
-		Data:        rawBody,
+		Description: "A comment was made on a Jira issue",
+		Data:        body,
 		URL:         issueURL,
 	}
 }
