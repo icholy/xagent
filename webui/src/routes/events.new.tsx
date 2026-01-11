@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@connectrpc/connect-query'
 import { createEvent } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { Card, CardContent } from '@/components/ui/card'
@@ -41,12 +41,6 @@ function CreateEventPage() {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
-      <div className="mb-6">
-        <Link to="/events" className="text-primary hover:underline">
-          &larr; Back to Events
-        </Link>
-      </div>
-
       <h1 className="text-2xl font-bold mb-6">Create Event</h1>
 
       <Card>

@@ -136,12 +136,6 @@ function TaskDetail() {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
-      <div className="mb-6">
-        <Link to="/tasks" className="text-primary hover:underline">
-          &larr; Back to Tasks
-        </Link>
-      </div>
-
       <div className="flex justify-between items-start mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
         <div className="flex gap-2">

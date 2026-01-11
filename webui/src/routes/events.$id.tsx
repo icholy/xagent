@@ -54,12 +54,6 @@ function EventDetail() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <div className="mb-6">
-        <Link to="/events" className="text-primary hover:underline">
-          &larr; Back to Events
-        </Link>
-      </div>
-
       <h1 className="text-2xl font-bold mb-6">Event {String(event.id)}</h1>
 
       <div className="space-y-6">
