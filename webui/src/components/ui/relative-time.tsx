@@ -5,16 +5,20 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
+function formatDuration(duration: Duration): string {
+  const truncatedDuration = duration.isGreaterThan('1h')
+    ? duration.truncate('1m')
+    : duration.truncate('1s')
+  return truncatedDuration.toString()
+}
+
 export function RelativeTime({ date }: { date: Date }) {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const duration = new Duration(diff)
 
-  const truncatedDuration = duration.isGreaterThan('1h')
-    ? duration.truncate('1m')
-    : duration.truncate('1s')
   const relativeText =
-    diff < 1000 ? 'just now' : `${truncatedDuration.toString()} ago`
+    diff < 1000 ? 'just now' : `${formatDuration(duration)} ago`
   const absoluteText = date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
