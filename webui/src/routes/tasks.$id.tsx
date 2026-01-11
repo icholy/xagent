@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/ui/relative-time'
 import { Plus } from 'lucide-react'
+import Markdown from 'react-markdown'
 
 export const Route = createFileRoute('/tasks/$id')({
   component: TaskDetail,
@@ -432,38 +433,74 @@ function EventsTable({
   )
 }
 
+function LlmLogCard({ content }: { content: string }) {
+  return (
+    <div className="bg-muted/50 border rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Badge
+          variant="outline"
+          className={logTypeStyles['llm']}
+        >
+          llm
+        </Badge>
+      </div>
+      <div className="prose prose-sm max-w-none break-words text-foreground">
+        <Markdown>{content}</Markdown>
+      </div>
+    </div>
+  )
+}
+
 function LogsTable({ logs }: { logs: LogEntry[] }) {
   if (logs.length === 0) {
     return <div className="text-muted-foreground">No logs yet.</div>
   }
 
+  // Separate LLM logs from other logs
+  const llmLogs = logs.filter((log) => log.type === 'llm')
+  const otherLogs = logs.filter((log) => log.type !== 'llm')
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Type</TableHead>
-          <TableHead>Content</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {logs.map((log, index) => (
-          <TableRow key={index}>
-            <TableCell>
-              <Badge
-                variant="outline"
-                className={
-                  logTypeStyles[log.type] ?? 'bg-gray-100 text-gray-600'
-                }
-              >
-                {log.type}
-              </Badge>
-            </TableCell>
-            <TableCell className="whitespace-pre-wrap break-words">
-              {log.content}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div className="space-y-4">
+      {/* LLM logs displayed as cards */}
+      {llmLogs.length > 0 && (
+        <div className="space-y-3">
+          {llmLogs.map((log, index) => (
+            <LlmLogCard key={`llm-${index}`} content={log.content} />
+          ))}
+        </div>
+      )}
+
+      {/* Other logs displayed in a table */}
+      {otherLogs.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Type</TableHead>
+              <TableHead>Content</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {otherLogs.map((log, index) => (
+              <TableRow key={index}>
+                <TableCell>
+                  <Badge
+                    variant="outline"
+                    className={
+                      logTypeStyles[log.type] ?? 'bg-gray-100 text-gray-600'
+                    }
+                  >
+                    {log.type}
+                  </Badge>
+                </TableCell>
+                <TableCell className="whitespace-pre-wrap break-words">
+                  {log.content}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </div>
   )
 }
