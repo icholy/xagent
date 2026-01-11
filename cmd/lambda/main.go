@@ -12,28 +12,16 @@ import (
 	"github.com/icholy/xagent/internal/webhook"
 )
 
+func mustEnv(name string) string {
+	value := os.Getenv(name)
+	if value == "" {
+		log.Fatalf("%s environment variable is required", name)
+	}
+	return value
+}
+
 func main() {
 	ctx := context.Background()
-
-	queueURL := os.Getenv("SQS_QUEUE_URL")
-	if queueURL == "" {
-		log.Fatal("SQS_QUEUE_URL environment variable is required")
-	}
-
-	githubSecret := os.Getenv("GITHUB_WEBHOOK_SECRET")
-	if githubSecret == "" {
-		log.Fatal("GITHUB_WEBHOOK_SECRET environment variable is required")
-	}
-
-	jiraSecret := os.Getenv("JIRA_WEBHOOK_SECRET")
-	if jiraSecret == "" {
-		log.Fatal("JIRA_WEBHOOK_SECRET environment variable is required")
-	}
-
-	jiraBaseURL := os.Getenv("JIRA_BASE_URL")
-	if jiraBaseURL == "" {
-		log.Fatal("JIRA_BASE_URL environment variable is required")
-	}
 
 	awsCfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -42,13 +30,13 @@ func main() {
 
 	publisher := &webhook.SQSPublisher{
 		Client:   sqs.NewFromConfig(awsCfg),
-		QueueURL: queueURL,
+		QueueURL: mustEnv("SQS_QUEUE_URL"),
 	}
 
 	handler := webhook.NewHandler(&webhook.Config{
-		GitHubSecret: githubSecret,
-		JiraSecret:   jiraSecret,
-		JiraBaseURL:  jiraBaseURL,
+		GitHubSecret: mustEnv("GITHUB_WEBHOOK_SECRET"),
+		JiraSecret:   mustEnv("JIRA_WEBHOOK_SECRET"),
+		JiraBaseURL:  mustEnv("JIRA_BASE_URL"),
 		Publisher:    publisher,
 	})
 
