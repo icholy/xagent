@@ -36,17 +36,13 @@ function NewTaskPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!workspace.trim()) return
-
-    const instructions = instruction.trim()
-      ? [{ text: instruction.trim(), url: '' }]
-      : []
+    if (!workspace.trim() || !instruction.trim()) return
 
     await mutation.mutateAsync({
       name: name.trim(),
       workspace: workspace.trim(),
       parent: 0n,
-      instructions,
+      instructions: [{ text: instruction.trim(), url: '' }],
     })
   }
 
@@ -87,13 +83,14 @@ function NewTaskPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="instruction">Initial Instruction (optional)</Label>
+              <Label htmlFor="instruction">Initial Instruction</Label>
               <Textarea
                 id="instruction"
                 placeholder="Enter the initial instruction for the task..."
                 value={instruction}
                 onChange={(e) => setInstruction(e.target.value)}
                 rows={4}
+                required
               />
             </div>
 
