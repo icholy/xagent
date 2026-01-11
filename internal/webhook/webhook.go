@@ -7,7 +7,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/go-github/v68/github"
+	"github.com/icholy/xagent/internal/githubx"
 )
 
 // Event represents an xagent webhook event.
@@ -93,24 +93,22 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature := r.Header.Get("X-Hub-Signature-256")
-	if !h.verifyGitHubSignature(body, signature) {
-		slog.Warn("invalid GitHub signature")
-		http.Error(w, "Invalid signature", http.StatusUnauthorized)
-		return
+	var secret []byte
+	if !h.config.NoVerify {
+		secret = []byte(h.config.GitHubSecret)
 	}
 
-	var webhookEvent gitHubWebhookEvent
-	if err := json.Unmarshal(body, &webhookEvent); err != nil {
+	webhookEvent, err := githubx.ParseWebHook(body, r.Header, secret)
+	if err != nil {
 		slog.Error("failed to parse GitHub webhook", "error", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		http.Error(w, "Invalid webhook", http.StatusBadRequest)
 		return
 	}
 
-	eventType := r.Header.Get("X-GitHub-Event")
-	event := h.extractGitHubEvent(&webhookEvent, eventType, string(body))
+	event := h.extractGitHubEvent(webhookEvent, string(body))
 
 	if event == nil {
+		eventType := r.Header.Get("X-GitHub-Event")
 		slog.Debug("ignoring GitHub event type", "event_type", eventType)
 		fmt.Fprintf(w, "ignored GitHub event type: %s", eventType)
 		return
@@ -166,22 +164,6 @@ func (h *Handler) handleJira(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "processed Jira event: %s", event.URL)
 }
 
-func (h *Handler) verifyGitHubSignature(payload []byte, signature string) bool {
-	if h.config.NoVerify {
-		return true
-	}
-	if !strings.HasPrefix(signature, "sha256=") {
-		return false
-	}
-
-	expectedMAC := signature[7:]
-	mac := hmac.New(sha256.New, []byte(h.config.GitHubSecret))
-	mac.Write(payload)
-	actualMAC := hex.EncodeToString(mac.Sum(nil))
-
-	return hmac.Equal([]byte(actualMAC), []byte(expectedMAC))
-}
-
 func (h *Handler) verifyJiraSignature(payload []byte, signature string) bool {
 	if h.config.NoVerify {
 		return true
@@ -193,18 +175,9 @@ func (h *Handler) verifyJiraSignature(payload []byte, signature string) bool {
 	return hmac.Equal([]byte(expectedMAC), []byte(signature))
 }
 
-type gitHubWebhookEvent struct {
-	Action      *string              `json:"action"`
-	Issue       *github.Issue        `json:"issue"`
-	PullRequest *github.PullRequest  `json:"pull_request"`
-	Comment     *github.IssueComment `json:"comment"`
-	Repository  *github.Repository   `json:"repository"`
-	Sender      *github.User         `json:"sender"`
-}
-
-func (h *Handler) extractGitHubEvent(event *gitHubWebhookEvent, eventType, rawBody string) *Event {
-	switch eventType {
-	case "issue_comment":
+func (h *Handler) extractGitHubEvent(webhookEvent any, rawBody string) *Event {
+	switch event := webhookEvent.(type) {
+	case *github.IssueCommentEvent:
 		if event.Comment != nil && event.Issue != nil &&
 			event.Comment.Body != nil && event.Issue.HTMLURL != nil {
 			body := strings.TrimSpace(*event.Comment.Body)
@@ -217,7 +190,7 @@ func (h *Handler) extractGitHubEvent(event *gitHubWebhookEvent, eventType, rawBo
 			}
 		}
 
-	case "pull_request_review_comment", "pull_request":
+	case *github.PullRequestReviewCommentEvent:
 		if event.Comment != nil && event.PullRequest != nil &&
 			event.Comment.Body != nil && event.PullRequest.HTMLURL != nil {
 			body := strings.TrimSpace(*event.Comment.Body)
