@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 mise run build          # Build main binary + prebuilt binaries for linux amd64/arm64
 mise run generate       # Generate protobuf code (go tool buf generate)
 mise run wipe           # Delete the database
-go build                # Build main binary only
+go build -o xagent ./cmd/xagent  # Build main binary only
 ```
 
 ## Architecture

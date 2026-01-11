@@ -6,10 +6,10 @@ age = "latest"
 [tasks.build]
 description = "Build xagent binaries for all architectures and lambda"
 run = [
-	"go build",
+	"go build -o xagent ./cmd/xagent",
 	"mkdir -p prebuilt",
-	"CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 .",
-	"CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o prebuilt/xagent-linux-arm64 .",
+	"CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 ./cmd/xagent",
+	"CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o prebuilt/xagent-linux-arm64 ./cmd/xagent",
 	"mkdir -p lambda",
 	"CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o lambda/bootstrap ./cmd/lambda"
 ]
