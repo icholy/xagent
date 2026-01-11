@@ -43,7 +43,7 @@
 				"user_view_type": "public",
 				"site_admin": false
 			},
-			"body": "xagent task: test comment",
+			"body": "xagent: test comment",
 			"created_at": "2026-01-11T17:50:56Z",
 			"updated_at": "2026-01-11T17:50:56Z",
 			"html_url": "https://github.com/icholy/xagent/pull/83#discussion_r2679976429",

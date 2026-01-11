@@ -53,6 +53,6 @@ func TestGitHubPullRequestReviewComment(t *testing.T) {
 	assert.Equal(t, len(publisher.PublishCalls()), 1)
 	assert.DeepEqual(t, publisher.PublishCalls()[0].Event, &webhook.Event{
 		URL:         "https://github.com/icholy/xagent/pull/83",
-		Description: "xagent task: test comment",
+		Description: "xagent: test comment",
 	}, cmpopts.IgnoreFields(webhook.Event{}, "Data"))
 }

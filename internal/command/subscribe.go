@@ -49,12 +49,6 @@ var SubscribeCommand = &cli.Command{
 			Value:   "http://localhost:8080",
 		},
 		&cli.StringFlag{
-			Name:     "workspace",
-			Aliases:  []string{"ws"},
-			Usage:    "Workspace for new tasks",
-			Required: true,
-		},
-		&cli.StringFlag{
 			Name:    "region",
 			Aliases: []string{"r"},
 			Usage:   "AWS region",
@@ -67,7 +61,6 @@ var SubscribeCommand = &cli.Command{
 		waitTime := cmd.Duration("wait-time")
 		pollInterval := cmd.Duration("poll-interval")
 		serverURL := cmd.String("server")
-		workspace := cmd.String("workspace")
 		region := cmd.String("region")
 
 		var cfg config.LoadOptionsFunc
@@ -83,8 +76,7 @@ var SubscribeCommand = &cli.Command{
 		xagent := xagentclient.New(serverURL)
 
 		handler := &xagentEventHandler{
-			client:    xagent,
-			workspace: workspace,
+			client: xagent,
 		}
 
 		subscriber := webhook.NewSQSSubscriber(&webhook.SQSSubscriberConfig{
@@ -101,66 +93,37 @@ var SubscribeCommand = &cli.Command{
 }
 
 type xagentEventHandler struct {
-	client    xagentclient.Client
-	workspace string
+	client xagentclient.Client
 }
 
 func (h *xagentEventHandler) HandleEvent(ctx context.Context, event *webhook.Event) error {
-	cmd, _ := webhook.ParseCommand(event.Description)
-
-	switch cmd {
-	case "task":
-		eventResp, err := h.client.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-			Description: event.Description,
-			Data:        event.Data,
-			Url:         event.URL,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create event: %w", err)
-		}
-
-		processResp, err := h.client.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
-			Id: eventResp.Event.Id,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to process event: %w", err)
-		}
-
-		if len(processResp.TaskIds) == 0 {
-			slog.Warn("no tasks linked to URL", "url", event.URL)
-			return nil
-		}
-
-		slog.Info("event processed", "event_id", eventResp.Event.Id, "task_ids", processResp.TaskIds)
-
-	case "new":
-		resp, err := h.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-			Workspace: h.workspace,
-			Instructions: []*xagentv1.Instruction{
-				{Text: event.Description, Url: event.URL},
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create task: %w", err)
-		}
-
-		taskID := resp.Task.Id
-
-		_, err = h.client.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-			TaskId:    taskID,
-			Relevance: "Task initiated from this event",
-			Url:       event.URL,
-			Notify:    true,
-		})
-		if err != nil {
-			slog.Error("failed to create link", "error", err, "task_id", taskID)
-		}
-
-		slog.Info("task created", "task_id", taskID, "workspace", h.workspace)
-
-	default:
+	content := webhook.ParseCommand(event.Description)
+	if content == "" {
 		slog.Warn("unknown command prefix", "description", event.Description)
+		return nil
 	}
 
+	eventResp, err := h.client.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+		Description: event.Description,
+		Data:        event.Data,
+		Url:         event.URL,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create event: %w", err)
+	}
+
+	processResp, err := h.client.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
+		Id: eventResp.Event.Id,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to process event: %w", err)
+	}
+
+	if len(processResp.TaskIds) == 0 {
+		slog.Warn("no tasks linked to URL", "url", event.URL)
+		return nil
+	}
+
+	slog.Info("event processed", "event_id", eventResp.Event.Id, "task_ids", processResp.TaskIds)
 	return nil
 }

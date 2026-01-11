@@ -181,7 +181,7 @@ func (h *Handler) extractGitHubEvent(webhookEvent any, rawBody string) *Event {
 		if event.Comment != nil && event.Issue != nil &&
 			event.Comment.Body != nil && event.Issue.HTMLURL != nil {
 			body := strings.TrimSpace(*event.Comment.Body)
-			if strings.HasPrefix(body, "xagent task") || strings.HasPrefix(body, "xagent new") {
+			if strings.HasPrefix(body, "xagent:") {
 				return &Event{
 					Description: body,
 					Data:        rawBody,
@@ -194,7 +194,7 @@ func (h *Handler) extractGitHubEvent(webhookEvent any, rawBody string) *Event {
 		if event.Comment != nil && event.PullRequest != nil &&
 			event.Comment.Body != nil && event.PullRequest.HTMLURL != nil {
 			body := strings.TrimSpace(*event.Comment.Body)
-			if strings.HasPrefix(body, "xagent task") || strings.HasPrefix(body, "xagent new") {
+			if strings.HasPrefix(body, "xagent:") {
 				return &Event{
 					Description: body,
 					Data:        rawBody,
@@ -224,7 +224,7 @@ func (h *Handler) extractJiraEvent(event *jiraWebhookEvent, rawBody string) *Eve
 	}
 
 	body := strings.TrimSpace(event.Comment.Body)
-	if !strings.HasPrefix(body, "xagent task") && !strings.HasPrefix(body, "xagent new") {
+	if !strings.HasPrefix(body, "xagent:") {
 		return nil
 	}
 

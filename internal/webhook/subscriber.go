@@ -100,20 +100,14 @@ func (s *SQSSubscriber) Run(ctx context.Context) error {
 	}
 }
 
-// ParseCommand extracts the command type and content from an event description.
-// Returns ("task", content) for "xagent task ..." messages,
-// ("new", content) for "xagent new ..." messages,
-// or ("", "") for unknown commands.
-func ParseCommand(description string) (command, content string) {
+// ParseCommand extracts the content from an event description.
+// Returns the content after "xagent:" prefix if present, or empty string otherwise.
+func ParseCommand(description string) string {
 	body := strings.TrimSpace(description)
-	switch {
-	case strings.HasPrefix(body, "xagent task"):
-		return "task", strings.TrimSpace(strings.TrimPrefix(body, "xagent task"))
-	case strings.HasPrefix(body, "xagent new"):
-		return "new", strings.TrimSpace(strings.TrimPrefix(body, "xagent new"))
-	default:
-		return "", ""
+	if strings.HasPrefix(body, "xagent:") {
+		return strings.TrimSpace(strings.TrimPrefix(body, "xagent:"))
 	}
+	return ""
 }
 
 // LogOnlyHandler is an EventHandler that only logs events (useful for testing).
@@ -121,12 +115,12 @@ type LogOnlyHandler struct{}
 
 // HandleEvent logs the event without taking action.
 func (h *LogOnlyHandler) HandleEvent(ctx context.Context, event *Event) error {
-	cmd, content := ParseCommand(event.Description)
-	if cmd == "" {
+	content := ParseCommand(event.Description)
+	if content == "" {
 		slog.Warn("unknown command prefix", "description", event.Description)
 		return nil
 	}
-	slog.Info("received command", "command", cmd, "content", content, "url", event.URL)
+	slog.Info("received command", "content", content, "url", event.URL)
 	return nil
 }
 
