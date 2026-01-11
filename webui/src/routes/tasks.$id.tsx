@@ -421,39 +421,58 @@ function EventsTable({
         <TableRow>
           <TableHead>ID</TableHead>
           <TableHead>Description</TableHead>
-          <TableHead>URL</TableHead>
+          <TableHead>Data</TableHead>
+          <TableHead>Created</TableHead>
           <TableHead></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {events.map((event) => (
-          <TableRow key={String(event.id)}>
-            <TableCell>{String(event.id)}</TableCell>
-            <TableCell>{event.description}</TableCell>
-            <TableCell>
-              {event.url && (
-                <a
-                  href={event.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+        {events.map((event) => {
+          const dataContent = event.data || '-'
+          const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
+
+          return (
+            <TableRow key={String(event.id)}>
+              <TableCell>{String(event.id)}</TableCell>
+              <TableCell>
+                <Link
+                  to="/events/$id"
+                  params={{ id: String(event.id) }}
                   className="text-primary hover:underline"
                 >
-                  {event.url}
-                </a>
-              )}
-            </TableCell>
-            <TableCell>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => onUnlink(event.id)}
-                disabled={isUnlinking}
-              >
-                Remove
-              </Button>
-            </TableCell>
-          </TableRow>
-        ))}
+                  {event.description || '-'}
+                </Link>
+              </TableCell>
+              <TableCell className="max-w-xs truncate">
+                {event.url ? (
+                  <a
+                    href={event.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {truncatedData}
+                  </a>
+                ) : (
+                  truncatedData
+                )}
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onUnlink(event.id)}
+                  disabled={isUnlinking}
+                >
+                  Remove
+                </Button>
+              </TableCell>
+            </TableRow>
+          )
+        })}
       </TableBody>
     </Table>
   )
