@@ -2,4 +2,4 @@
 /data/xagent.db*
 /data/*.json
 /prebuilt/
-/lambda
+/webhook

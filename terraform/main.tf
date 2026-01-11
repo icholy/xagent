@@ -115,7 +115,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 # Build webhooks Lambda function
 data "archive_file" "webhooks_lambda" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda"
+  source_dir  = "${path.module}/../webhook"
   output_path = "${path.module}/builds/webhooks-lambda.zip"
   excludes    = []
 }
