@@ -17,10 +17,6 @@ terraform {
   }
 }
 
-provider "aws" {
-  region = var.aws_region
-}
-
 provider "sops" {}
 
 # Load secrets from SOPS encrypted file
@@ -28,27 +24,36 @@ data "sops_file" "secrets" {
   source_file = "${path.module}/secrets.yaml"
 }
 
+locals {
+  aws_region   = data.sops_file.secrets.data["aws_region"]
+  project_name = data.sops_file.secrets.data["project_name"]
+}
+
+provider "aws" {
+  region = local.aws_region
+}
+
 # SQS Queue for xagent events
 resource "aws_sqs_queue" "xagent_events" {
-  name                       = "${var.project_name}-events"
+  name                       = "${local.project_name}-events"
   visibility_timeout_seconds = 60
   message_retention_seconds  = 1209600 # 14 days
   receive_wait_time_seconds  = 20      # Enable long polling
 
   tags = {
-    Name    = "${var.project_name}-events"
-    Project = var.project_name
+    Name    = "${local.project_name}-events"
+    Project = local.project_name
   }
 }
 
 # Dead Letter Queue for failed events
 resource "aws_sqs_queue" "xagent_events_dlq" {
-  name                      = "${var.project_name}-events-dlq"
+  name                      = "${local.project_name}-events-dlq"
   message_retention_seconds = 1209600 # 14 days
 
   tags = {
-    Name    = "${var.project_name}-events-dlq"
-    Project = var.project_name
+    Name    = "${local.project_name}-events-dlq"
+    Project = local.project_name
   }
 }
 
@@ -64,7 +69,7 @@ resource "aws_sqs_queue_redrive_policy" "xagent_events" {
 
 # IAM role for Lambda functions
 resource "aws_iam_role" "lambda_exec" {
-  name = "${var.project_name}-lambda-exec"
+  name = "${local.project_name}-lambda-exec"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -78,14 +83,14 @@ resource "aws_iam_role" "lambda_exec" {
   })
 
   tags = {
-    Name    = "${var.project_name}-lambda-exec"
-    Project = var.project_name
+    Name    = "${local.project_name}-lambda-exec"
+    Project = local.project_name
   }
 }
 
 # IAM policy for Lambda to write to SQS
 resource "aws_iam_role_policy" "lambda_sqs" {
-  name = "${var.project_name}-lambda-sqs"
+  name = "${local.project_name}-lambda-sqs"
   role = aws_iam_role.lambda_exec.id
 
   policy = jsonencode({
@@ -118,7 +123,7 @@ data "archive_file" "webhooks_lambda" {
 # Webhooks Lambda function
 resource "aws_lambda_function" "webhooks" {
   filename         = data.archive_file.webhooks_lambda.output_path
-  function_name    = "${var.project_name}-webhooks"
+  function_name    = "${local.project_name}-webhooks"
   role             = aws_iam_role.lambda_exec.arn
   handler          = "bootstrap"
   source_code_hash = data.archive_file.webhooks_lambda.output_base64sha256
@@ -135,8 +140,8 @@ resource "aws_lambda_function" "webhooks" {
   }
 
   tags = {
-    Name    = "${var.project_name}-webhooks"
-    Project = var.project_name
+    Name    = "${local.project_name}-webhooks"
+    Project = local.project_name
   }
 }
 

@@ -19,6 +19,7 @@ The infrastructure includes:
 2. **Terraform** >= 1.0 installed
 3. **AWS CLI** configured with credentials
 4. **Lambda Functions** built (see `../lambda/README.md`)
+5. **SOPS** installed for secrets management (https://github.com/getsops/sops)
 
 ## Quick Start
 
@@ -32,32 +33,40 @@ make all
 cd ../terraform
 ```
 
-### 2. Configure Variables
+### 2. Configure Secrets
 
-Copy the example variables file:
+Edit `secrets.yaml` with your configuration:
 
-```bash
-cp terraform.tfvars.example terraform.tfvars
-```
-
-Edit `terraform.tfvars`:
-
-```hcl
-aws_region   = "us-east-1"
-project_name = "xagent"
-
-# Generate webhook secrets (use strong random values)
-github_webhook_secret = "your-github-webhook-secret-here"
-jira_webhook_secret   = "your-jira-webhook-secret-here"
-
-# Your Jira instance URL
-jira_base_url = "https://your-domain.atlassian.net"
+```yaml
+aws_region: "us-east-1"
+project_name: "xagent"
+github_webhook_secret: "your-github-webhook-secret-here"
+jira_webhook_secret: "your-jira-webhook-secret-here"
+jira_base_url: "https://your-domain.atlassian.net"
 ```
 
 **Important:** Generate strong secrets using:
 
 ```bash
 openssl rand -hex 32
+```
+
+Then encrypt the file using SOPS:
+
+```bash
+# Using age (recommended)
+sops --encrypt --age <your-age-public-key> secrets.yaml > secrets.yaml.enc
+mv secrets.yaml.enc secrets.yaml
+
+# Or using AWS KMS
+sops --encrypt --kms arn:aws:kms:us-east-1:123456789:key/your-key-id secrets.yaml > secrets.yaml.enc
+mv secrets.yaml.enc secrets.yaml
+```
+
+To edit encrypted secrets later:
+
+```bash
+sops secrets.yaml
 ```
 
 ### 3. Deploy Infrastructure
@@ -89,15 +98,17 @@ terraform output -raw jira_webhook_url > jira_webhook.txt
 
 ## Configuration Reference
 
-### Variables
+### Secrets (secrets.yaml)
 
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `aws_region` | AWS region for resources | No | `us-east-1` |
-| `project_name` | Project name for resource naming | No | `xagent` |
-| `github_webhook_secret` | GitHub webhook signature secret | Yes | - |
-| `jira_webhook_secret` | Jira webhook signature secret | Yes | - |
-| `jira_base_url` | Jira base URL | Yes | - |
+All configuration is stored in `secrets.yaml` and managed with SOPS:
+
+| Key | Description | Required |
+|-----|-------------|----------|
+| `aws_region` | AWS region for resources | Yes |
+| `project_name` | Project name for resource naming | Yes |
+| `github_webhook_secret` | GitHub webhook signature secret | Yes |
+| `jira_webhook_secret` | Jira webhook signature secret | Yes |
+| `jira_base_url` | Jira base URL | Yes |
 
 ### Outputs
 
@@ -234,7 +245,7 @@ terraform plan
 
 **Solution**: Ensure webhook secrets match:
 
-1. Check `terraform.tfvars` values
+1. Check `secrets.yaml` values (use `sops secrets.yaml` to view/edit)
 2. Verify GitHub/Jira webhook configuration
 3. Re-apply Terraform to update Lambda environment variables
 
@@ -242,13 +253,21 @@ terraform plan
 
 ### Secrets Management
 
-- Never commit `terraform.tfvars` to version control
-- Use AWS Secrets Manager for production:
+Secrets are managed using [SOPS](https://github.com/getsops/sops), which encrypts the `secrets.yaml` file so it can be safely committed to version control.
 
-```hcl
-data "aws_secretsmanager_secret_version" "github_secret" {
-  secret_id = "xagent/github-webhook-secret"
-}
+Supported encryption backends:
+- **age** - Simple and modern encryption (recommended for personal use)
+- **AWS KMS** - Use for team access via IAM policies
+- **GCP KMS** - Google Cloud Key Management Service
+- **Azure Key Vault** - Azure's key management solution
+- **PGP** - Traditional GPG/PGP encryption
+
+Example `.sops.yaml` configuration for a team:
+
+```yaml
+creation_rules:
+  - path_regex: secrets\.yaml$
+    kms: arn:aws:kms:us-east-1:123456789:key/your-key-id
 ```
 
 ### Function URLs
