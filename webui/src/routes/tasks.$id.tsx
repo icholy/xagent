@@ -189,7 +189,7 @@ function TaskDetail() {
               )}
               {canArchive && (
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
                   onClick={() => handleUpdateStatus('archived')}
                   disabled={updateMutation.isPending}
