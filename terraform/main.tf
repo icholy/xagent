@@ -37,7 +37,7 @@ provider "aws" {
 resource "aws_sqs_queue" "xagent_events" {
   name                       = "${local.project_name}-events"
   visibility_timeout_seconds = 60
-  message_retention_seconds  = 1209600 # 14 days
+  message_retention_seconds  = 172800 # 2 days
   receive_wait_time_seconds  = 20      # Enable long polling
 
   tags = {
@@ -49,7 +49,7 @@ resource "aws_sqs_queue" "xagent_events" {
 # Dead Letter Queue for failed events
 resource "aws_sqs_queue" "xagent_events_dlq" {
   name                      = "${local.project_name}-events-dlq"
-  message_retention_seconds = 1209600 # 14 days
+  message_retention_seconds = 172800 # 2 days
 
   tags = {
     Name    = "${local.project_name}-events-dlq"
