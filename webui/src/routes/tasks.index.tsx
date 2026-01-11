@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch'
 import { RelativeTime } from '@/components/ui/relative-time'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { Plus } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
@@ -76,7 +77,10 @@ function TasksPage() {
             />
           </div>
           <Link to="/tasks/new">
-            <Button>New Task</Button>
+            <Button>
+              <Plus className="h-4 w-4" />
+              Task
+            </Button>
           </Link>
         </div>
       </div>

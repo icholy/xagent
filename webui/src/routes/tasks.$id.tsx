@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/ui/relative-time'
+import { Plus } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   component: TaskDetail,
@@ -248,7 +249,8 @@ function TaskDetail() {
             />
             <div className="flex justify-start">
               <Button type="submit" disabled={updateMutation.isPending}>
-                Add Instruction
+                <Plus className="h-4 w-4" />
+                Instruction
               </Button>
             </div>
           </form>
