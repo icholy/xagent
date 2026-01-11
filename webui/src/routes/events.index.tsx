@@ -12,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { RelativeTime } from '@/components/ui/relative-time'
+import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/events/')({
   component: EventsPage,
@@ -42,7 +43,12 @@ function EventsPage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-6">Events</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Events</h1>
+        <Link to="/events/new">
+          <Button>Create Event</Button>
+        </Link>
+      </div>
       {events.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">
           No events found
