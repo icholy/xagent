@@ -15,6 +15,8 @@ Open [http://localhost:5173](http://localhost:5173) to view the app.
 - **React 19** - UI framework
 - **TypeScript** - Type safety
 - **Vite** - Build tool and dev server
+- **TanStack Router** - File-based routing
+- **TanStack Query** - Server state management
 - **Tailwind CSS v4** - Styling
 - **shadcn/ui** - Component library
 
@@ -23,14 +25,24 @@ Open [http://localhost:5173](http://localhost:5173) to view the app.
 ```
 webui/
 ├── src/
-│   ├── components/     # React components
+│   ├── routes/        # File-based routes (TanStack Router)
+│   │   ├── __root.tsx # Root layout
+│   │   └── index.tsx  # Home page (/)
+│   ├── components/    # React components
 │   │   └── ui/        # shadcn/ui components
 │   ├── lib/           # Utilities
-│   ├── App.tsx        # Main app component
 │   └── main.tsx       # Entry point
 ├── public/            # Static assets
 └── package.json       # Dependencies
 ```
+
+## Routing
+
+Routes are file-based in `src/routes/`. The TanStack Router plugin automatically generates the route tree.
+
+- `src/routes/index.tsx` → `/`
+- `src/routes/tasks.tsx` → `/tasks`
+- `src/routes/tasks/$id.tsx` → `/tasks/:id`
 
 ## Adding Components
 
