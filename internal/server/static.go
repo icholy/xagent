@@ -10,17 +10,24 @@ import (
 //go:embed all:webui
 var webuiFS embed.FS
 
+var webui fs.FS
+var webuiBuilt bool
+
+func init() {
+	var err error
+	webui, err = fs.Sub(webuiFS, "webui")
+	if err != nil {
+		panic(err)
+	}
+	_, err = fs.Stat(webui, "index.html")
+	webuiBuilt = err == nil
+}
+
 // WebUI serves the React SPA from the embedded webui directory.
 // It handles SPA routing by returning index.html for any path that doesn't
 // exist as a file (client-side routing support).
 func WebUI() http.Handler {
-	webui, err := fs.Sub(webuiFS, "webui")
-	if err != nil {
-		panic(err)
-	}
-
-	// Check if index.html exists - if not, the frontend hasn't been built
-	if _, err := fs.Stat(webui, "index.html"); err != nil {
+	if !webuiBuilt {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Frontend not built. Run 'mise run build' or 'cd webui && npm run build' to build the frontend.", http.StatusInternalServerError)
 		})
