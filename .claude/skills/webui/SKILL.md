@@ -21,7 +21,7 @@ A modern React-based UI is being developed in `webui/` to replace the Go templat
 
 ```bash
 cd webui
-npm install
+npm ci
 npm run dev  # Runs on http://localhost:5173
 ```
 
