@@ -1,387 +1,501 @@
 package model
 
-import "testing"
+import (
+	"testing"
 
-func TestTask_ApplyRunnerEvent_Reconcile(t *testing.T) {
-	task := &Task{
-		ID:      1,
-		Status:  TaskStatusPending,
-		Command: TaskCommandRestart,
-		Version: 1,
-	}
+	"gotest.tools/v3/assert"
+)
 
-	event := &RunnerEvent{
-		TaskID:    1,
-		Event:     RunnerEventStarted,
-		Version:   1,
-		Reconcile: true,
-	}
-
-	if task.ApplyRunnerEvent(event) {
-		t.Error("expected ApplyRunnerEvent to return false for reconcile events")
-	}
-
-	if task.Status != TaskStatusPending {
-		t.Errorf("expected status to remain pending, got %s", task.Status)
-	}
-}
-
-func TestTask_ApplyRunnerEvent_VersionMismatch(t *testing.T) {
-	task := &Task{
-		ID:      1,
-		Status:  TaskStatusPending,
-		Command: TaskCommandRestart,
-		Version: 2,
-	}
-
-	event := &RunnerEvent{
-		TaskID:  1,
-		Event:   RunnerEventStarted,
-		Version: 1, // mismatched version
-	}
-
-	if task.ApplyRunnerEvent(event) {
-		t.Error("expected ApplyRunnerEvent to return false for version mismatch")
-	}
-
-	if task.Status != TaskStatusPending {
-		t.Errorf("expected status to remain pending, got %s", task.Status)
-	}
-}
-
-func TestTask_ApplyRunnerEvent_VersionZeroBypass(t *testing.T) {
-	task := &Task{
-		ID:      1,
-		Status:  TaskStatusRunning,
-		Command: "",
-		Version: 5,
-	}
-
-	event := &RunnerEvent{
-		TaskID:  1,
-		Event:   RunnerEventFailed,
-		Version: 0, // version 0 bypasses check
-	}
-
-	if !task.ApplyRunnerEvent(event) {
-		t.Error("expected ApplyRunnerEvent to return true for version 0 bypass")
-	}
-
-	if task.Status != TaskStatusFailed {
-		t.Errorf("expected status to be failed, got %s", task.Status)
-	}
-}
-
-func TestTask_ApplyRunnerEvent_Started(t *testing.T) {
+func TestTask_ApplyRunnerEvent(t *testing.T) {
 	tests := []struct {
-		name           string
-		initialStatus  TaskStatus
-		initialCommand TaskCommand
-		version        int64
-		wantUpdated    bool
-		wantStatus     TaskStatus
-		wantCommand    TaskCommand
+		name    string
+		before  Task
+		after   Task
+		event   RunnerEvent
+		changed bool
 	}{
+		// Reconcile events
 		{
-			name:           "pending with restart command",
-			initialStatus:  TaskStatusPending,
-			initialCommand: TaskCommandRestart,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusRunning,
-			wantCommand:    "",
-		},
-		{
-			name:           "restarting with restart command",
-			initialStatus:  TaskStatusRestarting,
-			initialCommand: TaskCommandRestart,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusRunning,
-			wantCommand:    "",
-		},
-		{
-			name:           "running with restart command (SIGHUP case)",
-			initialStatus:  TaskStatusRunning,
-			initialCommand: TaskCommandRestart,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusRunning,
-			wantCommand:    "",
-		},
-		{
-			name:           "pending without restart command",
-			initialStatus:  TaskStatusPending,
-			initialCommand: "",
-			version:        1,
-			wantUpdated:    false,
-			wantStatus:     TaskStatusPending,
-			wantCommand:    "",
-		},
-		{
-			name:           "completed status",
-			initialStatus:  TaskStatusCompleted,
-			initialCommand: "",
-			version:        1,
-			wantUpdated:    false,
-			wantStatus:     TaskStatusCompleted,
-			wantCommand:    "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			task := &Task{
+			name: "reconcile event returns false",
+			before: Task{
 				ID:      1,
-				Status:  tt.initialStatus,
-				Command: tt.initialCommand,
-				Version: tt.version,
-			}
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:    1,
+				Event:     RunnerEventStarted,
+				Version:   1,
+				Reconcile: true,
+			},
+			changed: false,
+		},
 
-			event := &RunnerEvent{
+		// Version mismatch
+		{
+			name: "version mismatch returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 2,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 2,
+			},
+			event: RunnerEvent{
 				TaskID:  1,
 				Event:   RunnerEventStarted,
-				Version: tt.version,
-			}
-
-			got := task.ApplyRunnerEvent(event)
-			if got != tt.wantUpdated {
-				t.Errorf("ApplyRunnerEvent() = %v, want %v", got, tt.wantUpdated)
-			}
-
-			if task.Status != tt.wantStatus {
-				t.Errorf("Status = %s, want %s", task.Status, tt.wantStatus)
-			}
-
-			if task.Command != tt.wantCommand {
-				t.Errorf("Command = %s, want %s", task.Command, tt.wantCommand)
-			}
-		})
-	}
-}
-
-func TestTask_ApplyRunnerEvent_Stopped(t *testing.T) {
-	tests := []struct {
-		name           string
-		initialStatus  TaskStatus
-		initialCommand TaskCommand
-		version        int64
-		wantUpdated    bool
-		wantStatus     TaskStatus
-		wantCommand    TaskCommand
-	}{
-		{
-			name:           "running with no command (clean exit)",
-			initialStatus:  TaskStatusRunning,
-			initialCommand: "",
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusCompleted,
-			wantCommand:    "",
+				Version: 1,
+			},
+			changed: false,
 		},
 		{
-			name:           "running with stop command",
-			initialStatus:  TaskStatusRunning,
-			initialCommand: TaskCommandStop,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusCancelled,
-			wantCommand:    "",
-		},
-		{
-			name:           "cancelling with stop command",
-			initialStatus:  TaskStatusCancelling,
-			initialCommand: TaskCommandStop,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusCancelled,
-			wantCommand:    "",
-		},
-		{
-			name:           "running with restart command (unexpected)",
-			initialStatus:  TaskStatusRunning,
-			initialCommand: TaskCommandRestart,
-			version:        1,
-			wantUpdated:    false,
-			wantStatus:     TaskStatusRunning,
-			wantCommand:    TaskCommandRestart,
-		},
-		{
-			name:           "pending status (unexpected)",
-			initialStatus:  TaskStatusPending,
-			initialCommand: "",
-			version:        1,
-			wantUpdated:    false,
-			wantStatus:     TaskStatusPending,
-			wantCommand:    "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			task := &Task{
+			name: "version 0 bypasses check",
+			before: Task{
 				ID:      1,
-				Status:  tt.initialStatus,
-				Command: tt.initialCommand,
-				Version: tt.version,
-			}
-
-			event := &RunnerEvent{
-				TaskID:  1,
-				Event:   RunnerEventStopped,
-				Version: tt.version,
-			}
-
-			got := task.ApplyRunnerEvent(event)
-			if got != tt.wantUpdated {
-				t.Errorf("ApplyRunnerEvent() = %v, want %v", got, tt.wantUpdated)
-			}
-
-			if task.Status != tt.wantStatus {
-				t.Errorf("Status = %s, want %s", task.Status, tt.wantStatus)
-			}
-
-			if task.Command != tt.wantCommand {
-				t.Errorf("Command = %s, want %s", task.Command, tt.wantCommand)
-			}
-		})
-	}
-}
-
-func TestTask_ApplyRunnerEvent_Failed(t *testing.T) {
-	tests := []struct {
-		name           string
-		initialStatus  TaskStatus
-		initialCommand TaskCommand
-		version        int64
-		wantUpdated    bool
-		wantStatus     TaskStatus
-		wantCommand    TaskCommand
-	}{
-		{
-			name:           "pending",
-			initialStatus:  TaskStatusPending,
-			initialCommand: TaskCommandRestart,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusFailed,
-			wantCommand:    "",
-		},
-		{
-			name:           "restarting",
-			initialStatus:  TaskStatusRestarting,
-			initialCommand: TaskCommandRestart,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusFailed,
-			wantCommand:    "",
-		},
-		{
-			name:           "running",
-			initialStatus:  TaskStatusRunning,
-			initialCommand: "",
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusFailed,
-			wantCommand:    "",
-		},
-		{
-			name:           "running with stop command",
-			initialStatus:  TaskStatusRunning,
-			initialCommand: TaskCommandStop,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusFailed,
-			wantCommand:    "",
-		},
-		{
-			name:           "cancelling",
-			initialStatus:  TaskStatusCancelling,
-			initialCommand: TaskCommandStop,
-			version:        1,
-			wantUpdated:    true,
-			wantStatus:     TaskStatusFailed,
-			wantCommand:    "",
-		},
-		{
-			name:           "already failed",
-			initialStatus:  TaskStatusFailed,
-			initialCommand: "",
-			version:        1,
-			wantUpdated:    false,
-			wantStatus:     TaskStatusFailed,
-			wantCommand:    "",
-		},
-		{
-			name:           "completed",
-			initialStatus:  TaskStatusCompleted,
-			initialCommand: "",
-			version:        1,
-			wantUpdated:    false,
-			wantStatus:     TaskStatusCompleted,
-			wantCommand:    "",
-		},
-		{
-			name:           "cancelled",
-			initialStatus:  TaskStatusCancelled,
-			initialCommand: "",
-			version:        1,
-			wantUpdated:    false,
-			wantStatus:     TaskStatusCancelled,
-			wantCommand:    "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			task := &Task{
+				Status:  TaskStatusRunning,
+				Command: "",
+				Version: 5,
+			},
+			after: Task{
 				ID:      1,
-				Status:  tt.initialStatus,
-				Command: tt.initialCommand,
-				Version: tt.version,
-			}
-
-			event := &RunnerEvent{
+				Status:  TaskStatusFailed,
+				Command: "",
+				Version: 5,
+			},
+			event: RunnerEvent{
 				TaskID:  1,
 				Event:   RunnerEventFailed,
-				Version: tt.version,
-			}
+				Version: 0,
+			},
+			changed: true,
+		},
 
-			got := task.ApplyRunnerEvent(event)
-			if got != tt.wantUpdated {
-				t.Errorf("ApplyRunnerEvent() = %v, want %v", got, tt.wantUpdated)
-			}
+		// Started events
+		{
+			name: "started: pending with restart -> running",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStarted,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "started: restarting with restart -> running",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRestarting,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStarted,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "started: running with restart -> running (SIGHUP case)",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStarted,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "started: pending without restart command returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStarted,
+				Version: 1,
+			},
+			changed: false,
+		},
+		{
+			name: "started: completed status returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusCompleted,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusCompleted,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStarted,
+				Version: 1,
+			},
+			changed: false,
+		},
 
-			if task.Status != tt.wantStatus {
-				t.Errorf("Status = %s, want %s", task.Status, tt.wantStatus)
-			}
+		// Stopped events
+		{
+			name: "stopped: running with no command -> completed",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusCompleted,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStopped,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "stopped: running with stop command -> cancelled",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: TaskCommandStop,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusCancelled,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStopped,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "stopped: cancelling with stop command -> cancelled",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusCancelling,
+				Command: TaskCommandStop,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusCancelled,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStopped,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "stopped: running with restart command returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStopped,
+				Version: 1,
+			},
+			changed: false,
+		},
+		{
+			name: "stopped: pending status returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventStopped,
+				Version: 1,
+			},
+			changed: false,
+		},
 
-			if task.Command != tt.wantCommand {
-				t.Errorf("Command = %s, want %s", task.Command, tt.wantCommand)
-			}
+		// Failed events
+		{
+			name: "failed: pending -> failed",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusFailed,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventFailed,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "failed: restarting -> failed",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRestarting,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusFailed,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventFailed,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "failed: running -> failed",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusFailed,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventFailed,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "failed: running with stop command -> failed",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: TaskCommandStop,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusFailed,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventFailed,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "failed: cancelling -> failed",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusCancelling,
+				Command: TaskCommandStop,
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusFailed,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventFailed,
+				Version: 1,
+			},
+			changed: true,
+		},
+		{
+			name: "failed: already failed returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusFailed,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusFailed,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventFailed,
+				Version: 1,
+			},
+			changed: false,
+		},
+		{
+			name: "failed: completed returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusCompleted,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusCompleted,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventFailed,
+				Version: 1,
+			},
+			changed: false,
+		},
+		{
+			name: "failed: cancelled returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusCancelled,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusCancelled,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventFailed,
+				Version: 1,
+			},
+			changed: false,
+		},
+
+		// Unknown event type
+		{
+			name: "unknown event type returns false",
+			before: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: "",
+				Version: 1,
+			},
+			after: Task{
+				ID:      1,
+				Status:  TaskStatusRunning,
+				Command: "",
+				Version: 1,
+			},
+			event: RunnerEvent{
+				TaskID:  1,
+				Event:   RunnerEventType("unknown"),
+				Version: 1,
+			},
+			changed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := tt.before
+			got := task.ApplyRunnerEvent(&tt.event)
+			assert.Equal(t, got, tt.changed)
+			assert.DeepEqual(t, task, tt.after)
 		})
-	}
-}
-
-func TestTask_ApplyRunnerEvent_UnknownEvent(t *testing.T) {
-	task := &Task{
-		ID:      1,
-		Status:  TaskStatusRunning,
-		Command: "",
-		Version: 1,
-	}
-
-	event := &RunnerEvent{
-		TaskID:  1,
-		Event:   RunnerEventType("unknown"),
-		Version: 1,
-	}
-
-	if task.ApplyRunnerEvent(event) {
-		t.Error("expected ApplyRunnerEvent to return false for unknown event type")
-	}
-
-	if task.Status != TaskStatusRunning {
-		t.Errorf("expected status to remain running, got %s", task.Status)
 	}
 }

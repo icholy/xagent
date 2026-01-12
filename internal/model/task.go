@@ -163,70 +163,64 @@ func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
 		return false
 	}
 
-	var newStatus TaskStatus
-	var clearCommand bool
-
 	switch e.Event {
 	case RunnerEventStarted:
-		switch t.Status {
-		case TaskStatusPending, TaskStatusRestarting:
-			if t.Command == TaskCommandRestart {
-				newStatus = TaskStatusRunning
-				clearCommand = true
-			}
-		case TaskStatusRunning:
-			if t.Command == TaskCommandRestart {
-				newStatus = TaskStatusRunning
-				clearCommand = true
-			}
-		default:
-			return false
-		}
-
+		return t.applyRunnerEventStarted()
 	case RunnerEventStopped:
-		switch t.Status {
-		case TaskStatusRunning:
-			if t.Command == TaskCommandStop {
-				newStatus = TaskStatusCancelled
-				clearCommand = true
-			} else if t.Command == "" {
-				newStatus = TaskStatusCompleted
-			} else {
-				return false
-			}
-		case TaskStatusCancelling:
-			if t.Command == TaskCommandStop {
-				newStatus = TaskStatusCancelled
-				clearCommand = true
-			} else {
-				return false
-			}
-		default:
-			return false
-		}
-
+		return t.applyRunnerEventStopped()
 	case RunnerEventFailed:
-		// Failed events always result in failed status
-		switch t.Status {
-		case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
-			newStatus = TaskStatusFailed
-			clearCommand = true
-		default:
-			return false
-		}
-
+		return t.applyRunnerEventFailed()
 	default:
 		return false
 	}
+}
 
-	// Apply the updates
-	if newStatus == "" {
+func (t *Task) applyRunnerEventStarted() bool {
+	switch t.Status {
+	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning:
+		if t.Command == TaskCommandRestart {
+			t.Status = TaskStatusRunning
+			t.Command = ""
+			return true
+		}
+		return false
+	default:
 		return false
 	}
+}
 
-	t.Status = newStatus
-	if clearCommand {
-		t.Command = ""
+func (t *Task) applyRunnerEventStopped() bool {
+	switch t.Status {
+	case TaskStatusRunning:
+		if t.Command == TaskCommandStop {
+			t.Status = TaskStatusCancelled
+			t.Command = ""
+			return true
+		}
+		if t.Command == "" {
+			t.Status = TaskStatusCompleted
+			return true
+		}
+		return false
+	case TaskStatusCancelling:
+		if t.Command == TaskCommandStop {
+			t.Status = TaskStatusCancelled
+			t.Command = ""
+			return true
+		}
+		return false
+	default:
+		return false
 	}
-	return true
+}
+
+func (t *Task) applyRunnerEventFailed() bool {
+	switch t.Status {
+	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
+		t.Status = TaskStatusFailed
+		t.Command = ""
+		return true
+	default:
+		return false
+	}
 }
