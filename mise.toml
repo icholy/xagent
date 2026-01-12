@@ -20,7 +20,8 @@ run = [
 description = "Generate code from proto files"
 run = [
 	"go tool buf generate",
-	"go generate ./..."
+	"go generate ./...",
+	"cd webui && pnpm install --frozen-lockfile && pnpm exec buf generate"
 ]
 
 [tasks.wipe]
