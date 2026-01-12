@@ -296,7 +296,7 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
-	// The running count is updated by Monitor when the container start event is received
+	r.runningCount.Add(1)
 	return nil
 }
 
@@ -468,7 +468,6 @@ func (r *Runner) Monitor(ctx context.Context) error {
 
 			switch event.Action {
 			case events.ActionStart:
-				r.runningCount.Add(1)
 				slog.Info("container started", "task", taskID)
 				// Use version 0 to bypass version check (spontaneous events)
 				if err := r.submit(ctx, taskID, "started", 0); err != nil {
