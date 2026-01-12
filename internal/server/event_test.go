@@ -544,10 +544,15 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Archive the second task
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     archivedTask.Task.Id,
-		Status: "archived",
+	// Archive the second task - first set it to completed via runner event, then archive it
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: archivedTask.Task.Id, Status: "completed"},
+		},
+	})
+	assert.NilError(t, err)
+	_, err = srv.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{
+		Id: archivedTask.Task.Id,
 	})
 	assert.NilError(t, err)
 

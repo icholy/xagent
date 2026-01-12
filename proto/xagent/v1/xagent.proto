@@ -108,8 +108,7 @@ message GetTaskDetailsResponse {
 message UpdateTaskRequest {
   int64 id = 1;
   string name = 2;
-  string status = 3;
-  repeated Instruction add_instructions = 4;
+  repeated Instruction add_instructions = 3;
 }
 
 message UpdateTaskResponse {}

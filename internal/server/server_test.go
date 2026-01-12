@@ -259,7 +259,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := context.Background()
 
-	// Create a task and set it to running
+	// Create a task and set it to running using SubmitRunnerEvents with direct status update
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
@@ -267,9 +267,13 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	assert.NilError(t, err)
 	taskID := createResp.Task.Id
 
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     taskID,
-		Status: "running",
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{
+				TaskId: taskID,
+				Status: "running",
+			},
+		},
 	})
 	assert.NilError(t, err)
 

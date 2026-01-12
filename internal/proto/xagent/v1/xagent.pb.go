@@ -750,8 +750,7 @@ type UpdateTaskRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Status          string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
-	AddInstructions []*Instruction         `protobuf:"bytes,4,rep,name=add_instructions,json=addInstructions,proto3" json:"add_instructions,omitempty"`
+	AddInstructions []*Instruction         `protobuf:"bytes,3,rep,name=add_instructions,json=addInstructions,proto3" json:"add_instructions,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -796,13 +795,6 @@ func (x *UpdateTaskRequest) GetId() int64 {
 func (x *UpdateTaskRequest) GetName() string {
 	if x != nil {
 		return x.Name
-	}
-	return ""
-}
-
-func (x *UpdateTaskRequest) GetStatus() string {
-	if x != nil {
-		return x.Status
 	}
 	return ""
 }
@@ -2873,12 +2865,11 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04task\x18\x01 \x01(\v2\x0f.xagent.v1.TaskR\x04task\x12+\n" +
 	"\bchildren\x18\x02 \x03(\v2\x0f.xagent.v1.TaskR\bchildren\x12(\n" +
 	"\x06events\x18\x03 \x03(\v2\x10.xagent.v1.EventR\x06events\x12)\n" +
-	"\x05links\x18\x04 \x03(\v2\x13.xagent.v1.TaskLinkR\x05links\"\x92\x01\n" +
+	"\x05links\x18\x04 \x03(\v2\x13.xagent.v1.TaskLinkR\x05links\"z\n" +
 	"\x11UpdateTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\tR\x06status\x12A\n" +
-	"\x10add_instructions\x18\x04 \x03(\v2\x16.xagent.v1.InstructionR\x0faddInstructions\"\x14\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12A\n" +
+	"\x10add_instructions\x18\x03 \x03(\v2\x16.xagent.v1.InstructionR\x0faddInstructions\"\x14\n" +
 	"\x12UpdateTaskResponse\"#\n" +
 	"\x11DeleteTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x14\n" +
