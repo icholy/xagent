@@ -322,6 +322,15 @@ func TestProcessEvent(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
+	// Transition both tasks to running state so they can be restarted
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: task1.Task.Id, Event: "started", Version: task1.Task.Version},
+			{TaskId: task2.Task.Id, Event: "started", Version: task2.Task.Version},
+		},
+	})
+	assert.NilError(t, err)
+
 	// Create links with notify=true
 	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId:    task1.Task.Id,
@@ -544,15 +553,16 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// First, send started event to transition pending -> running
+	// Transition both tasks to running state
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
+			{TaskId: activeTask.Task.Id, Event: "started", Version: activeTask.Task.Version},
 			{TaskId: archivedTask.Task.Id, Event: "started", Version: archivedTask.Task.Version},
 		},
 	})
 	assert.NilError(t, err)
 
-	// Then send stopped event to transition running -> completed
+	// Stop the archived task to transition running -> completed
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{TaskId: archivedTask.Task.Id, Event: "stopped", Version: 0},
