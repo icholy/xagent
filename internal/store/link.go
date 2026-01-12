@@ -43,18 +43,7 @@ func (r *LinkRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int6
 		return nil, err
 	}
 	defer rows.Close()
-
-	var links []*model.Link
-	for rows.Next() {
-		var link model.Link
-		var title sql.NullString
-		if err := rows.Scan(&link.ID, &link.TaskID, &link.Relevance, &link.URL, &title, &link.Notify, &link.CreatedAt); err != nil {
-			return nil, err
-		}
-		link.Title = title.String
-		links = append(links, &link)
-	}
-	return links, rows.Err()
+	return r.scanLinks(rows)
 }
 
 func (r *LinkRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
@@ -74,7 +63,10 @@ func (r *LinkRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string) 
 		return nil, err
 	}
 	defer rows.Close()
+	return r.scanLinks(rows)
+}
 
+func (r *LinkRepository) scanLinks(rows *sql.Rows) ([]*model.Link, error) {
 	var links []*model.Link
 	for rows.Next() {
 		var link model.Link
