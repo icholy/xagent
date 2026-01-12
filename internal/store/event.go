@@ -82,7 +82,7 @@ func (r *EventRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) erro
 		if _, err := tx.ExecContext(ctx, `DELETE FROM events WHERE id = ?`, id); err != nil {
 			return err
 		}
-		return nil
+		return tx.Commit()
 	})
 }
 

@@ -181,7 +181,7 @@ func (r *TaskRepository) Update(ctx context.Context, tx *sql.Tx, id int64, updat
 			}
 		}
 
-		return nil
+		return tx.Commit()
 	})
 }
 
