@@ -84,7 +84,11 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		}
 	}
 
-	return cmd.Wait()
+	err = cmd.Wait()
+	if context.Cause(ctx) == ErrStop {
+		return ErrStop
+	}
+	return err
 }
 
 // Close releases any resources held by the agent.

@@ -3,9 +3,19 @@ package agent
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 )
+
+// ErrStop is returned by Agent.Prompt when the context is cancelled with
+// ErrStop as the cause. Callers should cancel the context with:
+//
+//	context.WithCancelCause(ctx)
+//	cancel(agent.ErrStop)
+//
+// When this happens, the agent should terminate gracefully and return ErrStop.
+var ErrStop = errors.New("stop")
 
 // Agent type constants.
 const (
@@ -19,6 +29,9 @@ const (
 type Agent interface {
 	// Prompt sends a prompt to the agent and waits for completion.
 	// If resume is true, the agent should continue from the previous session.
+	//
+	// If the context is cancelled with ErrStop as the cause, implementations
+	// should terminate the agent and return ErrStop.
 	Prompt(ctx context.Context, prompt string, resume bool) error
 
 	// Close releases any resources held by the agent.
