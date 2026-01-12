@@ -30,6 +30,7 @@ var ServerCommand = &cli.Command{
 		&cli.BoolFlag{
 			Name:  "notify",
 			Usage: "Send system notification when a task finishes",
+			Value: true,
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
