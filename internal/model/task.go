@@ -216,7 +216,16 @@ func (t *Task) applyRunnerEventStopped() bool {
 
 func (t *Task) applyRunnerEventFailed() bool {
 	switch t.Status {
-	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
+	case TaskStatusPending, TaskStatusRunning, TaskStatusCancelling:
+		t.Status = TaskStatusFailed
+		t.Command = ""
+		return true
+	case TaskStatusRestarting:
+		// Don't mark as failed if this is an intentional restart
+		// The container was killed by the runner as part of the restart process
+		if t.Command == TaskCommandRestart {
+			return false
+		}
 		t.Status = TaskStatusFailed
 		t.Command = ""
 		return true

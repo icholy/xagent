@@ -189,10 +189,20 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
-			name: "failed: restarting -> failed",
+			name: "failed: restarting with restart command returns false (intentional restart)",
 			before: Task{
 				Status:  TaskStatusRestarting,
 				Command: TaskCommandRestart,
+			},
+			event: RunnerEvent{
+				Event: RunnerEventFailed,
+			},
+			changed: false,
+		},
+		{
+			name: "failed: restarting without command -> failed",
+			before: Task{
+				Status: TaskStatusRestarting,
 			},
 			after: Task{
 				Status: TaskStatusFailed,
