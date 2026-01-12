@@ -15,7 +15,6 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Server struct {
@@ -82,7 +81,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 		Tasks: make([]*xagentv1.Task, len(tasks)),
 	}
 	for i, t := range tasks {
-		resp.Tasks[i] = taskToProto(t)
+		resp.Tasks[i] = t.Proto()
 	}
 	return resp, nil
 }
@@ -97,7 +96,7 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 		Tasks: make([]*xagentv1.Task, len(tasks)),
 	}
 	for i, t := range tasks {
-		resp.Tasks[i] = taskToProto(t)
+		resp.Tasks[i] = t.Proto()
 	}
 	return resp, nil
 }
@@ -105,10 +104,7 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	instructions := make([]model.Instruction, len(req.Instructions))
 	for i, inst := range req.Instructions {
-		instructions[i] = model.Instruction{
-			Text: inst.Text,
-			URL:  inst.Url,
-		}
+		instructions[i] = model.InstructionFromProto(inst)
 	}
 
 	task := &model.Task{
@@ -125,7 +121,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 
 	s.log.Info("task created", "id", task.ID, "workspace", task.Workspace)
 	return &xagentv1.CreateTaskResponse{
-		Task: taskToProto(task),
+		Task: task.Proto(),
 	}, nil
 }
 
@@ -136,7 +132,7 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 	}
 
 	return &xagentv1.GetTaskResponse{
-		Task: taskToProto(task),
+		Task: task.Proto(),
 	}, nil
 }
 
@@ -151,19 +147,19 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 	links, _ := s.links.ListByTask(req.Id)
 
 	resp := &xagentv1.GetTaskDetailsResponse{
-		Task:     taskToProto(task),
+		Task:     task.Proto(),
 		Children: make([]*xagentv1.Task, len(children)),
 		Events:   make([]*xagentv1.Event, len(events)),
 		Links:    make([]*xagentv1.TaskLink, len(links)),
 	}
 	for i, c := range children {
-		resp.Children[i] = taskToProto(c)
+		resp.Children[i] = c.Proto()
 	}
 	for i, e := range events {
-		resp.Events[i] = eventToProto(e)
+		resp.Events[i] = e.Proto()
 	}
 	for i, l := range links {
-		resp.Links[i] = linkToProto(l)
+		resp.Links[i] = l.Proto()
 	}
 	return resp, nil
 }
@@ -171,10 +167,7 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	instructions := make([]model.Instruction, len(req.AddInstructions))
 	for i, inst := range req.AddInstructions {
-		instructions[i] = model.Instruction{
-			Text: inst.Text,
-			URL:  inst.Url,
-		}
+		instructions[i] = model.InstructionFromProto(inst)
 	}
 
 	if err := s.tasks.Update(req.Id, store.TaskUpdate{
@@ -244,7 +237,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
 	return &xagentv1.CreateLinkResponse{
-		Link: linkToProto(link),
+		Link: link.Proto(),
 	}, nil
 }
 
@@ -257,7 +250,7 @@ func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) 
 		Links: make([]*xagentv1.TaskLink, len(links)),
 	}
 	for i, l := range links {
-		resp.Links[i] = linkToProto(l)
+		resp.Links[i] = l.Proto()
 	}
 	return resp, nil
 }
@@ -271,41 +264,9 @@ func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByUR
 		Links: make([]*xagentv1.TaskLink, len(links)),
 	}
 	for i, l := range links {
-		resp.Links[i] = linkToProto(l)
+		resp.Links[i] = l.Proto()
 	}
 	return resp, nil
-}
-
-func taskToProto(t *model.Task) *xagentv1.Task {
-	instructions := make([]*xagentv1.Instruction, len(t.Instructions))
-	for i, inst := range t.Instructions {
-		instructions[i] = &xagentv1.Instruction{
-			Text: inst.Text,
-			Url:  inst.URL,
-		}
-	}
-	return &xagentv1.Task{
-		Id:           t.ID,
-		Name:         t.Name,
-		Parent:       t.Parent,
-		Workspace:    t.Workspace,
-		Instructions: instructions,
-		Status:       string(t.Status),
-		CreatedAt:    timestamppb.New(t.CreatedAt),
-		UpdatedAt:    timestamppb.New(t.UpdatedAt),
-	}
-}
-
-func linkToProto(l *model.Link) *xagentv1.TaskLink {
-	return &xagentv1.TaskLink{
-		Id:        l.ID,
-		TaskId:    l.TaskID,
-		Relevance: l.Relevance,
-		Url:       l.URL,
-		Title:     l.Title,
-		Notify:    l.Notify,
-		CreatedAt: timestamppb.New(l.CreatedAt),
-	}
 }
 
 const maxLimit = 100
@@ -323,7 +284,7 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 		Events: make([]*xagentv1.Event, len(events)),
 	}
 	for i, e := range events {
-		resp.Events[i] = eventToProto(e)
+		resp.Events[i] = e.Proto()
 	}
 	return resp, nil
 }
@@ -339,7 +300,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 	}
 	s.log.Info("event created", "id", event.ID, "description", event.Description)
 	return &xagentv1.CreateEventResponse{
-		Event: eventToProto(event),
+		Event: event.Proto(),
 	}, nil
 }
 
@@ -349,7 +310,7 @@ func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 	return &xagentv1.GetEventResponse{
-		Event: eventToProto(event),
+		Event: event.Proto(),
 	}, nil
 }
 
@@ -394,7 +355,7 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 		Events: make([]*xagentv1.Event, len(events)),
 	}
 	for i, e := range events {
-		resp.Events[i] = eventToProto(e)
+		resp.Events[i] = e.Proto()
 	}
 	return resp, nil
 }
@@ -442,14 +403,4 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 	ids := slices.Collect(maps.Keys(taskIDs))
 	s.log.Info("event processed", "id", req.Id, "tasks_routed", len(ids))
 	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
-}
-
-func eventToProto(e *model.Event) *xagentv1.Event {
-	return &xagentv1.Event{
-		Id:          e.ID,
-		Description: e.Description,
-		Data:        e.Data,
-		Url:         e.URL,
-		CreatedAt:   timestamppb.New(e.CreatedAt),
-	}
 }
