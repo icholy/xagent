@@ -129,9 +129,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				}
 				continue
 			}
-			if err := r.submit(ctx, task.ID, "started", task.Version); err != nil {
-				slog.Error("failed to send started event", "task", task.ID, "error", err)
-			}
+			// The "started" event is sent by Monitor when the container starts
 		}
 	}
 
@@ -299,8 +297,6 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	}
 
 	r.runningCount.Add(1)
-
-	slog.Info("container started", "task", task.ID, "container", containerName)
 	return nil
 }
 
@@ -449,11 +445,12 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 	return r.docker.CopyToContainer(ctx, containerID, "/", bytes.NewReader(data), container.CopyToContainerOptions{})
 }
 
-// Monitor watches for container exits and sends runner events accordingly.
+// Monitor watches for container starts and exits and sends runner events accordingly.
 func (r *Runner) Monitor(ctx context.Context) error {
 	eventCh, errCh := r.docker.Events(ctx, events.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("type", "container"),
+			filters.Arg("event", "start"),
 			filters.Arg("event", "die"),
 			filters.Arg("label", "xagent=true"),
 		),
@@ -462,33 +459,43 @@ func (r *Runner) Monitor(ctx context.Context) error {
 	for {
 		select {
 		case event := <-eventCh:
-			r.runningCount.Add(-1)
 			taskIDStr := event.Actor.Attributes["xagent.task"]
 			taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
 			if err != nil {
 				slog.Error("invalid task ID in container event", "task", taskIDStr, "error", err)
 				continue
 			}
-			// Use version 0 to bypass version check (spontaneous events)
-			exitCode := event.Actor.Attributes["exitCode"]
-			if exitCode == "0" {
-				slog.Info("container exited successfully", "task", taskID)
-				if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
-					slog.Error("failed to send stopped event", "task", taskID, "error", err)
+
+			switch event.Action {
+			case events.ActionStart:
+				slog.Info("container started", "task", taskID)
+				// Use version 0 to bypass version check (spontaneous events)
+				if err := r.submit(ctx, taskID, "started", 0); err != nil {
+					slog.Error("failed to send started event", "task", taskID, "error", err)
 				}
-				if r.notify {
-					if err := notify.Send("xagent", fmt.Sprintf("%s completed", r.taskDisplayName(ctx, taskID))); err != nil {
-						slog.Error("failed to send notification", "task", taskID, "error", err)
+			case events.ActionDie:
+				r.runningCount.Add(-1)
+				// Use version 0 to bypass version check (spontaneous events)
+				exitCode := event.Actor.Attributes["exitCode"]
+				if exitCode == "0" {
+					slog.Info("container exited successfully", "task", taskID)
+					if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
+						slog.Error("failed to send stopped event", "task", taskID, "error", err)
 					}
-				}
-			} else {
-				slog.Error("container exited with error", "task", taskID, "exitCode", exitCode)
-				if err := r.submit(ctx, taskID, "failed", 0); err != nil {
-					slog.Error("failed to send failed event", "task", taskID, "error", err)
-				}
-				if r.notify {
-					if err := notify.Send("xagent", fmt.Sprintf("%s failed (exit code %s)", r.taskDisplayName(ctx, taskID), exitCode)); err != nil {
-						slog.Error("failed to send notification", "task", taskID, "error", err)
+					if r.notify {
+						if err := notify.Send("xagent", fmt.Sprintf("%s completed", r.taskDisplayName(ctx, taskID))); err != nil {
+							slog.Error("failed to send notification", "task", taskID, "error", err)
+						}
+					}
+				} else {
+					slog.Error("container exited with error", "task", taskID, "exitCode", exitCode)
+					if err := r.submit(ctx, taskID, "failed", 0); err != nil {
+						slog.Error("failed to send failed event", "task", taskID, "error", err)
+					}
+					if r.notify {
+						if err := notify.Send("xagent", fmt.Sprintf("%s failed (exit code %s)", r.taskDisplayName(ctx, taskID), exitCode)); err != nil {
+							slog.Error("failed to send notification", "task", taskID, "error", err)
+						}
 					}
 				}
 			}
