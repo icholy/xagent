@@ -200,6 +200,81 @@ func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest
 	return &xagentv1.DeleteTaskResponse{}, nil
 }
 
+func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
+	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.tasks.Get(ctx, tx, req.Id)
+		if err != nil {
+			return err
+		}
+		if task.Status != model.TaskStatusCompleted && task.Status != model.TaskStatusFailed {
+			return fmt.Errorf("cannot archive task with status %s", task.Status)
+		}
+		task.Status = model.TaskStatusArchived
+		if err := s.tasks.Put(ctx, tx, task); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	s.log.Info("task archived", "id", req.Id)
+	return &xagentv1.ArchiveTaskResponse{}, nil
+}
+
+func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
+	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.tasks.Get(ctx, tx, req.Id)
+		if err != nil {
+			return err
+		}
+		if task.Status != model.TaskStatusRunning && task.Status != model.TaskStatusPending {
+			return fmt.Errorf("cannot cancel task with status %s", task.Status)
+		}
+		task.Status = model.TaskStatusCancelling
+		task.Command = model.TaskCommandStop
+		task.Version++
+		if err := s.tasks.Put(ctx, tx, task); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	s.log.Info("task cancelled", "id", req.Id)
+	return &xagentv1.CancelTaskResponse{}, nil
+}
+
+func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
+	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.tasks.Get(ctx, tx, req.Id)
+		if err != nil {
+			return err
+		}
+		if task.Status != model.TaskStatusRunning &&
+			task.Status != model.TaskStatusCompleted &&
+			task.Status != model.TaskStatusFailed {
+			return fmt.Errorf("cannot restart task with status %s", task.Status)
+		}
+		task.Status = model.TaskStatusRestarting
+		task.Command = model.TaskCommandRestart
+		task.Version++
+		if err := s.tasks.Put(ctx, tx, task); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	s.log.Info("task restarted", "id", req.Id)
+	return &xagentv1.RestartTaskResponse{}, nil
+}
+
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
 	for _, entry := range req.Entries {
 		log := model.LogFromProto(entry)
