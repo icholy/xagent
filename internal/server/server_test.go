@@ -254,3 +254,39 @@ func TestUploadAndListLogs(t *testing.T) {
 	assert.Equal(t, resp.Entries[0].Content, "First log entry")
 	assert.Equal(t, resp.Entries[1].Content, "Second log entry")
 }
+
+func TestSubmitRunnerEvents(t *testing.T) {
+	srv := setupTestServer(t)
+	ctx := context.Background()
+
+	// Create a task and set it to running
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Test Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	taskID := createResp.Task.Id
+
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:     taskID,
+		Status: "running",
+	})
+	assert.NilError(t, err)
+
+	// Submit a stopped event
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{
+				TaskId:  taskID,
+				Event:   "stopped",
+				Version: 0,
+			},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Verify task status was updated
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.Status, "completed")
+}
