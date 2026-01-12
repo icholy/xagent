@@ -10,34 +10,6 @@ import (
 	"github.com/icholy/xagent/internal/model"
 )
 
-// Type aliases for backwards compatibility
-type TaskStatus = model.TaskStatus
-type Instruction = model.Instruction
-
-const (
-	TaskStatusPending    = model.TaskStatusPending
-	TaskStatusRunning    = model.TaskStatusRunning
-	TaskStatusRestarting = model.TaskStatusRestarting
-	TaskStatusCancelling = model.TaskStatusCancelling
-	TaskStatusCompleted  = model.TaskStatusCompleted
-	TaskStatusFailed     = model.TaskStatusFailed
-	TaskStatusCancelled  = model.TaskStatusCancelled
-	TaskStatusArchived   = model.TaskStatusArchived
-)
-
-type Task struct {
-	ID           int64         `json:"id"`
-	Name         string        `json:"name"`
-	Parent       int64         `json:"parent"`
-	Workspace    string        `json:"workspace"`
-	Instructions []Instruction `json:"instructions"`
-	Status       TaskStatus    `json:"status"`
-	Command      model.TaskCommand `json:"command"`
-	Version      int64         `json:"version"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
-}
-
 type TaskRepository struct {
 	db *sql.DB
 }
@@ -46,7 +18,7 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
-func (r *TaskRepository) Create(task *Task) error {
+func (r *TaskRepository) Create(task *model.Task) error {
 	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
@@ -71,7 +43,7 @@ func (r *TaskRepository) Create(task *Task) error {
 	return nil
 }
 
-func (r *TaskRepository) Get(id int64) (*Task, error) {
+func (r *TaskRepository) Get(id int64) (*model.Task, error) {
 	row := r.db.QueryRow(`
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE id = ?
@@ -79,7 +51,7 @@ func (r *TaskRepository) Get(id int64) (*Task, error) {
 	return r.scanTask(row)
 }
 
-func (r *TaskRepository) List() ([]*Task, error) {
+func (r *TaskRepository) List() ([]*model.Task, error) {
 	rows, err := r.db.Query(`
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE status != 'archived' ORDER BY created_at DESC
@@ -92,7 +64,7 @@ func (r *TaskRepository) List() ([]*Task, error) {
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) {
+func (r *TaskRepository) ListByStatuses(statuses []model.TaskStatus) ([]*model.Task, error) {
 	if len(statuses) == 0 {
 		return r.List()
 	}
@@ -115,7 +87,7 @@ func (r *TaskRepository) ListByStatuses(statuses []TaskStatus) ([]*Task, error) 
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListChildren(parentID int64) ([]*Task, error) {
+func (r *TaskRepository) ListChildren(parentID int64) ([]*model.Task, error) {
 	rows, err := r.db.Query(`
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE parent = ? ORDER BY created_at DESC
@@ -128,7 +100,7 @@ func (r *TaskRepository) ListChildren(parentID int64) ([]*Task, error) {
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListByEvent(eventID int64) ([]*Task, error) {
+func (r *TaskRepository) ListByEvent(eventID int64) ([]*model.Task, error) {
 	rows, err := r.db.Query(`
 		SELECT t.id, t.name, t.parent, t.workspace, t.prompts, t.status, t.created_at, t.updated_at
 		FROM tasks t
@@ -144,10 +116,11 @@ func (r *TaskRepository) ListByEvent(eventID int64) ([]*Task, error) {
 	return r.scanTasks(rows)
 }
 
+// TaskUpdate contains fields that can be updated on a task.
 type TaskUpdate struct {
 	Name            string
-	Status          TaskStatus
-	AddInstructions []Instruction
+	Status          model.TaskStatus
+	AddInstructions []model.Instruction
 }
 
 func (r *TaskRepository) Update(id int64, update TaskUpdate) error {
@@ -166,7 +139,7 @@ func (r *TaskRepository) Update(id int64, update TaskUpdate) error {
 			return err
 		}
 
-		var all []Instruction
+		var all []model.Instruction
 		if err := json.Unmarshal(existing, &all); err != nil {
 			return err
 		}
@@ -213,8 +186,8 @@ func (r *TaskRepository) Delete(id int64) error {
 	return err
 }
 
-func (r *TaskRepository) scanTask(row *sql.Row) (*Task, error) {
-	var task Task
+func (r *TaskRepository) scanTask(row *sql.Row) (*model.Task, error) {
+	var task model.Task
 	var instructions []byte
 
 	err := row.Scan(
@@ -238,10 +211,10 @@ func (r *TaskRepository) scanTask(row *sql.Row) (*Task, error) {
 	return &task, nil
 }
 
-func (r *TaskRepository) scanTasks(rows *sql.Rows) ([]*Task, error) {
-	var tasks []*Task
+func (r *TaskRepository) scanTasks(rows *sql.Rows) ([]*model.Task, error) {
+	var tasks []*model.Task
 	for rows.Next() {
-		var task Task
+		var task model.Task
 		var instructions []byte
 
 		err := rows.Scan(

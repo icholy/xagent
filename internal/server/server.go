@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
@@ -62,12 +63,12 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
-	var tasks []*store.Task
+	var tasks []*model.Task
 	var err error
 	if len(req.Statuses) > 0 {
-		statuses := make([]store.TaskStatus, len(req.Statuses))
+		statuses := make([]model.TaskStatus, len(req.Statuses))
 		for i, s := range req.Statuses {
-			statuses[i] = store.TaskStatus(s)
+			statuses[i] = model.TaskStatus(s)
 		}
 		tasks, err = s.tasks.ListByStatuses(statuses)
 	} else {
@@ -102,20 +103,20 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 }
 
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
-	instructions := make([]store.Instruction, len(req.Instructions))
+	instructions := make([]model.Instruction, len(req.Instructions))
 	for i, inst := range req.Instructions {
-		instructions[i] = store.Instruction{
+		instructions[i] = model.Instruction{
 			Text: inst.Text,
 			URL:  inst.Url,
 		}
 	}
 
-	task := &store.Task{
+	task := &model.Task{
 		Name:         req.Name,
 		Parent:       req.Parent,
 		Workspace:    req.Workspace,
 		Instructions: instructions,
-		Status:       store.TaskStatusPending,
+		Status:       model.TaskStatusPending,
 	}
 
 	if err := s.tasks.Create(task); err != nil {
@@ -168,9 +169,9 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 }
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
-	instructions := make([]store.Instruction, len(req.AddInstructions))
+	instructions := make([]model.Instruction, len(req.AddInstructions))
 	for i, inst := range req.AddInstructions {
-		instructions[i] = store.Instruction{
+		instructions[i] = model.Instruction{
 			Text: inst.Text,
 			URL:  inst.Url,
 		}
@@ -178,7 +179,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 
 	if err := s.tasks.Update(req.Id, store.TaskUpdate{
 		Name:            req.Name,
-		Status:          store.TaskStatus(req.Status),
+		Status:          model.TaskStatus(req.Status),
 		AddInstructions: instructions,
 	}); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -275,7 +276,7 @@ func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByUR
 	return resp, nil
 }
 
-func taskToProto(t *store.Task) *xagentv1.Task {
+func taskToProto(t *model.Task) *xagentv1.Task {
 	instructions := make([]*xagentv1.Instruction, len(t.Instructions))
 	for i, inst := range t.Instructions {
 		instructions[i] = &xagentv1.Instruction{
@@ -425,7 +426,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
 		}
-		if task.Status == store.TaskStatusArchived {
+		if task.Status == model.TaskStatusArchived {
 			s.log.Info("skipping archived task", "task_id", link.TaskID)
 			continue
 		}
@@ -433,7 +434,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		if err := s.events.AddTask(req.Id, link.TaskID); err != nil {
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
 		}
-		if err := s.tasks.Update(link.TaskID, store.TaskUpdate{Status: store.TaskStatusRestarting}); err != nil {
+		if err := s.tasks.Update(link.TaskID, store.TaskUpdate{Status: model.TaskStatusRestarting}); err != nil {
 			s.log.Warn("failed to restart task", "task_id", link.TaskID, "error", err)
 		}
 	}
