@@ -108,7 +108,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 	for _, task := range resp.Tasks {
 		switch task.Status {
 		case "cancelled":
-			if err := r.killTask(ctx, task); err != nil {
+			if err := r.killTask(ctx, task, "SIGKILL"); err != nil {
 				slog.Error("failed to cancel task", "task", task.Id, "error", err)
 			}
 			r.log(ctx, task.Id, "info", "task cancelled")
@@ -116,7 +116,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				slog.Error("failed to update cancelled task", "task", task.Id, "error", err)
 			}
 		case "restarting":
-			if err := r.killTask(ctx, task); err != nil {
+			if err := r.killTask(ctx, task, "SIGTERM"); err != nil {
 				slog.Error("failed to kill task for restart", "task", task.Id, "error", err)
 			}
 			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
@@ -228,7 +228,7 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task) error {
+func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task, signal string) error {
 	taskIDStr := strconv.FormatInt(task.Id, 10)
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
@@ -245,7 +245,7 @@ func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task) error {
 		return nil
 	}
 	slog.Info("killing cancelled task container", "task", task.Id)
-	if err := r.docker.ContainerKill(ctx, c.ID, "SIGKILL"); err != nil {
+	if err := r.docker.ContainerKill(ctx, c.ID, signal); err != nil {
 		// Container may have stopped between our check and the kill call
 		if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
 			return nil
