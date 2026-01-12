@@ -53,6 +53,8 @@ func migrate(db *sql.DB) error {
 			workspace     TEXT NOT NULL,
 			prompts       TEXT NOT NULL,
 			status        TEXT NOT NULL,
+			command       TEXT NOT NULL DEFAULT '',
+			version       INTEGER NOT NULL DEFAULT 0,
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
@@ -96,5 +98,29 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_event_tasks_task_id ON event_tasks(task_id);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migrations: Add columns to existing tables
+	// These use "IF NOT EXISTS" logic by checking for errors and ignoring "duplicate column" errors
+	migrations := []string{
+		`ALTER TABLE tasks ADD COLUMN command TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN version INTEGER NOT NULL DEFAULT 0`,
+	}
+	for _, m := range migrations {
+		if _, err := db.Exec(m); err != nil {
+			// Ignore "duplicate column name" errors (column already exists)
+			if !isDuplicateColumnError(err) {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func isDuplicateColumnError(err error) bool {
+	return err != nil && (err.Error() == "duplicate column name: command" ||
+		err.Error() == "duplicate column name: version")
 }
