@@ -224,3 +224,36 @@ func (t *Task) applyRunnerEventFailed() bool {
 		return false
 	}
 }
+
+// SetStatus attempts to transition the task to the specified status.
+// Returns true if the transition is valid and was applied, false otherwise.
+// This method enforces the task state machine rules:
+//   - archived: only from completed or failed
+//   - cancelling: only from running or pending
+//   - restarting: only from running, completed, or failed
+func (t *Task) SetStatus(status TaskStatus) bool {
+	switch status {
+	case TaskStatusArchived:
+		if t.Status != TaskStatusCompleted && t.Status != TaskStatusFailed {
+			return false
+		}
+		t.Status = TaskStatusArchived
+		return true
+	case TaskStatusCancelling:
+		if t.Status != TaskStatusRunning && t.Status != TaskStatusPending {
+			return false
+		}
+		t.Status = TaskStatusCancelling
+		return true
+	case TaskStatusRestarting:
+		if t.Status != TaskStatusRunning &&
+			t.Status != TaskStatusCompleted &&
+			t.Status != TaskStatusFailed {
+			return false
+		}
+		t.Status = TaskStatusRestarting
+		return true
+	default:
+		return false
+	}
+}

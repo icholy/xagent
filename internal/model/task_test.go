@@ -298,3 +298,233 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 		})
 	}
 }
+
+func TestTask_SetStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		before    TaskStatus
+		newStatus TaskStatus
+		want      bool
+		after     TaskStatus
+	}{
+		// Archive transitions (only from completed or failed)
+		{
+			name:      "archive from completed succeeds",
+			before:    TaskStatusCompleted,
+			newStatus: TaskStatusArchived,
+			want:      true,
+			after:     TaskStatusArchived,
+		},
+		{
+			name:      "archive from failed succeeds",
+			before:    TaskStatusFailed,
+			newStatus: TaskStatusArchived,
+			want:      true,
+			after:     TaskStatusArchived,
+		},
+		{
+			name:      "archive from pending fails",
+			before:    TaskStatusPending,
+			newStatus: TaskStatusArchived,
+			want:      false,
+			after:     TaskStatusPending,
+		},
+		{
+			name:      "archive from running fails",
+			before:    TaskStatusRunning,
+			newStatus: TaskStatusArchived,
+			want:      false,
+			after:     TaskStatusRunning,
+		},
+		{
+			name:      "archive from restarting fails",
+			before:    TaskStatusRestarting,
+			newStatus: TaskStatusArchived,
+			want:      false,
+			after:     TaskStatusRestarting,
+		},
+		{
+			name:      "archive from cancelling fails",
+			before:    TaskStatusCancelling,
+			newStatus: TaskStatusArchived,
+			want:      false,
+			after:     TaskStatusCancelling,
+		},
+		{
+			name:      "archive from cancelled fails",
+			before:    TaskStatusCancelled,
+			newStatus: TaskStatusArchived,
+			want:      false,
+			after:     TaskStatusCancelled,
+		},
+		{
+			name:      "archive from archived fails",
+			before:    TaskStatusArchived,
+			newStatus: TaskStatusArchived,
+			want:      false,
+			after:     TaskStatusArchived,
+		},
+
+		// Cancel transitions (only from running or pending)
+		{
+			name:      "cancel from running succeeds",
+			before:    TaskStatusRunning,
+			newStatus: TaskStatusCancelling,
+			want:      true,
+			after:     TaskStatusCancelling,
+		},
+		{
+			name:      "cancel from pending succeeds",
+			before:    TaskStatusPending,
+			newStatus: TaskStatusCancelling,
+			want:      true,
+			after:     TaskStatusCancelling,
+		},
+		{
+			name:      "cancel from completed fails",
+			before:    TaskStatusCompleted,
+			newStatus: TaskStatusCancelling,
+			want:      false,
+			after:     TaskStatusCompleted,
+		},
+		{
+			name:      "cancel from failed fails",
+			before:    TaskStatusFailed,
+			newStatus: TaskStatusCancelling,
+			want:      false,
+			after:     TaskStatusFailed,
+		},
+		{
+			name:      "cancel from restarting fails",
+			before:    TaskStatusRestarting,
+			newStatus: TaskStatusCancelling,
+			want:      false,
+			after:     TaskStatusRestarting,
+		},
+		{
+			name:      "cancel from cancelling fails",
+			before:    TaskStatusCancelling,
+			newStatus: TaskStatusCancelling,
+			want:      false,
+			after:     TaskStatusCancelling,
+		},
+		{
+			name:      "cancel from cancelled fails",
+			before:    TaskStatusCancelled,
+			newStatus: TaskStatusCancelling,
+			want:      false,
+			after:     TaskStatusCancelled,
+		},
+		{
+			name:      "cancel from archived fails",
+			before:    TaskStatusArchived,
+			newStatus: TaskStatusCancelling,
+			want:      false,
+			after:     TaskStatusArchived,
+		},
+
+		// Restart transitions (only from running, completed, or failed)
+		{
+			name:      "restart from running succeeds",
+			before:    TaskStatusRunning,
+			newStatus: TaskStatusRestarting,
+			want:      true,
+			after:     TaskStatusRestarting,
+		},
+		{
+			name:      "restart from completed succeeds",
+			before:    TaskStatusCompleted,
+			newStatus: TaskStatusRestarting,
+			want:      true,
+			after:     TaskStatusRestarting,
+		},
+		{
+			name:      "restart from failed succeeds",
+			before:    TaskStatusFailed,
+			newStatus: TaskStatusRestarting,
+			want:      true,
+			after:     TaskStatusRestarting,
+		},
+		{
+			name:      "restart from pending fails",
+			before:    TaskStatusPending,
+			newStatus: TaskStatusRestarting,
+			want:      false,
+			after:     TaskStatusPending,
+		},
+		{
+			name:      "restart from restarting fails",
+			before:    TaskStatusRestarting,
+			newStatus: TaskStatusRestarting,
+			want:      false,
+			after:     TaskStatusRestarting,
+		},
+		{
+			name:      "restart from cancelling fails",
+			before:    TaskStatusCancelling,
+			newStatus: TaskStatusRestarting,
+			want:      false,
+			after:     TaskStatusCancelling,
+		},
+		{
+			name:      "restart from cancelled fails",
+			before:    TaskStatusCancelled,
+			newStatus: TaskStatusRestarting,
+			want:      false,
+			after:     TaskStatusCancelled,
+		},
+		{
+			name:      "restart from archived fails",
+			before:    TaskStatusArchived,
+			newStatus: TaskStatusRestarting,
+			want:      false,
+			after:     TaskStatusArchived,
+		},
+
+		// Unsupported target status values
+		{
+			name:      "setting to running fails",
+			before:    TaskStatusPending,
+			newStatus: TaskStatusRunning,
+			want:      false,
+			after:     TaskStatusPending,
+		},
+		{
+			name:      "setting to completed fails",
+			before:    TaskStatusRunning,
+			newStatus: TaskStatusCompleted,
+			want:      false,
+			after:     TaskStatusRunning,
+		},
+		{
+			name:      "setting to failed fails",
+			before:    TaskStatusRunning,
+			newStatus: TaskStatusFailed,
+			want:      false,
+			after:     TaskStatusRunning,
+		},
+		{
+			name:      "setting to cancelled fails",
+			before:    TaskStatusCancelling,
+			newStatus: TaskStatusCancelled,
+			want:      false,
+			after:     TaskStatusCancelling,
+		},
+		{
+			name:      "setting to pending fails",
+			before:    TaskStatusRunning,
+			newStatus: TaskStatusPending,
+			want:      false,
+			after:     TaskStatusRunning,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := Task{Status: tt.before}
+			got := task.SetStatus(tt.newStatus)
+			assert.Equal(t, got, tt.want)
+			assert.Equal(t, task.Status, tt.after)
+		})
+	}
+}
