@@ -221,7 +221,7 @@ func (r *Runner) kill(ctx context.Context, task *model.Task) error {
 	if c.State != "running" {
 		return nil
 	}
-	slog.Info("killing cancelled task container", "task", task.ID)
+	slog.Info("killing container", "task", task.ID)
 	if err := r.docker.ContainerKill(ctx, c.ID, "SIGTERM"); err != nil {
 		// Container may have stopped between our check and the kill call
 		if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
