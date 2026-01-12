@@ -175,9 +175,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
 		}
 		if req.Restart {
-			if !task.Restart() {
-				return fmt.Errorf("cannot restart task with status %s", task.Status)
-			}
+			task.Restart()
 		}
 
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
