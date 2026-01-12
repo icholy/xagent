@@ -50,6 +50,7 @@ var RunnerCommand = &cli.Command{
 		&cli.BoolFlag{
 			Name:  "autoprune",
 			Usage: "Automatically remove containers for archived tasks",
+			Value: true,
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
