@@ -64,15 +64,11 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 	var tasks []*model.Task
 	var err error
-	if len(req.Statuses) > 0 {
-		statuses := make([]model.TaskStatus, len(req.Statuses))
-		for i, s := range req.Statuses {
-			statuses[i] = model.TaskStatus(s)
-		}
-		tasks, err = s.tasks.ListByStatuses(statuses)
-	} else {
-		tasks, err = s.tasks.List()
+	statuses := make([]model.TaskStatus, len(req.Statuses))
+	for i, s := range req.Statuses {
+		statuses[i] = model.TaskStatus(s)
 	}
+	tasks, err = s.tasks.ListByStatuses(statuses)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
