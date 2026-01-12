@@ -107,7 +107,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 		task := model.TaskFromProto(pbTask)
 		switch task.Command {
 		case model.TaskCommandStop:
-			if err := r.killTask(ctx, pbTask, "SIGTERM"); err != nil {
+			if err := r.kill(ctx, pbTask); err != nil {
 				slog.Error("failed to stop task", "task", task.ID, "error", err)
 			}
 			if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
@@ -115,14 +115,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 			}
 		case model.TaskCommandRestart:
 			// Kill existing container if running
-			if err := r.killTask(ctx, pbTask, "SIGTERM"); err != nil {
+			if err := r.kill(ctx, pbTask); err != nil {
 				slog.Error("failed to kill task for restart", "task", task.ID, "error", err)
 			}
 			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
 				slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
 				continue
 			}
-			if err := r.startTask(ctx, pbTask); err != nil {
+			if err := r.start(ctx, pbTask); err != nil {
 				slog.Error("failed to start task", "task", task.ID, "error", err)
 				if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
 					slog.Error("failed to send failed event", "task", task.ID, "error", err)
@@ -207,7 +207,7 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task, signal string) error {
+func (r *Runner) kill(ctx context.Context, task *xagentv1.Task) error {
 	taskIDStr := strconv.FormatInt(task.Id, 10)
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
@@ -224,7 +224,7 @@ func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task, signal strin
 		return nil
 	}
 	slog.Info("killing cancelled task container", "task", task.Id)
-	if err := r.docker.ContainerKill(ctx, c.ID, signal); err != nil {
+	if err := r.docker.ContainerKill(ctx, c.ID, "SIGTERM"); err != nil {
 		// Container may have stopped between our check and the kill call
 		if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
 			return nil
@@ -244,7 +244,7 @@ func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task, signal strin
 	return nil
 }
 
-func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
+func (r *Runner) start(ctx context.Context, task *xagentv1.Task) error {
 	ws, err := r.workspaces.Get(task.Workspace)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace: %w", err)
