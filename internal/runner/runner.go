@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"connectrpc.com/connect"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
@@ -539,6 +540,15 @@ func (r *Runner) Prune(ctx context.Context) error {
 		// Fetch task status
 		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 		if err != nil {
+			// Remove container if task was not found
+			if connect.CodeOf(err) == connect.CodeNotFound {
+				if err := r.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
+					slog.Error("failed to remove container", "task", taskID, "error", err)
+				} else {
+					slog.Info("container removed (task not found)", "task", taskID)
+				}
+				continue
+			}
 			slog.Error("failed to get task", "task", taskID, "error", err)
 			continue
 		}
