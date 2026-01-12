@@ -471,7 +471,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			if err != nil {
 				return err
 			}
-			task.Status = model.TaskStatusRestarting
+			task.Restart()
 			if err := s.tasks.Put(ctx, tx, task); err != nil {
 				return err
 			}
