@@ -1,10 +1,19 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// Executor is an interface that both *sql.DB and *sql.Tx implement.
+// It allows repository methods to work with either.
+type Executor interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
 
 func Open(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", path+"?mode=rwc&_journal_mode=WAL&_busy_timeout=5000")

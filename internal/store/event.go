@@ -16,8 +16,15 @@ func NewEventRepository(db *sql.DB) *EventRepository {
 	return &EventRepository{db: db}
 }
 
-func (r *EventRepository) Create(ctx context.Context, event *model.Event) error {
-	result, err := r.db.ExecContext(ctx, `
+func (r *EventRepository) exec(tx *sql.Tx) Executor {
+	if tx != nil {
+		return tx
+	}
+	return r.db
+}
+
+func (r *EventRepository) Create(ctx context.Context, tx *sql.Tx, event *model.Event) error {
+	result, err := r.exec(tx).ExecContext(ctx, `
 		INSERT INTO events (description, data, url, created_at)
 		VALUES (?, ?, ?, ?)
 	`, event.Description, event.Data, event.URL, time.Now())
@@ -28,10 +35,10 @@ func (r *EventRepository) Create(ctx context.Context, event *model.Event) error 
 	return nil
 }
 
-func (r *EventRepository) Get(ctx context.Context, id int64) (*model.Event, error) {
+func (r *EventRepository) Get(ctx context.Context, tx *sql.Tx, id int64) (*model.Event, error) {
 	var event model.Event
 	var url sql.NullString
-	err := r.db.QueryRowContext(ctx, `
+	err := r.exec(tx).QueryRowContext(ctx, `
 		SELECT id, description, data, url, created_at
 		FROM events WHERE id = ?
 	`, id).Scan(&event.ID, &event.Description, &event.Data, &url, &event.CreatedAt)
@@ -42,8 +49,8 @@ func (r *EventRepository) Get(ctx context.Context, id int64) (*model.Event, erro
 	return &event, nil
 }
 
-func (r *EventRepository) List(ctx context.Context, limit int) ([]*model.Event, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func (r *EventRepository) List(ctx context.Context, tx *sql.Tx, limit int) ([]*model.Event, error) {
+	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT id, description, data, url, created_at
 		FROM events ORDER BY created_at DESC
 		LIMIT ?
@@ -55,8 +62,8 @@ func (r *EventRepository) List(ctx context.Context, limit int) ([]*model.Event, 
 	return r.scanEvents(rows)
 }
 
-func (r *EventRepository) FindByURL(ctx context.Context, url string) ([]*model.Event, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func (r *EventRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string) ([]*model.Event, error) {
+	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT id, description, data, url, created_at
 		FROM events WHERE url = ? ORDER BY created_at DESC
 	`, url)
@@ -67,12 +74,17 @@ func (r *EventRepository) FindByURL(ctx context.Context, url string) ([]*model.E
 	return r.scanEvents(rows)
 }
 
-func (r *EventRepository) Delete(ctx context.Context, id int64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
+func (r *EventRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
+	var ownTx bool
+	if tx == nil {
+		var err error
+		tx, err = r.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		ownTx = true
+		defer tx.Rollback()
 	}
-	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM event_tasks WHERE event_id = ?`, id); err != nil {
 		return err
@@ -80,25 +92,29 @@ func (r *EventRepository) Delete(ctx context.Context, id int64) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM events WHERE id = ?`, id); err != nil {
 		return err
 	}
-	return tx.Commit()
+
+	if ownTx {
+		return tx.Commit()
+	}
+	return nil
 }
 
-func (r *EventRepository) AddTask(ctx context.Context, eventID int64, taskID int64) error {
-	_, err := r.db.ExecContext(ctx, `
+func (r *EventRepository) AddTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
+	_, err := r.exec(tx).ExecContext(ctx, `
 		INSERT OR IGNORE INTO event_tasks (event_id, task_id) VALUES (?, ?)
 	`, eventID, taskID)
 	return err
 }
 
-func (r *EventRepository) RemoveTask(ctx context.Context, eventID int64, taskID int64) error {
-	_, err := r.db.ExecContext(ctx, `
+func (r *EventRepository) RemoveTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
+	_, err := r.exec(tx).ExecContext(ctx, `
 		DELETE FROM event_tasks WHERE event_id = ? AND task_id = ?
 	`, eventID, taskID)
 	return err
 }
 
-func (r *EventRepository) ListTasks(ctx context.Context, eventID int64) ([]int64, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func (r *EventRepository) ListTasks(ctx context.Context, tx *sql.Tx, eventID int64) ([]int64, error) {
+	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT task_id FROM event_tasks WHERE event_id = ?
 	`, eventID)
 	if err != nil {
@@ -117,8 +133,8 @@ func (r *EventRepository) ListTasks(ctx context.Context, eventID int64) ([]int64
 	return tasks, rows.Err()
 }
 
-func (r *EventRepository) ListByTask(ctx context.Context, taskID int64) ([]*model.Event, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func (r *EventRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64) ([]*model.Event, error) {
+	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT e.id, e.description, e.data, e.url, e.created_at
 		FROM events e
 		JOIN event_tasks et ON e.id = et.event_id

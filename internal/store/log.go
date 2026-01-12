@@ -16,8 +16,15 @@ func NewLogRepository(db *sql.DB) *LogRepository {
 	return &LogRepository{db: db}
 }
 
-func (r *LogRepository) Create(ctx context.Context, log *model.Log) error {
-	result, err := r.db.ExecContext(ctx, `
+func (r *LogRepository) exec(tx *sql.Tx) Executor {
+	if tx != nil {
+		return tx
+	}
+	return r.db
+}
+
+func (r *LogRepository) Create(ctx context.Context, tx *sql.Tx, log *model.Log) error {
+	result, err := r.exec(tx).ExecContext(ctx, `
 		INSERT INTO logs (task_id, type, content, created_at)
 		VALUES (?, ?, ?, ?)
 	`, log.TaskID, log.Type, log.Content, time.Now())
@@ -28,8 +35,8 @@ func (r *LogRepository) Create(ctx context.Context, log *model.Log) error {
 	return nil
 }
 
-func (r *LogRepository) ListByTask(ctx context.Context, taskID int64) ([]*model.Log, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func (r *LogRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64) ([]*model.Log, error) {
+	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT id, task_id, type, content, created_at
 		FROM logs WHERE task_id = ? ORDER BY created_at ASC
 	`, taskID)
