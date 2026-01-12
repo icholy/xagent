@@ -22,3 +22,13 @@ func (l *Log) Proto() *xagentv1.LogEntry {
 		Content: l.Content,
 	}
 }
+
+// LogFromProto converts a protobuf LogEntry to a model Log.
+// Note: ID, TaskID, and CreatedAt must be set separately as they are not
+// part of the LogEntry protobuf message.
+func LogFromProto(pb *xagentv1.LogEntry) Log {
+	return Log{
+		Type:    pb.Type,
+		Content: pb.Content,
+	}
+}

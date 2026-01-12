@@ -189,12 +189,9 @@ func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest
 
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
 	for _, entry := range req.Entries {
-		log := &model.Log{
-			TaskID:  req.TaskId,
-			Type:    entry.Type,
-			Content: entry.Content,
-		}
-		if err := s.logs.Create(ctx, log); err != nil {
+		log := model.LogFromProto(entry)
+		log.TaskID = req.TaskId
+		if err := s.logs.Create(ctx, &log); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
@@ -210,10 +207,7 @@ func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*
 		Entries: make([]*xagentv1.LogEntry, len(logs)),
 	}
 	for i, l := range logs {
-		resp.Entries[i] = &xagentv1.LogEntry{
-			Type:    l.Type,
-			Content: l.Content,
-		}
+		resp.Entries[i] = l.Proto()
 	}
 	return resp, nil
 }
