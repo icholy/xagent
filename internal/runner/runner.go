@@ -107,7 +107,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 		task := model.TaskFromProto(pbTask)
 		switch task.Command {
 		case model.TaskCommandStop:
-			if err := r.kill(ctx, pbTask); err != nil {
+			if err := r.kill(ctx, task); err != nil {
 				slog.Error("failed to stop task", "task", task.ID, "error", err)
 			}
 			if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
@@ -115,14 +115,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 			}
 		case model.TaskCommandRestart:
 			// Kill existing container if running
-			if err := r.kill(ctx, pbTask); err != nil {
+			if err := r.kill(ctx, task); err != nil {
 				slog.Error("failed to kill task for restart", "task", task.ID, "error", err)
 			}
 			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
 				slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
 				continue
 			}
-			if err := r.start(ctx, pbTask); err != nil {
+			if err := r.start(ctx, task); err != nil {
 				slog.Error("failed to start task", "task", task.ID, "error", err)
 				if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
 					slog.Error("failed to send failed event", "task", task.ID, "error", err)
@@ -207,8 +207,8 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) kill(ctx context.Context, task *xagentv1.Task) error {
-	taskIDStr := strconv.FormatInt(task.Id, 10)
+func (r *Runner) kill(ctx context.Context, task *model.Task) error {
+	taskIDStr := strconv.FormatInt(task.ID, 10)
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
 		Filters: filters.NewArgs(filters.Arg("label", "xagent.task="+taskIDStr)),
@@ -223,7 +223,7 @@ func (r *Runner) kill(ctx context.Context, task *xagentv1.Task) error {
 	if c.State != "running" {
 		return nil
 	}
-	slog.Info("killing cancelled task container", "task", task.Id)
+	slog.Info("killing cancelled task container", "task", task.ID)
 	if err := r.docker.ContainerKill(ctx, c.ID, "SIGTERM"); err != nil {
 		// Container may have stopped between our check and the kill call
 		if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
@@ -244,13 +244,13 @@ func (r *Runner) kill(ctx context.Context, task *xagentv1.Task) error {
 	return nil
 }
 
-func (r *Runner) start(ctx context.Context, task *xagentv1.Task) error {
+func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	ws, err := r.workspaces.Get(task.Workspace)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	taskIDStr := strconv.FormatInt(task.Id, 10)
+	taskIDStr := strconv.FormatInt(task.ID, 10)
 	containerName := "xagent-" + taskIDStr
 
 	// Look up existing container
@@ -266,16 +266,16 @@ func (r *Runner) start(ctx context.Context, task *xagentv1.Task) error {
 	if len(containers) > 0 {
 		c := containers[0]
 		if c.State == "running" {
-			slog.Info("container already running", "task", task.Id, "container", containerName)
+			slog.Info("container already running", "task", task.ID, "container", containerName)
 			return nil
 		}
-		slog.Info("starting existing container", "task", task.Id, "container", containerName)
+		slog.Info("starting existing container", "task", task.ID, "container", containerName)
 		containerID = c.ID
 	} else {
 		// Build container config from workspace
 		config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
 
-		slog.Info("creating container", "task", task.Id, "container", containerName, "image", ws.Container.Image, "workspace", task.Workspace)
+		slog.Info("creating container", "task", task.ID, "container", containerName, "image", ws.Container.Image, "workspace", task.Workspace)
 		resp, err := r.docker.ContainerCreate(ctx, config, hostConfig, networkConfig, nil, containerName)
 		if err != nil {
 			return fmt.Errorf("failed to create container: %w", err)
@@ -300,13 +300,13 @@ func (r *Runner) start(ctx context.Context, task *xagentv1.Task) error {
 
 	r.runningCount.Add(1)
 
-	slog.Info("container started", "task", task.Id, "container", containerName)
+	slog.Info("container started", "task", task.ID, "container", containerName)
 	return nil
 }
 
-func (r *Runner) buildContainerConfig(task *xagentv1.Task, ws *workspace.Workspace) (*container.Config, *container.HostConfig, *network.NetworkingConfig) {
+func (r *Runner) buildContainerConfig(task *model.Task, ws *workspace.Workspace) (*container.Config, *container.HostConfig, *network.NetworkingConfig) {
 	ctr := &ws.Container
-	taskIDStr := strconv.FormatInt(task.Id, 10)
+	taskIDStr := strconv.FormatInt(task.ID, 10)
 
 	// Build environment variables
 	env := make([]string, 0, len(ctr.Environment)+1)
@@ -389,8 +389,8 @@ func (r *Runner) copyBinary(ctx context.Context, containerID, image string) erro
 	return r.docker.CopyToContainer(ctx, containerID, "/usr/local/bin", &buf, container.CopyToContainerOptions{})
 }
 
-func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagentv1.Task, ws *workspace.Workspace) error {
-	taskIDStr := strconv.FormatInt(task.Id, 10)
+func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model.Task, ws *workspace.Workspace) error {
+	taskIDStr := strconv.FormatInt(task.ID, 10)
 
 	// Convert workspace to agent config format
 	cfg := agent.Config{
