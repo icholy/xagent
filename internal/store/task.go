@@ -26,6 +26,10 @@ func (r *TaskRepository) exec(tx *sql.Tx) Executor {
 	return r.db
 }
 
+func (r *TaskRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error) error {
+	return WithTx(ctx, r.db, tx, f)
+}
+
 func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
@@ -124,65 +128,18 @@ func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID in
 	return r.scanTasks(rows)
 }
 
-// TaskUpdate contains fields that can be updated on a task.
-type TaskUpdate struct {
-	Name            string
-	Status          model.TaskStatus
-	AddInstructions []model.Instruction
-}
+func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) error {
+	instructions, err := json.Marshal(task.Instructions)
+	if err != nil {
+		return err
+	}
 
-func (r *TaskRepository) Update(ctx context.Context, tx *sql.Tx, id int64, update TaskUpdate) error {
-	return WithTx(ctx, r.db, tx, func(tx *sql.Tx) error {
-		// Add instructions if provided
-		if len(update.AddInstructions) > 0 {
-			row := tx.QueryRowContext(ctx, `SELECT prompts FROM tasks WHERE id = ?`, id)
-
-			var existing []byte
-			if err := row.Scan(&existing); err != nil {
-				return err
-			}
-
-			var all []model.Instruction
-			if err := json.Unmarshal(existing, &all); err != nil {
-				return err
-			}
-
-			all = append(all, update.AddInstructions...)
-			data, err := json.Marshal(all)
-			if err != nil {
-				return err
-			}
-
-			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
-			`, data, time.Now(), id)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Update name if provided
-		if update.Name != "" {
-			_, err := tx.ExecContext(ctx, `
-				UPDATE tasks SET name = ?, updated_at = ? WHERE id = ?
-			`, update.Name, time.Now(), id)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Update status if provided
-		if update.Status != "" {
-			_, err := tx.ExecContext(ctx, `
-				UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?
-			`, update.Status, time.Now(), id)
-			if err != nil {
-				return err
-			}
-		}
-
-		return tx.Commit()
-	})
+	task.UpdatedAt = time.Now()
+	_, err = r.exec(tx).ExecContext(ctx, `
+		UPDATE tasks SET name = ?, parent = ?, workspace = ?, prompts = ?, status = ?, updated_at = ?
+		WHERE id = ?
+	`, task.Name, task.Parent, task.Workspace, instructions, task.Status, task.UpdatedAt, task.ID)
+	return err
 }
 
 func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
