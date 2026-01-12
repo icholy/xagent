@@ -492,13 +492,25 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if err != nil {
 				return err
 			}
-			if task.ApplyRunnerEvent(&event) {
+
+			var updated bool
+			if event.Status != "" {
+				// Direct status update (bypasses state machine)
+				task.Status = event.Status
+				updated = true
+			} else {
+				// Use state machine
+				updated = task.ApplyRunnerEvent(&event)
+			}
+
+			if updated {
 				if err := s.tasks.Put(ctx, tx, task); err != nil {
 					return err
 				}
 				s.log.Info("runner event applied",
 					"task_id", event.TaskID,
 					"event", event.Event,
+					"status", event.Status,
 					"new_status", task.Status,
 				)
 			}
