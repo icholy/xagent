@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // CursorAgent implements Agent using the Cursor Agent CLI.
@@ -66,6 +68,14 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 	cmd.Dir = a.cwd
 	cmd.Env = os.Environ()
 	cmd.Stderr = os.Stderr
+
+	// Create a new process group so we can kill all child processes
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		// Send SIGTERM to the entire process group (negative PID)
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
+	cmd.WaitDelay = 5 * time.Second
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
