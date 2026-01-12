@@ -91,6 +91,9 @@ const (
 	// XAgentServiceProcessEventProcedure is the fully-qualified name of the XAgentService's
 	// ProcessEvent RPC.
 	XAgentServiceProcessEventProcedure = "/xagent.v1.XAgentService/ProcessEvent"
+	// XAgentServiceSubmitRunnerEventsProcedure is the fully-qualified name of the XAgentService's
+	// SubmitRunnerEvents RPC.
+	XAgentServiceSubmitRunnerEventsProcedure = "/xagent.v1.XAgentService/SubmitRunnerEvents"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -116,6 +119,7 @@ type XAgentServiceClient interface {
 	ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
 	ProcessEvent(context.Context, *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error)
+	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -255,32 +259,39 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("ProcessEvent")),
 			connect.WithClientOptions(opts...),
 		),
+		submitRunnerEvents: connect.NewClient[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse](
+			httpClient,
+			baseURL+XAgentServiceSubmitRunnerEventsProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("SubmitRunnerEvents")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // xAgentServiceClient implements XAgentServiceClient.
 type xAgentServiceClient struct {
-	listTasks        *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
-	listChildTasks   *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
-	createTask       *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
-	getTask          *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	getTaskDetails   *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
-	updateTask       *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	deleteTask       *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
-	uploadLogs       *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
-	listLogs         *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
-	createLink       *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
-	listLinks        *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
-	findLinksByURL   *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
-	listEvents       *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
-	createEvent      *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
-	getEvent         *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
-	deleteEvent      *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
-	addEventTask     *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
-	removeEventTask  *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
-	listEventTasks   *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
-	listEventsByTask *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
-	processEvent     *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
+	listTasks          *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	listChildTasks     *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
+	createTask         *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	getTask            *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
+	getTaskDetails     *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
+	updateTask         *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
+	deleteTask         *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
+	uploadLogs         *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
+	listLogs           *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
+	createLink         *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
+	listLinks          *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
+	findLinksByURL     *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
+	listEvents         *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
+	createEvent        *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
+	getEvent           *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
+	deleteEvent        *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
+	addEventTask       *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
+	removeEventTask    *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
+	listEventTasks     *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
+	listEventsByTask   *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
+	processEvent       *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
+	submitRunnerEvents *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
 }
 
 // ListTasks calls xagent.v1.XAgentService.ListTasks.
@@ -472,6 +483,15 @@ func (c *xAgentServiceClient) ProcessEvent(ctx context.Context, req *v1.ProcessE
 	return nil, err
 }
 
+// SubmitRunnerEvents calls xagent.v1.XAgentService.SubmitRunnerEvents.
+func (c *xAgentServiceClient) SubmitRunnerEvents(ctx context.Context, req *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error) {
+	response, err := c.submitRunnerEvents.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
@@ -495,6 +515,7 @@ type XAgentServiceHandler interface {
 	ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
 	ProcessEvent(context.Context, *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error)
+	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -630,6 +651,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("ProcessEvent")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceSubmitRunnerEventsHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceSubmitRunnerEventsProcedure,
+		svc.SubmitRunnerEvents,
+		connect.WithSchema(xAgentServiceMethods.ByName("SubmitRunnerEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServiceListTasksProcedure:
@@ -674,6 +701,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListEventsByTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceProcessEventProcedure:
 			xAgentServiceProcessEventHandler.ServeHTTP(w, r)
+		case XAgentServiceSubmitRunnerEventsProcedure:
+			xAgentServiceSubmitRunnerEventsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -765,4 +794,8 @@ func (UnimplementedXAgentServiceHandler) ListEventsByTask(context.Context, *v1.L
 
 func (UnimplementedXAgentServiceHandler) ProcessEvent(context.Context, *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ProcessEvent is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SubmitRunnerEvents is not implemented"))
 }
