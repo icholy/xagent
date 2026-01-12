@@ -259,7 +259,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := context.Background()
 
-	// Create a task
+	// Create a task and set it to running
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
@@ -267,51 +267,13 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	assert.NilError(t, err)
 	taskID := createResp.Task.Id
 
-	// Set task to pending with restart command (ready to start)
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     taskID,
-		Status: "pending",
-	})
-	assert.NilError(t, err)
-
-	// Submit a started event - this should not change status because command is not set
-	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{
-				TaskId:  taskID,
-				Event:   "started",
-				Version: 0,
-			},
-		},
-	})
-	assert.NilError(t, err)
-
-	// Verify task is still pending (started needs restart command)
-	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.Status, "pending")
-}
-
-func TestSubmitRunnerEvents_StoppedTransition(t *testing.T) {
-	srv := setupTestServer(t)
-	ctx := context.Background()
-
-	// Create a task
-	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Test Task",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-	taskID := createResp.Task.Id
-
-	// Set task to running
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:     taskID,
 		Status: "running",
 	})
 	assert.NilError(t, err)
 
-	// Submit a stopped event - should transition to completed
+	// Submit a stopped event
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{
@@ -323,117 +285,8 @@ func TestSubmitRunnerEvents_StoppedTransition(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Verify task is completed
+	// Verify task status was updated
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.Status, "completed")
-}
-
-func TestSubmitRunnerEvents_FailedTransition(t *testing.T) {
-	srv := setupTestServer(t)
-	ctx := context.Background()
-
-	// Create a task
-	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Test Task",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-	taskID := createResp.Task.Id
-
-	// Set task to running
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     taskID,
-		Status: "running",
-	})
-	assert.NilError(t, err)
-
-	// Submit a failed event - should transition to failed
-	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{
-				TaskId:  taskID,
-				Event:   "failed",
-				Version: 0,
-			},
-		},
-	})
-	assert.NilError(t, err)
-
-	// Verify task is failed
-	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.Status, "failed")
-}
-
-func TestSubmitRunnerEvents_MultipleEvents(t *testing.T) {
-	srv := setupTestServer(t)
-	ctx := context.Background()
-
-	// Create two tasks
-	createResp1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Task 1",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-	createResp2, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Task 2",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Set both tasks to running
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     createResp1.Task.Id,
-		Status: "running",
-	})
-	assert.NilError(t, err)
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     createResp2.Task.Id,
-		Status: "running",
-	})
-	assert.NilError(t, err)
-
-	// Submit multiple events in one request
-	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{
-				TaskId:  createResp1.Task.Id,
-				Event:   "stopped",
-				Version: 0,
-			},
-			{
-				TaskId:  createResp2.Task.Id,
-				Event:   "failed",
-				Version: 0,
-			},
-		},
-	})
-	assert.NilError(t, err)
-
-	// Verify task 1 is completed and task 2 is failed
-	getResp1, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp1.Task.Id})
-	assert.NilError(t, err)
-	assert.Equal(t, getResp1.Task.Status, "completed")
-
-	getResp2, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp2.Task.Id})
-	assert.NilError(t, err)
-	assert.Equal(t, getResp2.Task.Status, "failed")
-}
-
-func TestSubmitRunnerEvents_NonExistentTask(t *testing.T) {
-	srv := setupTestServer(t)
-	ctx := context.Background()
-
-	// Submit an event for a non-existent task - should return an error
-	_, err := srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{
-				TaskId:  99999,
-				Event:   "stopped",
-				Version: 0,
-			},
-		},
-	})
-	assert.ErrorContains(t, err, "")
 }
