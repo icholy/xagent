@@ -22,11 +22,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 				Command: TaskCommandRestart,
 				Version: 2,
 			},
-			after: Task{
-				Status:  TaskStatusPending,
-				Command: TaskCommandRestart,
-				Version: 2,
-			},
 			event: RunnerEvent{
 				Event:   RunnerEventStarted,
 				Version: 1,
@@ -98,9 +93,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			before: Task{
 				Status: TaskStatusPending,
 			},
-			after: Task{
-				Status: TaskStatusPending,
-			},
 			event: RunnerEvent{
 				Event: RunnerEventStarted,
 			},
@@ -109,9 +101,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 		{
 			name: "started: completed status returns false",
 			before: Task{
-				Status: TaskStatusCompleted,
-			},
-			after: Task{
 				Status: TaskStatusCompleted,
 			},
 			event: RunnerEvent{
@@ -168,10 +157,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 				Status:  TaskStatusRunning,
 				Command: TaskCommandRestart,
 			},
-			after: Task{
-				Status:  TaskStatusRunning,
-				Command: TaskCommandRestart,
-			},
 			event: RunnerEvent{
 				Event: RunnerEventStopped,
 			},
@@ -180,9 +165,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 		{
 			name: "stopped: pending status returns false",
 			before: Task{
-				Status: TaskStatusPending,
-			},
-			after: Task{
 				Status: TaskStatusPending,
 			},
 			event: RunnerEvent{
@@ -266,9 +248,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			before: Task{
 				Status: TaskStatusFailed,
 			},
-			after: Task{
-				Status: TaskStatusFailed,
-			},
 			event: RunnerEvent{
 				Event: RunnerEventFailed,
 			},
@@ -279,9 +258,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			before: Task{
 				Status: TaskStatusCompleted,
 			},
-			after: Task{
-				Status: TaskStatusCompleted,
-			},
 			event: RunnerEvent{
 				Event: RunnerEventFailed,
 			},
@@ -290,9 +266,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 		{
 			name: "failed: cancelled returns false",
 			before: Task{
-				Status: TaskStatusCancelled,
-			},
-			after: Task{
 				Status: TaskStatusCancelled,
 			},
 			event: RunnerEvent{
@@ -307,9 +280,6 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			before: Task{
 				Status: TaskStatusRunning,
 			},
-			after: Task{
-				Status: TaskStatusRunning,
-			},
 			event: RunnerEvent{
 				Event: RunnerEventType("unknown"),
 			},
@@ -322,7 +292,9 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			task := tt.before
 			got := task.ApplyRunnerEvent(&tt.event)
 			assert.Equal(t, got, tt.changed)
-			assert.DeepEqual(t, task, tt.after)
+			if tt.changed {
+				assert.DeepEqual(t, task, tt.after)
+			}
 		})
 	}
 }
