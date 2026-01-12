@@ -253,19 +253,40 @@ func (r *Runner) kill(ctx context.Context, task *model.Task) error {
 	return nil
 }
 
-func (r *Runner) start(ctx context.Context, task *model.Task) error {
+func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	ws, err := r.workspaces.Get(task.Workspace)
 	if err != nil {
-		return fmt.Errorf("failed to get workspace: %w", err)
+		return "", fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	taskIDStr := strconv.FormatInt(task.ID, 10)
-	containerName := "xagent-" + taskIDStr
+	// Build container config from workspace
+	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
 
+	name := fmt.Sprintf("xagent-%d", task.ID)
+	slog.Info("creating container", "task", task.ID, "name", name, "image", ws.Container.Image, "workspace", task.Workspace)
+	resp, err := r.docker.ContainerCreate(ctx, config, hostConfig, networkConfig, nil, name)
+	if err != nil {
+		return "", fmt.Errorf("failed to create container: %w", err)
+	}
+
+	// Copy xagent binary into container
+	if err := r.copyBinary(ctx, resp.ID, ws.Container.Image); err != nil {
+		return "", fmt.Errorf("failed to copy binary: %w", err)
+	}
+
+	// Copy config into container
+	if err := r.copyConfig(ctx, resp.ID, task, ws); err != nil {
+		return "", fmt.Errorf("failed to copy config: %w", err)
+	}
+
+	return resp.ID, nil
+}
+
+func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	// Look up existing container
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
-		Filters: filters.NewArgs(filters.Arg("label", "xagent.task="+taskIDStr)),
+		Filters: filters.NewArgs(filters.Arg("label", fmt.Sprintf("xagent.task=%d", task.ID))),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -274,29 +295,14 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	var containerID string
 	if len(containers) > 0 {
 		c := containers[0]
-		slog.Info("starting existing container", "task", task.ID, "container", containerName)
+		slog.Info("starting existing container", "task", task.ID, "name", fmt.Sprintf("xagent-%d", task.ID))
 		containerID = c.ID
 	} else {
-		// Build container config from workspace
-		config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
-
-		slog.Info("creating container", "task", task.ID, "container", containerName, "image", ws.Container.Image, "workspace", task.Workspace)
-		resp, err := r.docker.ContainerCreate(ctx, config, hostConfig, networkConfig, nil, containerName)
+		var err error
+		containerID, err = r.create(ctx, task)
 		if err != nil {
-			return fmt.Errorf("failed to create container: %w", err)
+			return err
 		}
-
-		// Copy xagent binary into container
-		if err := r.copyBinary(ctx, resp.ID, ws.Container.Image); err != nil {
-			return fmt.Errorf("failed to copy binary: %w", err)
-		}
-
-		// Copy config into container
-		if err := r.copyConfig(ctx, resp.ID, task, ws); err != nil {
-			return fmt.Errorf("failed to copy config: %w", err)
-		}
-
-		containerID = resp.ID
 	}
 
 	if err := r.docker.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
