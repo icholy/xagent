@@ -65,11 +65,22 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 	var tasks []*model.Task
 	var err error
-	statuses := make([]model.TaskStatus, len(req.Statuses))
-	for i, s := range req.Statuses {
-		statuses[i] = model.TaskStatus(s)
+
+	// If commands filter is specified, use that
+	if len(req.Commands) > 0 {
+		commands := make([]model.TaskCommand, len(req.Commands))
+		for i, c := range req.Commands {
+			commands[i] = model.TaskCommand(c)
+		}
+		tasks, err = s.tasks.ListByCommands(ctx, nil, commands)
+	} else {
+		statuses := make([]model.TaskStatus, len(req.Statuses))
+		for i, s := range req.Statuses {
+			statuses[i] = model.TaskStatus(s)
+		}
+		tasks, err = s.tasks.ListByStatuses(ctx, nil, statuses)
 	}
-	tasks, err = s.tasks.ListByStatuses(ctx, nil, statuses)
+
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -110,6 +121,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Workspace:    req.Workspace,
 		Instructions: instructions,
 		Status:       model.TaskStatusPending,
+		Command:      model.TaskCommandRestart,
 	}
 
 	if err := s.tasks.Create(ctx, nil, task); err != nil {
@@ -171,9 +183,6 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if req.Name != "" {
 			task.Name = req.Name
 		}
-		if req.Status != "" {
-			task.Status = model.TaskStatus(req.Status)
-		}
 		for _, inst := range req.AddInstructions {
 			task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
 		}
@@ -187,7 +196,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	s.log.Info("task updated", "id", req.Id, "name", req.Name, "status", req.Status, "instructions_added", len(req.AddInstructions))
+	s.log.Info("task updated", "id", req.Id, "name", req.Name, "instructions_added", len(req.AddInstructions))
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 
@@ -228,7 +237,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if err != nil {
 			return err
 		}
-		if !task.SetStatus(model.TaskStatusCancelling) {
+		if !task.Cancel() {
 			return fmt.Errorf("cannot cancel task with status %s", task.Status)
 		}
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
@@ -250,7 +259,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if err != nil {
 			return err
 		}
-		if !task.SetStatus(model.TaskStatusRestarting) {
+		if !task.Restart() {
 			return fmt.Errorf("cannot restart task with status %s", task.Status)
 		}
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
@@ -468,7 +477,9 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			if err != nil {
 				return err
 			}
-			task.Status = model.TaskStatusRestarting
+			if !task.Restart() {
+				return fmt.Errorf("cannot restart task with status %s", task.Status)
+			}
 			if err := s.tasks.Put(ctx, tx, task); err != nil {
 				return err
 			}

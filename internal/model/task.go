@@ -228,30 +228,58 @@ func (t *Task) applyRunnerEventFailed() bool {
 // SetStatus attempts to transition the task to the specified status.
 // Returns true if the transition is valid and was applied, false otherwise.
 // This method enforces the task state machine rules:
-//   - archived: only from completed or failed
-//   - cancelling: only from running or pending
-//   - restarting: only from running, completed, or failed
+//   - archived: only from completed, failed, or cancelled
 func (t *Task) SetStatus(status TaskStatus) bool {
 	switch status {
 	case TaskStatusArchived:
-		if t.Status != TaskStatusCompleted && t.Status != TaskStatusFailed {
+		if t.Status != TaskStatusCompleted && t.Status != TaskStatusFailed && t.Status != TaskStatusCancelled {
 			return false
 		}
 		t.Status = TaskStatusArchived
 		return true
-	case TaskStatusCancelling:
-		if t.Status != TaskStatusRunning && t.Status != TaskStatusPending {
-			return false
-		}
-		t.Status = TaskStatusCancelling
+	default:
+		return false
+	}
+}
+
+// Cancel attempts to cancel the task.
+// Returns true if the transition is valid and was applied, false otherwise.
+func (t *Task) Cancel() bool {
+	switch t.Status {
+	case TaskStatusPending:
+		// Task not running yet, can cancel immediately
+		t.Status = TaskStatusCancelled
+		t.Command = ""
 		return true
-	case TaskStatusRestarting:
-		if t.Status != TaskStatusRunning &&
-			t.Status != TaskStatusCompleted &&
-			t.Status != TaskStatusFailed {
-			return false
-		}
+	case TaskStatusRunning, TaskStatusRestarting:
+		// Need to send stop command to runner
+		t.Status = TaskStatusCancelling
+		t.Command = TaskCommandStop
+		t.Version++
+		return true
+	default:
+		return false
+	}
+}
+
+// Restart attempts to restart the task.
+// Returns true if the transition is valid and was applied, false otherwise.
+func (t *Task) Restart() bool {
+	switch t.Status {
+	case TaskStatusPending:
+		// Task is already pending; just ensure restart command is set
+		t.Command = TaskCommandRestart
+		t.Version++
+		return true
+	case TaskStatusRunning:
 		t.Status = TaskStatusRestarting
+		t.Command = TaskCommandRestart
+		t.Version++
+		return true
+	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
+		t.Status = TaskStatusPending
+		t.Command = TaskCommandRestart
+		t.Version++
 		return true
 	default:
 		return false

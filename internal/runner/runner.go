@@ -99,59 +99,52 @@ func (r *Runner) taskDisplayName(ctx context.Context, taskID int64) string {
 	return fmt.Sprintf("%q", resp.Task.Name)
 }
 
+func (r *Runner) submitRunnerEvent(ctx context.Context, taskID int64, event string, version int64, reconcile bool) {
+	_, err := r.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{
+				TaskId:    taskID,
+				Event:     event,
+				Version:   version,
+				Reconcile: reconcile,
+			},
+		},
+	})
+	if err != nil {
+		slog.Error("failed to submit runner event", "task", taskID, "event", event, "error", err)
+	}
+}
+
 func (r *Runner) Poll(ctx context.Context) error {
-	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{Statuses: []string{"pending", "cancelled", "restarting"}})
+	// Poll for tasks with actionable commands
+	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{Commands: []string{"restart", "stop"}})
 	if err != nil {
 		return err
 	}
 
 	for _, task := range resp.Tasks {
-		switch task.Status {
-		case "cancelled":
-			if err := r.killTask(ctx, task, "SIGKILL"); err != nil {
-				slog.Error("failed to cancel task", "task", task.Id, "error", err)
+		switch task.Command {
+		case "stop":
+			if err := r.killTask(ctx, task, "SIGTERM"); err != nil {
+				slog.Error("failed to stop task", "task", task.Id, "error", err)
 			}
-			r.log(ctx, task.Id, "info", "task cancelled")
-			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "failed"}); err != nil {
-				slog.Error("failed to update cancelled task", "task", task.Id, "error", err)
-			}
-		case "restarting":
+			r.log(ctx, task.Id, "info", "task stopping")
+		case "restart":
 			if err := r.killTask(ctx, task, "SIGTERM"); err != nil {
 				slog.Error("failed to kill task for restart", "task", task.Id, "error", err)
 			}
 			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
-				slog.Debug("concurrency limit reached, skipping restarting task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
-				continue
-			}
-			r.log(ctx, task.Id, "info", "container restarting")
-			if err := r.startTask(ctx, task); err != nil {
-				slog.Error("failed to restart task", "task", task.Id, "error", err)
-				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to restart task: %v", err))
-				if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "failed"}); err != nil {
-					slog.Error("failed to update task status", "task", task.Id, "error", err)
-				}
-				continue
-			}
-			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "running"}); err != nil {
-				slog.Error("failed to update task status", "task", task.Id, "error", err)
-			}
-		case "pending":
-			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
-				slog.Debug("concurrency limit reached, skipping pending task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
+				slog.Debug("concurrency limit reached, skipping task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
 				continue
 			}
 			r.log(ctx, task.Id, "info", "container starting")
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to start container", "task", task.Id, "error", err)
 				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to start container: %v", err))
-				if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "failed"}); err != nil {
-					slog.Error("failed to update task status", "task", task.Id, "error", err)
-				}
+				r.submitRunnerEvent(ctx, task.Id, "failed", task.Version, false)
 				continue
 			}
-			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: task.Id, Status: "running"}); err != nil {
-				slog.Error("failed to update task status", "task", task.Id, "error", err)
-			}
+			r.submitRunnerEvent(ctx, task.Id, "started", task.Version, false)
 		}
 	}
 
@@ -171,6 +164,26 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	}
 	r.runningCount.Store(int32(len(runningContainers)))
 	slog.Info("initialized running container count", "count", len(runningContainers))
+
+	// Submit started events for running containers
+	for _, c := range runningContainers {
+		taskIDStr := c.Labels["xagent.task"]
+		if taskIDStr == "" {
+			continue
+		}
+		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+		if err != nil {
+			slog.Error("invalid task ID in container label", "task", taskIDStr, "error", err)
+			continue
+		}
+		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+		if err != nil {
+			slog.Error("failed to get task", "task", taskID, "error", err)
+			continue
+		}
+		slog.Info("reconcile: container running", "task", taskID)
+		r.submitRunnerEvent(ctx, taskID, "started", task.Task.Version, true)
+	}
 
 	// Find all exited xagent containers
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
@@ -192,13 +205,10 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			continue
 		}
 
-		// Check if task is still running
+		// Get task to check status and get version
 		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 		if err != nil {
 			slog.Error("failed to get task", "task", taskID, "error", err)
-			continue
-		}
-		if task.Task.Status != "running" {
 			continue
 		}
 
@@ -213,15 +223,12 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		if exitCode == 0 {
 			slog.Info("reconcile: container exited successfully", "task", taskID)
 			r.log(ctx, taskID, "info", "container exited successfully (reconciled)")
-			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Status: "completed"}); err != nil {
-				slog.Error("failed to update task status", "task", taskID, "error", err)
-			}
+			r.submitRunnerEvent(ctx, taskID, "stopped", task.Task.Version, true)
 		} else {
 			slog.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
 			r.log(ctx, taskID, "error", fmt.Sprintf("container exited with code %d (reconciled)", exitCode))
-			if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Status: "failed"}); err != nil {
-				slog.Error("failed to update task status", "task", taskID, "error", err)
-			}
+			// Use version 0 for failed events to bypass version check
+			r.submitRunnerEvent(ctx, taskID, "failed", 0, true)
 		}
 	}
 
@@ -490,9 +497,8 @@ func (r *Runner) Monitor(ctx context.Context) error {
 			if exitCode == "0" {
 				slog.Info("container exited successfully", "task", taskID)
 				r.log(ctx, taskID, "info", "container exited successfully")
-				if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Status: "completed"}); err != nil {
-					slog.Error("failed to update task status", "task", taskID, "error", err)
-				}
+				// Use version 0 for spontaneous exits to bypass version check
+				r.submitRunnerEvent(ctx, taskID, "stopped", 0, false)
 				if r.notify {
 					if err := notify.Send("xagent", fmt.Sprintf("%s completed", r.taskDisplayName(ctx, taskID))); err != nil {
 						slog.Error("failed to send notification", "task", taskID, "error", err)
@@ -501,9 +507,8 @@ func (r *Runner) Monitor(ctx context.Context) error {
 			} else {
 				slog.Error("container exited with error", "task", taskID, "exitCode", exitCode)
 				r.log(ctx, taskID, "error", fmt.Sprintf("container exited with code %s", exitCode))
-				if _, err := r.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Status: "failed"}); err != nil {
-					slog.Error("failed to update task status", "task", taskID, "error", err)
-				}
+				// Use version 0 for spontaneous failures to bypass version check
+				r.submitRunnerEvent(ctx, taskID, "failed", 0, false)
 				if r.notify {
 					if err := notify.Send("xagent", fmt.Sprintf("%s failed (exit code %s)", r.taskDisplayName(ctx, taskID), exitCode)); err != nil {
 						slog.Error("failed to send notification", "task", taskID, "error", err)

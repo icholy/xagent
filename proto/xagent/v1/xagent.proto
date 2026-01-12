@@ -61,6 +61,7 @@ message McpServer {
 
 message ListTasksRequest {
   repeated string statuses = 1;
+  repeated string commands = 2;  // Filter by command ("restart", "stop")
 }
 
 message ListTasksResponse {
@@ -108,7 +109,6 @@ message GetTaskDetailsResponse {
 message UpdateTaskRequest {
   int64 id = 1;
   string name = 2;
-  string status = 3;
   repeated Instruction add_instructions = 4;
 }
 

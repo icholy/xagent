@@ -371,14 +371,16 @@ func TestProcessEvent(t *testing.T) {
 	assert.Equal(t, len(events2.Events), 1)
 	assert.Equal(t, events2.Events[0].Id, eventResp.Event.Id)
 
-	// Verify both tasks were set to restarting status
+	// Verify both tasks have restart command set (status stays pending since they were already pending)
 	getTask1, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: task1.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getTask1.Task.Status, "restarting")
+	assert.Equal(t, getTask1.Task.Status, "pending")
+	assert.Equal(t, getTask1.Task.Command, "restart")
 
 	getTask2, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: task2.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getTask2.Task.Status, "restarting")
+	assert.Equal(t, getTask2.Task.Status, "pending")
+	assert.Equal(t, getTask2.Task.Command, "restart")
 }
 
 func TestProcessEventWithoutURL(t *testing.T) {
@@ -544,10 +546,25 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Archive the second task
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     archivedTask.Task.Id,
-		Status: "archived",
+	// Get the task to running state first by simulating runner events
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: archivedTask.Task.Id, Event: "started", Version: archivedTask.Task.Version},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Then complete the task
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: archivedTask.Task.Id, Event: "stopped", Version: 0},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Archive the second task (now in completed state)
+	_, err = srv.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{
+		Id: archivedTask.Task.Id,
 	})
 	assert.NilError(t, err)
 
@@ -586,7 +603,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	assert.Equal(t, len(processResp.TaskIds), 1)
 	assert.Equal(t, processResp.TaskIds[0], activeTask.Task.Id)
 
-	// Verify active task received the event and was set to restarting
+	// Verify active task received the event (status stays pending since it was already pending)
 	events1, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
 		TaskId: activeTask.Task.Id,
 	})
@@ -595,7 +612,8 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 
 	getActiveTask, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: activeTask.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getActiveTask.Task.Status, "restarting")
+	assert.Equal(t, getActiveTask.Task.Status, "pending")
+	assert.Equal(t, getActiveTask.Task.Command, "restart")
 
 	// Verify archived task did NOT receive the event and remains archived
 	events2, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
