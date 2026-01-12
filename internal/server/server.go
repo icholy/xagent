@@ -233,8 +233,6 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 			return fmt.Errorf("cannot cancel task with status %s", task.Status)
 		}
 		task.Status = model.TaskStatusCancelling
-		task.Command = model.TaskCommandStop
-		task.Version++
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
 			return err
 		}
@@ -260,8 +258,6 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 			return fmt.Errorf("cannot restart task with status %s", task.Status)
 		}
 		task.Status = model.TaskStatusRestarting
-		task.Command = model.TaskCommandRestart
-		task.Version++
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
 			return err
 		}
