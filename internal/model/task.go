@@ -148,3 +148,79 @@ func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 		Reconcile: pb.Reconcile,
 	}
 }
+
+// ApplyRunnerEvent applies a runner event to the task, updating its status
+// and command fields according to the state machine rules defined in RFC #149.
+// Returns true if the task was updated, false otherwise.
+func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
+	// TODO: Reconciliation events require special handling
+	if e.Reconcile {
+		return false
+	}
+
+	// Check version match (version 0 bypasses check for spontaneous failures)
+	if e.Version != 0 && e.Version != t.Version {
+		return false
+	}
+
+	switch e.Event {
+	case RunnerEventStarted:
+		return t.applyRunnerEventStarted()
+	case RunnerEventStopped:
+		return t.applyRunnerEventStopped()
+	case RunnerEventFailed:
+		return t.applyRunnerEventFailed()
+	default:
+		return false
+	}
+}
+
+func (t *Task) applyRunnerEventStarted() bool {
+	switch t.Status {
+	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning:
+		if t.Command == TaskCommandRestart {
+			t.Status = TaskStatusRunning
+			t.Command = ""
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func (t *Task) applyRunnerEventStopped() bool {
+	switch t.Status {
+	case TaskStatusRunning:
+		if t.Command == TaskCommandStop {
+			t.Status = TaskStatusCancelled
+			t.Command = ""
+			return true
+		}
+		if t.Command == "" {
+			t.Status = TaskStatusCompleted
+			return true
+		}
+		return false
+	case TaskStatusCancelling:
+		if t.Command == TaskCommandStop {
+			t.Status = TaskStatusCancelled
+			t.Command = ""
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func (t *Task) applyRunnerEventFailed() bool {
+	switch t.Status {
+	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
+		t.Status = TaskStatusFailed
+		t.Command = ""
+		return true
+	default:
+		return false
+	}
+}
