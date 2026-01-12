@@ -2,6 +2,7 @@ import { Outlet, createRootRouteWithContext, Link } from '@tanstack/react-router
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { QueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import xagentIcon from '@/assets/icon.png'
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -14,8 +15,8 @@ function RootComponent() {
     <>
       <nav className="border-b">
         <div className="container mx-auto px-4 py-3 flex items-center gap-6">
-          <Link to="/" className="font-semibold text-lg">
-            XAgent
+          <Link to="/">
+            <img src={xagentIcon} alt="XAgent" className="h-8 w-8" />
           </Link>
           <div className="flex gap-4">
             <Link
