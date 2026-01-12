@@ -298,3 +298,240 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 		})
 	}
 }
+
+func TestTask_ApplyUserAction(t *testing.T) {
+	tests := []struct {
+		name    string
+		before  Task
+		after   Task
+		action  UserAction
+		changed bool
+	}{
+		// Start action
+		{
+			name: "start: pending -> sets restart command",
+			before: Task{
+				Status:  TaskStatusPending,
+				Version: 1,
+			},
+			after: Task{
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 2,
+			},
+			action: UserAction{
+				Action: UserActionStart,
+			},
+			changed: true,
+		},
+		{
+			name: "start: running returns false",
+			before: Task{
+				Status: TaskStatusRunning,
+			},
+			action: UserAction{
+				Action: UserActionStart,
+			},
+			changed: false,
+		},
+		{
+			name: "start: completed returns false",
+			before: Task{
+				Status: TaskStatusCompleted,
+			},
+			action: UserAction{
+				Action: UserActionStart,
+			},
+			changed: false,
+		},
+
+		// Restart action
+		{
+			name: "restart: running -> restarting with restart command",
+			before: Task{
+				Status:  TaskStatusRunning,
+				Version: 1,
+			},
+			after: Task{
+				Status:  TaskStatusRestarting,
+				Command: TaskCommandRestart,
+				Version: 2,
+			},
+			action: UserAction{
+				Action: UserActionRestart,
+			},
+			changed: true,
+		},
+		{
+			name: "restart: failed -> pending with restart command",
+			before: Task{
+				Status:  TaskStatusFailed,
+				Version: 1,
+			},
+			after: Task{
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 2,
+			},
+			action: UserAction{
+				Action: UserActionRestart,
+			},
+			changed: true,
+		},
+		{
+			name: "restart: completed -> pending with restart command",
+			before: Task{
+				Status:  TaskStatusCompleted,
+				Version: 1,
+			},
+			after: Task{
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 2,
+			},
+			action: UserAction{
+				Action: UserActionRestart,
+			},
+			changed: true,
+		},
+		{
+			name: "restart: cancelled -> pending with restart command",
+			before: Task{
+				Status:  TaskStatusCancelled,
+				Version: 1,
+			},
+			after: Task{
+				Status:  TaskStatusPending,
+				Command: TaskCommandRestart,
+				Version: 2,
+			},
+			action: UserAction{
+				Action: UserActionRestart,
+			},
+			changed: true,
+		},
+		{
+			name: "restart: pending returns false",
+			before: Task{
+				Status: TaskStatusPending,
+			},
+			action: UserAction{
+				Action: UserActionRestart,
+			},
+			changed: false,
+		},
+		{
+			name: "restart: restarting returns false",
+			before: Task{
+				Status: TaskStatusRestarting,
+			},
+			action: UserAction{
+				Action: UserActionRestart,
+			},
+			changed: false,
+		},
+
+		// Cancel action
+		{
+			name: "cancel: running -> cancelling with stop command",
+			before: Task{
+				Status:  TaskStatusRunning,
+				Version: 1,
+			},
+			after: Task{
+				Status:  TaskStatusCancelling,
+				Command: TaskCommandStop,
+				Version: 2,
+			},
+			action: UserAction{
+				Action: UserActionCancel,
+			},
+			changed: true,
+		},
+		{
+			name: "cancel: restarting -> cancelling with stop command",
+			before: Task{
+				Status:  TaskStatusRestarting,
+				Command: TaskCommandRestart,
+				Version: 1,
+			},
+			after: Task{
+				Status:  TaskStatusCancelling,
+				Command: TaskCommandStop,
+				Version: 2,
+			},
+			action: UserAction{
+				Action: UserActionCancel,
+			},
+			changed: true,
+		},
+		{
+			name: "cancel: pending -> cancelled",
+			before: Task{
+				Status:  TaskStatusPending,
+				Version: 1,
+			},
+			after: Task{
+				Status:  TaskStatusCancelled,
+				Version: 2,
+			},
+			action: UserAction{
+				Action: UserActionCancel,
+			},
+			changed: true,
+		},
+		{
+			name: "cancel: completed returns false",
+			before: Task{
+				Status: TaskStatusCompleted,
+			},
+			action: UserAction{
+				Action: UserActionCancel,
+			},
+			changed: false,
+		},
+		{
+			name: "cancel: already cancelled returns false",
+			before: Task{
+				Status: TaskStatusCancelled,
+			},
+			action: UserAction{
+				Action: UserActionCancel,
+			},
+			changed: false,
+		},
+		{
+			name: "cancel: failed returns false",
+			before: Task{
+				Status: TaskStatusFailed,
+			},
+			action: UserAction{
+				Action: UserActionCancel,
+			},
+			changed: false,
+		},
+
+		// Unknown action type
+		{
+			name: "unknown action type returns false",
+			before: Task{
+				Status: TaskStatusRunning,
+			},
+			action: UserAction{
+				Action: UserActionType("unknown"),
+			},
+			changed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := tt.before
+			got := task.ApplyUserAction(&tt.action)
+			assert.Equal(t, got, tt.changed)
+			if tt.changed {
+				assert.DeepEqual(t, task, tt.after)
+			}
+		})
+	}
+}

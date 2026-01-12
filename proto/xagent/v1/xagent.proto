@@ -29,6 +29,7 @@ service XAgentService {
   rpc ListEventsByTask(ListEventsByTaskRequest) returns (ListEventsByTaskResponse);
   rpc ProcessEvent(ProcessEventRequest) returns (ProcessEventResponse);
   rpc SubmitRunnerEvents(SubmitRunnerEventsRequest) returns (SubmitRunnerEventsResponse);
+  rpc SubmitUserAction(SubmitUserActionRequest) returns (SubmitUserActionResponse);
 }
 
 message Instruction {
@@ -265,3 +266,14 @@ message SubmitRunnerEventsRequest {
 }
 
 message SubmitRunnerEventsResponse {}
+
+message UserAction {
+  int64 task_id = 1;
+  string action = 2;  // "start", "restart", "cancel"
+}
+
+message SubmitUserActionRequest {
+  UserAction action = 1;
+}
+
+message SubmitUserActionResponse {}

@@ -94,6 +94,9 @@ const (
 	// XAgentServiceSubmitRunnerEventsProcedure is the fully-qualified name of the XAgentService's
 	// SubmitRunnerEvents RPC.
 	XAgentServiceSubmitRunnerEventsProcedure = "/xagent.v1.XAgentService/SubmitRunnerEvents"
+	// XAgentServiceSubmitUserActionProcedure is the fully-qualified name of the XAgentService's
+	// SubmitUserAction RPC.
+	XAgentServiceSubmitUserActionProcedure = "/xagent.v1.XAgentService/SubmitUserAction"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -120,6 +123,7 @@ type XAgentServiceClient interface {
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
 	ProcessEvent(context.Context, *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error)
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
+	SubmitUserAction(context.Context, *v1.SubmitUserActionRequest) (*v1.SubmitUserActionResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -265,6 +269,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("SubmitRunnerEvents")),
 			connect.WithClientOptions(opts...),
 		),
+		submitUserAction: connect.NewClient[v1.SubmitUserActionRequest, v1.SubmitUserActionResponse](
+			httpClient,
+			baseURL+XAgentServiceSubmitUserActionProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("SubmitUserAction")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -292,6 +302,7 @@ type xAgentServiceClient struct {
 	listEventsByTask   *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
 	processEvent       *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
 	submitRunnerEvents *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
+	submitUserAction   *connect.Client[v1.SubmitUserActionRequest, v1.SubmitUserActionResponse]
 }
 
 // ListTasks calls xagent.v1.XAgentService.ListTasks.
@@ -492,6 +503,15 @@ func (c *xAgentServiceClient) SubmitRunnerEvents(ctx context.Context, req *v1.Su
 	return nil, err
 }
 
+// SubmitUserAction calls xagent.v1.XAgentService.SubmitUserAction.
+func (c *xAgentServiceClient) SubmitUserAction(ctx context.Context, req *v1.SubmitUserActionRequest) (*v1.SubmitUserActionResponse, error) {
+	response, err := c.submitUserAction.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
@@ -516,6 +536,7 @@ type XAgentServiceHandler interface {
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
 	ProcessEvent(context.Context, *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error)
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
+	SubmitUserAction(context.Context, *v1.SubmitUserActionRequest) (*v1.SubmitUserActionResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -657,6 +678,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("SubmitRunnerEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceSubmitUserActionHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceSubmitUserActionProcedure,
+		svc.SubmitUserAction,
+		connect.WithSchema(xAgentServiceMethods.ByName("SubmitUserAction")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServiceListTasksProcedure:
@@ -703,6 +730,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceProcessEventHandler.ServeHTTP(w, r)
 		case XAgentServiceSubmitRunnerEventsProcedure:
 			xAgentServiceSubmitRunnerEventsHandler.ServeHTTP(w, r)
+		case XAgentServiceSubmitUserActionProcedure:
+			xAgentServiceSubmitUserActionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -798,4 +827,8 @@ func (UnimplementedXAgentServiceHandler) ProcessEvent(context.Context, *v1.Proce
 
 func (UnimplementedXAgentServiceHandler) SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SubmitRunnerEvents is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) SubmitUserAction(context.Context, *v1.SubmitUserActionRequest) (*v1.SubmitUserActionResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SubmitUserAction is not implemented"))
 }

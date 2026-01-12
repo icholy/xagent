@@ -149,6 +149,37 @@ func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 	}
 }
 
+// UserActionType represents the type of action requested by a user.
+type UserActionType string
+
+const (
+	UserActionStart   UserActionType = "start"
+	UserActionRestart UserActionType = "restart"
+	UserActionCancel  UserActionType = "cancel"
+)
+
+// UserAction represents an action requested by a user on a task.
+type UserAction struct {
+	TaskID int64
+	Action UserActionType
+}
+
+// Proto converts a UserAction to its protobuf representation.
+func (u *UserAction) Proto() *xagentv1.UserAction {
+	return &xagentv1.UserAction{
+		TaskId: u.TaskID,
+		Action: string(u.Action),
+	}
+}
+
+// UserActionFromProto converts a protobuf UserAction to a model UserAction.
+func UserActionFromProto(pb *xagentv1.UserAction) UserAction {
+	return UserAction{
+		TaskID: pb.TaskId,
+		Action: UserActionType(pb.Action),
+	}
+}
+
 // ApplyRunnerEvent applies a runner event to the task, updating its status
 // and command fields according to the state machine rules defined in RFC #149.
 // Returns true if the task was updated, false otherwise.
@@ -219,6 +250,66 @@ func (t *Task) applyRunnerEventFailed() bool {
 	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
 		t.Status = TaskStatusFailed
 		t.Command = ""
+		return true
+	default:
+		return false
+	}
+}
+
+// ApplyUserAction applies a user action to the task, updating its status
+// and command fields according to the state machine rules defined in RFC #149.
+// Returns true if the task was updated, false otherwise.
+func (t *Task) ApplyUserAction(a *UserAction) bool {
+	switch a.Action {
+	case UserActionStart:
+		return t.applyUserActionStart()
+	case UserActionRestart:
+		return t.applyUserActionRestart()
+	case UserActionCancel:
+		return t.applyUserActionCancel()
+	default:
+		return false
+	}
+}
+
+func (t *Task) applyUserActionStart() bool {
+	switch t.Status {
+	case TaskStatusPending:
+		t.Command = TaskCommandRestart
+		t.Version++
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *Task) applyUserActionRestart() bool {
+	switch t.Status {
+	case TaskStatusRunning:
+		t.Command = TaskCommandRestart
+		t.Status = TaskStatusRestarting
+		t.Version++
+		return true
+	case TaskStatusFailed, TaskStatusCompleted, TaskStatusCancelled:
+		t.Command = TaskCommandRestart
+		t.Status = TaskStatusPending
+		t.Version++
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *Task) applyUserActionCancel() bool {
+	switch t.Status {
+	case TaskStatusRunning, TaskStatusRestarting:
+		t.Command = TaskCommandStop
+		t.Status = TaskStatusCancelling
+		t.Version++
+		return true
+	case TaskStatusPending:
+		t.Status = TaskStatusCancelled
+		t.Version++
 		return true
 	default:
 		return false

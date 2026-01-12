@@ -80,6 +80,9 @@ var _ xagentclient.Client = &ClientMock{}
 //			SubmitRunnerEventsFunc: func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 //				panic("mock out the SubmitRunnerEvents method")
 //			},
+//			SubmitUserActionFunc: func(contextMoqParam context.Context, submitUserActionRequest *xagentv1.SubmitUserActionRequest) (*xagentv1.SubmitUserActionResponse, error) {
+//				panic("mock out the SubmitUserAction method")
+//			},
 //			UpdateTaskFunc: func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 //				panic("mock out the UpdateTask method")
 //			},
@@ -152,6 +155,9 @@ type ClientMock struct {
 
 	// SubmitRunnerEventsFunc mocks the SubmitRunnerEvents method.
 	SubmitRunnerEventsFunc func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error)
+
+	// SubmitUserActionFunc mocks the SubmitUserAction method.
+	SubmitUserActionFunc func(contextMoqParam context.Context, submitUserActionRequest *xagentv1.SubmitUserActionRequest) (*xagentv1.SubmitUserActionResponse, error)
 
 	// UpdateTaskFunc mocks the UpdateTask method.
 	UpdateTaskFunc func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error)
@@ -301,6 +307,13 @@ type ClientMock struct {
 			// SubmitRunnerEventsRequest is the submitRunnerEventsRequest argument value.
 			SubmitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest
 		}
+		// SubmitUserAction holds details about calls to the SubmitUserAction method.
+		SubmitUserAction []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// SubmitUserActionRequest is the submitUserActionRequest argument value.
+			SubmitUserActionRequest *xagentv1.SubmitUserActionRequest
+		}
 		// UpdateTask holds details about calls to the UpdateTask method.
 		UpdateTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -336,6 +349,7 @@ type ClientMock struct {
 	lockProcessEvent       sync.RWMutex
 	lockRemoveEventTask    sync.RWMutex
 	lockSubmitRunnerEvents sync.RWMutex
+	lockSubmitUserAction   sync.RWMutex
 	lockUpdateTask         sync.RWMutex
 	lockUploadLogs         sync.RWMutex
 }
@@ -1057,6 +1071,42 @@ func (mock *ClientMock) SubmitRunnerEventsCalls() []struct {
 	mock.lockSubmitRunnerEvents.RLock()
 	calls = mock.calls.SubmitRunnerEvents
 	mock.lockSubmitRunnerEvents.RUnlock()
+	return calls
+}
+
+// SubmitUserAction calls SubmitUserActionFunc.
+func (mock *ClientMock) SubmitUserAction(contextMoqParam context.Context, submitUserActionRequest *xagentv1.SubmitUserActionRequest) (*xagentv1.SubmitUserActionResponse, error) {
+	if mock.SubmitUserActionFunc == nil {
+		panic("ClientMock.SubmitUserActionFunc: method is nil but Client.SubmitUserAction was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam         context.Context
+		SubmitUserActionRequest *xagentv1.SubmitUserActionRequest
+	}{
+		ContextMoqParam:         contextMoqParam,
+		SubmitUserActionRequest: submitUserActionRequest,
+	}
+	mock.lockSubmitUserAction.Lock()
+	mock.calls.SubmitUserAction = append(mock.calls.SubmitUserAction, callInfo)
+	mock.lockSubmitUserAction.Unlock()
+	return mock.SubmitUserActionFunc(contextMoqParam, submitUserActionRequest)
+}
+
+// SubmitUserActionCalls gets all the calls that were made to SubmitUserAction.
+// Check the length with:
+//
+//	len(mockedClient.SubmitUserActionCalls())
+func (mock *ClientMock) SubmitUserActionCalls() []struct {
+	ContextMoqParam         context.Context
+	SubmitUserActionRequest *xagentv1.SubmitUserActionRequest
+} {
+	var calls []struct {
+		ContextMoqParam         context.Context
+		SubmitUserActionRequest *xagentv1.SubmitUserActionRequest
+	}
+	mock.lockSubmitUserAction.RLock()
+	calls = mock.calls.SubmitUserAction
+	mock.lockSubmitUserAction.RUnlock()
 	return calls
 }
 
