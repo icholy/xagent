@@ -495,7 +495,15 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if err != nil {
 				return err
 			}
-			if !task.ApplyRunnerEvent(&event) {
+			applied := task.ApplyRunnerEvent(&event)
+			s.log.Info("runner event recieved",
+				"task_id", event.TaskID,
+				"event", event.Event,
+				"version", event.Version,
+				"status", task.Status,
+				"applied", applied,
+			)
+			if !applied {
 				return nil
 			}
 			if err := s.tasks.Put(ctx, tx, task); err != nil {
@@ -506,12 +514,6 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 					return err
 				}
 			}
-			s.log.Info("runner event applied",
-				"task_id", event.TaskID,
-				"event", event.Event,
-				"version", event.Version,
-				"new_status", task.Status,
-			)
 			return tx.Commit()
 		})
 		if err != nil {
