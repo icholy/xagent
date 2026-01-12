@@ -6,24 +6,24 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/icholy/xagent/internal/model"
 )
 
-type TaskStatus string
+// Type aliases for backwards compatibility
+type TaskStatus = model.TaskStatus
+type Instruction = model.Instruction
 
 const (
-	TaskStatusPending    TaskStatus = "pending"
-	TaskStatusRunning    TaskStatus = "running"
-	TaskStatusRestarting TaskStatus = "restarting"
-	TaskStatusCompleted  TaskStatus = "completed"
-	TaskStatusFailed     TaskStatus = "failed"
-	TaskStatusCancelled  TaskStatus = "cancelled"
-	TaskStatusArchived   TaskStatus = "archived"
+	TaskStatusPending    = model.TaskStatusPending
+	TaskStatusRunning    = model.TaskStatusRunning
+	TaskStatusRestarting = model.TaskStatusRestarting
+	TaskStatusCancelling = model.TaskStatusCancelling
+	TaskStatusCompleted  = model.TaskStatusCompleted
+	TaskStatusFailed     = model.TaskStatusFailed
+	TaskStatusCancelled  = model.TaskStatusCancelled
+	TaskStatusArchived   = model.TaskStatusArchived
 )
-
-type Instruction struct {
-	Text string `json:"text"`
-	URL  string `json:"url,omitempty"`
-}
 
 type Task struct {
 	ID           int64         `json:"id"`
@@ -32,6 +32,8 @@ type Task struct {
 	Workspace    string        `json:"workspace"`
 	Instructions []Instruction `json:"instructions"`
 	Status       TaskStatus    `json:"status"`
+	Command      model.TaskCommand `json:"command"`
+	Version      int64         `json:"version"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
 }

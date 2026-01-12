@@ -1,43 +1,7 @@
 // Package statemachine implements task state transitions based on runner events.
 package statemachine
 
-// Task status constants
-const (
-	StatusPending     = "pending"
-	StatusRestarting  = "restarting"
-	StatusRunning     = "running"
-	StatusCancelling  = "cancelling"
-	StatusCancelled   = "cancelled"
-	StatusCompleted   = "completed"
-	StatusFailed      = "failed"
-)
-
-// Command constants
-const (
-	CommandRestart = "restart"
-	CommandStop    = "stop"
-)
-
-// Event constants
-const (
-	EventStarted = "started"
-	EventStopped = "stopped"
-	EventFailed  = "failed"
-)
-
-// Task represents the state of a task for state machine transitions.
-type Task struct {
-	Status  string
-	Command string
-	Version int64
-}
-
-// RunnerEvent represents an event from the runner.
-type RunnerEvent struct {
-	Event     string
-	Version   int64
-	Reconcile bool
-}
+import "github.com/icholy/xagent/internal/model"
 
 // Update applies a runner event to a task and returns true if the task was modified.
 // The Task struct is modified in place with the new status and command.
@@ -47,7 +11,7 @@ type RunnerEvent struct {
 // - Version 0 in the event is a bypass (for spontaneous failures)
 // - Events with mismatched versions (non-zero, non-matching) are ignored
 // - Reconcile events only update if the task isn't already in the expected state
-func Update(task *Task, event RunnerEvent) bool {
+func Update(task *model.Task, event *model.RunnerEvent) bool {
 	// Version check: if event version is non-zero, it must match task version
 	// Version 0 is a bypass (for spontaneous failures)
 	if event.Version != 0 && event.Version != task.Version {
@@ -63,59 +27,59 @@ func Update(task *Task, event RunnerEvent) bool {
 }
 
 // applyEvent applies a real-time event to the task.
-func applyEvent(task *Task, event RunnerEvent) bool {
+func applyEvent(task *model.Task, event *model.RunnerEvent) bool {
 	oldStatus := task.Status
 	oldCommand := task.Command
 
 	switch event.Event {
-	case EventFailed:
+	case model.RunnerEventFailed:
 		// Failed always results in failed status, clears command if version matches
-		task.Status = StatusFailed
+		task.Status = model.TaskStatusFailed
 		if event.Version == task.Version || event.Version == 0 {
 			task.Command = ""
 		}
 
-	case EventStarted:
+	case model.RunnerEventStarted:
 		switch task.Status {
-		case StatusPending:
-			if task.Command == CommandRestart {
-				task.Status = StatusRunning
+		case model.TaskStatusPending:
+			if task.Command == model.TaskCommandRestart {
+				task.Status = model.TaskStatusRunning
 				task.Command = ""
 			}
-		case StatusRestarting:
-			if task.Command == CommandRestart {
-				task.Status = StatusRunning
+		case model.TaskStatusRestarting:
+			if task.Command == model.TaskCommandRestart {
+				task.Status = model.TaskStatusRunning
 				task.Command = ""
 			}
-		case StatusRunning:
-			if task.Command == CommandRestart {
-				task.Status = StatusRunning
+		case model.TaskStatusRunning:
+			if task.Command == model.TaskCommandRestart {
+				task.Status = model.TaskStatusRunning
 				task.Command = ""
 			}
 		}
 
-	case EventStopped:
+	case model.RunnerEventStopped:
 		switch task.Status {
-		case StatusRunning:
-			if task.Command == CommandStop {
-				task.Status = StatusCancelled
+		case model.TaskStatusRunning:
+			if task.Command == model.TaskCommandStop {
+				task.Status = model.TaskStatusCancelled
 				task.Command = ""
 			} else if task.Command == "" {
-				task.Status = StatusCompleted
+				task.Status = model.TaskStatusCompleted
 			}
-		case StatusCancelling:
-			if task.Command == CommandStop {
-				task.Status = StatusCancelled
+		case model.TaskStatusCancelling:
+			if task.Command == model.TaskCommandStop {
+				task.Status = model.TaskStatusCancelled
 				task.Command = ""
 			}
-		case StatusPending:
-			if task.Command == CommandRestart {
-				task.Status = StatusFailed
+		case model.TaskStatusPending:
+			if task.Command == model.TaskCommandRestart {
+				task.Status = model.TaskStatusFailed
 				task.Command = ""
 			}
-		case StatusRestarting:
-			if task.Command == CommandRestart {
-				task.Status = StatusFailed
+		case model.TaskStatusRestarting:
+			if task.Command == model.TaskCommandRestart {
+				task.Status = model.TaskStatusFailed
 				task.Command = ""
 			}
 		}
@@ -126,36 +90,36 @@ func applyEvent(task *Task, event RunnerEvent) bool {
 
 // applyReconcileEvent applies a reconciliation event to the task.
 // Reconcile events only update if the task doesn't already reflect the state.
-func applyReconcileEvent(task *Task, event RunnerEvent) bool {
+func applyReconcileEvent(task *model.Task, event *model.RunnerEvent) bool {
 	oldStatus := task.Status
 	oldCommand := task.Command
 
 	switch event.Event {
-	case EventFailed:
+	case model.RunnerEventFailed:
 		// Reconcile failed only updates running tasks
-		if task.Status == StatusRunning {
-			task.Status = StatusFailed
+		if task.Status == model.TaskStatusRunning {
+			task.Status = model.TaskStatusFailed
 			task.Command = ""
 		}
 
-	case EventStarted:
+	case model.RunnerEventStarted:
 		// Reconcile started only updates pending/restarting tasks
 		switch task.Status {
-		case StatusPending, StatusRestarting:
-			if task.Command == CommandRestart {
-				task.Status = StatusRunning
+		case model.TaskStatusPending, model.TaskStatusRestarting:
+			if task.Command == model.TaskCommandRestart {
+				task.Status = model.TaskStatusRunning
 				task.Command = ""
 			}
 		}
 
-	case EventStopped:
+	case model.RunnerEventStopped:
 		// Reconcile stopped only updates running tasks
-		if task.Status == StatusRunning {
-			if task.Command == CommandStop {
-				task.Status = StatusCancelled
+		if task.Status == model.TaskStatusRunning {
+			if task.Command == model.TaskCommandStop {
+				task.Status = model.TaskStatusCancelled
 				task.Command = ""
 			} else if task.Command == "" {
-				task.Status = StatusCompleted
+				task.Status = model.TaskStatusCompleted
 			}
 		}
 	}
