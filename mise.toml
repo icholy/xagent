@@ -20,6 +20,7 @@ run = [
 description = "Generate code from proto files"
 run = [
 	"go tool buf generate",
+	"cd webui && pnpm install --frozen-lockfile && pnpm run generate",
 	"go generate ./..."
 ]
 
