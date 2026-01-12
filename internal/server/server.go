@@ -487,6 +487,8 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)
+
+		var newStatus model.TaskStatus
 		err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
 			task, err := s.tasks.Get(ctx, tx, event.TaskID)
 			if err != nil {
@@ -504,6 +506,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			}
 
 			if updated {
+				newStatus = task.Status
 				if err := s.tasks.Put(ctx, tx, task); err != nil {
 					return err
 				}
@@ -518,6 +521,28 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 		})
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+
+		// Generate log entry based on status transition
+		if newStatus != "" {
+			var log model.Log
+			log.TaskID = event.TaskID
+			switch newStatus {
+			case model.TaskStatusRunning:
+				log.Type = "info"
+				log.Content = "container started"
+			case model.TaskStatusCompleted:
+				log.Type = "info"
+				log.Content = "container exited successfully"
+			case model.TaskStatusFailed:
+				log.Type = "error"
+				log.Content = "container failed"
+			}
+			if log.Content != "" {
+				if err := s.logs.Create(ctx, nil, &log); err != nil {
+					s.log.Warn("failed to create log", "task_id", event.TaskID, "error", err)
+				}
+			}
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil

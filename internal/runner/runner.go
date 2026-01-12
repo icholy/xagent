@@ -76,18 +76,6 @@ func (r *Runner) Close() error {
 	return r.docker.Close()
 }
 
-func (r *Runner) log(ctx context.Context, taskID int64, typ, content string) {
-	_, err := r.client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
-		TaskId: taskID,
-		Entries: []*xagentv1.LogEntry{
-			{Type: typ, Content: content},
-		},
-	})
-	if err != nil {
-		slog.Error("failed to upload log", "task", taskID, "error", err)
-	}
-}
-
 func (r *Runner) updateStatus(ctx context.Context, taskID int64, status string) error {
 	_, err := r.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
@@ -120,7 +108,6 @@ func (r *Runner) Poll(ctx context.Context) error {
 			if err := r.killTask(ctx, task, "SIGKILL"); err != nil {
 				slog.Error("failed to cancel task", "task", task.Id, "error", err)
 			}
-			r.log(ctx, task.Id, "info", "task cancelled")
 			if err := r.updateStatus(ctx, task.Id, "failed"); err != nil {
 				slog.Error("failed to update cancelled task", "task", task.Id, "error", err)
 			}
@@ -132,10 +119,8 @@ func (r *Runner) Poll(ctx context.Context) error {
 				slog.Debug("concurrency limit reached, skipping restarting task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
 				continue
 			}
-			r.log(ctx, task.Id, "info", "container restarting")
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to restart task", "task", task.Id, "error", err)
-				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to restart task: %v", err))
 				if err := r.updateStatus(ctx, task.Id, "failed"); err != nil {
 					slog.Error("failed to update task status", "task", task.Id, "error", err)
 				}
@@ -149,10 +134,8 @@ func (r *Runner) Poll(ctx context.Context) error {
 				slog.Debug("concurrency limit reached, skipping pending task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
 				continue
 			}
-			r.log(ctx, task.Id, "info", "container starting")
 			if err := r.startTask(ctx, task); err != nil {
 				slog.Error("failed to start container", "task", task.Id, "error", err)
-				r.log(ctx, task.Id, "error", fmt.Sprintf("failed to start container: %v", err))
 				if err := r.updateStatus(ctx, task.Id, "failed"); err != nil {
 					slog.Error("failed to update task status", "task", task.Id, "error", err)
 				}
@@ -221,13 +204,11 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		exitCode := info.State.ExitCode
 		if exitCode == 0 {
 			slog.Info("reconcile: container exited successfully", "task", taskID)
-			r.log(ctx, taskID, "info", "container exited successfully (reconciled)")
 			if err := r.updateStatus(ctx, taskID, "completed"); err != nil {
 				slog.Error("failed to update task status", "task", taskID, "error", err)
 			}
 		} else {
 			slog.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
-			r.log(ctx, taskID, "error", fmt.Sprintf("container exited with code %d (reconciled)", exitCode))
 			if err := r.updateStatus(ctx, taskID, "failed"); err != nil {
 				slog.Error("failed to update task status", "task", taskID, "error", err)
 			}
@@ -306,7 +287,6 @@ func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
 		config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
 
 		slog.Info("creating container", "task", task.Id, "container", containerName, "image", ws.Container.Image, "workspace", task.Workspace)
-		r.log(ctx, task.Id, "info", fmt.Sprintf("creating container %s with image %s", containerName, ws.Container.Image))
 		resp, err := r.docker.ContainerCreate(ctx, config, hostConfig, networkConfig, nil, containerName)
 		if err != nil {
 			return fmt.Errorf("failed to create container: %w", err)
@@ -498,7 +478,6 @@ func (r *Runner) Monitor(ctx context.Context) error {
 			exitCode := event.Actor.Attributes["exitCode"]
 			if exitCode == "0" {
 				slog.Info("container exited successfully", "task", taskID)
-				r.log(ctx, taskID, "info", "container exited successfully")
 				if err := r.updateStatus(ctx, taskID, "completed"); err != nil {
 					slog.Error("failed to update task status", "task", taskID, "error", err)
 				}
@@ -509,7 +488,6 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				}
 			} else {
 				slog.Error("container exited with error", "task", taskID, "exitCode", exitCode)
-				r.log(ctx, taskID, "error", fmt.Sprintf("container exited with code %s", exitCode))
 				if err := r.updateStatus(ctx, taskID, "failed"); err != nil {
 					slog.Error("failed to update task status", "task", taskID, "error", err)
 				}
