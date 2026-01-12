@@ -23,6 +23,12 @@ var _ xagentclient.Client = &ClientMock{}
 //			AddEventTaskFunc: func(contextMoqParam context.Context, addEventTaskRequest *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error) {
 //				panic("mock out the AddEventTask method")
 //			},
+//			ArchiveTaskFunc: func(contextMoqParam context.Context, archiveTaskRequest *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
+//				panic("mock out the ArchiveTask method")
+//			},
+//			CancelTaskFunc: func(contextMoqParam context.Context, cancelTaskRequest *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
+//				panic("mock out the CancelTask method")
+//			},
 //			CreateEventFunc: func(contextMoqParam context.Context, createEventRequest *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
 //				panic("mock out the CreateEvent method")
 //			},
@@ -77,6 +83,9 @@ var _ xagentclient.Client = &ClientMock{}
 //			RemoveEventTaskFunc: func(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
 //				panic("mock out the RemoveEventTask method")
 //			},
+//			RestartTaskFunc: func(contextMoqParam context.Context, restartTaskRequest *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
+//				panic("mock out the RestartTask method")
+//			},
 //			SubmitRunnerEventsFunc: func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 //				panic("mock out the SubmitRunnerEvents method")
 //			},
@@ -95,6 +104,12 @@ var _ xagentclient.Client = &ClientMock{}
 type ClientMock struct {
 	// AddEventTaskFunc mocks the AddEventTask method.
 	AddEventTaskFunc func(contextMoqParam context.Context, addEventTaskRequest *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error)
+
+	// ArchiveTaskFunc mocks the ArchiveTask method.
+	ArchiveTaskFunc func(contextMoqParam context.Context, archiveTaskRequest *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error)
+
+	// CancelTaskFunc mocks the CancelTask method.
+	CancelTaskFunc func(contextMoqParam context.Context, cancelTaskRequest *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error)
 
 	// CreateEventFunc mocks the CreateEvent method.
 	CreateEventFunc func(contextMoqParam context.Context, createEventRequest *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error)
@@ -150,6 +165,9 @@ type ClientMock struct {
 	// RemoveEventTaskFunc mocks the RemoveEventTask method.
 	RemoveEventTaskFunc func(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error)
 
+	// RestartTaskFunc mocks the RestartTask method.
+	RestartTaskFunc func(contextMoqParam context.Context, restartTaskRequest *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error)
+
 	// SubmitRunnerEventsFunc mocks the SubmitRunnerEvents method.
 	SubmitRunnerEventsFunc func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error)
 
@@ -167,6 +185,20 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// AddEventTaskRequest is the addEventTaskRequest argument value.
 			AddEventTaskRequest *xagentv1.AddEventTaskRequest
+		}
+		// ArchiveTask holds details about calls to the ArchiveTask method.
+		ArchiveTask []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// ArchiveTaskRequest is the archiveTaskRequest argument value.
+			ArchiveTaskRequest *xagentv1.ArchiveTaskRequest
+		}
+		// CancelTask holds details about calls to the CancelTask method.
+		CancelTask []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// CancelTaskRequest is the cancelTaskRequest argument value.
+			CancelTaskRequest *xagentv1.CancelTaskRequest
 		}
 		// CreateEvent holds details about calls to the CreateEvent method.
 		CreateEvent []struct {
@@ -294,6 +326,13 @@ type ClientMock struct {
 			// RemoveEventTaskRequest is the removeEventTaskRequest argument value.
 			RemoveEventTaskRequest *xagentv1.RemoveEventTaskRequest
 		}
+		// RestartTask holds details about calls to the RestartTask method.
+		RestartTask []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// RestartTaskRequest is the restartTaskRequest argument value.
+			RestartTaskRequest *xagentv1.RestartTaskRequest
+		}
 		// SubmitRunnerEvents holds details about calls to the SubmitRunnerEvents method.
 		SubmitRunnerEvents []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -317,6 +356,8 @@ type ClientMock struct {
 		}
 	}
 	lockAddEventTask       sync.RWMutex
+	lockArchiveTask        sync.RWMutex
+	lockCancelTask         sync.RWMutex
 	lockCreateEvent        sync.RWMutex
 	lockCreateLink         sync.RWMutex
 	lockCreateTask         sync.RWMutex
@@ -335,6 +376,7 @@ type ClientMock struct {
 	lockListTasks          sync.RWMutex
 	lockProcessEvent       sync.RWMutex
 	lockRemoveEventTask    sync.RWMutex
+	lockRestartTask        sync.RWMutex
 	lockSubmitRunnerEvents sync.RWMutex
 	lockUpdateTask         sync.RWMutex
 	lockUploadLogs         sync.RWMutex
@@ -373,6 +415,78 @@ func (mock *ClientMock) AddEventTaskCalls() []struct {
 	mock.lockAddEventTask.RLock()
 	calls = mock.calls.AddEventTask
 	mock.lockAddEventTask.RUnlock()
+	return calls
+}
+
+// ArchiveTask calls ArchiveTaskFunc.
+func (mock *ClientMock) ArchiveTask(contextMoqParam context.Context, archiveTaskRequest *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
+	if mock.ArchiveTaskFunc == nil {
+		panic("ClientMock.ArchiveTaskFunc: method is nil but Client.ArchiveTask was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam    context.Context
+		ArchiveTaskRequest *xagentv1.ArchiveTaskRequest
+	}{
+		ContextMoqParam:    contextMoqParam,
+		ArchiveTaskRequest: archiveTaskRequest,
+	}
+	mock.lockArchiveTask.Lock()
+	mock.calls.ArchiveTask = append(mock.calls.ArchiveTask, callInfo)
+	mock.lockArchiveTask.Unlock()
+	return mock.ArchiveTaskFunc(contextMoqParam, archiveTaskRequest)
+}
+
+// ArchiveTaskCalls gets all the calls that were made to ArchiveTask.
+// Check the length with:
+//
+//	len(mockedClient.ArchiveTaskCalls())
+func (mock *ClientMock) ArchiveTaskCalls() []struct {
+	ContextMoqParam    context.Context
+	ArchiveTaskRequest *xagentv1.ArchiveTaskRequest
+} {
+	var calls []struct {
+		ContextMoqParam    context.Context
+		ArchiveTaskRequest *xagentv1.ArchiveTaskRequest
+	}
+	mock.lockArchiveTask.RLock()
+	calls = mock.calls.ArchiveTask
+	mock.lockArchiveTask.RUnlock()
+	return calls
+}
+
+// CancelTask calls CancelTaskFunc.
+func (mock *ClientMock) CancelTask(contextMoqParam context.Context, cancelTaskRequest *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
+	if mock.CancelTaskFunc == nil {
+		panic("ClientMock.CancelTaskFunc: method is nil but Client.CancelTask was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam   context.Context
+		CancelTaskRequest *xagentv1.CancelTaskRequest
+	}{
+		ContextMoqParam:   contextMoqParam,
+		CancelTaskRequest: cancelTaskRequest,
+	}
+	mock.lockCancelTask.Lock()
+	mock.calls.CancelTask = append(mock.calls.CancelTask, callInfo)
+	mock.lockCancelTask.Unlock()
+	return mock.CancelTaskFunc(contextMoqParam, cancelTaskRequest)
+}
+
+// CancelTaskCalls gets all the calls that were made to CancelTask.
+// Check the length with:
+//
+//	len(mockedClient.CancelTaskCalls())
+func (mock *ClientMock) CancelTaskCalls() []struct {
+	ContextMoqParam   context.Context
+	CancelTaskRequest *xagentv1.CancelTaskRequest
+} {
+	var calls []struct {
+		ContextMoqParam   context.Context
+		CancelTaskRequest *xagentv1.CancelTaskRequest
+	}
+	mock.lockCancelTask.RLock()
+	calls = mock.calls.CancelTask
+	mock.lockCancelTask.RUnlock()
 	return calls
 }
 
@@ -1021,6 +1135,42 @@ func (mock *ClientMock) RemoveEventTaskCalls() []struct {
 	mock.lockRemoveEventTask.RLock()
 	calls = mock.calls.RemoveEventTask
 	mock.lockRemoveEventTask.RUnlock()
+	return calls
+}
+
+// RestartTask calls RestartTaskFunc.
+func (mock *ClientMock) RestartTask(contextMoqParam context.Context, restartTaskRequest *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
+	if mock.RestartTaskFunc == nil {
+		panic("ClientMock.RestartTaskFunc: method is nil but Client.RestartTask was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam    context.Context
+		RestartTaskRequest *xagentv1.RestartTaskRequest
+	}{
+		ContextMoqParam:    contextMoqParam,
+		RestartTaskRequest: restartTaskRequest,
+	}
+	mock.lockRestartTask.Lock()
+	mock.calls.RestartTask = append(mock.calls.RestartTask, callInfo)
+	mock.lockRestartTask.Unlock()
+	return mock.RestartTaskFunc(contextMoqParam, restartTaskRequest)
+}
+
+// RestartTaskCalls gets all the calls that were made to RestartTask.
+// Check the length with:
+//
+//	len(mockedClient.RestartTaskCalls())
+func (mock *ClientMock) RestartTaskCalls() []struct {
+	ContextMoqParam    context.Context
+	RestartTaskRequest *xagentv1.RestartTaskRequest
+} {
+	var calls []struct {
+		ContextMoqParam    context.Context
+		RestartTaskRequest *xagentv1.RestartTaskRequest
+	}
+	mock.lockRestartTask.RLock()
+	calls = mock.calls.RestartTask
+	mock.lockRestartTask.RUnlock()
 	return calls
 }
 

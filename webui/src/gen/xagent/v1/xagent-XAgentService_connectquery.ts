@@ -40,6 +40,21 @@ export const updateTask = XAgentService.method.updateTask;
 export const deleteTask = XAgentService.method.deleteTask;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.ArchiveTask
+ */
+export const archiveTask = XAgentService.method.archiveTask;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.CancelTask
+ */
+export const cancelTask = XAgentService.method.cancelTask;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.RestartTask
+ */
+export const restartTask = XAgentService.method.restartTask;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.UploadLogs
  */
 export const uploadLogs = XAgentService.method.uploadLogs;
@@ -108,3 +123,8 @@ export const listEventsByTask = XAgentService.method.listEventsByTask;
  * @generated from rpc xagent.v1.XAgentService.ProcessEvent
  */
 export const processEvent = XAgentService.method.processEvent;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.SubmitRunnerEvents
+ */
+export const submitRunnerEvents = XAgentService.method.submitRunnerEvents;

@@ -14,6 +14,9 @@ service XAgentService {
   rpc GetTaskDetails(GetTaskDetailsRequest) returns (GetTaskDetailsResponse);
   rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
   rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+  rpc ArchiveTask(ArchiveTaskRequest) returns (ArchiveTaskResponse);
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+  rpc RestartTask(RestartTaskRequest) returns (RestartTaskResponse);
   rpc UploadLogs(UploadLogsRequest) returns (UploadLogsResponse);
   rpc ListLogs(ListLogsRequest) returns (ListLogsResponse);
   rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
@@ -116,6 +119,24 @@ message DeleteTaskRequest {
 }
 
 message DeleteTaskResponse {}
+
+message ArchiveTaskRequest {
+  int64 id = 1;
+}
+
+message ArchiveTaskResponse {}
+
+message CancelTaskRequest {
+  int64 id = 1;
+}
+
+message CancelTaskResponse {}
+
+message RestartTaskRequest {
+  int64 id = 1;
+}
+
+message RestartTaskResponse {}
 
 message LogEntry {
   string type = 1;

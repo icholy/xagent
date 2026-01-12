@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
-import { listTasks, updateTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import {
@@ -112,11 +112,11 @@ function TasksPage() {
 
 function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   const isChild = task.parent !== 0n
-  const updateMutation = useMutation(updateTask)
+  const archiveMutation = useMutation(archiveTask)
   const canArchive = task.status === 'completed' || task.status === 'failed'
 
   const handleArchive = async () => {
-    await updateMutation.mutateAsync({ id: task.id, status: 'archived' })
+    await archiveMutation.mutateAsync({ id: task.id })
     onUpdate()
   }
 
@@ -144,7 +144,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
             variant="outline"
             size="sm"
             onClick={handleArchive}
-            disabled={updateMutation.isPending}
+            disabled={archiveMutation.isPending}
           >
             Archive
           </Button>

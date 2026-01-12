@@ -52,6 +52,15 @@ const (
 	// XAgentServiceDeleteTaskProcedure is the fully-qualified name of the XAgentService's DeleteTask
 	// RPC.
 	XAgentServiceDeleteTaskProcedure = "/xagent.v1.XAgentService/DeleteTask"
+	// XAgentServiceArchiveTaskProcedure is the fully-qualified name of the XAgentService's ArchiveTask
+	// RPC.
+	XAgentServiceArchiveTaskProcedure = "/xagent.v1.XAgentService/ArchiveTask"
+	// XAgentServiceCancelTaskProcedure is the fully-qualified name of the XAgentService's CancelTask
+	// RPC.
+	XAgentServiceCancelTaskProcedure = "/xagent.v1.XAgentService/CancelTask"
+	// XAgentServiceRestartTaskProcedure is the fully-qualified name of the XAgentService's RestartTask
+	// RPC.
+	XAgentServiceRestartTaskProcedure = "/xagent.v1.XAgentService/RestartTask"
 	// XAgentServiceUploadLogsProcedure is the fully-qualified name of the XAgentService's UploadLogs
 	// RPC.
 	XAgentServiceUploadLogsProcedure = "/xagent.v1.XAgentService/UploadLogs"
@@ -105,6 +114,9 @@ type XAgentServiceClient interface {
 	GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error)
 	UpdateTask(context.Context, *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error)
 	DeleteTask(context.Context, *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error)
+	ArchiveTask(context.Context, *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error)
+	CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error)
+	RestartTask(context.Context, *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error)
 	UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error)
 	ListLogs(context.Context, *v1.ListLogsRequest) (*v1.ListLogsResponse, error)
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
@@ -173,6 +185,24 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceDeleteTaskProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("DeleteTask")),
+			connect.WithClientOptions(opts...),
+		),
+		archiveTask: connect.NewClient[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse](
+			httpClient,
+			baseURL+XAgentServiceArchiveTaskProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ArchiveTask")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelTask: connect.NewClient[v1.CancelTaskRequest, v1.CancelTaskResponse](
+			httpClient,
+			baseURL+XAgentServiceCancelTaskProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("CancelTask")),
+			connect.WithClientOptions(opts...),
+		),
+		restartTask: connect.NewClient[v1.RestartTaskRequest, v1.RestartTaskResponse](
+			httpClient,
+			baseURL+XAgentServiceRestartTaskProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("RestartTask")),
 			connect.WithClientOptions(opts...),
 		),
 		uploadLogs: connect.NewClient[v1.UploadLogsRequest, v1.UploadLogsResponse](
@@ -277,6 +307,9 @@ type xAgentServiceClient struct {
 	getTaskDetails     *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
 	updateTask         *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
 	deleteTask         *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
+	archiveTask        *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
+	cancelTask         *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
+	restartTask        *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
 	uploadLogs         *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
 	listLogs           *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
 	createLink         *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
@@ -351,6 +384,33 @@ func (c *xAgentServiceClient) UpdateTask(ctx context.Context, req *v1.UpdateTask
 // DeleteTask calls xagent.v1.XAgentService.DeleteTask.
 func (c *xAgentServiceClient) DeleteTask(ctx context.Context, req *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error) {
 	response, err := c.deleteTask.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// ArchiveTask calls xagent.v1.XAgentService.ArchiveTask.
+func (c *xAgentServiceClient) ArchiveTask(ctx context.Context, req *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error) {
+	response, err := c.archiveTask.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// CancelTask calls xagent.v1.XAgentService.CancelTask.
+func (c *xAgentServiceClient) CancelTask(ctx context.Context, req *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error) {
+	response, err := c.cancelTask.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// RestartTask calls xagent.v1.XAgentService.RestartTask.
+func (c *xAgentServiceClient) RestartTask(ctx context.Context, req *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error) {
+	response, err := c.restartTask.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -501,6 +561,9 @@ type XAgentServiceHandler interface {
 	GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error)
 	UpdateTask(context.Context, *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error)
 	DeleteTask(context.Context, *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error)
+	ArchiveTask(context.Context, *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error)
+	CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error)
+	RestartTask(context.Context, *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error)
 	UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error)
 	ListLogs(context.Context, *v1.ListLogsRequest) (*v1.ListLogsResponse, error)
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
@@ -565,6 +628,24 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceDeleteTaskProcedure,
 		svc.DeleteTask,
 		connect.WithSchema(xAgentServiceMethods.ByName("DeleteTask")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceArchiveTaskHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceArchiveTaskProcedure,
+		svc.ArchiveTask,
+		connect.WithSchema(xAgentServiceMethods.ByName("ArchiveTask")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceCancelTaskHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceCancelTaskProcedure,
+		svc.CancelTask,
+		connect.WithSchema(xAgentServiceMethods.ByName("CancelTask")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceRestartTaskHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceRestartTaskProcedure,
+		svc.RestartTask,
+		connect.WithSchema(xAgentServiceMethods.ByName("RestartTask")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceUploadLogsHandler := connect.NewUnaryHandlerSimple(
@@ -673,6 +754,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceUpdateTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceDeleteTaskProcedure:
 			xAgentServiceDeleteTaskHandler.ServeHTTP(w, r)
+		case XAgentServiceArchiveTaskProcedure:
+			xAgentServiceArchiveTaskHandler.ServeHTTP(w, r)
+		case XAgentServiceCancelTaskProcedure:
+			xAgentServiceCancelTaskHandler.ServeHTTP(w, r)
+		case XAgentServiceRestartTaskProcedure:
+			xAgentServiceRestartTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceUploadLogsProcedure:
 			xAgentServiceUploadLogsHandler.ServeHTTP(w, r)
 		case XAgentServiceListLogsProcedure:
@@ -738,6 +825,18 @@ func (UnimplementedXAgentServiceHandler) UpdateTask(context.Context, *v1.UpdateT
 
 func (UnimplementedXAgentServiceHandler) DeleteTask(context.Context, *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteTask is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ArchiveTask(context.Context, *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ArchiveTask is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CancelTask is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) RestartTask(context.Context, *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.RestartTask is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error) {

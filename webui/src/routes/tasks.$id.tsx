@@ -5,6 +5,9 @@ import {
   listLogs,
   updateTask,
   removeEventTask,
+  archiveTask,
+  cancelTask,
+  restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task, TaskLink, Event, LogEntry } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
@@ -74,9 +77,22 @@ function TaskDetail() {
 
   const updateMutation = useMutation(updateTask)
   const removeEventMutation = useMutation(removeEventTask)
+  const archiveMutation = useMutation(archiveTask)
+  const cancelMutation = useMutation(cancelTask)
+  const restartMutation = useMutation(restartTask)
 
-  const handleUpdateStatus = async (status: string) => {
-    await updateMutation.mutateAsync({ id: taskId, status })
+  const handleArchive = async () => {
+    await archiveMutation.mutateAsync({ id: taskId })
+    refetch()
+  }
+
+  const handleCancel = async () => {
+    await cancelMutation.mutateAsync({ id: taskId })
+    refetch()
+  }
+
+  const handleRestart = async () => {
+    await restartMutation.mutateAsync({ id: taskId })
     refetch()
   }
 
@@ -134,6 +150,7 @@ function TaskDetail() {
     task.status === 'completed' ||
     task.status === 'failed'
   const canArchive = task.status === 'completed' || task.status === 'failed'
+  const isMutating = archiveMutation.isPending || cancelMutation.isPending || restartMutation.isPending
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
@@ -144,8 +161,8 @@ function TaskDetail() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => handleUpdateStatus('cancelled')}
-              disabled={updateMutation.isPending}
+              onClick={handleCancel}
+              disabled={isMutating}
             >
               Cancel
             </Button>
@@ -154,8 +171,8 @@ function TaskDetail() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleUpdateStatus('restarting')}
-              disabled={updateMutation.isPending}
+              onClick={handleRestart}
+              disabled={isMutating}
             >
               Restart
             </Button>
@@ -164,8 +181,8 @@ function TaskDetail() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleUpdateStatus('archived')}
-              disabled={updateMutation.isPending}
+              onClick={handleArchive}
+              disabled={isMutating}
             >
               Archive
             </Button>
@@ -364,11 +381,11 @@ function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => v
 }
 
 function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
-  const updateMutation = useMutation(updateTask)
+  const archiveMutation = useMutation(archiveTask)
   const canArchive = task.status === 'completed' || task.status === 'failed'
 
   const handleArchive = async () => {
-    await updateMutation.mutateAsync({ id: task.id, status: 'archived' })
+    await archiveMutation.mutateAsync({ id: task.id })
     onUpdate()
   }
 
@@ -396,7 +413,7 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
             variant="outline"
             size="sm"
             onClick={handleArchive}
-            disabled={updateMutation.isPending}
+            disabled={archiveMutation.isPending}
           >
             Archive
           </Button>
