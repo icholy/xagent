@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/urfave/cli/v3"
@@ -30,6 +32,17 @@ var RunCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		// Set up SIGTERM handler to cancel with ErrStop
+		ctx, cancel := context.WithCancelCause(ctx)
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			slog.Info("received SIGTERM, stopping agent")
+			cancel(agent.ErrStop)
+		}()
+		defer signal.Stop(sigCh)
+
 		taskID := cmd.String("task")
 
 		// Load config
@@ -108,6 +121,10 @@ var RunCommand = &cli.Command{
 		}
 
 		if err := a.Prompt(ctx, prompt, cfg.Started); err != nil {
+			if context.Cause(ctx) == agent.ErrStop {
+				slog.Info("agent stopped gracefully")
+				return nil
+			}
 			return err
 		}
 
