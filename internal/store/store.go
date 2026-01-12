@@ -15,6 +15,24 @@ type Executor interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+// WithTx runs f within a transaction. If tx is non-nil, it uses that transaction
+// and the caller is responsible for committing/rolling back. If tx is nil, it
+// creates a new transaction and commits on success or rolls back on error.
+func WithTx(ctx context.Context, db *sql.DB, tx *sql.Tx, f func(tx *sql.Tx) error) error {
+	if tx != nil {
+		return f(tx)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := f(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func Open(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", path+"?mode=rwc&_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {

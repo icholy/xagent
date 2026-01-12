@@ -132,69 +132,57 @@ type TaskUpdate struct {
 }
 
 func (r *TaskRepository) Update(ctx context.Context, tx *sql.Tx, id int64, update TaskUpdate) error {
-	var ownTx bool
-	if tx == nil {
-		var err error
-		tx, err = r.db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		ownTx = true
-		defer tx.Rollback()
-	}
+	return WithTx(ctx, r.db, tx, func(tx *sql.Tx) error {
+		// Add instructions if provided
+		if len(update.AddInstructions) > 0 {
+			row := tx.QueryRowContext(ctx, `SELECT prompts FROM tasks WHERE id = ?`, id)
 
-	// Add instructions if provided
-	if len(update.AddInstructions) > 0 {
-		row := tx.QueryRowContext(ctx, `SELECT prompts FROM tasks WHERE id = ?`, id)
+			var existing []byte
+			if err := row.Scan(&existing); err != nil {
+				return err
+			}
 
-		var existing []byte
-		if err := row.Scan(&existing); err != nil {
-			return err
-		}
+			var all []model.Instruction
+			if err := json.Unmarshal(existing, &all); err != nil {
+				return err
+			}
 
-		var all []model.Instruction
-		if err := json.Unmarshal(existing, &all); err != nil {
-			return err
-		}
+			all = append(all, update.AddInstructions...)
+			data, err := json.Marshal(all)
+			if err != nil {
+				return err
+			}
 
-		all = append(all, update.AddInstructions...)
-		data, err := json.Marshal(all)
-		if err != nil {
-			return err
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
+			`, data, time.Now(), id)
+			if err != nil {
+				return err
+			}
 		}
 
-		_, err = tx.ExecContext(ctx, `
-			UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
-		`, data, time.Now(), id)
-		if err != nil {
-			return err
+		// Update name if provided
+		if update.Name != "" {
+			_, err := tx.ExecContext(ctx, `
+				UPDATE tasks SET name = ?, updated_at = ? WHERE id = ?
+			`, update.Name, time.Now(), id)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	// Update name if provided
-	if update.Name != "" {
-		_, err := tx.ExecContext(ctx, `
-			UPDATE tasks SET name = ?, updated_at = ? WHERE id = ?
-		`, update.Name, time.Now(), id)
-		if err != nil {
-			return err
+		// Update status if provided
+		if update.Status != "" {
+			_, err := tx.ExecContext(ctx, `
+				UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?
+			`, update.Status, time.Now(), id)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	// Update status if provided
-	if update.Status != "" {
-		_, err := tx.ExecContext(ctx, `
-			UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?
-		`, update.Status, time.Now(), id)
-		if err != nil {
-			return err
-		}
-	}
-
-	if ownTx {
-		return tx.Commit()
-	}
-	return nil
+		return nil
+	})
 }
 
 func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {

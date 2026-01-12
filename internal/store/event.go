@@ -75,28 +75,15 @@ func (r *EventRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string)
 }
 
 func (r *EventRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
-	var ownTx bool
-	if tx == nil {
-		var err error
-		tx, err = r.db.BeginTx(ctx, nil)
-		if err != nil {
+	return WithTx(ctx, r.db, tx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM event_tasks WHERE event_id = ?`, id); err != nil {
 			return err
 		}
-		ownTx = true
-		defer tx.Rollback()
-	}
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM event_tasks WHERE event_id = ?`, id); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM events WHERE id = ?`, id); err != nil {
-		return err
-	}
-
-	if ownTx {
-		return tx.Commit()
-	}
-	return nil
+		if _, err := tx.ExecContext(ctx, `DELETE FROM events WHERE id = ?`, id); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (r *EventRepository) AddTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
