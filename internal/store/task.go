@@ -23,14 +23,14 @@ func (r *TaskRepository) txdb(tx *sql.Tx) *TxDB {
 	return NewTxDB(r.db, tx)
 }
 
-func (r *TaskRepository) Create(tx *sql.Tx, task *model.Task) error {
+func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now()
-	result, err := r.txdb(tx).ExecContext(context.Background(), `
+	result, err := r.txdb(tx).ExecContext(ctx, `
 		INSERT INTO tasks (name, parent, workspace, prompts, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, task.Name, task.Parent, task.Workspace, instructions, task.Status, now, now)
@@ -48,16 +48,16 @@ func (r *TaskRepository) Create(tx *sql.Tx, task *model.Task) error {
 	return nil
 }
 
-func (r *TaskRepository) Get(tx *sql.Tx, id int64) (*model.Task, error) {
-	row := r.txdb(tx).QueryRowContext(context.Background(), `
+func (r *TaskRepository) Get(ctx context.Context, tx *sql.Tx, id int64) (*model.Task, error) {
+	row := r.txdb(tx).QueryRowContext(ctx, `
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE id = ?
 	`, id)
 	return r.scanTask(row)
 }
 
-func (r *TaskRepository) List(tx *sql.Tx) ([]*model.Task, error) {
-	rows, err := r.txdb(tx).QueryContext(context.Background(), `
+func (r *TaskRepository) List(ctx context.Context, tx *sql.Tx) ([]*model.Task, error) {
+	rows, err := r.txdb(tx).QueryContext(ctx, `
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE status != 'archived' ORDER BY created_at DESC
 	`)
@@ -69,9 +69,9 @@ func (r *TaskRepository) List(tx *sql.Tx) ([]*model.Task, error) {
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListByStatuses(tx *sql.Tx, statuses []model.TaskStatus) ([]*model.Task, error) {
+func (r *TaskRepository) ListByStatuses(ctx context.Context, tx *sql.Tx, statuses []model.TaskStatus) ([]*model.Task, error) {
 	if len(statuses) == 0 {
-		return r.List(tx)
+		return r.List(ctx, tx)
 	}
 	placeholders := make([]string, len(statuses))
 	args := make([]any, len(statuses))
@@ -83,7 +83,7 @@ func (r *TaskRepository) ListByStatuses(tx *sql.Tx, statuses []model.TaskStatus)
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE status IN (%s) ORDER BY created_at DESC
 	`, strings.Join(placeholders, ","))
-	rows, err := r.txdb(tx).QueryContext(context.Background(), query, args...)
+	rows, err := r.txdb(tx).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +92,8 @@ func (r *TaskRepository) ListByStatuses(tx *sql.Tx, statuses []model.TaskStatus)
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListChildren(tx *sql.Tx, parentID int64) ([]*model.Task, error) {
-	rows, err := r.txdb(tx).QueryContext(context.Background(), `
+func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID int64) ([]*model.Task, error) {
+	rows, err := r.txdb(tx).QueryContext(ctx, `
 		SELECT id, name, parent, workspace, prompts, status, created_at, updated_at
 		FROM tasks WHERE parent = ? ORDER BY created_at DESC
 	`, parentID)
@@ -105,8 +105,8 @@ func (r *TaskRepository) ListChildren(tx *sql.Tx, parentID int64) ([]*model.Task
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListByEvent(tx *sql.Tx, eventID int64) ([]*model.Task, error) {
-	rows, err := r.txdb(tx).QueryContext(context.Background(), `
+func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
+	rows, err := r.txdb(tx).QueryContext(ctx, `
 		SELECT t.id, t.name, t.parent, t.workspace, t.prompts, t.status, t.created_at, t.updated_at
 		FROM tasks t
 		JOIN event_tasks et ON t.id = et.task_id
@@ -128,19 +128,19 @@ type TaskUpdate struct {
 	AddInstructions []model.Instruction
 }
 
-func (r *TaskRepository) Update(tx *sql.Tx, id int64, update TaskUpdate) error {
+func (r *TaskRepository) Update(ctx context.Context, tx *sql.Tx, id int64, update TaskUpdate) error {
 	db := r.txdb(tx)
 
 	// If no tx was provided and we need to do multiple operations, create one
 	if tx == nil {
-		return WithTx(context.Background(), r.db, func(innerTx *sql.Tx) error {
-			return r.Update(innerTx, id, update)
+		return WithTx(ctx, r.db, func(innerTx *sql.Tx) error {
+			return r.Update(ctx, innerTx, id, update)
 		})
 	}
 
 	// Add instructions if provided
 	if len(update.AddInstructions) > 0 {
-		row := db.QueryRowContext(context.Background(), `SELECT prompts FROM tasks WHERE id = ?`, id)
+		row := db.QueryRowContext(ctx, `SELECT prompts FROM tasks WHERE id = ?`, id)
 
 		var existing []byte
 		if err := row.Scan(&existing); err != nil {
@@ -158,7 +158,7 @@ func (r *TaskRepository) Update(tx *sql.Tx, id int64, update TaskUpdate) error {
 			return err
 		}
 
-		_, err = db.ExecContext(context.Background(), `
+		_, err = db.ExecContext(ctx, `
 			UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
 		`, data, time.Now(), id)
 		if err != nil {
@@ -168,7 +168,7 @@ func (r *TaskRepository) Update(tx *sql.Tx, id int64, update TaskUpdate) error {
 
 	// Update name if provided
 	if update.Name != "" {
-		_, err := db.ExecContext(context.Background(), `
+		_, err := db.ExecContext(ctx, `
 			UPDATE tasks SET name = ?, updated_at = ? WHERE id = ?
 		`, update.Name, time.Now(), id)
 		if err != nil {
@@ -178,7 +178,7 @@ func (r *TaskRepository) Update(tx *sql.Tx, id int64, update TaskUpdate) error {
 
 	// Update status if provided
 	if update.Status != "" {
-		_, err := db.ExecContext(context.Background(), `
+		_, err := db.ExecContext(ctx, `
 			UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?
 		`, update.Status, time.Now(), id)
 		if err != nil {
@@ -189,8 +189,8 @@ func (r *TaskRepository) Update(tx *sql.Tx, id int64, update TaskUpdate) error {
 	return nil
 }
 
-func (r *TaskRepository) Delete(tx *sql.Tx, id int64) error {
-	_, err := r.txdb(tx).ExecContext(context.Background(), `DELETE FROM tasks WHERE id = ?`, id)
+func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
+	_, err := r.txdb(tx).ExecContext(ctx, `DELETE FROM tasks WHERE id = ?`, id)
 	return err
 }
 

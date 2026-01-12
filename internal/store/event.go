@@ -20,8 +20,8 @@ func (r *EventRepository) txdb(tx *sql.Tx) *TxDB {
 	return NewTxDB(r.db, tx)
 }
 
-func (r *EventRepository) Create(tx *sql.Tx, event *model.Event) error {
-	result, err := r.txdb(tx).ExecContext(context.Background(), `
+func (r *EventRepository) Create(ctx context.Context, tx *sql.Tx, event *model.Event) error {
+	result, err := r.txdb(tx).ExecContext(ctx, `
 		INSERT INTO events (description, data, url, created_at)
 		VALUES (?, ?, ?, ?)
 	`, event.Description, event.Data, event.URL, time.Now())
@@ -32,10 +32,10 @@ func (r *EventRepository) Create(tx *sql.Tx, event *model.Event) error {
 	return nil
 }
 
-func (r *EventRepository) Get(tx *sql.Tx, id int64) (*model.Event, error) {
+func (r *EventRepository) Get(ctx context.Context, tx *sql.Tx, id int64) (*model.Event, error) {
 	var event model.Event
 	var url sql.NullString
-	err := r.txdb(tx).QueryRowContext(context.Background(), `
+	err := r.txdb(tx).QueryRowContext(ctx, `
 		SELECT id, description, data, url, created_at
 		FROM events WHERE id = ?
 	`, id).Scan(&event.ID, &event.Description, &event.Data, &url, &event.CreatedAt)
@@ -46,8 +46,8 @@ func (r *EventRepository) Get(tx *sql.Tx, id int64) (*model.Event, error) {
 	return &event, nil
 }
 
-func (r *EventRepository) List(tx *sql.Tx, limit int) ([]*model.Event, error) {
-	rows, err := r.txdb(tx).QueryContext(context.Background(), `
+func (r *EventRepository) List(ctx context.Context, tx *sql.Tx, limit int) ([]*model.Event, error) {
+	rows, err := r.txdb(tx).QueryContext(ctx, `
 		SELECT id, description, data, url, created_at
 		FROM events ORDER BY created_at DESC
 		LIMIT ?
@@ -59,8 +59,8 @@ func (r *EventRepository) List(tx *sql.Tx, limit int) ([]*model.Event, error) {
 	return r.scanEvents(rows)
 }
 
-func (r *EventRepository) FindByURL(tx *sql.Tx, url string) ([]*model.Event, error) {
-	rows, err := r.txdb(tx).QueryContext(context.Background(), `
+func (r *EventRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string) ([]*model.Event, error) {
+	rows, err := r.txdb(tx).QueryContext(ctx, `
 		SELECT id, description, data, url, created_at
 		FROM events WHERE url = ? ORDER BY created_at DESC
 	`, url)
@@ -71,40 +71,40 @@ func (r *EventRepository) FindByURL(tx *sql.Tx, url string) ([]*model.Event, err
 	return r.scanEvents(rows)
 }
 
-func (r *EventRepository) Delete(tx *sql.Tx, id int64) error {
+func (r *EventRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
 	// If no tx was provided, create one
 	if tx == nil {
-		return WithTx(context.Background(), r.db, func(innerTx *sql.Tx) error {
-			return r.Delete(innerTx, id)
+		return WithTx(ctx, r.db, func(innerTx *sql.Tx) error {
+			return r.Delete(ctx, innerTx, id)
 		})
 	}
 
 	db := r.txdb(tx)
-	if _, err := db.ExecContext(context.Background(), `DELETE FROM event_tasks WHERE event_id = ?`, id); err != nil {
+	if _, err := db.ExecContext(ctx, `DELETE FROM event_tasks WHERE event_id = ?`, id); err != nil {
 		return err
 	}
-	if _, err := db.ExecContext(context.Background(), `DELETE FROM events WHERE id = ?`, id); err != nil {
+	if _, err := db.ExecContext(ctx, `DELETE FROM events WHERE id = ?`, id); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *EventRepository) AddTask(tx *sql.Tx, eventID int64, taskID int64) error {
-	_, err := r.txdb(tx).ExecContext(context.Background(), `
+func (r *EventRepository) AddTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
+	_, err := r.txdb(tx).ExecContext(ctx, `
 		INSERT OR IGNORE INTO event_tasks (event_id, task_id) VALUES (?, ?)
 	`, eventID, taskID)
 	return err
 }
 
-func (r *EventRepository) RemoveTask(tx *sql.Tx, eventID int64, taskID int64) error {
-	_, err := r.txdb(tx).ExecContext(context.Background(), `
+func (r *EventRepository) RemoveTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
+	_, err := r.txdb(tx).ExecContext(ctx, `
 		DELETE FROM event_tasks WHERE event_id = ? AND task_id = ?
 	`, eventID, taskID)
 	return err
 }
 
-func (r *EventRepository) ListTasks(tx *sql.Tx, eventID int64) ([]int64, error) {
-	rows, err := r.txdb(tx).QueryContext(context.Background(), `
+func (r *EventRepository) ListTasks(ctx context.Context, tx *sql.Tx, eventID int64) ([]int64, error) {
+	rows, err := r.txdb(tx).QueryContext(ctx, `
 		SELECT task_id FROM event_tasks WHERE event_id = ?
 	`, eventID)
 	if err != nil {
@@ -123,8 +123,8 @@ func (r *EventRepository) ListTasks(tx *sql.Tx, eventID int64) ([]int64, error) 
 	return tasks, rows.Err()
 }
 
-func (r *EventRepository) ListByTask(tx *sql.Tx, taskID int64) ([]*model.Event, error) {
-	rows, err := r.txdb(tx).QueryContext(context.Background(), `
+func (r *EventRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64) ([]*model.Event, error) {
+	rows, err := r.txdb(tx).QueryContext(ctx, `
 		SELECT e.id, e.description, e.data, e.url, e.created_at
 		FROM events e
 		JOIN event_tasks et ON e.id = et.event_id

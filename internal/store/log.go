@@ -20,8 +20,8 @@ func (r *LogRepository) txdb(tx *sql.Tx) *TxDB {
 	return NewTxDB(r.db, tx)
 }
 
-func (r *LogRepository) Create(tx *sql.Tx, log *model.Log) error {
-	result, err := r.txdb(tx).ExecContext(context.Background(), `
+func (r *LogRepository) Create(ctx context.Context, tx *sql.Tx, log *model.Log) error {
+	result, err := r.txdb(tx).ExecContext(ctx, `
 		INSERT INTO logs (task_id, type, content, created_at)
 		VALUES (?, ?, ?, ?)
 	`, log.TaskID, log.Type, log.Content, time.Now())
@@ -32,15 +32,15 @@ func (r *LogRepository) Create(tx *sql.Tx, log *model.Log) error {
 	return nil
 }
 
-func (r *LogRepository) CreateBatch(tx *sql.Tx, logs []*model.Log) error {
+func (r *LogRepository) CreateBatch(ctx context.Context, tx *sql.Tx, logs []*model.Log) error {
 	// If no tx was provided, create one
 	if tx == nil {
-		return WithTx(context.Background(), r.db, func(innerTx *sql.Tx) error {
-			return r.CreateBatch(innerTx, logs)
+		return WithTx(ctx, r.db, func(innerTx *sql.Tx) error {
+			return r.CreateBatch(ctx, innerTx, logs)
 		})
 	}
 
-	stmt, err := tx.Prepare(`
+	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO logs (task_id, type, content, created_at)
 		VALUES (?, ?, ?, ?)
 	`)
@@ -51,7 +51,7 @@ func (r *LogRepository) CreateBatch(tx *sql.Tx, logs []*model.Log) error {
 
 	now := time.Now()
 	for _, log := range logs {
-		result, err := stmt.Exec(log.TaskID, log.Type, log.Content, now)
+		result, err := stmt.ExecContext(ctx, log.TaskID, log.Type, log.Content, now)
 		if err != nil {
 			return err
 		}
@@ -61,8 +61,8 @@ func (r *LogRepository) CreateBatch(tx *sql.Tx, logs []*model.Log) error {
 	return nil
 }
 
-func (r *LogRepository) ListByTask(tx *sql.Tx, taskID int64) ([]*model.Log, error) {
-	rows, err := r.txdb(tx).QueryContext(context.Background(), `
+func (r *LogRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64) ([]*model.Log, error) {
+	rows, err := r.txdb(tx).QueryContext(ctx, `
 		SELECT id, task_id, type, content, created_at
 		FROM logs WHERE task_id = ? ORDER BY created_at ASC
 	`, taskID)
