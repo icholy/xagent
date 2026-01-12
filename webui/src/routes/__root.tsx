@@ -50,12 +50,6 @@ function RootComponent() {
             >
               Events
             </Link>
-            <Link
-              to="/tasks/new"
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Create Task
-            </Link>
           </div>
         </div>
       </nav>
