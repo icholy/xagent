@@ -3,15 +3,9 @@ package store
 import (
 	"database/sql"
 	"time"
-)
 
-type Log struct {
-	ID        int64     `json:"id"`
-	TaskID    int64     `json:"task_id"`
-	Type      string    `json:"type"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-}
+	"github.com/icholy/xagent/internal/model"
+)
 
 type LogRepository struct {
 	db *sql.DB
@@ -21,7 +15,7 @@ func NewLogRepository(db *sql.DB) *LogRepository {
 	return &LogRepository{db: db}
 }
 
-func (r *LogRepository) Create(log *Log) error {
+func (r *LogRepository) Create(log *model.Log) error {
 	result, err := r.db.Exec(`
 		INSERT INTO logs (task_id, type, content, created_at)
 		VALUES (?, ?, ?, ?)
@@ -33,7 +27,7 @@ func (r *LogRepository) Create(log *Log) error {
 	return nil
 }
 
-func (r *LogRepository) CreateBatch(logs []*Log) error {
+func (r *LogRepository) CreateBatch(logs []*model.Log) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -61,7 +55,7 @@ func (r *LogRepository) CreateBatch(logs []*Log) error {
 	return tx.Commit()
 }
 
-func (r *LogRepository) ListByTask(taskID int64) ([]*Log, error) {
+func (r *LogRepository) ListByTask(taskID int64) ([]*model.Log, error) {
 	rows, err := r.db.Query(`
 		SELECT id, task_id, type, content, created_at
 		FROM logs WHERE task_id = ? ORDER BY created_at ASC
@@ -71,9 +65,9 @@ func (r *LogRepository) ListByTask(taskID int64) ([]*Log, error) {
 	}
 	defer rows.Close()
 
-	var logs []*Log
+	var logs []*model.Log
 	for rows.Next() {
-		var log Log
+		var log model.Log
 		if err := rows.Scan(&log.ID, &log.TaskID, &log.Type, &log.Content, &log.CreatedAt); err != nil {
 			return nil, err
 		}

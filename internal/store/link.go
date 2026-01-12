@@ -2,18 +2,9 @@ package store
 
 import (
 	"database/sql"
-	"time"
-)
 
-type Link struct {
-	ID        int64     `json:"id"`
-	TaskID    int64     `json:"task_id"`
-	Relevance string    `json:"relevance"`
-	URL       string    `json:"url"`
-	Title     string    `json:"title"`
-	Notify    bool      `json:"notify"`
-	CreatedAt time.Time `json:"created_at"`
-}
+	"github.com/icholy/xagent/internal/model"
+)
 
 type LinkRepository struct {
 	db *sql.DB
@@ -23,7 +14,7 @@ func NewLinkRepository(db *sql.DB) *LinkRepository {
 	return &LinkRepository{db: db}
 }
 
-func (r *LinkRepository) Create(link *Link) error {
+func (r *LinkRepository) Create(link *model.Link) error {
 	result, err := r.db.Exec(`
 		INSERT INTO task_links (task_id, relevance, url, title, notify, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
@@ -35,7 +26,7 @@ func (r *LinkRepository) Create(link *Link) error {
 	return nil
 }
 
-func (r *LinkRepository) ListByTask(taskID int64) ([]*Link, error) {
+func (r *LinkRepository) ListByTask(taskID int64) ([]*model.Link, error) {
 	rows, err := r.db.Query(`
 		SELECT id, task_id, relevance, url, title, notify, created_at
 		FROM task_links WHERE task_id = ? ORDER BY created_at ASC
@@ -45,9 +36,9 @@ func (r *LinkRepository) ListByTask(taskID int64) ([]*Link, error) {
 	}
 	defer rows.Close()
 
-	var links []*Link
+	var links []*model.Link
 	for rows.Next() {
-		var link Link
+		var link model.Link
 		var title sql.NullString
 		if err := rows.Scan(&link.ID, &link.TaskID, &link.Relevance, &link.URL, &title, &link.Notify, &link.CreatedAt); err != nil {
 			return nil, err
@@ -63,7 +54,7 @@ func (r *LinkRepository) Delete(id int64) error {
 	return err
 }
 
-func (r *LinkRepository) FindByURL(url string) ([]*Link, error) {
+func (r *LinkRepository) FindByURL(url string) ([]*model.Link, error) {
 	rows, err := r.db.Query(`
 		SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 		FROM task_links l
@@ -76,9 +67,9 @@ func (r *LinkRepository) FindByURL(url string) ([]*Link, error) {
 	}
 	defer rows.Close()
 
-	var links []*Link
+	var links []*model.Link
 	for rows.Next() {
-		var link Link
+		var link model.Link
 		var title sql.NullString
 		if err := rows.Scan(&link.ID, &link.TaskID, &link.Relevance, &link.URL, &title, &link.Notify, &link.CreatedAt); err != nil {
 			return nil, err

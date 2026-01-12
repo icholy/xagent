@@ -199,9 +199,9 @@ func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest
 }
 
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
-	logs := make([]*store.Log, len(req.Entries))
+	logs := make([]*model.Log, len(req.Entries))
 	for i, entry := range req.Entries {
-		logs[i] = &store.Log{
+		logs[i] = &model.Log{
 			TaskID:  req.TaskId,
 			Type:    entry.Type,
 			Content: entry.Content,
@@ -231,7 +231,7 @@ func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*
 }
 
 func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
-	link := &store.Link{
+	link := &model.Link{
 		TaskID:    req.TaskId,
 		Relevance: req.Relevance,
 		URL:       req.Url,
@@ -296,7 +296,7 @@ func taskToProto(t *model.Task) *xagentv1.Task {
 	}
 }
 
-func linkToProto(l *store.Link) *xagentv1.TaskLink {
+func linkToProto(l *model.Link) *xagentv1.TaskLink {
 	return &xagentv1.TaskLink{
 		Id:        l.ID,
 		TaskId:    l.TaskID,
@@ -329,7 +329,7 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 }
 
 func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
-	event := &store.Event{
+	event := &model.Event{
 		Description: req.Description,
 		Data:        req.Data,
 		URL:         req.Url,
@@ -444,7 +444,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
 }
 
-func eventToProto(e *store.Event) *xagentv1.Event {
+func eventToProto(e *model.Event) *xagentv1.Event {
 	return &xagentv1.Event{
 		Id:          e.ID,
 		Description: e.Description,

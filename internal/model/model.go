@@ -61,3 +61,32 @@ type RunnerEvent struct {
 	Version   int64
 	Reconcile bool
 }
+
+// Event represents an external event that can trigger task actions.
+type Event struct {
+	ID          int64     `json:"id"`
+	Description string    `json:"description"`
+	Data        string    `json:"data"`
+	URL         string    `json:"url,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Link represents a link between a task and an external resource.
+type Link struct {
+	ID        int64     `json:"id"`
+	TaskID    int64     `json:"task_id"`
+	Relevance string    `json:"relevance"`
+	URL       string    `json:"url"`
+	Title     string    `json:"title"`
+	Notify    bool      `json:"notify"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Log represents a log entry for a task.
+type Log struct {
+	ID        int64     `json:"id"`
+	TaskID    int64     `json:"task_id"`
+	Type      string    `json:"type"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+}
