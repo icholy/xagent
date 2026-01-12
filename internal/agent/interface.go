@@ -49,6 +49,7 @@ type Options struct {
 	Claude     *ClaudeOptions
 	Copilot    *CopilotOptions
 	Cursor     *CursorOptions
+	Dummy      *DummyOptions
 }
 
 // ClaudeOptions contains Claude-specific agent options.
@@ -64,6 +65,12 @@ type CopilotOptions struct {
 // CursorOptions contains Cursor-specific agent options.
 type CursorOptions struct {
 	Model string
+}
+
+// DummyOptions contains Dummy-specific agent options.
+type DummyOptions struct {
+	// Sleep duration in seconds. If -1, sleeps forever.
+	Sleep int
 }
 
 // NewAgent creates an Agent based on the type specified in options.
@@ -94,7 +101,7 @@ func NewAgent(opts Options) (Agent, error) {
 			options:    opts.Cursor,
 		}, nil
 	case TypeDummy:
-		return &DummyAgent{log: log}, nil
+		return &DummyAgent{log: log, options: opts.Dummy}, nil
 	default:
 		return nil, fmt.Errorf("unknown agent type: %s", opts.Type)
 	}

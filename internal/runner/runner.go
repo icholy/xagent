@@ -417,6 +417,11 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 			Model: ws.Agent.Cursor.Model,
 		}
 	}
+	if ws.Agent.Dummy != nil {
+		cfg.Dummy = &agent.DummyOptions{
+			Sleep: ws.Agent.Dummy.Sleep,
+		}
+	}
 
 	// Inject xagent MCP server for link creation
 	cfg.McpServers["xagent"] = agent.McpServer{

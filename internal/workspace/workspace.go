@@ -41,6 +41,7 @@ type Agent struct {
 	Claude     *ClaudeConfig              `yaml:"claude,omitempty"`
 	Copilot    *CopilotConfig             `yaml:"copilot,omitempty"`
 	Cursor     *CursorConfig              `yaml:"cursor,omitempty"`
+	Dummy      *DummyConfig               `yaml:"dummy,omitempty"`
 }
 
 // ClaudeConfig contains Claude-specific agent configuration.
@@ -56,6 +57,12 @@ type CopilotConfig struct {
 // CursorConfig contains Cursor-specific agent configuration.
 type CursorConfig struct {
 	Model string `yaml:"model"`
+}
+
+// DummyConfig contains Dummy-specific agent configuration.
+type DummyConfig struct {
+	// Sleep duration in seconds. If -1, sleeps forever.
+	Sleep int `yaml:"sleep"`
 }
 
 func (w *Workspace) Validate() error {
