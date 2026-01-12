@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -128,7 +129,10 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 	task, err := s.tasks.Get(ctx, nil, req.Id)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	return &xagentv1.GetTaskResponse{
@@ -139,7 +143,10 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 	task, err := s.tasks.Get(ctx, nil, req.Id)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	children, _ := s.tasks.ListChildren(ctx, nil, req.Id)
@@ -378,7 +385,10 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 	event, err := s.events.Get(ctx, nil, req.Id)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.GetEventResponse{
 		Event: event.Proto(),
@@ -434,7 +444,10 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
 	event, err := s.events.Get(ctx, nil, req.Id)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	if event.URL == "" {
