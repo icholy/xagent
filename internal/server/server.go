@@ -188,16 +188,15 @@ func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest
 }
 
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
-	logs := make([]*model.Log, len(req.Entries))
-	for i, entry := range req.Entries {
-		logs[i] = &model.Log{
+	for _, entry := range req.Entries {
+		log := &model.Log{
 			TaskID:  req.TaskId,
 			Type:    entry.Type,
 			Content: entry.Content,
 		}
-	}
-	if err := s.logs.CreateBatch(ctx, logs); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		if err := s.logs.Create(ctx, log); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
 	}
 	return &xagentv1.UploadLogsResponse{}, nil
 }

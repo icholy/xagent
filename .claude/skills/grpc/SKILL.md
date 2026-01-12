@@ -287,16 +287,15 @@ if err != nil {
 ### Batch operations
 ```go
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
-    logs := make([]*store.Log, len(req.Entries))
-    for i, entry := range req.Entries {
-        logs[i] = &store.Log{
+    for _, entry := range req.Entries {
+        log := &model.Log{
             TaskID:  req.TaskId,
             Type:    entry.Type,
             Content: entry.Content,
         }
-    }
-    if err := s.logs.CreateBatch(logs); err != nil {
-        return nil, connect.NewError(connect.CodeInternal, err)
+        if err := s.logs.Create(ctx, log); err != nil {
+            return nil, connect.NewError(connect.CodeInternal, err)
+        }
     }
     return &xagentv1.UploadLogsResponse{}, nil
 }
