@@ -189,7 +189,7 @@ function CommandBadge({ command }: { command: string }) {
       variant="outline"
       className={commandStyles[command] ?? 'bg-gray-100 text-gray-600'}
     >
-      {command}
+      command:{command}
     </Badge>
   )
 }
