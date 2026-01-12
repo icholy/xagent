@@ -439,11 +439,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return tx.Commit()
 		})
 		if err != nil {
-			s.log.Warn("failed to apply runner event",
-				"task_id", event.TaskID,
-				"event", event.Event,
-				"error", err,
-			)
+			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil

@@ -425,7 +425,7 @@ func TestSubmitRunnerEvents_NonExistentTask(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := context.Background()
 
-	// Submit an event for a non-existent task - should not error, just log warning
+	// Submit an event for a non-existent task - should return an error
 	_, err := srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{
@@ -435,5 +435,5 @@ func TestSubmitRunnerEvents_NonExistentTask(t *testing.T) {
 			},
 		},
 	})
-	assert.NilError(t, err)
+	assert.ErrorContains(t, err, "")
 }
