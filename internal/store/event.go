@@ -3,15 +3,9 @@ package store
 import (
 	"database/sql"
 	"time"
-)
 
-type Event struct {
-	ID          int64     `json:"id"`
-	Description string    `json:"description"`
-	Data        string    `json:"data"`
-	URL         string    `json:"url,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-}
+	"github.com/icholy/xagent/internal/model"
+)
 
 type EventRepository struct {
 	db *sql.DB
@@ -21,7 +15,7 @@ func NewEventRepository(db *sql.DB) *EventRepository {
 	return &EventRepository{db: db}
 }
 
-func (r *EventRepository) Create(event *Event) error {
+func (r *EventRepository) Create(event *model.Event) error {
 	result, err := r.db.Exec(`
 		INSERT INTO events (description, data, url, created_at)
 		VALUES (?, ?, ?, ?)
@@ -33,8 +27,8 @@ func (r *EventRepository) Create(event *Event) error {
 	return nil
 }
 
-func (r *EventRepository) Get(id int64) (*Event, error) {
-	var event Event
+func (r *EventRepository) Get(id int64) (*model.Event, error) {
+	var event model.Event
 	var url sql.NullString
 	err := r.db.QueryRow(`
 		SELECT id, description, data, url, created_at
@@ -47,7 +41,7 @@ func (r *EventRepository) Get(id int64) (*Event, error) {
 	return &event, nil
 }
 
-func (r *EventRepository) List(limit int) ([]*Event, error) {
+func (r *EventRepository) List(limit int) ([]*model.Event, error) {
 	rows, err := r.db.Query(`
 		SELECT id, description, data, url, created_at
 		FROM events ORDER BY created_at DESC
@@ -60,7 +54,7 @@ func (r *EventRepository) List(limit int) ([]*Event, error) {
 	return r.scanEvents(rows)
 }
 
-func (r *EventRepository) FindByURL(url string) ([]*Event, error) {
+func (r *EventRepository) FindByURL(url string) ([]*model.Event, error) {
 	rows, err := r.db.Query(`
 		SELECT id, description, data, url, created_at
 		FROM events WHERE url = ? ORDER BY created_at DESC
@@ -122,7 +116,7 @@ func (r *EventRepository) ListTasks(eventID int64) ([]int64, error) {
 	return tasks, rows.Err()
 }
 
-func (r *EventRepository) ListByTask(taskID int64) ([]*Event, error) {
+func (r *EventRepository) ListByTask(taskID int64) ([]*model.Event, error) {
 	rows, err := r.db.Query(`
 		SELECT e.id, e.description, e.data, e.url, e.created_at
 		FROM events e
@@ -137,10 +131,10 @@ func (r *EventRepository) ListByTask(taskID int64) ([]*Event, error) {
 	return r.scanEvents(rows)
 }
 
-func (r *EventRepository) scanEvents(rows *sql.Rows) ([]*Event, error) {
-	var events []*Event
+func (r *EventRepository) scanEvents(rows *sql.Rows) ([]*model.Event, error) {
+	var events []*model.Event
 	for rows.Next() {
-		var event Event
+		var event model.Event
 		var url sql.NullString
 		if err := rows.Scan(&event.ID, &event.Description, &event.Data, &url, &event.CreatedAt); err != nil {
 			return nil, err
