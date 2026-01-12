@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -15,8 +16,12 @@ func NewLogRepository(db *sql.DB) *LogRepository {
 	return &LogRepository{db: db}
 }
 
-func (r *LogRepository) Create(log *model.Log) error {
-	result, err := r.db.Exec(`
+func (r *LogRepository) txdb(tx *sql.Tx) *TxDB {
+	return NewTxDB(r.db, tx)
+}
+
+func (r *LogRepository) Create(tx *sql.Tx, log *model.Log) error {
+	result, err := r.txdb(tx).ExecContext(context.Background(), `
 		INSERT INTO logs (task_id, type, content, created_at)
 		VALUES (?, ?, ?, ?)
 	`, log.TaskID, log.Type, log.Content, time.Now())
@@ -27,12 +32,13 @@ func (r *LogRepository) Create(log *model.Log) error {
 	return nil
 }
 
-func (r *LogRepository) CreateBatch(logs []*model.Log) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
+func (r *LogRepository) CreateBatch(tx *sql.Tx, logs []*model.Log) error {
+	// If no tx was provided, create one
+	if tx == nil {
+		return WithTx(context.Background(), r.db, func(innerTx *sql.Tx) error {
+			return r.CreateBatch(innerTx, logs)
+		})
 	}
-	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO logs (task_id, type, content, created_at)
@@ -52,11 +58,11 @@ func (r *LogRepository) CreateBatch(logs []*model.Log) error {
 		log.ID, _ = result.LastInsertId()
 	}
 
-	return tx.Commit()
+	return nil
 }
 
-func (r *LogRepository) ListByTask(taskID int64) ([]*model.Log, error) {
-	rows, err := r.db.Query(`
+func (r *LogRepository) ListByTask(tx *sql.Tx, taskID int64) ([]*model.Log, error) {
+	rows, err := r.txdb(tx).QueryContext(context.Background(), `
 		SELECT id, task_id, type, content, created_at
 		FROM logs WHERE task_id = ? ORDER BY created_at ASC
 	`, taskID)

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/icholy/xagent/internal/model"
@@ -14,8 +15,12 @@ func NewLinkRepository(db *sql.DB) *LinkRepository {
 	return &LinkRepository{db: db}
 }
 
-func (r *LinkRepository) Create(link *model.Link) error {
-	result, err := r.db.Exec(`
+func (r *LinkRepository) txdb(tx *sql.Tx) *TxDB {
+	return NewTxDB(r.db, tx)
+}
+
+func (r *LinkRepository) Create(tx *sql.Tx, link *model.Link) error {
+	result, err := r.txdb(tx).ExecContext(context.Background(), `
 		INSERT INTO task_links (task_id, relevance, url, title, notify, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, link.TaskID, link.Relevance, link.URL, link.Title, link.Notify, link.CreatedAt)
@@ -26,8 +31,8 @@ func (r *LinkRepository) Create(link *model.Link) error {
 	return nil
 }
 
-func (r *LinkRepository) ListByTask(taskID int64) ([]*model.Link, error) {
-	rows, err := r.db.Query(`
+func (r *LinkRepository) ListByTask(tx *sql.Tx, taskID int64) ([]*model.Link, error) {
+	rows, err := r.txdb(tx).QueryContext(context.Background(), `
 		SELECT id, task_id, relevance, url, title, notify, created_at
 		FROM task_links WHERE task_id = ? ORDER BY created_at ASC
 	`, taskID)
@@ -49,13 +54,13 @@ func (r *LinkRepository) ListByTask(taskID int64) ([]*model.Link, error) {
 	return links, rows.Err()
 }
 
-func (r *LinkRepository) Delete(id int64) error {
-	_, err := r.db.Exec(`DELETE FROM task_links WHERE id = ?`, id)
+func (r *LinkRepository) Delete(tx *sql.Tx, id int64) error {
+	_, err := r.txdb(tx).ExecContext(context.Background(), `DELETE FROM task_links WHERE id = ?`, id)
 	return err
 }
 
-func (r *LinkRepository) FindByURL(url string) ([]*model.Link, error) {
-	rows, err := r.db.Query(`
+func (r *LinkRepository) FindByURL(tx *sql.Tx, url string) ([]*model.Link, error) {
+	rows, err := r.txdb(tx).QueryContext(context.Background(), `
 		SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 		FROM task_links l
 		JOIN tasks t ON l.task_id = t.id
