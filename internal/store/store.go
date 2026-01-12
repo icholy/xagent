@@ -15,9 +15,9 @@ type Executor interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// WithTx runs f within a transaction. If tx is non-nil, it uses that transaction
-// and the caller is responsible for committing/rolling back. If tx is nil, it
-// creates a new transaction and commits on success or rolls back on error.
+// WithTx runs f within a transaction. If tx is non-nil, it uses that transaction.
+// If tx is nil, it creates a new transaction. The callback is responsible for
+// committing the transaction. If an error is returned, the transaction is rolled back.
 func WithTx(ctx context.Context, db *sql.DB, tx *sql.Tx, f func(tx *sql.Tx) error) error {
 	if tx != nil {
 		return f(tx)
@@ -27,10 +27,7 @@ func WithTx(ctx context.Context, db *sql.DB, tx *sql.Tx, f func(tx *sql.Tx) erro
 		return err
 	}
 	defer tx.Rollback()
-	if err := f(tx); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return f(tx)
 }
 
 func Open(path string) (*sql.DB, error) {
