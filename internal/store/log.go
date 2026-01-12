@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -15,8 +16,8 @@ func NewLogRepository(db *sql.DB) *LogRepository {
 	return &LogRepository{db: db}
 }
 
-func (r *LogRepository) Create(log *model.Log) error {
-	result, err := r.db.Exec(`
+func (r *LogRepository) Create(ctx context.Context, log *model.Log) error {
+	result, err := r.db.ExecContext(ctx, `
 		INSERT INTO logs (task_id, type, content, created_at)
 		VALUES (?, ?, ?, ?)
 	`, log.TaskID, log.Type, log.Content, time.Now())
@@ -27,14 +28,14 @@ func (r *LogRepository) Create(log *model.Log) error {
 	return nil
 }
 
-func (r *LogRepository) CreateBatch(logs []*model.Log) error {
-	tx, err := r.db.Begin()
+func (r *LogRepository) CreateBatch(ctx context.Context, logs []*model.Log) error {
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(`
+	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO logs (task_id, type, content, created_at)
 		VALUES (?, ?, ?, ?)
 	`)
@@ -45,7 +46,7 @@ func (r *LogRepository) CreateBatch(logs []*model.Log) error {
 
 	now := time.Now()
 	for _, log := range logs {
-		result, err := stmt.Exec(log.TaskID, log.Type, log.Content, now)
+		result, err := stmt.ExecContext(ctx, log.TaskID, log.Type, log.Content, now)
 		if err != nil {
 			return err
 		}
@@ -55,8 +56,8 @@ func (r *LogRepository) CreateBatch(logs []*model.Log) error {
 	return tx.Commit()
 }
 
-func (r *LogRepository) ListByTask(taskID int64) ([]*model.Log, error) {
-	rows, err := r.db.Query(`
+func (r *LogRepository) ListByTask(ctx context.Context, taskID int64) ([]*model.Log, error) {
+	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, task_id, type, content, created_at
 		FROM logs WHERE task_id = ? ORDER BY created_at ASC
 	`, taskID)

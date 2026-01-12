@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/icholy/xagent/internal/model"
@@ -14,8 +15,8 @@ func NewLinkRepository(db *sql.DB) *LinkRepository {
 	return &LinkRepository{db: db}
 }
 
-func (r *LinkRepository) Create(link *model.Link) error {
-	result, err := r.db.Exec(`
+func (r *LinkRepository) Create(ctx context.Context, link *model.Link) error {
+	result, err := r.db.ExecContext(ctx, `
 		INSERT INTO task_links (task_id, relevance, url, title, notify, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, link.TaskID, link.Relevance, link.URL, link.Title, link.Notify, link.CreatedAt)
@@ -26,8 +27,8 @@ func (r *LinkRepository) Create(link *model.Link) error {
 	return nil
 }
 
-func (r *LinkRepository) ListByTask(taskID int64) ([]*model.Link, error) {
-	rows, err := r.db.Query(`
+func (r *LinkRepository) ListByTask(ctx context.Context, taskID int64) ([]*model.Link, error) {
+	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, task_id, relevance, url, title, notify, created_at
 		FROM task_links WHERE task_id = ? ORDER BY created_at ASC
 	`, taskID)
@@ -49,13 +50,13 @@ func (r *LinkRepository) ListByTask(taskID int64) ([]*model.Link, error) {
 	return links, rows.Err()
 }
 
-func (r *LinkRepository) Delete(id int64) error {
-	_, err := r.db.Exec(`DELETE FROM task_links WHERE id = ?`, id)
+func (r *LinkRepository) Delete(ctx context.Context, id int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM task_links WHERE id = ?`, id)
 	return err
 }
 
-func (r *LinkRepository) FindByURL(url string) ([]*model.Link, error) {
-	rows, err := r.db.Query(`
+func (r *LinkRepository) FindByURL(ctx context.Context, url string) ([]*model.Link, error) {
+	rows, err := r.db.QueryContext(ctx, `
 		SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 		FROM task_links l
 		JOIN tasks t ON l.task_id = t.id
