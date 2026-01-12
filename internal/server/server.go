@@ -69,11 +69,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 	if req.HasCommand {
 		tasks, err = s.tasks.ListWithCommand(ctx, nil)
 	} else {
-		statuses := make([]model.TaskStatus, len(req.Statuses))
-		for i, s := range req.Statuses {
-			statuses[i] = model.TaskStatus(s)
-		}
-		tasks, err = s.tasks.ListByStatuses(ctx, nil, statuses)
+		tasks, err = s.tasks.List(ctx, nil)
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

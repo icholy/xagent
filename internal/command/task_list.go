@@ -22,17 +22,11 @@ var TaskListCommand = &cli.Command{
 			Usage:   "C2 server URL",
 			Value:   "http://localhost:8080",
 		},
-		&cli.StringSliceFlag{
-			Name:  "status",
-			Usage: "Filter by status (pending, running, completed, failed)",
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		client := xagentclient.New(cmd.String("server"))
 
-		resp, err := client.ListTasks(ctx, &xagentv1.ListTasksRequest{
-			Statuses: cmd.StringSlice("status"),
-		})
+		resp, err := client.ListTasks(ctx, &xagentv1.ListTasksRequest{})
 		if err != nil {
 			return fmt.Errorf("failed to list tasks: %w", err)
 		}

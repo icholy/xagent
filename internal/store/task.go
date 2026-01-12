@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
@@ -76,28 +74,6 @@ func (r *TaskRepository) List(ctx context.Context, tx *sql.Tx) ([]*model.Task, e
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListByStatuses(ctx context.Context, tx *sql.Tx, statuses []model.TaskStatus) ([]*model.Task, error) {
-	if len(statuses) == 0 {
-		return r.List(ctx, tx)
-	}
-	placeholders := make([]string, len(statuses))
-	args := make([]any, len(statuses))
-	for i, s := range statuses {
-		placeholders[i] = "?"
-		args[i] = s
-	}
-	query := fmt.Sprintf(`
-		SELECT id, name, parent, workspace, prompts, status, command, version, created_at, updated_at
-		FROM tasks WHERE status IN (%s) ORDER BY created_at DESC
-	`, strings.Join(placeholders, ","))
-	rows, err := r.exec(tx).QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	return r.scanTasks(rows)
-}
 
 func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID int64) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
