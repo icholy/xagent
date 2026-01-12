@@ -107,6 +107,7 @@ message UpdateTaskRequest {
   string name = 2;
   string status = 3;
   repeated Instruction add_instructions = 4;
+  string command = 5;  // "restart", "stop", or empty to clear
 }
 
 message UpdateTaskResponse {}
