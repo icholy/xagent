@@ -27,10 +27,15 @@ var ServerCommand = &cli.Command{
 			Usage:   "Database file path",
 			Value:   "data/xagent.db",
 		},
+		&cli.BoolFlag{
+			Name:  "notify",
+			Usage: "Send system notification when a task finishes",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
 		dbPath := cmd.String("db")
+		notifyFlag := cmd.Bool("notify")
 
 		db, err := store.Open(dbPath)
 		if err != nil {
@@ -47,6 +52,7 @@ var ServerCommand = &cli.Command{
 			Logs:   logs,
 			Links:  links,
 			Events: events,
+			Notify: notifyFlag,
 		})
 
 		slog.Info("starting server", "addr", addr, "db", dbPath)

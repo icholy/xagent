@@ -14,6 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
@@ -26,6 +27,7 @@ type Server struct {
 	logs   *store.LogRepository
 	links  *store.LinkRepository
 	events *store.EventRepository
+	notify bool
 }
 
 type Options struct {
@@ -34,6 +36,7 @@ type Options struct {
 	Logs   *store.LogRepository
 	Links  *store.LinkRepository
 	Events *store.EventRepository
+	Notify bool
 }
 
 func New(opts Options) *Server {
@@ -47,6 +50,7 @@ func New(opts Options) *Server {
 		logs:   opts.Logs,
 		links:  opts.Links,
 		events: opts.Events,
+		notify: opts.Notify,
 	}
 }
 
@@ -503,12 +507,15 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)
+		var task *model.Task
+		var applied bool
 		err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			task, err := s.tasks.Get(ctx, tx, event.TaskID)
+			var err error
+			task, err = s.tasks.Get(ctx, tx, event.TaskID)
 			if err != nil {
 				return err
 			}
-			applied := task.ApplyRunnerEvent(&event)
+			applied = task.ApplyRunnerEvent(&event)
 			s.log.Info("runner event recieved",
 				"task_id", event.TaskID,
 				"event", event.Event,
@@ -531,6 +538,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 		})
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if s.notify && applied {
+			s.sendNotification(task, event.Event)
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
@@ -558,5 +568,26 @@ func (s *Server) toRunnerEventLog(e model.RunnerEvent) (model.Log, bool) {
 		}, true
 	default:
 		return model.Log{}, false
+	}
+}
+
+func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType) {
+	displayName := fmt.Sprintf("Task %d", task.ID)
+	if task.Name != "" {
+		displayName = fmt.Sprintf("%q", task.Name)
+	}
+
+	var message string
+	switch event {
+	case model.RunnerEventStopped:
+		message = fmt.Sprintf("%s completed", displayName)
+	case model.RunnerEventFailed:
+		message = fmt.Sprintf("%s failed", displayName)
+	default:
+		return
+	}
+
+	if err := notify.Send("xagent", message); err != nil {
+		s.log.Error("failed to send notification", "task", task.ID, "error", err)
 	}
 }

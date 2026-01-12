@@ -21,7 +21,6 @@ import (
 	"github.com/docker/docker/errdefs"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -37,7 +36,6 @@ type Runner struct {
 	prebuiltDir  string
 	workspaces   *workspace.Config
 	concurrency  int
-	notify       bool
 	runningCount atomic.Int32
 }
 
@@ -46,7 +44,6 @@ type Options struct {
 	PrebuiltDir string
 	Workspaces  *workspace.Config
 	Concurrency int
-	Notify      bool
 }
 
 func New(opts Options) (*Runner, error) {
@@ -70,7 +67,6 @@ func New(opts Options) (*Runner, error) {
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
 		concurrency: opts.Concurrency,
-		notify:      opts.Notify,
 	}, nil
 }
 
@@ -86,17 +82,6 @@ func (r *Runner) submit(ctx context.Context, taskID int64, event string, version
 		},
 	})
 	return err
-}
-
-func (r *Runner) taskDisplayName(ctx context.Context, taskID int64) string {
-	resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-	if err != nil {
-		return fmt.Sprintf("Task %d", taskID)
-	}
-	if resp.Task.Name == "" {
-		return fmt.Sprintf("Task %d", taskID)
-	}
-	return fmt.Sprintf("%q", resp.Task.Name)
 }
 
 func (r *Runner) Poll(ctx context.Context) error {
@@ -495,20 +480,10 @@ func (r *Runner) Monitor(ctx context.Context) error {
 					if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
 						slog.Error("failed to send stopped event", "task", taskID, "error", err)
 					}
-					if r.notify {
-						if err := notify.Send("xagent", fmt.Sprintf("%s completed", r.taskDisplayName(ctx, taskID))); err != nil {
-							slog.Error("failed to send notification", "task", taskID, "error", err)
-						}
-					}
 				} else {
 					slog.Error("container exited with error", "task", taskID, "exitCode", exitCode)
 					if err := r.submit(ctx, taskID, "failed", 0); err != nil {
 						slog.Error("failed to send failed event", "task", taskID, "error", err)
-					}
-					if r.notify {
-						if err := notify.Send("xagent", fmt.Sprintf("%s failed (exit code %s)", r.taskDisplayName(ctx, taskID), exitCode)); err != nil {
-							slog.Error("failed to send notification", "task", taskID, "error", err)
-						}
 					}
 				}
 			}
