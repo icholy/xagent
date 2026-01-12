@@ -397,8 +397,18 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		if err := s.events.AddTask(ctx, nil, req.Id, link.TaskID); err != nil {
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
 		}
-		task.Status = model.TaskStatusRestarting
-		if err := s.tasks.Put(ctx, nil, task); err != nil {
+		err = s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
+			task, err := s.tasks.Get(ctx, tx, link.TaskID)
+			if err != nil {
+				return err
+			}
+			task.Status = model.TaskStatusRestarting
+			if err := s.tasks.Put(ctx, tx, task); err != nil {
+				return err
+			}
+			return tx.Commit()
+		})
+		if err != nil {
 			s.log.Warn("failed to restart task", "task_id", link.TaskID, "error", err)
 		}
 	}
