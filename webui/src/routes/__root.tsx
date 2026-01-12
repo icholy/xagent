@@ -3,6 +3,10 @@ import { lazy, Suspense } from 'react'
 import { QueryClient } from '@tanstack/react-query'
 import xagentIcon from '@/assets/icon.png'
 
+// TanStack devtools check NODE_ENV and render nothing in production, but the
+// devtools code is still bundled. Use lazy loading with import.meta.env.DEV to
+// completely exclude devtools from production builds.
+// https://github.com/TanStack/router/issues/1383
 const TanStackRouterDevtools = import.meta.env.DEV
   ? lazy(() =>
       import('@tanstack/router-devtools').then((res) => ({
