@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"syscall"
+	"time"
 )
 
 // ClaudeAgent implements Agent using Claude Code CLI.
@@ -55,6 +57,15 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = a.cwd
 	cmd.Stderr = os.Stderr
+
+	// Create a new process group so we can kill all child processes.
+	// When npx spawns node, we need to kill the entire process tree.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		// Send SIGTERM to the entire process group (negative PID)
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
+	cmd.WaitDelay = 5 * time.Second
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

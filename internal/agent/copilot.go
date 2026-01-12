@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"syscall"
+	"time"
 )
 
 // CopilotAgent implements Agent using GitHub Copilot CLI.
@@ -50,6 +52,14 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 	cmd := exec.CommandContext(ctx, "copilot", args...)
 	cmd.Dir = a.cwd
 	cmd.Stderr = os.Stderr
+
+	// Create a new process group so we can kill all child processes
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		// Send SIGTERM to the entire process group (negative PID)
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
+	cmd.WaitDelay = 5 * time.Second
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
