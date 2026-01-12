@@ -274,10 +274,6 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	var containerID string
 	if len(containers) > 0 {
 		c := containers[0]
-		if c.State == "running" {
-			slog.Info("container already running", "task", task.ID, "container", containerName)
-			return nil
-		}
 		slog.Info("starting existing container", "task", task.ID, "container", containerName)
 		containerID = c.ID
 	} else {
