@@ -44,10 +44,6 @@ var RunnerCommand = &cli.Command{
 			Value: 0,
 		},
 		&cli.BoolFlag{
-			Name:  "notify",
-			Usage: "Send system notification when a task finishes",
-		},
-		&cli.BoolFlag{
 			Name:  "autoprune",
 			Usage: "Automatically remove containers for archived tasks",
 			Value: true,
@@ -59,7 +55,6 @@ var RunnerCommand = &cli.Command{
 		pollInterval := cmd.Duration("poll")
 		prebuiltDir := cmd.String("prebuilt")
 		concurrency := cmd.Int("concurrency")
-		notifyFlag := cmd.Bool("notify")
 		autoprune := cmd.Bool("autoprune")
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
@@ -72,7 +67,6 @@ var RunnerCommand = &cli.Command{
 			PrebuiltDir: prebuiltDir,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
-			Notify:      notifyFlag,
 		})
 		if err != nil {
 			return err
