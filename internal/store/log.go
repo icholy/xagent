@@ -28,34 +28,6 @@ func (r *LogRepository) Create(ctx context.Context, log *model.Log) error {
 	return nil
 }
 
-func (r *LogRepository) CreateBatch(ctx context.Context, logs []*model.Log) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO logs (task_id, type, content, created_at)
-		VALUES (?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	now := time.Now()
-	for _, log := range logs {
-		result, err := stmt.ExecContext(ctx, log.TaskID, log.Type, log.Content, now)
-		if err != nil {
-			return err
-		}
-		log.ID, _ = result.LastInsertId()
-	}
-
-	return tx.Commit()
-}
-
 func (r *LogRepository) ListByTask(ctx context.Context, taskID int64) ([]*model.Log, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, task_id, type, content, created_at
