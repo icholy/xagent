@@ -8,13 +8,14 @@ import (
 	"log/slog"
 )
 
-// ErrStop is returned by Agent.Prompt when the context is cancelled with
-// ErrStop as the cause. Callers should cancel the context with:
+// ErrStop is a sentinel error used to signal graceful agent cancellation.
+// Callers can cancel the context with ErrStop as the cause:
 //
-//	context.WithCancelCause(ctx)
+//	ctx, cancel := context.WithCancelCause(parentCtx)
 //	cancel(agent.ErrStop)
 //
-// When this happens, the agent should terminate gracefully and return ErrStop.
+// After Prompt returns, callers can check context.Cause(ctx) == ErrStop
+// to distinguish a graceful stop from other errors.
 var ErrStop = errors.New("stop")
 
 // Agent type constants.
@@ -29,9 +30,6 @@ const (
 type Agent interface {
 	// Prompt sends a prompt to the agent and waits for completion.
 	// If resume is true, the agent should continue from the previous session.
-	//
-	// If the context is cancelled with ErrStop as the cause, implementations
-	// should terminate the agent and return ErrStop.
 	Prompt(ctx context.Context, prompt string, resume bool) error
 
 	// Close releases any resources held by the agent.

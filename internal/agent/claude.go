@@ -75,11 +75,7 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		}
 	}
 
-	err = cmd.Wait()
-	if context.Cause(ctx) == ErrStop {
-		return ErrStop
-	}
-	return err
+	return cmd.Wait()
 }
 
 // Close releases any resources held by the agent.

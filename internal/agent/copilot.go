@@ -66,11 +66,7 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 		a.log.Info("output", "line", line)
 	}
 
-	err = cmd.Wait()
-	if context.Cause(ctx) == ErrStop {
-		return ErrStop
-	}
-	return err
+	return cmd.Wait()
 }
 
 // Close releases any resources held by the agent.

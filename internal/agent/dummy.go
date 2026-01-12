@@ -11,12 +11,8 @@ type DummyAgent struct {
 }
 
 // Prompt does nothing and returns nil.
-// If the context is cancelled with ErrStop as the cause, it returns ErrStop.
 func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) error {
 	a.log.Info("dummy agent received prompt", "text", prompt, "resume", resume)
-	if context.Cause(ctx) == ErrStop {
-		return ErrStop
-	}
 	return nil
 }
 
