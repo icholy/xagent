@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
+import { canArchiveTask, isChildTask } from '@/lib/task'
 import {
   Table,
   TableBody,
@@ -111,9 +112,7 @@ function TasksPage() {
 }
 
 function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
-  const isChild = task.parent !== 0n
   const archiveMutation = useMutation(archiveTask)
-  const canArchive = task.status === 'completed' || task.status === 'failed'
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: task.id })
@@ -121,7 +120,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   }
 
   return (
-    <TableRow className={cn(isChild && 'bg-muted/30')}>
+    <TableRow className={cn(isChildTask(task) && 'bg-muted/30')}>
       <TableCell>
         <Link
           to="/tasks/$id"
@@ -139,7 +138,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
         {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
       </TableCell>
       <TableCell>
-        {canArchive && (
+        {canArchiveTask(task) && (
           <Button
             variant="outline"
             size="sm"
@@ -174,4 +173,3 @@ function StatusBadge({ status }: { status: string }) {
     </Badge>
   )
 }
-
