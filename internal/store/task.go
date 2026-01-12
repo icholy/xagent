@@ -26,6 +26,13 @@ func (r *TaskRepository) exec(tx *sql.Tx) Executor {
 	return r.db
 }
 
+// WithTx runs f within a transaction. If tx is non-nil, it uses that transaction
+// and the caller is responsible for committing/rolling back. If tx is nil, it
+// creates a new transaction and commits on success or rolls back on error.
+func (r *TaskRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error) error {
+	return WithTx(ctx, r.db, tx, f)
+}
+
 func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
@@ -132,57 +139,57 @@ type TaskUpdate struct {
 }
 
 func (r *TaskRepository) Update(ctx context.Context, tx *sql.Tx, id int64, update TaskUpdate) error {
-	return WithTx(ctx, r.db, tx, func(tx *sql.Tx) error {
-		// Add instructions if provided
-		if len(update.AddInstructions) > 0 {
-			row := tx.QueryRowContext(ctx, `SELECT prompts FROM tasks WHERE id = ?`, id)
+	exec := r.exec(tx)
 
-			var existing []byte
-			if err := row.Scan(&existing); err != nil {
-				return err
-			}
+	// Add instructions if provided
+	if len(update.AddInstructions) > 0 {
+		row := exec.QueryRowContext(ctx, `SELECT prompts FROM tasks WHERE id = ?`, id)
 
-			var all []model.Instruction
-			if err := json.Unmarshal(existing, &all); err != nil {
-				return err
-			}
-
-			all = append(all, update.AddInstructions...)
-			data, err := json.Marshal(all)
-			if err != nil {
-				return err
-			}
-
-			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
-			`, data, time.Now(), id)
-			if err != nil {
-				return err
-			}
+		var existing []byte
+		if err := row.Scan(&existing); err != nil {
+			return err
 		}
 
-		// Update name if provided
-		if update.Name != "" {
-			_, err := tx.ExecContext(ctx, `
-				UPDATE tasks SET name = ?, updated_at = ? WHERE id = ?
-			`, update.Name, time.Now(), id)
-			if err != nil {
-				return err
-			}
+		var all []model.Instruction
+		if err := json.Unmarshal(existing, &all); err != nil {
+			return err
 		}
 
-		// Update status if provided
-		if update.Status != "" {
-			_, err := tx.ExecContext(ctx, `
-				UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?
-			`, update.Status, time.Now(), id)
-			if err != nil {
-				return err
-			}
+		all = append(all, update.AddInstructions...)
+		data, err := json.Marshal(all)
+		if err != nil {
+			return err
 		}
 
-		return nil
-	})
+		_, err = exec.ExecContext(ctx, `
+			UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
+		`, data, time.Now(), id)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update name if provided
+	if update.Name != "" {
+		_, err := exec.ExecContext(ctx, `
+			UPDATE tasks SET name = ?, updated_at = ? WHERE id = ?
+		`, update.Name, time.Now(), id)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update status if provided
+	if update.Status != "" {
+		_, err := exec.ExecContext(ctx, `
+			UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?
+		`, update.Status, time.Now(), id)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
