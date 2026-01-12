@@ -16,7 +16,7 @@ function RootComponent() {
       <nav className="border-b">
         <div className="container mx-auto px-4 py-3 flex items-center gap-6">
           <Link to="/" className="flex items-center">
-            <img src={iconPng} alt="XAgent" className="h-8 w-8" />
+            <img src={iconPng} alt="XAgent" className="h-10 w-10" />
           </Link>
           <div className="flex gap-4">
             <Link
