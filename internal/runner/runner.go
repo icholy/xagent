@@ -25,6 +25,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
+	"golang.org/x/sync/errgroup"
 )
 
 const socketPath = "/tmp/xagent.sock"
@@ -104,37 +105,46 @@ func (r *Runner) Poll(ctx context.Context) error {
 		return err
 	}
 
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(3)
+
 	for _, pbTask := range resp.Tasks {
 		task := model.TaskFromProto(pbTask)
 		switch task.Command {
 		case model.TaskCommandStop:
-			if err := r.kill(ctx, task); err != nil {
-				slog.Error("failed to stop task", "task", task.ID, "error", err)
-			}
-			if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
-				slog.Error("failed to send stopped event", "task", task.ID, "error", err)
-			}
-		case model.TaskCommandRestart:
-			// Kill existing container if running
-			if err := r.kill(ctx, task); err != nil {
-				slog.Error("failed to kill task for restart", "task", task.ID, "error", err)
-			}
-			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
-				slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
-				continue
-			}
-			if err := r.start(ctx, task); err != nil {
-				slog.Error("failed to start task", "task", task.ID, "error", err)
-				if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
-					slog.Error("failed to send failed event", "task", task.ID, "error", err)
+			g.Go(func() error {
+				if err := r.kill(ctx, task); err != nil {
+					slog.Error("failed to stop task", "task", task.ID, "error", err)
 				}
-				continue
-			}
-			// The "started" event is sent by Monitor when the container starts
+				if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
+					slog.Error("failed to send stopped event", "task", task.ID, "error", err)
+				}
+				return nil
+			})
+		case model.TaskCommandRestart:
+			g.Go(func() error {
+				// Kill existing container if running
+				if err := r.kill(ctx, task); err != nil {
+					slog.Error("failed to kill task for restart", "task", task.ID, "error", err)
+				}
+				if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
+					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
+					return nil
+				}
+				if err := r.start(ctx, task); err != nil {
+					slog.Error("failed to start task", "task", task.ID, "error", err)
+					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
+						slog.Error("failed to send failed event", "task", task.ID, "error", err)
+					}
+					return nil
+				}
+				// The "started" event is sent by Monitor when the container starts
+				return nil
+			})
 		}
 	}
 
-	return nil
+	return g.Wait()
 }
 
 func (r *Runner) Reconcile(ctx context.Context) error {
