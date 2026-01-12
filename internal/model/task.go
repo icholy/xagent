@@ -225,35 +225,37 @@ func (t *Task) applyRunnerEventFailed() bool {
 	}
 }
 
-// SetStatus attempts to transition the task to the specified status.
-// Returns true if the transition is valid and was applied, false otherwise.
-// This method enforces the task state machine rules:
-//   - archived: only from completed or failed
-//   - cancelling: only from running or pending
-//   - restarting: only from running, completed, or failed
-func (t *Task) SetStatus(status TaskStatus) bool {
-	switch status {
-	case TaskStatusArchived:
-		if t.Status != TaskStatusCompleted && t.Status != TaskStatusFailed {
-			return false
-		}
-		t.Status = TaskStatusArchived
-		return true
-	case TaskStatusCancelling:
-		if t.Status != TaskStatusRunning && t.Status != TaskStatusPending {
-			return false
-		}
-		t.Status = TaskStatusCancelling
-		return true
-	case TaskStatusRestarting:
-		if t.Status != TaskStatusRunning &&
-			t.Status != TaskStatusCompleted &&
-			t.Status != TaskStatusFailed {
-			return false
-		}
-		t.Status = TaskStatusRestarting
-		return true
-	default:
+// Archive transitions the task to archived status.
+// Returns true if the transition is valid and was applied.
+// Only valid from completed or failed status.
+func (t *Task) Archive() bool {
+	if t.Status != TaskStatusCompleted && t.Status != TaskStatusFailed {
 		return false
 	}
+	t.Status = TaskStatusArchived
+	return true
+}
+
+// Cancel transitions the task to cancelling status.
+// Returns true if the transition is valid and was applied.
+// Only valid from running or pending status.
+func (t *Task) Cancel() bool {
+	if t.Status != TaskStatusRunning && t.Status != TaskStatusPending {
+		return false
+	}
+	t.Status = TaskStatusCancelling
+	return true
+}
+
+// Restart transitions the task to restarting status.
+// Returns true if the transition is valid and was applied.
+// Only valid from running, completed, or failed status.
+func (t *Task) Restart() bool {
+	if t.Status != TaskStatusRunning &&
+		t.Status != TaskStatusCompleted &&
+		t.Status != TaskStatusFailed {
+		return false
+	}
+	t.Status = TaskStatusRestarting
+	return true
 }

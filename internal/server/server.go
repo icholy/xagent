@@ -206,7 +206,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if err != nil {
 			return err
 		}
-		if !task.SetStatus(model.TaskStatusArchived) {
+		if !task.Archive() {
 			return fmt.Errorf("cannot archive task with status %s", task.Status)
 		}
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
@@ -228,7 +228,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if err != nil {
 			return err
 		}
-		if !task.SetStatus(model.TaskStatusCancelling) {
+		if !task.Cancel() {
 			return fmt.Errorf("cannot cancel task with status %s", task.Status)
 		}
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
@@ -250,7 +250,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if err != nil {
 			return err
 		}
-		if !task.SetStatus(model.TaskStatusRestarting) {
+		if !task.Restart() {
 			return fmt.Errorf("cannot restart task with status %s", task.Status)
 		}
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
