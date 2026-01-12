@@ -21,7 +21,7 @@ c2 -> agent: Task details
 
 agent -> agent: Run setup commands
 
-agent -> claude: npx claude-code --print "prompt"
+agent -> claude: claude --print "prompt"
 claude -> claude: Run tools
 claude -> mcp: create_link / report
 mcp -> c2: CreateLink / UploadLogs

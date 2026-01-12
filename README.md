@@ -53,7 +53,7 @@ Containers communicate with the C2 server via a Unix socket proxy:
 - **Cancellation**: Kills containers for cancelled tasks
 
 ### Agent
-- Runs Claude Code via CLI (`npx @anthropic-ai/claude-code --print`)
+- Runs Claude Code via CLI (`claude --print`)
 - Executes tasks with `--continue` flag for resumption
 - Stores local state in `~/.xagent/{task-id}.json`
 - Accesses injected `xagent` MCP server for task communication tools
@@ -259,7 +259,7 @@ Stored in `~/.xagent/{task-id}.json` with session status (`started`) and prompt 
 5. Agent runs setup commands from workspace config
 6. Agent calls `GetTask` to get task details (including prompts)
 7. Agent creates Claude session, stores state locally in `~/.xagent/{task-id}.json`
-8. Agent executes `prompts[prompt_index]` via `npx @anthropic-ai/claude-code --print`
+8. Agent executes `prompts[prompt_index]` via `claude --print`
 9. Agent increments local `prompt_index`, sets `started: true`
 10. Agent polls `GetTask` for new prompts
 11. When done, agent exits (exit code 0 = completed, non-zero = failed)

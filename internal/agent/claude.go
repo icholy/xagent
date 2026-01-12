@@ -28,7 +28,6 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 	}
 
 	args := []string{
-		"@anthropic-ai/claude-code",
 		"--dangerously-skip-permissions",
 		"--verbose",
 		"--output-format", "stream-json",
@@ -53,9 +52,8 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 
 	args = append(args, "--print", prompt)
 
-	cmd := exec.CommandContext(ctx, "npx", args...)
+	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = a.cwd
-	cmd.Env = append(os.Environ(), "DISABLE_AUTOUPDATER=1")
 	cmd.Stderr = os.Stderr
 
 	stdout, err := cmd.StdoutPipe()

@@ -19,7 +19,7 @@ XAGENT is an async agent orchestrator using a botnet-style C2 (command & control
 
 - **C2 Server** (`internal/server/`) - Connect RPC API + Web UI, stores tasks and logs in SQLite
 - **Runner** (`internal/runner/`) - Polls for pending tasks, manages Docker container lifecycle, creates Unix socket proxy for container-to-server communication
-- **Agent** (`internal/agent/`) - Runs inside containers, executes Claude Code CLI (`npx @anthropic-ai/claude-code --print`)
+- **Agent** (`internal/agent/`) - Runs inside containers, executes Claude Code CLI (`claude --print`)
 - **Store** (`internal/store/`) - SQLite persistence layer with WAL mode
 
 ### Key Concepts
