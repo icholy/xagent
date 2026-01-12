@@ -12,6 +12,7 @@ import {
 import type { Task, TaskLink, Event, LogEntry } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
+import { canArchiveTask, canCancelTask, canRestartTask, isArchivedTask } from '@/lib/task'
 import {
   Table,
   TableBody,
@@ -143,13 +144,6 @@ function TaskDetail() {
     )
   }
 
-  const isArchived = task.status === 'archived'
-  const canCancel = task.status === 'running' || task.status === 'pending'
-  const canRestart =
-    task.status === 'running' ||
-    task.status === 'completed' ||
-    task.status === 'failed'
-  const canArchive = task.status === 'completed' || task.status === 'failed'
   const isMutating = archiveMutation.isPending || cancelMutation.isPending || restartMutation.isPending
 
   return (
@@ -157,7 +151,7 @@ function TaskDetail() {
       <div className="flex justify-between items-start mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
         <div className="flex gap-2">
-          {canCancel && (
+          {canCancelTask(task) && (
             <Button
               variant="destructive"
               size="sm"
@@ -167,7 +161,7 @@ function TaskDetail() {
               Cancel
             </Button>
           )}
-          {canRestart && (
+          {canRestartTask(task) && (
             <Button
               variant="outline"
               size="sm"
@@ -177,7 +171,7 @@ function TaskDetail() {
               Restart
             </Button>
           )}
-          {canArchive && (
+          {canArchiveTask(task) && (
             <Button
               variant="outline"
               size="sm"
@@ -256,7 +250,7 @@ function TaskDetail() {
             ))}
           </div>
         )}
-        {!isArchived && (
+        {!isArchivedTask(task) && (
           <form onSubmit={handleAddInstruction} className="space-y-4 pt-4 mt-4 border-t">
             <Textarea
               placeholder="Enter a new instruction..."
@@ -382,7 +376,6 @@ function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => v
 
 function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   const archiveMutation = useMutation(archiveTask)
-  const canArchive = task.status === 'completed' || task.status === 'failed'
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: task.id })
@@ -408,7 +401,7 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
         {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
       </TableCell>
       <TableCell>
-        {canArchive && (
+        {canArchiveTask(task) && (
           <Button
             variant="outline"
             size="sm"
