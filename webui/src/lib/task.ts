@@ -8,15 +8,15 @@ export function isChildTask(task: TaskWithParent): boolean {
 }
 
 export function canArchiveTask(task: TaskLike): boolean {
-  return task.status === 'completed' || task.status === 'failed'
+  return task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'
 }
 
 export function canCancelTask(task: TaskLike): boolean {
-  return task.status === 'running' || task.status === 'pending'
+  return task.status === 'pending' || task.status === 'running' || task.status === 'restarting'
 }
 
 export function canRestartTask(task: TaskLike): boolean {
-  return task.status === 'running' || task.status === 'completed' || task.status === 'failed'
+  return task.status === 'running' || task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'
 }
 
 export function isArchivedTask(task: TaskLike): boolean {
