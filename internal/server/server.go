@@ -174,6 +174,11 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		for _, inst := range req.AddInstructions {
 			task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
 		}
+		if req.Restart {
+			if !task.Restart() {
+				return fmt.Errorf("cannot restart task with status %s", task.Status)
+			}
+		}
 
 		if err := s.tasks.Put(ctx, tx, task); err != nil {
 			return err
@@ -184,7 +189,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	s.log.Info("task updated", "id", req.Id, "name", req.Name, "instructions_added", len(req.AddInstructions))
+	s.log.Info("task updated", "id", req.Id, "name", req.Name, "instructions_added", len(req.AddInstructions), "restart", req.Restart)
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 

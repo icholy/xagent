@@ -109,6 +109,7 @@ message UpdateTaskRequest {
   int64 id = 1;
   string name = 2;
   repeated Instruction add_instructions = 3;
+  bool restart = 4;  // Set status to restarting after applying updates
 }
 
 message UpdateTaskResponse {}

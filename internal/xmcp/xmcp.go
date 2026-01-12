@@ -213,23 +213,16 @@ func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 		return errorResult("cannot update archived task"), nil, nil
 	}
 
-	// Add the instruction
+	// Add the instruction and restart the task
 	_, err = s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id: input.TaskID,
 		AddInstructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
 		},
+		Restart: true,
 	})
 	if err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
-	}
-
-	// Restart the task
-	_, err = s.client.RestartTask(ctx, &xagentv1.RestartTaskRequest{
-		Id: input.TaskID,
-	})
-	if err != nil {
-		return errorResult("failed to restart task: %v", err), nil, nil
 	}
 
 	s.log(ctx, "updated child task: %d", input.TaskID)

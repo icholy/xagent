@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
@@ -528,36 +529,31 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 
 func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	// Arrange
-	srv := setupTestServer(t)
+	env := setupTestEnv(t)
 	ctx := context.Background()
 
-	// Create two tasks with links to the same URL with notify=true
-	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	// Create an active task via API
+	activeTask, err := env.srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Active Task",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
-	archivedTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	// Create archived task directly via repository with completed status, then archive it
+	archivedTask := &model.Task{
 		Name:      "Archived Task",
 		Workspace: "test-workspace",
-	})
+		Status:    model.TaskStatusCompleted,
+	}
+	err = env.tasks.Create(ctx, nil, archivedTask)
 	assert.NilError(t, err)
-
-	// Archive the second task - first set it to completed via runner event, then archive it
-	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{TaskId: archivedTask.Task.Id, Status: "completed"},
-		},
-	})
-	assert.NilError(t, err)
-	_, err = srv.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{
-		Id: archivedTask.Task.Id,
+	_, err = env.srv.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{
+		Id: archivedTask.ID,
 	})
 	assert.NilError(t, err)
 
 	// Create links with notify=true for both tasks
-	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+	_, err = env.srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId:    activeTask.Task.Id,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "PR to monitor",
@@ -565,8 +561,8 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-		TaskId:    archivedTask.Task.Id,
+	_, err = env.srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId:    archivedTask.ID,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "PR to monitor",
 		Notify:    true,
@@ -574,7 +570,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Create an event with matching URL
-	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+	eventResp, err := env.srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "PR comment added",
 		Data:        `{"comment": "Please review"}`,
 		Url:         "https://github.com/example/repo/pull/123",
@@ -582,7 +578,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	processResp, err := srv.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
+	processResp, err := env.srv.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
 		Id: eventResp.Event.Id,
 	})
 
@@ -592,24 +588,24 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	assert.Equal(t, processResp.TaskIds[0], activeTask.Task.Id)
 
 	// Verify active task received the event and was set to restarting
-	events1, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+	events1, err := env.srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
 		TaskId: activeTask.Task.Id,
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, len(events1.Events), 1)
 
-	getActiveTask, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: activeTask.Task.Id})
+	getActiveTask, err := env.srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: activeTask.Task.Id})
 	assert.NilError(t, err)
 	assert.Equal(t, getActiveTask.Task.Status, "restarting")
 
 	// Verify archived task did NOT receive the event and remains archived
-	events2, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
-		TaskId: archivedTask.Task.Id,
+	events2, err := env.srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: archivedTask.ID,
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, len(events2.Events), 0)
 
-	getArchivedTask, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: archivedTask.Task.Id})
+	getArchivedTask, err := env.srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: archivedTask.ID})
 	assert.NilError(t, err)
 	assert.Equal(t, getArchivedTask.Task.Status, "archived")
 }

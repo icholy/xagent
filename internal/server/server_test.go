@@ -5,15 +5,26 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 )
 
+type testEnv struct {
+	srv   *Server
+	tasks *store.TaskRepository
+}
+
 // setupTestServer creates a test server with a clean database in a temporary directory.
 // The database is automatically cleaned up when the test completes.
 func setupTestServer(t *testing.T) *Server {
+	return setupTestEnv(t).srv
+}
+
+// setupTestEnv creates a test environment with direct access to repositories.
+func setupTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
 	// Create a temporary directory for the test database
@@ -36,12 +47,14 @@ func setupTestServer(t *testing.T) *Server {
 	events := store.NewEventRepository(db)
 
 	// Create and return the server
-	return New(Options{
+	srv := New(Options{
 		Tasks:  tasks,
 		Logs:   logs,
 		Links:  links,
 		Events: events,
 	})
+
+	return &testEnv{srv: srv, tasks: tasks}
 }
 
 func TestGetTask(t *testing.T) {
@@ -256,29 +269,21 @@ func TestUploadAndListLogs(t *testing.T) {
 }
 
 func TestSubmitRunnerEvents(t *testing.T) {
-	srv := setupTestServer(t)
+	env := setupTestEnv(t)
 	ctx := context.Background()
 
-	// Create a task and set it to running using SubmitRunnerEvents with direct status update
-	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	// Create a task directly with running status using the repository
+	task := &model.Task{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
-	})
+		Status:    model.TaskStatusRunning,
+	}
+	err := env.tasks.Create(ctx, nil, task)
 	assert.NilError(t, err)
-	taskID := createResp.Task.Id
-
-	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{
-				TaskId: taskID,
-				Status: "running",
-			},
-		},
-	})
-	assert.NilError(t, err)
+	taskID := task.ID
 
 	// Submit a stopped event
-	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+	_, err = env.srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{
 				TaskId:  taskID,
@@ -290,7 +295,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Verify task status was updated
-	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	getResp, err := env.srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.Status, "completed")
 }
