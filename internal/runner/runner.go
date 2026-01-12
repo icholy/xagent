@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -244,7 +245,7 @@ func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task, signal strin
 	if c.State != "running" {
 		return nil
 	}
-	slog.Info("killing cancelled task container", "task", task.Id)
+	slog.Info("killing task container", "task", task.Id, "signal", signal)
 	if err := r.docker.ContainerKill(ctx, c.ID, signal); err != nil {
 		// Container may have stopped between our check and the kill call
 		if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
@@ -252,7 +253,13 @@ func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task, signal strin
 		}
 		return fmt.Errorf("failed to kill container: %w", err)
 	}
-	// Wait for the container to actually exit
+
+	// For SIGTERM, wait up to 10 seconds then escalate to SIGKILL
+	if signal == "SIGTERM" {
+		return r.waitWithTimeout(ctx, c.ID, task.Id, 10*time.Second)
+	}
+
+	// For other signals (like SIGKILL), just wait for exit
 	waitCh, errCh := r.docker.ContainerWait(ctx, c.ID, container.WaitConditionNotRunning)
 	select {
 	case <-waitCh:
@@ -263,6 +270,41 @@ func (r *Runner) killTask(ctx context.Context, task *xagentv1.Task, signal strin
 		return ctx.Err()
 	}
 	return nil
+}
+
+func (r *Runner) waitWithTimeout(ctx context.Context, containerID string, taskID int64, timeout time.Duration) error {
+	waitCh, errCh := r.docker.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-waitCh:
+		// Container exited gracefully
+		return nil
+	case err := <-errCh:
+		return fmt.Errorf("failed to wait for container to exit: %w", err)
+	case <-timer.C:
+		// Timeout reached, escalate to SIGKILL
+		slog.Warn("container did not exit after SIGTERM, sending SIGKILL", "task", taskID, "timeout", timeout)
+		if err := r.docker.ContainerKill(ctx, containerID, "SIGKILL"); err != nil {
+			if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
+				return nil
+			}
+			return fmt.Errorf("failed to send SIGKILL: %w", err)
+		}
+		// Wait for container to exit after SIGKILL
+		waitCh2, errCh2 := r.docker.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+		select {
+		case <-waitCh2:
+			return nil
+		case err := <-errCh2:
+			return fmt.Errorf("failed to wait for container after SIGKILL: %w", err)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (r *Runner) startTask(ctx context.Context, task *xagentv1.Task) error {
