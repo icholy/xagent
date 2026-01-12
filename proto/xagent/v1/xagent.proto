@@ -60,8 +60,7 @@ message McpServer {
 }
 
 message ListTasksRequest {
-  repeated string statuses = 1;
-  bool has_command = 2;  // If true, only return tasks with non-empty command
+  bool has_command = 1;  // If true, only return tasks with non-empty command
 }
 
 message ListTasksResponse {

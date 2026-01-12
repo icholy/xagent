@@ -260,8 +260,7 @@ func (x *McpServer) GetEnv() map[string]string {
 
 type ListTasksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Statuses      []string               `protobuf:"bytes,1,rep,name=statuses,proto3" json:"statuses,omitempty"`
-	HasCommand    bool                   `protobuf:"varint,2,opt,name=has_command,json=hasCommand,proto3" json:"has_command,omitempty"` // If true, only return tasks with non-empty command
+	HasCommand    bool                   `protobuf:"varint,1,opt,name=has_command,json=hasCommand,proto3" json:"has_command,omitempty"` // If true, only return tasks with non-empty command
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -294,13 +293,6 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListTasksRequest) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *ListTasksRequest) GetStatuses() []string {
-	if x != nil {
-		return x.Statuses
-	}
-	return nil
 }
 
 func (x *ListTasksRequest) GetHasCommand() bool {
@@ -2847,10 +2839,9 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x03env\x18\x04 \x03(\v2\x1d.xagent.v1.McpServer.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"O\n" +
-	"\x10ListTasksRequest\x12\x1a\n" +
-	"\bstatuses\x18\x01 \x03(\tR\bstatuses\x12\x1f\n" +
-	"\vhas_command\x18\x02 \x01(\bR\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"3\n" +
+	"\x10ListTasksRequest\x12\x1f\n" +
+	"\vhas_command\x18\x01 \x01(\bR\n" +
 	"hasCommand\":\n" +
 	"\x11ListTasksResponse\x12%\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"4\n" +
