@@ -91,7 +91,7 @@ func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID 
 func (r *TaskRepository) ListWithCommand(ctx context.Context, tx *sql.Tx) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT id, name, parent, workspace, prompts, status, command, version, created_at, updated_at
-		FROM tasks WHERE command != '' ORDER BY created_at DESC
+		FROM tasks WHERE command != '' AND status != 'archived' ORDER BY created_at DESC
 	`)
 	if err != nil {
 		return nil, err
