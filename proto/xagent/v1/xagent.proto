@@ -61,6 +61,7 @@ message McpServer {
 
 message ListTasksRequest {
   repeated string statuses = 1;
+  bool has_command = 2;  // If true, only return tasks with non-empty command
 }
 
 message ListTasksResponse {
@@ -279,7 +280,6 @@ message RunnerEvent {
   string event = 2;     // "started", "stopped", "failed"
   int64 version = 3;    // Current version, or 0 for bypass
   bool reconcile = 4;   // True if from reconciliation, not real-time
-  string status = 5;    // Optional: direct status update (bypasses state machine)
 }
 
 message SubmitRunnerEventsRequest {

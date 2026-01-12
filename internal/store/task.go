@@ -112,6 +112,19 @@ func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID 
 	return r.scanTasks(rows)
 }
 
+func (r *TaskRepository) ListWithCommand(ctx context.Context, tx *sql.Tx) ([]*model.Task, error) {
+	rows, err := r.exec(tx).QueryContext(ctx, `
+		SELECT id, name, parent, workspace, prompts, status, command, version, created_at, updated_at
+		FROM tasks WHERE command != '' ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanTasks(rows)
+}
+
 func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT t.id, t.name, t.parent, t.workspace, t.prompts, t.status, t.command, t.version, t.created_at, t.updated_at

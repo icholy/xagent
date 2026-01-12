@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/workspace"
@@ -76,10 +77,10 @@ func (r *Runner) Close() error {
 	return r.docker.Close()
 }
 
-func (r *Runner) updateStatus(ctx context.Context, taskID int64, status string) error {
+func (r *Runner) submit(ctx context.Context, taskID int64, event string, version int64) error {
 	_, err := r.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
-			{TaskId: taskID, Status: status},
+			{TaskId: taskID, Event: event, Version: version},
 		},
 	})
 	return err
@@ -97,52 +98,39 @@ func (r *Runner) taskDisplayName(ctx context.Context, taskID int64) string {
 }
 
 func (r *Runner) Poll(ctx context.Context) error {
-	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{Statuses: []string{"pending", "cancelled", "restarting"}})
+	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{HasCommand: true})
 	if err != nil {
 		return err
 	}
 
-	for _, task := range resp.Tasks {
-		switch task.Status {
-		case "cancelled":
-			if err := r.killTask(ctx, task, "SIGKILL"); err != nil {
-				slog.Error("failed to cancel task", "task", task.Id, "error", err)
+	for _, pbTask := range resp.Tasks {
+		task := model.TaskFromProto(pbTask)
+		switch task.Command {
+		case model.TaskCommandStop:
+			if err := r.killTask(ctx, pbTask, "SIGTERM"); err != nil {
+				slog.Error("failed to stop task", "task", task.ID, "error", err)
 			}
-			if err := r.updateStatus(ctx, task.Id, "failed"); err != nil {
-				slog.Error("failed to update cancelled task", "task", task.Id, "error", err)
+			if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
+				slog.Error("failed to send stopped event", "task", task.ID, "error", err)
 			}
-		case "restarting":
-			if err := r.killTask(ctx, task, "SIGTERM"); err != nil {
-				slog.Error("failed to kill task for restart", "task", task.Id, "error", err)
+		case model.TaskCommandRestart:
+			// Kill existing container if running
+			if err := r.killTask(ctx, pbTask, "SIGTERM"); err != nil {
+				slog.Error("failed to kill task for restart", "task", task.ID, "error", err)
 			}
 			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
-				slog.Debug("concurrency limit reached, skipping restarting task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
+				slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
 				continue
 			}
-			if err := r.startTask(ctx, task); err != nil {
-				slog.Error("failed to restart task", "task", task.Id, "error", err)
-				if err := r.updateStatus(ctx, task.Id, "failed"); err != nil {
-					slog.Error("failed to update task status", "task", task.Id, "error", err)
+			if err := r.startTask(ctx, pbTask); err != nil {
+				slog.Error("failed to start task", "task", task.ID, "error", err)
+				if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
+					slog.Error("failed to send failed event", "task", task.ID, "error", err)
 				}
 				continue
 			}
-			if err := r.updateStatus(ctx, task.Id, "running"); err != nil {
-				slog.Error("failed to update task status", "task", task.Id, "error", err)
-			}
-		case "pending":
-			if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
-				slog.Debug("concurrency limit reached, skipping pending task", "task", task.Id, "running", r.runningCount.Load(), "limit", r.concurrency)
-				continue
-			}
-			if err := r.startTask(ctx, task); err != nil {
-				slog.Error("failed to start container", "task", task.Id, "error", err)
-				if err := r.updateStatus(ctx, task.Id, "failed"); err != nil {
-					slog.Error("failed to update task status", "task", task.Id, "error", err)
-				}
-				continue
-			}
-			if err := r.updateStatus(ctx, task.Id, "running"); err != nil {
-				slog.Error("failed to update task status", "task", task.Id, "error", err)
+			if err := r.submit(ctx, task.ID, "started", task.Version); err != nil {
+				slog.Error("failed to send started event", "task", task.ID, "error", err)
 			}
 		}
 	}
@@ -201,16 +189,17 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			continue
 		}
 
+		// Use version 0 to bypass version check (spontaneous events)
 		exitCode := info.State.ExitCode
 		if exitCode == 0 {
 			slog.Info("reconcile: container exited successfully", "task", taskID)
-			if err := r.updateStatus(ctx, taskID, "completed"); err != nil {
-				slog.Error("failed to update task status", "task", taskID, "error", err)
+			if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
+				slog.Error("failed to send stopped event", "task", taskID, "error", err)
 			}
 		} else {
 			slog.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
-			if err := r.updateStatus(ctx, taskID, "failed"); err != nil {
-				slog.Error("failed to update task status", "task", taskID, "error", err)
+			if err := r.submit(ctx, taskID, "failed", 0); err != nil {
+				slog.Error("failed to send failed event", "task", taskID, "error", err)
 			}
 		}
 	}
@@ -455,7 +444,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *xagen
 	return r.docker.CopyToContainer(ctx, containerID, "/", bytes.NewReader(data), container.CopyToContainerOptions{})
 }
 
-// Monitor watches for container exits and updates task status accordingly.
+// Monitor watches for container exits and sends runner events accordingly.
 func (r *Runner) Monitor(ctx context.Context) error {
 	eventCh, errCh := r.docker.Events(ctx, events.ListOptions{
 		Filters: filters.NewArgs(
@@ -475,11 +464,12 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				slog.Error("invalid task ID in container event", "task", taskIDStr, "error", err)
 				continue
 			}
+			// Use version 0 to bypass version check (spontaneous events)
 			exitCode := event.Actor.Attributes["exitCode"]
 			if exitCode == "0" {
 				slog.Info("container exited successfully", "task", taskID)
-				if err := r.updateStatus(ctx, taskID, "completed"); err != nil {
-					slog.Error("failed to update task status", "task", taskID, "error", err)
+				if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
+					slog.Error("failed to send stopped event", "task", taskID, "error", err)
 				}
 				if r.notify {
 					if err := notify.Send("xagent", fmt.Sprintf("%s completed", r.taskDisplayName(ctx, taskID))); err != nil {
@@ -488,8 +478,8 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				}
 			} else {
 				slog.Error("container exited with error", "task", taskID, "exitCode", exitCode)
-				if err := r.updateStatus(ctx, taskID, "failed"); err != nil {
-					slog.Error("failed to update task status", "task", taskID, "error", err)
+				if err := r.submit(ctx, taskID, "failed", 0); err != nil {
+					slog.Error("failed to send failed event", "task", taskID, "error", err)
 				}
 				if r.notify {
 					if err := notify.Send("xagent", fmt.Sprintf("%s failed (exit code %s)", r.taskDisplayName(ctx, taskID), exitCode)); err != nil {

@@ -261,6 +261,7 @@ func (x *McpServer) GetEnv() map[string]string {
 type ListTasksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Statuses      []string               `protobuf:"bytes,1,rep,name=statuses,proto3" json:"statuses,omitempty"`
+	HasCommand    bool                   `protobuf:"varint,2,opt,name=has_command,json=hasCommand,proto3" json:"has_command,omitempty"` // If true, only return tasks with non-empty command
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -300,6 +301,13 @@ func (x *ListTasksRequest) GetStatuses() []string {
 		return x.Statuses
 	}
 	return nil
+}
+
+func (x *ListTasksRequest) GetHasCommand() bool {
+	if x != nil {
+		return x.HasCommand
+	}
+	return false
 }
 
 type ListTasksResponse struct {
@@ -2668,7 +2676,6 @@ type RunnerEvent struct {
 	Event         string                 `protobuf:"bytes,2,opt,name=event,proto3" json:"event,omitempty"`          // "started", "stopped", "failed"
 	Version       int64                  `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`     // Current version, or 0 for bypass
 	Reconcile     bool                   `protobuf:"varint,4,opt,name=reconcile,proto3" json:"reconcile,omitempty"` // True if from reconciliation, not real-time
-	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`        // Optional: direct status update (bypasses state machine)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2729,13 +2736,6 @@ func (x *RunnerEvent) GetReconcile() bool {
 		return x.Reconcile
 	}
 	return false
-}
-
-func (x *RunnerEvent) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
 }
 
 type SubmitRunnerEventsRequest struct {
@@ -2847,9 +2847,11 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x03env\x18\x04 \x03(\v2\x1d.xagent.v1.McpServer.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\".\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"O\n" +
 	"\x10ListTasksRequest\x12\x1a\n" +
-	"\bstatuses\x18\x01 \x03(\tR\bstatuses\":\n" +
+	"\bstatuses\x18\x01 \x03(\tR\bstatuses\x12\x1f\n" +
+	"\vhas_command\x18\x02 \x01(\bR\n" +
+	"hasCommand\":\n" +
 	"\x11ListTasksResponse\x12%\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"4\n" +
 	"\x15ListChildTasksRequest\x12\x1b\n" +
@@ -2971,13 +2973,12 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x13ProcessEventRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"1\n" +
 	"\x14ProcessEventResponse\x12\x19\n" +
-	"\btask_ids\x18\x01 \x03(\x03R\ataskIds\"\x8c\x01\n" +
+	"\btask_ids\x18\x01 \x03(\x03R\ataskIds\"t\n" +
 	"\vRunnerEvent\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x14\n" +
 	"\x05event\x18\x02 \x01(\tR\x05event\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\x03R\aversion\x12\x1c\n" +
-	"\treconcile\x18\x04 \x01(\bR\treconcile\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\tR\x06status\"K\n" +
+	"\treconcile\x18\x04 \x01(\bR\treconcile\"K\n" +
 	"\x19SubmitRunnerEventsRequest\x12.\n" +
 	"\x06events\x18\x01 \x03(\v2\x16.xagent.v1.RunnerEventR\x06events\"\x1c\n" +
 	"\x1aSubmitRunnerEventsResponse2\xc8\x0f\n" +

@@ -544,10 +544,18 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Set task to completed first (archive only works from completed/failed)
+	// First, send started event to transition pending -> running
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
-			{TaskId: archivedTask.Task.Id, Status: "completed"},
+			{TaskId: archivedTask.Task.Id, Event: "started", Version: archivedTask.Task.Version},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Then send stopped event to transition running -> completed
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: archivedTask.Task.Id, Event: "stopped", Version: 0},
 		},
 	})
 	assert.NilError(t, err)
