@@ -77,6 +77,9 @@ var _ xagentclient.Client = &ClientMock{}
 //			RemoveEventTaskFunc: func(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
 //				panic("mock out the RemoveEventTask method")
 //			},
+//			SubmitRunnerEventsFunc: func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+//				panic("mock out the SubmitRunnerEvents method")
+//			},
 //			UpdateTaskFunc: func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 //				panic("mock out the UpdateTask method")
 //			},
@@ -146,6 +149,9 @@ type ClientMock struct {
 
 	// RemoveEventTaskFunc mocks the RemoveEventTask method.
 	RemoveEventTaskFunc func(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error)
+
+	// SubmitRunnerEventsFunc mocks the SubmitRunnerEvents method.
+	SubmitRunnerEventsFunc func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error)
 
 	// UpdateTaskFunc mocks the UpdateTask method.
 	UpdateTaskFunc func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error)
@@ -288,6 +294,13 @@ type ClientMock struct {
 			// RemoveEventTaskRequest is the removeEventTaskRequest argument value.
 			RemoveEventTaskRequest *xagentv1.RemoveEventTaskRequest
 		}
+		// SubmitRunnerEvents holds details about calls to the SubmitRunnerEvents method.
+		SubmitRunnerEvents []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// SubmitRunnerEventsRequest is the submitRunnerEventsRequest argument value.
+			SubmitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest
+		}
 		// UpdateTask holds details about calls to the UpdateTask method.
 		UpdateTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -303,27 +316,28 @@ type ClientMock struct {
 			UploadLogsRequest *xagentv1.UploadLogsRequest
 		}
 	}
-	lockAddEventTask     sync.RWMutex
-	lockCreateEvent      sync.RWMutex
-	lockCreateLink       sync.RWMutex
-	lockCreateTask       sync.RWMutex
-	lockDeleteEvent      sync.RWMutex
-	lockDeleteTask       sync.RWMutex
-	lockFindLinksByURL   sync.RWMutex
-	lockGetEvent         sync.RWMutex
-	lockGetTask          sync.RWMutex
-	lockGetTaskDetails   sync.RWMutex
-	lockListChildTasks   sync.RWMutex
-	lockListEventTasks   sync.RWMutex
-	lockListEvents       sync.RWMutex
-	lockListEventsByTask sync.RWMutex
-	lockListLinks        sync.RWMutex
-	lockListLogs         sync.RWMutex
-	lockListTasks        sync.RWMutex
-	lockProcessEvent     sync.RWMutex
-	lockRemoveEventTask  sync.RWMutex
-	lockUpdateTask       sync.RWMutex
-	lockUploadLogs       sync.RWMutex
+	lockAddEventTask       sync.RWMutex
+	lockCreateEvent        sync.RWMutex
+	lockCreateLink         sync.RWMutex
+	lockCreateTask         sync.RWMutex
+	lockDeleteEvent        sync.RWMutex
+	lockDeleteTask         sync.RWMutex
+	lockFindLinksByURL     sync.RWMutex
+	lockGetEvent           sync.RWMutex
+	lockGetTask            sync.RWMutex
+	lockGetTaskDetails     sync.RWMutex
+	lockListChildTasks     sync.RWMutex
+	lockListEventTasks     sync.RWMutex
+	lockListEvents         sync.RWMutex
+	lockListEventsByTask   sync.RWMutex
+	lockListLinks          sync.RWMutex
+	lockListLogs           sync.RWMutex
+	lockListTasks          sync.RWMutex
+	lockProcessEvent       sync.RWMutex
+	lockRemoveEventTask    sync.RWMutex
+	lockSubmitRunnerEvents sync.RWMutex
+	lockUpdateTask         sync.RWMutex
+	lockUploadLogs         sync.RWMutex
 }
 
 // AddEventTask calls AddEventTaskFunc.
@@ -1007,6 +1021,42 @@ func (mock *ClientMock) RemoveEventTaskCalls() []struct {
 	mock.lockRemoveEventTask.RLock()
 	calls = mock.calls.RemoveEventTask
 	mock.lockRemoveEventTask.RUnlock()
+	return calls
+}
+
+// SubmitRunnerEvents calls SubmitRunnerEventsFunc.
+func (mock *ClientMock) SubmitRunnerEvents(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+	if mock.SubmitRunnerEventsFunc == nil {
+		panic("ClientMock.SubmitRunnerEventsFunc: method is nil but Client.SubmitRunnerEvents was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam           context.Context
+		SubmitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest
+	}{
+		ContextMoqParam:           contextMoqParam,
+		SubmitRunnerEventsRequest: submitRunnerEventsRequest,
+	}
+	mock.lockSubmitRunnerEvents.Lock()
+	mock.calls.SubmitRunnerEvents = append(mock.calls.SubmitRunnerEvents, callInfo)
+	mock.lockSubmitRunnerEvents.Unlock()
+	return mock.SubmitRunnerEventsFunc(contextMoqParam, submitRunnerEventsRequest)
+}
+
+// SubmitRunnerEventsCalls gets all the calls that were made to SubmitRunnerEvents.
+// Check the length with:
+//
+//	len(mockedClient.SubmitRunnerEventsCalls())
+func (mock *ClientMock) SubmitRunnerEventsCalls() []struct {
+	ContextMoqParam           context.Context
+	SubmitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest
+} {
+	var calls []struct {
+		ContextMoqParam           context.Context
+		SubmitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest
+	}
+	mock.lockSubmitRunnerEvents.RLock()
+	calls = mock.calls.SubmitRunnerEvents
+	mock.lockSubmitRunnerEvents.RUnlock()
 	return calls
 }
 

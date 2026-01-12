@@ -84,6 +84,8 @@ type Task struct {
 	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Command       string                 `protobuf:"bytes,9,opt,name=command,proto3" json:"command,omitempty"`   // "restart", "stop", or empty
+	Version       int64                  `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"` // Incremented when command changes
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -172,6 +174,20 @@ func (x *Task) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Task) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *Task) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
 }
 
 type McpServer struct {
@@ -2406,6 +2422,154 @@ func (x *ProcessEventResponse) GetTaskIds() []int64 {
 	return nil
 }
 
+type RunnerEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        int64                  `protobuf:"varint,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Event         string                 `protobuf:"bytes,2,opt,name=event,proto3" json:"event,omitempty"`          // "started", "stopped", "failed"
+	Version       int64                  `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`     // Current version, or 0 for bypass
+	Reconcile     bool                   `protobuf:"varint,4,opt,name=reconcile,proto3" json:"reconcile,omitempty"` // True if from reconciliation, not real-time
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunnerEvent) Reset() {
+	*x = RunnerEvent{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunnerEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunnerEvent) ProtoMessage() {}
+
+func (x *RunnerEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunnerEvent.ProtoReflect.Descriptor instead.
+func (*RunnerEvent) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *RunnerEvent) GetTaskId() int64 {
+	if x != nil {
+		return x.TaskId
+	}
+	return 0
+}
+
+func (x *RunnerEvent) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *RunnerEvent) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *RunnerEvent) GetReconcile() bool {
+	if x != nil {
+		return x.Reconcile
+	}
+	return false
+}
+
+type SubmitRunnerEventsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*RunnerEvent         `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitRunnerEventsRequest) Reset() {
+	*x = SubmitRunnerEventsRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitRunnerEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitRunnerEventsRequest) ProtoMessage() {}
+
+func (x *SubmitRunnerEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitRunnerEventsRequest.ProtoReflect.Descriptor instead.
+func (*SubmitRunnerEventsRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *SubmitRunnerEventsRequest) GetEvents() []*RunnerEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+type SubmitRunnerEventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitRunnerEventsResponse) Reset() {
+	*x = SubmitRunnerEventsResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitRunnerEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitRunnerEventsResponse) ProtoMessage() {}
+
+func (x *SubmitRunnerEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitRunnerEventsResponse.ProtoReflect.Descriptor instead.
+func (*SubmitRunnerEventsResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{50}
+}
+
 var File_xagent_v1_xagent_proto protoreflect.FileDescriptor
 
 const file_xagent_v1_xagent_proto_rawDesc = "" +
@@ -2413,7 +2577,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x16xagent/v1/xagent.proto\x12\txagent.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"3\n" +
 	"\vInstruction\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"\xaa\x02\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\xde\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -2424,7 +2588,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xb6\x01\n" +
+	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x18\n" +
+	"\acommand\x18\t \x01(\tR\acommand\x12\x18\n" +
+	"\aversion\x18\n" +
+	" \x01(\x03R\aversion\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
@@ -2547,7 +2714,15 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x13ProcessEventRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"1\n" +
 	"\x14ProcessEventResponse\x12\x19\n" +
-	"\btask_ids\x18\x01 \x03(\x03R\ataskIds2\xfe\f\n" +
+	"\btask_ids\x18\x01 \x03(\x03R\ataskIds\"t\n" +
+	"\vRunnerEvent\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x14\n" +
+	"\x05event\x18\x02 \x01(\tR\x05event\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\x03R\aversion\x12\x1c\n" +
+	"\treconcile\x18\x04 \x01(\bR\treconcile\"K\n" +
+	"\x19SubmitRunnerEventsRequest\x12.\n" +
+	"\x06events\x18\x01 \x03(\v2\x16.xagent.v1.RunnerEventR\x06events\"\x1c\n" +
+	"\x1aSubmitRunnerEventsResponse2\xe1\r\n" +
 	"\rXAgentService\x12F\n" +
 	"\tListTasks\x12\x1b.xagent.v1.ListTasksRequest\x1a\x1c.xagent.v1.ListTasksResponse\x12U\n" +
 	"\x0eListChildTasks\x12 .xagent.v1.ListChildTasksRequest\x1a!.xagent.v1.ListChildTasksResponse\x12I\n" +
@@ -2575,7 +2750,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x0fRemoveEventTask\x12!.xagent.v1.RemoveEventTaskRequest\x1a\".xagent.v1.RemoveEventTaskResponse\x12U\n" +
 	"\x0eListEventTasks\x12 .xagent.v1.ListEventTasksRequest\x1a!.xagent.v1.ListEventTasksResponse\x12[\n" +
 	"\x10ListEventsByTask\x12\".xagent.v1.ListEventsByTaskRequest\x1a#.xagent.v1.ListEventsByTaskResponse\x12O\n" +
-	"\fProcessEvent\x12\x1e.xagent.v1.ProcessEventRequest\x1a\x1f.xagent.v1.ProcessEventResponseB<Z:github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1b\x06proto3"
+	"\fProcessEvent\x12\x1e.xagent.v1.ProcessEventRequest\x1a\x1f.xagent.v1.ProcessEventResponse\x12a\n" +
+	"\x12SubmitRunnerEvents\x12$.xagent.v1.SubmitRunnerEventsRequest\x1a%.xagent.v1.SubmitRunnerEventsResponseB<Z:github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1b\x06proto3"
 
 var (
 	file_xagent_v1_xagent_proto_rawDescOnce sync.Once
@@ -2589,64 +2765,67 @@ func file_xagent_v1_xagent_proto_rawDescGZIP() []byte {
 	return file_xagent_v1_xagent_proto_rawDescData
 }
 
-var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 49)
+var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
 var file_xagent_v1_xagent_proto_goTypes = []any{
-	(*Instruction)(nil),              // 0: xagent.v1.Instruction
-	(*Task)(nil),                     // 1: xagent.v1.Task
-	(*McpServer)(nil),                // 2: xagent.v1.McpServer
-	(*ListTasksRequest)(nil),         // 3: xagent.v1.ListTasksRequest
-	(*ListTasksResponse)(nil),        // 4: xagent.v1.ListTasksResponse
-	(*ListChildTasksRequest)(nil),    // 5: xagent.v1.ListChildTasksRequest
-	(*ListChildTasksResponse)(nil),   // 6: xagent.v1.ListChildTasksResponse
-	(*CreateTaskRequest)(nil),        // 7: xagent.v1.CreateTaskRequest
-	(*CreateTaskResponse)(nil),       // 8: xagent.v1.CreateTaskResponse
-	(*GetTaskRequest)(nil),           // 9: xagent.v1.GetTaskRequest
-	(*GetTaskResponse)(nil),          // 10: xagent.v1.GetTaskResponse
-	(*GetTaskDetailsRequest)(nil),    // 11: xagent.v1.GetTaskDetailsRequest
-	(*GetTaskDetailsResponse)(nil),   // 12: xagent.v1.GetTaskDetailsResponse
-	(*UpdateTaskRequest)(nil),        // 13: xagent.v1.UpdateTaskRequest
-	(*UpdateTaskResponse)(nil),       // 14: xagent.v1.UpdateTaskResponse
-	(*DeleteTaskRequest)(nil),        // 15: xagent.v1.DeleteTaskRequest
-	(*DeleteTaskResponse)(nil),       // 16: xagent.v1.DeleteTaskResponse
-	(*LogEntry)(nil),                 // 17: xagent.v1.LogEntry
-	(*UploadLogsRequest)(nil),        // 18: xagent.v1.UploadLogsRequest
-	(*UploadLogsResponse)(nil),       // 19: xagent.v1.UploadLogsResponse
-	(*ListLogsRequest)(nil),          // 20: xagent.v1.ListLogsRequest
-	(*ListLogsResponse)(nil),         // 21: xagent.v1.ListLogsResponse
-	(*TaskLink)(nil),                 // 22: xagent.v1.TaskLink
-	(*CreateLinkRequest)(nil),        // 23: xagent.v1.CreateLinkRequest
-	(*CreateLinkResponse)(nil),       // 24: xagent.v1.CreateLinkResponse
-	(*ListLinksRequest)(nil),         // 25: xagent.v1.ListLinksRequest
-	(*ListLinksResponse)(nil),        // 26: xagent.v1.ListLinksResponse
-	(*FindLinksByURLRequest)(nil),    // 27: xagent.v1.FindLinksByURLRequest
-	(*FindLinksByURLResponse)(nil),   // 28: xagent.v1.FindLinksByURLResponse
-	(*Event)(nil),                    // 29: xagent.v1.Event
-	(*ListEventsRequest)(nil),        // 30: xagent.v1.ListEventsRequest
-	(*ListEventsResponse)(nil),       // 31: xagent.v1.ListEventsResponse
-	(*CreateEventRequest)(nil),       // 32: xagent.v1.CreateEventRequest
-	(*CreateEventResponse)(nil),      // 33: xagent.v1.CreateEventResponse
-	(*GetEventRequest)(nil),          // 34: xagent.v1.GetEventRequest
-	(*GetEventResponse)(nil),         // 35: xagent.v1.GetEventResponse
-	(*DeleteEventRequest)(nil),       // 36: xagent.v1.DeleteEventRequest
-	(*DeleteEventResponse)(nil),      // 37: xagent.v1.DeleteEventResponse
-	(*AddEventTaskRequest)(nil),      // 38: xagent.v1.AddEventTaskRequest
-	(*AddEventTaskResponse)(nil),     // 39: xagent.v1.AddEventTaskResponse
-	(*RemoveEventTaskRequest)(nil),   // 40: xagent.v1.RemoveEventTaskRequest
-	(*RemoveEventTaskResponse)(nil),  // 41: xagent.v1.RemoveEventTaskResponse
-	(*ListEventTasksRequest)(nil),    // 42: xagent.v1.ListEventTasksRequest
-	(*ListEventTasksResponse)(nil),   // 43: xagent.v1.ListEventTasksResponse
-	(*ListEventsByTaskRequest)(nil),  // 44: xagent.v1.ListEventsByTaskRequest
-	(*ListEventsByTaskResponse)(nil), // 45: xagent.v1.ListEventsByTaskResponse
-	(*ProcessEventRequest)(nil),      // 46: xagent.v1.ProcessEventRequest
-	(*ProcessEventResponse)(nil),     // 47: xagent.v1.ProcessEventResponse
-	nil,                              // 48: xagent.v1.McpServer.EnvEntry
-	(*timestamppb.Timestamp)(nil),    // 49: google.protobuf.Timestamp
+	(*Instruction)(nil),                // 0: xagent.v1.Instruction
+	(*Task)(nil),                       // 1: xagent.v1.Task
+	(*McpServer)(nil),                  // 2: xagent.v1.McpServer
+	(*ListTasksRequest)(nil),           // 3: xagent.v1.ListTasksRequest
+	(*ListTasksResponse)(nil),          // 4: xagent.v1.ListTasksResponse
+	(*ListChildTasksRequest)(nil),      // 5: xagent.v1.ListChildTasksRequest
+	(*ListChildTasksResponse)(nil),     // 6: xagent.v1.ListChildTasksResponse
+	(*CreateTaskRequest)(nil),          // 7: xagent.v1.CreateTaskRequest
+	(*CreateTaskResponse)(nil),         // 8: xagent.v1.CreateTaskResponse
+	(*GetTaskRequest)(nil),             // 9: xagent.v1.GetTaskRequest
+	(*GetTaskResponse)(nil),            // 10: xagent.v1.GetTaskResponse
+	(*GetTaskDetailsRequest)(nil),      // 11: xagent.v1.GetTaskDetailsRequest
+	(*GetTaskDetailsResponse)(nil),     // 12: xagent.v1.GetTaskDetailsResponse
+	(*UpdateTaskRequest)(nil),          // 13: xagent.v1.UpdateTaskRequest
+	(*UpdateTaskResponse)(nil),         // 14: xagent.v1.UpdateTaskResponse
+	(*DeleteTaskRequest)(nil),          // 15: xagent.v1.DeleteTaskRequest
+	(*DeleteTaskResponse)(nil),         // 16: xagent.v1.DeleteTaskResponse
+	(*LogEntry)(nil),                   // 17: xagent.v1.LogEntry
+	(*UploadLogsRequest)(nil),          // 18: xagent.v1.UploadLogsRequest
+	(*UploadLogsResponse)(nil),         // 19: xagent.v1.UploadLogsResponse
+	(*ListLogsRequest)(nil),            // 20: xagent.v1.ListLogsRequest
+	(*ListLogsResponse)(nil),           // 21: xagent.v1.ListLogsResponse
+	(*TaskLink)(nil),                   // 22: xagent.v1.TaskLink
+	(*CreateLinkRequest)(nil),          // 23: xagent.v1.CreateLinkRequest
+	(*CreateLinkResponse)(nil),         // 24: xagent.v1.CreateLinkResponse
+	(*ListLinksRequest)(nil),           // 25: xagent.v1.ListLinksRequest
+	(*ListLinksResponse)(nil),          // 26: xagent.v1.ListLinksResponse
+	(*FindLinksByURLRequest)(nil),      // 27: xagent.v1.FindLinksByURLRequest
+	(*FindLinksByURLResponse)(nil),     // 28: xagent.v1.FindLinksByURLResponse
+	(*Event)(nil),                      // 29: xagent.v1.Event
+	(*ListEventsRequest)(nil),          // 30: xagent.v1.ListEventsRequest
+	(*ListEventsResponse)(nil),         // 31: xagent.v1.ListEventsResponse
+	(*CreateEventRequest)(nil),         // 32: xagent.v1.CreateEventRequest
+	(*CreateEventResponse)(nil),        // 33: xagent.v1.CreateEventResponse
+	(*GetEventRequest)(nil),            // 34: xagent.v1.GetEventRequest
+	(*GetEventResponse)(nil),           // 35: xagent.v1.GetEventResponse
+	(*DeleteEventRequest)(nil),         // 36: xagent.v1.DeleteEventRequest
+	(*DeleteEventResponse)(nil),        // 37: xagent.v1.DeleteEventResponse
+	(*AddEventTaskRequest)(nil),        // 38: xagent.v1.AddEventTaskRequest
+	(*AddEventTaskResponse)(nil),       // 39: xagent.v1.AddEventTaskResponse
+	(*RemoveEventTaskRequest)(nil),     // 40: xagent.v1.RemoveEventTaskRequest
+	(*RemoveEventTaskResponse)(nil),    // 41: xagent.v1.RemoveEventTaskResponse
+	(*ListEventTasksRequest)(nil),      // 42: xagent.v1.ListEventTasksRequest
+	(*ListEventTasksResponse)(nil),     // 43: xagent.v1.ListEventTasksResponse
+	(*ListEventsByTaskRequest)(nil),    // 44: xagent.v1.ListEventsByTaskRequest
+	(*ListEventsByTaskResponse)(nil),   // 45: xagent.v1.ListEventsByTaskResponse
+	(*ProcessEventRequest)(nil),        // 46: xagent.v1.ProcessEventRequest
+	(*ProcessEventResponse)(nil),       // 47: xagent.v1.ProcessEventResponse
+	(*RunnerEvent)(nil),                // 48: xagent.v1.RunnerEvent
+	(*SubmitRunnerEventsRequest)(nil),  // 49: xagent.v1.SubmitRunnerEventsRequest
+	(*SubmitRunnerEventsResponse)(nil), // 50: xagent.v1.SubmitRunnerEventsResponse
+	nil,                                // 51: xagent.v1.McpServer.EnvEntry
+	(*timestamppb.Timestamp)(nil),      // 52: google.protobuf.Timestamp
 }
 var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	0,  // 0: xagent.v1.Task.instructions:type_name -> xagent.v1.Instruction
-	49, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
-	49, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
-	48, // 3: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
+	52, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	52, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	51, // 3: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
 	1,  // 4: xagent.v1.ListTasksResponse.tasks:type_name -> xagent.v1.Task
 	1,  // 5: xagent.v1.ListChildTasksResponse.tasks:type_name -> xagent.v1.Task
 	0,  // 6: xagent.v1.CreateTaskRequest.instructions:type_name -> xagent.v1.Instruction
@@ -2659,62 +2838,65 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	0,  // 13: xagent.v1.UpdateTaskRequest.add_instructions:type_name -> xagent.v1.Instruction
 	17, // 14: xagent.v1.UploadLogsRequest.entries:type_name -> xagent.v1.LogEntry
 	17, // 15: xagent.v1.ListLogsResponse.entries:type_name -> xagent.v1.LogEntry
-	49, // 16: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
+	52, // 16: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
 	22, // 17: xagent.v1.CreateLinkResponse.link:type_name -> xagent.v1.TaskLink
 	22, // 18: xagent.v1.ListLinksResponse.links:type_name -> xagent.v1.TaskLink
 	22, // 19: xagent.v1.FindLinksByURLResponse.links:type_name -> xagent.v1.TaskLink
-	49, // 20: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
+	52, // 20: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
 	29, // 21: xagent.v1.ListEventsResponse.events:type_name -> xagent.v1.Event
 	29, // 22: xagent.v1.CreateEventResponse.event:type_name -> xagent.v1.Event
 	29, // 23: xagent.v1.GetEventResponse.event:type_name -> xagent.v1.Event
 	29, // 24: xagent.v1.ListEventsByTaskResponse.events:type_name -> xagent.v1.Event
-	3,  // 25: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
-	5,  // 26: xagent.v1.XAgentService.ListChildTasks:input_type -> xagent.v1.ListChildTasksRequest
-	7,  // 27: xagent.v1.XAgentService.CreateTask:input_type -> xagent.v1.CreateTaskRequest
-	9,  // 28: xagent.v1.XAgentService.GetTask:input_type -> xagent.v1.GetTaskRequest
-	11, // 29: xagent.v1.XAgentService.GetTaskDetails:input_type -> xagent.v1.GetTaskDetailsRequest
-	13, // 30: xagent.v1.XAgentService.UpdateTask:input_type -> xagent.v1.UpdateTaskRequest
-	15, // 31: xagent.v1.XAgentService.DeleteTask:input_type -> xagent.v1.DeleteTaskRequest
-	18, // 32: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
-	20, // 33: xagent.v1.XAgentService.ListLogs:input_type -> xagent.v1.ListLogsRequest
-	23, // 34: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
-	25, // 35: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
-	27, // 36: xagent.v1.XAgentService.FindLinksByURL:input_type -> xagent.v1.FindLinksByURLRequest
-	30, // 37: xagent.v1.XAgentService.ListEvents:input_type -> xagent.v1.ListEventsRequest
-	32, // 38: xagent.v1.XAgentService.CreateEvent:input_type -> xagent.v1.CreateEventRequest
-	34, // 39: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
-	36, // 40: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
-	38, // 41: xagent.v1.XAgentService.AddEventTask:input_type -> xagent.v1.AddEventTaskRequest
-	40, // 42: xagent.v1.XAgentService.RemoveEventTask:input_type -> xagent.v1.RemoveEventTaskRequest
-	42, // 43: xagent.v1.XAgentService.ListEventTasks:input_type -> xagent.v1.ListEventTasksRequest
-	44, // 44: xagent.v1.XAgentService.ListEventsByTask:input_type -> xagent.v1.ListEventsByTaskRequest
-	46, // 45: xagent.v1.XAgentService.ProcessEvent:input_type -> xagent.v1.ProcessEventRequest
-	4,  // 46: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
-	6,  // 47: xagent.v1.XAgentService.ListChildTasks:output_type -> xagent.v1.ListChildTasksResponse
-	8,  // 48: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
-	10, // 49: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
-	12, // 50: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
-	14, // 51: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
-	16, // 52: xagent.v1.XAgentService.DeleteTask:output_type -> xagent.v1.DeleteTaskResponse
-	19, // 53: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
-	21, // 54: xagent.v1.XAgentService.ListLogs:output_type -> xagent.v1.ListLogsResponse
-	24, // 55: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
-	26, // 56: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
-	28, // 57: xagent.v1.XAgentService.FindLinksByURL:output_type -> xagent.v1.FindLinksByURLResponse
-	31, // 58: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
-	33, // 59: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
-	35, // 60: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
-	37, // 61: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
-	39, // 62: xagent.v1.XAgentService.AddEventTask:output_type -> xagent.v1.AddEventTaskResponse
-	41, // 63: xagent.v1.XAgentService.RemoveEventTask:output_type -> xagent.v1.RemoveEventTaskResponse
-	43, // 64: xagent.v1.XAgentService.ListEventTasks:output_type -> xagent.v1.ListEventTasksResponse
-	45, // 65: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
-	47, // 66: xagent.v1.XAgentService.ProcessEvent:output_type -> xagent.v1.ProcessEventResponse
-	46, // [46:67] is the sub-list for method output_type
-	25, // [25:46] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	48, // 25: xagent.v1.SubmitRunnerEventsRequest.events:type_name -> xagent.v1.RunnerEvent
+	3,  // 26: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
+	5,  // 27: xagent.v1.XAgentService.ListChildTasks:input_type -> xagent.v1.ListChildTasksRequest
+	7,  // 28: xagent.v1.XAgentService.CreateTask:input_type -> xagent.v1.CreateTaskRequest
+	9,  // 29: xagent.v1.XAgentService.GetTask:input_type -> xagent.v1.GetTaskRequest
+	11, // 30: xagent.v1.XAgentService.GetTaskDetails:input_type -> xagent.v1.GetTaskDetailsRequest
+	13, // 31: xagent.v1.XAgentService.UpdateTask:input_type -> xagent.v1.UpdateTaskRequest
+	15, // 32: xagent.v1.XAgentService.DeleteTask:input_type -> xagent.v1.DeleteTaskRequest
+	18, // 33: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
+	20, // 34: xagent.v1.XAgentService.ListLogs:input_type -> xagent.v1.ListLogsRequest
+	23, // 35: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
+	25, // 36: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
+	27, // 37: xagent.v1.XAgentService.FindLinksByURL:input_type -> xagent.v1.FindLinksByURLRequest
+	30, // 38: xagent.v1.XAgentService.ListEvents:input_type -> xagent.v1.ListEventsRequest
+	32, // 39: xagent.v1.XAgentService.CreateEvent:input_type -> xagent.v1.CreateEventRequest
+	34, // 40: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
+	36, // 41: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
+	38, // 42: xagent.v1.XAgentService.AddEventTask:input_type -> xagent.v1.AddEventTaskRequest
+	40, // 43: xagent.v1.XAgentService.RemoveEventTask:input_type -> xagent.v1.RemoveEventTaskRequest
+	42, // 44: xagent.v1.XAgentService.ListEventTasks:input_type -> xagent.v1.ListEventTasksRequest
+	44, // 45: xagent.v1.XAgentService.ListEventsByTask:input_type -> xagent.v1.ListEventsByTaskRequest
+	46, // 46: xagent.v1.XAgentService.ProcessEvent:input_type -> xagent.v1.ProcessEventRequest
+	49, // 47: xagent.v1.XAgentService.SubmitRunnerEvents:input_type -> xagent.v1.SubmitRunnerEventsRequest
+	4,  // 48: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
+	6,  // 49: xagent.v1.XAgentService.ListChildTasks:output_type -> xagent.v1.ListChildTasksResponse
+	8,  // 50: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
+	10, // 51: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
+	12, // 52: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
+	14, // 53: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
+	16, // 54: xagent.v1.XAgentService.DeleteTask:output_type -> xagent.v1.DeleteTaskResponse
+	19, // 55: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
+	21, // 56: xagent.v1.XAgentService.ListLogs:output_type -> xagent.v1.ListLogsResponse
+	24, // 57: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
+	26, // 58: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
+	28, // 59: xagent.v1.XAgentService.FindLinksByURL:output_type -> xagent.v1.FindLinksByURLResponse
+	31, // 60: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
+	33, // 61: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
+	35, // 62: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
+	37, // 63: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
+	39, // 64: xagent.v1.XAgentService.AddEventTask:output_type -> xagent.v1.AddEventTaskResponse
+	41, // 65: xagent.v1.XAgentService.RemoveEventTask:output_type -> xagent.v1.RemoveEventTaskResponse
+	43, // 66: xagent.v1.XAgentService.ListEventTasks:output_type -> xagent.v1.ListEventTasksResponse
+	45, // 67: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
+	47, // 68: xagent.v1.XAgentService.ProcessEvent:output_type -> xagent.v1.ProcessEventResponse
+	50, // 69: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
+	48, // [48:70] is the sub-list for method output_type
+	26, // [26:48] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_xagent_v1_xagent_proto_init() }
@@ -2728,7 +2910,7 @@ func file_xagent_v1_xagent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_xagent_v1_xagent_proto_rawDesc), len(file_xagent_v1_xagent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   49,
+			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

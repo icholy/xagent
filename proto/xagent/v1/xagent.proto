@@ -28,6 +28,7 @@ service XAgentService {
   rpc ListEventTasks(ListEventTasksRequest) returns (ListEventTasksResponse);
   rpc ListEventsByTask(ListEventsByTaskRequest) returns (ListEventsByTaskResponse);
   rpc ProcessEvent(ProcessEventRequest) returns (ProcessEventResponse);
+  rpc SubmitRunnerEvents(SubmitRunnerEventsRequest) returns (SubmitRunnerEventsResponse);
 }
 
 message Instruction {
@@ -44,6 +45,8 @@ message Task {
   string status = 6;
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
+  string command = 9;  // "restart", "stop", or empty
+  int64 version = 10;  // Incremented when command changes
 }
 
 message McpServer {
@@ -249,3 +252,16 @@ message ProcessEventRequest {
 message ProcessEventResponse {
   repeated int64 task_ids = 1;
 }
+
+message RunnerEvent {
+  int64 task_id = 1;
+  string event = 2;     // "started", "stopped", "failed"
+  int64 version = 3;    // Current version, or 0 for bypass
+  bool reconcile = 4;   // True if from reconciliation, not real-time
+}
+
+message SubmitRunnerEventsRequest {
+  repeated RunnerEvent events = 1;
+}
+
+message SubmitRunnerEventsResponse {}
