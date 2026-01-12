@@ -21,8 +21,8 @@ A modern React-based UI is being developed in `webui/` to replace the Go templat
 
 ```bash
 cd webui
-npm ci
-npm run dev  # Runs on http://localhost:5173
+pnpm install
+pnpm run dev  # Runs on http://localhost:5173
 ```
 
 The v2 UI runs independently on the Vite dev server and can be developed incrementally alongside the existing Go template UI.
@@ -85,7 +85,7 @@ navigate({ to: '/tasks/$id', params: { id: '123' } })
 
 **Use Connect-Query for ALL API calls** - The webui uses `@connectrpc/connect-query` which provides type-safe hooks generated from protobuf definitions. Do NOT use raw `fetch` or manual `useQuery` with fetch.
 
-**Generated code** - Run `npm run generate` in the `webui/` directory to regenerate TypeScript types and hooks from proto definitions. Generated files are in `src/gen/` (gitignored).
+**Generated code** - Run `pnpm run generate` in the `webui/` directory to regenerate TypeScript types and hooks from proto definitions. Generated files are in `src/gen/` (gitignored).
 
 **Fetching data with useQuery**:
 ```tsx
