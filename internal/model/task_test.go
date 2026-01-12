@@ -302,66 +302,66 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 func TestTask_Archive(t *testing.T) {
 	tests := []struct {
 		name   string
-		before TaskStatus
+		before Task
+		after  Task
 		want   bool
-		after  TaskStatus
 	}{
 		{
 			name:   "from completed succeeds",
-			before: TaskStatusCompleted,
+			before: Task{Status: TaskStatusCompleted},
+			after:  Task{Status: TaskStatusArchived},
 			want:   true,
-			after:  TaskStatusArchived,
 		},
 		{
 			name:   "from failed succeeds",
-			before: TaskStatusFailed,
+			before: Task{Status: TaskStatusFailed},
+			after:  Task{Status: TaskStatusArchived},
 			want:   true,
-			after:  TaskStatusArchived,
 		},
 		{
 			name:   "from pending fails",
-			before: TaskStatusPending,
+			before: Task{Status: TaskStatusPending},
+			after:  Task{Status: TaskStatusPending},
 			want:   false,
-			after:  TaskStatusPending,
 		},
 		{
 			name:   "from running fails",
-			before: TaskStatusRunning,
+			before: Task{Status: TaskStatusRunning},
+			after:  Task{Status: TaskStatusRunning},
 			want:   false,
-			after:  TaskStatusRunning,
 		},
 		{
 			name:   "from restarting fails",
-			before: TaskStatusRestarting,
+			before: Task{Status: TaskStatusRestarting},
+			after:  Task{Status: TaskStatusRestarting},
 			want:   false,
-			after:  TaskStatusRestarting,
 		},
 		{
 			name:   "from cancelling fails",
-			before: TaskStatusCancelling,
+			before: Task{Status: TaskStatusCancelling},
+			after:  Task{Status: TaskStatusCancelling},
 			want:   false,
-			after:  TaskStatusCancelling,
 		},
 		{
-			name:   "from cancelled fails",
-			before: TaskStatusCancelled,
-			want:   false,
-			after:  TaskStatusCancelled,
+			name:   "from cancelled succeeds",
+			before: Task{Status: TaskStatusCancelled},
+			after:  Task{Status: TaskStatusArchived},
+			want:   true,
 		},
 		{
 			name:   "from archived fails",
-			before: TaskStatusArchived,
+			before: Task{Status: TaskStatusArchived},
+			after:  Task{Status: TaskStatusArchived},
 			want:   false,
-			after:  TaskStatusArchived,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := Task{Status: tt.before}
+			task := tt.before
 			got := task.Archive()
 			assert.Equal(t, got, tt.want)
-			assert.Equal(t, task.Status, tt.after)
+			assert.DeepEqual(t, task, tt.after)
 		})
 	}
 }
@@ -369,66 +369,66 @@ func TestTask_Archive(t *testing.T) {
 func TestTask_Cancel(t *testing.T) {
 	tests := []struct {
 		name   string
-		before TaskStatus
+		before Task
+		after  Task
 		want   bool
-		after  TaskStatus
 	}{
 		{
 			name:   "from running succeeds",
-			before: TaskStatusRunning,
+			before: Task{Status: TaskStatusRunning},
+			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 1},
 			want:   true,
-			after:  TaskStatusCancelling,
 		},
 		{
-			name:   "from pending succeeds",
-			before: TaskStatusPending,
+			name:   "from pending succeeds with cancelled status",
+			before: Task{Status: TaskStatusPending},
+			after:  Task{Status: TaskStatusCancelled},
 			want:   true,
-			after:  TaskStatusCancelling,
 		},
 		{
 			name:   "from completed fails",
-			before: TaskStatusCompleted,
+			before: Task{Status: TaskStatusCompleted},
+			after:  Task{Status: TaskStatusCompleted},
 			want:   false,
-			after:  TaskStatusCompleted,
 		},
 		{
 			name:   "from failed fails",
-			before: TaskStatusFailed,
+			before: Task{Status: TaskStatusFailed},
+			after:  Task{Status: TaskStatusFailed},
 			want:   false,
-			after:  TaskStatusFailed,
 		},
 		{
-			name:   "from restarting fails",
-			before: TaskStatusRestarting,
-			want:   false,
-			after:  TaskStatusRestarting,
+			name:   "from restarting succeeds",
+			before: Task{Status: TaskStatusRestarting},
+			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 1},
+			want:   true,
 		},
 		{
 			name:   "from cancelling fails",
-			before: TaskStatusCancelling,
+			before: Task{Status: TaskStatusCancelling},
+			after:  Task{Status: TaskStatusCancelling},
 			want:   false,
-			after:  TaskStatusCancelling,
 		},
 		{
 			name:   "from cancelled fails",
-			before: TaskStatusCancelled,
+			before: Task{Status: TaskStatusCancelled},
+			after:  Task{Status: TaskStatusCancelled},
 			want:   false,
-			after:  TaskStatusCancelled,
 		},
 		{
 			name:   "from archived fails",
-			before: TaskStatusArchived,
+			before: Task{Status: TaskStatusArchived},
+			after:  Task{Status: TaskStatusArchived},
 			want:   false,
-			after:  TaskStatusArchived,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := Task{Status: tt.before}
+			task := tt.before
 			got := task.Cancel()
 			assert.Equal(t, got, tt.want)
-			assert.Equal(t, task.Status, tt.after)
+			assert.DeepEqual(t, task, tt.after)
 		})
 	}
 }
@@ -436,66 +436,66 @@ func TestTask_Cancel(t *testing.T) {
 func TestTask_Restart(t *testing.T) {
 	tests := []struct {
 		name   string
-		before TaskStatus
+		before Task
+		after  Task
 		want   bool
-		after  TaskStatus
 	}{
 		{
 			name:   "from running succeeds",
-			before: TaskStatusRunning,
+			before: Task{Status: TaskStatusRunning},
+			after:  Task{Status: TaskStatusRestarting, Command: TaskCommandRestart, Version: 1},
 			want:   true,
-			after:  TaskStatusRestarting,
 		},
 		{
 			name:   "from completed succeeds",
-			before: TaskStatusCompleted,
+			before: Task{Status: TaskStatusCompleted},
+			after:  Task{Status: TaskStatusPending, Command: TaskCommandRestart, Version: 1},
 			want:   true,
-			after:  TaskStatusRestarting,
 		},
 		{
 			name:   "from failed succeeds",
-			before: TaskStatusFailed,
+			before: Task{Status: TaskStatusFailed},
+			after:  Task{Status: TaskStatusPending, Command: TaskCommandRestart, Version: 1},
 			want:   true,
-			after:  TaskStatusRestarting,
 		},
 		{
 			name:   "from pending fails",
-			before: TaskStatusPending,
+			before: Task{Status: TaskStatusPending},
+			after:  Task{Status: TaskStatusPending},
 			want:   false,
-			after:  TaskStatusPending,
 		},
 		{
 			name:   "from restarting fails",
-			before: TaskStatusRestarting,
+			before: Task{Status: TaskStatusRestarting},
+			after:  Task{Status: TaskStatusRestarting},
 			want:   false,
-			after:  TaskStatusRestarting,
 		},
 		{
 			name:   "from cancelling fails",
-			before: TaskStatusCancelling,
+			before: Task{Status: TaskStatusCancelling},
+			after:  Task{Status: TaskStatusCancelling},
 			want:   false,
-			after:  TaskStatusCancelling,
 		},
 		{
-			name:   "from cancelled fails",
-			before: TaskStatusCancelled,
-			want:   false,
-			after:  TaskStatusCancelled,
+			name:   "from cancelled succeeds",
+			before: Task{Status: TaskStatusCancelled},
+			after:  Task{Status: TaskStatusPending, Command: TaskCommandRestart, Version: 1},
+			want:   true,
 		},
 		{
 			name:   "from archived fails",
-			before: TaskStatusArchived,
+			before: Task{Status: TaskStatusArchived},
+			after:  Task{Status: TaskStatusArchived},
 			want:   false,
-			after:  TaskStatusArchived,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := Task{Status: tt.before}
+			task := tt.before
 			got := task.Restart()
 			assert.Equal(t, got, tt.want)
-			assert.Equal(t, task.Status, tt.after)
+			assert.DeepEqual(t, task, tt.after)
 		})
 	}
 }

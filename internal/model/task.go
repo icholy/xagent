@@ -127,7 +127,6 @@ type RunnerEvent struct {
 	Event     RunnerEventType
 	Version   int64
 	Reconcile bool
-	Status    TaskStatus // Optional: direct status update (bypasses state machine)
 }
 
 // Proto converts a RunnerEvent to its protobuf representation.
@@ -137,7 +136,6 @@ func (r *RunnerEvent) Proto() *xagentv1.RunnerEvent {
 		Event:     string(r.Event),
 		Version:   r.Version,
 		Reconcile: r.Reconcile,
-		Status:    string(r.Status),
 	}
 }
 
@@ -148,7 +146,6 @@ func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 		Event:     RunnerEventType(pb.Event),
 		Version:   pb.Version,
 		Reconcile: pb.Reconcile,
-		Status:    TaskStatus(pb.Status),
 	}
 }
 
@@ -230,35 +227,53 @@ func (t *Task) applyRunnerEventFailed() bool {
 
 // Archive transitions the task to archived status.
 // Returns true if the transition is valid and was applied.
-// Only valid from completed or failed status.
+// Only valid from completed, failed, or cancelled status.
 func (t *Task) Archive() bool {
-	if t.Status != TaskStatusCompleted && t.Status != TaskStatusFailed {
+	switch t.Status {
+	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
+		t.Status = TaskStatusArchived
+		return true
+	default:
 		return false
 	}
-	t.Status = TaskStatusArchived
-	return true
 }
 
-// Cancel transitions the task to cancelling status.
+// Cancel transitions the task to cancelling/cancelled status and sets the stop command.
 // Returns true if the transition is valid and was applied.
-// Only valid from running or pending status.
+// For running or restarting tasks: sets status to cancelling, command to stop, increments version.
+// For pending tasks: sets status to cancelled directly (no runner action needed).
 func (t *Task) Cancel() bool {
-	if t.Status != TaskStatusRunning && t.Status != TaskStatusPending {
+	switch t.Status {
+	case TaskStatusRunning, TaskStatusRestarting:
+		t.Status = TaskStatusCancelling
+		t.Command = TaskCommandStop
+		t.Version++
+		return true
+	case TaskStatusPending:
+		t.Status = TaskStatusCancelled
+		return true
+	default:
 		return false
 	}
-	t.Status = TaskStatusCancelling
-	return true
 }
 
-// Restart transitions the task to restarting status.
+// Restart transitions the task to pending/restarting status and sets the restart command.
 // Returns true if the transition is valid and was applied.
-// Only valid from running, completed, or failed status.
+// For running tasks: sets status to restarting, command to restart, increments version.
+// For completed, failed, or cancelled tasks: sets status to pending, command to restart, increments version.
 func (t *Task) Restart() bool {
-	if t.Status != TaskStatusRunning &&
-		t.Status != TaskStatusCompleted &&
-		t.Status != TaskStatusFailed {
+	switch t.Status {
+	case TaskStatusRunning:
+		t.Status = TaskStatusRestarting
+		t.Command = TaskCommandRestart
+		t.Version++
+		return true
+	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
+		t.Status = TaskStatusPending
+		t.Command = TaskCommandRestart
+		t.Version++
+		return true
+	default:
 		return false
 	}
-	t.Status = TaskStatusRestarting
-	return true
 }

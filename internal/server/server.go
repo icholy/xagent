@@ -65,11 +65,16 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 	var tasks []*model.Task
 	var err error
-	statuses := make([]model.TaskStatus, len(req.Statuses))
-	for i, s := range req.Statuses {
-		statuses[i] = model.TaskStatus(s)
+
+	if req.HasCommand {
+		tasks, err = s.tasks.ListWithCommand(ctx, nil)
+	} else {
+		statuses := make([]model.TaskStatus, len(req.Statuses))
+		for i, s := range req.Statuses {
+			statuses[i] = model.TaskStatus(s)
+		}
+		tasks, err = s.tasks.ListByStatuses(ctx, nil, statuses)
 	}
-	tasks, err = s.tasks.ListByStatuses(ctx, nil, statuses)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -110,6 +115,8 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Workspace:    req.Workspace,
 		Instructions: instructions,
 		Status:       model.TaskStatusPending,
+		Command:      model.TaskCommandRestart,
+		Version:      1,
 	}
 
 	if err := s.tasks.Create(ctx, nil, task); err != nil {
@@ -495,17 +502,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				return err
 			}
 
-			var updated bool
-			if event.Status != "" {
-				// Direct status update (bypasses state machine)
-				task.Status = event.Status
-				updated = true
-			} else {
-				// Use state machine
-				updated = task.ApplyRunnerEvent(&event)
-			}
-
-			if updated {
+			if task.ApplyRunnerEvent(&event) {
 				newStatus = task.Status
 				if err := s.tasks.Put(ctx, tx, task); err != nil {
 					return err
@@ -513,7 +510,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				s.log.Info("runner event applied",
 					"task_id", event.TaskID,
 					"event", event.Event,
-					"status", event.Status,
+					"version", event.Version,
 					"new_status", task.Status,
 				)
 			}
