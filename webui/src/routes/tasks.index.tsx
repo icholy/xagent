@@ -132,7 +132,10 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
       </TableCell>
       <TableCell>{task.workspace}</TableCell>
       <TableCell>
-        <StatusBadge status={task.status} />
+        <span className="flex items-center gap-2">
+          <StatusBadge status={task.status} />
+          {task.command && <CommandBadge command={task.command} />}
+        </span>
       </TableCell>
       <TableCell className="text-muted-foreground">
         {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
@@ -171,6 +174,22 @@ function StatusBadge({ status }: { status: string }) {
       className={statusStyles[status] ?? 'bg-gray-100 text-gray-600'}
     >
       {status}
+    </Badge>
+  )
+}
+
+const commandStyles: Record<string, string> = {
+  restart: 'bg-pink-100 text-pink-800 border-pink-200',
+  stop: 'bg-orange-100 text-orange-800 border-orange-200',
+}
+
+function CommandBadge({ command }: { command: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={commandStyles[command] ?? 'bg-gray-100 text-gray-600'}
+    >
+      {command}
     </Badge>
   )
 }

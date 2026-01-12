@@ -59,6 +59,22 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+const commandStyles: Record<string, string> = {
+  restart: 'bg-pink-100 text-pink-800 border-pink-200',
+  stop: 'bg-orange-100 text-orange-800 border-orange-200',
+}
+
+function CommandBadge({ command }: { command: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={commandStyles[command] ?? 'bg-gray-100 text-gray-600'}
+    >
+      {command}
+    </Badge>
+  )
+}
+
 
 function TaskDetail() {
   const { id } = Route.useParams()
@@ -209,8 +225,9 @@ function TaskDetail() {
 
         <div>
           <h2 className="text-sm font-medium text-muted-foreground">Status</h2>
-          <p className="mt-1">
+          <p className="mt-1 flex items-center gap-2">
             <StatusBadge status={task.status} />
+            {task.command && <CommandBadge command={task.command} />}
           </p>
         </div>
 
