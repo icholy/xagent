@@ -102,7 +102,7 @@ function TaskDetail() {
     if (!instruction.trim()) return
     await updateMutation.mutateAsync({
       id: taskId,
-      status: 'restarting',
+      restart: true,
       addInstructions: [{ text: instruction, url: '' }],
     })
     setInstruction('')

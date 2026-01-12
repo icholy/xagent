@@ -108,7 +108,7 @@ message GetTaskDetailsResponse {
 message UpdateTaskRequest {
   int64 id = 1;
   string name = 2;
-  string status = 3;
+  bool restart = 3;
   repeated Instruction add_instructions = 4;
 }
 

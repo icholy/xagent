@@ -259,7 +259,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := context.Background()
 
-	// Create a task and set it to running
+	// Create a task
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
@@ -267,26 +267,35 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	assert.NilError(t, err)
 	taskID := createResp.Task.Id
 
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:     taskID,
-		Status: "running",
-	})
-	assert.NilError(t, err)
-
-	// Submit a stopped event
+	// Use direct status update (like the runner does) to set to running
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{
-				TaskId:  taskID,
-				Event:   "stopped",
-				Version: 0,
+				TaskId: taskID,
+				Status: "running",
+			},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Verify task is running
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.Status, "running")
+
+	// Use direct status update to set to completed
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{
+				TaskId: taskID,
+				Status: "completed",
 			},
 		},
 	})
 	assert.NilError(t, err)
 
 	// Verify task status was updated
-	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.Status, "completed")
 }

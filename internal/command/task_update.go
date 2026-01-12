@@ -26,9 +26,10 @@ var TaskUpdateCommand = &cli.Command{
 			Aliases: []string{"n"},
 			Usage:   "Set task name",
 		},
-		&cli.StringFlag{
-			Name:  "status",
-			Usage: "Set task status (pending, running, completed, failed)",
+		&cli.BoolFlag{
+			Name:    "restart",
+			Aliases: []string{"r"},
+			Usage:   "Restart the task",
 		},
 		&cli.StringSliceFlag{
 			Name:    "add-instruction",
@@ -47,10 +48,10 @@ var TaskUpdateCommand = &cli.Command{
 		}
 
 		name := cmd.String("name")
-		status := cmd.String("status")
+		restart := cmd.Bool("restart")
 		texts := cmd.StringSlice("add-instruction")
 
-		if name == "" && status == "" && len(texts) == 0 {
+		if name == "" && !restart && len(texts) == 0 {
 			return fmt.Errorf("nothing to update")
 		}
 
@@ -63,7 +64,7 @@ var TaskUpdateCommand = &cli.Command{
 		if _, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 			Id:              taskID,
 			Name:            name,
-			Status:          status,
+			Restart:         restart,
 			AddInstructions: instructions,
 		}); err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
