@@ -513,39 +513,29 @@ func (r *Runner) Prune(ctx context.Context) error {
 
 	// Check each container's task status and remove if archived
 	for _, c := range containers {
-		taskIDStr := c.Labels["xagent.task"]
-		if taskIDStr == "" {
+		label := c.Labels["xagent.task"]
+		if label == "" {
 			continue
 		}
-
-		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+		taskID, err := strconv.ParseInt(label, 10, 64)
 		if err != nil {
-			slog.Error("invalid task ID in container label", "task", taskIDStr, "error", err)
+			slog.Error("invalid task ID in container label", "xagent.task", label, "error", err)
 			continue
 		}
-
-		// Fetch task status
-		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-		if err != nil {
-			// Remove container if task was not found
-			if connect.CodeOf(err) == connect.CodeNotFound {
-				if err := r.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
-					slog.Error("failed to remove container", "task", taskID, "error", err)
-				} else {
-					slog.Info("container removed (task not found)", "task", taskID)
-				}
-				continue
-			}
+		// Fetch task
+		resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+		if err != nil && connect.CodeOf(err) != connect.CodeNotFound {
 			slog.Error("failed to get task", "task", taskID, "error", err)
 			continue
 		}
+		task := model.TaskFromProto(resp.Task)
 
-		// Remove container if task is archived
-		if task.Task.Status == "archived" {
+		// Remove container if task is archived or deleted
+		if task.Status == model.TaskStatusArchived || connect.CodeOf(err) == connect.CodeNotFound {
 			if err := r.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
 				slog.Error("failed to remove container", "task", taskID, "error", err)
 			} else {
-				slog.Info("container removed (task archived)", "task", taskID)
+				slog.Info("container removed", "task", taskID)
 			}
 		}
 	}
