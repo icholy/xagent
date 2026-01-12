@@ -417,3 +417,34 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 	s.log.Info("event processed", "id", req.Id, "tasks_routed", len(ids))
 	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
 }
+
+func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+	for _, pbEvent := range req.Events {
+		event := model.RunnerEventFromProto(pbEvent)
+		err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
+			task, err := s.tasks.Get(ctx, tx, event.TaskID)
+			if err != nil {
+				return err
+			}
+			if task.ApplyRunnerEvent(&event) {
+				if err := s.tasks.Put(ctx, tx, task); err != nil {
+					return err
+				}
+				s.log.Info("runner event applied",
+					"task_id", event.TaskID,
+					"event", event.Event,
+					"new_status", task.Status,
+				)
+			}
+			return tx.Commit()
+		})
+		if err != nil {
+			s.log.Warn("failed to apply runner event",
+				"task_id", event.TaskID,
+				"event", event.Event,
+				"error", err,
+			)
+		}
+	}
+	return &xagentv1.SubmitRunnerEventsResponse{}, nil
+}

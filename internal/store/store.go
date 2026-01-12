@@ -53,6 +53,8 @@ func migrate(db *sql.DB) error {
 			workspace     TEXT NOT NULL,
 			prompts       TEXT NOT NULL,
 			status        TEXT NOT NULL,
+			command       TEXT NOT NULL DEFAULT '',
+			version       INTEGER NOT NULL DEFAULT 0,
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
@@ -96,5 +98,13 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_event_tasks_task_id ON event_tasks(task_id);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Add columns to existing tables (ignore errors if columns already exist)
+	db.Exec(`ALTER TABLE tasks ADD COLUMN command TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE tasks ADD COLUMN version INTEGER NOT NULL DEFAULT 0`)
+
+	return nil
 }
