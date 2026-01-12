@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -121,7 +122,7 @@ var RunCommand = &cli.Command{
 		}
 
 		if err := a.Prompt(ctx, prompt, cfg.Started); err != nil {
-			if context.Cause(ctx) == agent.ErrStop {
+			if context.Cause(ctx) == agent.ErrStop && errors.Is(err, context.Canceled) {
 				slog.Info("agent stopped gracefully")
 				return nil
 			}
