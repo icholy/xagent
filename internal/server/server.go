@@ -3,6 +3,7 @@ package server
 import (
 	"cmp"
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -161,16 +162,25 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 }
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
-	instructions := make([]model.Instruction, len(req.AddInstructions))
-	for i, inst := range req.AddInstructions {
-		instructions[i] = model.InstructionFromProto(inst)
-	}
+	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.tasks.Get(ctx, tx, req.Id)
+		if err != nil {
+			return err
+		}
 
-	if err := s.tasks.Update(ctx, nil, req.Id, store.TaskUpdate{
-		Name:            req.Name,
-		Status:          model.TaskStatus(req.Status),
-		AddInstructions: instructions,
-	}); err != nil {
+		if req.Name != "" {
+			task.Name = req.Name
+		}
+		if req.Status != "" {
+			task.Status = model.TaskStatus(req.Status)
+		}
+		for _, inst := range req.AddInstructions {
+			task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
+		}
+
+		return s.tasks.Put(ctx, tx, task)
+	})
+	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -384,7 +394,8 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		if err := s.events.AddTask(ctx, nil, req.Id, link.TaskID); err != nil {
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
 		}
-		if err := s.tasks.Update(ctx, nil, link.TaskID, store.TaskUpdate{Status: model.TaskStatusRestarting}); err != nil {
+		task.Status = model.TaskStatusRestarting
+		if err := s.tasks.Put(ctx, nil, task); err != nil {
 			s.log.Warn("failed to restart task", "task_id", link.TaskID, "error", err)
 		}
 	}

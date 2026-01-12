@@ -131,65 +131,18 @@ func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID in
 	return r.scanTasks(rows)
 }
 
-// TaskUpdate contains fields that can be updated on a task.
-type TaskUpdate struct {
-	Name            string
-	Status          model.TaskStatus
-	AddInstructions []model.Instruction
-}
-
-func (r *TaskRepository) Update(ctx context.Context, tx *sql.Tx, id int64, update TaskUpdate) error {
-	exec := r.exec(tx)
-
-	// Add instructions if provided
-	if len(update.AddInstructions) > 0 {
-		row := exec.QueryRowContext(ctx, `SELECT prompts FROM tasks WHERE id = ?`, id)
-
-		var existing []byte
-		if err := row.Scan(&existing); err != nil {
-			return err
-		}
-
-		var all []model.Instruction
-		if err := json.Unmarshal(existing, &all); err != nil {
-			return err
-		}
-
-		all = append(all, update.AddInstructions...)
-		data, err := json.Marshal(all)
-		if err != nil {
-			return err
-		}
-
-		_, err = exec.ExecContext(ctx, `
-			UPDATE tasks SET prompts = ?, updated_at = ? WHERE id = ?
-		`, data, time.Now(), id)
-		if err != nil {
-			return err
-		}
+// Put updates an existing task with all mutable fields.
+func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) error {
+	instructions, err := json.Marshal(task.Instructions)
+	if err != nil {
+		return err
 	}
 
-	// Update name if provided
-	if update.Name != "" {
-		_, err := exec.ExecContext(ctx, `
-			UPDATE tasks SET name = ?, updated_at = ? WHERE id = ?
-		`, update.Name, time.Now(), id)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Update status if provided
-	if update.Status != "" {
-		_, err := exec.ExecContext(ctx, `
-			UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?
-		`, update.Status, time.Now(), id)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	task.UpdatedAt = time.Now()
+	_, err = r.exec(tx).ExecContext(ctx, `
+		UPDATE tasks SET name = ?, prompts = ?, status = ?, updated_at = ? WHERE id = ?
+	`, task.Name, instructions, task.Status, task.UpdatedAt, task.ID)
+	return err
 }
 
 func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
