@@ -68,7 +68,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 	for i, s := range req.Statuses {
 		statuses[i] = model.TaskStatus(s)
 	}
-	tasks, err = s.tasks.ListByStatuses(statuses)
+	tasks, err = s.tasks.ListByStatuses(ctx, statuses)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -83,7 +83,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 }
 
 func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
-	tasks, err := s.tasks.ListChildren(req.ParentId)
+	tasks, err := s.tasks.ListChildren(ctx, req.ParentId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -111,7 +111,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Status:       model.TaskStatusPending,
 	}
 
-	if err := s.tasks.Create(task); err != nil {
+	if err := s.tasks.Create(ctx, task); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -122,7 +122,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 }
 
 func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
-	task, err := s.tasks.Get(req.Id)
+	task, err := s.tasks.Get(ctx, req.Id)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -133,14 +133,14 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 }
 
 func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-	task, err := s.tasks.Get(req.Id)
+	task, err := s.tasks.Get(ctx, req.Id)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
-	children, _ := s.tasks.ListChildren(req.Id)
-	events, _ := s.events.ListByTask(req.Id)
-	links, _ := s.links.ListByTask(req.Id)
+	children, _ := s.tasks.ListChildren(ctx, req.Id)
+	events, _ := s.events.ListByTask(ctx, req.Id)
+	links, _ := s.links.ListByTask(ctx, req.Id)
 
 	resp := &xagentv1.GetTaskDetailsResponse{
 		Task:     task.Proto(),
@@ -166,7 +166,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		instructions[i] = model.InstructionFromProto(inst)
 	}
 
-	if err := s.tasks.Update(req.Id, store.TaskUpdate{
+	if err := s.tasks.Update(ctx, req.Id, store.TaskUpdate{
 		Name:            req.Name,
 		Status:          model.TaskStatus(req.Status),
 		AddInstructions: instructions,
@@ -179,7 +179,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 }
 
 func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error) {
-	if err := s.tasks.Delete(req.Id); err != nil {
+	if err := s.tasks.Delete(ctx, req.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -196,14 +196,14 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 			Content: entry.Content,
 		}
 	}
-	if err := s.logs.CreateBatch(logs); err != nil {
+	if err := s.logs.CreateBatch(ctx, logs); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.UploadLogsResponse{}, nil
 }
 
 func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
-	logs, err := s.logs.ListByTask(req.TaskId)
+	logs, err := s.logs.ListByTask(ctx, req.TaskId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -228,7 +228,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		Notify:    req.Notify,
 		CreatedAt: time.Now(),
 	}
-	if err := s.links.Create(link); err != nil {
+	if err := s.links.Create(ctx, link); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
@@ -238,7 +238,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 }
 
 func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
-	links, err := s.links.ListByTask(req.TaskId)
+	links, err := s.links.ListByTask(ctx, req.TaskId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -252,7 +252,7 @@ func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) 
 }
 
 func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
-	links, err := s.links.FindByURL(req.Url)
+	links, err := s.links.FindByURL(ctx, req.Url)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -272,7 +272,7 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 	if limit < 0 || limit > maxLimit {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be at most %d", maxLimit))
 	}
-	events, err := s.events.List(limit)
+	events, err := s.events.List(ctx, limit)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -291,7 +291,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 		Data:        req.Data,
 		URL:         req.Url,
 	}
-	if err := s.events.Create(event); err != nil {
+	if err := s.events.Create(ctx, event); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event created", "id", event.ID, "description", event.Description)
@@ -301,7 +301,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 }
 
 func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
-	event, err := s.events.Get(req.Id)
+	event, err := s.events.Get(ctx, req.Id)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -311,7 +311,7 @@ func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*
 }
 
 func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
-	if err := s.events.Delete(req.Id); err != nil {
+	if err := s.events.Delete(ctx, req.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event deleted", "id", req.Id)
@@ -319,7 +319,7 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 }
 
 func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error) {
-	if err := s.events.AddTask(req.EventId, req.TaskId); err != nil {
+	if err := s.events.AddTask(ctx, req.EventId, req.TaskId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event task added", "event_id", req.EventId, "task_id", req.TaskId)
@@ -327,7 +327,7 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 }
 
 func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
-	if err := s.events.RemoveTask(req.EventId, req.TaskId); err != nil {
+	if err := s.events.RemoveTask(ctx, req.EventId, req.TaskId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event task removed", "event_id", req.EventId, "task_id", req.TaskId)
@@ -335,7 +335,7 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 }
 
 func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
-	tasks, err := s.events.ListTasks(req.EventId)
+	tasks, err := s.events.ListTasks(ctx, req.EventId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -343,7 +343,7 @@ func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTask
 }
 
 func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
-	events, err := s.events.ListByTask(req.TaskId)
+	events, err := s.events.ListByTask(ctx, req.TaskId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -357,7 +357,7 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 }
 
 func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
-	event, err := s.events.Get(req.Id)
+	event, err := s.events.Get(ctx, req.Id)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -366,7 +366,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		return &xagentv1.ProcessEventResponse{}, nil
 	}
 
-	links, err := s.links.FindByURL(event.URL)
+	links, err := s.links.FindByURL(ctx, event.URL)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -378,7 +378,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			continue
 		}
 		// Skip archived tasks
-		task, err := s.tasks.Get(link.TaskID)
+		task, err := s.tasks.Get(ctx, link.TaskID)
 		if err != nil {
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
@@ -388,10 +388,10 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			continue
 		}
 		taskIDs[link.TaskID] = true
-		if err := s.events.AddTask(req.Id, link.TaskID); err != nil {
+		if err := s.events.AddTask(ctx, req.Id, link.TaskID); err != nil {
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
 		}
-		if err := s.tasks.Update(link.TaskID, store.TaskUpdate{Status: model.TaskStatusRestarting}); err != nil {
+		if err := s.tasks.Update(ctx, link.TaskID, store.TaskUpdate{Status: model.TaskStatusRestarting}); err != nil {
 			s.log.Warn("failed to restart task", "task_id", link.TaskID, "error", err)
 		}
 	}
