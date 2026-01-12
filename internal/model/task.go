@@ -127,6 +127,7 @@ type RunnerEvent struct {
 	Event     RunnerEventType
 	Version   int64
 	Reconcile bool
+	Status    TaskStatus // Optional: direct status update (bypasses state machine)
 }
 
 // Proto converts a RunnerEvent to its protobuf representation.
@@ -136,6 +137,7 @@ func (r *RunnerEvent) Proto() *xagentv1.RunnerEvent {
 		Event:     string(r.Event),
 		Version:   r.Version,
 		Reconcile: r.Reconcile,
+		Status:    string(r.Status),
 	}
 }
 
@@ -146,6 +148,7 @@ func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 		Event:     RunnerEventType(pb.Event),
 		Version:   pb.Version,
 		Reconcile: pb.Reconcile,
+		Status:    TaskStatus(pb.Status),
 	}
 }
 
