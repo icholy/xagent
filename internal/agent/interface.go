@@ -30,6 +30,10 @@ const (
 type Agent interface {
 	// Prompt sends a prompt to the agent and waits for completion.
 	// If resume is true, the agent should continue from the previous session.
+	//
+	// If the provided context is cancelled, the returned error must have
+	// context.Canceled in its error chain (i.e., errors.Is(err, context.Canceled)
+	// must return true).
 	Prompt(ctx context.Context, prompt string, resume bool) error
 
 	// Close releases any resources held by the agent.
