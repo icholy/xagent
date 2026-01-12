@@ -498,6 +498,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if !task.ApplyRunnerEvent(&event) {
 				return nil
 			}
+			if err := s.tasks.Put(ctx, tx, task); err != nil {
+				return err
+			}
 			if log, ok := s.toRunnerEventLog(event); ok {
 				if err := s.logs.Create(ctx, tx, &log); err != nil {
 					return err
