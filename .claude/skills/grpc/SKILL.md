@@ -51,7 +51,7 @@ This runs:
 For the frontend TypeScript client, run:
 
 ```bash
-cd webui && npm run generate
+cd webui && pnpm run generate
 ```
 
 This generates:

@@ -31,13 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: webui/package-lock.json
+          cache: 'pnpm'
+          cache-dependency-path: webui/pnpm-lock.yaml
 
       - name: Build webui
-        run: npm ci && npm run build
+        run: pnpm install --frozen-lockfile && pnpm run build
         working-directory: webui
