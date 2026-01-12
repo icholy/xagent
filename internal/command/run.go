@@ -109,12 +109,12 @@ var RunCommand = &cli.Command{
 				"When creating links with xagent:create_link, ALWAYS set notify=true for resources you create (PRs, issues, comments), even if the task is complete. Others may respond and you'll need to handle those responses. Only use notify=false for reference links to external resources you didn't create.",
 				"Use xagent:update_child_task to delegate work to child tasks.",
 				"",
-				"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
-				"Always use web URLs that users can visit, not API URLs.",
 				"Use xagent:report to log important observations.",
 				"Only use xagent:create_child_task when explicitly instructed to create a new task.",
 				"",
 				"Your text responses are NOT visible to users - only tool calls matter.",
+				"",
+				"IMPORTANT: Before finishing any task, you MUST call xagent:create_link for EVERY URL you created (PRs, issues, comments, etc). Always use web URLs that users can visit, not API URLs. This is critical for task tracking.",
 			}, "\n")
 		}
 		if cfg.Prompt != "" {
