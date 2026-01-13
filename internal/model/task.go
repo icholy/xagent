@@ -27,6 +27,7 @@ type TaskCommand string
 const (
 	TaskCommandRestart TaskCommand = "restart"
 	TaskCommandStop    TaskCommand = "stop"
+	TaskCommandStart   TaskCommand = "start"
 )
 
 // Instruction represents a task instruction with text and optional source URL.
@@ -178,7 +179,7 @@ func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
 func (t *Task) applyRunnerEventStarted() bool {
 	switch t.Status {
 	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning:
-		if t.Command == TaskCommandRestart {
+		if t.Command == TaskCommandRestart || t.Command == TaskCommandStart {
 			t.Status = TaskStatusRunning
 			t.Command = ""
 			return true
@@ -195,6 +196,13 @@ func (t *Task) applyRunnerEventStopped() bool {
 		if t.Command == TaskCommandStop {
 			t.Status = TaskStatusCancelled
 			t.Command = ""
+			return true
+		}
+		if t.Command == TaskCommandStart {
+			// Container finished, but start command pending
+			// Go back to pending so runner picks it up and starts a new container
+			t.Status = TaskStatusPending
+			// Keep command as "start" so runner will start it
 			return true
 		}
 		if t.Command == "" {
@@ -271,6 +279,28 @@ func (t *Task) Restart() bool {
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
 		t.Status = TaskStatusPending
 		t.Command = TaskCommandRestart
+		t.Version++
+		return true
+	default:
+		return false
+	}
+}
+
+// Start sets the start command without interrupting a running task.
+// Returns true if the transition is valid and was applied.
+// For running tasks: sets command to start (container continues, will restart after exit).
+// For completed, failed, or cancelled tasks: sets status to pending, command to start, increments version.
+func (t *Task) Start() bool {
+	switch t.Status {
+	case TaskStatusRunning:
+		// Don't change status - let it continue running
+		// Just set command so it restarts after exiting
+		t.Command = TaskCommandStart
+		t.Version++
+		return true
+	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
+		t.Status = TaskStatusPending
+		t.Command = TaskCommandStart
 		t.Version++
 		return true
 	default:
