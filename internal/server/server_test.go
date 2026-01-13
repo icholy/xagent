@@ -88,7 +88,7 @@ func TestGetTask(t *testing.T) {
 			},
 		},
 		Status:    "pending",
-		Command:   "restart",
+		Command:   "start",
 		Version:   1,
 		CreatedAt: getResp.Task.CreatedAt, // Copy timestamps since we can't predict them
 		UpdatedAt: getResp.Task.UpdatedAt,
@@ -128,7 +128,7 @@ func TestCreateTask(t *testing.T) {
 			},
 		},
 		Status:    "pending",
-		Command:   "restart",
+		Command:   "start",
 		Version:   1,
 		CreatedAt: resp.Task.CreatedAt,
 		UpdatedAt: resp.Task.UpdatedAt,
@@ -263,7 +263,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := context.Background()
 
-	// Create a task (starts as pending with restart command)
+	// Create a task (starts as pending with start command)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
@@ -275,7 +275,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.Status, "pending")
-	assert.Equal(t, getResp.Task.Command, "restart")
+	assert.Equal(t, getResp.Task.Command, "start")
 	assert.Equal(t, getResp.Task.Version, int64(1))
 
 	// Send started event (simulating container start)
