@@ -202,16 +202,15 @@ function TaskDetail() {
       </div>
 
       {/* Task Details */}
-      <div className="rounded-lg border p-6 space-y-4">
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground">Workspace</h2>
-          <p className="mt-1">{task.workspace}</p>
-        </div>
-
-        {task.parent !== 0n && (
-          <div>
-            <h2 className="text-sm font-medium text-muted-foreground">Parent</h2>
-            <p className="mt-1">
+      <div className="rounded-lg border p-4">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Workspace:</span>
+            <span>{task.workspace}</span>
+          </div>
+          {task.parent !== 0n && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Parent:</span>
               <Link
                 to="/tasks/$id"
                 params={{ id: String(task.parent) }}
@@ -219,33 +218,24 @@ function TaskDetail() {
               >
                 Task {String(task.parent)}
               </Link>
-            </p>
-          </div>
-        )}
-
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground">Status</h2>
-          <p className="mt-1 flex items-center gap-2">
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Status:</span>
             <StatusBadge status={task.status} />
             {task.command && <CommandBadge command={task.command} />}
-          </p>
-        </div>
-
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground">Created</h2>
-          <p className="mt-1">
-            {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
-          </p>
-        </div>
-
-        {task.updatedAt && (
-          <div>
-            <h2 className="text-sm font-medium text-muted-foreground">Updated</h2>
-            <p className="mt-1">
-              <RelativeTime date={timestampDate(task.updatedAt)} />
-            </p>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Created:</span>
+            <span>{task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}</span>
+          </div>
+          {task.updatedAt && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Updated:</span>
+              <span><RelativeTime date={timestampDate(task.updatedAt)} /></span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Links */}
