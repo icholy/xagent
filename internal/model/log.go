@@ -4,6 +4,7 @@ import (
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Log represents a log entry for a task.
@@ -18,8 +19,9 @@ type Log struct {
 // Proto converts a Log to its protobuf LogEntry representation.
 func (l *Log) Proto() *xagentv1.LogEntry {
 	return &xagentv1.LogEntry{
-		Type:    l.Type,
-		Content: l.Content,
+		Type:      l.Type,
+		Content:   l.Content,
+		CreatedAt: timestamppb.New(l.CreatedAt),
 	}
 }
 

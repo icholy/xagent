@@ -517,6 +517,7 @@ function LogsTable({ logs }: { logs: LogEntry[] }) {
         <TableRow>
           <TableHead>Type</TableHead>
           <TableHead>Content</TableHead>
+          <TableHead>Created</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -534,6 +535,9 @@ function LogsTable({ logs }: { logs: LogEntry[] }) {
             </TableCell>
             <TableCell className="whitespace-pre-wrap break-words">
               {log.content}
+            </TableCell>
+            <TableCell className="text-muted-foreground">
+              {log.createdAt ? <RelativeTime date={timestampDate(log.createdAt)} /> : '-'}
             </TableCell>
           </TableRow>
         ))}
