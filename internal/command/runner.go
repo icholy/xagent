@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/icholy/xagent/internal/common"
@@ -50,10 +49,6 @@ var RunnerCommand = &cli.Command{
 			Usage: "Automatically remove containers for archived tasks",
 			Value: true,
 		},
-		&cli.StringFlag{
-			Name:  "runner-id",
-			Usage: "Unique identifier for this runner (defaults to hostname)",
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -62,16 +57,6 @@ var RunnerCommand = &cli.Command{
 		prebuiltDir := cmd.String("prebuilt")
 		concurrency := cmd.Int("concurrency")
 		autoprune := cmd.Bool("autoprune")
-		runnerID := cmd.String("runner-id")
-
-		// Default runner ID to hostname
-		if runnerID == "" {
-			var err error
-			runnerID, err = os.Hostname()
-			if err != nil {
-				return fmt.Errorf("failed to get hostname: %w", err)
-			}
-		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
 		if err != nil {
@@ -89,10 +74,10 @@ var RunnerCommand = &cli.Command{
 		}
 		defer r.Close()
 
-		slog.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency, "runner_id", runnerID)
+		slog.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency)
 
 		// Register workspaces with the server
-		if err := r.RegisterWorkspaces(ctx, runnerID); err != nil {
+		if err := r.RegisterWorkspaces(ctx); err != nil {
 			slog.Error("failed to register workspaces", "error", err)
 		}
 
