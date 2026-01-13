@@ -1,5 +1,7 @@
 package dockerx
 
+//go:generate go tool moq -pkg dockerx -out container_waiter_moq_test.go . ContainerWaiter
+
 import (
 	"context"
 	"fmt"
