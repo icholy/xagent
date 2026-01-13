@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync/atomic"
 
 	"connectrpc.com/connect"
 	"github.com/docker/docker/api/types/container"
@@ -25,19 +25,20 @@ import (
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 )
 
 const socketPath = "/tmp/xagent.sock"
 
 type Runner struct {
-	docker       *client.Client
-	client       xagentclient.Client
-	proxy        *xagentclient.UnixProxy
-	prebuiltDir  string
-	workspaces   *workspace.Config
-	concurrency  int
-	runnerID     string
-	runningCount atomic.Int32
+	docker      *client.Client
+	client      xagentclient.Client
+	proxy       *xagentclient.UnixProxy
+	prebuiltDir string
+	workspaces  *workspace.Config
+	runnerID    string
+	concurrency int64
+	sem         *semaphore.Weighted
 }
 
 type Options struct {
@@ -62,14 +63,21 @@ func New(opts Options) (*Runner, error) {
 
 	go p.Serve()
 
+	// Use math.MaxInt64 if no limit is set (concurrency <= 0)
+	concurrency := int64(opts.Concurrency)
+	if concurrency <= 0 {
+		concurrency = math.MaxInt64
+	}
+
 	return &Runner{
 		docker:      docker,
 		client:      xagentclient.New(opts.ServerURL),
 		proxy:       p,
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
-		concurrency: opts.Concurrency,
 		runnerID:    opts.RunnerID,
+		concurrency: concurrency,
+		sem:         semaphore.NewWeighted(concurrency),
 	}, nil
 }
 
@@ -111,7 +119,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(r.concurrency)
+	g.SetLimit(int(r.concurrency))
 
 	for _, pbTask := range resp.Tasks {
 		task := model.TaskFromProto(pbTask)
@@ -132,11 +140,13 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.kill(ctx, task); err != nil {
 					slog.Error("failed to kill task for restart", "task", task.ID, "error", err)
 				}
-				if r.atConcurrencyLimit() {
-					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
+				// Atomically acquire a semaphore slot before starting
+				if !r.sem.TryAcquire(1) {
+					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
 				}
 				if err := r.start(ctx, task); err != nil {
+					r.sem.Release(1) // Release the slot on failure
 					slog.Error("failed to start task", "task", task.ID, "error", err)
 					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
 						slog.Error("failed to send failed event", "task", task.ID, "error", err)
@@ -161,12 +171,13 @@ func (r *Runner) Poll(ctx context.Context) error {
 					return nil
 				}
 
-				// Container not running - start it
-				if r.atConcurrencyLimit() {
-					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
+				// Container not running - atomically acquire a semaphore slot before starting
+				if !r.sem.TryAcquire(1) {
+					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
 				}
 				if err := r.start(ctx, task); err != nil {
+					r.sem.Release(1) // Release the slot on failure
 					slog.Error("failed to start task", "task", task.ID, "error", err)
 					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
 						slog.Error("failed to send failed event", "task", task.ID, "error", err)
@@ -183,7 +194,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 }
 
 func (r *Runner) Reconcile(ctx context.Context) error {
-	// Initialize running container count
+	// Acquire semaphore permits for already-running containers
 	runningContainers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("label", "xagent=true"),
@@ -193,8 +204,16 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to list running containers: %w", err)
 	}
-	r.runningCount.Store(int32(len(runningContainers)))
-	slog.Info("initialized running container count", "count", len(runningContainers))
+	runningCount := int64(len(runningContainers))
+	// Fail if running containers exceed the concurrency limit
+	if runningCount > r.concurrency {
+		return fmt.Errorf("running container count (%d) exceeds concurrency limit (%d)", runningCount, r.concurrency)
+	}
+	// Acquire permits for existing running containers so they count against the limit
+	if err := r.sem.Acquire(ctx, runningCount); err != nil {
+		return fmt.Errorf("failed to acquire semaphore: %w", err)
+	}
+	slog.Info("initialized running container count", "count", runningCount)
 
 	// Find all exited xagent containers
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
@@ -249,11 +268,6 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// atConcurrencyLimit returns true if the runner has reached its concurrency limit.
-func (r *Runner) atConcurrencyLimit() bool {
-	return r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency
 }
 
 // find returns the container for the given task.
@@ -355,8 +369,6 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	if err := r.docker.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
-
-	r.runningCount.Add(1)
 	return nil
 }
 
@@ -534,7 +546,7 @@ func (r *Runner) Monitor(ctx context.Context) error {
 					slog.Error("failed to send started event", "task", taskID, "error", err)
 				}
 			case events.ActionDie:
-				r.runningCount.Add(-1)
+				r.sem.Release(1)
 				// Use version 0 to bypass version check (spontaneous events)
 				exitCode := event.Actor.Attributes["exitCode"]
 				if exitCode == "0" {
