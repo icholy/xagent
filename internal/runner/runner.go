@@ -20,6 +20,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/workspace"
@@ -226,14 +227,8 @@ func (r *Runner) kill(ctx context.Context, task *model.Task) error {
 		return fmt.Errorf("failed to kill container: %w", err)
 	}
 	// Wait for the container to actually exit
-	waitCh, errCh := r.docker.ContainerWait(ctx, c.ID, container.WaitConditionNotRunning)
-	select {
-	case <-waitCh:
-		// Container has exited
-	case err := <-errCh:
+	if err := dockerx.ContainerWait(ctx, r.docker, c.ID, container.WaitConditionNotRunning); err != nil {
 		return fmt.Errorf("failed to wait for container to exit: %w", err)
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 	return nil
 }
