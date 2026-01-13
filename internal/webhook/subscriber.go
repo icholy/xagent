@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/icholy/xagent/internal/common"
 )
 
 // EventHandler processes webhook events.
@@ -52,7 +53,9 @@ func (s *SQSSubscriber) Run(ctx context.Context) error {
 		})
 		if err != nil {
 			slog.Error("failed to receive messages from SQS", "error", err)
-			time.Sleep(s.config.PollInterval)
+			if !common.SleepContext(ctx, s.config.PollInterval) {
+				return ctx.Err()
+			}
 			continue
 		}
 
