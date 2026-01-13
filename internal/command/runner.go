@@ -49,6 +49,11 @@ var RunnerCommand = &cli.Command{
 			Usage: "Automatically remove containers for archived tasks",
 			Value: true,
 		},
+		&cli.StringFlag{
+			Name:  "id",
+			Usage: "Unique identifier for this runner",
+			Value: "default",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -57,6 +62,7 @@ var RunnerCommand = &cli.Command{
 		prebuiltDir := cmd.String("prebuilt")
 		concurrency := cmd.Int("concurrency")
 		autoprune := cmd.Bool("autoprune")
+		runnerID := cmd.String("id")
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
 		if err != nil {
@@ -68,6 +74,7 @@ var RunnerCommand = &cli.Command{
 			PrebuiltDir: prebuiltDir,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
+			RunnerID:    runnerID,
 		})
 		if err != nil {
 			return err
