@@ -17,10 +17,11 @@ import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
 import { RelativeTime } from '@/components/ui/relative-time'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { Plus } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
@@ -31,6 +32,7 @@ function TasksPage() {
     const stored = localStorage.getItem('showChildTasks')
     return stored !== null ? stored === 'true' : false
   })
+  const [searchQuery, setSearchQuery] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery(listTasks, {}, {
     refetchInterval: 3000,
@@ -58,16 +60,31 @@ function TasksPage() {
   }
 
   const allTasks = data?.tasks ?? []
-  const tasks = showChildTasks
+  const filteredByParent = showChildTasks
     ? allTasks
     : allTasks.filter((task) => task.parent === 0n)
-  const hiddenCount = allTasks.length - tasks.length
+  const tasks = searchQuery.trim()
+    ? filteredByParent.filter((task) =>
+        (task.name || `Unnamed - ${task.id}`).toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : filteredByParent
+  const hiddenCount = allTasks.length - filteredByParent.length
 
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search tasks..."
+              className="pl-8 w-48"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           <div className="flex items-center gap-2">
             <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
               Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
