@@ -87,7 +87,7 @@ function NewTaskPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="instruction">Initial Instruction</Label>
+              <Label htmlFor="instruction">Instructions</Label>
               <Textarea
                 id="instruction"
                 placeholder="Enter the initial instruction for the task..."
