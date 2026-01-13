@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/ui/status-badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { RelativeTime } from '@/components/ui/relative-time'
@@ -153,28 +154,6 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
         )}
       </TableCell>
     </TableRow>
-  )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const statusStyles: Record<string, string> = {
-    pending: 'bg-amber-100 text-amber-800 border-amber-200',
-    running: 'bg-blue-100 text-blue-800 border-blue-200',
-    restarting: 'bg-pink-100 text-pink-800 border-pink-200',
-    cancelling: 'bg-orange-100 text-orange-800 border-orange-200',
-    completed: 'bg-green-100 text-green-800 border-green-200',
-    failed: 'bg-red-100 text-red-800 border-red-200',
-    cancelled: 'bg-amber-100 text-amber-800 border-amber-200',
-    archived: 'bg-gray-100 text-gray-600 border-gray-200',
-  }
-
-  return (
-    <Badge
-      variant="outline"
-      className={statusStyles[status] ?? 'bg-gray-100 text-gray-600'}
-    >
-      {status}
-    </Badge>
   )
 }
 
