@@ -491,14 +491,14 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			if err != nil {
 				return err
 			}
-			task.Restart()
+			task.Start()
 			if err := s.tasks.Put(ctx, tx, task); err != nil {
 				return err
 			}
 			return tx.Commit()
 		})
 		if err != nil {
-			s.log.Warn("failed to restart task", "task_id", link.TaskID, "error", err)
+			s.log.Warn("failed to start task", "task_id", link.TaskID, "error", err)
 		}
 	}
 
