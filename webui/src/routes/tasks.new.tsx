@@ -1,12 +1,19 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation } from '@connectrpc/connect-query'
-import { createTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { useMutation, useQuery } from '@connectrpc/connect-query'
+import { createTask, listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 export const Route = createFileRoute('/tasks/new')({
   component: NewTaskPage,
@@ -18,6 +25,8 @@ function NewTaskPage() {
   const [name, setName] = useState('')
   const [workspace, setWorkspace] = useState('')
   const [instruction, setInstruction] = useState('')
+
+  const { data: workspacesData } = useQuery(listWorkspaces, {})
 
   const mutation = useMutation(createTask, {
     onSuccess: (data) => {
@@ -60,13 +69,18 @@ function NewTaskPage() {
 
             <div className="space-y-2">
               <Label htmlFor="workspace">Workspace</Label>
-              <Input
-                id="workspace"
-                placeholder="Enter workspace name"
-                value={workspace}
-                onChange={(e) => setWorkspace(e.target.value)}
-                required
-              />
+              <Select value={workspace} onValueChange={setWorkspace} required>
+                <SelectTrigger id="workspace">
+                  <SelectValue placeholder="Select a workspace" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workspacesData?.workspaces.map((ws) => (
+                    <SelectItem key={ws.name} value={ws.name}>
+                      {ws.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-sm text-muted-foreground">
                 The workspace defines the container configuration for the task
               </p>
