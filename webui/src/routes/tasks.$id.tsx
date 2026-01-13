@@ -41,15 +41,19 @@ const logTypeStyles: Record<string, string> = {
 const commandStyles: Record<string, string> = {
   restart: 'bg-pink-100 text-pink-800 border-pink-200',
   stop: 'bg-orange-100 text-orange-800 border-orange-200',
-  start: 'bg-green-100 text-green-800 border-green-200',
 }
 
-function CommandBadge({ command }: { command: string }) {
+function CommandBadge({ command, status }: { command: string; status: string }) {
+  let style = commandStyles[command]
+  if (!style) {
+    if (command === 'start' && status === 'running') {
+      style = 'bg-green-100 text-green-800 border-green-200'
+    } else {
+      style = 'bg-gray-100 text-gray-600'
+    }
+  }
   return (
-    <Badge
-      variant="outline"
-      className={commandStyles[command] ?? 'bg-gray-100 text-gray-600'}
-    >
+    <Badge variant="outline" className={style}>
       command:{command}
     </Badge>
   )
@@ -203,7 +207,7 @@ function TaskDetail() {
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Status:</span>
             <StatusBadge status={task.status} />
-            {task.command && <CommandBadge command={task.command} />}
+            {task.command && <CommandBadge command={task.command} status={task.status} />}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Created:</span>
