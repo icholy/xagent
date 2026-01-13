@@ -60,15 +60,17 @@ function TasksPage() {
   }
 
   const allTasks = data?.tasks ?? []
-  const filteredByParent = showChildTasks
-    ? allTasks
-    : allTasks.filter((task) => task.parent === 0n)
-  const tasks = searchQuery.trim()
-    ? filteredByParent.filter((task) =>
-        (task.name || `Unnamed - ${task.id}`).toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : filteredByParent
-  const hiddenCount = allTasks.length - filteredByParent.length
+  const search = searchQuery.trim().toLowerCase()
+  const tasks = allTasks.filter((task) => {
+    if (!showChildTasks && task.parent !== 0n) {
+      return false
+    }
+    if (search && !(task.name || `Unnamed - ${task.id}`).toLowerCase().includes(search)) {
+      return false
+    }
+    return true
+  })
+  const hiddenCount = allTasks.filter((task) => task.parent !== 0n).length
 
   return (
     <div className="container mx-auto py-8 px-4">
