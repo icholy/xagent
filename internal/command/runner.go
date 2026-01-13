@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/icholy/xagent/internal/common"
@@ -49,6 +50,15 @@ var RunnerCommand = &cli.Command{
 			Usage: "Automatically remove containers for archived tasks",
 			Value: true,
 		},
+		&cli.StringFlag{
+			Name:  "runner-id",
+			Usage: "Unique identifier for this runner (defaults to hostname)",
+		},
+		&cli.DurationFlag{
+			Name:  "register-interval",
+			Usage: "Interval for re-registering workspaces with the server",
+			Value: 60 * time.Second,
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -57,6 +67,17 @@ var RunnerCommand = &cli.Command{
 		prebuiltDir := cmd.String("prebuilt")
 		concurrency := cmd.Int("concurrency")
 		autoprune := cmd.Bool("autoprune")
+		runnerID := cmd.String("runner-id")
+		registerInterval := cmd.Duration("register-interval")
+
+		// Default runner ID to hostname
+		if runnerID == "" {
+			var err error
+			runnerID, err = os.Hostname()
+			if err != nil {
+				return fmt.Errorf("failed to get hostname: %w", err)
+			}
+		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
 		if err != nil {
@@ -74,7 +95,21 @@ var RunnerCommand = &cli.Command{
 		}
 		defer r.Close()
 
-		slog.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency)
+		slog.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency, "runner_id", runnerID)
+
+		// Register workspaces with the server
+		if err := r.RegisterWorkspaces(ctx, runnerID); err != nil {
+			slog.Error("failed to register workspaces", "error", err)
+		}
+
+		// Start workspace registration goroutine for periodic re-registration
+		go func() {
+			for common.SleepContext(ctx, registerInterval) {
+				if err := r.RegisterWorkspaces(ctx, runnerID); err != nil {
+					slog.Error("failed to re-register workspaces", "error", err)
+				}
+			}
+		}()
 
 		// Start container monitor in background
 		go func() {

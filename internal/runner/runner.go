@@ -75,6 +75,23 @@ func (r *Runner) Close() error {
 	return r.docker.Close()
 }
 
+// RegisterWorkspaces sends the available workspace names to the server.
+func (r *Runner) RegisterWorkspaces(ctx context.Context, runnerID string) error {
+	workspaces := make([]*xagentv1.RegisteredWorkspace, 0, len(r.workspaces.Workspaces))
+	for name := range r.workspaces.Workspaces {
+		workspaces = append(workspaces, &xagentv1.RegisteredWorkspace{Name: name})
+	}
+	_, err := r.client.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId:   runnerID,
+		Workspaces: workspaces,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to register workspaces: %w", err)
+	}
+	slog.Info("registered workspaces", "runner_id", runnerID, "count", len(workspaces))
+	return nil
+}
+
 func (r *Runner) submit(ctx context.Context, taskID int64, event string, version int64) error {
 	_, err := r.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{

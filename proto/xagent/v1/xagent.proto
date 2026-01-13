@@ -32,6 +32,8 @@ service XAgentService {
   rpc ListEventsByTask(ListEventsByTaskRequest) returns (ListEventsByTaskResponse);
   rpc ProcessEvent(ProcessEventRequest) returns (ProcessEventResponse);
   rpc SubmitRunnerEvents(SubmitRunnerEventsRequest) returns (SubmitRunnerEventsResponse);
+  rpc RegisterWorkspaces(RegisterWorkspacesRequest) returns (RegisterWorkspacesResponse);
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
 }
 
 message Instruction {
@@ -286,3 +288,20 @@ message SubmitRunnerEventsRequest {
 }
 
 message SubmitRunnerEventsResponse {}
+
+message RegisteredWorkspace {
+  string name = 1;
+}
+
+message RegisterWorkspacesRequest {
+  string runner_id = 1;
+  repeated RegisteredWorkspace workspaces = 2;
+}
+
+message RegisterWorkspacesResponse {}
+
+message ListWorkspacesRequest {}
+
+message ListWorkspacesResponse {
+  repeated RegisteredWorkspace workspaces = 1;
+}

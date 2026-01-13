@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -28,6 +29,9 @@ type Server struct {
 	links  *store.LinkRepository
 	events *store.EventRepository
 	notify bool
+
+	workspacesMu sync.RWMutex
+	workspaces   map[string][]string // runner_id -> workspace names
 }
 
 type Options struct {
@@ -45,12 +49,13 @@ func New(opts Options) *Server {
 		log = slog.Default()
 	}
 	return &Server{
-		log:    log,
-		tasks:  opts.Tasks,
-		logs:   opts.Logs,
-		links:  opts.Links,
-		events: opts.Events,
-		notify: opts.Notify,
+		log:        log,
+		tasks:      opts.Tasks,
+		logs:       opts.Logs,
+		links:      opts.Links,
+		events:     opts.Events,
+		notify:     opts.Notify,
+		workspaces: make(map[string][]string),
 	}
 }
 
@@ -590,4 +595,43 @@ func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType)
 	if err := notify.Send("xagent", message); err != nil {
 		s.log.Error("failed to send notification", "task", task.ID, "error", err)
 	}
+}
+
+func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
+	names := make([]string, len(req.Workspaces))
+	for i, ws := range req.Workspaces {
+		names[i] = ws.Name
+	}
+
+	s.workspacesMu.Lock()
+	s.workspaces[req.RunnerId] = names
+	s.workspacesMu.Unlock()
+
+	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "count", len(names))
+	return &xagentv1.RegisterWorkspacesResponse{}, nil
+}
+
+func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
+	s.workspacesMu.RLock()
+	defer s.workspacesMu.RUnlock()
+
+	// Collect unique workspace names across all runners
+	seen := make(map[string]bool)
+	for _, names := range s.workspaces {
+		for _, name := range names {
+			seen[name] = true
+		}
+	}
+
+	workspaces := make([]*xagentv1.RegisteredWorkspace, 0, len(seen))
+	for name := range seen {
+		workspaces = append(workspaces, &xagentv1.RegisteredWorkspace{Name: name})
+	}
+
+	// Sort for consistent ordering
+	slices.SortFunc(workspaces, func(a, b *xagentv1.RegisteredWorkspace) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+
+	return &xagentv1.ListWorkspacesResponse{Workspaces: workspaces}, nil
 }
