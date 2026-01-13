@@ -7,15 +7,20 @@ const commandStyles: Record<string, string> = {
   start: 'bg-green-100 text-green-800 border-green-200',
 }
 
+function getCommandStyle(task: Task): string {
+  // When task is running with start command, show grey instead of green
+  if (task.command === 'start' && task.status === 'running') {
+    return 'bg-gray-100 text-gray-600 border-gray-200'
+  }
+  return commandStyles[task.command!] ?? 'bg-gray-100 text-gray-600'
+}
+
 export function CommandBadge({ task }: { task: Task }) {
   if (!task.command) {
     return null
   }
   return (
-    <Badge
-      variant="outline"
-      className={commandStyles[task.command] ?? 'bg-gray-100 text-gray-600'}
-    >
+    <Badge variant="outline" className={getCommandStyle(task)}>
       command:{task.command}
     </Badge>
   )
