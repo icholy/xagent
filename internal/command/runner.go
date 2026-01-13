@@ -78,7 +78,7 @@ var RunnerCommand = &cli.Command{
 
 		// Register workspaces with the server
 		if err := r.RegisterWorkspaces(ctx); err != nil {
-			slog.Error("failed to register workspaces", "error", err)
+			return fmt.Errorf("failed to register workspaces: %w", err)
 		}
 
 		// Start container monitor in background
