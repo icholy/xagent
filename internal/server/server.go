@@ -542,7 +542,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		if s.notify && applied {
+		if s.notify && applied && task.Command == "" {
 			s.sendNotification(task, event.Event)
 		}
 	}
