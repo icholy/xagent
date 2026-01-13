@@ -24,27 +24,19 @@ func (r *WorkspaceRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx 
 	return WithTx(ctx, r.db, tx, f)
 }
 
-// Register deletes all existing workspaces for the given runner ID and inserts
-// the new workspace names. This should be called within a transaction.
-func (r *WorkspaceRepository) Register(ctx context.Context, tx *sql.Tx, runnerID string, names []string) error {
-	// Delete all existing workspaces for this runner
+// DeleteByRunner deletes all workspaces for the given runner ID.
+func (r *WorkspaceRepository) DeleteByRunner(ctx context.Context, tx *sql.Tx, runnerID string) error {
 	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM workspaces WHERE runner_id = ?`, runnerID)
-	if err != nil {
-		return err
-	}
+	return err
+}
 
-	// Insert new workspaces
-	for _, name := range names {
-		_, err := r.exec(tx).ExecContext(ctx, `
-			INSERT INTO workspaces (runner_id, name)
-			VALUES (?, ?)
-		`, runnerID, name)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+// Create inserts a new workspace for the given runner ID.
+func (r *WorkspaceRepository) Create(ctx context.Context, tx *sql.Tx, runnerID string, name string) error {
+	_, err := r.exec(tx).ExecContext(ctx, `
+		INSERT INTO workspaces (runner_id, name)
+		VALUES (?, ?)
+	`, runnerID, name)
+	return err
 }
 
 // List returns all unique workspace names across all runners, sorted alphabetically.
