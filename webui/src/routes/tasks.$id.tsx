@@ -185,6 +185,11 @@ function TaskDetail() {
       <div className="rounded-lg border p-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
           <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Status:</span>
+            <StatusBadge status={task.status} />
+            {task.command && <CommandBadge command={task.command} />}
+          </div>
+          <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Workspace:</span>
             <span>{task.workspace}</span>
           </div>
@@ -200,11 +205,6 @@ function TaskDetail() {
               </Link>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Status:</span>
-            <StatusBadge status={task.status} />
-            {task.command && <CommandBadge command={task.command} />}
-          </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Created:</span>
             <span>{task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}</span>
