@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/icholy/xagent/internal/common"
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/urfave/cli/v3"
@@ -83,21 +84,18 @@ var RunnerCommand = &cli.Command{
 					break
 				}
 				slog.Error("monitor error, restarting", "error", err)
-				time.Sleep(time.Second)
+				if !common.SleepContext(ctx, time.Second) {
+					break
+				}
 			}
 		}()
 
 		// Start autoprune goroutine if enabled
 		if autoprune {
 			go func() {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(pollInterval):
-						if err := r.Prune(ctx); err != nil {
-							slog.Error("failed to prune containers", "error", err)
-						}
+				for common.SleepContext(ctx, pollInterval) {
+					if err := r.Prune(ctx); err != nil {
+						slog.Error("failed to prune containers", "error", err)
 					}
 				}
 			}()
@@ -112,7 +110,9 @@ var RunnerCommand = &cli.Command{
 			if err := r.Poll(ctx); err != nil {
 				slog.Error("failed to poll tasks", "error", err)
 			}
-			time.Sleep(pollInterval)
+			if !common.SleepContext(ctx, pollInterval) {
+				return nil
+			}
 		}
 	},
 }

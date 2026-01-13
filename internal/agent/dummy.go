@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/icholy/xagent/internal/common"
 )
 
 // DummyAgent is a no-op agent implementation for testing.
@@ -27,10 +29,8 @@ func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) err
 		}
 		duration := time.Duration(a.options.Sleep) * time.Second
 		a.log.Info("dummy agent sleeping", "duration", duration)
-		select {
-		case <-ctx.Done():
+		if !common.SleepContext(ctx, duration) {
 			return ctx.Err()
-		case <-time.After(duration):
 		}
 	}
 
