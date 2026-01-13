@@ -83,9 +83,9 @@ var RunnerCommand = &cli.Command{
 
 		slog.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency)
 
-		// Register workspaces with the server
+		// Register workspaces with the server (non-fatal if it fails)
 		if err := r.RegisterWorkspaces(ctx); err != nil {
-			return fmt.Errorf("failed to register workspaces: %w", err)
+			slog.Warn("failed to register workspaces", "error", err)
 		}
 
 		// Start container monitor in background
