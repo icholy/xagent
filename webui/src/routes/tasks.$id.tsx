@@ -186,8 +186,8 @@ function TaskDetail() {
           )}
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Status:</span>
-            <StatusBadge status={task.status} />
-            {task.command && <CommandBadge command={task.command} />}
+            <StatusBadge task={task} />
+            <CommandBadge task={task} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Created:</span>
@@ -365,7 +365,10 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
       </TableCell>
       <TableCell>{task.workspace}</TableCell>
       <TableCell>
-        <StatusBadge status={task.status} />
+        <span className="flex items-center gap-2">
+          <StatusBadge task={task} />
+          <CommandBadge task={task} />
+        </span>
       </TableCell>
       <TableCell className="text-muted-foreground">
         {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}

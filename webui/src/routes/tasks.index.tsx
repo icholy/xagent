@@ -153,8 +153,8 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
       <TableCell>{task.workspace}</TableCell>
       <TableCell>
         <span className="flex items-center gap-2">
-          <StatusBadge status={task.status} />
-          {task.command && <CommandBadge command={task.command} />}
+          <StatusBadge task={task} />
+          <CommandBadge task={task} />
         </span>
       </TableCell>
       <TableCell className="text-muted-foreground">

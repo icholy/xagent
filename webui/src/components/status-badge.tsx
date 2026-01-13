@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import type { Task } from '@/gen/xagent/v1/xagent_pb'
 
 const statusStyles: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -14,13 +15,13 @@ const statusStyles: Record<string, string> = {
 
 const activeStatuses = new Set(['running', 'restarting', 'cancelling'])
 
-export function StatusBadge({ status }: { status: string }) {
-  const isActive = activeStatuses.has(status)
+export function StatusBadge({ task }: { task: Task }) {
+  const isActive = activeStatuses.has(task.status)
 
   return (
     <Badge
       variant="outline"
-      className={cn(statusStyles[status] ?? 'bg-gray-100 text-gray-600')}
+      className={cn(statusStyles[task.status] ?? 'bg-gray-100 text-gray-600')}
     >
       {isActive && (
         <span className="relative flex h-2 w-2 mr-1">
@@ -28,7 +29,7 @@ export function StatusBadge({ status }: { status: string }) {
           <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
         </span>
       )}
-      {status}
+      {task.status}
     </Badge>
   )
 }
