@@ -154,9 +154,26 @@ function CreateTaskButton() {
 
 **API Access** - The v2 UI will call the same Connect RPC API at `/xagent.v1.XAgentService/*` that the v1 UI uses.
 
-## Component Customization
+## Component Organization
+
+**Directory structure**:
+- `src/components/ui/` - **shadcn/ui primitives only** (Button, Badge, Card, Table, etc.)
+- `src/components/` - **Custom project components** (StatusBadge, RelativeTime, CommandBadge, etc.)
 
 **shadcn/ui philosophy** - shadcn/ui is NOT a traditional npm package. It's a code distribution system that copies component source code into your project (`src/components/ui/`). You own the code and can modify it directly.
+
+**Important**: Only shadcn components belong in `components/ui/`. Custom components that build on top of shadcn primitives go in `components/`.
+
+**Examples**:
+```
+src/components/ui/badge.tsx       ← shadcn primitive
+src/components/ui/button.tsx      ← shadcn primitive
+src/components/status-badge.tsx   ← custom component (uses Badge)
+src/components/command-badge.tsx  ← custom component (uses Badge)
+src/components/relative-time.tsx  ← custom component (uses Tooltip)
+```
+
+## Component Customization
 
 **One component, multiple variants** - Do NOT create multiple copies of the same component (e.g., `button-primary.tsx`, `button-secondary.tsx`). Instead, use class-variance-authority (CVA) to add variants to a single component:
 
@@ -178,12 +195,14 @@ const buttonVariants = cva(
 
 Usage: `<Button variant="success">Save</Button>`
 
-**When to create new components**:
+**When to create custom components** (in `src/components/`):
 - Building composite/wrapper components (e.g., `TaskCard` that uses `Card` + `Badge` + `Button`)
-- Creating domain-specific components (e.g., `TaskStatusBadge`)
+- Creating domain-specific components (e.g., `StatusBadge`, `CommandBadge`)
+- Reusing styled combinations across multiple routes
 
 **Don't create**:
 - Multiple variations of the same primitive component
 - Wrapper components just to override styles (edit the source directly instead)
+- Custom components in `components/ui/` - that directory is reserved for shadcn primitives
 
 **Pattern**: One source of truth per primitive component, compose for complexity.

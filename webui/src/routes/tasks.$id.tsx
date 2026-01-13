@@ -22,10 +22,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { StatusBadge } from '@/components/ui/status-badge'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { RelativeTime } from '@/components/ui/relative-time'
+import { RelativeTime } from '@/components/relative-time'
+import { CommandBadge } from '@/components/command-badge'
 import { Plus } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
@@ -36,23 +37,6 @@ const logTypeStyles: Record<string, string> = {
   llm: 'bg-purple-100 text-purple-800 border-purple-200',
   info: 'bg-blue-100 text-blue-800 border-blue-200',
   error: 'bg-red-100 text-red-800 border-red-200',
-}
-
-const commandStyles: Record<string, string> = {
-  restart: 'bg-pink-100 text-pink-800 border-pink-200',
-  stop: 'bg-orange-100 text-orange-800 border-orange-200',
-  start: 'bg-green-100 text-green-800 border-green-200',
-}
-
-function CommandBadge({ command }: { command: string }) {
-  return (
-    <Badge
-      variant="outline"
-      className={commandStyles[command] ?? 'bg-gray-100 text-gray-600'}
-    >
-      command:{command}
-    </Badge>
-  )
 }
 
 
