@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
+import { useLocalStorage } from 'usehooks-ts'
 import { createTask, listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,8 +16,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-const WORKSPACE_STORAGE_KEY = 'xagent-last-workspace'
-
 export const Route = createFileRoute('/tasks/new')({
   component: NewTaskPage,
 })
@@ -25,26 +24,10 @@ function NewTaskPage() {
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
-  const [workspace, setWorkspace] = useState(() => {
-    return localStorage.getItem(WORKSPACE_STORAGE_KEY) || ''
-  })
+  const [workspace, setWorkspace] = useLocalStorage('xagent-last-workspace', '')
   const [instruction, setInstruction] = useState('')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {})
-
-  useEffect(() => {
-    if (workspacesData?.workspaces && workspace) {
-      const workspaceExists = workspacesData.workspaces.some(ws => ws.name === workspace)
-      if (!workspaceExists) {
-        setWorkspace('')
-      }
-    }
-  }, [workspacesData, workspace])
-
-  const handleWorkspaceChange = (value: string) => {
-    setWorkspace(value)
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, value)
-  }
 
   const mutation = useMutation(createTask, {
     onSuccess: (data) => {
@@ -87,7 +70,7 @@ function NewTaskPage() {
 
             <div className="space-y-2">
               <Label htmlFor="workspace">Workspace</Label>
-              <Select value={workspace} onValueChange={handleWorkspaceChange} required>
+              <Select value={workspace} onValueChange={setWorkspace} required>
                 <SelectTrigger id="workspace">
                   <SelectValue placeholder="Select a workspace" />
                 </SelectTrigger>
