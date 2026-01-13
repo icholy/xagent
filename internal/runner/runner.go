@@ -202,27 +202,29 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-// find returns the container for the given task, or an empty container if not found.
-func (r *Runner) find(ctx context.Context, taskID int64) (container.Summary, error) {
+// find returns the container for the given task.
+// Returns (container, true, nil) if found, (empty, false, nil) if not found,
+// or (empty, false, error) on error.
+func (r *Runner) find(ctx context.Context, taskID int64) (container.Summary, bool, error) {
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
 		Filters: filters.NewArgs(filters.Arg("label", fmt.Sprintf("xagent.task=%d", taskID))),
 	})
 	if err != nil {
-		return container.Summary{}, fmt.Errorf("failed to list containers: %w", err)
+		return container.Summary{}, false, fmt.Errorf("failed to list containers: %w", err)
 	}
 	if len(containers) == 0 {
-		return container.Summary{}, nil
+		return container.Summary{}, false, nil
 	}
-	return containers[0], nil
+	return containers[0], true, nil
 }
 
 func (r *Runner) kill(ctx context.Context, task *model.Task) error {
-	c, err := r.find(ctx, task.ID)
+	c, ok, err := r.find(ctx, task.ID)
 	if err != nil {
 		return err
 	}
-	if c.ID == "" {
+	if !ok {
 		return nil
 	}
 	if c.State != "running" {
@@ -273,13 +275,13 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 }
 
 func (r *Runner) start(ctx context.Context, task *model.Task) error {
-	c, err := r.find(ctx, task.ID)
+	c, ok, err := r.find(ctx, task.ID)
 	if err != nil {
 		return err
 	}
 
 	var containerID string
-	if c.ID != "" {
+	if ok {
 		slog.Info("starting existing container", "task", task.ID, "name", fmt.Sprintf("xagent-%d", task.ID))
 		containerID = c.ID
 	} else {
