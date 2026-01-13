@@ -128,3 +128,13 @@ export const processEvent = XAgentService.method.processEvent;
  * @generated from rpc xagent.v1.XAgentService.SubmitRunnerEvents
  */
 export const submitRunnerEvents = XAgentService.method.submitRunnerEvents;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.RegisterWorkspaces
+ */
+export const registerWorkspaces = XAgentService.method.registerWorkspaces;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.ListWorkspaces
+ */
+export const listWorkspaces = XAgentService.method.listWorkspaces;

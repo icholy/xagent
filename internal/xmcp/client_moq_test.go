@@ -77,8 +77,14 @@ var _ xagentclient.Client = &ClientMock{}
 //			ListTasksFunc: func(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 //				panic("mock out the ListTasks method")
 //			},
+//			ListWorkspacesFunc: func(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
+//				panic("mock out the ListWorkspaces method")
+//			},
 //			ProcessEventFunc: func(contextMoqParam context.Context, processEventRequest *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
 //				panic("mock out the ProcessEvent method")
+//			},
+//			RegisterWorkspacesFunc: func(contextMoqParam context.Context, registerWorkspacesRequest *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
+//				panic("mock out the RegisterWorkspaces method")
 //			},
 //			RemoveEventTaskFunc: func(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
 //				panic("mock out the RemoveEventTask method")
@@ -159,8 +165,14 @@ type ClientMock struct {
 	// ListTasksFunc mocks the ListTasks method.
 	ListTasksFunc func(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error)
 
+	// ListWorkspacesFunc mocks the ListWorkspaces method.
+	ListWorkspacesFunc func(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error)
+
 	// ProcessEventFunc mocks the ProcessEvent method.
 	ProcessEventFunc func(contextMoqParam context.Context, processEventRequest *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error)
+
+	// RegisterWorkspacesFunc mocks the RegisterWorkspaces method.
+	RegisterWorkspacesFunc func(contextMoqParam context.Context, registerWorkspacesRequest *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error)
 
 	// RemoveEventTaskFunc mocks the RemoveEventTask method.
 	RemoveEventTaskFunc func(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error)
@@ -312,12 +324,26 @@ type ClientMock struct {
 			// ListTasksRequest is the listTasksRequest argument value.
 			ListTasksRequest *xagentv1.ListTasksRequest
 		}
+		// ListWorkspaces holds details about calls to the ListWorkspaces method.
+		ListWorkspaces []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// ListWorkspacesRequest is the listWorkspacesRequest argument value.
+			ListWorkspacesRequest *xagentv1.ListWorkspacesRequest
+		}
 		// ProcessEvent holds details about calls to the ProcessEvent method.
 		ProcessEvent []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
 			ContextMoqParam context.Context
 			// ProcessEventRequest is the processEventRequest argument value.
 			ProcessEventRequest *xagentv1.ProcessEventRequest
+		}
+		// RegisterWorkspaces holds details about calls to the RegisterWorkspaces method.
+		RegisterWorkspaces []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// RegisterWorkspacesRequest is the registerWorkspacesRequest argument value.
+			RegisterWorkspacesRequest *xagentv1.RegisterWorkspacesRequest
 		}
 		// RemoveEventTask holds details about calls to the RemoveEventTask method.
 		RemoveEventTask []struct {
@@ -374,7 +400,9 @@ type ClientMock struct {
 	lockListLinks          sync.RWMutex
 	lockListLogs           sync.RWMutex
 	lockListTasks          sync.RWMutex
+	lockListWorkspaces     sync.RWMutex
 	lockProcessEvent       sync.RWMutex
+	lockRegisterWorkspaces sync.RWMutex
 	lockRemoveEventTask    sync.RWMutex
 	lockRestartTask        sync.RWMutex
 	lockSubmitRunnerEvents sync.RWMutex
@@ -1066,6 +1094,42 @@ func (mock *ClientMock) ListTasksCalls() []struct {
 	return calls
 }
 
+// ListWorkspaces calls ListWorkspacesFunc.
+func (mock *ClientMock) ListWorkspaces(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
+	if mock.ListWorkspacesFunc == nil {
+		panic("ClientMock.ListWorkspacesFunc: method is nil but Client.ListWorkspaces was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam       context.Context
+		ListWorkspacesRequest *xagentv1.ListWorkspacesRequest
+	}{
+		ContextMoqParam:       contextMoqParam,
+		ListWorkspacesRequest: listWorkspacesRequest,
+	}
+	mock.lockListWorkspaces.Lock()
+	mock.calls.ListWorkspaces = append(mock.calls.ListWorkspaces, callInfo)
+	mock.lockListWorkspaces.Unlock()
+	return mock.ListWorkspacesFunc(contextMoqParam, listWorkspacesRequest)
+}
+
+// ListWorkspacesCalls gets all the calls that were made to ListWorkspaces.
+// Check the length with:
+//
+//	len(mockedClient.ListWorkspacesCalls())
+func (mock *ClientMock) ListWorkspacesCalls() []struct {
+	ContextMoqParam       context.Context
+	ListWorkspacesRequest *xagentv1.ListWorkspacesRequest
+} {
+	var calls []struct {
+		ContextMoqParam       context.Context
+		ListWorkspacesRequest *xagentv1.ListWorkspacesRequest
+	}
+	mock.lockListWorkspaces.RLock()
+	calls = mock.calls.ListWorkspaces
+	mock.lockListWorkspaces.RUnlock()
+	return calls
+}
+
 // ProcessEvent calls ProcessEventFunc.
 func (mock *ClientMock) ProcessEvent(contextMoqParam context.Context, processEventRequest *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
 	if mock.ProcessEventFunc == nil {
@@ -1099,6 +1163,42 @@ func (mock *ClientMock) ProcessEventCalls() []struct {
 	mock.lockProcessEvent.RLock()
 	calls = mock.calls.ProcessEvent
 	mock.lockProcessEvent.RUnlock()
+	return calls
+}
+
+// RegisterWorkspaces calls RegisterWorkspacesFunc.
+func (mock *ClientMock) RegisterWorkspaces(contextMoqParam context.Context, registerWorkspacesRequest *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
+	if mock.RegisterWorkspacesFunc == nil {
+		panic("ClientMock.RegisterWorkspacesFunc: method is nil but Client.RegisterWorkspaces was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam           context.Context
+		RegisterWorkspacesRequest *xagentv1.RegisterWorkspacesRequest
+	}{
+		ContextMoqParam:           contextMoqParam,
+		RegisterWorkspacesRequest: registerWorkspacesRequest,
+	}
+	mock.lockRegisterWorkspaces.Lock()
+	mock.calls.RegisterWorkspaces = append(mock.calls.RegisterWorkspaces, callInfo)
+	mock.lockRegisterWorkspaces.Unlock()
+	return mock.RegisterWorkspacesFunc(contextMoqParam, registerWorkspacesRequest)
+}
+
+// RegisterWorkspacesCalls gets all the calls that were made to RegisterWorkspaces.
+// Check the length with:
+//
+//	len(mockedClient.RegisterWorkspacesCalls())
+func (mock *ClientMock) RegisterWorkspacesCalls() []struct {
+	ContextMoqParam           context.Context
+	RegisterWorkspacesRequest *xagentv1.RegisterWorkspacesRequest
+} {
+	var calls []struct {
+		ContextMoqParam           context.Context
+		RegisterWorkspacesRequest *xagentv1.RegisterWorkspacesRequest
+	}
+	mock.lockRegisterWorkspaces.RLock()
+	calls = mock.calls.RegisterWorkspaces
+	mock.lockRegisterWorkspaces.RUnlock()
 	return calls
 }
 

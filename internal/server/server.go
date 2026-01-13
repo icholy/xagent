@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -28,6 +29,9 @@ type Server struct {
 	links  *store.LinkRepository
 	events *store.EventRepository
 	notify bool
+
+	workspacesMu sync.RWMutex
+	workspaces   []string
 }
 
 type Options struct {
@@ -590,4 +594,31 @@ func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType)
 	if err := notify.Send("xagent", message); err != nil {
 		s.log.Error("failed to send notification", "task", task.ID, "error", err)
 	}
+}
+
+func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
+	names := make([]string, len(req.Workspaces))
+	for i, ws := range req.Workspaces {
+		names[i] = ws.Name
+	}
+	slices.Sort(names)
+
+	s.workspacesMu.Lock()
+	s.workspaces = names
+	s.workspacesMu.Unlock()
+
+	s.log.Info("workspaces registered", "count", len(names))
+	return &xagentv1.RegisterWorkspacesResponse{}, nil
+}
+
+func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
+	s.workspacesMu.RLock()
+	defer s.workspacesMu.RUnlock()
+
+	workspaces := make([]*xagentv1.RegisteredWorkspace, len(s.workspaces))
+	for i, name := range s.workspaces {
+		workspaces[i] = &xagentv1.RegisteredWorkspace{Name: name}
+	}
+
+	return &xagentv1.ListWorkspacesResponse{Workspaces: workspaces}, nil
 }
