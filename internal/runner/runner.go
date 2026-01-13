@@ -158,6 +158,11 @@ func (r *Runner) Poll(ctx context.Context) error {
 			})
 		case model.TaskCommandStart:
 			g.Go(func() error {
+				// Don't bother checking docker if the status is still running
+				if task.Status == model.TaskStatusRunning {
+					slog.Debug("start command: task.status=running, waiting for it to finish", "task", task.ID)
+					return nil
+				}
 				// Check if container is already running
 				running, err := r.isRunning(ctx, task)
 				if err != nil {
