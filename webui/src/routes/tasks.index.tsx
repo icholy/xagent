@@ -62,7 +62,7 @@ function TasksPage() {
   const allTasks = data?.tasks ?? []
   const search = searchQuery.trim().toLowerCase()
   const tasks = allTasks.filter((task) => {
-    if (!showChildTasks && task.parent !== 0n) {
+    if (!showChildTasks && isChildTask(task)) {
       return false
     }
     if (search && !(task.name || `Unnamed - ${task.id}`).toLowerCase().includes(search)) {
@@ -70,7 +70,7 @@ function TasksPage() {
     }
     return true
   })
-  const hiddenCount = allTasks.filter((task) => task.parent !== 0n).length
+  const hiddenCount = allTasks.filter(isChildTask).length
 
   return (
     <div className="container mx-auto py-8 px-4">
