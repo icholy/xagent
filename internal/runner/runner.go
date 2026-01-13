@@ -590,10 +590,8 @@ func (r *Runner) Prune(ctx context.Context) error {
 			slog.Error("failed to get task", "task", taskID, "error", err)
 			continue
 		}
-		task := model.TaskFromProto(resp.Task)
-
 		// Remove container if task is archived or deleted
-		if task.Status == model.TaskStatusArchived || connect.CodeOf(err) == connect.CodeNotFound {
+		if connect.CodeOf(err) == connect.CodeNotFound || resp.Task.Status == string(model.TaskStatusArchived) {
 			if err := r.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
 				slog.Error("failed to remove container", "task", taskID, "error", err)
 			} else {
