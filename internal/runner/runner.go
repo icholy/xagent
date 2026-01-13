@@ -4,12 +4,12 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync/atomic"
 
 	"connectrpc.com/connect"
@@ -18,7 +18,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
@@ -219,16 +218,11 @@ func (r *Runner) kill(ctx context.Context, task *model.Task) error {
 		return nil
 	}
 	slog.Info("killing container", "task", task.ID)
-	if err := r.docker.ContainerKill(ctx, c.ID, "SIGTERM"); err != nil {
-		// Container may have stopped between our check and the kill call
-		if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
+	if err := dockerx.ContainerKill(ctx, r.docker, c.ID, "SIGTERM"); err != nil {
+		if errors.Is(err, dockerx.ErrNotRunning) {
 			return nil
 		}
-		return fmt.Errorf("failed to kill container: %w", err)
-	}
-	// Wait for the container to actually exit
-	if err := dockerx.ContainerWait(ctx, r.docker, c.ID, container.WaitConditionNotRunning); err != nil {
-		return fmt.Errorf("failed to wait for container to exit: %w", err)
+		return err
 	}
 	return nil
 }
