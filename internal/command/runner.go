@@ -54,11 +54,6 @@ var RunnerCommand = &cli.Command{
 			Name:  "runner-id",
 			Usage: "Unique identifier for this runner (defaults to hostname)",
 		},
-		&cli.DurationFlag{
-			Name:  "register-interval",
-			Usage: "Interval for re-registering workspaces with the server",
-			Value: 60 * time.Second,
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -68,7 +63,6 @@ var RunnerCommand = &cli.Command{
 		concurrency := cmd.Int("concurrency")
 		autoprune := cmd.Bool("autoprune")
 		runnerID := cmd.String("runner-id")
-		registerInterval := cmd.Duration("register-interval")
 
 		// Default runner ID to hostname
 		if runnerID == "" {
@@ -101,15 +95,6 @@ var RunnerCommand = &cli.Command{
 		if err := r.RegisterWorkspaces(ctx, runnerID); err != nil {
 			slog.Error("failed to register workspaces", "error", err)
 		}
-
-		// Start workspace registration goroutine for periodic re-registration
-		go func() {
-			for common.SleepContext(ctx, registerInterval) {
-				if err := r.RegisterWorkspaces(ctx, runnerID); err != nil {
-					slog.Error("failed to re-register workspaces", "error", err)
-				}
-			}
-		}()
 
 		// Start container monitor in background
 		go func() {
