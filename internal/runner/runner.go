@@ -92,7 +92,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(3)
+	g.SetLimit(r.concurrency)
 
 	for _, pbTask := range resp.Tasks {
 		task := model.TaskFromProto(pbTask)
