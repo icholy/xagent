@@ -128,7 +128,37 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.kill(ctx, task); err != nil {
 					slog.Error("failed to kill task for restart", "task", task.ID, "error", err)
 				}
-				if r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency {
+				if r.atConcurrencyLimit() {
+					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
+					return nil
+				}
+				if err := r.start(ctx, task); err != nil {
+					slog.Error("failed to start task", "task", task.ID, "error", err)
+					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
+						slog.Error("failed to send failed event", "task", task.ID, "error", err)
+					}
+					return nil
+				}
+				// The "started" event is sent by Monitor when the container starts
+				return nil
+			})
+		case model.TaskCommandStart:
+			g.Go(func() error {
+				// Check if container is already running
+				running, err := r.isRunning(ctx, task)
+				if err != nil {
+					slog.Error("failed to check if task is running", "task", task.ID, "error", err)
+					return nil
+				}
+				if running {
+					// Container is running - do nothing, let it finish naturally
+					// The command will be processed when it stops
+					slog.Debug("start command: container already running, waiting for it to finish", "task", task.ID)
+					return nil
+				}
+
+				// Container not running - start it
+				if r.atConcurrencyLimit() {
 					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "running", r.runningCount.Load(), "limit", r.concurrency)
 					return nil
 				}
@@ -217,6 +247,11 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	return nil
 }
 
+// atConcurrencyLimit returns true if the runner has reached its concurrency limit.
+func (r *Runner) atConcurrencyLimit() bool {
+	return r.concurrency > 0 && int(r.runningCount.Load()) >= r.concurrency
+}
+
 // find returns the container for the given task.
 // Returns (container, true, nil) if found, (empty, false, nil) if not found,
 // or (empty, false, error) on error.
@@ -232,6 +267,17 @@ func (r *Runner) find(ctx context.Context, taskID int64) (container.Summary, boo
 		return container.Summary{}, false, nil
 	}
 	return containers[0], true, nil
+}
+
+func (r *Runner) isRunning(ctx context.Context, task *model.Task) (bool, error) {
+	c, ok, err := r.find(ctx, task.ID)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil
+	}
+	return c.State == "running", nil
 }
 
 func (r *Runner) kill(ctx context.Context, task *model.Task) error {

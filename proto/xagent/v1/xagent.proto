@@ -110,8 +110,9 @@ message GetTaskDetailsResponse {
 message UpdateTaskRequest {
   int64 id = 1;
   string name = 2;
-  bool restart = 3;
+  reserved 3;  // Previously: restart
   repeated Instruction add_instructions = 4;
+  bool start = 5;    // Start after current run finishes (non-interrupting)
 }
 
 message UpdateTaskResponse {}

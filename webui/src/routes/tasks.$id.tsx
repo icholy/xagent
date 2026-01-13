@@ -62,6 +62,7 @@ function StatusBadge({ status }: { status: string }) {
 const commandStyles: Record<string, string> = {
   restart: 'bg-pink-100 text-pink-800 border-pink-200',
   stop: 'bg-orange-100 text-orange-800 border-orange-200',
+  start: 'bg-green-100 text-green-800 border-green-200',
 }
 
 function CommandBadge({ command }: { command: string }) {
@@ -119,7 +120,7 @@ function TaskDetail() {
     if (!instruction.trim()) return
     await updateMutation.mutateAsync({
       id: taskId,
-      restart: true,
+      start: true,
       addInstructions: [{ text: instruction, url: '' }],
     })
     setInstruction('')

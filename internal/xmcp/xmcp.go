@@ -214,8 +214,8 @@ func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 	}
 
 	_, err = s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:      input.TaskID,
-		Restart: true,
+		Id:    input.TaskID,
+		Start: true,
 		AddInstructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
 		},

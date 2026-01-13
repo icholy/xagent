@@ -109,6 +109,36 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: false,
 		},
 
+		// Started events with start command
+		{
+			name: "started: pending with start -> running",
+			before: Task{
+				Status:  TaskStatusPending,
+				Command: TaskCommandStart,
+			},
+			after: Task{
+				Status: TaskStatusRunning,
+			},
+			event: RunnerEvent{
+				Event: RunnerEventStarted,
+			},
+			changed: true,
+		},
+		{
+			name: "started: running with start -> running",
+			before: Task{
+				Status:  TaskStatusRunning,
+				Command: TaskCommandStart,
+			},
+			after: Task{
+				Status: TaskStatusRunning,
+			},
+			event: RunnerEvent{
+				Event: RunnerEventStarted,
+			},
+			changed: true,
+		},
+
 		// Stopped events
 		{
 			name: "stopped: running with no command -> completed",
@@ -161,6 +191,21 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 				Event: RunnerEventStopped,
 			},
 			changed: false,
+		},
+		{
+			name: "stopped: running with start command -> pending (ready to restart)",
+			before: Task{
+				Status:  TaskStatusRunning,
+				Command: TaskCommandStart,
+			},
+			after: Task{
+				Status:  TaskStatusPending,
+				Command: TaskCommandStart,
+			},
+			event: RunnerEvent{
+				Event: RunnerEventStopped,
+			},
+			changed: true,
 		},
 		{
 			name: "stopped: pending status returns false",
@@ -494,6 +539,73 @@ func TestTask_Restart(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			task := tt.before
 			got := task.Restart()
+			assert.Equal(t, got, tt.want)
+			assert.DeepEqual(t, task, tt.after)
+		})
+	}
+}
+
+func TestTask_Start(t *testing.T) {
+	tests := []struct {
+		name   string
+		before Task
+		after  Task
+		want   bool
+	}{
+		{
+			name:   "from running succeeds without changing status",
+			before: Task{Status: TaskStatusRunning},
+			after:  Task{Status: TaskStatusRunning, Command: TaskCommandStart, Version: 1},
+			want:   true,
+		},
+		{
+			name:   "from completed succeeds",
+			before: Task{Status: TaskStatusCompleted},
+			after:  Task{Status: TaskStatusPending, Command: TaskCommandStart, Version: 1},
+			want:   true,
+		},
+		{
+			name:   "from failed succeeds",
+			before: Task{Status: TaskStatusFailed},
+			after:  Task{Status: TaskStatusPending, Command: TaskCommandStart, Version: 1},
+			want:   true,
+		},
+		{
+			name:   "from pending fails",
+			before: Task{Status: TaskStatusPending},
+			after:  Task{Status: TaskStatusPending},
+			want:   false,
+		},
+		{
+			name:   "from restarting fails",
+			before: Task{Status: TaskStatusRestarting},
+			after:  Task{Status: TaskStatusRestarting},
+			want:   false,
+		},
+		{
+			name:   "from cancelling fails",
+			before: Task{Status: TaskStatusCancelling},
+			after:  Task{Status: TaskStatusCancelling},
+			want:   false,
+		},
+		{
+			name:   "from cancelled succeeds",
+			before: Task{Status: TaskStatusCancelled},
+			after:  Task{Status: TaskStatusPending, Command: TaskCommandStart, Version: 1},
+			want:   true,
+		},
+		{
+			name:   "from archived fails",
+			before: Task{Status: TaskStatusArchived},
+			after:  Task{Status: TaskStatusArchived},
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := tt.before
+			got := task.Start()
 			assert.Equal(t, got, tt.want)
 			assert.DeepEqual(t, task, tt.after)
 		})
