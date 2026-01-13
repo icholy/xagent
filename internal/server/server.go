@@ -10,7 +10,6 @@ import (
 	"maps"
 	"net/http"
 	"slices"
-	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -23,24 +22,23 @@ import (
 
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
-	log    *slog.Logger
-	tasks  *store.TaskRepository
-	logs   *store.LogRepository
-	links  *store.LinkRepository
-	events *store.EventRepository
-	notify bool
-
-	workspacesMu sync.RWMutex
-	workspaces   []string
+	log        *slog.Logger
+	tasks      *store.TaskRepository
+	logs       *store.LogRepository
+	links      *store.LinkRepository
+	events     *store.EventRepository
+	workspaces *store.WorkspaceRepository
+	notify     bool
 }
 
 type Options struct {
-	Log    *slog.Logger
-	Tasks  *store.TaskRepository
-	Logs   *store.LogRepository
-	Links  *store.LinkRepository
-	Events *store.EventRepository
-	Notify bool
+	Log        *slog.Logger
+	Tasks      *store.TaskRepository
+	Logs       *store.LogRepository
+	Links      *store.LinkRepository
+	Events     *store.EventRepository
+	Workspaces *store.WorkspaceRepository
+	Notify     bool
 }
 
 func New(opts Options) *Server {
@@ -49,12 +47,13 @@ func New(opts Options) *Server {
 		log = slog.Default()
 	}
 	return &Server{
-		log:    log,
-		tasks:  opts.Tasks,
-		logs:   opts.Logs,
-		links:  opts.Links,
-		events: opts.Events,
-		notify: opts.Notify,
+		log:        log,
+		tasks:      opts.Tasks,
+		logs:       opts.Logs,
+		links:      opts.Links,
+		events:     opts.Events,
+		workspaces: opts.Workspaces,
+		notify:     opts.Notify,
 	}
 }
 
@@ -597,26 +596,33 @@ func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType)
 }
 
 func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
-	names := make([]string, len(req.Workspaces))
-	for i, ws := range req.Workspaces {
-		names[i] = ws.Name
+	err := s.workspaces.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := s.workspaces.DeleteByRunner(ctx, tx, req.RunnerId); err != nil {
+			return err
+		}
+		for _, ws := range req.Workspaces {
+			if err := s.workspaces.Create(ctx, tx, req.RunnerId, ws.Name); err != nil {
+				return err
+			}
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	slices.Sort(names)
 
-	s.workspacesMu.Lock()
-	s.workspaces = names
-	s.workspacesMu.Unlock()
-
-	s.log.Info("workspaces registered", "count", len(names))
+	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "count", len(req.Workspaces))
 	return &xagentv1.RegisterWorkspacesResponse{}, nil
 }
 
 func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
-	s.workspacesMu.RLock()
-	defer s.workspacesMu.RUnlock()
+	names, err := s.workspaces.List(ctx, nil)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 
-	workspaces := make([]*xagentv1.RegisteredWorkspace, len(s.workspaces))
-	for i, name := range s.workspaces {
+	workspaces := make([]*xagentv1.RegisteredWorkspace, len(names))
+	for i, name := range names {
 		workspaces[i] = &xagentv1.RegisteredWorkspace{Name: name}
 	}
 

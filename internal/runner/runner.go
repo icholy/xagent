@@ -36,6 +36,7 @@ type Runner struct {
 	prebuiltDir  string
 	workspaces   *workspace.Config
 	concurrency  int
+	runnerID     string
 	runningCount atomic.Int32
 }
 
@@ -44,6 +45,7 @@ type Options struct {
 	PrebuiltDir string
 	Workspaces  *workspace.Config
 	Concurrency int
+	RunnerID    string
 }
 
 func New(opts Options) (*Runner, error) {
@@ -67,6 +69,7 @@ func New(opts Options) (*Runner, error) {
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
 		concurrency: opts.Concurrency,
+		runnerID:    opts.RunnerID,
 	}, nil
 }
 
@@ -82,12 +85,13 @@ func (r *Runner) RegisterWorkspaces(ctx context.Context) error {
 		workspaces = append(workspaces, &xagentv1.RegisteredWorkspace{Name: name})
 	}
 	_, err := r.client.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId:   r.runnerID,
 		Workspaces: workspaces,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to register workspaces: %w", err)
 	}
-	slog.Info("registered workspaces", "count", len(workspaces))
+	slog.Info("registered workspaces", "runner_id", r.runnerID, "count", len(workspaces))
 	return nil
 }
 
