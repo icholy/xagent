@@ -286,18 +286,16 @@ function TaskDetail() {
       )}
 
       {/* Events */}
-      <div className="rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-4">Events</h2>
-        {events.length === 0 ? (
-          <p className="text-muted-foreground">No events linked to this task.</p>
-        ) : (
+      {events.length > 0 && (
+        <div className="rounded-lg border p-6">
+          <h2 className="text-lg font-semibold mb-4">Events</h2>
           <EventsTable
             events={events}
             onUnlink={handleUnlinkEvent}
             isUnlinking={removeEventMutation.isPending}
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Logs */}
       <div className="rounded-lg border p-6">
