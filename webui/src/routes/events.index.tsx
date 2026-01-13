@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { RelativeTime } from '@/components/ui/relative-time'
+import { RelativeTime } from '@/components/relative-time'
 import { Button } from '@/components/ui/button'
 import {
   Select,

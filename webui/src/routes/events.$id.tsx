@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@connectrpc/connect-query'
 import { getEvent, listEventTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
-import { RelativeTime } from '@/components/ui/relative-time'
+import { RelativeTime } from '@/components/relative-time'
 
 export const Route = createFileRoute('/events/$id')({
   component: EventDetail,
