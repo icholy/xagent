@@ -18,8 +18,7 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 		{
 			name: "version mismatch returns false",
 			before: Task{
-				Status:  TaskStatusPending,
-				Command: TaskCommandRestart,
+				Status:  TaskStatusStarting,
 				Version: 2,
 			},
 			event: RunnerEvent{
@@ -47,10 +46,9 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 
 		// Started events
 		{
-			name: "started: pending with restart -> running",
+			name: "started: starting -> running",
 			before: Task{
-				Status:  TaskStatusPending,
-				Command: TaskCommandRestart,
+				Status: TaskStatusStarting,
 			},
 			after: Task{
 				Status: TaskStatusRunning,
@@ -61,10 +59,9 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
-			name: "started: restarting with restart -> running",
+			name: "started: restarting -> running",
 			before: Task{
-				Status:  TaskStatusRestarting,
-				Command: TaskCommandRestart,
+				Status: TaskStatusRestarting,
 			},
 			after: Task{
 				Status: TaskStatusRunning,
@@ -75,23 +72,9 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
-			name: "started: running with restart -> running (SIGHUP case)",
+			name: "started: running returns false",
 			before: Task{
-				Status:  TaskStatusRunning,
-				Command: TaskCommandRestart,
-			},
-			after: Task{
 				Status: TaskStatusRunning,
-			},
-			event: RunnerEvent{
-				Event: RunnerEventStarted,
-			},
-			changed: true,
-		},
-		{
-			name: "started: pending without restart command returns false",
-			before: Task{
-				Status: TaskStatusPending,
 			},
 			event: RunnerEvent{
 				Event: RunnerEventStarted,
@@ -111,7 +94,7 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 
 		// Stopped events
 		{
-			name: "stopped: running with no command -> completed",
+			name: "stopped: running -> completed",
 			before: Task{
 				Status: TaskStatusRunning,
 			},
@@ -124,10 +107,9 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
-			name: "stopped: running with stop command -> cancelled",
+			name: "stopped: stopping -> cancelled",
 			before: Task{
-				Status:  TaskStatusRunning,
-				Command: TaskCommandStop,
+				Status: TaskStatusStopping,
 			},
 			after: Task{
 				Status: TaskStatusCancelled,
@@ -138,34 +120,9 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
-			name: "stopped: cancelling with stop command -> cancelled",
+			name: "stopped: starting status returns false",
 			before: Task{
-				Status:  TaskStatusCancelling,
-				Command: TaskCommandStop,
-			},
-			after: Task{
-				Status: TaskStatusCancelled,
-			},
-			event: RunnerEvent{
-				Event: RunnerEventStopped,
-			},
-			changed: true,
-		},
-		{
-			name: "stopped: running with restart command returns false",
-			before: Task{
-				Status:  TaskStatusRunning,
-				Command: TaskCommandRestart,
-			},
-			event: RunnerEvent{
-				Event: RunnerEventStopped,
-			},
-			changed: false,
-		},
-		{
-			name: "stopped: pending status returns false",
-			before: Task{
-				Status: TaskStatusPending,
+				Status: TaskStatusStarting,
 			},
 			event: RunnerEvent{
 				Event: RunnerEventStopped,
@@ -175,10 +132,9 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 
 		// Failed events
 		{
-			name: "failed: pending -> failed",
+			name: "failed: starting -> failed",
 			before: Task{
-				Status:  TaskStatusPending,
-				Command: TaskCommandRestart,
+				Status: TaskStatusStarting,
 			},
 			after: Task{
 				Status: TaskStatusFailed,
@@ -191,8 +147,7 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 		{
 			name: "failed: restarting -> failed",
 			before: Task{
-				Status:  TaskStatusRestarting,
-				Command: TaskCommandRestart,
+				Status: TaskStatusRestarting,
 			},
 			after: Task{
 				Status: TaskStatusFailed,
@@ -216,24 +171,9 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
-			name: "failed: running with stop command -> failed",
+			name: "failed: stopping -> failed",
 			before: Task{
-				Status:  TaskStatusRunning,
-				Command: TaskCommandStop,
-			},
-			after: Task{
-				Status: TaskStatusFailed,
-			},
-			event: RunnerEvent{
-				Event: RunnerEventFailed,
-			},
-			changed: true,
-		},
-		{
-			name: "failed: cancelling -> failed",
-			before: Task{
-				Status:  TaskStatusCancelling,
-				Command: TaskCommandStop,
+				Status: TaskStatusStopping,
 			},
 			after: Task{
 				Status: TaskStatusFailed,
@@ -319,9 +259,9 @@ func TestTask_Archive(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "from pending fails",
-			before: Task{Status: TaskStatusPending},
-			after:  Task{Status: TaskStatusPending},
+			name:   "from starting fails",
+			before: Task{Status: TaskStatusStarting},
+			after:  Task{Status: TaskStatusStarting},
 			want:   false,
 		},
 		{
@@ -337,9 +277,9 @@ func TestTask_Archive(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "from cancelling fails",
-			before: Task{Status: TaskStatusCancelling},
-			after:  Task{Status: TaskStatusCancelling},
+			name:   "from stopping fails",
+			before: Task{Status: TaskStatusStopping},
+			after:  Task{Status: TaskStatusStopping},
 			want:   false,
 		},
 		{
@@ -376,12 +316,12 @@ func TestTask_Cancel(t *testing.T) {
 		{
 			name:   "from running succeeds",
 			before: Task{Status: TaskStatusRunning},
-			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 1},
+			after:  Task{Status: TaskStatusStopping, Version: 1},
 			want:   true,
 		},
 		{
-			name:   "from pending succeeds with cancelled status",
-			before: Task{Status: TaskStatusPending},
+			name:   "from starting succeeds with cancelled status",
+			before: Task{Status: TaskStatusStarting},
 			after:  Task{Status: TaskStatusCancelled},
 			want:   true,
 		},
@@ -400,13 +340,13 @@ func TestTask_Cancel(t *testing.T) {
 		{
 			name:   "from restarting succeeds",
 			before: Task{Status: TaskStatusRestarting},
-			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 1},
+			after:  Task{Status: TaskStatusStopping, Version: 1},
 			want:   true,
 		},
 		{
-			name:   "from cancelling fails",
-			before: Task{Status: TaskStatusCancelling},
-			after:  Task{Status: TaskStatusCancelling},
+			name:   "from stopping fails",
+			before: Task{Status: TaskStatusStopping},
+			after:  Task{Status: TaskStatusStopping},
 			want:   false,
 		},
 		{
@@ -443,25 +383,25 @@ func TestTask_Restart(t *testing.T) {
 		{
 			name:   "from running succeeds",
 			before: Task{Status: TaskStatusRunning},
-			after:  Task{Status: TaskStatusRestarting, Command: TaskCommandRestart, Version: 1},
+			after:  Task{Status: TaskStatusRestarting, Version: 1},
 			want:   true,
 		},
 		{
 			name:   "from completed succeeds",
 			before: Task{Status: TaskStatusCompleted},
-			after:  Task{Status: TaskStatusPending, Command: TaskCommandRestart, Version: 1},
+			after:  Task{Status: TaskStatusStarting, Version: 1},
 			want:   true,
 		},
 		{
 			name:   "from failed succeeds",
 			before: Task{Status: TaskStatusFailed},
-			after:  Task{Status: TaskStatusPending, Command: TaskCommandRestart, Version: 1},
+			after:  Task{Status: TaskStatusStarting, Version: 1},
 			want:   true,
 		},
 		{
-			name:   "from pending fails",
-			before: Task{Status: TaskStatusPending},
-			after:  Task{Status: TaskStatusPending},
+			name:   "from starting fails",
+			before: Task{Status: TaskStatusStarting},
+			after:  Task{Status: TaskStatusStarting},
 			want:   false,
 		},
 		{
@@ -471,15 +411,15 @@ func TestTask_Restart(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "from cancelling fails",
-			before: Task{Status: TaskStatusCancelling},
-			after:  Task{Status: TaskStatusCancelling},
+			name:   "from stopping fails",
+			before: Task{Status: TaskStatusStopping},
+			after:  Task{Status: TaskStatusStopping},
 			want:   false,
 		},
 		{
 			name:   "from cancelled succeeds",
 			before: Task{Status: TaskStatusCancelled},
-			after:  Task{Status: TaskStatusPending, Command: TaskCommandRestart, Version: 1},
+			after:  Task{Status: TaskStatusStarting, Version: 1},
 			want:   true,
 		},
 		{

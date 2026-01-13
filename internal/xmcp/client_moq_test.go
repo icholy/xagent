@@ -56,6 +56,9 @@ var _ xagentclient.Client = &ClientMock{}
 //			GetTaskDetailsFunc: func(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 //				panic("mock out the GetTaskDetails method")
 //			},
+//			ListActionableTasksFunc: func(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
+//				panic("mock out the ListActionableTasks method")
+//			},
 //			ListChildTasksFunc: func(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
 //				panic("mock out the ListChildTasks method")
 //			},
@@ -137,6 +140,9 @@ type ClientMock struct {
 
 	// GetTaskDetailsFunc mocks the GetTaskDetails method.
 	GetTaskDetailsFunc func(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error)
+
+	// ListActionableTasksFunc mocks the ListActionableTasks method.
+	ListActionableTasksFunc func(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error)
 
 	// ListChildTasksFunc mocks the ListChildTasks method.
 	ListChildTasksFunc func(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error)
@@ -263,6 +269,13 @@ type ClientMock struct {
 			// GetTaskDetailsRequest is the getTaskDetailsRequest argument value.
 			GetTaskDetailsRequest *xagentv1.GetTaskDetailsRequest
 		}
+		// ListActionableTasks holds details about calls to the ListActionableTasks method.
+		ListActionableTasks []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// ListTasksRequest is the listTasksRequest argument value.
+			ListTasksRequest *xagentv1.ListTasksRequest
+		}
 		// ListChildTasks holds details about calls to the ListChildTasks method.
 		ListChildTasks []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -355,31 +368,32 @@ type ClientMock struct {
 			UploadLogsRequest *xagentv1.UploadLogsRequest
 		}
 	}
-	lockAddEventTask       sync.RWMutex
-	lockArchiveTask        sync.RWMutex
-	lockCancelTask         sync.RWMutex
-	lockCreateEvent        sync.RWMutex
-	lockCreateLink         sync.RWMutex
-	lockCreateTask         sync.RWMutex
-	lockDeleteEvent        sync.RWMutex
-	lockDeleteTask         sync.RWMutex
-	lockFindLinksByURL     sync.RWMutex
-	lockGetEvent           sync.RWMutex
-	lockGetTask            sync.RWMutex
-	lockGetTaskDetails     sync.RWMutex
-	lockListChildTasks     sync.RWMutex
-	lockListEventTasks     sync.RWMutex
-	lockListEvents         sync.RWMutex
-	lockListEventsByTask   sync.RWMutex
-	lockListLinks          sync.RWMutex
-	lockListLogs           sync.RWMutex
-	lockListTasks          sync.RWMutex
-	lockProcessEvent       sync.RWMutex
-	lockRemoveEventTask    sync.RWMutex
-	lockRestartTask        sync.RWMutex
-	lockSubmitRunnerEvents sync.RWMutex
-	lockUpdateTask         sync.RWMutex
-	lockUploadLogs         sync.RWMutex
+	lockAddEventTask        sync.RWMutex
+	lockArchiveTask         sync.RWMutex
+	lockCancelTask          sync.RWMutex
+	lockCreateEvent         sync.RWMutex
+	lockCreateLink          sync.RWMutex
+	lockCreateTask          sync.RWMutex
+	lockDeleteEvent         sync.RWMutex
+	lockDeleteTask          sync.RWMutex
+	lockFindLinksByURL      sync.RWMutex
+	lockGetEvent            sync.RWMutex
+	lockGetTask             sync.RWMutex
+	lockGetTaskDetails      sync.RWMutex
+	lockListActionableTasks sync.RWMutex
+	lockListChildTasks      sync.RWMutex
+	lockListEventTasks      sync.RWMutex
+	lockListEvents          sync.RWMutex
+	lockListEventsByTask    sync.RWMutex
+	lockListLinks           sync.RWMutex
+	lockListLogs            sync.RWMutex
+	lockListTasks           sync.RWMutex
+	lockProcessEvent        sync.RWMutex
+	lockRemoveEventTask     sync.RWMutex
+	lockRestartTask         sync.RWMutex
+	lockSubmitRunnerEvents  sync.RWMutex
+	lockUpdateTask          sync.RWMutex
+	lockUploadLogs          sync.RWMutex
 }
 
 // AddEventTask calls AddEventTaskFunc.
@@ -811,6 +825,42 @@ func (mock *ClientMock) GetTaskDetailsCalls() []struct {
 	mock.lockGetTaskDetails.RLock()
 	calls = mock.calls.GetTaskDetails
 	mock.lockGetTaskDetails.RUnlock()
+	return calls
+}
+
+// ListActionableTasks calls ListActionableTasksFunc.
+func (mock *ClientMock) ListActionableTasks(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
+	if mock.ListActionableTasksFunc == nil {
+		panic("ClientMock.ListActionableTasksFunc: method is nil but Client.ListActionableTasks was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam  context.Context
+		ListTasksRequest *xagentv1.ListTasksRequest
+	}{
+		ContextMoqParam:  contextMoqParam,
+		ListTasksRequest: listTasksRequest,
+	}
+	mock.lockListActionableTasks.Lock()
+	mock.calls.ListActionableTasks = append(mock.calls.ListActionableTasks, callInfo)
+	mock.lockListActionableTasks.Unlock()
+	return mock.ListActionableTasksFunc(contextMoqParam, listTasksRequest)
+}
+
+// ListActionableTasksCalls gets all the calls that were made to ListActionableTasks.
+// Check the length with:
+//
+//	len(mockedClient.ListActionableTasksCalls())
+func (mock *ClientMock) ListActionableTasksCalls() []struct {
+	ContextMoqParam  context.Context
+	ListTasksRequest *xagentv1.ListTasksRequest
+} {
+	var calls []struct {
+		ContextMoqParam  context.Context
+		ListTasksRequest *xagentv1.ListTasksRequest
+	}
+	mock.lockListActionableTasks.RLock()
+	calls = mock.calls.ListActionableTasks
+	mock.lockListActionableTasks.RUnlock()
 	return calls
 }
 

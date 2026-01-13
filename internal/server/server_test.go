@@ -87,8 +87,7 @@ func TestGetTask(t *testing.T) {
 				Url:  "https://example.com/issue/2",
 			},
 		},
-		Status:    "pending",
-		Command:   "restart",
+		Status:    "starting",
 		Version:   1,
 		CreatedAt: getResp.Task.CreatedAt, // Copy timestamps since we can't predict them
 		UpdatedAt: getResp.Task.UpdatedAt,
@@ -127,8 +126,7 @@ func TestCreateTask(t *testing.T) {
 				Url:  "https://example.com/issue/1",
 			},
 		},
-		Status:    "pending",
-		Command:   "restart",
+		Status:    "starting",
 		Version:   1,
 		CreatedAt: resp.Task.CreatedAt,
 		UpdatedAt: resp.Task.UpdatedAt,
@@ -263,7 +261,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := context.Background()
 
-	// Create a task (starts as pending with restart command)
+	// Create a task (starts in "starting" status)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
 		Workspace: "test-workspace",
@@ -274,8 +272,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	// Verify initial state
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.Status, "pending")
-	assert.Equal(t, getResp.Task.Command, "restart")
+	assert.Equal(t, getResp.Task.Status, "starting")
 	assert.Equal(t, getResp.Task.Version, int64(1))
 
 	// Send started event (simulating container start)
@@ -290,11 +287,10 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Verify task is running and command is cleared
+	// Verify task is running
 	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.Status, "running")
-	assert.Equal(t, getResp.Task.Command, "")
 
 	// Send stopped event (simulating container exit with code 0)
 	// Use version 0 to bypass version check (spontaneous event)

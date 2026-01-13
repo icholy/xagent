@@ -11,22 +11,14 @@ import (
 type TaskStatus string
 
 const (
-	TaskStatusPending    TaskStatus = "pending"
-	TaskStatusRunning    TaskStatus = "running"
-	TaskStatusRestarting TaskStatus = "restarting"
-	TaskStatusCancelling TaskStatus = "cancelling"
-	TaskStatusCompleted  TaskStatus = "completed"
-	TaskStatusFailed     TaskStatus = "failed"
-	TaskStatusCancelled  TaskStatus = "cancelled"
-	TaskStatusArchived   TaskStatus = "archived"
-)
-
-// TaskCommand represents a command to be executed by the runner.
-type TaskCommand string
-
-const (
-	TaskCommandRestart TaskCommand = "restart"
-	TaskCommandStop    TaskCommand = "stop"
+	TaskStatusStarting   TaskStatus = "starting"   // Task waiting to be started
+	TaskStatusRunning    TaskStatus = "running"    // Task container is executing
+	TaskStatusStopping   TaskStatus = "stopping"   // Task is being stopped/cancelled
+	TaskStatusRestarting TaskStatus = "restarting" // Task is being restarted
+	TaskStatusCompleted  TaskStatus = "completed"  // Task finished successfully
+	TaskStatusFailed     TaskStatus = "failed"     // Task failed
+	TaskStatusCancelled  TaskStatus = "cancelled"  // Task was cancelled
+	TaskStatusArchived   TaskStatus = "archived"   // Task archived
 )
 
 // Instruction represents a task instruction with text and optional source URL.
@@ -59,7 +51,6 @@ type Task struct {
 	Workspace    string        `json:"workspace"`
 	Instructions []Instruction `json:"instructions"`
 	Status       TaskStatus    `json:"status"`
-	Command      TaskCommand   `json:"command"`
 	Version      int64         `json:"version"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
@@ -78,7 +69,6 @@ func (t *Task) Proto() *xagentv1.Task {
 		Workspace:    t.Workspace,
 		Instructions: instructions,
 		Status:       string(t.Status),
-		Command:      string(t.Command),
 		Version:      t.Version,
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
@@ -105,7 +95,6 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		Workspace:    pb.Workspace,
 		Instructions: instructions,
 		Status:       TaskStatus(pb.Status),
-		Command:      TaskCommand(pb.Command),
 		Version:      pb.Version,
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
@@ -177,13 +166,9 @@ func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
 
 func (t *Task) applyRunnerEventStarted() bool {
 	switch t.Status {
-	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning:
-		if t.Command == TaskCommandRestart {
-			t.Status = TaskStatusRunning
-			t.Command = ""
-			return true
-		}
-		return false
+	case TaskStatusStarting, TaskStatusRestarting:
+		t.Status = TaskStatusRunning
+		return true
 	default:
 		return false
 	}
@@ -192,23 +177,11 @@ func (t *Task) applyRunnerEventStarted() bool {
 func (t *Task) applyRunnerEventStopped() bool {
 	switch t.Status {
 	case TaskStatusRunning:
-		if t.Command == TaskCommandStop {
-			t.Status = TaskStatusCancelled
-			t.Command = ""
-			return true
-		}
-		if t.Command == "" {
-			t.Status = TaskStatusCompleted
-			return true
-		}
-		return false
-	case TaskStatusCancelling:
-		if t.Command == TaskCommandStop {
-			t.Status = TaskStatusCancelled
-			t.Command = ""
-			return true
-		}
-		return false
+		t.Status = TaskStatusCompleted
+		return true
+	case TaskStatusStopping:
+		t.Status = TaskStatusCancelled
+		return true
 	default:
 		return false
 	}
@@ -216,9 +189,8 @@ func (t *Task) applyRunnerEventStopped() bool {
 
 func (t *Task) applyRunnerEventFailed() bool {
 	switch t.Status {
-	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
+	case TaskStatusStarting, TaskStatusRestarting, TaskStatusRunning, TaskStatusStopping:
 		t.Status = TaskStatusFailed
-		t.Command = ""
 		return true
 	default:
 		return false
@@ -238,18 +210,17 @@ func (t *Task) Archive() bool {
 	}
 }
 
-// Cancel transitions the task to cancelling/cancelled status and sets the stop command.
+// Cancel transitions the task to stopping/cancelled status.
 // Returns true if the transition is valid and was applied.
-// For running or restarting tasks: sets status to cancelling, command to stop, increments version.
-// For pending tasks: sets status to cancelled directly (no runner action needed).
+// For running or restarting tasks: sets status to stopping, increments version.
+// For starting tasks: sets status to cancelled directly (no runner action needed).
 func (t *Task) Cancel() bool {
 	switch t.Status {
 	case TaskStatusRunning, TaskStatusRestarting:
-		t.Status = TaskStatusCancelling
-		t.Command = TaskCommandStop
+		t.Status = TaskStatusStopping
 		t.Version++
 		return true
-	case TaskStatusPending:
+	case TaskStatusStarting:
 		t.Status = TaskStatusCancelled
 		return true
 	default:
@@ -257,20 +228,18 @@ func (t *Task) Cancel() bool {
 	}
 }
 
-// Restart transitions the task to pending/restarting status and sets the restart command.
+// Restart transitions the task to starting/restarting status.
 // Returns true if the transition is valid and was applied.
-// For running tasks: sets status to restarting, command to restart, increments version.
-// For completed, failed, or cancelled tasks: sets status to pending, command to restart, increments version.
+// For running tasks: sets status to restarting, increments version.
+// For completed, failed, or cancelled tasks: sets status to starting, increments version.
 func (t *Task) Restart() bool {
 	switch t.Status {
 	case TaskStatusRunning:
 		t.Status = TaskStatusRestarting
-		t.Command = TaskCommandRestart
 		t.Version++
 		return true
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
-		t.Status = TaskStatusPending
-		t.Command = TaskCommandRestart
+		t.Status = TaskStatusStarting
 		t.Version++
 		return true
 	default:

@@ -8,6 +8,7 @@ option go_package = "github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1"
 
 service XAgentService {
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc ListActionableTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc ListChildTasks(ListChildTasksRequest) returns (ListChildTasksResponse);
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
@@ -48,8 +49,8 @@ message Task {
   string status = 6;
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
-  string command = 9;  // "restart", "stop", or empty
-  int64 version = 10;  // Incremented when command changes
+  reserved 9;  // Removed: command field
+  int64 version = 10;  // Incremented when status changes requiring runner action
 }
 
 message McpServer {
@@ -60,7 +61,7 @@ message McpServer {
 }
 
 message ListTasksRequest {
-  bool has_command = 1;  // If true, only return tasks with non-empty command
+  reserved 1;  // Removed: has_command field
 }
 
 message ListTasksResponse {

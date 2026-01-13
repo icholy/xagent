@@ -134,7 +134,6 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
       <TableCell>
         <span className="flex items-center gap-2">
           <StatusBadge status={task.status} />
-          {task.command && <CommandBadge command={task.command} />}
         </span>
       </TableCell>
       <TableCell className="text-muted-foreground">
@@ -158,10 +157,10 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
 
 function StatusBadge({ status }: { status: string }) {
   const statusStyles: Record<string, string> = {
-    pending: 'bg-amber-100 text-amber-800 border-amber-200',
+    starting: 'bg-amber-100 text-amber-800 border-amber-200',
     running: 'bg-blue-100 text-blue-800 border-blue-200',
     restarting: 'bg-pink-100 text-pink-800 border-pink-200',
-    cancelling: 'bg-orange-100 text-orange-800 border-orange-200',
+    stopping: 'bg-orange-100 text-orange-800 border-orange-200',
     completed: 'bg-green-100 text-green-800 border-green-200',
     failed: 'bg-red-100 text-red-800 border-red-200',
     cancelled: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -174,22 +173,6 @@ function StatusBadge({ status }: { status: string }) {
       className={statusStyles[status] ?? 'bg-gray-100 text-gray-600'}
     >
       {status}
-    </Badge>
-  )
-}
-
-const commandStyles: Record<string, string> = {
-  restart: 'bg-pink-100 text-pink-800 border-pink-200',
-  stop: 'bg-orange-100 text-orange-800 border-orange-200',
-}
-
-function CommandBadge({ command }: { command: string }) {
-  return (
-    <Badge
-      variant="outline"
-      className={commandStyles[command] ?? 'bg-gray-100 text-gray-600'}
-    >
-      command:{command}
     </Badge>
   )
 }

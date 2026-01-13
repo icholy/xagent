@@ -35,6 +35,9 @@ const (
 const (
 	// XAgentServiceListTasksProcedure is the fully-qualified name of the XAgentService's ListTasks RPC.
 	XAgentServiceListTasksProcedure = "/xagent.v1.XAgentService/ListTasks"
+	// XAgentServiceListActionableTasksProcedure is the fully-qualified name of the XAgentService's
+	// ListActionableTasks RPC.
+	XAgentServiceListActionableTasksProcedure = "/xagent.v1.XAgentService/ListActionableTasks"
 	// XAgentServiceListChildTasksProcedure is the fully-qualified name of the XAgentService's
 	// ListChildTasks RPC.
 	XAgentServiceListChildTasksProcedure = "/xagent.v1.XAgentService/ListChildTasks"
@@ -108,6 +111,7 @@ const (
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
 type XAgentServiceClient interface {
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
+	ListActionableTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
 	ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error)
 	CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error)
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
@@ -149,6 +153,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceListTasksProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("ListTasks")),
+			connect.WithClientOptions(opts...),
+		),
+		listActionableTasks: connect.NewClient[v1.ListTasksRequest, v1.ListTasksResponse](
+			httpClient,
+			baseURL+XAgentServiceListActionableTasksProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ListActionableTasks")),
 			connect.WithClientOptions(opts...),
 		),
 		listChildTasks: connect.NewClient[v1.ListChildTasksRequest, v1.ListChildTasksResponse](
@@ -300,36 +310,46 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // xAgentServiceClient implements XAgentServiceClient.
 type xAgentServiceClient struct {
-	listTasks          *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
-	listChildTasks     *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
-	createTask         *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
-	getTask            *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	getTaskDetails     *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
-	updateTask         *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	deleteTask         *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
-	archiveTask        *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
-	cancelTask         *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
-	restartTask        *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
-	uploadLogs         *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
-	listLogs           *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
-	createLink         *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
-	listLinks          *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
-	findLinksByURL     *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
-	listEvents         *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
-	createEvent        *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
-	getEvent           *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
-	deleteEvent        *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
-	addEventTask       *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
-	removeEventTask    *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
-	listEventTasks     *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
-	listEventsByTask   *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
-	processEvent       *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
-	submitRunnerEvents *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
+	listTasks           *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	listActionableTasks *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	listChildTasks      *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
+	createTask          *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	getTask             *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
+	getTaskDetails      *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
+	updateTask          *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
+	deleteTask          *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
+	archiveTask         *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
+	cancelTask          *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
+	restartTask         *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
+	uploadLogs          *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
+	listLogs            *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
+	createLink          *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
+	listLinks           *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
+	findLinksByURL      *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
+	listEvents          *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
+	createEvent         *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
+	getEvent            *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
+	deleteEvent         *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
+	addEventTask        *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
+	removeEventTask     *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
+	listEventTasks      *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
+	listEventsByTask    *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
+	processEvent        *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
+	submitRunnerEvents  *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
 }
 
 // ListTasks calls xagent.v1.XAgentService.ListTasks.
 func (c *xAgentServiceClient) ListTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	response, err := c.listTasks.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// ListActionableTasks calls xagent.v1.XAgentService.ListActionableTasks.
+func (c *xAgentServiceClient) ListActionableTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
+	response, err := c.listActionableTasks.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -555,6 +575,7 @@ func (c *xAgentServiceClient) SubmitRunnerEvents(ctx context.Context, req *v1.Su
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
+	ListActionableTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
 	ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error)
 	CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error)
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
@@ -592,6 +613,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceListTasksProcedure,
 		svc.ListTasks,
 		connect.WithSchema(xAgentServiceMethods.ByName("ListTasks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceListActionableTasksHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceListActionableTasksProcedure,
+		svc.ListActionableTasks,
+		connect.WithSchema(xAgentServiceMethods.ByName("ListActionableTasks")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceListChildTasksHandler := connect.NewUnaryHandlerSimple(
@@ -742,6 +769,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		switch r.URL.Path {
 		case XAgentServiceListTasksProcedure:
 			xAgentServiceListTasksHandler.ServeHTTP(w, r)
+		case XAgentServiceListActionableTasksProcedure:
+			xAgentServiceListActionableTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceListChildTasksProcedure:
 			xAgentServiceListChildTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateTaskProcedure:
@@ -801,6 +830,10 @@ type UnimplementedXAgentServiceHandler struct{}
 
 func (UnimplementedXAgentServiceHandler) ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListTasks is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ListActionableTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListActionableTasks is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error) {

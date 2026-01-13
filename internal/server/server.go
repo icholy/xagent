@@ -68,14 +68,22 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
-	var tasks []*model.Task
-	var err error
-
-	if req.HasCommand {
-		tasks, err = s.tasks.ListWithCommand(ctx, nil)
-	} else {
-		tasks, err = s.tasks.List(ctx, nil)
+	tasks, err := s.tasks.List(ctx, nil)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+
+	resp := &xagentv1.ListTasksResponse{
+		Tasks: make([]*xagentv1.Task, len(tasks)),
+	}
+	for i, t := range tasks {
+		resp.Tasks[i] = t.Proto()
+	}
+	return resp, nil
+}
+
+func (s *Server) ListActionableTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
+	tasks, err := s.tasks.ListActionable(ctx, nil)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -115,8 +123,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Parent:       req.Parent,
 		Workspace:    req.Workspace,
 		Instructions: instructions,
-		Status:       model.TaskStatusPending,
-		Command:      model.TaskCommandRestart,
+		Status:       model.TaskStatusStarting,
 		Version:      1,
 	}
 

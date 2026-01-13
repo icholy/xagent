@@ -53,7 +53,6 @@ func migrate(db *sql.DB) error {
 			workspace     TEXT NOT NULL,
 			prompts       TEXT NOT NULL,
 			status        TEXT NOT NULL,
-			command       TEXT NOT NULL DEFAULT '',
 			version       INTEGER NOT NULL DEFAULT 0,
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -98,5 +97,14 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_event_tasks_task_id ON event_tasks(task_id);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migrate existing data: convert old status names and remove command field
+	// pending -> starting, cancelling -> stopping
+	_, _ = db.Exec(`UPDATE tasks SET status = 'starting' WHERE status = 'pending'`)
+	_, _ = db.Exec(`UPDATE tasks SET status = 'stopping' WHERE status = 'cancelling'`)
+
+	return nil
 }

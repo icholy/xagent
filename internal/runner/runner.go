@@ -85,7 +85,7 @@ func (r *Runner) submit(ctx context.Context, taskID int64, event string, version
 }
 
 func (r *Runner) Poll(ctx context.Context) error {
-	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{HasCommand: true})
+	resp, err := r.client.ListActionableTasks(ctx, &xagentv1.ListTasksRequest{})
 	if err != nil {
 		return err
 	}
@@ -95,8 +95,8 @@ func (r *Runner) Poll(ctx context.Context) error {
 
 	for _, pbTask := range resp.Tasks {
 		task := model.TaskFromProto(pbTask)
-		switch task.Command {
-		case model.TaskCommandStop:
+		switch task.Status {
+		case model.TaskStatusStopping:
 			g.Go(func() error {
 				if err := r.kill(ctx, task); err != nil {
 					slog.Error("failed to stop task", "task", task.ID, "error", err)
@@ -106,7 +106,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				}
 				return nil
 			})
-		case model.TaskCommandRestart:
+		case model.TaskStatusStarting, model.TaskStatusRestarting:
 			g.Go(func() error {
 				// Kill existing container if running
 				if err := r.kill(ctx, task); err != nil {

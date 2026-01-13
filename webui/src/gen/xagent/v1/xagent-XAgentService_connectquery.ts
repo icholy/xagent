@@ -10,6 +10,11 @@ import { XAgentService } from "./xagent_pb";
 export const listTasks = XAgentService.method.listTasks;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.ListActionableTasks
+ */
+export const listActionableTasks = XAgentService.method.listActionableTasks;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.ListChildTasks
  */
 export const listChildTasks = XAgentService.method.listChildTasks;
