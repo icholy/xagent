@@ -13,7 +13,6 @@ type TaskStatus string
 const (
 	TaskStatusPending    TaskStatus = "pending"
 	TaskStatusRunning    TaskStatus = "running"
-	TaskStatusRestarting TaskStatus = "restarting"
 	TaskStatusCancelling TaskStatus = "cancelling"
 	TaskStatusCompleted  TaskStatus = "completed"
 	TaskStatusFailed     TaskStatus = "failed"
@@ -178,7 +177,7 @@ func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
 
 func (t *Task) applyRunnerEventStarted() bool {
 	switch t.Status {
-	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning:
+	case TaskStatusPending, TaskStatusRunning:
 		if t.Command == TaskCommandRestart || t.Command == TaskCommandStart {
 			t.Status = TaskStatusRunning
 			t.Command = ""
@@ -224,7 +223,7 @@ func (t *Task) applyRunnerEventStopped() bool {
 
 func (t *Task) applyRunnerEventFailed() bool {
 	switch t.Status {
-	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
+	case TaskStatusPending, TaskStatusRunning, TaskStatusCancelling:
 		t.Status = TaskStatusFailed
 		t.Command = ""
 		return true
@@ -248,11 +247,11 @@ func (t *Task) Archive() bool {
 
 // Cancel transitions the task to cancelling/cancelled status and sets the stop command.
 // Returns true if the transition is valid and was applied.
-// For running or restarting tasks: sets status to cancelling, command to stop, increments version.
+// For running tasks: sets status to cancelling, command to stop, increments version.
 // For pending tasks: sets status to cancelled directly (no runner action needed).
 func (t *Task) Cancel() bool {
 	switch t.Status {
-	case TaskStatusRunning, TaskStatusRestarting:
+	case TaskStatusRunning:
 		t.Status = TaskStatusCancelling
 		t.Command = TaskCommandStop
 		t.Version++
@@ -265,14 +264,14 @@ func (t *Task) Cancel() bool {
 	}
 }
 
-// Restart transitions the task to pending/restarting status and sets the restart command.
+// Restart transitions the task to pending status and sets the restart command.
 // Returns true if the transition is valid and was applied.
-// For running tasks: sets status to restarting, command to restart, increments version.
+// For running tasks: keeps status as running, sets command to restart, increments version.
 // For completed, failed, or cancelled tasks: sets status to pending, command to restart, increments version.
 func (t *Task) Restart() bool {
 	switch t.Status {
 	case TaskStatusRunning:
-		t.Status = TaskStatusRestarting
+		// Keep status as running - the restart command tells the runner to kill and restart
 		t.Command = TaskCommandRestart
 		t.Version++
 		return true
