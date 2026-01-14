@@ -48,17 +48,11 @@ func (s *Semaphore) Release(n int64) {
 	}
 }
 
-// Set sets the available permit count to n, capped at capacity.
+// Set sets the available permit count to n.
+// The count can be negative (when running exceeds capacity) or above capacity.
 // This is useful for initializing the semaphore to match existing state.
 func (s *Semaphore) Set(n int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	s.count = n
-	if s.count > s.capacity {
-		s.count = s.capacity
-	}
-	if s.count < 0 {
-		s.count = 0
-	}
 }

@@ -69,19 +69,27 @@ func TestSemaphore_Set(t *testing.T) {
 		t.Error("expected TryAcquire(1) to fail - count should be 0")
 	}
 
-	// Set above capacity should be capped
+	// Set above capacity is allowed (bypasses capacity)
 	sem.Set(100)
-	if !sem.TryAcquire(5) {
-		t.Error("expected TryAcquire(5) to succeed after Set(100) capped to capacity")
+	if !sem.TryAcquire(100) {
+		t.Error("expected TryAcquire(100) to succeed after Set(100)")
 	}
 	if sem.TryAcquire(1) {
 		t.Error("expected TryAcquire(1) to fail - count should be 0")
 	}
 
-	// Set to negative should be capped at 0
-	sem.Set(-10)
+	// Set to negative is allowed (more running than capacity)
+	// Needs releases to bring count back up before acquires succeed
+	sem.Set(-2)
 	if sem.TryAcquire(1) {
-		t.Error("expected TryAcquire(1) to fail after Set(-10)")
+		t.Error("expected TryAcquire(1) to fail after Set(-2)")
+	}
+	// After 3 releases, count should be 1
+	sem.Release(1)
+	sem.Release(1)
+	sem.Release(1)
+	if !sem.TryAcquire(1) {
+		t.Error("expected TryAcquire(1) to succeed after releases brought count positive")
 	}
 }
 
