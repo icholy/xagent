@@ -12,7 +12,7 @@ export function canArchiveTask(task: TaskLike): boolean {
 }
 
 export function canCancelTask(task: TaskLike): boolean {
-  return task.status === 'pending' || task.status === 'running' || task.status === 'restarting'
+  return task.status === 'pending' || task.status === 'running'
 }
 
 export function canRestartTask(task: TaskLike): boolean {
