@@ -22,10 +22,10 @@ import (
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/safesem"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/semaphore"
 )
 
 const socketPath = "/tmp/xagent.sock"
@@ -38,7 +38,7 @@ type Runner struct {
 	workspaces  *workspace.Config
 	runnerID    string
 	concurrency int64
-	sem         *semaphore.Weighted
+	sem         *safesem.Semaphore
 }
 
 type Options struct {
@@ -77,7 +77,7 @@ func New(opts Options) (*Runner, error) {
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
-		sem:         semaphore.NewWeighted(concurrency),
+		sem:         safesem.New(concurrency),
 	}, nil
 }
 
@@ -199,7 +199,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 }
 
 func (r *Runner) Reconcile(ctx context.Context) error {
-	// Acquire semaphore permits for already-running containers
+	// Count already-running containers and set semaphore accordingly
 	runningContainers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("label", "xagent=true"),
@@ -210,14 +210,8 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		return fmt.Errorf("failed to list running containers: %w", err)
 	}
 	runningCount := int64(len(runningContainers))
-	// Fail if running containers exceed the concurrency limit
-	if runningCount > r.concurrency {
-		return fmt.Errorf("running container count (%d) exceeds concurrency limit (%d)", runningCount, r.concurrency)
-	}
-	// Acquire permits for existing running containers so they count against the limit
-	if err := r.sem.Acquire(ctx, runningCount); err != nil {
-		return fmt.Errorf("failed to acquire semaphore: %w", err)
-	}
+	// Set count to running containers (can exceed capacity in over-limit scenarios)
+	r.sem.Set(runningCount)
 	slog.Info("initialized running container count", "count", runningCount)
 
 	// Find all exited xagent containers

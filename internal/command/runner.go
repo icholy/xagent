@@ -89,18 +89,6 @@ var RunnerCommand = &cli.Command{
 		}
 
 		// Start container monitor in background
-		// BUG: Race Condition.
-		//
-		//	If a container stops after monitoring starts and before reconciliation finishes
-		//  then it will try to decrement and empty sempahore resulting in a panic.
-		//  If we switch the order, then we can miss events.
-		//
-		//  I think the solution is to write a custom sempahore implementation with two unique
-		//  properties.
-		//
-		//  1. Releasing at 0 is no-op
-		//  2. It can be initialized with a higher value than the weight.
-		//
 		go func() {
 			for {
 				err := r.Monitor(ctx)
