@@ -210,12 +210,8 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		return fmt.Errorf("failed to list running containers: %w", err)
 	}
 	runningCount := int64(len(runningContainers))
-	// Fail if running containers exceed the concurrency limit
-	if runningCount > r.concurrency {
-		return fmt.Errorf("running container count (%d) exceeds concurrency limit (%d)", runningCount, r.concurrency)
-	}
-	// Set available permits to (capacity - running) so running containers count against the limit
-	r.sem.Set(r.concurrency - runningCount)
+	// Set count to running containers (can exceed capacity in over-limit scenarios)
+	r.sem.Set(runningCount)
 	slog.Info("initialized running container count", "count", runningCount)
 
 	// Find all exited xagent containers
