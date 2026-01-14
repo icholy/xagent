@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { useLocalStorage } from 'usehooks-ts'
-import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { listTasks, archiveTask, listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { canArchiveTask, isChildTask } from '@/lib/task'
@@ -14,6 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -31,10 +38,17 @@ export const Route = createFileRoute('/tasks/')({
 function TasksPage() {
   const [showChildTasks, setShowChildTasks] = useLocalStorage('showChildTasks', false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [workspaceFilter, setWorkspaceFilter] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery(listTasks, {}, {
     refetchInterval: 3000,
   })
+
+  const { data: workspacesData } = useQuery(listWorkspaces, {})
+
+  const handleWorkspaceFilterChange = (value: string) => {
+    setWorkspaceFilter(value === 'all' ? '' : value)
+  }
 
   if (isLoading) {
     return (
@@ -53,12 +67,16 @@ function TasksPage() {
   }
 
   const allTasks = data?.tasks ?? []
+  const workspaces = workspacesData?.workspaces ?? []
   const search = searchQuery.trim().toLowerCase()
   const tasks = allTasks.filter((task) => {
     if (!showChildTasks && isChildTask(task)) {
       return false
     }
     if (search && !(task.name || `Unnamed - ${task.id}`).toLowerCase().includes(search)) {
+      return false
+    }
+    if (workspaceFilter && task.workspace !== workspaceFilter) {
       return false
     }
     return true
@@ -80,6 +98,19 @@ function TasksPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          <Select value={workspaceFilter || 'all'} onValueChange={handleWorkspaceFilterChange}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="All workspaces" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All workspaces</SelectItem>
+              {workspaces.map((workspace) => (
+                <SelectItem key={workspace.name} value={workspace.name}>
+                  {workspace.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2">
             <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
               Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
@@ -168,4 +199,3 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
     </TableRow>
   )
 }
-
