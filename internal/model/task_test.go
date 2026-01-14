@@ -61,6 +61,20 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
+			name: "started: restarting with restart -> running",
+			before: Task{
+				Status:  TaskStatusRestarting,
+				Command: TaskCommandRestart,
+			},
+			after: Task{
+				Status: TaskStatusRunning,
+			},
+			event: RunnerEvent{
+				Event: RunnerEventStarted,
+			},
+			changed: true,
+		},
+		{
 			name: "started: running with restart -> running (SIGHUP case)",
 			before: Task{
 				Status:  TaskStatusRunning,
@@ -220,6 +234,20 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
+			name: "failed: restarting -> failed",
+			before: Task{
+				Status:  TaskStatusRestarting,
+				Command: TaskCommandRestart,
+			},
+			after: Task{
+				Status: TaskStatusFailed,
+			},
+			event: RunnerEvent{
+				Event: RunnerEventFailed,
+			},
+			changed: true,
+		},
+		{
 			name: "failed: running -> failed",
 			before: Task{
 				Status: TaskStatusRunning,
@@ -348,6 +376,12 @@ func TestTask_Archive(t *testing.T) {
 			want:   false,
 		},
 		{
+			name:   "from restarting fails",
+			before: Task{Status: TaskStatusRestarting},
+			after:  Task{Status: TaskStatusRestarting},
+			want:   false,
+		},
+		{
 			name:   "from cancelling fails",
 			before: Task{Status: TaskStatusCancelling},
 			after:  Task{Status: TaskStatusCancelling},
@@ -409,6 +443,12 @@ func TestTask_Cancel(t *testing.T) {
 			want:   false,
 		},
 		{
+			name:   "from restarting succeeds",
+			before: Task{Status: TaskStatusRestarting},
+			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 1},
+			want:   true,
+		},
+		{
 			name:   "from cancelling fails",
 			before: Task{Status: TaskStatusCancelling},
 			after:  Task{Status: TaskStatusCancelling},
@@ -446,9 +486,9 @@ func TestTask_Restart(t *testing.T) {
 		want   bool
 	}{
 		{
-			name:   "from running succeeds without changing status",
+			name:   "from running succeeds",
 			before: Task{Status: TaskStatusRunning},
-			after:  Task{Status: TaskStatusRunning, Command: TaskCommandRestart, Version: 1},
+			after:  Task{Status: TaskStatusRestarting, Command: TaskCommandRestart, Version: 1},
 			want:   true,
 		},
 		{
@@ -467,6 +507,12 @@ func TestTask_Restart(t *testing.T) {
 			name:   "from pending fails",
 			before: Task{Status: TaskStatusPending},
 			after:  Task{Status: TaskStatusPending},
+			want:   false,
+		},
+		{
+			name:   "from restarting fails",
+			before: Task{Status: TaskStatusRestarting},
+			after:  Task{Status: TaskStatusRestarting},
 			want:   false,
 		},
 		{
@@ -528,6 +574,12 @@ func TestTask_Start(t *testing.T) {
 			name:   "from pending fails",
 			before: Task{Status: TaskStatusPending},
 			after:  Task{Status: TaskStatusPending},
+			want:   false,
+		},
+		{
+			name:   "from restarting fails",
+			before: Task{Status: TaskStatusRestarting},
+			after:  Task{Status: TaskStatusRestarting},
 			want:   false,
 		},
 		{
