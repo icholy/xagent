@@ -25,7 +25,6 @@ import (
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/semaphore"
 )
 
 const socketPath = "/tmp/xagent.sock"
@@ -38,7 +37,7 @@ type Runner struct {
 	workspaces  *workspace.Config
 	runnerID    string
 	concurrency int64
-	sem         *semaphore.Weighted
+	sem         *SafeSemaphore
 }
 
 type Options struct {
@@ -77,7 +76,7 @@ func New(opts Options) (*Runner, error) {
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
-		sem:         semaphore.NewWeighted(concurrency),
+		sem:         NewSafeSemaphore(concurrency),
 	}, nil
 }
 
