@@ -613,7 +613,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	assert.Equal(t, len(processResp.TaskIds), 1)
 	assert.Equal(t, processResp.TaskIds[0], activeTask.Task.Id)
 
-	// Verify active task received the event and was set to start
+	// Verify active task received the event and was set to restarting
 	events1, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
 		TaskId: activeTask.Task.Id,
 	})
