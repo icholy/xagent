@@ -22,6 +22,7 @@ import (
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/safesem"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"golang.org/x/sync/errgroup"
@@ -37,7 +38,7 @@ type Runner struct {
 	workspaces  *workspace.Config
 	runnerID    string
 	concurrency int64
-	sem         *SafeSemaphore
+	sem         *safesem.Semaphore
 }
 
 type Options struct {
@@ -76,7 +77,7 @@ func New(opts Options) (*Runner, error) {
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
-		sem:         NewSafeSemaphore(concurrency),
+		sem:         safesem.New(concurrency),
 	}, nil
 }
 
@@ -198,7 +199,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 }
 
 func (r *Runner) Reconcile(ctx context.Context) error {
-	// Acquire semaphore permits for already-running containers
+	// Count already-running containers and set semaphore accordingly
 	runningContainers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("label", "xagent=true"),
@@ -213,10 +214,8 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	if runningCount > r.concurrency {
 		return fmt.Errorf("running container count (%d) exceeds concurrency limit (%d)", runningCount, r.concurrency)
 	}
-	// Acquire permits for existing running containers so they count against the limit
-	if err := r.sem.Acquire(ctx, runningCount); err != nil {
-		return fmt.Errorf("failed to acquire semaphore: %w", err)
-	}
+	// Set available permits to (capacity - running) so running containers count against the limit
+	r.sem.Set(r.concurrency - runningCount)
 	slog.Info("initialized running container count", "count", runningCount)
 
 	// Find all exited xagent containers
