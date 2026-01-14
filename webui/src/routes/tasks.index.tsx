@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
+import { useLocalStorage } from 'usehooks-ts'
 import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
@@ -28,20 +29,12 @@ export const Route = createFileRoute('/tasks/')({
 })
 
 function TasksPage() {
-  const [showChildTasks, setShowChildTasks] = useState(() => {
-    const stored = localStorage.getItem('showChildTasks')
-    return stored !== null ? stored === 'true' : false
-  })
+  const [showChildTasks, setShowChildTasks] = useLocalStorage('showChildTasks', false)
   const [searchQuery, setSearchQuery] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery(listTasks, {}, {
     refetchInterval: 3000,
   })
-
-  const handleToggleChildTasks = (checked: boolean) => {
-    setShowChildTasks(checked)
-    localStorage.setItem('showChildTasks', String(checked))
-  }
 
   if (isLoading) {
     return (
@@ -94,7 +87,7 @@ function TasksPage() {
             <Switch
               id="show-child-tasks"
               checked={showChildTasks}
-              onCheckedChange={handleToggleChildTasks}
+              onCheckedChange={setShowChildTasks}
             />
           </div>
           <Link to="/tasks/new">
