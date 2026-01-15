@@ -36,7 +36,6 @@ workspaces:
       - git clone --no-hardlinks -b master /repo /home/vscode/cdl
       - git -C /home/vscode/cdl remote set-url origin git@github.com:Compass-Digital-Engineering/core-eng-mono.git
       - git -C /home/vscode/cdl remote set-head origin master
-      - git -C /home/vscode/cdl switch -c task-$XAGENT_TASK_ID-$(date +%Y%m%d)
     container:
       image: containeragent
       working_dir: /home/vscode
