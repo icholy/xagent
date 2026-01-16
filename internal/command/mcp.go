@@ -24,7 +24,7 @@ var McpCommand = &cli.Command{
 			Name:    "server",
 			Aliases: []string{"s"},
 			Usage:   "C2 server URL",
-			Value:   "http://localhost:8080",
+			Value:   "http://localhost:6464",
 		},
 		&cli.Int64Flag{
 			Name:    "task",

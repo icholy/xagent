@@ -19,7 +19,7 @@ var TaskDeleteCommand = &cli.Command{
 			Name:    "server",
 			Aliases: []string{"s"},
 			Usage:   "C2 server URL",
-			Value:   "http://localhost:8080",
+			Value:   "http://localhost:6464",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
