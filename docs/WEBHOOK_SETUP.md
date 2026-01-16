@@ -131,7 +131,7 @@ export AWS_REGION="us-east-1"
 xagent subscribe \
   --queue-url "$SQS_QUEUE_URL" \
   --workspace <your-workspace> \
-  --server http://localhost:8080
+  --server http://localhost:6464
 ```
 
 Or using environment variables:
@@ -147,7 +147,7 @@ xagent subscribe -w <your-workspace>
 
 - `--queue-url, -q`: SQS queue URL (or env: `SQS_QUEUE_URL`)
 - `--workspace, -ws`: Workspace for new tasks (required)
-- `--server, -s`: xagent server URL (default: `http://localhost:8080`)
+- `--server, -s`: xagent server URL (default: `http://localhost:6464`)
 - `--max-messages, -m`: Max messages per poll (default: 10)
 - `--wait-time, -w`: Long polling wait time in seconds (default: 20)
 - `--poll-interval`: Interval between polls when queue is empty (default: 5s)

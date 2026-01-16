@@ -19,7 +19,7 @@ var ServerCommand = &cli.Command{
 			Name:    "addr",
 			Aliases: []string{"a"},
 			Usage:   "Address to listen on",
-			Value:   ":8080",
+			Value:   ":6464",
 		},
 		&cli.StringFlag{
 			Name:    "db",

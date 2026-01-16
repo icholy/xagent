@@ -72,16 +72,16 @@ Containers communicate with the C2 server via a Unix socket proxy:
 
 ```bash
 # Start server
-xagent server --addr :8080
+xagent server --addr :6464
 
 # Start runner (separate terminal)
-xagent runner --server http://localhost:8080
+xagent runner --server http://localhost:6464
 
 # Create a task
 xagent task create --workspace myworkspace --prompt "Implement feature X"
 
 # Monitor via Web UI
-open http://localhost:8080
+open http://localhost:6464
 ```
 
 For detailed CLI reference, see [CLAUDE.md](CLAUDE.md).

@@ -106,7 +106,7 @@ connect.CodePermissionDenied // Authorization failure
 import "github.com/icholy/xagent/internal/xagentclient"
 
 // HTTP client
-client := xagentclient.New("http://localhost:8080")
+client := xagentclient.New("http://localhost:6464")
 
 // Unix socket client (used inside containers)
 client := xagentclient.New("unix:///var/run/xagent.sock")
@@ -208,12 +208,12 @@ Connect RPC endpoints are accessible via HTTP POST with JSON:
 
 ```bash
 # List tasks
-curl -X POST http://localhost:8080/xagent.v1.XAgentService/ListTasks \
+curl -X POST http://localhost:6464/xagent.v1.XAgentService/ListTasks \
   -H "Content-Type: application/json" \
   -d '{"statuses": ["pending", "running"]}'
 
 # Get task
-curl -X POST http://localhost:8080/xagent.v1.XAgentService/GetTask \
+curl -X POST http://localhost:6464/xagent.v1.XAgentService/GetTask \
   -H "Content-Type: application/json" \
   -d '{"id": 123}'
 ```

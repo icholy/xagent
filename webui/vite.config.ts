@@ -20,7 +20,7 @@ export default defineConfig({
     proxy: {
       // Proxy Connect RPC requests to the backend server
       "/xagent.v1.XAgentService": {
-        target: "http://localhost:8080",
+        target: "http://localhost:6464",
         changeOrigin: true,
       },
     },
