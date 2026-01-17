@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/icholy/xagent/internal/common"
@@ -54,6 +55,11 @@ var RunnerCommand = &cli.Command{
 			Usage: "Unique identifier for this runner",
 			Value: "default",
 		},
+		&cli.BoolFlag{
+			Name:  "debug",
+			Usage: "Enable debug logging",
+			Value: false,
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -63,6 +69,17 @@ var RunnerCommand = &cli.Command{
 		concurrency := cmd.Int("concurrency")
 		autoprune := cmd.Bool("autoprune")
 		runnerID := cmd.String("id")
+		debug := cmd.Bool("debug")
+
+		// Create logger if debug is enabled
+		var log *slog.Logger
+		if debug {
+			opts := &slog.HandlerOptions{
+				Level: slog.LevelDebug,
+			}
+			handler := slog.NewTextHandler(os.Stderr, opts)
+			log = slog.New(handler)
+		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
 		if err != nil {
@@ -75,6 +92,7 @@ var RunnerCommand = &cli.Command{
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
+			Log:         log,
 		})
 		if err != nil {
 			return err

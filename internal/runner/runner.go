@@ -3,6 +3,7 @@ package runner
 import (
 	"archive/tar"
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -39,6 +40,7 @@ type Runner struct {
 	runnerID    string
 	concurrency int64
 	sem         *safesem.Semaphore
+	log         *slog.Logger
 }
 
 type Options struct {
@@ -47,6 +49,7 @@ type Options struct {
 	Workspaces  *workspace.Config
 	Concurrency int
 	RunnerID    string
+	Log         *slog.Logger
 }
 
 func New(opts Options) (*Runner, error) {
@@ -78,6 +81,7 @@ func New(opts Options) (*Runner, error) {
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
 		sem:         safesem.New(concurrency),
+		log:         cmp.Or(opts.Log, slog.Default()),
 	}, nil
 }
 
@@ -99,7 +103,7 @@ func (r *Runner) RegisterWorkspaces(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to register workspaces: %w", err)
 	}
-	slog.Info("registered workspaces", "runner_id", r.runnerID, "count", len(workspaces))
+	r.log.Info("registered workspaces", "runner_id", r.runnerID, "count", len(workspaces))
 	return nil
 }
 
@@ -127,10 +131,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 		case model.TaskCommandStop:
 			g.Go(func() error {
 				if err := r.kill(ctx, task); err != nil {
-					slog.Error("failed to stop task", "task", task.ID, "error", err)
+					r.log.Error("failed to stop task", "task", task.ID, "error", err)
 				}
 				if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
-					slog.Error("failed to send stopped event", "task", task.ID, "error", err)
+					r.log.Error("failed to send stopped event", "task", task.ID, "error", err)
 				}
 				return nil
 			})
@@ -138,18 +142,18 @@ func (r *Runner) Poll(ctx context.Context) error {
 			g.Go(func() error {
 				// Kill existing container if running
 				if err := r.kill(ctx, task); err != nil {
-					slog.Error("failed to kill task for restart", "task", task.ID, "error", err)
+					r.log.Error("failed to kill task for restart", "task", task.ID, "error", err)
 				}
 				// Atomically acquire a semaphore slot before starting
 				if !r.sem.TryAcquire(1) {
-					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
+					r.log.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
 				}
 				if err := r.start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
-					slog.Error("failed to start task", "task", task.ID, "error", err)
+					r.log.Error("failed to start task", "task", task.ID, "error", err)
 					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
-						slog.Error("failed to send failed event", "task", task.ID, "error", err)
+						r.log.Error("failed to send failed event", "task", task.ID, "error", err)
 					}
 					return nil
 				}
@@ -160,32 +164,32 @@ func (r *Runner) Poll(ctx context.Context) error {
 			g.Go(func() error {
 				// Don't bother checking docker if the status is still running
 				if task.Status == model.TaskStatusRunning {
-					slog.Debug("start command: task.status=running, waiting for it to finish", "task", task.ID)
+					r.log.Debug("start command: task.status=running, waiting for it to finish", "task", task.ID)
 					return nil
 				}
 				// Check if container is already running
 				running, err := r.isRunning(ctx, task)
 				if err != nil {
-					slog.Error("failed to check if task is running", "task", task.ID, "error", err)
+					r.log.Error("failed to check if task is running", "task", task.ID, "error", err)
 					return nil
 				}
 				if running {
 					// Container is running - do nothing, let it finish naturally
 					// The command will be processed when it stops
-					slog.Debug("start command: container already running, waiting for it to finish", "task", task.ID)
+					r.log.Debug("start command: container already running, waiting for it to finish", "task", task.ID)
 					return nil
 				}
 
 				// Container not running - atomically acquire a semaphore slot before starting
 				if !r.sem.TryAcquire(1) {
-					slog.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
+					r.log.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
 				}
 				if err := r.start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
-					slog.Error("failed to start task", "task", task.ID, "error", err)
+					r.log.Error("failed to start task", "task", task.ID, "error", err)
 					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
-						slog.Error("failed to send failed event", "task", task.ID, "error", err)
+						r.log.Error("failed to send failed event", "task", task.ID, "error", err)
 					}
 					return nil
 				}
@@ -212,7 +216,7 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	runningCount := int64(len(runningContainers))
 	// Set count to running containers (can exceed capacity in over-limit scenarios)
 	r.sem.Set(runningCount)
-	slog.Info("initialized running container count", "count", runningCount)
+	r.log.Info("initialized running container count", "count", runningCount)
 
 	// Find all exited xagent containers
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
@@ -230,14 +234,14 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		}
 		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
 		if err != nil {
-			slog.Error("invalid task ID in container label", "task", taskIDStr, "error", err)
+			r.log.Error("invalid task ID in container label", "task", taskIDStr, "error", err)
 			continue
 		}
 
 		// Check if task is still running
 		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 		if err != nil {
-			slog.Error("failed to get task", "task", taskID, "error", err)
+			r.log.Error("failed to get task", "task", taskID, "error", err)
 			continue
 		}
 		if task.Task.Status != "running" {
@@ -247,21 +251,21 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		// Inspect container to get exit code
 		info, err := r.docker.ContainerInspect(ctx, c.ID)
 		if err != nil {
-			slog.Error("failed to inspect container", "task", taskID, "error", err)
+			r.log.Error("failed to inspect container", "task", taskID, "error", err)
 			continue
 		}
 
 		// Use version 0 to bypass version check (spontaneous events)
 		exitCode := info.State.ExitCode
 		if exitCode == 0 {
-			slog.Info("reconcile: container exited successfully", "task", taskID)
+			r.log.Info("reconcile: container exited successfully", "task", taskID)
 			if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
-				slog.Error("failed to send stopped event", "task", taskID, "error", err)
+				r.log.Error("failed to send stopped event", "task", taskID, "error", err)
 			}
 		} else {
-			slog.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
+			r.log.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
 			if err := r.submit(ctx, taskID, "failed", 0); err != nil {
-				slog.Error("failed to send failed event", "task", taskID, "error", err)
+				r.log.Error("failed to send failed event", "task", taskID, "error", err)
 			}
 		}
 	}
@@ -308,7 +312,7 @@ func (r *Runner) kill(ctx context.Context, task *model.Task) error {
 	if c.State != "running" {
 		return nil
 	}
-	slog.Info("killing container", "task", task.ID)
+	r.log.Info("killing container", "task", task.ID)
 	if err := dockerx.ContainerKill(ctx, r.docker, c.ID, "SIGTERM"); err != nil {
 		if errors.Is(err, dockerx.ErrNotRunning) {
 			return nil
@@ -328,7 +332,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
 
 	name := fmt.Sprintf("xagent-%d", task.ID)
-	slog.Info("creating container", "task", task.ID, "name", name, "image", ws.Container.Image, "workspace", task.Workspace)
+	r.log.Info("creating container", "task", task.ID, "name", name, "image", ws.Container.Image, "workspace", task.Workspace)
 	resp, err := r.docker.ContainerCreate(ctx, config, hostConfig, networkConfig, nil, name)
 	if err != nil {
 		return "", fmt.Errorf("failed to create container: %w", err)
@@ -355,7 +359,7 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 
 	var containerID string
 	if ok {
-		slog.Info("starting existing container", "task", task.ID, "name", fmt.Sprintf("xagent-%d", task.ID))
+		r.log.Info("starting existing container", "task", task.ID, "name", fmt.Sprintf("xagent-%d", task.ID))
 		containerID = c.ID
 	} else {
 		var err error
@@ -533,30 +537,30 @@ func (r *Runner) Monitor(ctx context.Context) error {
 			taskIDStr := event.Actor.Attributes["xagent.task"]
 			taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
 			if err != nil {
-				slog.Error("invalid task ID in container event", "task", taskIDStr, "error", err)
+				r.log.Error("invalid task ID in container event", "task", taskIDStr, "error", err)
 				continue
 			}
 
 			switch event.Action {
 			case events.ActionStart:
-				slog.Info("container started", "task", taskID)
+				r.log.Info("container started", "task", taskID)
 				// Use version 0 to bypass version check (spontaneous events)
 				if err := r.submit(ctx, taskID, "started", 0); err != nil {
-					slog.Error("failed to send started event", "task", taskID, "error", err)
+					r.log.Error("failed to send started event", "task", taskID, "error", err)
 				}
 			case events.ActionDie:
 				r.sem.Release(1)
 				// Use version 0 to bypass version check (spontaneous events)
 				exitCode := event.Actor.Attributes["exitCode"]
 				if exitCode == "0" {
-					slog.Info("container exited successfully", "task", taskID)
+					r.log.Info("container exited successfully", "task", taskID)
 					if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
-						slog.Error("failed to send stopped event", "task", taskID, "error", err)
+						r.log.Error("failed to send stopped event", "task", taskID, "error", err)
 					}
 				} else {
-					slog.Error("container exited with error", "task", taskID, "exitCode", exitCode)
+					r.log.Error("container exited with error", "task", taskID, "exitCode", exitCode)
 					if err := r.submit(ctx, taskID, "failed", 0); err != nil {
-						slog.Error("failed to send failed event", "task", taskID, "error", err)
+						r.log.Error("failed to send failed event", "task", taskID, "error", err)
 					}
 				}
 			}
@@ -592,21 +596,21 @@ func (r *Runner) Prune(ctx context.Context) error {
 		}
 		taskID, err := strconv.ParseInt(label, 10, 64)
 		if err != nil {
-			slog.Error("invalid task ID in container label", "xagent.task", label, "error", err)
+			r.log.Error("invalid task ID in container label", "xagent.task", label, "error", err)
 			continue
 		}
 		// Fetch task
 		resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 		if err != nil && connect.CodeOf(err) != connect.CodeNotFound {
-			slog.Error("failed to get task", "task", taskID, "error", err)
+			r.log.Error("failed to get task", "task", taskID, "error", err)
 			continue
 		}
 		// Remove container if task is archived or deleted
 		if connect.CodeOf(err) == connect.CodeNotFound || resp.Task.Status == string(model.TaskStatusArchived) {
 			if err := r.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
-				slog.Error("failed to remove container", "task", taskID, "error", err)
+				r.log.Error("failed to remove container", "task", taskID, "error", err)
 			} else {
-				slog.Info("container removed", "task", taskID)
+				r.log.Info("container removed", "task", taskID)
 			}
 		}
 	}
