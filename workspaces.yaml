@@ -202,3 +202,33 @@ workspaces:
 
         IMPORTANT: When creating GitHub issues, you must ONLY create issues in the icholy/containeragent repository.
         Do NOT create issues in any other repository.
+
+  zitadel-poc:
+    commands:
+      - git clone git@github.com:icholy/zitadel-poc.git
+    container:
+      image: containeragent
+      working_dir: /home/vscode
+      user: "${sh:id -u}:${sh:id -g}"
+      volumes:
+        - credentials:/mnt/credentials
+        - /var/run/docker.sock:/var/run/docker.sock
+      networks:
+        - metamcp_metamcp-network
+      environment:
+        CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
+        DISABLE_AUTOUPDATER: 1
+    agent:
+      cwd: /home/vscode/zitadel-poc
+      mcp_servers:
+        meta:
+          type: "http"
+          url: "http://metamcp:12008/metamcp/Default/mcp"
+          headers:
+            Authorization: "Bearer ${env:METAMCP_API_KEY}"
+      prompt: |
+        You have the zitadel-poc repo cloned locally. When asked to make code changes, you should open a PR.
+
+        IMPORTANT: When creating GitHub issues or PRs, you must ONLY create issues in the icholy/zitadel-poc repository.
+        Do NOT create issues in any other repository.
+        Do NOT create jira issues.
