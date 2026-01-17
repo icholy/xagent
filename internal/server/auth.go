@@ -13,50 +13,39 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
-	"golang.org/x/oauth2"
 )
 
 // AuthConfig holds configuration for OAuth/OIDC authentication.
 type AuthConfig struct {
-	GoogleClientID     string
-	GoogleClientSecret string
-	BaseURL            string
+	IssuerURL    string // OIDC issuer URL (e.g., https://your-instance.zitadel.cloud)
+	ClientID     string
+	ClientSecret string
 }
 
 // Auth handles OAuth/OIDC authentication using Bearer tokens.
 type Auth struct {
-	log          *slog.Logger
-	config       *AuthConfig
-	oauth2Config *oauth2.Config
-	verifier     *oidc.IDTokenVerifier
-	provider     *oidc.Provider
-	users        *store.UserRepository
+	log      *slog.Logger
+	config   *AuthConfig
+	verifier *oidc.IDTokenVerifier
+	provider *oidc.Provider
+	users    *store.UserRepository
 }
 
 // NewAuth creates a new Auth handler.
 func NewAuth(ctx context.Context, log *slog.Logger, config *AuthConfig, users *store.UserRepository) (*Auth, error) {
-	provider, err := oidc.NewProvider(ctx, "https://accounts.google.com")
+	provider, err := oidc.NewProvider(ctx, config.IssuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 	}
 
-	oauth2Config := &oauth2.Config{
-		ClientID:     config.GoogleClientID,
-		ClientSecret: config.GoogleClientSecret,
-		RedirectURL:  config.BaseURL + "/auth/callback",
-		Endpoint:     provider.Endpoint(),
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
-	}
-
-	verifier := provider.Verifier(&oidc.Config{ClientID: config.GoogleClientID})
+	verifier := provider.Verifier(&oidc.Config{ClientID: config.ClientID})
 
 	return &Auth{
-		log:          log,
-		config:       config,
-		oauth2Config: oauth2Config,
-		verifier:     verifier,
-		provider:     provider,
-		users:        users,
+		log:      log,
+		config:   config,
+		verifier: verifier,
+		provider: provider,
+		users:    users,
 	}, nil
 }
 
@@ -81,7 +70,7 @@ func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 // ValidateToken validates a Bearer token and returns the user info.
-// It expects the token to be a Google OIDC ID token.
+// It expects the token to be an OIDC ID token.
 func (a *Auth) ValidateToken(ctx context.Context, token string) (*model.User, error) {
 	// Verify the ID token
 	idToken, err := a.verifier.Verify(ctx, token)
@@ -101,14 +90,14 @@ func (a *Auth) ValidateToken(ctx context.Context, token string) (*model.User, er
 	}
 
 	// Find or create user
-	user, err := a.users.GetByGoogleID(ctx, nil, claims.Sub)
+	user, err := a.users.GetBySubject(ctx, nil, claims.Sub)
 	if errors.Is(err, sql.ErrNoRows) {
 		// Create new user
 		user = &model.User{
-			GoogleID: claims.Sub,
-			Email:    claims.Email,
-			Name:     claims.Name,
-			Picture:  claims.Picture,
+			Subject: claims.Sub,
+			Email:   claims.Email,
+			Name:    claims.Name,
+			Picture: claims.Picture,
 		}
 		if err := a.users.Create(ctx, nil, user); err != nil {
 			return nil, fmt.Errorf("failed to create user: %w", err)

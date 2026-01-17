@@ -35,23 +35,23 @@ var ServerCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "auth-enabled",
-			Usage:   "Enable Google OIDC authentication",
+			Usage:   "Enable OIDC authentication",
 			Sources: cli.EnvVars("XAGENT_AUTH_ENABLED"),
 		},
 		&cli.StringFlag{
-			Name:    "google-client-id",
-			Usage:   "Google OAuth client ID",
-			Sources: cli.EnvVars("XAGENT_GOOGLE_CLIENT_ID"),
+			Name:    "oidc-issuer",
+			Usage:   "OIDC issuer URL (e.g., https://your-instance.zitadel.cloud)",
+			Sources: cli.EnvVars("XAGENT_OIDC_ISSUER"),
 		},
 		&cli.StringFlag{
-			Name:    "google-client-secret",
-			Usage:   "Google OAuth client secret",
-			Sources: cli.EnvVars("XAGENT_GOOGLE_CLIENT_SECRET"),
+			Name:    "oidc-client-id",
+			Usage:   "OIDC client ID",
+			Sources: cli.EnvVars("XAGENT_OIDC_CLIENT_ID"),
 		},
 		&cli.StringFlag{
-			Name:    "base-url",
-			Usage:   "Base URL for OAuth callbacks (e.g., http://localhost:6464)",
-			Sources: cli.EnvVars("XAGENT_BASE_URL"),
+			Name:    "oidc-client-secret",
+			Usage:   "OIDC client secret",
+			Sources: cli.EnvVars("XAGENT_OIDC_CLIENT_SECRET"),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -83,24 +83,21 @@ var ServerCommand = &cli.Command{
 		}
 
 		if authEnabled {
-			googleClientID := cmd.String("google-client-id")
-			googleClientSecret := cmd.String("google-client-secret")
-			baseURL := cmd.String("base-url")
+			oidcIssuer := cmd.String("oidc-issuer")
+			oidcClientID := cmd.String("oidc-client-id")
+			oidcClientSecret := cmd.String("oidc-client-secret")
 
-			if googleClientID == "" {
-				return fmt.Errorf("--google-client-id is required when auth is enabled")
+			if oidcIssuer == "" {
+				return fmt.Errorf("--oidc-issuer is required when auth is enabled")
 			}
-			if googleClientSecret == "" {
-				return fmt.Errorf("--google-client-secret is required when auth is enabled")
-			}
-			if baseURL == "" {
-				return fmt.Errorf("--base-url is required when auth is enabled")
+			if oidcClientID == "" {
+				return fmt.Errorf("--oidc-client-id is required when auth is enabled")
 			}
 
 			authConfig := &server.AuthConfig{
-				GoogleClientID:     googleClientID,
-				GoogleClientSecret: googleClientSecret,
-				BaseURL:            baseURL,
+				IssuerURL:    oidcIssuer,
+				ClientID:     oidcClientID,
+				ClientSecret: oidcClientSecret,
 			}
 
 			auth, err := server.NewAuth(ctx, slog.Default(), authConfig, users)
@@ -109,7 +106,7 @@ var ServerCommand = &cli.Command{
 			}
 			opts.Auth = auth
 
-			slog.Info("authentication enabled", "base_url", baseURL)
+			slog.Info("authentication enabled", "issuer", oidcIssuer)
 		}
 
 		srv := server.New(opts)

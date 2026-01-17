@@ -10,7 +10,7 @@ import (
 // User represents a user in the system.
 type User struct {
 	ID        int64     `json:"id"`
-	GoogleID  string    `json:"google_id"`
+	Subject   string    `json:"subject"` // OIDC subject claim (unique user identifier)
 	Email     string    `json:"email"`
 	Name      string    `json:"name"`
 	Picture   string    `json:"picture"`
@@ -22,7 +22,7 @@ type User struct {
 func (u *User) Proto() *xagentv1.User {
 	return &xagentv1.User{
 		Id:        u.ID,
-		GoogleId:  u.GoogleID,
+		Subject:   u.Subject,
 		Email:     u.Email,
 		Name:      u.Name,
 		Picture:   u.Picture,
@@ -42,7 +42,7 @@ func UserFromProto(pb *xagentv1.User) *User {
 	}
 	return &User{
 		ID:        pb.Id,
-		GoogleID:  pb.GoogleId,
+		Subject:   pb.Subject,
 		Email:     pb.Email,
 		Name:      pb.Name,
 		Picture:   pb.Picture,

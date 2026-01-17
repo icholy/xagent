@@ -30,9 +30,9 @@ func (r *UserRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.
 func (r *UserRepository) Create(ctx context.Context, tx *sql.Tx, user *model.User) error {
 	now := time.Now()
 	result, err := r.exec(tx).ExecContext(ctx, `
-		INSERT INTO users (google_id, email, name, picture, created_at, updated_at)
+		INSERT INTO users (subject, email, name, picture, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, user.GoogleID, user.Email, user.Name, user.Picture, now, now)
+	`, user.Subject, user.Email, user.Name, user.Picture, now, now)
 	if err != nil {
 		return err
 	}
@@ -49,23 +49,23 @@ func (r *UserRepository) Create(ctx context.Context, tx *sql.Tx, user *model.Use
 
 func (r *UserRepository) Get(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
 	row := r.exec(tx).QueryRowContext(ctx, `
-		SELECT id, google_id, email, name, picture, created_at, updated_at
+		SELECT id, subject, email, name, picture, created_at, updated_at
 		FROM users WHERE id = ?
 	`, id)
 	return r.scanUser(row)
 }
 
-func (r *UserRepository) GetByGoogleID(ctx context.Context, tx *sql.Tx, googleID string) (*model.User, error) {
+func (r *UserRepository) GetBySubject(ctx context.Context, tx *sql.Tx, subject string) (*model.User, error) {
 	row := r.exec(tx).QueryRowContext(ctx, `
-		SELECT id, google_id, email, name, picture, created_at, updated_at
-		FROM users WHERE google_id = ?
-	`, googleID)
+		SELECT id, subject, email, name, picture, created_at, updated_at
+		FROM users WHERE subject = ?
+	`, subject)
 	return r.scanUser(row)
 }
 
 func (r *UserRepository) GetByEmail(ctx context.Context, tx *sql.Tx, email string) (*model.User, error) {
 	row := r.exec(tx).QueryRowContext(ctx, `
-		SELECT id, google_id, email, name, picture, created_at, updated_at
+		SELECT id, subject, email, name, picture, created_at, updated_at
 		FROM users WHERE email = ?
 	`, email)
 	return r.scanUser(row)
@@ -74,9 +74,9 @@ func (r *UserRepository) GetByEmail(ctx context.Context, tx *sql.Tx, email strin
 func (r *UserRepository) Put(ctx context.Context, tx *sql.Tx, user *model.User) error {
 	user.UpdatedAt = time.Now()
 	_, err := r.exec(tx).ExecContext(ctx, `
-		UPDATE users SET google_id = ?, email = ?, name = ?, picture = ?, updated_at = ?
+		UPDATE users SET subject = ?, email = ?, name = ?, picture = ?, updated_at = ?
 		WHERE id = ?
-	`, user.GoogleID, user.Email, user.Name, user.Picture, user.UpdatedAt, user.ID)
+	`, user.Subject, user.Email, user.Name, user.Picture, user.UpdatedAt, user.ID)
 	return err
 }
 
@@ -89,7 +89,7 @@ func (r *UserRepository) scanUser(row *sql.Row) (*model.User, error) {
 	var user model.User
 	err := row.Scan(
 		&user.ID,
-		&user.GoogleID,
+		&user.Subject,
 		&user.Email,
 		&user.Name,
 		&user.Picture,

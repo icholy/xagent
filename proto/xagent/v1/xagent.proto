@@ -310,7 +310,7 @@ message ListWorkspacesResponse {
 
 message User {
   int64 id = 1;
-  string google_id = 2;
+  string subject = 2;  // OIDC subject claim (unique user identifier)
   string email = 3;
   string name = 4;
   string picture = 5;

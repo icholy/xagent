@@ -3033,7 +3033,7 @@ func (x *ListWorkspacesResponse) GetWorkspaces() []*RegisteredWorkspace {
 type User struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	GoogleId      string                 `protobuf:"bytes,2,opt,name=google_id,json=googleId,proto3" json:"google_id,omitempty"`
+	Subject       string                 `protobuf:"bytes,2,opt,name=subject,proto3" json:"subject,omitempty"` // OIDC subject claim (unique user identifier)
 	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
 	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	Picture       string                 `protobuf:"bytes,5,opt,name=picture,proto3" json:"picture,omitempty"`
@@ -3080,9 +3080,9 @@ func (x *User) GetId() int64 {
 	return 0
 }
 
-func (x *User) GetGoogleId() string {
+func (x *User) GetSubject() string {
 	if x != nil {
-		return x.GoogleId
+		return x.Subject
 	}
 	return ""
 }
@@ -3299,10 +3299,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x16ListWorkspacesResponse\x12>\n" +
 	"\n" +
 	"workspaces\x18\x01 \x03(\v2\x1e.xagent.v1.RegisteredWorkspaceR\n" +
-	"workspaces\"\xed\x01\n" +
+	"workspaces\"\xea\x01\n" +
 	"\x04User\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
-	"\tgoogle_id\x18\x02 \x01(\tR\bgoogleId\x12\x14\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x18\n" +
+	"\asubject\x18\x02 \x01(\tR\asubject\x12\x14\n" +
 	"\x05email\x18\x03 \x01(\tR\x05email\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12\x18\n" +
 	"\apicture\x18\x05 \x01(\tR\apicture\x129\n" +

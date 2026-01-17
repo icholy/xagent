@@ -108,14 +108,14 @@ func migrate(db *sql.DB) error {
 
 		CREATE TABLE IF NOT EXISTS users (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
-			google_id  TEXT NOT NULL UNIQUE,
+			subject    TEXT NOT NULL UNIQUE,
 			email      TEXT NOT NULL UNIQUE,
 			name       TEXT NOT NULL DEFAULT '',
 			picture    TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
-		CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+		CREATE INDEX IF NOT EXISTS idx_users_subject ON users(subject);
 		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 	`)
 	return err
