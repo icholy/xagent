@@ -72,7 +72,7 @@ var RunnerCommand = &cli.Command{
 		debug := cmd.Bool("debug")
 
 		// Create logger if debug is enabled
-		var log *slog.Logger
+		log := slog.Default()
 		if debug {
 			opts := &slog.HandlerOptions{
 				Level: slog.LevelDebug,
@@ -99,11 +99,11 @@ var RunnerCommand = &cli.Command{
 		}
 		defer r.Close()
 
-		slog.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency)
+		log.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency)
 
 		// Register workspaces with the server (non-fatal if it fails)
 		if err := r.RegisterWorkspaces(ctx); err != nil {
-			slog.Warn("failed to register workspaces", "error", err)
+			log.Warn("failed to register workspaces", "error", err)
 		}
 
 		// Start container monitor in background
@@ -113,7 +113,7 @@ var RunnerCommand = &cli.Command{
 				if errors.Is(err, context.Canceled) {
 					break
 				}
-				slog.Error("monitor error, restarting", "error", err)
+				log.Error("monitor error, restarting", "error", err)
 				if !common.SleepContext(ctx, time.Second) {
 					break
 				}
@@ -130,7 +130,7 @@ var RunnerCommand = &cli.Command{
 			go func() {
 				for common.SleepContext(ctx, pollInterval) {
 					if err := r.Prune(ctx); err != nil {
-						slog.Error("failed to prune containers", "error", err)
+						log.Error("failed to prune containers", "error", err)
 					}
 				}
 			}()
@@ -138,7 +138,7 @@ var RunnerCommand = &cli.Command{
 
 		for {
 			if err := r.Poll(ctx); err != nil {
-				slog.Error("failed to poll tasks", "error", err)
+				log.Error("failed to poll tasks", "error", err)
 			}
 			if !common.SleepContext(ctx, pollInterval) {
 				return nil
