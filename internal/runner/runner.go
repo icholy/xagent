@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/docker/docker/api/types/container"
@@ -313,13 +314,28 @@ func (r *Runner) kill(ctx context.Context, task *model.Task) error {
 		return nil
 	}
 	r.log.Info("killing container", "task", task.ID)
-	if err := dockerx.ContainerKill(ctx, r.docker, c.ID, "SIGTERM"); err != nil {
-		if errors.Is(err, dockerx.ErrNotRunning) {
-			return nil
-		}
-		return err
+
+	// Try SIGTERM first with a timeout
+	killCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err = dockerx.ContainerKill(killCtx, r.docker, c.ID, "SIGTERM")
+	if err == nil || errors.Is(err, dockerx.ErrNotRunning) {
+		return nil
 	}
-	return nil
+
+	// If SIGTERM timed out, send SIGKILL
+	if errors.Is(err, context.DeadlineExceeded) {
+		r.log.Warn("SIGTERM timed out, sending SIGKILL", "task", task.ID)
+		if err := dockerx.ContainerKill(ctx, r.docker, c.ID, "SIGKILL"); err != nil {
+			if errors.Is(err, dockerx.ErrNotRunning) {
+				return nil
+			}
+			return err
+		}
+		return nil
+	}
+
+	return err
 }
 
 func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
