@@ -50,16 +50,3 @@ func UserFromProto(pb *xagentv1.User) *User {
 		UpdatedAt: updatedAt,
 	}
 }
-
-// Session represents a user session.
-type Session struct {
-	ID        string    `json:"id"`
-	UserID    int64     `json:"user_id"`
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// IsExpired returns true if the session has expired.
-func (s *Session) IsExpired() bool {
-	return time.Now().After(s.ExpiresAt)
-}

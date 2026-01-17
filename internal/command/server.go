@@ -72,7 +72,6 @@ var ServerCommand = &cli.Command{
 		events := store.NewEventRepository(db)
 		workspaces := store.NewWorkspaceRepository(db)
 		users := store.NewUserRepository(db)
-		sessions := store.NewSessionRepository(db)
 
 		opts := server.Options{
 			Tasks:      tasks,
@@ -104,7 +103,7 @@ var ServerCommand = &cli.Command{
 				BaseURL:            baseURL,
 			}
 
-			auth, err := server.NewAuth(ctx, slog.Default(), authConfig, users, sessions)
+			auth, err := server.NewAuth(ctx, slog.Default(), authConfig, users)
 			if err != nil {
 				return fmt.Errorf("failed to initialize auth: %w", err)
 			}
