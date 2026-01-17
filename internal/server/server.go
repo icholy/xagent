@@ -29,6 +29,7 @@ type Server struct {
 	events     *store.EventRepository
 	workspaces *store.WorkspaceRepository
 	notify     bool
+	auth       *Auth
 }
 
 type Options struct {
@@ -39,6 +40,7 @@ type Options struct {
 	Events     *store.EventRepository
 	Workspaces *store.WorkspaceRepository
 	Notify     bool
+	Auth       *Auth
 }
 
 func New(opts Options) *Server {
@@ -54,6 +56,7 @@ func New(opts Options) *Server {
 		events:     opts.Events,
 		workspaces: opts.Workspaces,
 		notify:     opts.Notify,
+		auth:       opts.Auth,
 	}
 }
 
@@ -62,7 +65,14 @@ func (s *Server) Handler() http.Handler {
 
 	// API
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s)
-	mux.Handle(path, handler)
+
+	// If auth is enabled, protect the API with middleware
+	if s.auth != nil {
+		mux.Handle("/auth/", s.auth.Handler())
+		mux.Handle(path, AuthMiddleware(s.auth)(handler))
+	} else {
+		mux.Handle(path, handler)
+	}
 
 	// React UI (SPA with client-side routing)
 	mux.Handle("/", WebUI())
