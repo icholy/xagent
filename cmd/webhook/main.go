@@ -36,10 +36,11 @@ func main() {
 	}
 
 	handler := webhook.NewHandler(&webhook.Config{
-		GitHubSecret: mustEnv("GITHUB_WEBHOOK_SECRET"),
-		JiraSecret:   mustEnv("JIRA_WEBHOOK_SECRET"),
-		JiraBaseURL:  mustEnv("JIRA_BASE_URL"),
-		Publisher:    publisher,
+		GitHubSecret:   mustEnv("GITHUB_WEBHOOK_SECRET"),
+		GitHubUsername: os.Getenv("GITHUB_USERNAME"),
+		JiraSecret:     mustEnv("JIRA_WEBHOOK_SECRET"),
+		JiraBaseURL:    mustEnv("JIRA_BASE_URL"),
+		Publisher:      publisher,
 	})
 
 	lambda.Start(httpadapter.NewV2(handler).ProxyWithContext)

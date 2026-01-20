@@ -60,11 +60,12 @@ func (p *SQSPublisher) Publish(event *Event) error {
 
 // Config holds the webhook handler configuration.
 type Config struct {
-	GitHubSecret string
-	JiraSecret   string
-	JiraBaseURL  string
-	Publisher    Publisher
-	NoVerify     bool
+	GitHubSecret   string
+	GitHubUsername string
+	JiraSecret     string
+	JiraBaseURL    string
+	Publisher      Publisher
+	NoVerify       bool
 }
 
 // Handler is an http.Handler that processes GitHub and Jira webhooks.
@@ -112,6 +113,17 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 		eventType := r.Header.Get("X-GitHub-Event")
 		slog.Debug("ignoring GitHub event type", "event_type", eventType)
 		fmt.Fprintf(w, "ignored GitHub event type: %s", eventType)
+		return
+	}
+
+	// Filter by GitHub username if configured
+	if h.config.GitHubUsername != "" && event.Sender != h.config.GitHubUsername {
+		slog.Debug("ignoring event from different sender",
+			"sender", event.Sender,
+			"expected", h.config.GitHubUsername,
+			"url", event.URL,
+		)
+		fmt.Fprintf(w, "ignored GitHub event from sender: %s", event.Sender)
 		return
 	}
 
