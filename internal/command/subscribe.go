@@ -54,6 +54,11 @@ var SubscribeCommand = &cli.Command{
 			Usage:   "AWS region",
 			Sources: cli.EnvVars("AWS_REGION"),
 		},
+		&cli.StringFlag{
+			Name:    "github-username",
+			Usage:   "Only process GitHub events from this user",
+			Sources: cli.EnvVars("GITHUB_USERNAME"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		queueURL := cmd.String("queue-url")
@@ -62,6 +67,7 @@ var SubscribeCommand = &cli.Command{
 		pollInterval := cmd.Duration("poll-interval")
 		serverURL := cmd.String("server")
 		region := cmd.String("region")
+		githubUsername := cmd.String("github-username")
 
 		var opts []func(*config.LoadOptions) error
 		if region != "" {
@@ -76,7 +82,8 @@ var SubscribeCommand = &cli.Command{
 		xagent := xagentclient.New(serverURL)
 
 		handler := &xagentEventHandler{
-			client: xagent,
+			client:         xagent,
+			githubUsername: githubUsername,
 		}
 
 		subscriber := webhook.NewSQSSubscriber(&webhook.SQSSubscriberConfig{
@@ -93,10 +100,21 @@ var SubscribeCommand = &cli.Command{
 }
 
 type xagentEventHandler struct {
-	client xagentclient.Client
+	client         xagentclient.Client
+	githubUsername string
 }
 
 func (h *xagentEventHandler) HandleEvent(ctx context.Context, event *webhook.Event) error {
+	// Filter by GitHub username if configured
+	if h.githubUsername != "" && event.Sender != "" && event.Sender != h.githubUsername {
+		slog.Debug("ignoring event from different sender",
+			"sender", event.Sender,
+			"expected", h.githubUsername,
+			"url", event.URL,
+		)
+		return nil
+	}
+
 	eventResp, err := h.client.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: event.Description,
 		Data:        event.Data,

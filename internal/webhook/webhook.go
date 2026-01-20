@@ -26,6 +26,7 @@ type Event struct {
 	Description string `json:"description"`
 	Data        string `json:"data"`
 	URL         string `json:"url"`
+	Sender      string `json:"sender,omitempty"`
 }
 
 // Publisher is the interface for publishing webhook events.
@@ -190,6 +191,7 @@ func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 					Description: description,
 					Data:        body,
 					URL:         *event.Issue.HTMLURL,
+					Sender:      event.GetSender().GetLogin(),
 				}
 			}
 		}
@@ -203,6 +205,7 @@ func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 					Description: "A review comment was made on a pull request",
 					Data:        body,
 					URL:         *event.PullRequest.HTMLURL,
+					Sender:      event.GetSender().GetLogin(),
 				}
 			}
 		}
@@ -217,6 +220,7 @@ func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 					Description: "A review was submitted on a pull request",
 					Data:        body,
 					URL:         *event.PullRequest.HTMLURL,
+					Sender:      event.GetSender().GetLogin(),
 				}
 			}
 		}
