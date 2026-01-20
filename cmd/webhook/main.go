@@ -37,7 +37,7 @@ func main() {
 
 	handler := webhook.NewHandler(&webhook.Config{
 		GitHubSecret:   mustEnv("GITHUB_WEBHOOK_SECRET"),
-		GitHubUsername: os.Getenv("GITHUB_USERNAME"),
+		GitHubUsername: mustEnv("GITHUB_USERNAME"),
 		JiraSecret:     mustEnv("JIRA_WEBHOOK_SECRET"),
 		JiraBaseURL:    mustEnv("JIRA_BASE_URL"),
 		Publisher:      publisher,
