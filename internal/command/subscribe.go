@@ -106,7 +106,7 @@ type xagentEventHandler struct {
 
 func (h *xagentEventHandler) HandleEvent(ctx context.Context, event *webhook.Event) error {
 	// Filter by GitHub username if configured
-	if h.githubUsername != "" && event.Sender != "" && event.Sender != h.githubUsername {
+	if h.githubUsername != "" && event.Sender != h.githubUsername {
 		slog.Debug("ignoring event from different sender",
 			"sender", event.Sender,
 			"expected", h.githubUsername,
