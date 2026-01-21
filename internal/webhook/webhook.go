@@ -26,7 +26,6 @@ type Event struct {
 	Description string `json:"description"`
 	Data        string `json:"data"`
 	URL         string `json:"url"`
-	Sender      string `json:"sender,omitempty"`
 }
 
 // Publisher is the interface for publishing webhook events.
@@ -107,23 +106,25 @@ func (h *Handler) handleGitHub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Filter by GitHub username if configured
+	if h.config.GitHubUsername != "" {
+		sender := getGitHubSender(webhookEvent)
+		if sender != h.config.GitHubUsername {
+			slog.Debug("ignoring event from different sender",
+				"sender", sender,
+				"expected", h.config.GitHubUsername,
+			)
+			fmt.Fprintf(w, "ignored GitHub event from sender: %s", sender)
+			return
+		}
+	}
+
 	event := h.extractGitHubEvent(webhookEvent)
 
 	if event == nil {
 		eventType := r.Header.Get("X-GitHub-Event")
 		slog.Debug("ignoring GitHub event type", "event_type", eventType)
 		fmt.Fprintf(w, "ignored GitHub event type: %s", eventType)
-		return
-	}
-
-	// Filter by GitHub username if configured
-	if h.config.GitHubUsername != "" && event.Sender != h.config.GitHubUsername {
-		slog.Debug("ignoring event from different sender",
-			"sender", event.Sender,
-			"expected", h.config.GitHubUsername,
-			"url", event.URL,
-		)
-		fmt.Fprintf(w, "ignored GitHub event from sender: %s", event.Sender)
 		return
 	}
 
@@ -188,6 +189,19 @@ func (h *Handler) verifyJiraSignature(payload []byte, signature string) bool {
 	return hmac.Equal([]byte(expectedMAC), []byte(signature))
 }
 
+func getGitHubSender(webhookEvent any) string {
+	switch event := webhookEvent.(type) {
+	case *github.IssueCommentEvent:
+		return event.GetSender().GetLogin()
+	case *github.PullRequestReviewCommentEvent:
+		return event.GetSender().GetLogin()
+	case *github.PullRequestReviewEvent:
+		return event.GetSender().GetLogin()
+	default:
+		return ""
+	}
+}
+
 func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
@@ -203,7 +217,6 @@ func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 					Description: description,
 					Data:        body,
 					URL:         *event.Issue.HTMLURL,
-					Sender:      event.GetSender().GetLogin(),
 				}
 			}
 		}
@@ -217,7 +230,6 @@ func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 					Description: "A review comment was made on a pull request",
 					Data:        body,
 					URL:         *event.PullRequest.HTMLURL,
-					Sender:      event.GetSender().GetLogin(),
 				}
 			}
 		}
@@ -232,7 +244,6 @@ func (h *Handler) extractGitHubEvent(webhookEvent any) *Event {
 					Description: "A review was submitted on a pull request",
 					Data:        body,
 					URL:         *event.PullRequest.HTMLURL,
-					Sender:      event.GetSender().GetLogin(),
 				}
 			}
 		}

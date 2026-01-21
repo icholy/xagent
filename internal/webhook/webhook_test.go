@@ -44,7 +44,6 @@ func TestGitHubWebhook(t *testing.T) {
 				URL:         "https://github.com/icholy/xagent/pull/83",
 				Description: "A review comment was made on a pull request",
 				Data:        "xagent: test comment",
-				Sender:      "icholy",
 			},
 		},
 		{
@@ -54,7 +53,6 @@ func TestGitHubWebhook(t *testing.T) {
 				URL:         "https://github.com/icholy/xagent/pull/142",
 				Description: "A review was submitted on a pull request",
 				Data:        "xagent: please address the review comments",
-				Sender:      "icholy",
 			},
 		},
 	}
