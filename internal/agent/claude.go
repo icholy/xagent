@@ -97,10 +97,13 @@ func (a *ClaudeAgent) handleStreamEvent(data []byte) bool {
 		Type    string `json:"type"`
 		Message struct {
 			Content []struct {
-				Type  string `json:"type"`
-				Text  string `json:"text"`
-				Name  string `json:"name"`
-				Input any    `json:"input"`
+				Type      string `json:"type"`
+				Text      string `json:"text"`
+				Name      string `json:"name"`
+				Input     any    `json:"input"`
+				ToolUseID string `json:"tool_use_id"`
+				Content   string `json:"content"`
+				IsError   bool   `json:"is_error"`
 			} `json:"content"`
 		} `json:"message"`
 	}
@@ -117,6 +120,16 @@ func (a *ClaudeAgent) handleStreamEvent(data []byte) bool {
 				}
 			case "tool_use":
 				a.log.Info("tool", "name", block.Name)
+			}
+		}
+	case "user":
+		for _, block := range event.Message.Content {
+			if block.Type == "tool_result" {
+				if block.IsError {
+					a.log.Error("tool_result", "tool_use_id", block.ToolUseID, "error", block.Content)
+				} else {
+					a.log.Debug("tool_result", "tool_use_id", block.ToolUseID)
+				}
 			}
 		}
 	}
