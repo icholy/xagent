@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
 type WorkspaceRepository struct {
@@ -15,11 +16,11 @@ func NewWorkspaceRepository(db *sql.DB) *WorkspaceRepository {
 	return &WorkspaceRepository{db: db}
 }
 
-func (r *WorkspaceRepository) exec(tx *sql.Tx) Executor {
+func (r *WorkspaceRepository) queries(tx *sql.Tx) *sqlc.Queries {
 	if tx != nil {
-		return tx
+		return sqlc.New(tx)
 	}
-	return r.db
+	return sqlc.New(r.db)
 }
 
 func (r *WorkspaceRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error) error {
@@ -28,52 +29,41 @@ func (r *WorkspaceRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx 
 
 // DeleteByRunner deletes all workspaces for the given runner ID and owner.
 func (r *WorkspaceRepository) DeleteByRunner(ctx context.Context, tx *sql.Tx, runnerID, owner string) error {
-	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM workspaces WHERE runner_id = ? AND owner = ?`, runnerID, owner)
-	return err
+	return r.queries(tx).DeleteWorkspacesByRunner(ctx, sqlc.DeleteWorkspacesByRunnerParams{
+		RunnerID: runnerID,
+		Owner:    owner,
+	})
 }
 
 // Create inserts a new workspace for the given runner ID and owner.
 func (r *WorkspaceRepository) Create(ctx context.Context, tx *sql.Tx, runnerID, name, owner string) error {
-	_, err := r.exec(tx).ExecContext(ctx, `
-		INSERT INTO workspaces (runner_id, name, owner)
-		VALUES (?, ?, ?)
-	`, runnerID, name, owner)
-	return err
+	return r.queries(tx).CreateWorkspace(ctx, sqlc.CreateWorkspaceParams{
+		RunnerID: runnerID,
+		Name:     name,
+		Owner:    owner,
+	})
 }
 
 // List returns all workspaces for the given owner, sorted alphabetically by name.
 func (r *WorkspaceRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Workspace, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, runner_id, name, owner, updated_at
-		FROM workspaces WHERE owner = ? ORDER BY name ASC
-	`, owner)
+	rows, err := r.queries(tx).ListWorkspacesByOwner(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var workspaces []*model.Workspace
-	for rows.Next() {
-		ws, err := r.scanWorkspace(rows)
-		if err != nil {
-			return nil, err
+	workspaces := make([]*model.Workspace, len(rows))
+	for i, row := range rows {
+		workspaces[i] = &model.Workspace{
+			ID:        row.ID,
+			RunnerID:  row.RunnerID,
+			Name:      row.Name,
+			Owner:     row.Owner,
+			UpdatedAt: row.UpdatedAt.Time,
 		}
-		workspaces = append(workspaces, ws)
 	}
-	return workspaces, rows.Err()
-}
-
-func (r *WorkspaceRepository) scanWorkspace(rows *sql.Rows) (*model.Workspace, error) {
-	var ws model.Workspace
-	err := rows.Scan(&ws.ID, &ws.RunnerID, &ws.Name, &ws.Owner, &ws.UpdatedAt)
-	if err != nil {
-		return nil, err
-	}
-	return &ws, nil
+	return workspaces, nil
 }
 
 // Clear deletes all workspaces for the given owner.
 func (r *WorkspaceRepository) Clear(ctx context.Context, tx *sql.Tx, owner string) error {
-	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM workspaces WHERE owner = ?`, owner)
-	return err
+	return r.queries(tx).ClearWorkspacesByOwner(ctx, owner)
 }
