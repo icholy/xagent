@@ -36,9 +36,9 @@ func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Tas
 
 	now := time.Now()
 	result, err := r.exec(tx).ExecContext(ctx, `
-		INSERT INTO tasks (name, parent, workspace, prompts, status, command, version, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, task.Name, task.Parent, task.Workspace, instructions, task.Status, task.Command, task.Version, now, now)
+		INSERT INTO tasks (name, parent, workspace, prompts, status, command, version, owner, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, task.Name, task.Parent, task.Workspace, instructions, task.Status, task.Command, task.Version, task.Owner, now, now)
 	if err != nil {
 		return err
 	}
@@ -53,19 +53,19 @@ func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Tas
 	return nil
 }
 
-func (r *TaskRepository) Get(ctx context.Context, tx *sql.Tx, id int64) (*model.Task, error) {
+func (r *TaskRepository) Get(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Task, error) {
 	row := r.exec(tx).QueryRowContext(ctx, `
-		SELECT id, name, parent, workspace, prompts, status, command, version, created_at, updated_at
-		FROM tasks WHERE id = ?
-	`, id)
+		SELECT id, name, parent, workspace, prompts, status, command, version, owner, created_at, updated_at
+		FROM tasks WHERE id = ? AND owner = ?
+	`, id, owner)
 	return r.scanTask(row)
 }
 
-func (r *TaskRepository) List(ctx context.Context, tx *sql.Tx) ([]*model.Task, error) {
+func (r *TaskRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, name, parent, workspace, prompts, status, command, version, created_at, updated_at
-		FROM tasks WHERE status != 'archived' ORDER BY created_at DESC
-	`)
+		SELECT id, name, parent, workspace, prompts, status, command, version, owner, created_at, updated_at
+		FROM tasks WHERE status != 'archived' AND owner = ? ORDER BY created_at DESC
+	`, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -74,12 +74,11 @@ func (r *TaskRepository) List(ctx context.Context, tx *sql.Tx) ([]*model.Task, e
 	return r.scanTasks(rows)
 }
 
-
-func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID int64) ([]*model.Task, error) {
+func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID int64, owner string) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, name, parent, workspace, prompts, status, command, version, created_at, updated_at
-		FROM tasks WHERE parent = ? ORDER BY created_at DESC
-	`, parentID)
+		SELECT id, name, parent, workspace, prompts, status, command, version, owner, created_at, updated_at
+		FROM tasks WHERE parent = ? AND owner = ? ORDER BY created_at DESC
+	`, parentID, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -88,11 +87,11 @@ func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID 
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListWithCommand(ctx context.Context, tx *sql.Tx) ([]*model.Task, error) {
+func (r *TaskRepository) ListWithCommand(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, name, parent, workspace, prompts, status, command, version, created_at, updated_at
-		FROM tasks WHERE command != '' AND status != 'archived' ORDER BY created_at DESC
-	`)
+		SELECT id, name, parent, workspace, prompts, status, command, version, owner, created_at, updated_at
+		FROM tasks WHERE command != '' AND status != 'archived' AND owner = ? ORDER BY created_at DESC
+	`, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +102,7 @@ func (r *TaskRepository) ListWithCommand(ctx context.Context, tx *sql.Tx) ([]*mo
 
 func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT t.id, t.name, t.parent, t.workspace, t.prompts, t.status, t.command, t.version, t.created_at, t.updated_at
+		SELECT t.id, t.name, t.parent, t.workspace, t.prompts, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at
 		FROM tasks t
 		JOIN event_tasks et ON t.id = et.task_id
 		WHERE et.event_id = ?
@@ -126,13 +125,13 @@ func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) 
 	task.UpdatedAt = time.Now()
 	_, err = r.exec(tx).ExecContext(ctx, `
 		UPDATE tasks SET name = ?, parent = ?, workspace = ?, prompts = ?, status = ?, command = ?, version = ?, updated_at = ?
-		WHERE id = ?
-	`, task.Name, task.Parent, task.Workspace, instructions, task.Status, task.Command, task.Version, task.UpdatedAt, task.ID)
+		WHERE id = ? AND owner = ?
+	`, task.Name, task.Parent, task.Workspace, instructions, task.Status, task.Command, task.Version, task.UpdatedAt, task.ID, task.Owner)
 	return err
 }
 
-func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
-	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM tasks WHERE id = ?`, id)
+func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64, owner string) error {
+	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM tasks WHERE id = ? AND owner = ?`, id, owner)
 	return err
 }
 
@@ -149,6 +148,7 @@ func (r *TaskRepository) scanTask(row *sql.Row) (*model.Task, error) {
 		&task.Status,
 		&task.Command,
 		&task.Version,
+		&task.Owner,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	)
@@ -178,6 +178,7 @@ func (r *TaskRepository) scanTasks(rows *sql.Rows) ([]*model.Task, error) {
 			&task.Status,
 			&task.Command,
 			&task.Version,
+			&task.Owner,
 			&task.CreatedAt,
 			&task.UpdatedAt,
 		)

@@ -55,6 +55,7 @@ func migrate(db *sql.DB) error {
 			status        TEXT NOT NULL,
 			command       TEXT NOT NULL DEFAULT '',
 			version       INTEGER NOT NULL DEFAULT 0,
+			owner         TEXT NOT NULL DEFAULT '',
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 		);

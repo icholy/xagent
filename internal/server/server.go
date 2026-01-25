@@ -95,14 +95,23 @@ func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(s.discovery)
 }
 
+// userID returns the authenticated user's ID from context.
+// Returns empty string if no user is authenticated.
+func userID(ctx context.Context) string {
+	if u := apiauth.User(ctx); u != nil {
+		return u.ID
+	}
+	return ""
+}
+
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 	var tasks []*model.Task
 	var err error
 
 	if req.HasCommand {
-		tasks, err = s.tasks.ListWithCommand(ctx, nil)
+		tasks, err = s.tasks.ListWithCommand(ctx, nil, userID(ctx))
 	} else {
-		tasks, err = s.tasks.List(ctx, nil)
+		tasks, err = s.tasks.List(ctx, nil, userID(ctx))
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -118,7 +127,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 }
 
 func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
-	tasks, err := s.tasks.ListChildren(ctx, nil, req.ParentId)
+	tasks, err := s.tasks.ListChildren(ctx, nil, req.ParentId, userID(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -146,20 +155,21 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Status:       model.TaskStatusPending,
 		Command:      model.TaskCommandStart,
 		Version:      1,
+		Owner:        userID(ctx),
 	}
 
 	if err := s.tasks.Create(ctx, nil, task); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	s.log.Info("task created", "id", task.ID, "workspace", task.Workspace)
+	s.log.Info("task created", "id", task.ID, "workspace", task.Workspace, "owner", task.Owner)
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(),
 	}, nil
 }
 
 func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
-	task, err := s.tasks.Get(ctx, nil, req.Id)
+	task, err := s.tasks.Get(ctx, nil, req.Id, userID(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
@@ -173,7 +183,7 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 }
 
 func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-	task, err := s.tasks.Get(ctx, nil, req.Id)
+	task, err := s.tasks.Get(ctx, nil, req.Id, userID(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
@@ -181,7 +191,7 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	children, _ := s.tasks.ListChildren(ctx, nil, req.Id)
+	children, _ := s.tasks.ListChildren(ctx, nil, req.Id, userID(ctx))
 	events, _ := s.events.ListByTask(ctx, nil, req.Id)
 	links, _ := s.links.ListByTask(ctx, nil, req.Id)
 
@@ -205,7 +215,7 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.tasks.Get(ctx, tx, req.Id)
+		task, err := s.tasks.Get(ctx, tx, req.Id, userID(ctx))
 		if err != nil {
 			return err
 		}
@@ -234,7 +244,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 }
 
 func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error) {
-	if err := s.tasks.Delete(ctx, nil, req.Id); err != nil {
+	if err := s.tasks.Delete(ctx, nil, req.Id, userID(ctx)); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -244,7 +254,7 @@ func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest
 
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
 	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.tasks.Get(ctx, tx, req.Id)
+		task, err := s.tasks.Get(ctx, tx, req.Id, userID(ctx))
 		if err != nil {
 			return err
 		}
@@ -266,7 +276,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.tasks.Get(ctx, tx, req.Id)
+		task, err := s.tasks.Get(ctx, tx, req.Id, userID(ctx))
 		if err != nil {
 			return err
 		}
@@ -288,7 +298,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 
 func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.tasks.Get(ctx, tx, req.Id)
+		task, err := s.tasks.Get(ctx, tx, req.Id, userID(ctx))
 		if err != nil {
 			return err
 		}
@@ -498,7 +508,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			continue
 		}
 		// Skip archived tasks
-		task, err := s.tasks.Get(ctx, nil, link.TaskID)
+		task, err := s.tasks.Get(ctx, nil, link.TaskID, userID(ctx))
 		if err != nil {
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
@@ -512,7 +522,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
 		}
 		err = s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			task, err := s.tasks.Get(ctx, tx, link.TaskID)
+			task, err := s.tasks.Get(ctx, tx, link.TaskID, userID(ctx))
 			if err != nil {
 				return err
 			}
@@ -539,7 +549,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 		var applied bool
 		err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
 			var err error
-			task, err = s.tasks.Get(ctx, tx, event.TaskID)
+			task, err = s.tasks.Get(ctx, tx, event.TaskID, userID(ctx))
 			if err != nil {
 				return err
 			}

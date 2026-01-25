@@ -52,6 +52,7 @@ message Task {
   google.protobuf.Timestamp updated_at = 8;
   string command = 9;  // "restart", "stop", or empty
   int64 version = 10;  // Incremented when command changes
+  string owner = 11;   // User ID of the task owner
 }
 
 message McpServer {
