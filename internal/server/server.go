@@ -193,7 +193,7 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 
 	children, _ := s.tasks.ListChildren(ctx, nil, req.Id, userID(ctx))
 	events, _ := s.events.ListByTask(ctx, nil, req.Id)
-	links, _ := s.links.ListByTask(ctx, nil, req.Id)
+	links, _ := s.links.ListByTask(ctx, nil, req.Id, userID(ctx))
 
 	resp := &xagentv1.GetTaskDetailsResponse{
 		Task:     task.Proto(),
@@ -330,7 +330,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 }
 
 func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
-	logs, err := s.logs.ListByTask(ctx, nil, req.TaskId)
+	logs, err := s.logs.ListByTask(ctx, nil, req.TaskId, userID(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -362,7 +362,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 }
 
 func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
-	links, err := s.links.ListByTask(ctx, nil, req.TaskId)
+	links, err := s.links.ListByTask(ctx, nil, req.TaskId, userID(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -376,7 +376,7 @@ func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) 
 }
 
 func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
-	links, err := s.links.FindByURL(ctx, nil, req.Url)
+	links, err := s.links.FindByURL(ctx, nil, req.Url, userID(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -496,7 +496,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		return &xagentv1.ProcessEventResponse{}, nil
 	}
 
-	links, err := s.links.FindByURL(ctx, nil, event.URL)
+	links, err := s.links.FindByURL(ctx, nil, event.URL, userID(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

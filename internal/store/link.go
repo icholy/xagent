@@ -34,11 +34,14 @@ func (r *LinkRepository) Create(ctx context.Context, tx *sql.Tx, link *model.Lin
 	return nil
 }
 
-func (r *LinkRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64) ([]*model.Link, error) {
+func (r *LinkRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Link, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, task_id, relevance, url, title, notify, created_at
-		FROM task_links WHERE task_id = ? ORDER BY created_at ASC
-	`, taskID)
+		SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
+		FROM task_links l
+		JOIN tasks t ON l.task_id = t.id
+		WHERE l.task_id = ? AND t.owner = ?
+		ORDER BY l.created_at ASC
+	`, taskID, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -51,14 +54,14 @@ func (r *LinkRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error
 	return err
 }
 
-func (r *LinkRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string) ([]*model.Link, error) {
+func (r *LinkRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string, owner string) ([]*model.Link, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 		FROM task_links l
 		JOIN tasks t ON l.task_id = t.id
-		WHERE l.url = ? AND t.status != 'archived'
+		WHERE l.url = ? AND t.status != 'archived' AND t.owner = ?
 		ORDER BY l.created_at DESC
-	`, url)
+	`, url, owner)
 	if err != nil {
 		return nil, err
 	}

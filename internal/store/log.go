@@ -35,11 +35,14 @@ func (r *LogRepository) Create(ctx context.Context, tx *sql.Tx, log *model.Log) 
 	return nil
 }
 
-func (r *LogRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64) ([]*model.Log, error) {
+func (r *LogRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Log, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, task_id, type, content, created_at
-		FROM logs WHERE task_id = ? ORDER BY created_at ASC
-	`, taskID)
+		SELECT l.id, l.task_id, l.type, l.content, l.created_at
+		FROM logs l
+		JOIN tasks t ON l.task_id = t.id
+		WHERE l.task_id = ? AND t.owner = ?
+		ORDER BY l.created_at ASC
+	`, taskID, owner)
 	if err != nil {
 		return nil, err
 	}
