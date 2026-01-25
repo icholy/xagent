@@ -7,7 +7,7 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
+	"time"
 )
 
 const createTask = `-- name: CreateTask :execlastid
@@ -16,17 +16,17 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateTaskParams struct {
-	Name         string       `json:"name"`
-	Parent       int64        `json:"parent"`
-	Runner       string       `json:"runner"`
-	Workspace    string       `json:"workspace"`
-	Instructions string       `json:"instructions"`
-	Status       string       `json:"status"`
-	Command      string       `json:"command"`
-	Version      int64        `json:"version"`
-	Owner        string       `json:"owner"`
-	CreatedAt    sql.NullTime `json:"created_at"`
-	UpdatedAt    sql.NullTime `json:"updated_at"`
+	Name         string    `json:"name"`
+	Parent       int64     `json:"parent"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Instructions string    `json:"instructions"`
+	Status       string    `json:"status"`
+	Command      string    `json:"command"`
+	Version      int64     `json:"version"`
+	Owner        string    `json:"owner"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, error) {
@@ -300,17 +300,17 @@ WHERE id = ? AND owner = ?
 `
 
 type UpdateTaskParams struct {
-	Name         string       `json:"name"`
-	Parent       int64        `json:"parent"`
-	Runner       string       `json:"runner"`
-	Workspace    string       `json:"workspace"`
-	Instructions string       `json:"instructions"`
-	Status       string       `json:"status"`
-	Command      string       `json:"command"`
-	Version      int64        `json:"version"`
-	UpdatedAt    sql.NullTime `json:"updated_at"`
-	ID           int64        `json:"id"`
-	Owner        string       `json:"owner"`
+	Name         string    `json:"name"`
+	Parent       int64     `json:"parent"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Instructions string    `json:"instructions"`
+	Status       string    `json:"status"`
+	Command      string    `json:"command"`
+	Version      int64     `json:"version"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	ID           int64     `json:"id"`
+	Owner        string    `json:"owner"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {

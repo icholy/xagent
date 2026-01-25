@@ -13,9 +13,9 @@ func (s *Store) CreateLink(ctx context.Context, tx *sql.Tx, link *model.Link) er
 		TaskID:    link.TaskID,
 		Relevance: link.Relevance,
 		Url:       link.URL,
-		Title:     sql.NullString{String: link.Title, Valid: link.Title != ""},
-		Notify:    sql.NullBool{Bool: link.Notify, Valid: true},
-		CreatedAt: sql.NullTime{Time: link.CreatedAt, Valid: true},
+		Title:     link.Title,
+		Notify:    link.Notify,
+		CreatedAt: link.CreatedAt,
 	})
 	if err != nil {
 		return err
@@ -58,9 +58,9 @@ func toModelLinks(rows []sqlc.TaskLink) []*model.Link {
 			TaskID:    row.TaskID,
 			Relevance: row.Relevance,
 			URL:       row.Url,
-			Title:     row.Title.String,
-			Notify:    row.Notify.Bool,
-			CreatedAt: row.CreatedAt.Time,
+			Title:     row.Title,
+			Notify:    row.Notify,
+			CreatedAt: row.CreatedAt,
 		}
 	}
 	return links

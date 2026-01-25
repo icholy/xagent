@@ -124,4 +124,3 @@ func TestContainerKill_OtherError(t *testing.T) {
 		t.Error("expected non-ErrNotRunning error")
 	}
 }
-

@@ -7,7 +7,7 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
+	"time"
 )
 
 const createLog = `-- name: CreateLog :execlastid
@@ -16,10 +16,10 @@ VALUES (?, ?, ?, ?)
 `
 
 type CreateLogParams struct {
-	TaskID    int64        `json:"task_id"`
-	Type      string       `json:"type"`
-	Content   string       `json:"content"`
-	CreatedAt sql.NullTime `json:"created_at"`
+	TaskID    int64     `json:"task_id"`
+	Type      string    `json:"type"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) CreateLog(ctx context.Context, arg CreateLogParams) (int64, error) {

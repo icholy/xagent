@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     command       TEXT NOT NULL DEFAULT '',
     version       INTEGER NOT NULL DEFAULT 0,
     owner         TEXT NOT NULL,
-    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS logs (
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS logs (
     task_id    INTEGER NOT NULL,
     type       TEXT NOT NULL,
     content    TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 CREATE INDEX IF NOT EXISTS idx_logs_task_id ON logs(task_id);
@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS task_links (
     task_id    INTEGER NOT NULL,
     relevance  TEXT NOT NULL,
     url        TEXT NOT NULL,
-    title      TEXT,
-    notify     BOOLEAN DEFAULT FALSE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    title      TEXT NOT NULL DEFAULT '',
+    notify     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);
@@ -41,9 +41,9 @@ CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     description TEXT NOT NULL,
     data        TEXT NOT NULL,
-    url         TEXT,
+    url         TEXT NOT NULL DEFAULT '',
     owner       TEXT NOT NULL,
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_events_url ON events(url);
 CREATE INDEX IF NOT EXISTS idx_events_owner ON events(owner);
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
     runner_id  TEXT NOT NULL,
     name       TEXT NOT NULL,
     owner      TEXT NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_workspaces_runner_id ON workspaces(runner_id);
 CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner);

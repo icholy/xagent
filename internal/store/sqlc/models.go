@@ -5,16 +5,16 @@
 package sqlc
 
 import (
-	"database/sql"
+	"time"
 )
 
 type Event struct {
-	ID          int64          `json:"id"`
-	Description string         `json:"description"`
-	Data        string         `json:"data"`
-	Url         sql.NullString `json:"url"`
-	Owner       string         `json:"owner"`
-	CreatedAt   sql.NullTime   `json:"created_at"`
+	ID          int64     `json:"id"`
+	Description string    `json:"description"`
+	Data        string    `json:"data"`
+	Url         string    `json:"url"`
+	Owner       string    `json:"owner"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type EventTask struct {
@@ -23,42 +23,42 @@ type EventTask struct {
 }
 
 type Log struct {
-	ID        int64        `json:"id"`
-	TaskID    int64        `json:"task_id"`
-	Type      string       `json:"type"`
-	Content   string       `json:"content"`
-	CreatedAt sql.NullTime `json:"created_at"`
+	ID        int64     `json:"id"`
+	TaskID    int64     `json:"task_id"`
+	Type      string    `json:"type"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Task struct {
-	ID           int64        `json:"id"`
-	Name         string       `json:"name"`
-	Parent       int64        `json:"parent"`
-	Runner       string       `json:"runner"`
-	Workspace    string       `json:"workspace"`
-	Instructions string       `json:"instructions"`
-	Status       string       `json:"status"`
-	Command      string       `json:"command"`
-	Version      int64        `json:"version"`
-	Owner        string       `json:"owner"`
-	CreatedAt    sql.NullTime `json:"created_at"`
-	UpdatedAt    sql.NullTime `json:"updated_at"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Parent       int64     `json:"parent"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Instructions string    `json:"instructions"`
+	Status       string    `json:"status"`
+	Command      string    `json:"command"`
+	Version      int64     `json:"version"`
+	Owner        string    `json:"owner"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type TaskLink struct {
-	ID        int64          `json:"id"`
-	TaskID    int64          `json:"task_id"`
-	Relevance string         `json:"relevance"`
-	Url       string         `json:"url"`
-	Title     sql.NullString `json:"title"`
-	Notify    sql.NullBool   `json:"notify"`
-	CreatedAt sql.NullTime   `json:"created_at"`
+	ID        int64     `json:"id"`
+	TaskID    int64     `json:"task_id"`
+	Relevance string    `json:"relevance"`
+	Url       string    `json:"url"`
+	Title     string    `json:"title"`
+	Notify    bool      `json:"notify"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Workspace struct {
-	ID        int64        `json:"id"`
-	RunnerID  string       `json:"runner_id"`
-	Name      string       `json:"name"`
-	Owner     string       `json:"owner"`
-	UpdatedAt sql.NullTime `json:"updated_at"`
+	ID        int64     `json:"id"`
+	RunnerID  string    `json:"runner_id"`
+	Name      string    `json:"name"`
+	Owner     string    `json:"owner"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

@@ -13,9 +13,9 @@ func (s *Store) CreateEvent(ctx context.Context, tx *sql.Tx, event *model.Event)
 	id, err := s.q(tx).CreateEvent(ctx, sqlc.CreateEventParams{
 		Description: event.Description,
 		Data:        event.Data,
-		Url:         sql.NullString{String: event.URL, Valid: event.URL != ""},
+		Url:         event.URL,
 		Owner:       event.Owner,
-		CreatedAt:   sql.NullTime{Time: time.Now(), Valid: true},
+		CreatedAt:   time.Now(),
 	})
 	if err != nil {
 		return err
@@ -55,7 +55,7 @@ func (s *Store) ListEvents(ctx context.Context, tx *sql.Tx, limit int, owner str
 }
 
 func (s *Store) FindEventsByURL(ctx context.Context, tx *sql.Tx, url string) ([]*model.Event, error) {
-	rows, err := s.q(tx).FindEventsByURL(ctx, sql.NullString{String: url, Valid: url != ""})
+	rows, err := s.q(tx).FindEventsByURL(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +112,9 @@ func toModelEvent(row sqlc.Event) *model.Event {
 		ID:          row.ID,
 		Description: row.Description,
 		Data:        row.Data,
-		URL:         row.Url.String,
+		URL:         row.Url,
 		Owner:       row.Owner,
-		CreatedAt:   row.CreatedAt.Time,
+		CreatedAt:   row.CreatedAt,
 	}
 }
 

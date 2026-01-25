@@ -7,7 +7,7 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
+	"time"
 )
 
 const addEventTask = `-- name: AddEventTask :exec
@@ -30,11 +30,11 @@ VALUES (?, ?, ?, ?, ?)
 `
 
 type CreateEventParams struct {
-	Description string         `json:"description"`
-	Data        string         `json:"data"`
-	Url         sql.NullString `json:"url"`
-	Owner       string         `json:"owner"`
-	CreatedAt   sql.NullTime   `json:"created_at"`
+	Description string    `json:"description"`
+	Data        string    `json:"data"`
+	Url         string    `json:"url"`
+	Owner       string    `json:"owner"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (int64, error) {
@@ -81,7 +81,7 @@ WHERE url = ?
 ORDER BY created_at DESC
 `
 
-func (q *Queries) FindEventsByURL(ctx context.Context, url sql.NullString) ([]Event, error) {
+func (q *Queries) FindEventsByURL(ctx context.Context, url string) ([]Event, error) {
 	rows, err := q.db.QueryContext(ctx, findEventsByURL, url)
 	if err != nil {
 		return nil, err

@@ -7,7 +7,7 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
+	"time"
 )
 
 const createLink = `-- name: CreateLink :execlastid
@@ -16,12 +16,12 @@ VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type CreateLinkParams struct {
-	TaskID    int64          `json:"task_id"`
-	Relevance string         `json:"relevance"`
-	Url       string         `json:"url"`
-	Title     sql.NullString `json:"title"`
-	Notify    sql.NullBool   `json:"notify"`
-	CreatedAt sql.NullTime   `json:"created_at"`
+	TaskID    int64     `json:"task_id"`
+	Relevance string    `json:"relevance"`
+	Url       string    `json:"url"`
+	Title     string    `json:"title"`
+	Notify    bool      `json:"notify"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (int64, error) {

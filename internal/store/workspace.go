@@ -35,7 +35,7 @@ func (s *Store) ListWorkspaces(ctx context.Context, tx *sql.Tx, owner string) ([
 			RunnerID:  row.RunnerID,
 			Name:      row.Name,
 			Owner:     row.Owner,
-			UpdatedAt: row.UpdatedAt.Time,
+			UpdatedAt: row.UpdatedAt,
 		}
 	}
 	return workspaces, nil
