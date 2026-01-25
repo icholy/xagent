@@ -26,13 +26,13 @@ func withUserID(t *testing.T, id string) context.Context {
 func setupTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	dbURL := os.Getenv("TEST_DATABASE_URL")
-	if dbURL == "" {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL not set")
 	}
 
 	// Open the database (this will create and migrate it)
-	db, err := store.Open(dbURL)
+	db, err := store.Open(dsn)
 	assert.NilError(t, err)
 
 	// Clean up the database when the test completes

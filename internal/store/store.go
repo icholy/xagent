@@ -42,8 +42,8 @@ func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error
 	return f(tx)
 }
 
-func Open(connStr string) (*sql.DB, error) {
-	db, err := sql.Open("pgx", connStr)
+func Open(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, err
 	}
