@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Store) CreateLink(ctx context.Context, tx *sql.Tx, link *model.Link) error {
-	id, err := s.queries(tx).CreateLink(ctx, sqlc.CreateLinkParams{
+	id, err := s.qs(tx).CreateLink(ctx, sqlc.CreateLinkParams{
 		TaskID:    link.TaskID,
 		Relevance: link.Relevance,
 		Url:       link.URL,
@@ -25,7 +25,7 @@ func (s *Store) CreateLink(ctx context.Context, tx *sql.Tx, link *model.Link) er
 }
 
 func (s *Store) ListLinksByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Link, error) {
-	rows, err := s.queries(tx).ListLinksByTask(ctx, sqlc.ListLinksByTaskParams{
+	rows, err := s.qs(tx).ListLinksByTask(ctx, sqlc.ListLinksByTaskParams{
 		TaskID: taskID,
 		Owner:  owner,
 	})
@@ -36,11 +36,11 @@ func (s *Store) ListLinksByTask(ctx context.Context, tx *sql.Tx, taskID int64, o
 }
 
 func (s *Store) DeleteLink(ctx context.Context, tx *sql.Tx, id int64) error {
-	return s.queries(tx).DeleteLink(ctx, id)
+	return s.qs(tx).DeleteLink(ctx, id)
 }
 
 func (s *Store) FindLinksByURL(ctx context.Context, tx *sql.Tx, url string, owner string) ([]*model.Link, error) {
-	rows, err := s.queries(tx).FindLinksByURL(ctx, sqlc.FindLinksByURLParams{
+	rows, err := s.qs(tx).FindLinksByURL(ctx, sqlc.FindLinksByURLParams{
 		Url:   url,
 		Owner: owner,
 	})

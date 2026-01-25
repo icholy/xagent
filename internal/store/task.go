@@ -17,7 +17,7 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 	}
 
 	now := time.Now()
-	id, err := s.queries(tx).CreateTask(ctx, sqlc.CreateTaskParams{
+	id, err := s.qs(tx).CreateTask(ctx, sqlc.CreateTaskParams{
 		Name:         task.Name,
 		Parent:       task.Parent,
 		Runner:       task.Runner,
@@ -41,7 +41,7 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 }
 
 func (s *Store) GetTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Task, error) {
-	row, err := s.queries(tx).GetTask(ctx, sqlc.GetTaskParams{
+	row, err := s.qs(tx).GetTask(ctx, sqlc.GetTaskParams{
 		ID:    id,
 		Owner: owner,
 	})
@@ -52,7 +52,7 @@ func (s *Store) GetTask(ctx context.Context, tx *sql.Tx, id int64, owner string)
 }
 
 func (s *Store) HasTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
-	exists, err := s.queries(tx).HasTask(ctx, sqlc.HasTaskParams{
+	exists, err := s.qs(tx).HasTask(ctx, sqlc.HasTaskParams{
 		ID:    id,
 		Owner: owner,
 	})
@@ -60,7 +60,7 @@ func (s *Store) HasTask(ctx context.Context, tx *sql.Tx, id int64, owner string)
 }
 
 func (s *Store) ListTasks(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {
-	rows, err := s.queries(tx).ListTasks(ctx, owner)
+	rows, err := s.qs(tx).ListTasks(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (s *Store) ListTasks(ctx context.Context, tx *sql.Tx, owner string) ([]*mod
 }
 
 func (s *Store) ListTaskChildren(ctx context.Context, tx *sql.Tx, parentID int64, owner string) ([]*model.Task, error) {
-	rows, err := s.queries(tx).ListTaskChildren(ctx, sqlc.ListTaskChildrenParams{
+	rows, err := s.qs(tx).ListTaskChildren(ctx, sqlc.ListTaskChildrenParams{
 		Parent: parentID,
 		Owner:  owner,
 	})
@@ -79,7 +79,7 @@ func (s *Store) ListTaskChildren(ctx context.Context, tx *sql.Tx, parentID int64
 }
 
 func (s *Store) ListTasksForRunner(ctx context.Context, tx *sql.Tx, runner string, owner string) ([]*model.Task, error) {
-	rows, err := s.queries(tx).ListTasksForRunner(ctx, sqlc.ListTasksForRunnerParams{
+	rows, err := s.qs(tx).ListTasksForRunner(ctx, sqlc.ListTasksForRunnerParams{
 		Runner: runner,
 		Owner:  owner,
 	})
@@ -90,7 +90,7 @@ func (s *Store) ListTasksForRunner(ctx context.Context, tx *sql.Tx, runner strin
 }
 
 func (s *Store) ListTasksByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
-	rows, err := s.queries(tx).ListTasksByEvent(ctx, eventID)
+	rows, err := s.qs(tx).ListTasksByEvent(ctx, eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 	}
 
 	task.UpdatedAt = time.Now()
-	return s.queries(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
+	return s.qs(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
 		Name:         task.Name,
 		Parent:       task.Parent,
 		Runner:       task.Runner,
@@ -120,7 +120,7 @@ func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 }
 
 func (s *Store) DeleteTask(ctx context.Context, tx *sql.Tx, id int64, owner string) error {
-	return s.queries(tx).DeleteTask(ctx, sqlc.DeleteTaskParams{
+	return s.qs(tx).DeleteTask(ctx, sqlc.DeleteTaskParams{
 		ID:    id,
 		Owner: owner,
 	})

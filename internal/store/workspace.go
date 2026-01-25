@@ -9,14 +9,14 @@ import (
 )
 
 func (s *Store) DeleteWorkspacesByRunner(ctx context.Context, tx *sql.Tx, runnerID, owner string) error {
-	return s.queries(tx).DeleteWorkspacesByRunner(ctx, sqlc.DeleteWorkspacesByRunnerParams{
+	return s.qs(tx).DeleteWorkspacesByRunner(ctx, sqlc.DeleteWorkspacesByRunnerParams{
 		RunnerID: runnerID,
 		Owner:    owner,
 	})
 }
 
 func (s *Store) CreateWorkspace(ctx context.Context, tx *sql.Tx, runnerID, name, owner string) error {
-	return s.queries(tx).CreateWorkspace(ctx, sqlc.CreateWorkspaceParams{
+	return s.qs(tx).CreateWorkspace(ctx, sqlc.CreateWorkspaceParams{
 		RunnerID: runnerID,
 		Name:     name,
 		Owner:    owner,
@@ -24,7 +24,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, tx *sql.Tx, runnerID, name,
 }
 
 func (s *Store) ListWorkspaces(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Workspace, error) {
-	rows, err := s.queries(tx).ListWorkspacesByOwner(ctx, owner)
+	rows, err := s.qs(tx).ListWorkspacesByOwner(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -42,5 +42,5 @@ func (s *Store) ListWorkspaces(ctx context.Context, tx *sql.Tx, owner string) ([
 }
 
 func (s *Store) ClearWorkspaces(ctx context.Context, tx *sql.Tx, owner string) error {
-	return s.queries(tx).ClearWorkspacesByOwner(ctx, owner)
+	return s.qs(tx).ClearWorkspacesByOwner(ctx, owner)
 }

@@ -18,7 +18,7 @@ func New(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) queries(tx *sql.Tx) *sqlc.Queries {
+func (s *Store) q(tx *sql.Tx) *sqlc.Queries {
 	if tx != nil {
 		return sqlc.New(tx)
 	}
