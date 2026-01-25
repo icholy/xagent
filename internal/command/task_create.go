@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/icholy/xagent/internal/deviceauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
@@ -20,6 +21,13 @@ var TaskCreateCommand = &cli.Command{
 			Aliases: []string{"s"},
 			Usage:   "C2 server URL",
 			Value:   "http://localhost:6464",
+			Sources: cli.EnvVars("XAGENT_SERVER"),
+		},
+		&cli.StringFlag{
+			Name:    "token-file",
+			Usage:   "Path to authentication token file",
+			Value:   "data/token.json",
+			Sources: cli.EnvVars("XAGENT_TOKEN_FILE"),
 		},
 		&cli.StringFlag{
 			Name:    "name",
@@ -39,7 +47,15 @@ var TaskCreateCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		client := xagentclient.New(cmd.String("server"), nil)
+		serverURL := cmd.String("server")
+		auth, err := deviceauth.New(deviceauth.Options{
+			DiscoveryURL: deviceauth.DiscoveryURL(serverURL),
+			TokenFile:    cmd.String("token-file"),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize auth: %w", err)
+		}
+		client := xagentclient.New(serverURL, auth)
 
 		texts := cmd.StringSlice("instruction")
 		instructions := make([]*xagentv1.Instruction, len(texts))
