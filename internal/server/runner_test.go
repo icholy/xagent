@@ -84,3 +84,93 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	// Assert
 	assert.ErrorContains(t, err, "not found")
 }
+
+func TestListRunnerTasks(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	ctx := withUserID(t, "test-user")
+	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task for runner-1",
+		Workspace: "test-workspace",
+		Runner:    "runner-1",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task for runner-2",
+		Workspace: "test-workspace",
+		Runner:    "runner-2",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	resp, err := srv.ListRunnerTasks(ctx, &xagentv1.ListRunnerTasksRequest{
+		Runner: "runner-1",
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Tasks), 1)
+	assert.Equal(t, resp.Tasks[0].Name, "Task for runner-1")
+}
+
+func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	ctx := withUserID(t, "test-user")
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task with command",
+		Workspace: "test-workspace",
+		Runner:    "runner-1",
+	})
+	assert.NilError(t, err)
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: taskResp.Task.Id, Event: "started", Version: 1},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Act
+	resp, err := srv.ListRunnerTasks(ctx, &xagentv1.ListRunnerTasksRequest{
+		Runner: "runner-1",
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Tasks), 0)
+}
+
+func TestListRunnerTasks_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	_, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+		Runner:    "runner-1",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
+		Name:      "User B's Task",
+		Workspace: "test-workspace",
+		Runner:    "runner-1",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	respA, err := srv.ListRunnerTasks(userA, &xagentv1.ListRunnerTasksRequest{
+		Runner: "runner-1",
+	})
+	assert.NilError(t, err)
+	respB, err := srv.ListRunnerTasks(userB, &xagentv1.ListRunnerTasksRequest{
+		Runner: "runner-1",
+	})
+	assert.NilError(t, err)
+
+	// Assert
+	assert.Equal(t, len(respA.Tasks), 1)
+	assert.Equal(t, respA.Tasks[0].Name, "User A's Task")
+	assert.Equal(t, len(respB.Tasks), 1)
+	assert.Equal(t, respB.Tasks[0].Name, "User B's Task")
+}
