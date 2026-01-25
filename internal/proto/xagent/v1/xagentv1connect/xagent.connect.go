@@ -35,6 +35,9 @@ const (
 const (
 	// XAgentServiceListTasksProcedure is the fully-qualified name of the XAgentService's ListTasks RPC.
 	XAgentServiceListTasksProcedure = "/xagent.v1.XAgentService/ListTasks"
+	// XAgentServiceListRunnerTasksProcedure is the fully-qualified name of the XAgentService's
+	// ListRunnerTasks RPC.
+	XAgentServiceListRunnerTasksProcedure = "/xagent.v1.XAgentService/ListRunnerTasks"
 	// XAgentServiceListChildTasksProcedure is the fully-qualified name of the XAgentService's
 	// ListChildTasks RPC.
 	XAgentServiceListChildTasksProcedure = "/xagent.v1.XAgentService/ListChildTasks"
@@ -114,6 +117,7 @@ const (
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
 type XAgentServiceClient interface {
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
+	ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error)
 	ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error)
 	CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error)
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
@@ -157,6 +161,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceListTasksProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("ListTasks")),
+			connect.WithClientOptions(opts...),
+		),
+		listRunnerTasks: connect.NewClient[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse](
+			httpClient,
+			baseURL+XAgentServiceListRunnerTasksProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ListRunnerTasks")),
 			connect.WithClientOptions(opts...),
 		),
 		listChildTasks: connect.NewClient[v1.ListChildTasksRequest, v1.ListChildTasksResponse](
@@ -321,6 +331,7 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 // xAgentServiceClient implements XAgentServiceClient.
 type xAgentServiceClient struct {
 	listTasks          *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	listRunnerTasks    *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
 	listChildTasks     *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
 	createTask         *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
 	getTask            *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
@@ -352,6 +363,15 @@ type xAgentServiceClient struct {
 // ListTasks calls xagent.v1.XAgentService.ListTasks.
 func (c *xAgentServiceClient) ListTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	response, err := c.listTasks.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// ListRunnerTasks calls xagent.v1.XAgentService.ListRunnerTasks.
+func (c *xAgentServiceClient) ListRunnerTasks(ctx context.Context, req *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error) {
+	response, err := c.listRunnerTasks.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -595,6 +615,7 @@ func (c *xAgentServiceClient) ListWorkspaces(ctx context.Context, req *v1.ListWo
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
+	ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error)
 	ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error)
 	CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error)
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
@@ -634,6 +655,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceListTasksProcedure,
 		svc.ListTasks,
 		connect.WithSchema(xAgentServiceMethods.ByName("ListTasks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceListRunnerTasksHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceListRunnerTasksProcedure,
+		svc.ListRunnerTasks,
+		connect.WithSchema(xAgentServiceMethods.ByName("ListRunnerTasks")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceListChildTasksHandler := connect.NewUnaryHandlerSimple(
@@ -796,6 +823,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		switch r.URL.Path {
 		case XAgentServiceListTasksProcedure:
 			xAgentServiceListTasksHandler.ServeHTTP(w, r)
+		case XAgentServiceListRunnerTasksProcedure:
+			xAgentServiceListRunnerTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceListChildTasksProcedure:
 			xAgentServiceListChildTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateTaskProcedure:
@@ -859,6 +888,10 @@ type UnimplementedXAgentServiceHandler struct{}
 
 func (UnimplementedXAgentServiceHandler) ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListTasks is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListRunnerTasks is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error) {

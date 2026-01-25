@@ -8,6 +8,7 @@ option go_package = "github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1"
 
 service XAgentService {
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc ListRunnerTasks(ListRunnerTasksRequest) returns (ListRunnerTasksResponse);
   rpc ListChildTasks(ListChildTasksRequest) returns (ListChildTasksResponse);
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
@@ -69,6 +70,14 @@ message ListTasksRequest {
 }
 
 message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+message ListRunnerTasksRequest {
+  string runner = 1;  // Runner ID (required)
+}
+
+message ListRunnerTasksResponse {
   repeated Task tasks = 1;
 }
 
