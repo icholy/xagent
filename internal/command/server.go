@@ -2,7 +2,6 @@ package command
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -65,6 +64,11 @@ var ServerCommand = &cli.Command{
 			Usage:   "ZITADEL client ID for device flow (native app)",
 			Sources: cli.EnvVars("XAGENT_AUTH_DEVICE_CLIENT_ID"),
 		},
+		&cli.StringFlag{
+			Name:    "auth-encryption-key",
+			Usage:   "Hex-encoded 32-byte key for session encryption (generated if not set)",
+			Sources: cli.EnvVars("XAGENT_AUTH_ENCRYPTION_KEY"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
@@ -84,13 +88,17 @@ var ServerCommand = &cli.Command{
 		workspaces := store.NewWorkspaceRepository(db)
 
 		domain := cmd.String("auth-domain")
+		key, err := apiauth.DecodeEncryptionKey(cmd.String("auth-encryption-key"))
+		if err != nil {
+			return fmt.Errorf("invalid encryption key: %w", err)
+		}
 		auth, err := apiauth.New(ctx, apiauth.Config{
 			Domain:        domain,
 			ClientID:      cmd.String("auth-client-id"),
 			ClientSecret:  cmd.String("auth-client-secret"),
 			RedirectURI:   cmd.String("auth-redirect-uri"),
 			PostLogoutURI: cmd.String("auth-post-logout-uri"),
-			EncryptionKey: keygen(),
+			EncryptionKey: key,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
@@ -117,13 +125,4 @@ var ServerCommand = &cli.Command{
 		}
 		return nil
 	},
-}
-
-// TODO: allow persistent encryption key for sessions across restarts
-func keygen() []byte {
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		panic(fmt.Sprintf("failed to generate key: %v", err))
-	}
-	return key
 }
