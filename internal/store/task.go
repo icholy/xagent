@@ -37,17 +37,17 @@ func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Tas
 
 	now := time.Now()
 	id, err := r.queries(tx).CreateTask(ctx, sqlc.CreateTaskParams{
-		Name:      task.Name,
-		Parent:    task.Parent,
-		Runner:    task.Runner,
-		Workspace: task.Workspace,
+		Name:         task.Name,
+		Parent:       task.Parent,
+		Runner:       task.Runner,
+		Workspace:    task.Workspace,
 		Instructions: string(instructions),
-		Status:    string(task.Status),
-		Command:   string(task.Command),
-		Version:   task.Version,
-		Owner:     task.Owner,
-		CreatedAt: sql.NullTime{Time: now, Valid: true},
-		UpdatedAt: sql.NullTime{Time: now, Valid: true},
+		Status:       string(task.Status),
+		Command:      string(task.Command),
+		Version:      task.Version,
+		Owner:        task.Owner,
+		CreatedAt:    sql.NullTime{Time: now, Valid: true},
+		UpdatedAt:    sql.NullTime{Time: now, Valid: true},
 	})
 	if err != nil {
 		return err
@@ -124,17 +124,17 @@ func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) 
 
 	task.UpdatedAt = time.Now()
 	return r.queries(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
-		Name:      task.Name,
-		Parent:    task.Parent,
-		Runner:    task.Runner,
-		Workspace: task.Workspace,
+		Name:         task.Name,
+		Parent:       task.Parent,
+		Runner:       task.Runner,
+		Workspace:    task.Workspace,
 		Instructions: string(instructions),
-		Status:    string(task.Status),
-		Command:   string(task.Command),
-		Version:   task.Version,
-		UpdatedAt: sql.NullTime{Time: task.UpdatedAt, Valid: true},
-		ID:        task.ID,
-		Owner:     task.Owner,
+		Status:       string(task.Status),
+		Command:      string(task.Command),
+		Version:      task.Version,
+		UpdatedAt:    sql.NullTime{Time: task.UpdatedAt, Valid: true},
+		ID:           task.ID,
+		Owner:        task.Owner,
 	})
 }
 
