@@ -16,7 +16,7 @@ type DiscoveryConfig struct {
 
 // FetchConfig fetches the discovery config from the server
 func FetchConfig(serverURL string) (*DiscoveryConfig, error) {
-	resp, err := http.Get(serverURL + "/api/auth/config")
+	resp, err := http.Get(serverURL + "/device/config")
 	if err != nil {
 		return nil, err
 	}

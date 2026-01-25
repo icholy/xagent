@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -29,6 +32,8 @@ type Server struct {
 	events     *store.EventRepository
 	workspaces *store.WorkspaceRepository
 	notify     bool
+	auth       *apiauth.Auth
+	discovery  deviceauth.DiscoveryConfig
 }
 
 type Options struct {
@@ -39,6 +44,8 @@ type Options struct {
 	Events     *store.EventRepository
 	Workspaces *store.WorkspaceRepository
 	Notify     bool
+	Auth       *apiauth.Auth
+	Discovery  deviceauth.DiscoveryConfig
 }
 
 func New(opts Options) *Server {
@@ -54,20 +61,33 @@ func New(opts Options) *Server {
 		events:     opts.Events,
 		workspaces: opts.Workspaces,
 		notify:     opts.Notify,
+		auth:       opts.Auth,
+		discovery:  opts.Discovery,
 	}
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	// API
+	// Device flow discovery endpoint (public)
+	mux.HandleFunc("/device/config", s.handleDeviceConfig)
+
+	// Auth routes (login, callback, logout)
+	mux.Handle("/auth/", s.auth.Handler)
+
+	// Connect RPC API (protected)
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s)
-	mux.Handle(path, handler)
+	mux.Handle(path, s.auth.RequireAuth()(handler))
 
 	// React UI (SPA with client-side routing)
 	mux.Handle("/", WebUI())
 
 	return mux
+}
+
+func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(s.discovery)
 }
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
