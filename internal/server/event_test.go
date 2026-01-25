@@ -61,6 +61,26 @@ func TestGetEvent(t *testing.T) {
 	assert.DeepEqual(t, getResp.Event, expected, protocmp.Transform())
 }
 
+func TestGetEvent_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	createResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+		Description: "User A's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, err = srv.GetEvent(userB, &xagentv1.GetEventRequest{
+		Id: createResp.Event.Id,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "not found")
+}
+
 func TestListEvents(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
