@@ -1,5 +1,4 @@
--- Schema for sqlc code generation
--- This mirrors the schema in store.go migrate()
+-- Database schema (used by sqlc and embedded for runtime migrations)
 
 CREATE TABLE IF NOT EXISTS tasks (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
