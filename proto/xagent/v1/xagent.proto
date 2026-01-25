@@ -35,6 +35,7 @@ service XAgentService {
   rpc SubmitRunnerEvents(SubmitRunnerEventsRequest) returns (SubmitRunnerEventsResponse);
   rpc RegisterWorkspaces(RegisterWorkspacesRequest) returns (RegisterWorkspacesResponse);
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc ClearWorkspaces(ClearWorkspacesRequest) returns (ClearWorkspacesResponse);
 }
 
 message Instruction {
@@ -319,3 +320,7 @@ message ListWorkspacesRequest {}
 message ListWorkspacesResponse {
   repeated RegisteredWorkspace workspaces = 1;
 }
+
+message ClearWorkspacesRequest {}
+
+message ClearWorkspacesResponse {}

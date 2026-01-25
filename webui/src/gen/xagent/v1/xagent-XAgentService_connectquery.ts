@@ -10,6 +10,11 @@ import { XAgentService } from "./xagent_pb";
 export const listTasks = XAgentService.method.listTasks;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.ListRunnerTasks
+ */
+export const listRunnerTasks = XAgentService.method.listRunnerTasks;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.ListChildTasks
  */
 export const listChildTasks = XAgentService.method.listChildTasks;
@@ -138,3 +143,8 @@ export const registerWorkspaces = XAgentService.method.registerWorkspaces;
  * @generated from rpc xagent.v1.XAgentService.ListWorkspaces
  */
 export const listWorkspaces = XAgentService.method.listWorkspaces;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.ClearWorkspaces
+ */
+export const clearWorkspaces = XAgentService.method.clearWorkspaces;

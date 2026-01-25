@@ -29,6 +29,9 @@ var _ xagentclient.Client = &ClientMock{}
 //			CancelTaskFunc: func(contextMoqParam context.Context, cancelTaskRequest *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 //				panic("mock out the CancelTask method")
 //			},
+//			ClearWorkspacesFunc: func(contextMoqParam context.Context, clearWorkspacesRequest *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error) {
+//				panic("mock out the ClearWorkspaces method")
+//			},
 //			CreateEventFunc: func(contextMoqParam context.Context, createEventRequest *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
 //				panic("mock out the CreateEvent method")
 //			},
@@ -119,6 +122,9 @@ type ClientMock struct {
 
 	// CancelTaskFunc mocks the CancelTask method.
 	CancelTaskFunc func(contextMoqParam context.Context, cancelTaskRequest *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error)
+
+	// ClearWorkspacesFunc mocks the ClearWorkspaces method.
+	ClearWorkspacesFunc func(contextMoqParam context.Context, clearWorkspacesRequest *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error)
 
 	// CreateEventFunc mocks the CreateEvent method.
 	CreateEventFunc func(contextMoqParam context.Context, createEventRequest *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error)
@@ -217,6 +223,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// CancelTaskRequest is the cancelTaskRequest argument value.
 			CancelTaskRequest *xagentv1.CancelTaskRequest
+		}
+		// ClearWorkspaces holds details about calls to the ClearWorkspaces method.
+		ClearWorkspaces []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// ClearWorkspacesRequest is the clearWorkspacesRequest argument value.
+			ClearWorkspacesRequest *xagentv1.ClearWorkspacesRequest
 		}
 		// CreateEvent holds details about calls to the CreateEvent method.
 		CreateEvent []struct {
@@ -397,6 +410,7 @@ type ClientMock struct {
 	lockAddEventTask       sync.RWMutex
 	lockArchiveTask        sync.RWMutex
 	lockCancelTask         sync.RWMutex
+	lockClearWorkspaces    sync.RWMutex
 	lockCreateEvent        sync.RWMutex
 	lockCreateLink         sync.RWMutex
 	lockCreateTask         sync.RWMutex
@@ -529,6 +543,42 @@ func (mock *ClientMock) CancelTaskCalls() []struct {
 	mock.lockCancelTask.RLock()
 	calls = mock.calls.CancelTask
 	mock.lockCancelTask.RUnlock()
+	return calls
+}
+
+// ClearWorkspaces calls ClearWorkspacesFunc.
+func (mock *ClientMock) ClearWorkspaces(contextMoqParam context.Context, clearWorkspacesRequest *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error) {
+	if mock.ClearWorkspacesFunc == nil {
+		panic("ClientMock.ClearWorkspacesFunc: method is nil but Client.ClearWorkspaces was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam        context.Context
+		ClearWorkspacesRequest *xagentv1.ClearWorkspacesRequest
+	}{
+		ContextMoqParam:        contextMoqParam,
+		ClearWorkspacesRequest: clearWorkspacesRequest,
+	}
+	mock.lockClearWorkspaces.Lock()
+	mock.calls.ClearWorkspaces = append(mock.calls.ClearWorkspaces, callInfo)
+	mock.lockClearWorkspaces.Unlock()
+	return mock.ClearWorkspacesFunc(contextMoqParam, clearWorkspacesRequest)
+}
+
+// ClearWorkspacesCalls gets all the calls that were made to ClearWorkspaces.
+// Check the length with:
+//
+//	len(mockedClient.ClearWorkspacesCalls())
+func (mock *ClientMock) ClearWorkspacesCalls() []struct {
+	ContextMoqParam        context.Context
+	ClearWorkspacesRequest *xagentv1.ClearWorkspacesRequest
+} {
+	var calls []struct {
+		ContextMoqParam        context.Context
+		ClearWorkspacesRequest *xagentv1.ClearWorkspacesRequest
+	}
+	mock.lockClearWorkspaces.RLock()
+	calls = mock.calls.ClearWorkspaces
+	mock.lockClearWorkspaces.RUnlock()
 	return calls
 }
 

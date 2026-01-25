@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@connectrpc/connect-query'
-import { listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { useQuery, useMutation } from '@connectrpc/connect-query'
+import { listWorkspaces, clearWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import {
   Table,
@@ -10,16 +10,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
 import { RelativeTime } from '@/components/relative-time'
+import { Trash2 } from 'lucide-react'
 
 export const Route = createFileRoute('/workspaces/')({
   component: WorkspacesPage,
 })
 
 function WorkspacesPage() {
-  const { data, isLoading, error } = useQuery(listWorkspaces, {}, {
+  const { data, isLoading, error, refetch } = useQuery(listWorkspaces, {}, {
     refetchInterval: 5000,
   })
+  const clearMutation = useMutation(clearWorkspaces)
+
+  const handleClear = async () => {
+    await clearMutation.mutateAsync({})
+    refetch()
+  }
 
   if (isLoading) {
     return (
@@ -43,6 +51,14 @@ function WorkspacesPage() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Workspaces</h1>
+        <Button
+          variant="outline"
+          onClick={handleClear}
+          disabled={clearMutation.isPending || workspaces.length === 0}
+        >
+          <Trash2 className="h-4 w-4" />
+          Clear
+        </Button>
       </div>
       {workspaces.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">

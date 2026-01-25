@@ -3150,6 +3150,78 @@ func (x *ListWorkspacesResponse) GetWorkspaces() []*RegisteredWorkspace {
 	return nil
 }
 
+type ClearWorkspacesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearWorkspacesRequest) Reset() {
+	*x = ClearWorkspacesRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearWorkspacesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearWorkspacesRequest) ProtoMessage() {}
+
+func (x *ClearWorkspacesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearWorkspacesRequest.ProtoReflect.Descriptor instead.
+func (*ClearWorkspacesRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{64}
+}
+
+type ClearWorkspacesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearWorkspacesResponse) Reset() {
+	*x = ClearWorkspacesResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearWorkspacesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearWorkspacesResponse) ProtoMessage() {}
+
+func (x *ClearWorkspacesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearWorkspacesResponse.ProtoReflect.Descriptor instead.
+func (*ClearWorkspacesResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{65}
+}
+
 var File_xagent_v1_xagent_proto protoreflect.FileDescriptor
 
 const file_xagent_v1_xagent_proto_rawDesc = "" +
@@ -3335,7 +3407,9 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x16ListWorkspacesResponse\x12>\n" +
 	"\n" +
 	"workspaces\x18\x01 \x03(\v2\x1e.xagent.v1.RegisteredWorkspaceR\n" +
-	"workspaces2\xdc\x11\n" +
+	"workspaces\"\x18\n" +
+	"\x16ClearWorkspacesRequest\"\x19\n" +
+	"\x17ClearWorkspacesResponse2\xb6\x12\n" +
 	"\rXAgentService\x12F\n" +
 	"\tListTasks\x12\x1b.xagent.v1.ListTasksRequest\x1a\x1c.xagent.v1.ListTasksResponse\x12X\n" +
 	"\x0fListRunnerTasks\x12!.xagent.v1.ListRunnerTasksRequest\x1a\".xagent.v1.ListRunnerTasksResponse\x12U\n" +
@@ -3371,7 +3445,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\fProcessEvent\x12\x1e.xagent.v1.ProcessEventRequest\x1a\x1f.xagent.v1.ProcessEventResponse\x12a\n" +
 	"\x12SubmitRunnerEvents\x12$.xagent.v1.SubmitRunnerEventsRequest\x1a%.xagent.v1.SubmitRunnerEventsResponse\x12a\n" +
 	"\x12RegisterWorkspaces\x12$.xagent.v1.RegisterWorkspacesRequest\x1a%.xagent.v1.RegisterWorkspacesResponse\x12U\n" +
-	"\x0eListWorkspaces\x12 .xagent.v1.ListWorkspacesRequest\x1a!.xagent.v1.ListWorkspacesResponseB<Z:github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1b\x06proto3"
+	"\x0eListWorkspaces\x12 .xagent.v1.ListWorkspacesRequest\x1a!.xagent.v1.ListWorkspacesResponse\x12X\n" +
+	"\x0fClearWorkspaces\x12!.xagent.v1.ClearWorkspacesRequest\x1a\".xagent.v1.ClearWorkspacesResponseB<Z:github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1b\x06proto3"
 
 var (
 	file_xagent_v1_xagent_proto_rawDescOnce sync.Once
@@ -3385,7 +3460,7 @@ func file_xagent_v1_xagent_proto_rawDescGZIP() []byte {
 	return file_xagent_v1_xagent_proto_rawDescData
 }
 
-var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 65)
+var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 67)
 var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*Instruction)(nil),                // 0: xagent.v1.Instruction
 	(*Task)(nil),                       // 1: xagent.v1.Task
@@ -3451,14 +3526,16 @@ var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*RegisterWorkspacesResponse)(nil), // 61: xagent.v1.RegisterWorkspacesResponse
 	(*ListWorkspacesRequest)(nil),      // 62: xagent.v1.ListWorkspacesRequest
 	(*ListWorkspacesResponse)(nil),     // 63: xagent.v1.ListWorkspacesResponse
-	nil,                                // 64: xagent.v1.McpServer.EnvEntry
-	(*timestamppb.Timestamp)(nil),      // 65: google.protobuf.Timestamp
+	(*ClearWorkspacesRequest)(nil),     // 64: xagent.v1.ClearWorkspacesRequest
+	(*ClearWorkspacesResponse)(nil),    // 65: xagent.v1.ClearWorkspacesResponse
+	nil,                                // 66: xagent.v1.McpServer.EnvEntry
+	(*timestamppb.Timestamp)(nil),      // 67: google.protobuf.Timestamp
 }
 var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	0,  // 0: xagent.v1.Task.instructions:type_name -> xagent.v1.Instruction
-	65, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
-	65, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
-	64, // 3: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
+	67, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	67, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	66, // 3: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
 	1,  // 4: xagent.v1.ListTasksResponse.tasks:type_name -> xagent.v1.Task
 	1,  // 5: xagent.v1.ListRunnerTasksResponse.tasks:type_name -> xagent.v1.Task
 	1,  // 6: xagent.v1.ListChildTasksResponse.tasks:type_name -> xagent.v1.Task
@@ -3470,20 +3547,20 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	37, // 12: xagent.v1.GetTaskDetailsResponse.events:type_name -> xagent.v1.Event
 	30, // 13: xagent.v1.GetTaskDetailsResponse.links:type_name -> xagent.v1.TaskLink
 	0,  // 14: xagent.v1.UpdateTaskRequest.add_instructions:type_name -> xagent.v1.Instruction
-	65, // 15: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
+	67, // 15: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
 	25, // 16: xagent.v1.UploadLogsRequest.entries:type_name -> xagent.v1.LogEntry
 	25, // 17: xagent.v1.ListLogsResponse.entries:type_name -> xagent.v1.LogEntry
-	65, // 18: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
+	67, // 18: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
 	30, // 19: xagent.v1.CreateLinkResponse.link:type_name -> xagent.v1.TaskLink
 	30, // 20: xagent.v1.ListLinksResponse.links:type_name -> xagent.v1.TaskLink
 	30, // 21: xagent.v1.FindLinksByURLResponse.links:type_name -> xagent.v1.TaskLink
-	65, // 22: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
+	67, // 22: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
 	37, // 23: xagent.v1.ListEventsResponse.events:type_name -> xagent.v1.Event
 	37, // 24: xagent.v1.CreateEventResponse.event:type_name -> xagent.v1.Event
 	37, // 25: xagent.v1.GetEventResponse.event:type_name -> xagent.v1.Event
 	37, // 26: xagent.v1.ListEventsByTaskResponse.events:type_name -> xagent.v1.Event
 	56, // 27: xagent.v1.SubmitRunnerEventsRequest.events:type_name -> xagent.v1.RunnerEvent
-	65, // 28: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
+	67, // 28: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
 	59, // 29: xagent.v1.RegisterWorkspacesRequest.workspaces:type_name -> xagent.v1.RegisteredWorkspace
 	59, // 30: xagent.v1.ListWorkspacesResponse.workspaces:type_name -> xagent.v1.RegisteredWorkspace
 	3,  // 31: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
@@ -3514,36 +3591,38 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	57, // 56: xagent.v1.XAgentService.SubmitRunnerEvents:input_type -> xagent.v1.SubmitRunnerEventsRequest
 	60, // 57: xagent.v1.XAgentService.RegisterWorkspaces:input_type -> xagent.v1.RegisterWorkspacesRequest
 	62, // 58: xagent.v1.XAgentService.ListWorkspaces:input_type -> xagent.v1.ListWorkspacesRequest
-	4,  // 59: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
-	6,  // 60: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
-	8,  // 61: xagent.v1.XAgentService.ListChildTasks:output_type -> xagent.v1.ListChildTasksResponse
-	10, // 62: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
-	12, // 63: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
-	14, // 64: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
-	16, // 65: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
-	18, // 66: xagent.v1.XAgentService.DeleteTask:output_type -> xagent.v1.DeleteTaskResponse
-	20, // 67: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
-	22, // 68: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
-	24, // 69: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
-	27, // 70: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
-	29, // 71: xagent.v1.XAgentService.ListLogs:output_type -> xagent.v1.ListLogsResponse
-	32, // 72: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
-	34, // 73: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
-	36, // 74: xagent.v1.XAgentService.FindLinksByURL:output_type -> xagent.v1.FindLinksByURLResponse
-	39, // 75: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
-	41, // 76: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
-	43, // 77: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
-	45, // 78: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
-	47, // 79: xagent.v1.XAgentService.AddEventTask:output_type -> xagent.v1.AddEventTaskResponse
-	49, // 80: xagent.v1.XAgentService.RemoveEventTask:output_type -> xagent.v1.RemoveEventTaskResponse
-	51, // 81: xagent.v1.XAgentService.ListEventTasks:output_type -> xagent.v1.ListEventTasksResponse
-	53, // 82: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
-	55, // 83: xagent.v1.XAgentService.ProcessEvent:output_type -> xagent.v1.ProcessEventResponse
-	58, // 84: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
-	61, // 85: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
-	63, // 86: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
-	59, // [59:87] is the sub-list for method output_type
-	31, // [31:59] is the sub-list for method input_type
+	64, // 59: xagent.v1.XAgentService.ClearWorkspaces:input_type -> xagent.v1.ClearWorkspacesRequest
+	4,  // 60: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
+	6,  // 61: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
+	8,  // 62: xagent.v1.XAgentService.ListChildTasks:output_type -> xagent.v1.ListChildTasksResponse
+	10, // 63: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
+	12, // 64: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
+	14, // 65: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
+	16, // 66: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
+	18, // 67: xagent.v1.XAgentService.DeleteTask:output_type -> xagent.v1.DeleteTaskResponse
+	20, // 68: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
+	22, // 69: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
+	24, // 70: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
+	27, // 71: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
+	29, // 72: xagent.v1.XAgentService.ListLogs:output_type -> xagent.v1.ListLogsResponse
+	32, // 73: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
+	34, // 74: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
+	36, // 75: xagent.v1.XAgentService.FindLinksByURL:output_type -> xagent.v1.FindLinksByURLResponse
+	39, // 76: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
+	41, // 77: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
+	43, // 78: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
+	45, // 79: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
+	47, // 80: xagent.v1.XAgentService.AddEventTask:output_type -> xagent.v1.AddEventTaskResponse
+	49, // 81: xagent.v1.XAgentService.RemoveEventTask:output_type -> xagent.v1.RemoveEventTaskResponse
+	51, // 82: xagent.v1.XAgentService.ListEventTasks:output_type -> xagent.v1.ListEventTasksResponse
+	53, // 83: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
+	55, // 84: xagent.v1.XAgentService.ProcessEvent:output_type -> xagent.v1.ProcessEventResponse
+	58, // 85: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
+	61, // 86: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
+	63, // 87: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
+	65, // 88: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
+	60, // [60:89] is the sub-list for method output_type
+	31, // [31:60] is the sub-list for method input_type
 	31, // [31:31] is the sub-list for extension type_name
 	31, // [31:31] is the sub-list for extension extendee
 	0,  // [0:31] is the sub-list for field type_name
@@ -3560,7 +3639,7 @@ func file_xagent_v1_xagent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_xagent_v1_xagent_proto_rawDesc), len(file_xagent_v1_xagent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   65,
+			NumMessages:   67,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

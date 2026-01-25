@@ -71,3 +71,9 @@ func (r *WorkspaceRepository) scanWorkspace(rows *sql.Rows) (*model.Workspace, e
 	}
 	return &ws, nil
 }
+
+// Clear deletes all workspaces for the given owner.
+func (r *WorkspaceRepository) Clear(ctx context.Context, tx *sql.Tx, owner string) error {
+	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM workspaces WHERE owner = ?`, owner)
+	return err
+}
