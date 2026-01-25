@@ -49,7 +49,7 @@ func TestGetMyTask(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, 123, "test-workspace")
+	srv := NewServer(client, 123, "test-runner", "test-workspace")
 	session := setupTestSession(t, srv)
 
 	// Call the tool through the MCP framework
@@ -90,7 +90,7 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, parentTaskID, "test-workspace")
+	srv := NewServer(client, parentTaskID, "test-runner", "test-workspace")
 	session := setupTestSession(t, srv)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -135,6 +135,7 @@ func TestExternalServer_CreateTask(t *testing.T) {
 	client := &ClientMock{
 		CreateTaskFunc: func(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 			assert.Equal(t, req.Name, "new task")
+			assert.Equal(t, req.Runner, "test-runner")
 			assert.Equal(t, req.Workspace, "test-workspace")
 			assert.Equal(t, len(req.Instructions), 1)
 			assert.Equal(t, req.Instructions[0].Text, "do something")
@@ -143,6 +144,7 @@ func TestExternalServer_CreateTask(t *testing.T) {
 				Task: &xagentv1.Task{
 					Id:        456,
 					Name:      "new task",
+					Runner:    "test-runner",
 					Workspace: "test-workspace",
 					Status:    "pending",
 				},
@@ -157,6 +159,7 @@ func TestExternalServer_CreateTask(t *testing.T) {
 		Name: "create_task",
 		Arguments: map[string]any{
 			"name":        "new task",
+			"runner":      "test-runner",
 			"workspace":   "test-workspace",
 			"instruction": "do something",
 			"url":         "https://example.com",
@@ -167,6 +170,7 @@ func TestExternalServer_CreateTask(t *testing.T) {
 	assertTextResult(t, result, map[string]any{
 		"id":        float64(456),
 		"name":      "new task",
+		"runner":    "test-runner",
 		"workspace": "test-workspace",
 		"status":    "pending",
 	})
