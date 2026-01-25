@@ -54,3 +54,62 @@ func TestCreateLinkPermissions(t *testing.T) {
 	// Assert
 	assert.ErrorContains(t, err, "not found")
 }
+
+func TestListLinks(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	ctx := withUserID(t, "test-user")
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task with Links",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId:    taskResp.Task.Id,
+		Relevance: "Link 1",
+		Url:       "https://github.com/example/repo/pull/1",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId:    taskResp.Task.Id,
+		Relevance: "Link 2",
+		Url:       "https://github.com/example/repo/pull/2",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	resp, err := srv.ListLinks(ctx, &xagentv1.ListLinksRequest{
+		TaskId: taskResp.Task.Id,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Links), 2)
+}
+
+func TestListLinksPermissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateLink(userA, &xagentv1.CreateLinkRequest{
+		TaskId:    taskResp.Task.Id,
+		Relevance: "User A's Link",
+		Url:       "https://github.com/example/repo/pull/1",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	resp, err := srv.ListLinks(userB, &xagentv1.ListLinksRequest{
+		TaskId: taskResp.Task.Id,
+	})
+
+	// Assert - User B gets empty list, not an error
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Links), 0)
+}
