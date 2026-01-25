@@ -723,13 +723,13 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 
 func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
 	userID := s.userID(ctx)
-	names, err := s.workspaces.List(ctx, nil, userID)
+	workspaces, err := s.workspaces.List(ctx, nil, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	workspaces := make([]*xagentv1.RegisteredWorkspace, len(names))
-	for i, name := range names {
-		workspaces[i] = &xagentv1.RegisteredWorkspace{Name: name}
+	result := make([]*xagentv1.RegisteredWorkspace, len(workspaces))
+	for i, ws := range workspaces {
+		result[i] = ws.Proto()
 	}
-	return &xagentv1.ListWorkspacesResponse{Workspaces: workspaces}, nil
+	return &xagentv1.ListWorkspacesResponse{Workspaces: result}, nil
 }

@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
+
+	"github.com/icholy/xagent/internal/model"
 )
 
 type WorkspaceRepository struct {
@@ -39,23 +41,33 @@ func (r *WorkspaceRepository) Create(ctx context.Context, tx *sql.Tx, runnerID, 
 	return err
 }
 
-// List returns all unique workspace names for the given owner, sorted alphabetically.
-func (r *WorkspaceRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]string, error) {
+// List returns all workspaces for the given owner, sorted alphabetically by name.
+func (r *WorkspaceRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Workspace, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT DISTINCT name FROM workspaces WHERE owner = ? ORDER BY name ASC
+		SELECT id, runner_id, name, owner, created_at
+		FROM workspaces WHERE owner = ? ORDER BY name ASC
 	`, owner)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var names []string
+	var workspaces []*model.Workspace
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		ws, err := r.scanWorkspace(rows)
+		if err != nil {
 			return nil, err
 		}
-		names = append(names, name)
+		workspaces = append(workspaces, ws)
 	}
-	return names, rows.Err()
+	return workspaces, rows.Err()
+}
+
+func (r *WorkspaceRepository) scanWorkspace(rows *sql.Rows) (*model.Workspace, error) {
+	var ws model.Workspace
+	err := rows.Scan(&ws.ID, &ws.RunnerID, &ws.Name, &ws.Owner, &ws.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &ws, nil
 }
