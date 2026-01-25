@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
 type TaskRepository struct {
@@ -17,11 +18,11 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
-func (r *TaskRepository) exec(tx *sql.Tx) Executor {
+func (r *TaskRepository) queries(tx *sql.Tx) *sqlc.Queries {
 	if tx != nil {
-		return tx
+		return sqlc.New(tx)
 	}
-	return r.db
+	return sqlc.New(r.db)
 }
 
 func (r *TaskRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error) error {
@@ -29,24 +30,29 @@ func (r *TaskRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.
 }
 
 func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Task) error {
-	instructions, err := json.Marshal(task.Instructions)
+	prompts, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now()
-	result, err := r.exec(tx).ExecContext(ctx, `
-		INSERT INTO tasks (name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, task.Name, task.Parent, task.Runner, task.Workspace, instructions, task.Status, task.Command, task.Version, task.Owner, now, now)
+	id, err := r.queries(tx).CreateTask(ctx, sqlc.CreateTaskParams{
+		Name:      task.Name,
+		Parent:    task.Parent,
+		Runner:    task.Runner,
+		Workspace: task.Workspace,
+		Prompts:   string(prompts),
+		Status:    string(task.Status),
+		Command:   string(task.Command),
+		Version:   task.Version,
+		Owner:     task.Owner,
+		CreatedAt: sql.NullTime{Time: now, Valid: true},
+		UpdatedAt: sql.NullTime{Time: now, Valid: true},
+	})
 	if err != nil {
 		return err
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		return err
-	}
 	task.ID = id
 	task.CreatedAt = now
 	task.UpdatedAt = now
@@ -54,153 +60,120 @@ func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Tas
 }
 
 func (r *TaskRepository) Get(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Task, error) {
-	row := r.exec(tx).QueryRowContext(ctx, `
-		SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
-		FROM tasks WHERE id = ? AND owner = ?
-	`, id, owner)
-	return r.scanTask(row)
+	row, err := r.queries(tx).GetTask(ctx, sqlc.GetTaskParams{
+		ID:    id,
+		Owner: owner,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toModelTask(row)
 }
 
 func (r *TaskRepository) HasTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
-	var exists bool
-	err := r.exec(tx).QueryRowContext(ctx, `
-		SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ? AND owner = ?)
-	`, id, owner).Scan(&exists)
-	return exists, err
+	exists, err := r.queries(tx).HasTask(ctx, sqlc.HasTaskParams{
+		ID:    id,
+		Owner: owner,
+	})
+	return exists != 0, err
 }
 
 func (r *TaskRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
-		FROM tasks WHERE status != 'archived' AND owner = ? ORDER BY created_at DESC
-	`, owner)
+	rows, err := r.queries(tx).ListTasks(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	return r.scanTasks(rows)
+	return toModelTasks(rows)
 }
 
 func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID int64, owner string) ([]*model.Task, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
-		FROM tasks WHERE parent = ? AND owner = ? ORDER BY created_at DESC
-	`, parentID, owner)
+	rows, err := r.queries(tx).ListTaskChildren(ctx, sqlc.ListTaskChildrenParams{
+		Parent: parentID,
+		Owner:  owner,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	return r.scanTasks(rows)
+	return toModelTasks(rows)
 }
 
 func (r *TaskRepository) ListForRunner(ctx context.Context, tx *sql.Tx, runner string, owner string) ([]*model.Task, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
-		FROM tasks WHERE runner = ? AND owner = ? AND command != '' AND status != 'archived' ORDER BY created_at DESC
-	`, runner, owner)
+	rows, err := r.queries(tx).ListTasksForRunner(ctx, sqlc.ListTasksForRunnerParams{
+		Runner: runner,
+		Owner:  owner,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	return r.scanTasks(rows)
+	return toModelTasks(rows)
 }
 
 func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.prompts, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at
-		FROM tasks t
-		JOIN event_tasks et ON t.id = et.task_id
-		WHERE et.event_id = ?
-		ORDER BY t.created_at DESC
-	`, eventID)
+	rows, err := r.queries(tx).ListTasksByEvent(ctx, eventID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	return r.scanTasks(rows)
+	return toModelTasks(rows)
 }
 
 func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) error {
-	instructions, err := json.Marshal(task.Instructions)
+	prompts, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
 	}
 
 	task.UpdatedAt = time.Now()
-	_, err = r.exec(tx).ExecContext(ctx, `
-		UPDATE tasks SET name = ?, parent = ?, runner = ?, workspace = ?, prompts = ?, status = ?, command = ?, version = ?, updated_at = ?
-		WHERE id = ? AND owner = ?
-	`, task.Name, task.Parent, task.Runner, task.Workspace, instructions, task.Status, task.Command, task.Version, task.UpdatedAt, task.ID, task.Owner)
-	return err
+	return r.queries(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
+		Name:      task.Name,
+		Parent:    task.Parent,
+		Runner:    task.Runner,
+		Workspace: task.Workspace,
+		Prompts:   string(prompts),
+		Status:    string(task.Status),
+		Command:   string(task.Command),
+		Version:   task.Version,
+		UpdatedAt: sql.NullTime{Time: task.UpdatedAt, Valid: true},
+		ID:        task.ID,
+		Owner:     task.Owner,
+	})
 }
 
 func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64, owner string) error {
-	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM tasks WHERE id = ? AND owner = ?`, id, owner)
-	return err
+	return r.queries(tx).DeleteTask(ctx, sqlc.DeleteTaskParams{
+		ID:    id,
+		Owner: owner,
+	})
 }
 
-func (r *TaskRepository) scanTask(row *sql.Row) (*model.Task, error) {
-	var task model.Task
-	var instructions []byte
-
-	err := row.Scan(
-		&task.ID,
-		&task.Name,
-		&task.Parent,
-		&task.Runner,
-		&task.Workspace,
-		&instructions,
-		&task.Status,
-		&task.Command,
-		&task.Version,
-		&task.Owner,
-		&task.CreatedAt,
-		&task.UpdatedAt,
-	)
-	if err != nil {
+func toModelTask(row sqlc.Task) (*model.Task, error) {
+	var instructions []model.Instruction
+	if err := json.Unmarshal([]byte(row.Prompts), &instructions); err != nil {
 		return nil, err
 	}
-
-	if err := json.Unmarshal(instructions, &task.Instructions); err != nil {
-		return nil, err
-	}
-
-	return &task, nil
+	return &model.Task{
+		ID:           row.ID,
+		Name:         row.Name,
+		Parent:       row.Parent,
+		Runner:       row.Runner,
+		Workspace:    row.Workspace,
+		Instructions: instructions,
+		Status:       model.TaskStatus(row.Status),
+		Command:      model.TaskCommand(row.Command),
+		Version:      row.Version,
+		Owner:        row.Owner,
+		CreatedAt:    row.CreatedAt.Time,
+		UpdatedAt:    row.UpdatedAt.Time,
+	}, nil
 }
 
-func (r *TaskRepository) scanTasks(rows *sql.Rows) ([]*model.Task, error) {
-	var tasks []*model.Task
-	for rows.Next() {
-		var task model.Task
-		var instructions []byte
-
-		err := rows.Scan(
-			&task.ID,
-			&task.Name,
-			&task.Parent,
-			&task.Runner,
-			&task.Workspace,
-			&instructions,
-			&task.Status,
-			&task.Command,
-			&task.Version,
-			&task.Owner,
-			&task.CreatedAt,
-			&task.UpdatedAt,
-		)
+func toModelTasks(rows []sqlc.Task) ([]*model.Task, error) {
+	tasks := make([]*model.Task, len(rows))
+	for i, row := range rows {
+		task, err := toModelTask(row)
 		if err != nil {
 			return nil, err
 		}
-
-		if err := json.Unmarshal(instructions, &task.Instructions); err != nil {
-			return nil, err
-		}
-
-		tasks = append(tasks, &task)
+		tasks[i] = task
 	}
-	return tasks, rows.Err()
+	return tasks, nil
 }
