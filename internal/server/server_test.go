@@ -5,11 +5,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/icholy/xagent/internal/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 )
+
+// withUserID creates a context with an authenticated user for testing.
+func withUserID(t *testing.T, id string) context.Context {
+	t.Helper()
+	return apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: id})
+}
 
 // setupTestServer creates a test server with a clean database in a temporary directory.
 // The database is automatically cleaned up when the test completes.
@@ -46,7 +53,7 @@ func setupTestServer(t *testing.T) *Server {
 
 func TestGetTask(t *testing.T) {
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	// Create a task using the API
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -77,6 +84,7 @@ func TestGetTask(t *testing.T) {
 		Name:      "Test Task",
 		Parent:    0,
 		Workspace: "test-workspace",
+		Owner:     "test-user",
 		Instructions: []*xagentv1.Instruction{
 			{
 				Text: "Do something important",
@@ -100,7 +108,7 @@ func TestGetTask(t *testing.T) {
 func TestCreateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	// Act
 	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -121,6 +129,7 @@ func TestCreateTask(t *testing.T) {
 		Name:      "New Task",
 		Parent:    0,
 		Workspace: "test-workspace",
+		Owner:     "test-user",
 		Instructions: []*xagentv1.Instruction{
 			{
 				Text: "Do something",
@@ -139,7 +148,7 @@ func TestCreateTask(t *testing.T) {
 func TestListTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
 		Workspace: "workspace-1",
@@ -162,7 +171,7 @@ func TestListTasks(t *testing.T) {
 func TestUpdateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Original Name",
 		Workspace: "test-workspace",
@@ -185,7 +194,7 @@ func TestUpdateTask(t *testing.T) {
 func TestDeleteTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task to Delete",
 		Workspace: "test-workspace",
@@ -206,7 +215,7 @@ func TestDeleteTask(t *testing.T) {
 func TestCreateLink(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Link",
 		Workspace: "test-workspace",
@@ -232,7 +241,7 @@ func TestCreateLink(t *testing.T) {
 func TestUploadAndListLogs(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
 		Workspace: "test-workspace",
@@ -261,7 +270,7 @@ func TestUploadAndListLogs(t *testing.T) {
 
 func TestSubmitRunnerEvents(t *testing.T) {
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	// Create a task (starts as pending with start command)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{

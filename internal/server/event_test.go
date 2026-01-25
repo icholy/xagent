@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -13,7 +12,7 @@ import (
 func TestCreateEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	// Act
 	resp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -37,7 +36,7 @@ func TestCreateEvent(t *testing.T) {
 func TestGetEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Issue updated",
 		Data:        `{"status": "closed"}`,
@@ -65,7 +64,7 @@ func TestGetEvent(t *testing.T) {
 func TestListEvents(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event 1",
 		Data:        `{"test": "data1"}`,
@@ -91,7 +90,7 @@ func TestListEvents(t *testing.T) {
 func TestListEventsWithLimit(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	// Create 5 events
 	for i := range 5 {
@@ -118,7 +117,7 @@ func TestListEventsWithLimit(t *testing.T) {
 func TestDeleteEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event to Delete",
 		Data:        `{}`,
@@ -139,7 +138,7 @@ func TestDeleteEvent(t *testing.T) {
 func TestAddEventTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -174,7 +173,7 @@ func TestAddEventTask(t *testing.T) {
 func TestRemoveEventTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -214,7 +213,7 @@ func TestRemoveEventTask(t *testing.T) {
 func TestListEventTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
@@ -259,7 +258,7 @@ func TestListEventTasks(t *testing.T) {
 func TestListEventsByTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -307,7 +306,7 @@ func TestListEventsByTask(t *testing.T) {
 func TestProcessEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	// Create two tasks with links to the same URL with notify=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -395,7 +394,7 @@ func TestProcessEvent(t *testing.T) {
 func TestProcessEventWithoutURL(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	// Create an event without URL
 	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -417,7 +416,7 @@ func TestProcessEventWithoutURL(t *testing.T) {
 func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -455,7 +454,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 func TestProcessEventWithNotifyFalse(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -493,7 +492,7 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 func TestProcessEventDeduplicatesTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -540,7 +539,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := context.Background()
+	ctx := withUserID(t, "test-user")
 
 	// Create two tasks with links to the same URL with notify=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{

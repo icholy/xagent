@@ -98,10 +98,11 @@ func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
 // userID returns the authenticated user's ID from context.
 // Returns empty string if no user is authenticated.
 func userID(ctx context.Context) string {
-	if u := apiauth.User(ctx); u != nil {
-		return u.ID
+	u := apiauth.User(ctx)
+	if u == nil {
+		panic("no UserInfo in request context")
 	}
-	return ""
+	return u.ID
 }
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
