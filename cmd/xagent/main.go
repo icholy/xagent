@@ -25,6 +25,7 @@ func main() {
 			command.ShellCommand,
 			command.PruneCommand,
 			command.LogsCommand,
+			command.LoginCommand,
 		},
 	}
 
