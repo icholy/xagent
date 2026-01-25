@@ -377,3 +377,23 @@ func TestCancelTask_Permissions(t *testing.T) {
 	// Assert
 	assert.ErrorContains(t, err, "not found")
 }
+
+func TestRestartTask_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, err = srv.RestartTask(userB, &xagentv1.RestartTaskRequest{
+		Id: createResp.Task.Id,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "not found")
+}
