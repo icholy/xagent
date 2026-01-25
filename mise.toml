@@ -19,10 +19,8 @@ run = [
 [tasks.generate]
 description = "Generate code from proto files and sqlc"
 run = [
-	"go tool buf generate",
-	"go tool sqlc generate",
+	"go generate ./...",
 	"cd webui && pnpm install --frozen-lockfile && pnpm run generate",
-	"go generate ./..."
 ]
 
 [tasks.wipe]
