@@ -48,14 +48,13 @@ message Task {
   string name = 2;
   int64 parent = 3;
   string workspace = 4;
-  repeated Instruction instructions = 5;
-  string status = 6;
-  google.protobuf.Timestamp created_at = 7;
-  google.protobuf.Timestamp updated_at = 8;
-  string command = 9;  // "restart", "stop", or empty
-  int64 version = 10;  // Incremented when command changes
-  string owner = 11;   // User ID of the task owner
-  string runner = 12;  // Runner ID that handles this task
+  string runner = 5;  // Runner ID that handles this task
+  repeated Instruction instructions = 6;
+  string status = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  string command = 10;  // "restart", "stop", or empty
+  int64 version = 11;  // Incremented when command changes
 }
 
 message McpServer {

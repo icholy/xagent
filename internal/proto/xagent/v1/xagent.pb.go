@@ -80,14 +80,13 @@ type Task struct {
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Parent        int64                  `protobuf:"varint,3,opt,name=parent,proto3" json:"parent,omitempty"`
 	Workspace     string                 `protobuf:"bytes,4,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	Instructions  []*Instruction         `protobuf:"bytes,5,rep,name=instructions,proto3" json:"instructions,omitempty"`
-	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Command       string                 `protobuf:"bytes,9,opt,name=command,proto3" json:"command,omitempty"`   // "restart", "stop", or empty
-	Version       int64                  `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"` // Incremented when command changes
-	Owner         string                 `protobuf:"bytes,11,opt,name=owner,proto3" json:"owner,omitempty"`      // User ID of the task owner
-	Runner        string                 `protobuf:"bytes,12,opt,name=runner,proto3" json:"runner,omitempty"`    // Runner ID that handles this task
+	Runner        string                 `protobuf:"bytes,5,opt,name=runner,proto3" json:"runner,omitempty"` // Runner ID that handles this task
+	Instructions  []*Instruction         `protobuf:"bytes,6,rep,name=instructions,proto3" json:"instructions,omitempty"`
+	Status        string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Command       string                 `protobuf:"bytes,10,opt,name=command,proto3" json:"command,omitempty"`  // "restart", "stop", or empty
+	Version       int64                  `protobuf:"varint,11,opt,name=version,proto3" json:"version,omitempty"` // Incremented when command changes
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -150,6 +149,13 @@ func (x *Task) GetWorkspace() string {
 	return ""
 }
 
+func (x *Task) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
+}
+
 func (x *Task) GetInstructions() []*Instruction {
 	if x != nil {
 		return x.Instructions
@@ -190,20 +196,6 @@ func (x *Task) GetVersion() int64 {
 		return x.Version
 	}
 	return 0
-}
-
-func (x *Task) GetOwner() string {
-	if x != nil {
-		return x.Owner
-	}
-	return ""
-}
-
-func (x *Task) GetRunner() string {
-	if x != nil {
-		return x.Runner
-	}
-	return ""
 }
 
 type McpServer struct {
@@ -3229,23 +3221,22 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x16xagent/v1/xagent.proto\x12\txagent.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"3\n" +
 	"\vInstruction\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"\x8c\x03\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\xf6\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
 	"\x06parent\x18\x03 \x01(\x03R\x06parent\x12\x1c\n" +
-	"\tworkspace\x18\x04 \x01(\tR\tworkspace\x12:\n" +
-	"\finstructions\x18\x05 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\x129\n" +
+	"\tworkspace\x18\x04 \x01(\tR\tworkspace\x12\x16\n" +
+	"\x06runner\x18\x05 \x01(\tR\x06runner\x12:\n" +
+	"\finstructions\x18\x06 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x16\n" +
+	"\x06status\x18\a \x01(\tR\x06status\x129\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x18\n" +
-	"\acommand\x18\t \x01(\tR\acommand\x12\x18\n" +
-	"\aversion\x18\n" +
-	" \x01(\x03R\aversion\x12\x14\n" +
-	"\x05owner\x18\v \x01(\tR\x05owner\x12\x16\n" +
-	"\x06runner\x18\f \x01(\tR\x06runner\"\xb6\x01\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x18\n" +
+	"\acommand\x18\n" +
+	" \x01(\tR\acommand\x12\x18\n" +
+	"\aversion\x18\v \x01(\x03R\aversion\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
