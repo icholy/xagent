@@ -79,8 +79,8 @@ func (s *Server) Handler() http.Handler {
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s)
 	mux.Handle(path, s.auth.RequireAuth()(handler))
 
-	// React UI (SPA with client-side routing)
-	mux.Handle("/", WebUI())
+	// React UI (SPA with client-side routing, protected by cookie auth)
+	mux.Handle("/", s.auth.RequireAuth()(WebUI()))
 
 	return mux
 }
