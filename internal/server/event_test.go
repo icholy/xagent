@@ -213,6 +213,34 @@ func TestAddEventTask(t *testing.T) {
 	assert.Equal(t, listResp.TaskIds[0], taskResp.Task.Id)
 }
 
+func TestAddEventTask_Permissions_Task(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+
+	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	eventResp, err := srv.CreateEvent(userB, &xagentv1.CreateEventRequest{
+		Description: "User B's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, err = srv.AddEventTask(userB, &xagentv1.AddEventTaskRequest{
+		EventId: eventResp.Event.Id,
+		TaskId:  taskResp.Task.Id,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "not found")
+}
+
 func TestRemoveEventTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
