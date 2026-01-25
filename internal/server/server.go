@@ -422,12 +422,12 @@ func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByUR
 }
 
 func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
-	userID := s.userID(ctx)
 	const maxLimit = 100
 	limit := cmp.Or(int(req.Limit), maxLimit)
 	if limit < 0 || limit > maxLimit {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be at most %d", maxLimit))
 	}
+	userID := s.userID(ctx)
 	events, err := s.events.List(ctx, nil, limit, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
