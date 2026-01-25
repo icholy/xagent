@@ -31,18 +31,18 @@ type Log struct {
 }
 
 type Task struct {
-	ID        int64        `json:"id"`
-	Name      string       `json:"name"`
-	Parent    int64        `json:"parent"`
-	Runner    string       `json:"runner"`
-	Workspace string       `json:"workspace"`
-	Prompts   string       `json:"prompts"`
-	Status    string       `json:"status"`
-	Command   string       `json:"command"`
-	Version   int64        `json:"version"`
-	Owner     string       `json:"owner"`
-	CreatedAt sql.NullTime `json:"created_at"`
-	UpdatedAt sql.NullTime `json:"updated_at"`
+	ID           int64        `json:"id"`
+	Name         string       `json:"name"`
+	Parent       int64        `json:"parent"`
+	Runner       string       `json:"runner"`
+	Workspace    string       `json:"workspace"`
+	Instructions string       `json:"instructions"`
+	Status       string       `json:"status"`
+	Command      string       `json:"command"`
+	Version      int64        `json:"version"`
+	Owner        string       `json:"owner"`
+	CreatedAt    sql.NullTime `json:"created_at"`
+	UpdatedAt    sql.NullTime `json:"updated_at"`
 }
 
 type TaskLink struct {

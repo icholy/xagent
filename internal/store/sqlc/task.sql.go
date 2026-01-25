@@ -11,22 +11,22 @@ import (
 )
 
 const createTask = `-- name: CreateTask :execlastid
-INSERT INTO tasks (name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at)
+INSERT INTO tasks (name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateTaskParams struct {
-	Name      string       `json:"name"`
-	Parent    int64        `json:"parent"`
-	Runner    string       `json:"runner"`
-	Workspace string       `json:"workspace"`
-	Prompts   string       `json:"prompts"`
-	Status    string       `json:"status"`
-	Command   string       `json:"command"`
-	Version   int64        `json:"version"`
-	Owner     string       `json:"owner"`
-	CreatedAt sql.NullTime `json:"created_at"`
-	UpdatedAt sql.NullTime `json:"updated_at"`
+	Name         string       `json:"name"`
+	Parent       int64        `json:"parent"`
+	Runner       string       `json:"runner"`
+	Workspace    string       `json:"workspace"`
+	Instructions string       `json:"instructions"`
+	Status       string       `json:"status"`
+	Command      string       `json:"command"`
+	Version      int64        `json:"version"`
+	Owner        string       `json:"owner"`
+	CreatedAt    sql.NullTime `json:"created_at"`
+	UpdatedAt    sql.NullTime `json:"updated_at"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, error) {
@@ -35,7 +35,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, 
 		arg.Parent,
 		arg.Runner,
 		arg.Workspace,
-		arg.Prompts,
+		arg.Instructions,
 		arg.Status,
 		arg.Command,
 		arg.Version,
@@ -64,7 +64,7 @@ func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
 FROM tasks
 WHERE id = ? AND owner = ?
 `
@@ -83,7 +83,7 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 		&i.Parent,
 		&i.Runner,
 		&i.Workspace,
-		&i.Prompts,
+		&i.Instructions,
 		&i.Status,
 		&i.Command,
 		&i.Version,
@@ -111,7 +111,7 @@ func (q *Queries) HasTask(ctx context.Context, arg HasTaskParams) (int64, error)
 }
 
 const listTaskChildren = `-- name: ListTaskChildren :many
-SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
 FROM tasks
 WHERE parent = ? AND owner = ?
 ORDER BY created_at DESC
@@ -137,7 +137,7 @@ func (q *Queries) ListTaskChildren(ctx context.Context, arg ListTaskChildrenPara
 			&i.Parent,
 			&i.Runner,
 			&i.Workspace,
-			&i.Prompts,
+			&i.Instructions,
 			&i.Status,
 			&i.Command,
 			&i.Version,
@@ -159,7 +159,7 @@ func (q *Queries) ListTaskChildren(ctx context.Context, arg ListTaskChildrenPara
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
 FROM tasks
 WHERE status != 'archived' AND owner = ?
 ORDER BY created_at DESC
@@ -180,7 +180,7 @@ func (q *Queries) ListTasks(ctx context.Context, owner string) ([]Task, error) {
 			&i.Parent,
 			&i.Runner,
 			&i.Workspace,
-			&i.Prompts,
+			&i.Instructions,
 			&i.Status,
 			&i.Command,
 			&i.Version,
@@ -202,7 +202,7 @@ func (q *Queries) ListTasks(ctx context.Context, owner string) ([]Task, error) {
 }
 
 const listTasksByEvent = `-- name: ListTasksByEvent :many
-SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.prompts, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at
+SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.instructions, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at
 FROM tasks t
 JOIN event_tasks et ON t.id = et.task_id
 WHERE et.event_id = ?
@@ -224,7 +224,7 @@ func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, 
 			&i.Parent,
 			&i.Runner,
 			&i.Workspace,
-			&i.Prompts,
+			&i.Instructions,
 			&i.Status,
 			&i.Command,
 			&i.Version,
@@ -246,7 +246,7 @@ func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, 
 }
 
 const listTasksForRunner = `-- name: ListTasksForRunner :many
-SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
 FROM tasks
 WHERE runner = ? AND owner = ? AND command != '' AND status != 'archived'
 ORDER BY created_at DESC
@@ -272,7 +272,7 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 			&i.Parent,
 			&i.Runner,
 			&i.Workspace,
-			&i.Prompts,
+			&i.Instructions,
 			&i.Status,
 			&i.Command,
 			&i.Version,
@@ -295,22 +295,22 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 
 const updateTask = `-- name: UpdateTask :exec
 UPDATE tasks
-SET name = ?, parent = ?, runner = ?, workspace = ?, prompts = ?, status = ?, command = ?, version = ?, updated_at = ?
+SET name = ?, parent = ?, runner = ?, workspace = ?, instructions = ?, status = ?, command = ?, version = ?, updated_at = ?
 WHERE id = ? AND owner = ?
 `
 
 type UpdateTaskParams struct {
-	Name      string       `json:"name"`
-	Parent    int64        `json:"parent"`
-	Runner    string       `json:"runner"`
-	Workspace string       `json:"workspace"`
-	Prompts   string       `json:"prompts"`
-	Status    string       `json:"status"`
-	Command   string       `json:"command"`
-	Version   int64        `json:"version"`
-	UpdatedAt sql.NullTime `json:"updated_at"`
-	ID        int64        `json:"id"`
-	Owner     string       `json:"owner"`
+	Name         string       `json:"name"`
+	Parent       int64        `json:"parent"`
+	Runner       string       `json:"runner"`
+	Workspace    string       `json:"workspace"`
+	Instructions string       `json:"instructions"`
+	Status       string       `json:"status"`
+	Command      string       `json:"command"`
+	Version      int64        `json:"version"`
+	UpdatedAt    sql.NullTime `json:"updated_at"`
+	ID           int64        `json:"id"`
+	Owner        string       `json:"owner"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {
@@ -319,7 +319,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {
 		arg.Parent,
 		arg.Runner,
 		arg.Workspace,
-		arg.Prompts,
+		arg.Instructions,
 		arg.Status,
 		arg.Command,
 		arg.Version,

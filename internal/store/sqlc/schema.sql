@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     parent        INTEGER NOT NULL DEFAULT 0,
     runner        TEXT NOT NULL,
     workspace     TEXT NOT NULL,
-    prompts       TEXT NOT NULL,
+    instructions  TEXT NOT NULL,
     status        TEXT NOT NULL,
     command       TEXT NOT NULL DEFAULT '',
     version       INTEGER NOT NULL DEFAULT 0,

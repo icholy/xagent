@@ -30,7 +30,7 @@ func (r *TaskRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.
 }
 
 func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Task) error {
-	prompts, err := json.Marshal(task.Instructions)
+	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Tas
 		Parent:    task.Parent,
 		Runner:    task.Runner,
 		Workspace: task.Workspace,
-		Prompts:   string(prompts),
+		Instructions: string(instructions),
 		Status:    string(task.Status),
 		Command:   string(task.Command),
 		Version:   task.Version,
@@ -117,7 +117,7 @@ func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID in
 }
 
 func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) error {
-	prompts, err := json.Marshal(task.Instructions)
+	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) 
 		Parent:    task.Parent,
 		Runner:    task.Runner,
 		Workspace: task.Workspace,
-		Prompts:   string(prompts),
+		Instructions: string(instructions),
 		Status:    string(task.Status),
 		Command:   string(task.Command),
 		Version:   task.Version,
@@ -147,7 +147,7 @@ func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64, owner
 
 func toModelTask(row sqlc.Task) (*model.Task, error) {
 	var instructions []model.Instruction
-	if err := json.Unmarshal([]byte(row.Prompts), &instructions); err != nil {
+	if err := json.Unmarshal([]byte(row.Instructions), &instructions); err != nil {
 		return nil, err
 	}
 	return &model.Task{
