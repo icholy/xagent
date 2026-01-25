@@ -681,7 +681,6 @@ func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType)
 	default:
 		return
 	}
-
 	if err := notify.Send("xagent", message); err != nil {
 		s.log.Error("failed to send notification", "task", task.ID, "error", err)
 	}
