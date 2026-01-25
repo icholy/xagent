@@ -26,27 +26,19 @@ import (
 
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
-	log        *slog.Logger
-	tasks      *store.TaskRepository
-	logs       *store.LogRepository
-	links      *store.LinkRepository
-	events     *store.EventRepository
-	workspaces *store.WorkspaceRepository
-	notify     bool
-	auth       *apiauth.Auth
-	discovery  deviceauth.DiscoveryConfig
+	log       *slog.Logger
+	store     *store.Store
+	notify    bool
+	auth      *apiauth.Auth
+	discovery deviceauth.DiscoveryConfig
 }
 
 type Options struct {
-	Log        *slog.Logger
-	Tasks      *store.TaskRepository
-	Logs       *store.LogRepository
-	Links      *store.LinkRepository
-	Events     *store.EventRepository
-	Workspaces *store.WorkspaceRepository
-	Notify     bool
-	Auth       *apiauth.Auth
-	Discovery  deviceauth.DiscoveryConfig
+	Log       *slog.Logger
+	Store     *store.Store
+	Notify    bool
+	Auth      *apiauth.Auth
+	Discovery deviceauth.DiscoveryConfig
 }
 
 func New(opts Options) *Server {
@@ -55,15 +47,11 @@ func New(opts Options) *Server {
 		log = slog.Default()
 	}
 	return &Server{
-		log:        log,
-		tasks:      opts.Tasks,
-		logs:       opts.Logs,
-		links:      opts.Links,
-		events:     opts.Events,
-		workspaces: opts.Workspaces,
-		notify:     opts.Notify,
-		auth:       opts.Auth,
-		discovery:  opts.Discovery,
+		log:       log,
+		store:     opts.Store,
+		notify:    opts.Notify,
+		auth:      opts.Auth,
+		discovery: opts.Discovery,
 	}
 }
 
@@ -101,7 +89,7 @@ func (s *Server) userID(ctx context.Context) string {
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 	userID := s.userID(ctx)
-	tasks, err := s.tasks.List(ctx, nil, userID)
+	tasks, err := s.store.ListTasks(ctx, nil, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -116,7 +104,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 
 func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTasksRequest) (*xagentv1.ListRunnerTasksResponse, error) {
 	userID := s.userID(ctx)
-	tasks, err := s.tasks.ListForRunner(ctx, nil, req.Runner, userID)
+	tasks, err := s.store.ListTasksForRunner(ctx, nil, req.Runner, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &xagentv1.ListRunnerTasksResponse{}, nil
@@ -134,7 +122,7 @@ func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTa
 
 func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
 	userID := s.userID(ctx)
-	tasks, err := s.tasks.ListChildren(ctx, nil, req.ParentId, userID)
+	tasks, err := s.store.ListTaskChildren(ctx, nil, req.ParentId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -151,7 +139,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	userID := s.userID(ctx)
 	// Verify parent task ownership if specified
 	if req.Parent != 0 {
-		ok, err := s.tasks.HasTask(ctx, nil, req.Parent, userID)
+		ok, err := s.store.HasTask(ctx, nil, req.Parent, userID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
@@ -174,7 +162,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Version:      1,
 		Owner:        userID,
 	}
-	if err := s.tasks.Create(ctx, nil, task); err != nil {
+	if err := s.store.CreateTask(ctx, nil, task); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "owner", task.Owner)
@@ -185,7 +173,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 
 func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 	userID := s.userID(ctx)
-	task, err := s.tasks.Get(ctx, nil, req.Id, userID)
+	task, err := s.store.GetTask(ctx, nil, req.Id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
@@ -199,16 +187,16 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 
 func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 	userID := s.userID(ctx)
-	task, err := s.tasks.Get(ctx, nil, req.Id, userID)
+	task, err := s.store.GetTask(ctx, nil, req.Id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	children, _ := s.tasks.ListChildren(ctx, nil, req.Id, userID)
-	events, _ := s.events.ListByTask(ctx, nil, req.Id, userID)
-	links, _ := s.links.ListByTask(ctx, nil, req.Id, userID)
+	children, _ := s.store.ListTaskChildren(ctx, nil, req.Id, userID)
+	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, userID)
+	links, _ := s.store.ListLinksByTask(ctx, nil, req.Id, userID)
 	resp := &xagentv1.GetTaskDetailsResponse{
 		Task:     task.Proto(),
 		Children: make([]*xagentv1.Task, len(children)),
@@ -229,8 +217,8 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	userID := s.userID(ctx)
-	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.tasks.Get(ctx, tx, req.Id, userID)
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
@@ -243,7 +231,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if req.Start {
 			task.Start()
 		}
-		if err := s.tasks.Put(ctx, tx, task); err != nil {
+		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -260,7 +248,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 
 func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error) {
 	userID := s.userID(ctx)
-	if err := s.tasks.Delete(ctx, nil, req.Id, userID); err != nil {
+	if err := s.store.DeleteTask(ctx, nil, req.Id, userID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task deleted", "id", req.Id)
@@ -269,15 +257,15 @@ func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest
 
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
 	userID := s.userID(ctx)
-	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.tasks.Get(ctx, tx, req.Id, userID)
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
 		if !task.Archive() {
 			return fmt.Errorf("cannot archive task with status %s", task.Status)
 		}
-		if err := s.tasks.Put(ctx, tx, task); err != nil {
+		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -294,15 +282,15 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 	userID := s.userID(ctx)
-	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.tasks.Get(ctx, tx, req.Id, userID)
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
 		if !task.Cancel() {
 			return fmt.Errorf("cannot cancel task with status %s", task.Status)
 		}
-		if err := s.tasks.Put(ctx, tx, task); err != nil {
+		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -319,15 +307,15 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 
 func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 	userID := s.userID(ctx)
-	err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.tasks.Get(ctx, tx, req.Id, userID)
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
 		if !task.Restart() {
 			return fmt.Errorf("cannot restart task with status %s", task.Status)
 		}
-		if err := s.tasks.Put(ctx, tx, task); err != nil {
+		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -345,7 +333,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
 	userID := s.userID(ctx)
 	// Verify task ownership
-	ok, err := s.tasks.HasTask(ctx, nil, req.TaskId, userID)
+	ok, err := s.store.HasTask(ctx, nil, req.TaskId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -355,7 +343,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 	for _, entry := range req.Entries {
 		log := model.LogFromProto(entry)
 		log.TaskID = req.TaskId
-		if err := s.logs.Create(ctx, nil, &log); err != nil {
+		if err := s.store.CreateLog(ctx, nil, &log); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
@@ -364,7 +352,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 
 func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
 	userID := s.userID(ctx)
-	logs, err := s.logs.ListByTask(ctx, nil, req.TaskId, userID)
+	logs, err := s.store.ListLogsByTask(ctx, nil, req.TaskId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -380,7 +368,7 @@ func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*
 func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	userID := s.userID(ctx)
 	// Verify task ownership
-	ok, err := s.tasks.HasTask(ctx, nil, req.TaskId, userID)
+	ok, err := s.store.HasTask(ctx, nil, req.TaskId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -395,7 +383,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		Notify:    req.Notify,
 		CreatedAt: time.Now(),
 	}
-	if err := s.links.Create(ctx, nil, link); err != nil {
+	if err := s.store.CreateLink(ctx, nil, link); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
@@ -406,7 +394,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 
 func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
 	userID := s.userID(ctx)
-	links, err := s.links.ListByTask(ctx, nil, req.TaskId, userID)
+	links, err := s.store.ListLinksByTask(ctx, nil, req.TaskId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -421,7 +409,7 @@ func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) 
 
 func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
 	userID := s.userID(ctx)
-	links, err := s.links.FindByURL(ctx, nil, req.Url, userID)
+	links, err := s.store.FindLinksByURL(ctx, nil, req.Url, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -441,7 +429,7 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be at most %d", maxLimit))
 	}
 	userID := s.userID(ctx)
-	events, err := s.events.List(ctx, nil, limit, userID)
+	events, err := s.store.ListEvents(ctx, nil, limit, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -462,7 +450,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 		URL:         req.Url,
 		Owner:       userID,
 	}
-	if err := s.events.Create(ctx, nil, event); err != nil {
+	if err := s.store.CreateEvent(ctx, nil, event); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event created", "id", event.ID, "description", event.Description)
@@ -473,7 +461,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 
 func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 	userID := s.userID(ctx)
-	event, err := s.events.Get(ctx, nil, req.Id, userID)
+	event, err := s.store.GetEvent(ctx, nil, req.Id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
@@ -487,7 +475,7 @@ func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*
 
 func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
 	userID := s.userID(ctx)
-	if err := s.events.Delete(ctx, nil, req.Id, userID); err != nil {
+	if err := s.store.DeleteEvent(ctx, nil, req.Id, userID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event deleted", "id", req.Id)
@@ -497,7 +485,7 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error) {
 	userID := s.userID(ctx)
 	// Verify task ownership
-	ok, err := s.tasks.HasTask(ctx, nil, req.TaskId, userID)
+	ok, err := s.store.HasTask(ctx, nil, req.TaskId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -505,14 +493,14 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
 	}
 	// Verify event ownership
-	ok, err = s.events.HasEvent(ctx, nil, req.EventId, userID)
+	ok, err = s.store.HasEvent(ctx, nil, req.EventId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.EventId))
 	}
-	if err := s.events.AddTask(ctx, nil, req.EventId, req.TaskId); err != nil {
+	if err := s.store.AddEventTask(ctx, nil, req.EventId, req.TaskId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event task added", "event_id", req.EventId, "task_id", req.TaskId)
@@ -522,7 +510,7 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
 	userID := s.userID(ctx)
 	// Verify task ownership
-	ok, err := s.tasks.HasTask(ctx, nil, req.TaskId, userID)
+	ok, err := s.store.HasTask(ctx, nil, req.TaskId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -530,14 +518,14 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
 	}
 	// Verify event ownership
-	ok, err = s.events.HasEvent(ctx, nil, req.EventId, userID)
+	ok, err = s.store.HasEvent(ctx, nil, req.EventId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.EventId))
 	}
-	if err := s.events.RemoveTask(ctx, nil, req.EventId, req.TaskId); err != nil {
+	if err := s.store.RemoveEventTask(ctx, nil, req.EventId, req.TaskId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event task removed", "event_id", req.EventId, "task_id", req.TaskId)
@@ -546,16 +534,16 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 
 func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
 	userID := s.userID(ctx)
-	tasks, err := s.events.ListTasks(ctx, nil, req.EventId, userID)
+	taskIDs, err := s.store.ListEventTasks(ctx, nil, req.EventId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return &xagentv1.ListEventTasksResponse{TaskIds: tasks}, nil
+	return &xagentv1.ListEventTasksResponse{TaskIds: taskIDs}, nil
 }
 
 func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 	userID := s.userID(ctx)
-	events, err := s.events.ListByTask(ctx, nil, req.TaskId, userID)
+	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -570,7 +558,7 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 
 func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
 	userID := s.userID(ctx)
-	event, err := s.events.Get(ctx, nil, req.Id, userID)
+	event, err := s.store.GetEvent(ctx, nil, req.Id, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
@@ -580,7 +568,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 	if event.URL == "" {
 		return &xagentv1.ProcessEventResponse{}, nil
 	}
-	links, err := s.links.FindByURL(ctx, nil, event.URL, userID)
+	links, err := s.store.FindLinksByURL(ctx, nil, event.URL, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -591,7 +579,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			continue
 		}
 		// Skip archived tasks
-		task, err := s.tasks.Get(ctx, nil, link.TaskID, userID)
+		task, err := s.store.GetTask(ctx, nil, link.TaskID, userID)
 		if err != nil {
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
@@ -601,16 +589,16 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			continue
 		}
 		taskIDs[link.TaskID] = true
-		if err := s.events.AddTask(ctx, nil, req.Id, link.TaskID); err != nil {
+		if err := s.store.AddEventTask(ctx, nil, req.Id, link.TaskID); err != nil {
 			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
 		}
-		err = s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			task, err := s.tasks.Get(ctx, tx, link.TaskID, userID)
+		err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+			task, err := s.store.GetTask(ctx, tx, link.TaskID, userID)
 			if err != nil {
 				return err
 			}
 			task.Start()
-			if err := s.tasks.Put(ctx, tx, task); err != nil {
+			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 				return err
 			}
 			return tx.Commit()
@@ -630,9 +618,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 		event := model.RunnerEventFromProto(pbEvent)
 		var task *model.Task
 		var applied bool
-		err := s.tasks.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 			var err error
-			task, err = s.tasks.Get(ctx, tx, event.TaskID, userID)
+			task, err = s.store.GetTask(ctx, tx, event.TaskID, userID)
 			if err != nil {
 				return err
 			}
@@ -647,11 +635,11 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if !applied {
 				return nil
 			}
-			if err := s.tasks.Put(ctx, tx, task); err != nil {
+			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 				return err
 			}
 			if log, ok := s.toRunnerEventLog(event); ok {
-				if err := s.logs.Create(ctx, tx, &log); err != nil {
+				if err := s.store.CreateLog(ctx, tx, &log); err != nil {
 					return err
 				}
 			}
@@ -716,12 +704,12 @@ func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType)
 
 func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
 	userID := s.userID(ctx)
-	err := s.workspaces.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		if err := s.workspaces.DeleteByRunner(ctx, tx, req.RunnerId, userID); err != nil {
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := s.store.DeleteWorkspacesByRunner(ctx, tx, req.RunnerId, userID); err != nil {
 			return err
 		}
 		for _, ws := range req.Workspaces {
-			if err := s.workspaces.Create(ctx, tx, req.RunnerId, ws.Name, userID); err != nil {
+			if err := s.store.CreateWorkspace(ctx, tx, req.RunnerId, ws.Name, userID); err != nil {
 				return err
 			}
 		}
@@ -736,7 +724,7 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 
 func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
 	userID := s.userID(ctx)
-	workspaces, err := s.workspaces.List(ctx, nil, userID)
+	workspaces, err := s.store.ListWorkspaces(ctx, nil, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -749,7 +737,7 @@ func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspace
 
 func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error) {
 	userID := s.userID(ctx)
-	if err := s.workspaces.Clear(ctx, nil, userID); err != nil {
+	if err := s.store.ClearWorkspaces(ctx, nil, userID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("workspaces cleared", "owner", userID)

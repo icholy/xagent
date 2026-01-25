@@ -9,23 +9,8 @@ import (
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
-type LogRepository struct {
-	db *sql.DB
-}
-
-func NewLogRepository(db *sql.DB) *LogRepository {
-	return &LogRepository{db: db}
-}
-
-func (r *LogRepository) queries(tx *sql.Tx) *sqlc.Queries {
-	if tx != nil {
-		return sqlc.New(tx)
-	}
-	return sqlc.New(r.db)
-}
-
-func (r *LogRepository) Create(ctx context.Context, tx *sql.Tx, log *model.Log) error {
-	id, err := r.queries(tx).CreateLog(ctx, sqlc.CreateLogParams{
+func (s *Store) CreateLog(ctx context.Context, tx *sql.Tx, log *model.Log) error {
+	id, err := s.queries(tx).CreateLog(ctx, sqlc.CreateLogParams{
 		TaskID:    log.TaskID,
 		Type:      log.Type,
 		Content:   log.Content,
@@ -38,8 +23,8 @@ func (r *LogRepository) Create(ctx context.Context, tx *sql.Tx, log *model.Log) 
 	return nil
 }
 
-func (r *LogRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Log, error) {
-	rows, err := r.queries(tx).ListLogsByTask(ctx, sqlc.ListLogsByTaskParams{
+func (s *Store) ListLogsByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Log, error) {
+	rows, err := s.queries(tx).ListLogsByTask(ctx, sqlc.ListLogsByTaskParams{
 		TaskID: taskID,
 		Owner:  owner,
 	})

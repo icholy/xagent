@@ -34,19 +34,8 @@ func setupTestServer(t *testing.T) *Server {
 		db.Close()
 	})
 
-	// Create repositories
-	tasks := store.NewTaskRepository(db)
-	logs := store.NewLogRepository(db)
-	links := store.NewLinkRepository(db)
-	events := store.NewEventRepository(db)
-	workspaces := store.NewWorkspaceRepository(db)
-
 	// Create and return the server
 	return New(Options{
-		Tasks:      tasks,
-		Logs:       logs,
-		Links:      links,
-		Events:     events,
-		Workspaces: workspaces,
+		Store: store.New(db),
 	})
 }

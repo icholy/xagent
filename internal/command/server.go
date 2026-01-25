@@ -81,11 +81,7 @@ var ServerCommand = &cli.Command{
 		}
 		defer db.Close()
 
-		tasks := store.NewTaskRepository(db)
-		logs := store.NewLogRepository(db)
-		links := store.NewLinkRepository(db)
-		events := store.NewEventRepository(db)
-		workspaces := store.NewWorkspaceRepository(db)
+		st := store.New(db)
 
 		domain := cmd.String("auth-domain")
 		key, err := apiauth.DecodeEncryptionKey(cmd.String("auth-encryption-key"))
@@ -105,13 +101,9 @@ var ServerCommand = &cli.Command{
 		}
 
 		srv := server.New(server.Options{
-			Tasks:      tasks,
-			Logs:       logs,
-			Links:      links,
-			Events:     events,
-			Workspaces: workspaces,
-			Notify:     notifyFlag,
-			Auth:       auth,
+			Store:  st,
+			Notify: notifyFlag,
+			Auth:   auth,
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",

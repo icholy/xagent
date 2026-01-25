@@ -9,23 +9,8 @@ import (
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
-type EventRepository struct {
-	db *sql.DB
-}
-
-func NewEventRepository(db *sql.DB) *EventRepository {
-	return &EventRepository{db: db}
-}
-
-func (r *EventRepository) queries(tx *sql.Tx) *sqlc.Queries {
-	if tx != nil {
-		return sqlc.New(tx)
-	}
-	return sqlc.New(r.db)
-}
-
-func (r *EventRepository) Create(ctx context.Context, tx *sql.Tx, event *model.Event) error {
-	id, err := r.queries(tx).CreateEvent(ctx, sqlc.CreateEventParams{
+func (s *Store) CreateEvent(ctx context.Context, tx *sql.Tx, event *model.Event) error {
+	id, err := s.queries(tx).CreateEvent(ctx, sqlc.CreateEventParams{
 		Description: event.Description,
 		Data:        event.Data,
 		Url:         sql.NullString{String: event.URL, Valid: event.URL != ""},
@@ -39,8 +24,8 @@ func (r *EventRepository) Create(ctx context.Context, tx *sql.Tx, event *model.E
 	return nil
 }
 
-func (r *EventRepository) Get(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Event, error) {
-	row, err := r.queries(tx).GetEvent(ctx, sqlc.GetEventParams{
+func (s *Store) GetEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Event, error) {
+	row, err := s.queries(tx).GetEvent(ctx, sqlc.GetEventParams{
 		ID:    id,
 		Owner: owner,
 	})
@@ -50,16 +35,16 @@ func (r *EventRepository) Get(ctx context.Context, tx *sql.Tx, id int64, owner s
 	return toModelEvent(row), nil
 }
 
-func (r *EventRepository) HasEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
-	exists, err := r.queries(tx).HasEvent(ctx, sqlc.HasEventParams{
+func (s *Store) HasEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
+	exists, err := s.queries(tx).HasEvent(ctx, sqlc.HasEventParams{
 		ID:    id,
 		Owner: owner,
 	})
 	return exists != 0, err
 }
 
-func (r *EventRepository) List(ctx context.Context, tx *sql.Tx, limit int, owner string) ([]*model.Event, error) {
-	rows, err := r.queries(tx).ListEvents(ctx, sqlc.ListEventsParams{
+func (s *Store) ListEvents(ctx context.Context, tx *sql.Tx, limit int, owner string) ([]*model.Event, error) {
+	rows, err := s.queries(tx).ListEvents(ctx, sqlc.ListEventsParams{
 		Owner: owner,
 		Limit: int64(limit),
 	})
@@ -69,16 +54,16 @@ func (r *EventRepository) List(ctx context.Context, tx *sql.Tx, limit int, owner
 	return toModelEvents(rows), nil
 }
 
-func (r *EventRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string) ([]*model.Event, error) {
-	rows, err := r.queries(tx).FindEventsByURL(ctx, sql.NullString{String: url, Valid: url != ""})
+func (s *Store) FindEventsByURL(ctx context.Context, tx *sql.Tx, url string) ([]*model.Event, error) {
+	rows, err := s.queries(tx).FindEventsByURL(ctx, sql.NullString{String: url, Valid: url != ""})
 	if err != nil {
 		return nil, err
 	}
 	return toModelEvents(rows), nil
 }
 
-func (r *EventRepository) Delete(ctx context.Context, tx *sql.Tx, id int64, owner string) error {
-	return WithTx(ctx, r.db, tx, func(tx *sql.Tx) error {
+func (s *Store) DeleteEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) error {
+	return s.WithTx(ctx, tx, func(tx *sql.Tx) error {
 		q := sqlc.New(tx)
 		if err := q.DeleteEventTasks(ctx, id); err != nil {
 			return err
@@ -90,29 +75,29 @@ func (r *EventRepository) Delete(ctx context.Context, tx *sql.Tx, id int64, owne
 	})
 }
 
-func (r *EventRepository) AddTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
-	return r.queries(tx).AddEventTask(ctx, sqlc.AddEventTaskParams{
+func (s *Store) AddEventTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
+	return s.queries(tx).AddEventTask(ctx, sqlc.AddEventTaskParams{
 		EventID: eventID,
 		TaskID:  taskID,
 	})
 }
 
-func (r *EventRepository) RemoveTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
-	return r.queries(tx).RemoveEventTask(ctx, sqlc.RemoveEventTaskParams{
+func (s *Store) RemoveEventTask(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
+	return s.queries(tx).RemoveEventTask(ctx, sqlc.RemoveEventTaskParams{
 		EventID: eventID,
 		TaskID:  taskID,
 	})
 }
 
-func (r *EventRepository) ListTasks(ctx context.Context, tx *sql.Tx, eventID int64, owner string) ([]int64, error) {
-	return r.queries(tx).ListEventTasks(ctx, sqlc.ListEventTasksParams{
+func (s *Store) ListEventTasks(ctx context.Context, tx *sql.Tx, eventID int64, owner string) ([]int64, error) {
+	return s.queries(tx).ListEventTasks(ctx, sqlc.ListEventTasksParams{
 		EventID: eventID,
 		Owner:   owner,
 	})
 }
 
-func (r *EventRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Event, error) {
-	rows, err := r.queries(tx).ListEventsByTask(ctx, sqlc.ListEventsByTaskParams{
+func (s *Store) ListEventsByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Event, error) {
+	rows, err := s.queries(tx).ListEventsByTask(ctx, sqlc.ListEventsByTaskParams{
 		TaskID: taskID,
 		Owner:  owner,
 	})

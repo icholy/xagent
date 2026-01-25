@@ -8,23 +8,8 @@ import (
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
-type LinkRepository struct {
-	db *sql.DB
-}
-
-func NewLinkRepository(db *sql.DB) *LinkRepository {
-	return &LinkRepository{db: db}
-}
-
-func (r *LinkRepository) queries(tx *sql.Tx) *sqlc.Queries {
-	if tx != nil {
-		return sqlc.New(tx)
-	}
-	return sqlc.New(r.db)
-}
-
-func (r *LinkRepository) Create(ctx context.Context, tx *sql.Tx, link *model.Link) error {
-	id, err := r.queries(tx).CreateLink(ctx, sqlc.CreateLinkParams{
+func (s *Store) CreateLink(ctx context.Context, tx *sql.Tx, link *model.Link) error {
+	id, err := s.queries(tx).CreateLink(ctx, sqlc.CreateLinkParams{
 		TaskID:    link.TaskID,
 		Relevance: link.Relevance,
 		Url:       link.URL,
@@ -39,8 +24,8 @@ func (r *LinkRepository) Create(ctx context.Context, tx *sql.Tx, link *model.Lin
 	return nil
 }
 
-func (r *LinkRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Link, error) {
-	rows, err := r.queries(tx).ListLinksByTask(ctx, sqlc.ListLinksByTaskParams{
+func (s *Store) ListLinksByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Link, error) {
+	rows, err := s.queries(tx).ListLinksByTask(ctx, sqlc.ListLinksByTaskParams{
 		TaskID: taskID,
 		Owner:  owner,
 	})
@@ -50,12 +35,12 @@ func (r *LinkRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int6
 	return toModelLinks(rows), nil
 }
 
-func (r *LinkRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
-	return r.queries(tx).DeleteLink(ctx, id)
+func (s *Store) DeleteLink(ctx context.Context, tx *sql.Tx, id int64) error {
+	return s.queries(tx).DeleteLink(ctx, id)
 }
 
-func (r *LinkRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string, owner string) ([]*model.Link, error) {
-	rows, err := r.queries(tx).FindLinksByURL(ctx, sqlc.FindLinksByURLParams{
+func (s *Store) FindLinksByURL(ctx context.Context, tx *sql.Tx, url string, owner string) ([]*model.Link, error) {
+	rows, err := s.queries(tx).FindLinksByURL(ctx, sqlc.FindLinksByURLParams{
 		Url:   url,
 		Owner: owner,
 	})

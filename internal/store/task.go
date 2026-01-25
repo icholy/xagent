@@ -10,33 +10,14 @@ import (
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
-type TaskRepository struct {
-	db *sql.DB
-}
-
-func NewTaskRepository(db *sql.DB) *TaskRepository {
-	return &TaskRepository{db: db}
-}
-
-func (r *TaskRepository) queries(tx *sql.Tx) *sqlc.Queries {
-	if tx != nil {
-		return sqlc.New(tx)
-	}
-	return sqlc.New(r.db)
-}
-
-func (r *TaskRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error) error {
-	return WithTx(ctx, r.db, tx, f)
-}
-
-func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Task) error {
+func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now()
-	id, err := r.queries(tx).CreateTask(ctx, sqlc.CreateTaskParams{
+	id, err := s.queries(tx).CreateTask(ctx, sqlc.CreateTaskParams{
 		Name:         task.Name,
 		Parent:       task.Parent,
 		Runner:       task.Runner,
@@ -59,8 +40,8 @@ func (r *TaskRepository) Create(ctx context.Context, tx *sql.Tx, task *model.Tas
 	return nil
 }
 
-func (r *TaskRepository) Get(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Task, error) {
-	row, err := r.queries(tx).GetTask(ctx, sqlc.GetTaskParams{
+func (s *Store) GetTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Task, error) {
+	row, err := s.queries(tx).GetTask(ctx, sqlc.GetTaskParams{
 		ID:    id,
 		Owner: owner,
 	})
@@ -70,24 +51,24 @@ func (r *TaskRepository) Get(ctx context.Context, tx *sql.Tx, id int64, owner st
 	return toModelTask(row)
 }
 
-func (r *TaskRepository) HasTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
-	exists, err := r.queries(tx).HasTask(ctx, sqlc.HasTaskParams{
+func (s *Store) HasTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
+	exists, err := s.queries(tx).HasTask(ctx, sqlc.HasTaskParams{
 		ID:    id,
 		Owner: owner,
 	})
 	return exists != 0, err
 }
 
-func (r *TaskRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {
-	rows, err := r.queries(tx).ListTasks(ctx, owner)
+func (s *Store) ListTasks(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {
+	rows, err := s.queries(tx).ListTasks(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
 	return toModelTasks(rows)
 }
 
-func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID int64, owner string) ([]*model.Task, error) {
-	rows, err := r.queries(tx).ListTaskChildren(ctx, sqlc.ListTaskChildrenParams{
+func (s *Store) ListTaskChildren(ctx context.Context, tx *sql.Tx, parentID int64, owner string) ([]*model.Task, error) {
+	rows, err := s.queries(tx).ListTaskChildren(ctx, sqlc.ListTaskChildrenParams{
 		Parent: parentID,
 		Owner:  owner,
 	})
@@ -97,8 +78,8 @@ func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID 
 	return toModelTasks(rows)
 }
 
-func (r *TaskRepository) ListForRunner(ctx context.Context, tx *sql.Tx, runner string, owner string) ([]*model.Task, error) {
-	rows, err := r.queries(tx).ListTasksForRunner(ctx, sqlc.ListTasksForRunnerParams{
+func (s *Store) ListTasksForRunner(ctx context.Context, tx *sql.Tx, runner string, owner string) ([]*model.Task, error) {
+	rows, err := s.queries(tx).ListTasksForRunner(ctx, sqlc.ListTasksForRunnerParams{
 		Runner: runner,
 		Owner:  owner,
 	})
@@ -108,22 +89,22 @@ func (r *TaskRepository) ListForRunner(ctx context.Context, tx *sql.Tx, runner s
 	return toModelTasks(rows)
 }
 
-func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
-	rows, err := r.queries(tx).ListTasksByEvent(ctx, eventID)
+func (s *Store) ListTasksByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
+	rows, err := s.queries(tx).ListTasksByEvent(ctx, eventID)
 	if err != nil {
 		return nil, err
 	}
 	return toModelTasks(rows)
 }
 
-func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) error {
+func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {
 		return err
 	}
 
 	task.UpdatedAt = time.Now()
-	return r.queries(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
+	return s.queries(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
 		Name:         task.Name,
 		Parent:       task.Parent,
 		Runner:       task.Runner,
@@ -138,8 +119,8 @@ func (r *TaskRepository) Put(ctx context.Context, tx *sql.Tx, task *model.Task) 
 	})
 }
 
-func (r *TaskRepository) Delete(ctx context.Context, tx *sql.Tx, id int64, owner string) error {
-	return r.queries(tx).DeleteTask(ctx, sqlc.DeleteTaskParams{
+func (s *Store) DeleteTask(ctx context.Context, tx *sql.Tx, id int64, owner string) error {
+	return s.queries(tx).DeleteTask(ctx, sqlc.DeleteTaskParams{
 		ID:    id,
 		Owner: owner,
 	})

@@ -4,21 +4,33 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/icholy/xagent/internal/store/sqlc"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Executor is an interface that both *sql.DB and *sql.Tx implement.
-// It allows repository methods to work with either.
-type Executor interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+// Store provides access to all database operations.
+type Store struct {
+	db *sql.DB
 }
 
-// WithTx runs f within a transaction. If tx is non-nil, it uses that transaction.
-// If tx is nil, it creates a new transaction. The callback is responsible for
-// committing the transaction. If an error is returned, the transaction is rolled back.
-func WithTx(ctx context.Context, db *sql.DB, tx *sql.Tx, f func(tx *sql.Tx) error) error {
+// New creates a new Store with the given database connection.
+func New(db *sql.DB) *Store {
+	return &Store{db: db}
+}
+
+func (s *Store) queries(tx *sql.Tx) *sqlc.Queries {
+	if tx != nil {
+		return sqlc.New(tx)
+	}
+	return sqlc.New(s.db)
+}
+
+// WithTx runs f within a transaction.
+func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error) error {
+	return withTx(ctx, s.db, tx, f)
+}
+
+func withTx(ctx context.Context, db *sql.DB, tx *sql.Tx, f func(tx *sql.Tx) error) error {
 	if tx != nil {
 		return f(tx)
 	}
