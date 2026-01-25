@@ -248,6 +248,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return tx.Commit()
 	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
