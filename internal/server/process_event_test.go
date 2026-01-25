@@ -345,81 +345,17 @@ func TestProcessEvent_Permissions(t *testing.T) {
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")
 	userB := withUserID(t, "user-b")
-
-	// Create tasks for both users
-	taskA, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Task",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	taskB, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
-		Name:      "User B's Task",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Transition both tasks to running state
-	_, err = srv.SubmitRunnerEvents(userA, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{TaskId: taskA.Task.Id, Event: "started", Version: taskA.Task.Version},
-		},
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.SubmitRunnerEvents(userB, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{TaskId: taskB.Task.Id, Event: "started", Version: taskB.Task.Version},
-		},
-	})
-	assert.NilError(t, err)
-
-	// Create links with notify=true for both tasks to the same URL
-	_, err = srv.CreateLink(userA, &xagentv1.CreateLinkRequest{
-		TaskId:    taskA.Task.Id,
-		Url:       "https://github.com/example/repo/pull/123",
-		Relevance: "PR to monitor",
-		Notify:    true,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.CreateLink(userB, &xagentv1.CreateLinkRequest{
-		TaskId:    taskB.Task.Id,
-		Url:       "https://github.com/example/repo/pull/123",
-		Relevance: "PR to monitor",
-		Notify:    true,
-	})
-	assert.NilError(t, err)
-
-	// User A creates an event
 	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
-		Description: "PR comment added",
-		Data:        `{"comment": "Please review"}`,
+		Description: "User A's Event",
 		Url:         "https://github.com/example/repo/pull/123",
 	})
 	assert.NilError(t, err)
 
-	// Act - User A processes the event
-	processResp, err := srv.ProcessEvent(userA, &xagentv1.ProcessEventRequest{
+	// Act
+	_, err = srv.ProcessEvent(userB, &xagentv1.ProcessEventRequest{
 		Id: eventResp.Event.Id,
 	})
 
-	// Assert - should only route to User A's task, not User B's
-	assert.NilError(t, err)
-	assert.Equal(t, len(processResp.TaskIds), 1)
-	assert.Equal(t, processResp.TaskIds[0], taskA.Task.Id)
-
-	// Verify User A's task received the event
-	eventsA, err := srv.ListEventsByTask(userA, &xagentv1.ListEventsByTaskRequest{
-		TaskId: taskA.Task.Id,
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, len(eventsA.Events), 1)
-
-	// Verify User B's task did NOT receive the event
-	eventsB, err := srv.ListEventsByTask(userB, &xagentv1.ListEventsByTaskRequest{
-		TaskId: taskB.Task.Id,
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, len(eventsB.Events), 0)
+	// Assert
+	assert.ErrorContains(t, err, "not found")
 }
