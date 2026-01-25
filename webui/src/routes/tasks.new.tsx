@@ -24,10 +24,24 @@ function NewTaskPage() {
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
-  const [workspaceRunner, setWorkspaceRunner] = useLocalStorage('xagent-last-workspace-runner', '')
+  const [runner, setRunner] = useLocalStorage('xagent-last-runner', '')
+  const [workspace, setWorkspace] = useLocalStorage('xagent-last-workspace', '')
   const [instruction, setInstruction] = useState('')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {})
+
+  // Derive unique runners from workspaces
+  const runners = [...new Set(workspacesData?.workspaces.map((ws) => ws.runnerId) ?? [])]
+
+  // Filter workspaces by selected runner
+  const workspaces = workspacesData?.workspaces.filter(
+    (ws) => ws.runnerId === runner
+  ) ?? []
+
+  const handleRunnerChange = (newRunner: string) => {
+    setRunner(newRunner)
+    setWorkspace('')
+  }
 
   const mutation = useMutation(createTask, {
     onSuccess: (data) => {
@@ -41,14 +55,12 @@ function NewTaskPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!workspaceRunner.trim() || !instruction.trim()) return
-
-    const [workspace, runner] = workspaceRunner.split('@')
+    if (!runner.trim() || !workspace.trim() || !instruction.trim()) return
 
     await mutation.mutateAsync({
       name: name.trim(),
-      runner,
-      workspace,
+      runner: runner.trim(),
+      workspace: workspace.trim(),
       parent: 0n,
       instructions: [{ text: instruction.trim(), url: '' }],
     })
@@ -72,25 +84,40 @@ function NewTaskPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="workspace">Workspace</Label>
-              <Select value={workspaceRunner} onValueChange={setWorkspaceRunner} required>
-                <SelectTrigger id="workspace">
-                  <SelectValue placeholder="Select a workspace" />
+              <Label htmlFor="runner">Runner</Label>
+              <Select value={runner} onValueChange={handleRunnerChange} required>
+                <SelectTrigger id="runner">
+                  <SelectValue placeholder="Select a runner" />
                 </SelectTrigger>
                 <SelectContent>
-                  {workspacesData?.workspaces.map((ws) => {
-                    const value = `${ws.name}@${ws.runnerId}`
-                    return (
-                      <SelectItem key={value} value={value}>
-                        {value}
-                      </SelectItem>
-                    )
-                  })}
+                  {runners.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <p className="text-sm text-muted-foreground">
-                The workspace defines the container configuration for the task
-              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="workspace">Workspace</Label>
+              <Select
+                value={workspace}
+                onValueChange={setWorkspace}
+                required
+                disabled={!runner}
+              >
+                <SelectTrigger id="workspace">
+                  <SelectValue placeholder={runner ? "Select a workspace" : "Select a runner first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {workspaces.map((ws) => (
+                    <SelectItem key={ws.name} value={ws.name}>
+                      {ws.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

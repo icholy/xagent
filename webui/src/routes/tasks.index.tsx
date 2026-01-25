@@ -107,6 +107,7 @@ function TasksPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Runner</TableHead>
               <TableHead>Workspace</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Created</TableHead>
@@ -143,7 +144,8 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
           {task.name || `Unnamed - ${task.id}`}
         </Link>
       </TableCell>
-      <TableCell>{task.workspace}@{task.runner}</TableCell>
+      <TableCell>{task.runner}</TableCell>
+      <TableCell>{task.workspace}</TableCell>
       <TableCell>
         <span className="flex items-center gap-2">
           <StatusBadge task={task} />

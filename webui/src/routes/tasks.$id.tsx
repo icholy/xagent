@@ -169,8 +169,12 @@ function TaskDetail() {
       <div className="rounded-lg border p-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
           <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Runner:</span>
+            <span>{task.runner}</span>
+          </div>
+          <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Workspace:</span>
-            <span>{task.workspace}@{task.runner}</span>
+            <span>{task.workspace}</span>
           </div>
           {task.parent !== 0n && (
             <div className="flex items-center gap-2">
@@ -329,6 +333,7 @@ function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => v
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
+          <TableHead>Runner</TableHead>
           <TableHead>Workspace</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Created</TableHead>
@@ -363,7 +368,8 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
           {task.name || `Unnamed - ${task.id}`}
         </Link>
       </TableCell>
-      <TableCell>{task.workspace}@{task.runner}</TableCell>
+      <TableCell>{task.runner}</TableCell>
+      <TableCell>{task.workspace}</TableCell>
       <TableCell>
         <span className="flex items-center gap-2">
           <StatusBadge task={task} />
