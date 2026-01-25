@@ -309,6 +309,82 @@ func TestRemoveEventTask(t *testing.T) {
 	assert.Equal(t, len(listResp.TaskIds), 0)
 }
 
+func TestRemoveEventTask_Permissions_Task(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+
+	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+		Description: "User A's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.AddEventTask(userA, &xagentv1.AddEventTaskRequest{
+		EventId: eventResp.Event.Id,
+		TaskId:  taskResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, err = srv.RemoveEventTask(userB, &xagentv1.RemoveEventTaskRequest{
+		EventId: eventResp.Event.Id,
+		TaskId:  taskResp.Task.Id,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "not found")
+}
+
+func TestRemoveEventTask_Permissions_Event(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+
+	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
+		Name:      "User B's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+		Description: "User A's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	// User A links event to user B's task (user A owns event, user B owns task - neither can do this alone now)
+	// Instead: both users create their own, then user B tries to remove user A's event from their task
+	eventRespB, err := srv.CreateEvent(userB, &xagentv1.CreateEventRequest{
+		Description: "User B's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.AddEventTask(userB, &xagentv1.AddEventTaskRequest{
+		EventId: eventRespB.Event.Id,
+		TaskId:  taskResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	// Act - User B tries to remove User A's event (which isn't linked, but tests ownership check)
+	_, err = srv.RemoveEventTask(userB, &xagentv1.RemoveEventTaskRequest{
+		EventId: eventResp.Event.Id,
+		TaskId:  taskResp.Task.Id,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "not found")
+}
+
 func TestListEventTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
