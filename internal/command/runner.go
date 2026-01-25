@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/common"
+	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/urfave/cli/v3"
@@ -23,6 +24,13 @@ var RunnerCommand = &cli.Command{
 			Aliases: []string{"s"},
 			Usage:   "C2 server URL",
 			Value:   "http://localhost:6464",
+			Sources: cli.EnvVars("XAGENT_SERVER"),
+		},
+		&cli.StringFlag{
+			Name:    "token-file",
+			Usage:   "Path to authentication token file",
+			Value:   "data/token.json",
+			Sources: cli.EnvVars("XAGENT_TOKEN_FILE"),
 		},
 		&cli.StringFlag{
 			Name:    "config",
@@ -81,6 +89,14 @@ var RunnerCommand = &cli.Command{
 			log = slog.New(handler)
 		}
 
+		auth, err := deviceauth.New(deviceauth.Options{
+			DiscoveryURL: deviceauth.DiscoveryURL(serverAddr),
+			TokenFile:    cmd.String("token-file"),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize auth: %w", err)
+		}
+
 		workspaces, err := workspace.LoadConfig(configPath, nil)
 		if err != nil {
 			return fmt.Errorf("failed to load workspace config: %w", err)
@@ -93,6 +109,7 @@ var RunnerCommand = &cli.Command{
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
 			Log:         log,
+			Auth:        auth,
 		})
 		if err != nil {
 			return err

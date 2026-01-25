@@ -14,7 +14,7 @@ type UnixProxy struct {
 	server     *http.Server
 }
 
-func NewUnixProxy(socketPath, targetURL string) (*UnixProxy, error) {
+func NewUnixProxy(socketPath, targetURL string, tokenSource TokenSource) (*UnixProxy, error) {
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		return nil, err
@@ -32,6 +32,14 @@ func NewUnixProxy(socketPath, targetURL string) (*UnixProxy, error) {
 	os.Chmod(socketPath, 0777)
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	// Wrap transport to inject auth header
+	if tokenSource != nil {
+		proxy.Transport = &AuthTransport{
+			Transport: http.DefaultTransport,
+			Source:    tokenSource,
+		}
+	}
 
 	return &UnixProxy{
 		socketPath: socketPath,

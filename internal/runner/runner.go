@@ -51,6 +51,7 @@ type Options struct {
 	Concurrency int
 	RunnerID    string
 	Log         *slog.Logger
+	Auth        xagentclient.TokenSource
 }
 
 func New(opts Options) (*Runner, error) {
@@ -59,7 +60,7 @@ func New(opts Options) (*Runner, error) {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
 
-	p, err := xagentclient.NewUnixProxy(socketPath, opts.ServerURL)
+	p, err := xagentclient.NewUnixProxy(socketPath, opts.ServerURL, opts.Auth)
 	if err != nil {
 		docker.Close()
 		return nil, fmt.Errorf("failed to create proxy: %w", err)
@@ -75,7 +76,7 @@ func New(opts Options) (*Runner, error) {
 
 	return &Runner{
 		docker:      docker,
-		client:      xagentclient.New(opts.ServerURL, nil),
+		client:      xagentclient.New(opts.ServerURL, opts.Auth),
 		proxy:       p,
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
