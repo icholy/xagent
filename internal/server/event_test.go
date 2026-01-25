@@ -462,6 +462,45 @@ func TestListEventTasks(t *testing.T) {
 	assert.Equal(t, len(resp.TaskIds), 2)
 }
 
+func TestListEventTasks_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+
+	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+		Description: "User A's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.AddEventTask(userA, &xagentv1.AddEventTaskRequest{
+		EventId: eventResp.Event.Id,
+		TaskId:  taskResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	respA, err := srv.ListEventTasks(userA, &xagentv1.ListEventTasksRequest{
+		EventId: eventResp.Event.Id,
+	})
+	assert.NilError(t, err)
+	respB, err := srv.ListEventTasks(userB, &xagentv1.ListEventTasksRequest{
+		EventId: eventResp.Event.Id,
+	})
+	assert.NilError(t, err)
+
+	// Assert
+	assert.Equal(t, len(respA.TaskIds), 1)
+	assert.Equal(t, len(respB.TaskIds), 0)
+}
+
 func TestListEventsByTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
@@ -508,4 +547,43 @@ func TestListEventsByTask(t *testing.T) {
 	// Events are ordered by created_at DESC (newest first)
 	assert.Equal(t, resp.Events[0].Description, "Event 2")
 	assert.Equal(t, resp.Events[1].Description, "Event 1")
+}
+
+func TestListEventsByTask_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+
+	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+		Description: "User A's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.AddEventTask(userA, &xagentv1.AddEventTaskRequest{
+		EventId: eventResp.Event.Id,
+		TaskId:  taskResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	respA, err := srv.ListEventsByTask(userA, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskResp.Task.Id,
+	})
+	assert.NilError(t, err)
+	respB, err := srv.ListEventsByTask(userB, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	// Assert
+	assert.Equal(t, len(respA.Events), 1)
+	assert.Equal(t, len(respB.Events), 0)
 }
