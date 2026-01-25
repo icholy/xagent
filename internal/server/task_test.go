@@ -199,6 +199,38 @@ func TestListTasks_Permissions(t *testing.T) {
 	assert.Equal(t, len(respB.Tasks), 1)
 }
 
+func TestListChildTasks_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Parent Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Child Task",
+		Workspace: "test-workspace",
+		Parent:    parentResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	respA, err := srv.ListChildTasks(userA, &xagentv1.ListChildTasksRequest{
+		ParentId: parentResp.Task.Id,
+	})
+	assert.NilError(t, err)
+	respB, err := srv.ListChildTasks(userB, &xagentv1.ListChildTasksRequest{
+		ParentId: parentResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	// Assert
+	assert.Equal(t, len(respA.Tasks), 1)
+	assert.Equal(t, len(respB.Tasks), 0)
+}
+
 func TestUpdateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
