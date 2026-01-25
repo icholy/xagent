@@ -120,6 +120,24 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 	return resp, nil
 }
 
+func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTasksRequest) (*xagentv1.ListRunnerTasksResponse, error) {
+	userID := s.userID(ctx)
+	tasks, err := s.tasks.ListForRunner(ctx, nil, req.Runner, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return &xagentv1.ListRunnerTasksResponse{}, nil
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp := &xagentv1.ListRunnerTasksResponse{
+		Tasks: make([]*xagentv1.Task, len(tasks)),
+	}
+	for i, t := range tasks {
+		resp.Tasks[i] = t.Proto()
+	}
+	return resp, nil
+}
+
 func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
 	userID := s.userID(ctx)
 	tasks, err := s.tasks.ListChildren(ctx, nil, req.ParentId, userID)

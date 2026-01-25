@@ -108,6 +108,19 @@ func (r *TaskRepository) ListWithCommand(ctx context.Context, tx *sql.Tx, owner 
 	return r.scanTasks(rows)
 }
 
+func (r *TaskRepository) ListForRunner(ctx context.Context, tx *sql.Tx, runner string, owner string) ([]*model.Task, error) {
+	rows, err := r.exec(tx).QueryContext(ctx, `
+		SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
+		FROM tasks WHERE runner = ? AND owner = ? AND command != '' AND status != 'archived' ORDER BY created_at DESC
+	`, runner, owner)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanTasks(rows)
+}
+
 func (r *TaskRepository) ListByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.prompts, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at
