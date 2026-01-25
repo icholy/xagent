@@ -82,6 +82,26 @@ func TestGetTask_Permissions(t *testing.T) {
 	assert.ErrorContains(t, errB, "not found")
 }
 
+func TestGetTaskDetails_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, errA := srv.GetTaskDetails(userA, &xagentv1.GetTaskDetailsRequest{Id: createResp.Task.Id})
+	_, errB := srv.GetTaskDetails(userB, &xagentv1.GetTaskDetailsRequest{Id: createResp.Task.Id})
+
+	// Assert
+	assert.NilError(t, errA)
+	assert.ErrorContains(t, errB, "not found")
+}
+
 func TestCreateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
