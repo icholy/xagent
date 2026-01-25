@@ -1,4 +1,5 @@
 import { Outlet, createRootRouteWithContext, Link } from '@tanstack/react-router'
+import { LogOut } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { QueryClient } from '@tanstack/react-query'
 import xagentIcon from '@/assets/icon.png'
@@ -50,6 +51,15 @@ function RootComponent() {
             >
               Events
             </Link>
+          </div>
+          <div className="ml-auto">
+            <a
+              href="/auth/logout"
+              className="text-muted-foreground hover:text-foreground transition-colors text-sm flex items-center gap-1.5"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </a>
           </div>
         </div>
       </nav>
