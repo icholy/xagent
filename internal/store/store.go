@@ -55,7 +55,7 @@ func migrate(db *sql.DB) error {
 			status        TEXT NOT NULL,
 			command       TEXT NOT NULL DEFAULT '',
 			version       INTEGER NOT NULL DEFAULT 0,
-			owner         TEXT NOT NULL DEFAULT '',
+			owner         TEXT NOT NULL,
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
@@ -86,9 +86,11 @@ func migrate(db *sql.DB) error {
 			description TEXT NOT NULL,
 			data        TEXT NOT NULL,
 			url         TEXT,
+			owner       TEXT NOT NULL,
 			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX IF NOT EXISTS idx_events_url ON events(url);
+		CREATE INDEX IF NOT EXISTS idx_events_owner ON events(owner);
 
 		CREATE TABLE IF NOT EXISTS event_tasks (
 			event_id INTEGER NOT NULL,

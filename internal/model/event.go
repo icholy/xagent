@@ -13,6 +13,7 @@ type Event struct {
 	Description string    `json:"description"`
 	Data        string    `json:"data"`
 	URL         string    `json:"url,omitempty"`
+	Owner       string    `json:"owner"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

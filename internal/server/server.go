@@ -438,7 +438,7 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 	if limit < 0 || limit > maxLimit {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be at most %d", maxLimit))
 	}
-	events, err := s.events.List(ctx, nil, limit)
+	events, err := s.events.List(ctx, nil, limit, userID(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -456,6 +456,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 		Description: req.Description,
 		Data:        req.Data,
 		URL:         req.Url,
+		Owner:       userID(ctx),
 	}
 	if err := s.events.Create(ctx, nil, event); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -467,7 +468,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 }
 
 func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
-	event, err := s.events.Get(ctx, nil, req.Id)
+	event, err := s.events.Get(ctx, nil, req.Id, userID(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
@@ -480,7 +481,7 @@ func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*
 }
 
 func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
-	if err := s.events.Delete(ctx, nil, req.Id); err != nil {
+	if err := s.events.Delete(ctx, nil, req.Id, userID(ctx)); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event deleted", "id", req.Id)
@@ -543,7 +544,7 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 }
 
 func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
-	event, err := s.events.Get(ctx, nil, req.Id)
+	event, err := s.events.Get(ctx, nil, req.Id, userID(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
