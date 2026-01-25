@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/icholy/xagent/internal/deviceauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/webhook"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -47,6 +48,13 @@ var SubscribeCommand = &cli.Command{
 			Aliases: []string{"s"},
 			Usage:   "xagent server URL",
 			Value:   "http://localhost:6464",
+			Sources: cli.EnvVars("XAGENT_SERVER"),
+		},
+		&cli.StringFlag{
+			Name:    "token-file",
+			Usage:   "Path to authentication token file",
+			Value:   "data/token.json",
+			Sources: cli.EnvVars("XAGENT_TOKEN_FILE"),
 		},
 		&cli.StringFlag{
 			Name:    "region",
@@ -73,7 +81,15 @@ var SubscribeCommand = &cli.Command{
 		}
 
 		sqsClient := sqs.NewFromConfig(awsConfig)
-		xagent := xagentclient.New(serverURL, nil)
+
+		auth, err := deviceauth.New(deviceauth.Options{
+			DiscoveryURL: deviceauth.DiscoveryURL(serverURL),
+			TokenFile:    cmd.String("token-file"),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize auth: %w", err)
+		}
+		xagent := xagentclient.New(serverURL, auth)
 
 		handler := &xagentEventHandler{
 			client: xagent,
