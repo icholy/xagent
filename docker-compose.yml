@@ -15,5 +15,15 @@ services:
       timeout: 5s
       retries: 5
 
+  server:
+    build: .
+    ports:
+      - "6464:6464"
+    environment:
+      DATABASE_URL: postgres://xagent:xagent@postgres:5432/xagent?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
