@@ -24,26 +24,26 @@ func (r *WorkspaceRepository) WithTx(ctx context.Context, tx *sql.Tx, f func(tx 
 	return WithTx(ctx, r.db, tx, f)
 }
 
-// DeleteByRunner deletes all workspaces for the given runner ID.
-func (r *WorkspaceRepository) DeleteByRunner(ctx context.Context, tx *sql.Tx, runnerID string) error {
-	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM workspaces WHERE runner_id = ?`, runnerID)
+// DeleteByRunner deletes all workspaces for the given runner ID and owner.
+func (r *WorkspaceRepository) DeleteByRunner(ctx context.Context, tx *sql.Tx, runnerID, owner string) error {
+	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM workspaces WHERE runner_id = ? AND owner = ?`, runnerID, owner)
 	return err
 }
 
-// Create inserts a new workspace for the given runner ID.
-func (r *WorkspaceRepository) Create(ctx context.Context, tx *sql.Tx, runnerID string, name string) error {
+// Create inserts a new workspace for the given runner ID and owner.
+func (r *WorkspaceRepository) Create(ctx context.Context, tx *sql.Tx, runnerID, name, owner string) error {
 	_, err := r.exec(tx).ExecContext(ctx, `
-		INSERT INTO workspaces (runner_id, name)
-		VALUES (?, ?)
-	`, runnerID, name)
+		INSERT INTO workspaces (runner_id, name, owner)
+		VALUES (?, ?, ?)
+	`, runnerID, name, owner)
 	return err
 }
 
-// List returns all unique workspace names across all runners, sorted alphabetically.
-func (r *WorkspaceRepository) List(ctx context.Context, tx *sql.Tx) ([]string, error) {
+// List returns all unique workspace names for the given owner, sorted alphabetically.
+func (r *WorkspaceRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]string, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT DISTINCT name FROM workspaces ORDER BY name ASC
-	`)
+		SELECT DISTINCT name FROM workspaces WHERE owner = ? ORDER BY name ASC
+	`, owner)
 	if err != nil {
 		return nil, err
 	}

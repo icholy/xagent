@@ -702,12 +702,13 @@ func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType)
 }
 
 func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
+	userID := s.userID(ctx)
 	err := s.workspaces.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		if err := s.workspaces.DeleteByRunner(ctx, tx, req.RunnerId); err != nil {
+		if err := s.workspaces.DeleteByRunner(ctx, tx, req.RunnerId, userID); err != nil {
 			return err
 		}
 		for _, ws := range req.Workspaces {
-			if err := s.workspaces.Create(ctx, tx, req.RunnerId, ws.Name); err != nil {
+			if err := s.workspaces.Create(ctx, tx, req.RunnerId, ws.Name, userID); err != nil {
 				return err
 			}
 		}
@@ -716,12 +717,13 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "count", len(req.Workspaces))
+	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "owner", userID, "count", len(req.Workspaces))
 	return &xagentv1.RegisterWorkspacesResponse{}, nil
 }
 
 func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
-	names, err := s.workspaces.List(ctx, nil)
+	userID := s.userID(ctx)
+	names, err := s.workspaces.List(ctx, nil, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
