@@ -14,6 +14,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent);
+CREATE INDEX IF NOT EXISTS idx_tasks_runner_status ON tasks(runner, status);
 
 CREATE TABLE IF NOT EXISTS logs (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +40,7 @@ CREATE TABLE IF NOT EXISTS task_links (
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_links_url ON task_links(url);
 
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
