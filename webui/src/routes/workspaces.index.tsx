@@ -26,16 +26,20 @@ export const Route = createFileRoute('/workspaces/')({
   component: WorkspacesPage,
 })
 
+const ALL_RUNNERS = '\x00'
+
 function WorkspacesPage() {
-  const [selectedRunner, setSelectedRunner] = useState('')
+  const [selectedRunner, setSelectedRunner] = useState(ALL_RUNNERS)
   const { data, isLoading, error, refetch } = useQuery(listWorkspaces, {}, {
     refetchInterval: 5000,
   })
   const clearMutation = useMutation(clearWorkspaces)
 
   const handleClear = async () => {
-    await clearMutation.mutateAsync({ runnerId: selectedRunner })
-    setSelectedRunner('')
+    await clearMutation.mutateAsync({
+      runnerId: selectedRunner === ALL_RUNNERS ? '' : selectedRunner,
+    })
+    setSelectedRunner(ALL_RUNNERS)
     refetch()
   }
 
@@ -57,7 +61,7 @@ function WorkspacesPage() {
 
   const allWorkspaces = data?.workspaces ?? []
   const runners = [...new Set(allWorkspaces.map((w) => w.runnerId).filter(Boolean))]
-  const workspaces = allWorkspaces.filter((w) => !selectedRunner || w.runnerId === selectedRunner)
+  const workspaces = allWorkspaces.filter((w) => selectedRunner === ALL_RUNNERS || w.runnerId === selectedRunner)
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -66,10 +70,10 @@ function WorkspacesPage() {
         <div className="flex items-center gap-4">
           <Select value={selectedRunner} onValueChange={setSelectedRunner}>
             <SelectTrigger className="w-48">
-              <SelectValue placeholder="All runners" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All runners</SelectItem>
+              <SelectItem value={ALL_RUNNERS}>All runners</SelectItem>
               {runners.map((runner) => (
                 <SelectItem key={runner} value={runner!}>
                   {runner}
