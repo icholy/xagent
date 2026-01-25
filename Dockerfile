@@ -15,7 +15,6 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=webui /app/internal/server/webui ./internal/server/webui
-RUN go generate ./...
 RUN CGO_ENABLED=1 go build -o xagent ./cmd/xagent
 
 # Runtime
