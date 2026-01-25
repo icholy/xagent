@@ -282,6 +282,9 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return tx.Commit()
 	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -304,6 +307,9 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return tx.Commit()
 	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -326,6 +332,9 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return tx.Commit()
 	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -487,7 +496,6 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
 	}
-
 	if err := s.events.AddTask(ctx, nil, req.EventId, req.TaskId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -542,16 +550,13 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
 	if event.URL == "" {
 		return &xagentv1.ProcessEventResponse{}, nil
 	}
-
 	links, err := s.links.FindByURL(ctx, nil, event.URL, userID(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
 	// Build set of tasks that want notifications
 	taskIDs := map[int64]bool{}
 	for _, link := range links {
@@ -587,7 +592,6 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			s.log.Warn("failed to start task", "task_id", link.TaskID, "error", err)
 		}
 	}
-
 	ids := slices.Collect(maps.Keys(taskIDs))
 	s.log.Info("event processed", "id", req.Id, "tasks_routed", len(ids))
 	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
@@ -626,6 +630,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return tx.Commit()
 		})
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", event.TaskID))
+			}
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if s.notify && applied && task.Command == "" {
@@ -665,7 +672,6 @@ func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType)
 	if task.Name != "" {
 		displayName = fmt.Sprintf("%q", task.Name)
 	}
-
 	var message string
 	switch event {
 	case model.RunnerEventStopped:
@@ -696,7 +702,6 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
 	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "count", len(req.Workspaces))
 	return &xagentv1.RegisterWorkspacesResponse{}, nil
 }
@@ -706,11 +711,9 @@ func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspace
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
 	workspaces := make([]*xagentv1.RegisteredWorkspace, len(names))
 	for i, name := range names {
 		workspaces[i] = &xagentv1.RegisteredWorkspace{Name: name}
 	}
-
 	return &xagentv1.ListWorkspacesResponse{Workspaces: workspaces}, nil
 }
