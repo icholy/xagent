@@ -119,7 +119,7 @@ func (r *Runner) submit(ctx context.Context, taskID int64, event string, version
 }
 
 func (r *Runner) Poll(ctx context.Context) error {
-	resp, err := r.client.ListTasks(ctx, &xagentv1.ListTasksRequest{HasCommand: true})
+	resp, err := r.client.ListRunnerTasks(ctx, &xagentv1.ListRunnerTasksRequest{Runner: r.runnerID})
 	if err != nil {
 		return err
 	}
@@ -129,10 +129,6 @@ func (r *Runner) Poll(ctx context.Context) error {
 
 	for _, pbTask := range resp.Tasks {
 		task := model.TaskFromProto(pbTask)
-		// Skip tasks not assigned to this runner
-		if task.Runner != r.runnerID {
-			continue
-		}
 		switch task.Command {
 		case model.TaskCommandStop:
 			g.Go(func() error {
