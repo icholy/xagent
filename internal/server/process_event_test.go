@@ -10,7 +10,7 @@ import (
 func TestProcessEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "test-user")
+	ctx := withUserID(t, "")
 
 	// Create two tasks with links to the same URL with notify=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -98,7 +98,7 @@ func TestProcessEvent(t *testing.T) {
 func TestProcessEventWithoutURL(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "test-user")
+	ctx := withUserID(t, "")
 
 	// Create an event without URL
 	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -120,7 +120,7 @@ func TestProcessEventWithoutURL(t *testing.T) {
 func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "test-user")
+	ctx := withUserID(t, "")
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -158,7 +158,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 func TestProcessEventWithNotifyFalse(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "test-user")
+	ctx := withUserID(t, "")
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -196,7 +196,7 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 func TestProcessEventDeduplicatesTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "test-user")
+	ctx := withUserID(t, "")
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -243,7 +243,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "test-user")
+	ctx := withUserID(t, "")
 
 	// Create two tasks with links to the same URL with notify=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -343,8 +343,8 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 func TestProcessEvent_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "user-a")
-	userB := withUserID(t, "user-b")
+	userA := withUserID(t, "")
+	userB := withUserID(t, "")
 	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Url:         "https://github.com/example/repo/pull/123",
