@@ -46,9 +46,6 @@ type Auth struct {
 
 // New creates a new Auth client
 func New(ctx context.Context, config Options) (*Auth, error) {
-	if config.Display == nil {
-		return nil, fmt.Errorf("deviceauth.New called with nil Display")
-	}
 	if config.TokenFile == "" {
 		return nil, fmt.Errorf("deviceauth.New called with empty TokenFile")
 	}
@@ -114,6 +111,9 @@ func (a *Auth) Token(ctx context.Context) (string, error) {
 
 // DeviceFlow initiates a new device authorization flow, even if a valid token exists
 func (a *Auth) DeviceFlow(ctx context.Context) error {
+	if a.config.Display == nil {
+		return fmt.Errorf("DeviceFlow requires Display to be set")
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	deviceAuth, err := rp.DeviceAuthorization(ctx, scopes, a.provider, nil)
