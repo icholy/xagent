@@ -4,7 +4,7 @@ terraform = "latest"
 age = "latest"
 pnpm = "latest"
 flyctl = "latest"
-d2 = "latest"
+"ubi:terrastruct/d2" = "latest"
 
 [tasks.build]
 description = "Build xagent binaries for all architectures and webhook"
