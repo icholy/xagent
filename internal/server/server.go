@@ -154,6 +154,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	task := &model.Task{
 		Name:         req.Name,
 		Parent:       req.Parent,
+		Runner:       req.Runner,
 		Workspace:    req.Workspace,
 		Instructions: instructions,
 		Status:       model.TaskStatusPending,
@@ -164,7 +165,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	if err := s.tasks.Create(ctx, nil, task); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task created", "id", task.ID, "workspace", task.Workspace, "owner", task.Owner)
+	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "owner", task.Owner)
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(),
 	}, nil

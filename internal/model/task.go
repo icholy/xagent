@@ -57,6 +57,7 @@ type Task struct {
 	ID           int64         `json:"id"`
 	Name         string        `json:"name"`
 	Parent       int64         `json:"parent"`
+	Runner       string        `json:"runner"`
 	Workspace    string        `json:"workspace"`
 	Instructions []Instruction `json:"instructions"`
 	Status       TaskStatus    `json:"status"`
@@ -77,6 +78,7 @@ func (t *Task) Proto() *xagentv1.Task {
 		Id:           t.ID,
 		Name:         t.Name,
 		Parent:       t.Parent,
+		Runner:       t.Runner,
 		Workspace:    t.Workspace,
 		Instructions: instructions,
 		Status:       string(t.Status),
@@ -105,6 +107,7 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		ID:           pb.Id,
 		Name:         pb.Name,
 		Parent:       pb.Parent,
+		Runner:       pb.Runner,
 		Workspace:    pb.Workspace,
 		Instructions: instructions,
 		Status:       TaskStatus(pb.Status),

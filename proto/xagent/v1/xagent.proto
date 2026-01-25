@@ -53,6 +53,7 @@ message Task {
   string command = 9;  // "restart", "stop", or empty
   int64 version = 10;  // Incremented when command changes
   string owner = 11;   // User ID of the task owner
+  string runner = 12;  // Runner ID that handles this task
 }
 
 message McpServer {
@@ -64,6 +65,7 @@ message McpServer {
 
 message ListTasksRequest {
   bool has_command = 1;  // If true, only return tasks with non-empty command
+  string runner = 2;     // If set, only return tasks for this runner
 }
 
 message ListTasksResponse {
@@ -83,6 +85,7 @@ message CreateTaskRequest {
   int64 parent = 2;
   string workspace = 3;
   repeated Instruction instructions = 4;
+  string runner = 5;  // Runner ID that should handle this task
 }
 
 message CreateTaskResponse {

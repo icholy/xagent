@@ -18,13 +18,15 @@ import (
 type Server struct {
 	client    xagentclient.Client
 	taskID    int64
+	runner    string
 	workspace string
 }
 
-func NewServer(client xagentclient.Client, taskID int64, workspace string) *Server {
+func NewServer(client xagentclient.Client, taskID int64, runner, workspace string) *Server {
 	return &Server{
 		client:    client,
 		taskID:    taskID,
+		runner:    runner,
 		workspace: workspace,
 	}
 }
@@ -144,6 +146,7 @@ func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 	resp, err := s.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Parent:    s.taskID,
+		Runner:    s.runner,
 		Workspace: s.workspace,
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},

@@ -34,6 +34,7 @@ func (s *ExternalServer) AddTools(server *mcp.Server) {
 
 type createTaskInput struct {
 	Name        string `json:"name" jsonschema:"A short name for the task"`
+	Runner      string `json:"runner" jsonschema:"The runner ID to assign the task to"`
 	Workspace   string `json:"workspace" jsonschema:"The workspace to create the task in"`
 	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
 	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction"`
@@ -42,6 +43,7 @@ type createTaskInput struct {
 func (s *ExternalServer) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
 	resp, err := s.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
+		Runner:    input.Runner,
 		Workspace: input.Workspace,
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
@@ -54,6 +56,7 @@ func (s *ExternalServer) createTask(ctx context.Context, req *mcp.CallToolReques
 	return jsonResult(map[string]any{
 		"id":        resp.Task.Id,
 		"name":      resp.Task.Name,
+		"runner":    resp.Task.Runner,
 		"workspace": resp.Task.Workspace,
 		"status":    resp.Task.Status,
 	}), nil, nil

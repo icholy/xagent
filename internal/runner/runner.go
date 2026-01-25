@@ -129,6 +129,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 
 	for _, pbTask := range resp.Tasks {
 		task := model.TaskFromProto(pbTask)
+		// Skip tasks not assigned to this runner
+		if task.Runner != r.runnerID {
+			continue
+		}
 		switch task.Command {
 		case model.TaskCommandStop:
 			g.Go(func() error {
@@ -515,7 +519,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
 		Command: "/usr/local/bin/xagent",
-		Args:    []string{"mcp", "--mode", "container", "--server", "unix:///var/run/xagent.sock", "--task", taskIDStr, "--workspace", task.Workspace},
+		Args:    []string{"mcp", "--mode", "container", "--server", "unix:///var/run/xagent.sock", "--task", taskIDStr, "--runner", task.Runner, "--workspace", task.Workspace},
 	}
 
 	for name, srv := range ws.Agent.McpServers {

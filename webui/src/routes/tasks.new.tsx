@@ -24,7 +24,7 @@ function NewTaskPage() {
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
-  const [workspace, setWorkspace] = useLocalStorage('xagent-last-workspace', '')
+  const [workspaceRunner, setWorkspaceRunner] = useLocalStorage('xagent-last-workspace-runner', '')
   const [instruction, setInstruction] = useState('')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {})
@@ -41,11 +41,14 @@ function NewTaskPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!workspace.trim() || !instruction.trim()) return
+    if (!workspaceRunner.trim() || !instruction.trim()) return
+
+    const [workspace, runner] = workspaceRunner.split('@')
 
     await mutation.mutateAsync({
       name: name.trim(),
-      workspace: workspace.trim(),
+      runner,
+      workspace,
       parent: 0n,
       instructions: [{ text: instruction.trim(), url: '' }],
     })
@@ -70,16 +73,19 @@ function NewTaskPage() {
 
             <div className="space-y-2">
               <Label htmlFor="workspace">Workspace</Label>
-              <Select value={workspace} onValueChange={setWorkspace} required>
+              <Select value={workspaceRunner} onValueChange={setWorkspaceRunner} required>
                 <SelectTrigger id="workspace">
                   <SelectValue placeholder="Select a workspace" />
                 </SelectTrigger>
                 <SelectContent>
-                  {workspacesData?.workspaces.map((ws) => (
-                    <SelectItem key={ws.name} value={ws.name}>
-                      {ws.name}
-                    </SelectItem>
-                  ))}
+                  {workspacesData?.workspaces.map((ws) => {
+                    const value = `${ws.name}@${ws.runnerId}`
+                    return (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground">

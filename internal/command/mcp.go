@@ -32,6 +32,11 @@ var McpCommand = &cli.Command{
 			Usage:   "Task ID (required for container mode)",
 		},
 		&cli.StringFlag{
+			Name:    "runner",
+			Aliases: []string{"r"},
+			Usage:   "Runner ID (required for container mode)",
+		},
+		&cli.StringFlag{
 			Name:    "workspace",
 			Aliases: []string{"w"},
 			Usage:   "Workspace name (required for container mode)",
@@ -51,12 +56,16 @@ var McpCommand = &cli.Command{
 			if !cmd.IsSet("task") {
 				return fmt.Errorf("--task is required for container mode")
 			}
+			if !cmd.IsSet("runner") {
+				return fmt.Errorf("--runner is required for container mode")
+			}
 			if !cmd.IsSet("workspace") {
 				return fmt.Errorf("--workspace is required for container mode")
 			}
 			taskID := cmd.Int64("task")
+			runner := cmd.String("runner")
 			workspace := cmd.String("workspace")
-			xmcp.NewServer(client, taskID, workspace).AddTools(server)
+			xmcp.NewServer(client, taskID, runner, workspace).AddTools(server)
 		case "external":
 			xmcp.NewExternalServer(client).AddTools(server)
 		default:

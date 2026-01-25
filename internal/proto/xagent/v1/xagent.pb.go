@@ -87,6 +87,7 @@ type Task struct {
 	Command       string                 `protobuf:"bytes,9,opt,name=command,proto3" json:"command,omitempty"`   // "restart", "stop", or empty
 	Version       int64                  `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"` // Incremented when command changes
 	Owner         string                 `protobuf:"bytes,11,opt,name=owner,proto3" json:"owner,omitempty"`      // User ID of the task owner
+	Runner        string                 `protobuf:"bytes,12,opt,name=runner,proto3" json:"runner,omitempty"`    // Runner ID that handles this task
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -198,6 +199,13 @@ func (x *Task) GetOwner() string {
 	return ""
 }
 
+func (x *Task) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
+}
+
 type McpServer struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -269,6 +277,7 @@ func (x *McpServer) GetEnv() map[string]string {
 type ListTasksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HasCommand    bool                   `protobuf:"varint,1,opt,name=has_command,json=hasCommand,proto3" json:"has_command,omitempty"` // If true, only return tasks with non-empty command
+	Runner        string                 `protobuf:"bytes,2,opt,name=runner,proto3" json:"runner,omitempty"`                            // If set, only return tasks for this runner
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -308,6 +317,13 @@ func (x *ListTasksRequest) GetHasCommand() bool {
 		return x.HasCommand
 	}
 	return false
+}
+
+func (x *ListTasksRequest) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
 }
 
 type ListTasksResponse struct {
@@ -448,6 +464,7 @@ type CreateTaskRequest struct {
 	Parent        int64                  `protobuf:"varint,2,opt,name=parent,proto3" json:"parent,omitempty"`
 	Workspace     string                 `protobuf:"bytes,3,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Instructions  []*Instruction         `protobuf:"bytes,4,rep,name=instructions,proto3" json:"instructions,omitempty"`
+	Runner        string                 `protobuf:"bytes,5,opt,name=runner,proto3" json:"runner,omitempty"` // Runner ID that should handle this task
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -508,6 +525,13 @@ func (x *CreateTaskRequest) GetInstructions() []*Instruction {
 		return x.Instructions
 	}
 	return nil
+}
+
+func (x *CreateTaskRequest) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
 }
 
 type CreateTaskResponse struct {
@@ -3061,7 +3085,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x16xagent/v1/xagent.proto\x12\txagent.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"3\n" +
 	"\vInstruction\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"\xf4\x02\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\x8c\x03\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -3076,7 +3100,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\acommand\x18\t \x01(\tR\acommand\x12\x18\n" +
 	"\aversion\x18\n" +
 	" \x01(\x03R\aversion\x12\x14\n" +
-	"\x05owner\x18\v \x01(\tR\x05owner\"\xb6\x01\n" +
+	"\x05owner\x18\v \x01(\tR\x05owner\x12\x16\n" +
+	"\x06runner\x18\f \x01(\tR\x06runner\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
@@ -3084,21 +3109,23 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x03env\x18\x04 \x03(\v2\x1d.xagent.v1.McpServer.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"3\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"K\n" +
 	"\x10ListTasksRequest\x12\x1f\n" +
 	"\vhas_command\x18\x01 \x01(\bR\n" +
-	"hasCommand\":\n" +
+	"hasCommand\x12\x16\n" +
+	"\x06runner\x18\x02 \x01(\tR\x06runner\":\n" +
 	"\x11ListTasksResponse\x12%\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"4\n" +
 	"\x15ListChildTasksRequest\x12\x1b\n" +
 	"\tparent_id\x18\x01 \x01(\x03R\bparentId\"?\n" +
 	"\x16ListChildTasksResponse\x12%\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"\x99\x01\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"\xb1\x01\n" +
 	"\x11CreateTaskRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x03R\x06parent\x12\x1c\n" +
 	"\tworkspace\x18\x03 \x01(\tR\tworkspace\x12:\n" +
-	"\finstructions\x18\x04 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\"9\n" +
+	"\finstructions\x18\x04 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x16\n" +
+	"\x06runner\x18\x05 \x01(\tR\x06runner\"9\n" +
 	"\x12CreateTaskResponse\x12#\n" +
 	"\x04task\x18\x01 \x01(\v2\x0f.xagent.v1.TaskR\x04task\" \n" +
 	"\x0eGetTaskRequest\x12\x0e\n" +

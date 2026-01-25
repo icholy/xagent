@@ -50,6 +50,7 @@ func migrate(db *sql.DB) error {
 			id            INTEGER PRIMARY KEY AUTOINCREMENT,
 			name          TEXT NOT NULL DEFAULT '',
 			parent        INTEGER NOT NULL DEFAULT 0,
+			runner        TEXT NOT NULL,
 			workspace     TEXT NOT NULL,
 			prompts       TEXT NOT NULL,
 			status        TEXT NOT NULL,

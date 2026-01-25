@@ -143,7 +143,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
           {task.name || `Unnamed - ${task.id}`}
         </Link>
       </TableCell>
-      <TableCell>{task.workspace}</TableCell>
+      <TableCell>{task.workspace}@{task.runner}</TableCell>
       <TableCell>
         <span className="flex items-center gap-2">
           <StatusBadge task={task} />
