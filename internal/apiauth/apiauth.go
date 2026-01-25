@@ -4,13 +4,13 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/icholy/xagent/internal/zitadel/middlewarex"
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authentication"
 	openid "github.com/zitadel/zitadel-go/v3/pkg/authentication/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authorization"
 	"github.com/zitadel/zitadel-go/v3/pkg/authorization/oauth"
-	"github.com/zitadel/zitadel-go/v3/pkg/http/middleware"
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 )
 
@@ -51,7 +51,7 @@ type Auth struct {
 	// cookie middleware
 	cookie *authentication.Interceptor[*openid.DefaultContext]
 	// bearer token middleware
-	bearer *middleware.Interceptor[*oauth.IntrospectionContext]
+	bearer *middlewarex.Interceptor[*oauth.IntrospectionContext]
 	// Handler handles /auth/* routes (login, callback, logout)
 	Handler http.Handler
 }
@@ -95,7 +95,7 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	}
 	return &Auth{
 		cookie:  authentication.Middleware(authN),
-		bearer:  middleware.New(authZ),
+		bearer:  middlewarex.New(authZ),
 		Handler: authN,
 	}, nil
 }
@@ -115,6 +115,22 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 			}
 			// Web clients use cookie auth
 			a.cookie.RequireAuthentication()(next).ServeHTTP(w, r)
+		})
+	}
+}
+
+// CheckAuth returns middleware that checks for valid authentication and
+// populates context, but does not reject unauthenticated requests.
+func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// CLI/device clients send X-Auth-Type: bearer
+			if r.Header.Get(AuthTypeHeader) == "bearer" {
+				a.bearer.CheckAuthorization()(next).ServeHTTP(w, r)
+				return
+			}
+			// Web clients use cookie auth
+			a.cookie.CheckAuthentication()(next).ServeHTTP(w, r)
 		})
 	}
 }
