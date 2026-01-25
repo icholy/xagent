@@ -37,6 +37,7 @@ function WorkspacesPage() {
     await clearMutation.mutateAsync({
       runnerId: selectedRunner === 'all' ? '' : selectedRunner,
     })
+    setSelectedRunner('all')
     refetch()
   }
 
