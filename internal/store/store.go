@@ -43,12 +43,10 @@ func Open(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, err
 	}
-
 	return db, nil
 }
 
