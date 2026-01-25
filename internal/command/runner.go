@@ -15,6 +15,14 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+func defaultRunnerID() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "default"
+	}
+	return hostname
+}
+
 var RunnerCommand = &cli.Command{
 	Name:  "runner",
 	Usage: "Start the runner (monitors tasks, manages containers)",
@@ -61,7 +69,7 @@ var RunnerCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:  "id",
 			Usage: "Unique identifier for this runner",
-			Value: "default",
+			Value: defaultRunnerID(),
 		},
 		&cli.BoolFlag{
 			Name:  "debug",
