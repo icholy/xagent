@@ -134,6 +134,38 @@ func TestListEventsWithLimit(t *testing.T) {
 	assert.Equal(t, resp.Events[1].Description, "Event 4")
 }
 
+func TestListEvents_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	_, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+		Description: "User A's Event 1",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+		Description: "User A's Event 2",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateEvent(userB, &xagentv1.CreateEventRequest{
+		Description: "User B's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	respA, err := srv.ListEvents(userA, &xagentv1.ListEventsRequest{})
+	assert.NilError(t, err)
+	respB, err := srv.ListEvents(userB, &xagentv1.ListEventsRequest{})
+	assert.NilError(t, err)
+
+	// Assert
+	assert.Equal(t, len(respA.Events), 2)
+	assert.Equal(t, len(respB.Events), 1)
+}
+
 func TestDeleteEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
