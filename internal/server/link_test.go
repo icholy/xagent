@@ -33,7 +33,7 @@ func TestCreateLink(t *testing.T) {
 	assert.Equal(t, resp.Link.Notify, true)
 }
 
-func TestCreateLinkPermissions(t *testing.T) {
+func TestCreateLink_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")
@@ -87,7 +87,7 @@ func TestListLinks(t *testing.T) {
 	assert.Equal(t, len(resp.Links), 2)
 }
 
-func TestListLinksPermissions(t *testing.T) {
+func TestListLinks_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")
@@ -151,7 +151,7 @@ func TestFindLinksByURL(t *testing.T) {
 	assert.Equal(t, len(resp.Links), 2)
 }
 
-func TestFindLinksByURLPermissions(t *testing.T) {
+func TestFindLinksByURL_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")

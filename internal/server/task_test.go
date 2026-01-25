@@ -62,7 +62,7 @@ func TestGetTask(t *testing.T) {
 	assert.DeepEqual(t, getResp.Task, expected, protocmp.Transform())
 }
 
-func TestGetTaskPermissions(t *testing.T) {
+func TestGetTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")
@@ -122,7 +122,7 @@ func TestCreateTask(t *testing.T) {
 	assert.DeepEqual(t, resp.Task, expected, protocmp.Transform())
 }
 
-func TestCreateTaskWithParentPermissions(t *testing.T) {
+func TestCreateTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")
@@ -167,7 +167,7 @@ func TestListTasks(t *testing.T) {
 	assert.Equal(t, len(resp.Tasks), 2)
 }
 
-func TestListTasksPermissions(t *testing.T) {
+func TestListTasks_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")
@@ -222,7 +222,7 @@ func TestUpdateTask(t *testing.T) {
 	assert.Equal(t, getResp.Task.Name, "Updated Name")
 }
 
-func TestUpdateTaskPermissions(t *testing.T) {
+func TestUpdateTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")
@@ -264,7 +264,7 @@ func TestDeleteTask(t *testing.T) {
 	assert.ErrorContains(t, getErr, "")
 }
 
-func TestDeleteTaskPermissions(t *testing.T) {
+func TestDeleteTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
 	userA := withUserID(t, "user-a")
