@@ -5,3 +5,4 @@
 /webhook
 /internal/server/webui/
 /webui/node_modules/
+.env

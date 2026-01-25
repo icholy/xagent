@@ -28,3 +28,7 @@ run = [
 [tasks.wipe]
 description = "Delete the database"
 run = "rm -rf ./data/xagent.db*"
+
+[tasks.env]
+description = "Decrypt secrets.yml to .env"
+run = "sops -d --output-type dotenv sops.env.yml > .env"
