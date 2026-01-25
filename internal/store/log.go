@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Store) CreateLog(ctx context.Context, tx *sql.Tx, log *model.Log) error {
-	id, err := s.qs(tx).CreateLog(ctx, sqlc.CreateLogParams{
+	id, err := s.q(tx).CreateLog(ctx, sqlc.CreateLogParams{
 		TaskID:    log.TaskID,
 		Type:      log.Type,
 		Content:   log.Content,
@@ -24,7 +24,7 @@ func (s *Store) CreateLog(ctx context.Context, tx *sql.Tx, log *model.Log) error
 }
 
 func (s *Store) ListLogsByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Log, error) {
-	rows, err := s.qs(tx).ListLogsByTask(ctx, sqlc.ListLogsByTaskParams{
+	rows, err := s.q(tx).ListLogsByTask(ctx, sqlc.ListLogsByTaskParams{
 		TaskID: taskID,
 		Owner:  owner,
 	})
