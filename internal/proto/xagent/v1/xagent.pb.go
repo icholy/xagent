@@ -3284,6 +3284,7 @@ func (x *ListWorkspacesResponse) GetWorkspaces() []*RegisteredWorkspace {
 
 type ClearWorkspacesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunnerId      string                 `protobuf:"bytes,1,opt,name=runner_id,json=runnerId,proto3" json:"runner_id,omitempty"` // Optional: clear only workspaces for this runner
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3316,6 +3317,13 @@ func (x *ClearWorkspacesRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ClearWorkspacesRequest.ProtoReflect.Descriptor instead.
 func (*ClearWorkspacesRequest) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *ClearWorkspacesRequest) GetRunnerId() string {
+	if x != nil {
+		return x.RunnerId
+	}
+	return ""
 }
 
 type ClearWorkspacesResponse struct {
@@ -3545,8 +3553,9 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x16ListWorkspacesResponse\x12>\n" +
 	"\n" +
 	"workspaces\x18\x01 \x03(\v2\x1e.xagent.v1.RegisteredWorkspaceR\n" +
-	"workspaces\"\x18\n" +
-	"\x16ClearWorkspacesRequest\"\x19\n" +
+	"workspaces\"5\n" +
+	"\x16ClearWorkspacesRequest\x12\x1b\n" +
+	"\trunner_id\x18\x01 \x01(\tR\brunnerId\"\x19\n" +
 	"\x17ClearWorkspacesResponse2\x81\x13\n" +
 	"\rXAgentService\x12I\n" +
 	"\n" +

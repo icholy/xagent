@@ -333,6 +333,8 @@ message ListWorkspacesResponse {
   repeated RegisteredWorkspace workspaces = 1;
 }
 
-message ClearWorkspacesRequest {}
+message ClearWorkspacesRequest {
+  string runner_id = 1;  // Optional: clear only workspaces for this runner
+}
 
 message ClearWorkspacesResponse {}

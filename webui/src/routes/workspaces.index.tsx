@@ -34,7 +34,9 @@ function WorkspacesPage() {
   const clearMutation = useMutation(clearWorkspaces)
 
   const handleClear = async () => {
-    await clearMutation.mutateAsync({})
+    await clearMutation.mutateAsync({
+      runnerId: selectedRunner === 'all' ? '' : selectedRunner,
+    })
     refetch()
   }
 
