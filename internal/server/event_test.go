@@ -155,6 +155,29 @@ func TestDeleteEvent(t *testing.T) {
 	assert.ErrorContains(t, getErr, "")
 }
 
+func TestDeleteEvent_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	createResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+		Description: "User A's Event",
+		Data:        `{}`,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, err = srv.DeleteEvent(userB, &xagentv1.DeleteEventRequest{
+		Id: createResp.Event.Id,
+	})
+
+	// Assert - delete should silently fail (no error, but event still exists)
+	assert.NilError(t, err)
+	// Verify event still exists for user A
+	_, err = srv.GetEvent(userA, &xagentv1.GetEventRequest{Id: createResp.Event.Id})
+	assert.NilError(t, err)
+}
+
 func TestAddEventTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
