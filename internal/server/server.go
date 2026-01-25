@@ -421,10 +421,9 @@ func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByUR
 	return resp, nil
 }
 
-const maxLimit = 100
-
 func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
 	userID := s.userID(ctx)
+	const maxLimit = 100
 	limit := cmp.Or(int(req.Limit), maxLimit)
 	if limit < 0 || limit > maxLimit {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be at most %d", maxLimit))
