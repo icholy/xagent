@@ -51,6 +51,12 @@ function RootComponent() {
             >
               Events
             </Link>
+            <Link
+              to="/workspaces"
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+            >
+              Workspaces
+            </Link>
           </div>
           <div className="ml-auto">
             <a

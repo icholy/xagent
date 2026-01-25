@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkspacesIndexRouteImport } from './routes/workspaces.index'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
@@ -20,6 +21,11 @@ import { Route as EventsIdRouteImport } from './routes/events.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkspacesIndexRoute = WorkspacesIndexRouteImport.update({
+  id: '/workspaces/',
+  path: '/workspaces/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasksIndexRoute = TasksIndexRouteImport.update({
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
   '/tasks': typeof TasksIndexRoute
+  '/workspaces': typeof WorkspacesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
   '/tasks': typeof TasksIndexRoute
+  '/workspaces': typeof WorkspacesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
   '/tasks/': typeof TasksIndexRoute
+  '/workspaces/': typeof WorkspacesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/tasks/new'
     | '/events'
     | '/tasks'
+    | '/workspaces'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/tasks/new'
     | '/events'
     | '/tasks'
+    | '/workspaces'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/tasks/new'
     | '/events/'
     | '/tasks/'
+    | '/workspaces/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   TasksNewRoute: typeof TasksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
+  WorkspacesIndexRoute: typeof WorkspacesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/workspaces/': {
+      id: '/workspaces/'
+      path: '/workspaces'
+      fullPath: '/workspaces'
+      preLoaderRoute: typeof WorkspacesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks/': {
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   TasksNewRoute: TasksNewRoute,
   EventsIndexRoute: EventsIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
+  WorkspacesIndexRoute: WorkspacesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
