@@ -86,7 +86,6 @@ type Task struct {
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	Command       string                 `protobuf:"bytes,9,opt,name=command,proto3" json:"command,omitempty"`   // "restart", "stop", or empty
 	Version       int64                  `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"` // Incremented when command changes
-	Owner         string                 `protobuf:"bytes,11,opt,name=owner,proto3" json:"owner,omitempty"`      // User ID of the task owner
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -189,13 +188,6 @@ func (x *Task) GetVersion() int64 {
 		return x.Version
 	}
 	return 0
-}
-
-func (x *Task) GetOwner() string {
-	if x != nil {
-		return x.Owner
-	}
-	return ""
 }
 
 type McpServer struct {
@@ -3061,7 +3053,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x16xagent/v1/xagent.proto\x12\txagent.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"3\n" +
 	"\vInstruction\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"\xf4\x02\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\xe4\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -3075,8 +3067,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x18\n" +
 	"\acommand\x18\t \x01(\tR\acommand\x12\x18\n" +
 	"\aversion\x18\n" +
-	" \x01(\x03R\aversion\x12\x14\n" +
-	"\x05owner\x18\v \x01(\tR\x05owner\"\xb6\x01\n" +
+	" \x01(\x03R\aversionJ\x04\b\v\x10\f\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +

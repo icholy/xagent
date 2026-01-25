@@ -41,7 +41,6 @@ func TestGetTask(t *testing.T) {
 		Name:      "Test Task",
 		Parent:    0,
 		Workspace: "test-workspace",
-		Owner:     "test-user",
 		Instructions: []*xagentv1.Instruction{
 			{
 				Text: "Do something important",
@@ -126,7 +125,6 @@ func TestCreateTask(t *testing.T) {
 		Name:      "New Task",
 		Parent:    0,
 		Workspace: "test-workspace",
-		Owner:     "test-user",
 		Instructions: []*xagentv1.Instruction{
 			{
 				Text: "Do something",

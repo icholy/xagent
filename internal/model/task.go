@@ -82,7 +82,6 @@ func (t *Task) Proto() *xagentv1.Task {
 		Status:       string(t.Status),
 		Command:      string(t.Command),
 		Version:      t.Version,
-		Owner:        t.Owner,
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
 	}
@@ -110,7 +109,6 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		Status:       TaskStatus(pb.Status),
 		Command:      TaskCommand(pb.Command),
 		Version:      pb.Version,
-		Owner:        pb.Owner,
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
 	}
