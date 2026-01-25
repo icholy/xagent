@@ -7,16 +7,24 @@ import (
 	"net/url"
 )
 
-// DiscoveryConfig is returned by the server's /api/auth/config endpoint
+// DiscoveryPath is the path for the device auth discovery endpoint.
+const DiscoveryPath = "/device/config"
+
+// DiscoveryConfig is returned by the server's discovery endpoint.
 type DiscoveryConfig struct {
 	DeviceAuthorizationEndpoint string `json:"device_authorization_endpoint"`
 	TokenEndpoint               string `json:"token_endpoint"`
 	ClientID                    string `json:"client_id"`
 }
 
-// FetchConfig fetches the discovery config from the server
-func FetchConfig(serverURL string) (*DiscoveryConfig, error) {
-	resp, err := http.Get(serverURL + "/device/config")
+// DiscoveryURL returns the full discovery endpoint URL for a server.
+func DiscoveryURL(baseURL string) string {
+	return baseURL + DiscoveryPath
+}
+
+// FetchDiscoveryConfig fetches the discovery config from the given URL.
+func FetchDiscoveryConfig(url string) (*DiscoveryConfig, error) {
+	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}

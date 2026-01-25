@@ -29,10 +29,11 @@ func (t *Token) Valid() bool {
 
 // Options configures the Auth client
 type Options struct {
-	Issuer    string // ZITADEL issuer URL (e.g., https://instance.zitadel.cloud)
-	ClientID  string // Native app client ID
-	TokenFile string // Path to token storage file
-	Display   func(auth *oidc.DeviceAuthorizationResponse) error
+	DiscoveryURL string // Full URL to the discovery endpoint (e.g., http://localhost:6464/device/config)
+	Issuer       string // ZITADEL issuer URL (e.g., https://instance.zitadel.cloud)
+	ClientID     string // Native app client ID
+	TokenFile    string // Path to token storage file
+	Display      func(auth *oidc.DeviceAuthorizationResponse) error
 }
 
 // Auth handles device authorization flow and token management
@@ -46,10 +47,27 @@ type Auth struct {
 // New creates a new Auth client
 func New(ctx context.Context, config Options) (*Auth, error) {
 	if config.Display == nil {
-		return nil, fmt.Errorf("deviceauth.New called with nil Device")
+		return nil, fmt.Errorf("deviceauth.New called with nil Display")
 	}
 	if config.TokenFile == "" {
 		return nil, fmt.Errorf("deviceauth.New called with empty TokenFile")
+	}
+	// Fetch discovery config if DiscoveryURL is provided
+	if config.DiscoveryURL != "" {
+		discovery, err := FetchDiscoveryConfig(config.DiscoveryURL)
+		if err != nil {
+			return nil, fmt.Errorf("fetch discovery config: %w", err)
+		}
+		if config.ClientID == "" {
+			config.ClientID = discovery.ClientID
+		}
+		if config.Issuer == "" {
+			issuer, err := discovery.Issuer()
+			if err != nil {
+				return nil, fmt.Errorf("parse issuer: %w", err)
+			}
+			config.Issuer = issuer
+		}
 	}
 	provider, err := rp.NewRelyingPartyOIDC(
 		ctx,

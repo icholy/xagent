@@ -70,7 +70,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	// Device flow discovery endpoint (public)
-	mux.HandleFunc("/device/config", s.handleDeviceConfig)
+	mux.HandleFunc(deviceauth.DiscoveryPath, s.handleDeviceConfig)
 
 	// Auth routes (login, callback, logout)
 	mux.Handle("/auth/", s.auth.Handler)

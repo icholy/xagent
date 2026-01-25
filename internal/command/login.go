@@ -28,25 +28,9 @@ var LoginCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		serverAddr := cmd.String("server")
-		tokenFile := cmd.String("token-file")
-
-		// Fetch auth discovery config from server
-		discovery, err := deviceauth.FetchConfig(serverAddr)
-		if err != nil {
-			return fmt.Errorf("failed to fetch auth config: %w", err)
-		}
-
-		issuer, err := discovery.Issuer()
-		if err != nil {
-			return fmt.Errorf("failed to parse issuer: %w", err)
-		}
-
-		// Initialize device auth
 		auth, err := deviceauth.New(ctx, deviceauth.Options{
-			Issuer:    issuer,
-			ClientID:  discovery.ClientID,
-			TokenFile: tokenFile,
+			DiscoveryURL: deviceauth.DiscoveryURL(cmd.String("server")),
+			TokenFile:    cmd.String("token-file"),
 			Display: func(resp *oidc.DeviceAuthorizationResponse) error {
 				fmt.Printf("\nTo authenticate, visit: %s\n\n", resp.VerificationURIComplete)
 				fmt.Println("Waiting for authentication...")
@@ -57,12 +41,11 @@ var LoginCommand = &cli.Command{
 			return fmt.Errorf("failed to initialize auth: %w", err)
 		}
 
-		// Run device flow
 		if err := auth.DeviceFlow(ctx); err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
 
-		fmt.Println("Authentication successful! Token saved to", tokenFile)
+		fmt.Println("Authentication successful!")
 		return nil
 	},
 }
