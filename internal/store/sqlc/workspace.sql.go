@@ -11,7 +11,7 @@ import (
 
 const clearWorkspacesByOwner = `-- name: ClearWorkspacesByOwner :exec
 DELETE FROM workspaces
-WHERE owner = ?
+WHERE owner = $1
 `
 
 func (q *Queries) ClearWorkspacesByOwner(ctx context.Context, owner string) error {
@@ -21,7 +21,7 @@ func (q *Queries) ClearWorkspacesByOwner(ctx context.Context, owner string) erro
 
 const createWorkspace = `-- name: CreateWorkspace :exec
 INSERT INTO workspaces (runner_id, name, owner)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 `
 
 type CreateWorkspaceParams struct {
@@ -37,7 +37,7 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 
 const deleteWorkspacesByRunner = `-- name: DeleteWorkspacesByRunner :exec
 DELETE FROM workspaces
-WHERE runner_id = ? AND owner = ?
+WHERE runner_id = $1 AND owner = $2
 `
 
 type DeleteWorkspacesByRunnerParams struct {
@@ -53,7 +53,7 @@ func (q *Queries) DeleteWorkspacesByRunner(ctx context.Context, arg DeleteWorksp
 const listWorkspacesByOwner = `-- name: ListWorkspacesByOwner :many
 SELECT id, runner_id, name, owner, updated_at
 FROM workspaces
-WHERE owner = ?
+WHERE owner = $1
 ORDER BY name ASC
 `
 

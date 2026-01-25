@@ -36,17 +36,16 @@ func (s *Store) GetEvent(ctx context.Context, tx *sql.Tx, id int64, owner string
 }
 
 func (s *Store) HasEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
-	exists, err := s.q(tx).HasEvent(ctx, sqlc.HasEventParams{
+	return s.q(tx).HasEvent(ctx, sqlc.HasEventParams{
 		ID:    id,
 		Owner: owner,
 	})
-	return exists != 0, err
 }
 
 func (s *Store) ListEvents(ctx context.Context, tx *sql.Tx, limit int, owner string) ([]*model.Event, error) {
 	rows, err := s.q(tx).ListEvents(ctx, sqlc.ListEventsParams{
 		Owner: owner,
-		Limit: int64(limit),
+		Limit: int32(limit),
 	})
 	if err != nil {
 		return nil, err

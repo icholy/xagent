@@ -26,8 +26,8 @@ var ServerCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "db",
 			Aliases: []string{"d"},
-			Usage:   "Database file path",
-			Value:   "data/xagent.db",
+			Usage:   "PostgreSQL connection string",
+			Sources: cli.EnvVars("DATABASE_URL"),
 		},
 		&cli.BoolFlag{
 			Name:  "notify",

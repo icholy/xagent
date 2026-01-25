@@ -11,7 +11,8 @@ import (
 )
 
 const addEventTask = `-- name: AddEventTask :exec
-INSERT OR IGNORE INTO event_tasks (event_id, task_id) VALUES (?, ?)
+INSERT INTO event_tasks (event_id, task_id) VALUES ($1, $2)
+ON CONFLICT DO NOTHING
 `
 
 type AddEventTaskParams struct {
@@ -24,9 +25,10 @@ func (q *Queries) AddEventTask(ctx context.Context, arg AddEventTaskParams) erro
 	return err
 }
 
-const createEvent = `-- name: CreateEvent :execlastid
+const createEvent = `-- name: CreateEvent :one
 INSERT INTO events (description, data, url, owner, created_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id
 `
 
 type CreateEventParams struct {
@@ -38,21 +40,20 @@ type CreateEventParams struct {
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, createEvent,
+	row := q.db.QueryRowContext(ctx, createEvent,
 		arg.Description,
 		arg.Data,
 		arg.Url,
 		arg.Owner,
 		arg.CreatedAt,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const deleteEvent = `-- name: DeleteEvent :exec
-DELETE FROM events WHERE id = ? AND owner = ?
+DELETE FROM events WHERE id = $1 AND owner = $2
 `
 
 type DeleteEventParams struct {
@@ -66,7 +67,7 @@ func (q *Queries) DeleteEvent(ctx context.Context, arg DeleteEventParams) error 
 }
 
 const deleteEventTasks = `-- name: DeleteEventTasks :exec
-DELETE FROM event_tasks WHERE event_id = ?
+DELETE FROM event_tasks WHERE event_id = $1
 `
 
 func (q *Queries) DeleteEventTasks(ctx context.Context, eventID int64) error {
@@ -77,7 +78,7 @@ func (q *Queries) DeleteEventTasks(ctx context.Context, eventID int64) error {
 const findEventsByURL = `-- name: FindEventsByURL :many
 SELECT id, description, data, url, owner, created_at
 FROM events
-WHERE url = ?
+WHERE url = $1
 ORDER BY created_at DESC
 `
 
@@ -114,7 +115,7 @@ func (q *Queries) FindEventsByURL(ctx context.Context, url string) ([]Event, err
 const getEvent = `-- name: GetEvent :one
 SELECT id, description, data, url, owner, created_at
 FROM events
-WHERE id = ? AND owner = ?
+WHERE id = $1 AND owner = $2
 `
 
 type GetEventParams struct {
@@ -137,7 +138,7 @@ func (q *Queries) GetEvent(ctx context.Context, arg GetEventParams) (Event, erro
 }
 
 const hasEvent = `-- name: HasEvent :one
-SELECT EXISTS(SELECT 1 FROM events WHERE id = ? AND owner = ?)
+SELECT EXISTS(SELECT 1 FROM events WHERE id = $1 AND owner = $2)
 `
 
 type HasEventParams struct {
@@ -145,18 +146,18 @@ type HasEventParams struct {
 	Owner string `json:"owner"`
 }
 
-func (q *Queries) HasEvent(ctx context.Context, arg HasEventParams) (int64, error) {
+func (q *Queries) HasEvent(ctx context.Context, arg HasEventParams) (bool, error) {
 	row := q.db.QueryRowContext(ctx, hasEvent, arg.ID, arg.Owner)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listEventTasks = `-- name: ListEventTasks :many
 SELECT et.task_id
 FROM event_tasks et
 JOIN tasks t ON et.task_id = t.id
-WHERE et.event_id = ? AND t.owner = ?
+WHERE et.event_id = $1 AND t.owner = $2
 `
 
 type ListEventTasksParams struct {
@@ -190,14 +191,14 @@ func (q *Queries) ListEventTasks(ctx context.Context, arg ListEventTasksParams) 
 const listEvents = `-- name: ListEvents :many
 SELECT id, description, data, url, owner, created_at
 FROM events
-WHERE owner = ?
+WHERE owner = $1
 ORDER BY created_at DESC
-LIMIT ?
+LIMIT $2
 `
 
 type ListEventsParams struct {
 	Owner string `json:"owner"`
-	Limit int64  `json:"limit"`
+	Limit int32  `json:"limit"`
 }
 
 func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event, error) {
@@ -235,7 +236,7 @@ SELECT e.id, e.description, e.data, e.url, e.owner, e.created_at
 FROM events e
 JOIN event_tasks et ON e.id = et.event_id
 JOIN tasks t ON et.task_id = t.id
-WHERE et.task_id = ? AND t.owner = ?
+WHERE et.task_id = $1 AND t.owner = $2
 ORDER BY e.created_at DESC
 `
 
@@ -275,7 +276,7 @@ func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskPara
 }
 
 const removeEventTask = `-- name: RemoveEventTask :exec
-DELETE FROM event_tasks WHERE event_id = ? AND task_id = ?
+DELETE FROM event_tasks WHERE event_id = $1 AND task_id = $2
 `
 
 type RemoveEventTaskParams struct {

@@ -10,9 +10,10 @@ import (
 	"time"
 )
 
-const createLink = `-- name: CreateLink :execlastid
+const createLink = `-- name: CreateLink :one
 INSERT INTO task_links (task_id, relevance, url, title, notify, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id
 `
 
 type CreateLinkParams struct {
@@ -25,7 +26,7 @@ type CreateLinkParams struct {
 }
 
 func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, createLink,
+	row := q.db.QueryRowContext(ctx, createLink,
 		arg.TaskID,
 		arg.Relevance,
 		arg.Url,
@@ -33,14 +34,13 @@ func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (int64, 
 		arg.Notify,
 		arg.CreatedAt,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const deleteLink = `-- name: DeleteLink :exec
-DELETE FROM task_links WHERE id = ?
+DELETE FROM task_links WHERE id = $1
 `
 
 func (q *Queries) DeleteLink(ctx context.Context, id int64) error {
@@ -52,7 +52,7 @@ const findLinksByURL = `-- name: FindLinksByURL :many
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.url = ? AND t.status != 'archived' AND t.owner = ?
+WHERE l.url = $1 AND t.status != 'archived' AND t.owner = $2
 ORDER BY l.created_at DESC
 `
 
@@ -96,7 +96,7 @@ const listLinksByTask = `-- name: ListLinksByTask :many
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.task_id = ? AND t.owner = ?
+WHERE l.task_id = $1 AND t.owner = $2
 ORDER BY l.created_at ASC
 `
 

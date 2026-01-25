@@ -50,11 +50,10 @@ func (s *Store) GetTask(ctx context.Context, tx *sql.Tx, id int64, owner string)
 }
 
 func (s *Store) HasTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
-	exists, err := s.q(tx).HasTask(ctx, sqlc.HasTaskParams{
+	return s.q(tx).HasTask(ctx, sqlc.HasTaskParams{
 		ID:    id,
 		Owner: owner,
 	})
-	return exists != 0, err
 }
 
 func (s *Store) ListTasks(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {

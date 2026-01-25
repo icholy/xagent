@@ -12,7 +12,8 @@ require (
 	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/google/go-github/v68 v68.0.0
-	github.com/mattn/go-sqlite3 v1.14.33
+	github.com/jackc/pgx/v5 v5.7.5
+	github.com/justinas/alice v1.2.0
 	github.com/modelcontextprotocol/go-sdk v1.2.0
 	github.com/urfave/cli/v3 v3.6.1
 	github.com/zitadel/oidc/v3 v3.45.3
@@ -97,11 +98,9 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.7.5 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jdx/go-netrc v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/justinas/alice v1.2.0 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/matryer/moq v0.6.0 // indirect

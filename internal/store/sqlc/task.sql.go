@@ -10,9 +10,10 @@ import (
 	"time"
 )
 
-const createTask = `-- name: CreateTask :execlastid
+const createTask = `-- name: CreateTask :one
 INSERT INTO tasks (name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id
 `
 
 type CreateTaskParams struct {
@@ -30,7 +31,7 @@ type CreateTaskParams struct {
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, createTask,
+	row := q.db.QueryRowContext(ctx, createTask,
 		arg.Name,
 		arg.Parent,
 		arg.Runner,
@@ -43,14 +44,13 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, 
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const deleteTask = `-- name: DeleteTask :exec
-DELETE FROM tasks WHERE id = ? AND owner = ?
+DELETE FROM tasks WHERE id = $1 AND owner = $2
 `
 
 type DeleteTaskParams struct {
@@ -66,7 +66,7 @@ func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) error {
 const getTask = `-- name: GetTask :one
 SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
 FROM tasks
-WHERE id = ? AND owner = ?
+WHERE id = $1 AND owner = $2
 `
 
 type GetTaskParams struct {
@@ -95,7 +95,7 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 }
 
 const hasTask = `-- name: HasTask :one
-SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ? AND owner = ?)
+SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1 AND owner = $2)
 `
 
 type HasTaskParams struct {
@@ -103,17 +103,17 @@ type HasTaskParams struct {
 	Owner string `json:"owner"`
 }
 
-func (q *Queries) HasTask(ctx context.Context, arg HasTaskParams) (int64, error) {
+func (q *Queries) HasTask(ctx context.Context, arg HasTaskParams) (bool, error) {
 	row := q.db.QueryRowContext(ctx, hasTask, arg.ID, arg.Owner)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listTaskChildren = `-- name: ListTaskChildren :many
 SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
 FROM tasks
-WHERE parent = ? AND owner = ?
+WHERE parent = $1 AND owner = $2
 ORDER BY created_at DESC
 `
 
@@ -161,7 +161,7 @@ func (q *Queries) ListTaskChildren(ctx context.Context, arg ListTaskChildrenPara
 const listTasks = `-- name: ListTasks :many
 SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
 FROM tasks
-WHERE status != 'archived' AND owner = ?
+WHERE status != 'archived' AND owner = $1
 ORDER BY created_at DESC
 `
 
@@ -205,7 +205,7 @@ const listTasksByEvent = `-- name: ListTasksByEvent :many
 SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.instructions, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at
 FROM tasks t
 JOIN event_tasks et ON t.id = et.task_id
-WHERE et.event_id = ?
+WHERE et.event_id = $1
 ORDER BY t.created_at DESC
 `
 
@@ -248,7 +248,7 @@ func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, 
 const listTasksForRunner = `-- name: ListTasksForRunner :many
 SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
 FROM tasks
-WHERE runner = ? AND owner = ? AND command != '' AND status != 'archived'
+WHERE runner = $1 AND owner = $2 AND command != '' AND status != 'archived'
 ORDER BY created_at DESC
 `
 
@@ -295,8 +295,8 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 
 const updateTask = `-- name: UpdateTask :exec
 UPDATE tasks
-SET name = ?, parent = ?, runner = ?, workspace = ?, instructions = ?, status = ?, command = ?, version = ?, updated_at = ?
-WHERE id = ? AND owner = ?
+SET name = $1, parent = $2, runner = $3, workspace = $4, instructions = $5, status = $6, command = $7, version = $8, updated_at = $9
+WHERE id = $10 AND owner = $11
 `
 
 type UpdateTaskParams struct {

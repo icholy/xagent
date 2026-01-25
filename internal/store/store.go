@@ -6,7 +6,7 @@ import (
 	_ "embed"
 
 	"github.com/icholy/xagent/internal/store/sqlc"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 //go:embed sqlc/schema.sql
@@ -42,8 +42,8 @@ func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error
 	return f(tx)
 }
 
-func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", path+"?mode=rwc&_journal_mode=WAL&_busy_timeout=5000")
+func Open(connStr string) (*sql.DB, error) {
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		return nil, err
 	}

@@ -41,7 +41,7 @@ Containers communicate with the C2 server via a Unix socket proxy:
 
 ### C2 Server
 - Connect RPC API for task management
-- SQLite for task metadata and logs
+- PostgreSQL for task metadata and logs
 - Web UI for task monitoring
 
 ### Runner
@@ -167,24 +167,25 @@ export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...
 
 ## Storage
 
-SQLite database at project root:
+PostgreSQL database. Configure via `--db` flag or `DATABASE_URL` environment variable:
 
-```
-xagent.db              # SQLite database
+```bash
+# Example connection string
+export DATABASE_URL="postgres://user:password@localhost:5432/xagent?sslmode=disable"
 ```
 
 ### Tasks Table
 
 ```sql
 CREATE TABLE tasks (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    id            BIGSERIAL PRIMARY KEY,
     name          TEXT NOT NULL DEFAULT '',
-    parent        INTEGER NOT NULL DEFAULT 0,
+    parent        BIGINT NOT NULL DEFAULT 0,
     workspace     TEXT NOT NULL,
-    prompts       TEXT NOT NULL,  -- JSON array of prompts
+    instructions  TEXT NOT NULL,  -- JSON array of instructions
     status        TEXT NOT NULL,  -- pending, running, completed, failed, cancelled, archived
-    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -192,13 +193,13 @@ CREATE TABLE tasks (
 
 ```sql
 CREATE TABLE task_links (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id    INTEGER NOT NULL,
+    id         BIGSERIAL PRIMARY KEY,
+    task_id    BIGINT NOT NULL,
     relevance  TEXT NOT NULL,
     url        TEXT NOT NULL,
     title      TEXT,
     notify     BOOLEAN DEFAULT FALSE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 ```
@@ -207,11 +208,11 @@ CREATE TABLE task_links (
 
 ```sql
 CREATE TABLE logs (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id    INTEGER NOT NULL,
+    id         BIGSERIAL PRIMARY KEY,
+    task_id    BIGINT NOT NULL,
     type       TEXT NOT NULL,     -- "info", "error", "llm"
     content    TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 ```
@@ -220,11 +221,11 @@ CREATE TABLE logs (
 
 ```sql
 CREATE TABLE events (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          BIGSERIAL PRIMARY KEY,
     description TEXT NOT NULL,
     data        TEXT NOT NULL,
     url         TEXT,
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -232,8 +233,8 @@ CREATE TABLE events (
 
 ```sql
 CREATE TABLE event_tasks (
-    event_id INTEGER NOT NULL,
-    task_id  INTEGER NOT NULL,
+    event_id BIGINT NOT NULL,
+    task_id  BIGINT NOT NULL,
     PRIMARY KEY (event_id, task_id),
     FOREIGN KEY (event_id) REFERENCES events(id),
     FOREIGN KEY (task_id) REFERENCES tasks(id)

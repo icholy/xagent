@@ -2,31 +2,37 @@ package server
 
 import (
 	"context"
-	"path/filepath"
+	"os"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/store"
 	"gotest.tools/v3/assert"
 )
 
 // withUserID creates a context with an authenticated user for testing.
+// If id is empty, a random UUID is generated.
 func withUserID(t *testing.T, id string) context.Context {
 	t.Helper()
+	if id == "" {
+		id = uuid.NewString()
+	}
 	return apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: id})
 }
 
-// setupTestServer creates a test server with a clean database in a temporary directory.
-// The database is automatically cleaned up when the test completes.
+// setupTestServer creates a test server with a clean database.
+// Requires TEST_DATABASE_URL environment variable to be set.
 func setupTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	// Create a temporary directory for the test database
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
 
 	// Open the database (this will create and migrate it)
-	db, err := store.Open(dbPath)
+	db, err := store.Open(dbURL)
 	assert.NilError(t, err)
 
 	// Clean up the database when the test completes

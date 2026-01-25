@@ -10,9 +10,10 @@ import (
 	"time"
 )
 
-const createLog = `-- name: CreateLog :execlastid
+const createLog = `-- name: CreateLog :one
 INSERT INTO logs (task_id, type, content, created_at)
-VALUES (?, ?, ?, ?)
+VALUES ($1, $2, $3, $4)
+RETURNING id
 `
 
 type CreateLogParams struct {
@@ -23,23 +24,22 @@ type CreateLogParams struct {
 }
 
 func (q *Queries) CreateLog(ctx context.Context, arg CreateLogParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, createLog,
+	row := q.db.QueryRowContext(ctx, createLog,
 		arg.TaskID,
 		arg.Type,
 		arg.Content,
 		arg.CreatedAt,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const listLogsByTask = `-- name: ListLogsByTask :many
 SELECT l.id, l.task_id, l.type, l.content, l.created_at
 FROM logs l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.task_id = ? AND t.owner = ?
+WHERE l.task_id = $1 AND t.owner = $2
 ORDER BY l.created_at ASC
 `
 
