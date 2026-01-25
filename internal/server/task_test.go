@@ -167,6 +167,38 @@ func TestListTasks(t *testing.T) {
 	assert.Equal(t, len(resp.Tasks), 2)
 }
 
+func TestListTasksPermissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	_, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task 1",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task 2",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
+		Name:      "User B's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	respA, err := srv.ListTasks(userA, &xagentv1.ListTasksRequest{})
+	assert.NilError(t, err)
+	respB, err := srv.ListTasks(userB, &xagentv1.ListTasksRequest{})
+	assert.NilError(t, err)
+
+	// Assert
+	assert.Equal(t, len(respA.Tasks), 2)
+	assert.Equal(t, len(respB.Tasks), 1)
+}
+
 func TestUpdateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
