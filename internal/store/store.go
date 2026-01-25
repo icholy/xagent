@@ -106,7 +106,7 @@ func migrate(db *sql.DB) error {
 			runner_id  TEXT NOT NULL,
 			name       TEXT NOT NULL,
 			owner      TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX IF NOT EXISTS idx_workspaces_runner_id ON workspaces(runner_id);
 		CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner);

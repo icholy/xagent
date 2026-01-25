@@ -44,7 +44,7 @@ func (r *WorkspaceRepository) Create(ctx context.Context, tx *sql.Tx, runnerID, 
 // List returns all workspaces for the given owner, sorted alphabetically by name.
 func (r *WorkspaceRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Workspace, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, runner_id, name, owner, created_at
+		SELECT id, runner_id, name, owner, updated_at
 		FROM workspaces WHERE owner = ? ORDER BY name ASC
 	`, owner)
 	if err != nil {
@@ -65,7 +65,7 @@ func (r *WorkspaceRepository) List(ctx context.Context, tx *sql.Tx, owner string
 
 func (r *WorkspaceRepository) scanWorkspace(rows *sql.Rows) (*model.Workspace, error) {
 	var ws model.Workspace
-	err := rows.Scan(&ws.ID, &ws.RunnerID, &ws.Name, &ws.Owner, &ws.CreatedAt)
+	err := rows.Scan(&ws.ID, &ws.RunnerID, &ws.Name, &ws.Owner, &ws.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
