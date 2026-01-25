@@ -49,6 +49,14 @@ func (r *EventRepository) Get(ctx context.Context, tx *sql.Tx, id int64, owner s
 	return &event, nil
 }
 
+func (r *EventRepository) HasEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
+	var exists bool
+	err := r.exec(tx).QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM events WHERE id = ? AND owner = ?)
+	`, id, owner).Scan(&exists)
+	return exists, err
+}
+
 func (r *EventRepository) List(ctx context.Context, tx *sql.Tx, limit int, owner string) ([]*model.Event, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT id, description, data, url, owner, created_at
