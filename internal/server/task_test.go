@@ -337,3 +337,23 @@ func TestDeleteTask_Permissions(t *testing.T) {
 	_, err = srv.GetTask(userA, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 }
+
+func TestArchiveTask_Permissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, err = srv.ArchiveTask(userB, &xagentv1.ArchiveTaskRequest{
+		Id: createResp.Task.Id,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "not found")
+}
