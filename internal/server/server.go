@@ -143,6 +143,17 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 }
 
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
+	// Verify parent task ownership if specified
+	if req.Parent != 0 {
+		ok, err := s.tasks.HasTask(ctx, nil, req.Parent, userID(ctx))
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if !ok {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("parent task %d not found", req.Parent))
+		}
+	}
+
 	instructions := make([]model.Instruction, len(req.Instructions))
 	for i, inst := range req.Instructions {
 		instructions[i] = model.InstructionFromProto(inst)

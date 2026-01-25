@@ -61,6 +61,14 @@ func (r *TaskRepository) Get(ctx context.Context, tx *sql.Tx, id int64, owner st
 	return r.scanTask(row)
 }
 
+func (r *TaskRepository) HasTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
+	var exists bool
+	err := r.exec(tx).QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ? AND owner = ?)
+	`, id, owner).Scan(&exists)
+	return exists, err
+}
+
 func (r *TaskRepository) List(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT id, name, parent, workspace, prompts, status, command, version, owner, created_at, updated_at
