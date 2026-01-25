@@ -39,7 +39,7 @@ var TaskCreateCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		client := xagentclient.New(cmd.String("server"))
+		client := xagentclient.New(cmd.String("server"), nil)
 
 		texts := cmd.StringSlice("instruction")
 		instructions := make([]*xagentv1.Instruction, len(texts))

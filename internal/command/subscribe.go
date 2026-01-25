@@ -73,7 +73,7 @@ var SubscribeCommand = &cli.Command{
 		}
 
 		sqsClient := sqs.NewFromConfig(awsConfig)
-		xagent := xagentclient.New(serverURL)
+		xagent := xagentclient.New(serverURL, nil)
 
 		handler := &xagentEventHandler{
 			client: xagent,

@@ -32,7 +32,7 @@ var TaskDeleteCommand = &cli.Command{
 			return fmt.Errorf("invalid task ID: %w", err)
 		}
 
-		client := xagentclient.New(cmd.String("server"))
+		client := xagentclient.New(cmd.String("server"), nil)
 		if _, err := client.DeleteTask(ctx, &xagentv1.DeleteTaskRequest{Id: taskID}); err != nil {
 			return fmt.Errorf("failed to delete task: %w", err)
 		}

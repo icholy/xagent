@@ -33,7 +33,7 @@ var PruneCommand = &cli.Command{
 		defer docker.Close()
 
 		// Create xagent client
-		xagentClient := xagentclient.New(cmd.String("server"))
+		xagentClient := xagentclient.New(cmd.String("server"), nil)
 
 		// List all stopped xagent containers
 		containers, err := docker.ContainerList(ctx, container.ListOptions{

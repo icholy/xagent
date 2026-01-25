@@ -39,7 +39,7 @@ var McpCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		mode := cmd.String("mode")
-		client := xagentclient.New(cmd.String("server"))
+		client := xagentclient.New(cmd.String("server"), nil)
 
 		server := mcp.NewServer(&mcp.Implementation{
 			Name:    "xagent",

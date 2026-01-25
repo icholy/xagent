@@ -60,7 +60,7 @@ var TaskUpdateCommand = &cli.Command{
 			instructions[i] = &xagentv1.Instruction{Text: text}
 		}
 
-		client := xagentclient.New(cmd.String("server"))
+		client := xagentclient.New(cmd.String("server"), nil)
 		if _, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 			Id:              taskID,
 			Name:            name,
