@@ -82,28 +82,6 @@ func TestGetTaskPermissions(t *testing.T) {
 	assert.ErrorContains(t, errB, "not found")
 }
 
-func TestCreateTaskPermissions(t *testing.T) {
-	// Arrange
-	srv := setupTestServer(t)
-	userA := withUserID(t, "user-a")
-	userB := withUserID(t, "user-b")
-	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Parent Task",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, err = srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
-		Name:      "User B's Child Task",
-		Workspace: "test-workspace",
-		Parent:    parentResp.Task.Id,
-	})
-
-	// Assert
-	assert.ErrorContains(t, err, "not found")
-}
-
 func TestCreateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
@@ -142,6 +120,28 @@ func TestCreateTask(t *testing.T) {
 		UpdatedAt: resp.Task.UpdatedAt,
 	}
 	assert.DeepEqual(t, resp.Task, expected, protocmp.Transform())
+}
+
+func TestCreateTaskWithParentPermissions(t *testing.T) {
+	// Arrange
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+		Name:      "User A's Parent Task",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, err = srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
+		Name:      "User B's Child Task",
+		Workspace: "test-workspace",
+		Parent:    parentResp.Task.Id,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "not found")
 }
 
 func TestListTasks(t *testing.T) {
