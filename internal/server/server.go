@@ -87,6 +87,20 @@ func (s *Server) userID(ctx context.Context) string {
 	return u.ID
 }
 
+func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
+	u := apiauth.User(ctx)
+	if u == nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
+	}
+	return &xagentv1.GetProfileResponse{
+		Profile: &xagentv1.Profile{
+			Id:    u.ID,
+			Email: u.Email,
+			Name:  u.Name,
+		},
+	}, nil
+}
+
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 	userID := s.userID(ctx)
 	tasks, err := s.store.ListTasks(ctx, nil, userID)

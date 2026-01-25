@@ -5,6 +5,11 @@
 import { XAgentService } from "./xagent_pb";
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.GetProfile
+ */
+export const getProfile = XAgentService.method.getProfile;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.ListTasks
  */
 export const listTasks = XAgentService.method.listTasks;

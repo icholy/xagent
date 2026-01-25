@@ -33,6 +33,9 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// XAgentServiceGetProfileProcedure is the fully-qualified name of the XAgentService's GetProfile
+	// RPC.
+	XAgentServiceGetProfileProcedure = "/xagent.v1.XAgentService/GetProfile"
 	// XAgentServiceListTasksProcedure is the fully-qualified name of the XAgentService's ListTasks RPC.
 	XAgentServiceListTasksProcedure = "/xagent.v1.XAgentService/ListTasks"
 	// XAgentServiceListRunnerTasksProcedure is the fully-qualified name of the XAgentService's
@@ -119,6 +122,7 @@ const (
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
 type XAgentServiceClient interface {
+	GetProfile(context.Context, *v1.GetProfileRequest) (*v1.GetProfileResponse, error)
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
 	ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error)
 	ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error)
@@ -161,6 +165,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 	baseURL = strings.TrimRight(baseURL, "/")
 	xAgentServiceMethods := v1.File_xagent_v1_xagent_proto.Services().ByName("XAgentService").Methods()
 	return &xAgentServiceClient{
+		getProfile: connect.NewClient[v1.GetProfileRequest, v1.GetProfileResponse](
+			httpClient,
+			baseURL+XAgentServiceGetProfileProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GetProfile")),
+			connect.WithClientOptions(opts...),
+		),
 		listTasks: connect.NewClient[v1.ListTasksRequest, v1.ListTasksResponse](
 			httpClient,
 			baseURL+XAgentServiceListTasksProcedure,
@@ -340,6 +350,7 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // xAgentServiceClient implements XAgentServiceClient.
 type xAgentServiceClient struct {
+	getProfile         *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
 	listTasks          *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
 	listRunnerTasks    *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
 	listChildTasks     *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
@@ -369,6 +380,15 @@ type xAgentServiceClient struct {
 	registerWorkspaces *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
 	listWorkspaces     *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
 	clearWorkspaces    *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
+}
+
+// GetProfile calls xagent.v1.XAgentService.GetProfile.
+func (c *xAgentServiceClient) GetProfile(ctx context.Context, req *v1.GetProfileRequest) (*v1.GetProfileResponse, error) {
+	response, err := c.getProfile.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
 }
 
 // ListTasks calls xagent.v1.XAgentService.ListTasks.
@@ -634,6 +654,7 @@ func (c *xAgentServiceClient) ClearWorkspaces(ctx context.Context, req *v1.Clear
 
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
+	GetProfile(context.Context, *v1.GetProfileRequest) (*v1.GetProfileResponse, error)
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
 	ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error)
 	ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error)
@@ -672,6 +693,12 @@ type XAgentServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	xAgentServiceMethods := v1.File_xagent_v1_xagent_proto.Services().ByName("XAgentService").Methods()
+	xAgentServiceGetProfileHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGetProfileProcedure,
+		svc.GetProfile,
+		connect.WithSchema(xAgentServiceMethods.ByName("GetProfile")),
+		connect.WithHandlerOptions(opts...),
+	)
 	xAgentServiceListTasksHandler := connect.NewUnaryHandlerSimple(
 		XAgentServiceListTasksProcedure,
 		svc.ListTasks,
@@ -848,6 +875,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case XAgentServiceGetProfileProcedure:
+			xAgentServiceGetProfileHandler.ServeHTTP(w, r)
 		case XAgentServiceListTasksProcedure:
 			xAgentServiceListTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceListRunnerTasksProcedure:
@@ -914,6 +943,10 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 
 // UnimplementedXAgentServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedXAgentServiceHandler struct{}
+
+func (UnimplementedXAgentServiceHandler) GetProfile(context.Context, *v1.GetProfileRequest) (*v1.GetProfileResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetProfile is not implemented"))
+}
 
 func (UnimplementedXAgentServiceHandler) ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListTasks is not implemented"))

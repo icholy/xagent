@@ -7,6 +7,7 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1";
 
 service XAgentService {
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc ListRunnerTasks(ListRunnerTasksRequest) returns (ListRunnerTasksResponse);
   rpc ListChildTasks(ListChildTasksRequest) returns (ListChildTasksResponse);
@@ -62,6 +63,18 @@ message McpServer {
   string command = 2;
   repeated string args = 3;
   map<string, string> env = 4;
+}
+
+message Profile {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+}
+
+message GetProfileRequest {}
+
+message GetProfileResponse {
+  Profile profile = 1;
 }
 
 message ListTasksRequest {}

@@ -2,6 +2,8 @@ import { Outlet, createRootRouteWithContext, Link } from '@tanstack/react-router
 import { LogOut } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { QueryClient } from '@tanstack/react-query'
+import { useQuery } from '@connectrpc/connect-query'
+import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import xagentIcon from '@/assets/icon.png'
 
 // TanStack devtools check NODE_ENV and render nothing in production, but the
@@ -31,6 +33,8 @@ export const Route = createRootRouteWithContext<{
 })
 
 function RootComponent() {
+  const { data: profileData } = useQuery(getProfile, {})
+
   return (
     <>
       <nav className="border-b">
@@ -58,7 +62,12 @@ function RootComponent() {
               Workspaces
             </Link>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-4">
+            {profileData?.profile?.email && (
+              <span className="text-sm text-muted-foreground">
+                {profileData.profile.email}
+              </span>
+            )}
             <a
               href="/auth/logout"
               className="text-muted-foreground hover:text-foreground transition-colors text-sm flex items-center gap-1.5"
