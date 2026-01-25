@@ -2,8 +2,10 @@ package apiauth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
+	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/zitadel/middlewarex"
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -131,6 +133,30 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 			}
 			// Web clients use cookie auth
 			a.cookie.CheckAuthentication()(next).ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireUserInterceptor returns a Connect interceptor that fails if UserInfo is not in the context.
+func RequireUserInterceptor() connect.UnaryInterceptorFunc {
+	return func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			if User(ctx) == nil {
+				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+			}
+			return next(ctx, req)
+		}
+	}
+}
+
+// AttachUserInfo extracts user info from auth context and attaches it to the request context.
+func (a *Auth) AttachUserInfo() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if user := a.User(r); user != nil {
+				r = r.WithContext(WithUser(r.Context(), user))
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }
