@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
 type LogRepository struct {
@@ -16,45 +17,44 @@ func NewLogRepository(db *sql.DB) *LogRepository {
 	return &LogRepository{db: db}
 }
 
-func (r *LogRepository) exec(tx *sql.Tx) Executor {
+func (r *LogRepository) queries(tx *sql.Tx) *sqlc.Queries {
 	if tx != nil {
-		return tx
+		return sqlc.New(tx)
 	}
-	return r.db
+	return sqlc.New(r.db)
 }
 
 func (r *LogRepository) Create(ctx context.Context, tx *sql.Tx, log *model.Log) error {
-	result, err := r.exec(tx).ExecContext(ctx, `
-		INSERT INTO logs (task_id, type, content, created_at)
-		VALUES (?, ?, ?, ?)
-	`, log.TaskID, log.Type, log.Content, time.Now())
+	id, err := r.queries(tx).CreateLog(ctx, sqlc.CreateLogParams{
+		TaskID:    log.TaskID,
+		Type:      log.Type,
+		Content:   log.Content,
+		CreatedAt: sql.NullTime{Time: time.Now(), Valid: true},
+	})
 	if err != nil {
 		return err
 	}
-	log.ID, _ = result.LastInsertId()
+	log.ID = id
 	return nil
 }
 
 func (r *LogRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Log, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT l.id, l.task_id, l.type, l.content, l.created_at
-		FROM logs l
-		JOIN tasks t ON l.task_id = t.id
-		WHERE l.task_id = ? AND t.owner = ?
-		ORDER BY l.created_at ASC
-	`, taskID, owner)
+	rows, err := r.queries(tx).ListLogsByTask(ctx, sqlc.ListLogsByTaskParams{
+		TaskID: taskID,
+		Owner:  owner,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var logs []*model.Log
-	for rows.Next() {
-		var log model.Log
-		if err := rows.Scan(&log.ID, &log.TaskID, &log.Type, &log.Content, &log.CreatedAt); err != nil {
-			return nil, err
+	logs := make([]*model.Log, len(rows))
+	for i, row := range rows {
+		logs[i] = &model.Log{
+			ID:        row.ID,
+			TaskID:    row.TaskID,
+			Type:      row.Type,
+			Content:   row.Content,
+			CreatedAt: row.CreatedAt.Time,
 		}
-		logs = append(logs, &log)
 	}
-	return logs, rows.Err()
+	return logs, nil
 }

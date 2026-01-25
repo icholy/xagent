@@ -3,6 +3,7 @@ sops = "latest"
 terraform = "latest"
 age = "latest"
 pnpm = "latest"
+sqlc = "latest"
 
 [tasks.build]
 description = "Build xagent binaries for all architectures and webhook"
@@ -17,9 +18,10 @@ run = [
 ]
 
 [tasks.generate]
-description = "Generate code from proto files"
+description = "Generate code from proto files and sqlc"
 run = [
 	"go tool buf generate",
+	"sqlc generate",
 	"cd webui && pnpm install --frozen-lockfile && pnpm run generate",
 	"go generate ./..."
 ]
