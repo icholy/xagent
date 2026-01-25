@@ -21,6 +21,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
+	"github.com/justinas/alice"
 )
 
 type Server struct {
@@ -76,8 +77,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/auth/", s.auth.Handler)
 
 	// Connect RPC API (protected)
-	path, handler := xagentv1connect.NewXAgentServiceHandler(s)
-	mux.Handle(path, s.auth.RequireAuth()(handler))
+	// HTTP middleware checks auth and attaches UserInfo to context
+	// Connect interceptor enforces auth with proper RPC error responses
+	path, handler := xagentv1connect.NewXAgentServiceHandler(s,
+		connect.WithInterceptors(apiauth.RequireUserInterceptor()),
+	)
+	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
 
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/", s.auth.RequireAuth()(WebUI()))
