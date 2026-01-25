@@ -53,6 +53,9 @@ var _ xagentclient.Client = &ClientMock{}
 //			GetEventFunc: func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 //				panic("mock out the GetEvent method")
 //			},
+//			GetProfileFunc: func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
+//				panic("mock out the GetProfile method")
+//			},
 //			GetTaskFunc: func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 //				panic("mock out the GetTask method")
 //			},
@@ -146,6 +149,9 @@ type ClientMock struct {
 
 	// GetEventFunc mocks the GetEvent method.
 	GetEventFunc func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error)
+
+	// GetProfileFunc mocks the GetProfile method.
+	GetProfileFunc func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error)
 
 	// GetTaskFunc mocks the GetTask method.
 	GetTaskFunc func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error)
@@ -279,6 +285,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// GetEventRequest is the getEventRequest argument value.
 			GetEventRequest *xagentv1.GetEventRequest
+		}
+		// GetProfile holds details about calls to the GetProfile method.
+		GetProfile []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetProfileRequest is the getProfileRequest argument value.
+			GetProfileRequest *xagentv1.GetProfileRequest
 		}
 		// GetTask holds details about calls to the GetTask method.
 		GetTask []struct {
@@ -418,6 +431,7 @@ type ClientMock struct {
 	lockDeleteTask         sync.RWMutex
 	lockFindLinksByURL     sync.RWMutex
 	lockGetEvent           sync.RWMutex
+	lockGetProfile         sync.RWMutex
 	lockGetTask            sync.RWMutex
 	lockGetTaskDetails     sync.RWMutex
 	lockListChildTasks     sync.RWMutex
@@ -831,6 +845,42 @@ func (mock *ClientMock) GetEventCalls() []struct {
 	mock.lockGetEvent.RLock()
 	calls = mock.calls.GetEvent
 	mock.lockGetEvent.RUnlock()
+	return calls
+}
+
+// GetProfile calls GetProfileFunc.
+func (mock *ClientMock) GetProfile(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
+	if mock.GetProfileFunc == nil {
+		panic("ClientMock.GetProfileFunc: method is nil but Client.GetProfile was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam   context.Context
+		GetProfileRequest *xagentv1.GetProfileRequest
+	}{
+		ContextMoqParam:   contextMoqParam,
+		GetProfileRequest: getProfileRequest,
+	}
+	mock.lockGetProfile.Lock()
+	mock.calls.GetProfile = append(mock.calls.GetProfile, callInfo)
+	mock.lockGetProfile.Unlock()
+	return mock.GetProfileFunc(contextMoqParam, getProfileRequest)
+}
+
+// GetProfileCalls gets all the calls that were made to GetProfile.
+// Check the length with:
+//
+//	len(mockedClient.GetProfileCalls())
+func (mock *ClientMock) GetProfileCalls() []struct {
+	ContextMoqParam   context.Context
+	GetProfileRequest *xagentv1.GetProfileRequest
+} {
+	var calls []struct {
+		ContextMoqParam   context.Context
+		GetProfileRequest *xagentv1.GetProfileRequest
+	}
+	mock.lockGetProfile.RLock()
+	calls = mock.calls.GetProfile
+	mock.lockGetProfile.RUnlock()
 	return calls
 }
 
