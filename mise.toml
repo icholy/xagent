@@ -3,7 +3,7 @@ sops = "latest"
 terraform = "latest"
 age = "latest"
 pnpm = "latest"
-fly = "latest"
+flyctl = "latest"
 
 [tasks.build]
 description = "Build xagent binaries for all architectures and webhook"
