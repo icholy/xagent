@@ -746,3 +746,12 @@ func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspace
 	}
 	return &xagentv1.ListWorkspacesResponse{Workspaces: result}, nil
 }
+
+func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error) {
+	userID := s.userID(ctx)
+	if err := s.workspaces.Clear(ctx, nil, userID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("workspaces cleared", "owner", userID)
+	return &xagentv1.ClearWorkspacesResponse{}, nil
+}

@@ -112,6 +112,9 @@ const (
 	// XAgentServiceListWorkspacesProcedure is the fully-qualified name of the XAgentService's
 	// ListWorkspaces RPC.
 	XAgentServiceListWorkspacesProcedure = "/xagent.v1.XAgentService/ListWorkspaces"
+	// XAgentServiceClearWorkspacesProcedure is the fully-qualified name of the XAgentService's
+	// ClearWorkspaces RPC.
+	XAgentServiceClearWorkspacesProcedure = "/xagent.v1.XAgentService/ClearWorkspaces"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -144,6 +147,7 @@ type XAgentServiceClient interface {
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
 	RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error)
 	ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error)
+	ClearWorkspaces(context.Context, *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -325,6 +329,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("ListWorkspaces")),
 			connect.WithClientOptions(opts...),
 		),
+		clearWorkspaces: connect.NewClient[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse](
+			httpClient,
+			baseURL+XAgentServiceClearWorkspacesProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ClearWorkspaces")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -358,6 +368,7 @@ type xAgentServiceClient struct {
 	submitRunnerEvents *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
 	registerWorkspaces *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
 	listWorkspaces     *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
+	clearWorkspaces    *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
 }
 
 // ListTasks calls xagent.v1.XAgentService.ListTasks.
@@ -612,6 +623,15 @@ func (c *xAgentServiceClient) ListWorkspaces(ctx context.Context, req *v1.ListWo
 	return nil, err
 }
 
+// ClearWorkspaces calls xagent.v1.XAgentService.ClearWorkspaces.
+func (c *xAgentServiceClient) ClearWorkspaces(ctx context.Context, req *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error) {
+	response, err := c.clearWorkspaces.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
@@ -642,6 +662,7 @@ type XAgentServiceHandler interface {
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
 	RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error)
 	ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error)
+	ClearWorkspaces(context.Context, *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -819,6 +840,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("ListWorkspaces")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceClearWorkspacesHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceClearWorkspacesProcedure,
+		svc.ClearWorkspaces,
+		connect.WithSchema(xAgentServiceMethods.ByName("ClearWorkspaces")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServiceListTasksProcedure:
@@ -877,6 +904,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceRegisterWorkspacesHandler.ServeHTTP(w, r)
 		case XAgentServiceListWorkspacesProcedure:
 			xAgentServiceListWorkspacesHandler.ServeHTTP(w, r)
+		case XAgentServiceClearWorkspacesProcedure:
+			xAgentServiceClearWorkspacesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -996,4 +1025,8 @@ func (UnimplementedXAgentServiceHandler) RegisterWorkspaces(context.Context, *v1
 
 func (UnimplementedXAgentServiceHandler) ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListWorkspaces is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ClearWorkspaces(context.Context, *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ClearWorkspaces is not implemented"))
 }

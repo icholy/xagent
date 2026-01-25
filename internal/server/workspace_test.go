@@ -110,3 +110,71 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	assert.Equal(t, len(listRespB.Workspaces), 1)
 	assert.Equal(t, listRespB.Workspaces[0].Name, "workspace-b")
 }
+
+func TestClearWorkspaces(t *testing.T) {
+	srv := setupTestServer(t)
+	ctx := withUserID(t, "test-user")
+
+	// Register workspaces
+	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId: "runner-1",
+		Workspaces: []*xagentv1.RegisteredWorkspace{
+			{Name: "workspace-a"},
+			{Name: "workspace-b"},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Verify workspaces exist
+	listResp, err := srv.ListWorkspaces(ctx, &xagentv1.ListWorkspacesRequest{})
+	assert.NilError(t, err)
+	assert.Equal(t, len(listResp.Workspaces), 2)
+
+	// Clear workspaces
+	_, err = srv.ClearWorkspaces(ctx, &xagentv1.ClearWorkspacesRequest{})
+	assert.NilError(t, err)
+
+	// Verify workspaces are cleared
+	listResp, err = srv.ListWorkspaces(ctx, &xagentv1.ListWorkspacesRequest{})
+	assert.NilError(t, err)
+	assert.Equal(t, len(listResp.Workspaces), 0)
+}
+
+func TestClearWorkspaces_Permissions(t *testing.T) {
+	srv := setupTestServer(t)
+	userA := withUserID(t, "user-a")
+	userB := withUserID(t, "user-b")
+
+	// User A registers workspaces
+	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId: "runner-1",
+		Workspaces: []*xagentv1.RegisteredWorkspace{
+			{Name: "workspace-a"},
+		},
+	})
+	assert.NilError(t, err)
+
+	// User B registers workspaces
+	_, err = srv.RegisterWorkspaces(userB, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId: "runner-1",
+		Workspaces: []*xagentv1.RegisteredWorkspace{
+			{Name: "workspace-b"},
+		},
+	})
+	assert.NilError(t, err)
+
+	// User A clears workspaces - should only clear their own
+	_, err = srv.ClearWorkspaces(userA, &xagentv1.ClearWorkspacesRequest{})
+	assert.NilError(t, err)
+
+	// Verify User A has no workspaces
+	listRespA, err := srv.ListWorkspaces(userA, &xagentv1.ListWorkspacesRequest{})
+	assert.NilError(t, err)
+	assert.Equal(t, len(listRespA.Workspaces), 0)
+
+	// Verify User B still has their workspaces
+	listRespB, err := srv.ListWorkspaces(userB, &xagentv1.ListWorkspacesRequest{})
+	assert.NilError(t, err)
+	assert.Equal(t, len(listRespB.Workspaces), 1)
+	assert.Equal(t, listRespB.Workspaces[0].Name, "workspace-b")
+}
