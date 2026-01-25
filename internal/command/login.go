@@ -28,7 +28,7 @@ var LoginCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		auth, err := deviceauth.New(ctx, deviceauth.Options{
+		auth, err := deviceauth.New(deviceauth.Options{
 			DiscoveryURL: deviceauth.DiscoveryURL(cmd.String("server")),
 			TokenFile:    cmd.String("token-file"),
 			Display: func(resp *oidc.DeviceAuthorizationResponse) error {

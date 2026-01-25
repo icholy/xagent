@@ -42,50 +42,60 @@ type Auth struct {
 	provider rp.RelyingParty
 	token    *Token
 	mu       sync.RWMutex
+	once     sync.Once
+	err      error
 }
 
-// New creates a new Auth client
-func New(ctx context.Context, config Options) (*Auth, error) {
+// New creates a new Auth client. The provider is initialized lazily on first use.
+func New(config Options) (*Auth, error) {
 	if config.TokenFile == "" {
 		return nil, fmt.Errorf("deviceauth.New called with empty TokenFile")
 	}
-	// Fetch discovery config if DiscoveryURL is provided
-	if config.DiscoveryURL != "" {
-		discovery, err := FetchDiscoveryConfig(config.DiscoveryURL)
-		if err != nil {
-			return nil, fmt.Errorf("fetch discovery config: %w", err)
-		}
-		if config.ClientID == "" {
-			config.ClientID = discovery.ClientID
-		}
-		if config.Issuer == "" {
-			issuer, err := discovery.Issuer()
-			if err != nil {
-				return nil, fmt.Errorf("parse issuer: %w", err)
-			}
-			config.Issuer = issuer
-		}
-	}
-	provider, err := rp.NewRelyingPartyOIDC(
-		ctx,
-		config.Issuer,
-		config.ClientID,
-		"",
-		// dummy value, we don't actually use this.
-		"http://localhost",
-		scopes,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create relying party: %w", err)
-	}
-	a := &Auth{
-		config:   config,
-		provider: provider,
-	}
+	a := &Auth{config: config}
 	if err := a.load(); err != nil {
 		return nil, fmt.Errorf("load token file: %w", err)
 	}
 	return a, nil
+}
+
+// init initializes the OIDC provider. It is called lazily via once.Do().
+func (a *Auth) init(ctx context.Context) error {
+	a.once.Do(func() {
+		// Fetch discovery config if DiscoveryURL is provided
+		if a.config.DiscoveryURL != "" {
+			discovery, err := FetchDiscoveryConfig(a.config.DiscoveryURL)
+			if err != nil {
+				a.err = fmt.Errorf("fetch discovery config: %w", err)
+				return
+			}
+			if a.config.ClientID == "" {
+				a.config.ClientID = discovery.ClientID
+			}
+			if a.config.Issuer == "" {
+				issuer, err := discovery.Issuer()
+				if err != nil {
+					a.err = fmt.Errorf("parse issuer: %w", err)
+					return
+				}
+				a.config.Issuer = issuer
+			}
+		}
+		provider, err := rp.NewRelyingPartyOIDC(
+			ctx,
+			a.config.Issuer,
+			a.config.ClientID,
+			"",
+			// dummy value, we don't actually use this.
+			"http://localhost",
+			scopes,
+		)
+		if err != nil {
+			a.err = fmt.Errorf("create relying party: %w", err)
+			return
+		}
+		a.provider = provider
+	})
+	return a.err
 }
 
 // ErrNoToken is returned when no valid token is available
@@ -116,6 +126,9 @@ func (a *Auth) DeviceFlow(ctx context.Context) error {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if err := a.init(ctx); err != nil {
+		return err
+	}
 	deviceAuth, err := rp.DeviceAuthorization(ctx, scopes, a.provider, nil)
 	if err != nil {
 		return fmt.Errorf("device authorization: %w", err)
@@ -143,6 +156,9 @@ func (a *Auth) DeviceFlow(ctx context.Context) error {
 
 // refresh the tokens
 func (a *Auth) refresh(ctx context.Context) error {
+	if err := a.init(ctx); err != nil {
+		return err
+	}
 	tokens, err := rp.RefreshTokens[*oidc.IDTokenClaims](ctx, a.provider, a.token.RefreshToken, "", "")
 	if err != nil {
 		return fmt.Errorf("refresh: %w", err)
