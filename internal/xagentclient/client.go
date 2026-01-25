@@ -51,5 +51,6 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	req = req.Clone(req.Context())
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-Auth-Type", "bearer")
 	return t.t.RoundTrip(req)
 }

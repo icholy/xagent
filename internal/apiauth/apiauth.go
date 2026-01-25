@@ -3,7 +3,6 @@ package apiauth
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -101,15 +100,20 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	}, nil
 }
 
+// AuthTypeHeader is the header CLI/device clients send to indicate bearer auth.
+const AuthTypeHeader = "X-Auth-Type"
+
 // RequireAuth returns middleware that requires either a valid Bearer token
 // or an authenticated cookie session.
 func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+			// CLI/device clients send X-Auth-Type: bearer
+			if r.Header.Get(AuthTypeHeader) == "bearer" {
 				a.bearer.RequireAuthorization()(next).ServeHTTP(w, r)
 				return
 			}
+			// Web clients use cookie auth
 			a.cookie.RequireAuthentication()(next).ServeHTTP(w, r)
 		})
 	}
@@ -118,12 +122,15 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 // User returns the authenticated user's information.
 // Works with both Bearer token and cookie authentication.
 func (a *Auth) User(r *http.Request) *UserInfo {
-	if ctx := a.bearer.Context(r.Context()); ctx != nil {
-		return &UserInfo{
-			ID:    ctx.Subject,
-			Email: ctx.Email,
-			Name:  ctx.Name,
+	if r.Header.Get(AuthTypeHeader) == "bearer" {
+		if ctx := a.bearer.Context(r.Context()); ctx != nil {
+			return &UserInfo{
+				ID:    ctx.Subject,
+				Email: ctx.Email,
+				Name:  ctx.Name,
+			}
 		}
+		return nil
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{
