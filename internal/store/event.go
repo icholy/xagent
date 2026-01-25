@@ -100,10 +100,13 @@ func (r *EventRepository) RemoveTask(ctx context.Context, tx *sql.Tx, eventID in
 	return err
 }
 
-func (r *EventRepository) ListTasks(ctx context.Context, tx *sql.Tx, eventID int64) ([]int64, error) {
+func (r *EventRepository) ListTasks(ctx context.Context, tx *sql.Tx, eventID int64, owner string) ([]int64, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT task_id FROM event_tasks WHERE event_id = ?
-	`, eventID)
+		SELECT et.task_id
+		FROM event_tasks et
+		JOIN tasks t ON et.task_id = t.id
+		WHERE et.event_id = ? AND t.owner = ?
+	`, eventID, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -120,14 +123,15 @@ func (r *EventRepository) ListTasks(ctx context.Context, tx *sql.Tx, eventID int
 	return tasks, rows.Err()
 }
 
-func (r *EventRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64) ([]*model.Event, error) {
+func (r *EventRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Event, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT e.id, e.description, e.data, e.url, e.created_at
 		FROM events e
 		JOIN event_tasks et ON e.id = et.event_id
-		WHERE et.task_id = ?
+		JOIN tasks t ON et.task_id = t.id
+		WHERE et.task_id = ? AND t.owner = ?
 		ORDER BY e.created_at DESC
-	`, taskID)
+	`, taskID, owner)
 	if err != nil {
 		return nil, err
 	}
