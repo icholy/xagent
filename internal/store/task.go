@@ -95,19 +95,6 @@ func (r *TaskRepository) ListChildren(ctx context.Context, tx *sql.Tx, parentID 
 	return r.scanTasks(rows)
 }
 
-func (r *TaskRepository) ListWithCommand(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Task, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at
-		FROM tasks WHERE command != '' AND status != 'archived' AND owner = ? ORDER BY created_at DESC
-	`, owner)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	return r.scanTasks(rows)
-}
-
 func (r *TaskRepository) ListForRunner(ctx context.Context, tx *sql.Tx, runner string, owner string) ([]*model.Task, error) {
 	rows, err := r.exec(tx).QueryContext(ctx, `
 		SELECT id, name, parent, runner, workspace, prompts, status, command, version, owner, created_at, updated_at

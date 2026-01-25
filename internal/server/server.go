@@ -100,14 +100,8 @@ func (s *Server) userID(ctx context.Context) string {
 }
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
-	var tasks []*model.Task
-	var err error
 	userID := s.userID(ctx)
-	if req.HasCommand {
-		tasks, err = s.tasks.ListWithCommand(ctx, nil, userID)
-	} else {
-		tasks, err = s.tasks.List(ctx, nil, userID)
-	}
+	tasks, err := s.tasks.List(ctx, nil, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

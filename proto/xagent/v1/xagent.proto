@@ -64,10 +64,7 @@ message McpServer {
   map<string, string> env = 4;
 }
 
-message ListTasksRequest {
-  bool has_command = 1;  // If true, only return tasks with non-empty command
-  string runner = 2;     // If set, only return tasks for this runner
-}
+message ListTasksRequest {}
 
 message ListTasksResponse {
   repeated Task tasks = 1;
