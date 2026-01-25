@@ -1,23 +1,23 @@
+# fly.toml app configuration file generated for xagent on 2026-01-25T23:20:37Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
 app = 'xagent'
-primary_region = 'ord'
+primary_region = 'ams'
 
 [build]
 
-[env]
-  XAGENT_DB_PATH = '/data/xagent.db'
-
 [http_service]
-  internal_port = 6464
+  internal_port = 8080
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-
-[mounts]
-  source = 'xagent_data'
-  destination = '/data'
+  processes = ['app']
 
 [[vm]]
-  memory = '512mb'
+  memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
