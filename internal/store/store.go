@@ -27,14 +27,10 @@ func (s *Store) q(tx *sql.Tx) *sqlc.Queries {
 
 // WithTx runs f within a transaction.
 func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error) error {
-	return withTx(ctx, s.db, tx, f)
-}
-
-func withTx(ctx context.Context, db *sql.DB, tx *sql.Tx, f func(tx *sql.Tx) error) error {
 	if tx != nil {
 		return f(tx)
 	}
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
