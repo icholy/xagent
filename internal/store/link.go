@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
 type LinkRepository struct {
@@ -15,70 +16,67 @@ func NewLinkRepository(db *sql.DB) *LinkRepository {
 	return &LinkRepository{db: db}
 }
 
-func (r *LinkRepository) exec(tx *sql.Tx) Executor {
+func (r *LinkRepository) queries(tx *sql.Tx) *sqlc.Queries {
 	if tx != nil {
-		return tx
+		return sqlc.New(tx)
 	}
-	return r.db
+	return sqlc.New(r.db)
 }
 
 func (r *LinkRepository) Create(ctx context.Context, tx *sql.Tx, link *model.Link) error {
-	result, err := r.exec(tx).ExecContext(ctx, `
-		INSERT INTO task_links (task_id, relevance, url, title, notify, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, link.TaskID, link.Relevance, link.URL, link.Title, link.Notify, link.CreatedAt)
+	id, err := r.queries(tx).CreateLink(ctx, sqlc.CreateLinkParams{
+		TaskID:    link.TaskID,
+		Relevance: link.Relevance,
+		Url:       link.URL,
+		Title:     sql.NullString{String: link.Title, Valid: link.Title != ""},
+		Notify:    sql.NullBool{Bool: link.Notify, Valid: true},
+		CreatedAt: sql.NullTime{Time: link.CreatedAt, Valid: true},
+	})
 	if err != nil {
 		return err
 	}
-	link.ID, _ = result.LastInsertId()
+	link.ID = id
 	return nil
 }
 
 func (r *LinkRepository) ListByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Link, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
-		FROM task_links l
-		JOIN tasks t ON l.task_id = t.id
-		WHERE l.task_id = ? AND t.owner = ?
-		ORDER BY l.created_at ASC
-	`, taskID, owner)
+	rows, err := r.queries(tx).ListLinksByTask(ctx, sqlc.ListLinksByTaskParams{
+		TaskID: taskID,
+		Owner:  owner,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return r.scanLinks(rows)
+	return toModelLinks(rows), nil
 }
 
 func (r *LinkRepository) Delete(ctx context.Context, tx *sql.Tx, id int64) error {
-	_, err := r.exec(tx).ExecContext(ctx, `DELETE FROM task_links WHERE id = ?`, id)
-	return err
+	return r.queries(tx).DeleteLink(ctx, id)
 }
 
 func (r *LinkRepository) FindByURL(ctx context.Context, tx *sql.Tx, url string, owner string) ([]*model.Link, error) {
-	rows, err := r.exec(tx).QueryContext(ctx, `
-		SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
-		FROM task_links l
-		JOIN tasks t ON l.task_id = t.id
-		WHERE l.url = ? AND t.status != 'archived' AND t.owner = ?
-		ORDER BY l.created_at DESC
-	`, url, owner)
+	rows, err := r.queries(tx).FindLinksByURL(ctx, sqlc.FindLinksByURLParams{
+		Url:   url,
+		Owner: owner,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return r.scanLinks(rows)
+	return toModelLinks(rows), nil
 }
 
-func (r *LinkRepository) scanLinks(rows *sql.Rows) ([]*model.Link, error) {
-	var links []*model.Link
-	for rows.Next() {
-		var link model.Link
-		var title sql.NullString
-		if err := rows.Scan(&link.ID, &link.TaskID, &link.Relevance, &link.URL, &title, &link.Notify, &link.CreatedAt); err != nil {
-			return nil, err
+func toModelLinks(rows []sqlc.TaskLink) []*model.Link {
+	links := make([]*model.Link, len(rows))
+	for i, row := range rows {
+		links[i] = &model.Link{
+			ID:        row.ID,
+			TaskID:    row.TaskID,
+			Relevance: row.Relevance,
+			URL:       row.Url,
+			Title:     row.Title.String,
+			Notify:    row.Notify.Bool,
+			CreatedAt: row.CreatedAt.Time,
 		}
-		link.Title = title.String
-		links = append(links, &link)
 	}
-	return links, rows.Err()
+	return links
 }
