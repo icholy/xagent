@@ -82,6 +82,8 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		)),
 		// tell zitadel where to redirect to after logout
 		authentication.WithPostLogoutRedirectURI[*openid.DefaultContext](cfg.PostLogoutURI),
+		// store session in cookie instead of in-memory (survives server restarts)
+		authentication.WithCookieSession[*openid.DefaultContext](),
 	)
 	if err != nil {
 		return nil, err
