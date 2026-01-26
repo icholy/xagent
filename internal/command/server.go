@@ -94,7 +94,7 @@ var ServerCommand = &cli.Command{
 			ClientID:      cmd.String("auth-client-id"),
 			ClientSecret:  cmd.String("auth-client-secret"),
 			RedirectURI:   baseURL + "/auth/callback",
-			PostLogoutURI: baseURL
+			PostLogoutURI: baseURL,
 			EncryptionKey: key,
 		})
 		if err != nil {
