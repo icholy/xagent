@@ -30,7 +30,7 @@ export const Route = createFileRoute('/events/')({
 function EventsPage() {
   const [limit, setLimit] = useState(25)
   const { data, isLoading, error } = useQuery(listEvents, { limit }, {
-    refetchInterval: 3000,
+    refetchInterval: 6000,
   })
 
   if (isLoading) {

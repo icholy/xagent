@@ -48,13 +48,13 @@ function TaskDetail() {
   const { data, isLoading, error, refetch } = useQuery(
     getTaskDetails,
     { id: taskId },
-    { refetchInterval: 3000 }
+    { refetchInterval: 6000 }
   )
 
   const { data: logsData } = useQuery(
     listLogs,
     { taskId },
-    { refetchInterval: 3000 }
+    { refetchInterval: 6000 }
   )
 
   const updateMutation = useMutation(updateTask)

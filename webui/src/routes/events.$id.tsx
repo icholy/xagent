@@ -15,13 +15,13 @@ function EventDetail() {
   const { data: eventData, isLoading: eventLoading, error: eventError } = useQuery(
     getEvent,
     { id: eventId },
-    { refetchInterval: 3000 }
+    { refetchInterval: 6000 }
   )
 
   const { data: tasksData, isLoading: tasksLoading } = useQuery(
     listEventTasks,
     { eventId },
-    { refetchInterval: 3000 }
+    { refetchInterval: 6000 }
   )
 
   if (eventLoading) {

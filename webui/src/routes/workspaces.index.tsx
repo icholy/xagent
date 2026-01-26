@@ -31,7 +31,7 @@ const ALL_RUNNERS = '\x00'
 function WorkspacesPage() {
   const [selectedRunner, setSelectedRunner] = useState(ALL_RUNNERS)
   const { data, isLoading, error, refetch } = useQuery(listWorkspaces, {}, {
-    refetchInterval: 5000,
+    refetchInterval: 6000,
   })
   const clearMutation = useMutation(clearWorkspaces)
 
