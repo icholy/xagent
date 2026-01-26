@@ -56,18 +56,15 @@ func LoadOrCreatePrivateKey(path string) (ed25519.PrivateKey, error) {
 	if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("read key file: %w", err)
 	}
-
 	// Generate new key
 	priv, err := CreatePrivateKey()
 	if err != nil {
 		return nil, err
 	}
-
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, fmt.Errorf("create key directory: %w", err)
 	}
-
 	// Marshal to PKCS#8 format
 	der, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
@@ -80,7 +77,6 @@ func LoadOrCreatePrivateKey(path string) (ed25519.PrivateKey, error) {
 	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0600); err != nil {
 		return nil, fmt.Errorf("write key file: %w", err)
 	}
-
 	return priv, nil
 }
 
@@ -94,7 +90,6 @@ func SignToken(key ed25519.PrivateKey, claims *TaskClaims) (string, error) {
 func VerifyToken(key ed25519.PrivateKey, tokenStr string) (*TaskClaims, error) {
 	// Ed25519 public key is derived from private key
 	pubKey := key.Public()
-
 	token, err := jwt.ParseWithClaims(tokenStr, &TaskClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -104,11 +99,9 @@ func VerifyToken(key ed25519.PrivateKey, tokenStr string) (*TaskClaims, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse token: %w", err)
 	}
-
 	claims, ok := token.Claims.(*TaskClaims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token claims")
 	}
-
 	return claims, nil
 }
