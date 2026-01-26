@@ -29,20 +29,6 @@ func errPermissionDenied(msg string) error {
 	return connect.NewError(connect.CodePermissionDenied, errors.New(msg))
 }
 
-// isChild checks if the given task ID is a direct child (not self).
-func (p *TaskProxy) isChild(ctx context.Context, taskID int64) (bool, error) {
-	if taskID == p.taskID {
-		return false, nil
-	}
-	resp, err := p.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-	if err != nil {
-		return false, err
-	}
-	return resp.Task.Parent == p.taskID, nil
-}
-
-// Self-only operations: validate task ID matches
-
 func (p *TaskProxy) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	if req.TaskId != p.taskID {
 		return nil, errPermissionDenied("can only create links for own task")
@@ -111,12 +97,14 @@ func (p *TaskProxy) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequ
 }
 
 func (p *TaskProxy) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
-	ok, err := p.isChild(ctx, req.TaskId)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, errPermissionDenied("task is not a child of the current task")
+	if req.TaskId != p.taskID {
+		resp, err := p.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: req.TaskId})
+		if err != nil {
+			return nil, err
+		}
+		if resp.Task.Parent != p.taskID {
+			return nil, errPermissionDenied("task is not a child of the current task")
+		}
 	}
 	return p.client.ListLogs(ctx, req)
 }
