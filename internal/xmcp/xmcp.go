@@ -204,19 +204,8 @@ type updateChildTaskInput struct {
 }
 
 func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, input updateChildTaskInput) (*mcp.CallToolResult, any, error) {
-	// Verify we are the parent
-	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
-	if err != nil {
-		return errorResult("failed to get child task: %v", err), nil, nil
-	}
-	if childResp.Task.Parent != s.taskID {
-		return errorResult("task is not a child of the current task"), nil, nil
-	}
-	if childResp.Task.Status == "archived" {
-		return errorResult("cannot update archived task"), nil, nil
-	}
-
-	_, err = s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+	// Proxy validates it's a child and not archived
+	_, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:    input.TaskID,
 		Start: true,
 		AddInstructions: []*xagentv1.Instruction{
@@ -236,15 +225,7 @@ type listChildTaskLogsInput struct {
 }
 
 func (s *Server) listChildTaskLogs(ctx context.Context, req *mcp.CallToolRequest, input listChildTaskLogsInput) (*mcp.CallToolResult, any, error) {
-	// Verify we are the parent
-	childResp, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.TaskID})
-	if err != nil {
-		return errorResult("failed to get child task: %v", err), nil, nil
-	}
-	if childResp.Task.Parent != s.taskID {
-		return errorResult("task is not a child of the current task"), nil, nil
-	}
-
+	// Proxy validates it's a child task
 	logsResp, err := s.client.ListLogs(ctx, &xagentv1.ListLogsRequest{TaskId: input.TaskID})
 	if err != nil {
 		return errorResult("failed to list logs: %v", err), nil, nil

@@ -25,7 +25,9 @@ func NewTaskProxy(taskID int64, client xagentv1connect.XAgentServiceClient) *Tas
 	}
 }
 
-var ErrAccessDenied = connect.NewError(connect.CodePermissionDenied, errors.New("access denied"))
+func errPermissionDenied(msg string) error {
+	return connect.NewError(connect.CodePermissionDenied, errors.New(msg))
+}
 
 // isSelfOrChild checks if the given task ID is either this task or a direct child.
 func (p *TaskProxy) isSelfOrChild(ctx context.Context, taskID int64) (bool, error) {
@@ -55,81 +57,78 @@ func (p *TaskProxy) isChild(ctx context.Context, taskID int64) (bool, error) {
 
 func (p *TaskProxy) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	if req.TaskId != p.taskID {
-		return nil, ErrAccessDenied
+		return nil, errPermissionDenied("can only create links for own task")
 	}
 	return p.client.CreateLink(ctx, req)
 }
 
 func (p *TaskProxy) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
 	if req.TaskId != p.taskID {
-		return nil, ErrAccessDenied
+		return nil, errPermissionDenied("can only upload logs for own task")
 	}
 	return p.client.UploadLogs(ctx, req)
 }
 
 func (p *TaskProxy) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	if req.Parent != p.taskID {
-		return nil, ErrAccessDenied
+		return nil, errPermissionDenied("can only create child tasks of own task")
 	}
 	return p.client.CreateTask(ctx, req)
 }
 
 func (p *TaskProxy) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
 	if req.ParentId != p.taskID {
-		return nil, ErrAccessDenied
+		return nil, errPermissionDenied("can only list children of own task")
 	}
 	return p.client.ListChildTasks(ctx, req)
 }
 
-// Self or direct child: fetch-then-validate
 func (p *TaskProxy) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 	resp, err := p.client.GetTask(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	// Allow if self or direct child
 	if resp.Task.Id == p.taskID || resp.Task.Parent == p.taskID {
 		return resp, nil
 	}
-	return nil, ErrAccessDenied
+	return nil, errPermissionDenied("task is not a child of the current task")
 }
 
 func (p *TaskProxy) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-	// Check if self
 	if req.Id == p.taskID {
 		return p.client.GetTaskDetails(ctx, req)
 	}
-	// Check if direct child
 	ok, err := p.isChild(ctx, req.Id)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, ErrAccessDenied
+		return nil, errPermissionDenied("task is not a child of the current task")
 	}
 	return p.client.GetTaskDetails(ctx, req)
 }
 
 func (p *TaskProxy) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
-	// Check if self or direct child
-	ok, err := p.isSelfOrChild(ctx, req.Id)
+	resp, err := p.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: req.Id})
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		return nil, ErrAccessDenied
+	if resp.Task.Id != p.taskID && resp.Task.Parent != p.taskID {
+		return nil, errPermissionDenied("task is not a child of the current task")
+	}
+	if resp.Task.Status == "archived" {
+		return nil, errPermissionDenied("cannot update archived task")
 	}
 	return p.client.UpdateTask(ctx, req)
 }
 
 func (p *TaskProxy) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
-	// Only allow for direct children (not self - use get_my_task for that)
 	ok, err := p.isChild(ctx, req.TaskId)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, ErrAccessDenied
+		return nil, errPermissionDenied("task is not a child of the current task")
 	}
 	return p.client.ListLogs(ctx, req)
 }
