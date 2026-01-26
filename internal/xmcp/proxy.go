@@ -29,18 +29,6 @@ func errPermissionDenied(msg string) error {
 	return connect.NewError(connect.CodePermissionDenied, errors.New(msg))
 }
 
-// isSelfOrChild checks if the given task ID is either this task or a direct child.
-func (p *TaskProxy) isSelfOrChild(ctx context.Context, taskID int64) (bool, error) {
-	if taskID == p.taskID {
-		return true, nil
-	}
-	resp, err := p.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-	if err != nil {
-		return false, err
-	}
-	return resp.Task.Parent == p.taskID, nil
-}
-
 // isChild checks if the given task ID is a direct child (not self).
 func (p *TaskProxy) isChild(ctx context.Context, taskID int64) (bool, error) {
 	if taskID == p.taskID {
