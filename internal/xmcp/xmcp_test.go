@@ -3,6 +3,7 @@ package xmcp
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -90,7 +91,9 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, parentTaskID, "test-runner", "test-workspace")
+	// Wrap client with TaskProxy to enforce authorization
+	proxy := NewTaskProxy(parentTaskID, client)
+	srv := NewServer(proxy, parentTaskID, "test-runner", "test-workspace")
 	session := setupTestSession(t, srv)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -105,7 +108,7 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 
 	text, ok := result.Content[0].(*mcp.TextContent)
 	assert.Assert(t, ok, "expected TextContent")
-	assert.Assert(t, text.Text == "cannot update archived task", "expected archived error message, got: %s", text.Text)
+	assert.Assert(t, strings.Contains(text.Text, "cannot update archived task"), "expected archived error message, got: %s", text.Text)
 }
 
 func setupExternalTestSession(t *testing.T, srv *ExternalServer) *mcp.ClientSession {
