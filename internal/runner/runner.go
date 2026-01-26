@@ -425,6 +425,7 @@ func (r *Runner) buildContainerConfig(task *model.Task, ws *workspace.Workspace)
 	hostConfig := &container.HostConfig{
 		Binds:    binds,
 		GroupAdd: ctr.GroupAdd,
+		Runtime:  ctr.Runtime,
 	}
 
 	var networkConfig *network.NetworkingConfig
