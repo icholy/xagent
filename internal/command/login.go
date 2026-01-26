@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
@@ -17,7 +18,7 @@ var LoginCommand = &cli.Command{
 			Name:    "server",
 			Aliases: []string{"s"},
 			Usage:   "Server URL",
-			Value:   "http://localhost:6464",
+			Value:   xagentclient.DefaultURL,
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
 		&cli.StringFlag{

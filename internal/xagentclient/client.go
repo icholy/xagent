@@ -9,6 +9,9 @@ import (
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 )
 
+// DefaultURL is the default xagent server URL.
+const DefaultURL = "https://xagent.choly.ca"
+
 type Client = xagentv1connect.XAgentServiceClient
 
 // New returns a Connect client for the given base URL.

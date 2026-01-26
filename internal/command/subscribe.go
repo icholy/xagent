@@ -47,7 +47,7 @@ var SubscribeCommand = &cli.Command{
 			Name:    "server",
 			Aliases: []string{"s"},
 			Usage:   "xagent server URL",
-			Value:   "http://localhost:6464",
+			Value:   xagentclient.DefaultURL,
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
 		&cli.StringFlag{

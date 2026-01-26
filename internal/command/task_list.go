@@ -21,7 +21,7 @@ var TaskListCommand = &cli.Command{
 			Name:    "server",
 			Aliases: []string{"s"},
 			Usage:   "C2 server URL",
-			Value:   "http://localhost:6464",
+			Value:   xagentclient.DefaultURL,
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
 		&cli.StringFlag{

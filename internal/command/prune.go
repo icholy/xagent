@@ -21,7 +21,7 @@ var PruneCommand = &cli.Command{
 			Name:    "server",
 			Aliases: []string{"s"},
 			Usage:   "C2 server URL",
-			Value:   "http://localhost:6464",
+			Value:   xagentclient.DefaultURL,
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {

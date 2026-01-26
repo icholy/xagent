@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
 
@@ -22,7 +23,7 @@ var RunCommand = &cli.Command{
 			Name:    "server",
 			Aliases: []string{"s"},
 			Usage:   "C2 server URL",
-			Value:   "http://localhost:6464",
+			Value:   xagentclient.DefaultURL,
 		},
 		&cli.StringFlag{
 			Name:     "task",
