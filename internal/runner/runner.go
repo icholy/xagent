@@ -30,12 +30,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const socketPath = "/tmp/xagent.sock"
-
 type Runner struct {
 	docker      *client.Client
 	client      xagentclient.Client
-	proxy       *xagentclient.UnixProxy
+	proxies     *TaskProxies
 	prebuiltDir string
 	workspaces  *workspace.Config
 	runnerID    string
@@ -60,36 +58,32 @@ func New(opts Options) (*Runner, error) {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
 
-	p, err := xagentclient.NewUnixProxy(socketPath, opts.ServerURL, opts.Auth)
-	if err != nil {
-		docker.Close()
-		return nil, fmt.Errorf("failed to create proxy: %w", err)
-	}
-
-	go p.Serve()
-
 	// Use math.MaxInt64 if no limit is set (concurrency <= 0)
 	concurrency := int64(opts.Concurrency)
 	if concurrency <= 0 {
 		concurrency = math.MaxInt64
 	}
 
+	log := cmp.Or(opts.Log, slog.Default())
+
 	return &Runner{
 		docker:      docker,
 		client:      xagentclient.New(opts.ServerURL, opts.Auth),
-		proxy:       p,
+		proxies:     NewTaskProxies(opts.ServerURL, opts.Auth, log),
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
 		sem:         safesem.New(concurrency),
-		log:         cmp.Or(opts.Log, slog.Default()),
+		log:         log,
 	}, nil
 }
 
 func (r *Runner) Close() error {
-	r.proxy.Close()
-	return r.docker.Close()
+	return errors.Join(
+		r.proxies.Close(),
+		r.docker.Close(),
+	)
 }
 
 // RegisterWorkspaces sends the available workspace names to the server.
@@ -220,6 +214,23 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	r.sem.Set(runningCount)
 	r.log.Info("initialized running container count", "count", runningCount)
 
+	// Start proxies for running containers
+	// TODO: merge this with the loop below
+	for _, c := range runningContainers {
+		label := c.Labels["xagent.task"]
+		if label == "" {
+			continue
+		}
+		taskID, err := strconv.ParseInt(label, 10, 64)
+		if err != nil {
+			r.log.Error("invalid task ID in container label", "task", label, "error", err)
+			continue
+		}
+		if _, err := r.proxies.Start(taskID); err != nil {
+			r.log.Error("failed to start proxy for running container", "task", taskID, "error", err)
+		}
+	}
+
 	// Find all exited xagent containers
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
@@ -230,13 +241,13 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	}
 
 	for _, c := range containers {
-		taskIDStr := c.Labels["xagent.task"]
-		if taskIDStr == "" {
+		label := c.Labels["xagent.task"]
+		if label == "" {
 			continue
 		}
-		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+		taskID, err := strconv.ParseInt(label, 10, 64)
 		if err != nil {
-			r.log.Error("invalid task ID in container label", "task", taskIDStr, "error", err)
+			r.log.Error("invalid task ID in container label", "task", label, "error", err)
 			continue
 		}
 
@@ -345,8 +356,14 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		return "", fmt.Errorf("failed to get workspace: %w", err)
 	}
 
+	// the proxy should already be started if we're here
+	proxy, ok := r.proxies.Get(task.ID)
+	if !ok {
+		return "", fmt.Errorf("attempting to create runner without proxy running")
+	}
+
 	// Build container config from workspace
-	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
+	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws, proxy)
 
 	name := fmt.Sprintf("xagent-%d", task.ID)
 	r.log.Info("creating container", "task", task.ID, "name", name, "image", ws.Container.Image, "workspace", task.Workspace)
@@ -373,50 +390,57 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	if err != nil {
 		return err
 	}
+	if _, err := r.proxies.Start(task.ID); err != nil {
+		return fmt.Errorf("failed to start proxy: %w", err)
+	}
 
 	var containerID string
 	if ok {
 		r.log.Info("starting existing container", "task", task.ID, "name", fmt.Sprintf("xagent-%d", task.ID))
 		containerID = c.ID
 	} else {
-		var err error
 		containerID, err = r.create(ctx, task)
 		if err != nil {
+			r.proxies.Stop(task.ID)
 			return err
 		}
 	}
 
 	if err := r.docker.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
+		r.proxies.Stop(task.ID)
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 	return nil
 }
 
-func (r *Runner) buildContainerConfig(task *model.Task, ws *workspace.Workspace) (*container.Config, *container.HostConfig, *network.NetworkingConfig) {
+func (r *Runner) buildContainerConfig(
+	task *model.Task,
+	ws *workspace.Workspace,
+	proxy *xagentclient.UnixProxy,
+) (*container.Config, *container.HostConfig, *network.NetworkingConfig) {
 	ctr := &ws.Container
-	taskIDStr := strconv.FormatInt(task.ID, 10)
 
 	// Build environment variables
 	env := make([]string, 0, len(ctr.Environment)+1)
-	env = append(env, "XAGENT_TASK_ID="+taskIDStr)
+	env = append(env, fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID))
 	for k, v := range ctr.Environment {
 		env = append(env, k+"="+v)
 	}
 
 	// Build binds (volumes) - always include the socket
-	binds := append([]string{socketPath + ":/var/run/xagent.sock"}, ctr.Volumes...)
+	binds := append([]string{proxy.SocketPath() + ":/var/run/xagent.sock"}, ctr.Volumes...)
 
 	config := &container.Config{
 		Image: ctr.Image,
 		User:  ctr.User,
 		Labels: map[string]string{
 			"xagent":      "true",
-			"xagent.task": taskIDStr,
+			"xagent.task": fmt.Sprint(task.ID),
 		},
 		Cmd: []string{
 			"/usr/local/bin/xagent", "run",
 			"--server", "unix:///var/run/xagent.sock",
-			"--task", taskIDStr,
+			"--task", fmt.Sprint(task.ID),
 		},
 		Env:        env,
 		WorkingDir: ctr.WorkingDir,
@@ -568,6 +592,9 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				}
 			case events.ActionDie:
 				r.sem.Release(1)
+				if err := r.proxies.Stop(taskID); err != nil {
+					r.log.Error("failed to stop proxy", "task", taskID, "error", err)
+				}
 				// Use version 0 to bypass version check (spontaneous events)
 				exitCode := event.Actor.Attributes["exitCode"]
 				if exitCode == "0" {

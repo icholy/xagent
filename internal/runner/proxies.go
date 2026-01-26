@@ -29,21 +29,29 @@ func NewTaskProxies(serverURL string, auth xagentclient.TokenSource, log *slog.L
 	}
 }
 
+// Get an existing proxy
+func (p *TaskProxies) Get(taskID int64) (*xagentclient.UnixProxy, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	proxy, ok := p.proxies[taskID]
+	return proxy, ok
+}
+
 // Start creates and starts a proxy for a task, returning the socket path.
 // If a proxy already exists for the task, it returns the existing socket path.
-func (p *TaskProxies) Start(taskID int64) (string, error) {
+func (p *TaskProxies) Start(taskID int64) (*xagentclient.UnixProxy, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	// Check if proxy already exists
 	if proxy, ok := p.proxies[taskID]; ok {
-		return proxy.SocketPath(), nil
+		return proxy, nil
 	}
 
 	path := fmt.Sprintf("/tmp/xagent-%d.sock", taskID)
 	proxy, err := xagentclient.NewUnixProxy(path, p.serverURL, p.auth)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	go func() {
@@ -54,7 +62,7 @@ func (p *TaskProxies) Start(taskID int64) (string, error) {
 
 	p.proxies[taskID] = proxy
 	p.log.Debug("started proxy", "task", taskID, "socket", path)
-	return path, nil
+	return proxy, nil
 }
 
 // Stop closes and removes the proxy for a task.
