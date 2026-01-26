@@ -13,6 +13,13 @@ import (
 //go:embed sql/migrations/*.sql
 var migrations embed.FS
 
+func init() {
+	goose.SetBaseFS(migrations)
+	if err := goose.SetDialect("postgres"); err != nil {
+		panic(err)
+	}
+}
+
 // Store provides access to all database operations.
 type Store struct {
 	db *sql.DB
@@ -43,21 +50,13 @@ func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error
 	return f(tx)
 }
 
-func Migrate(db *sql.DB) error {
-	goose.SetBaseFS(migrations)
-	if err := goose.SetDialect("postgres"); err != nil {
-		return err
-	}
-	return goose.Up(db, "sql/migrations")
-}
-
 func Open(dsn string, migrate bool) (*sql.DB, error) {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, err
 	}
 	if migrate {
-		if err := Migrate(db); err != nil {
+		if err := goose.Up(db, "sql/migrations"); err != nil {
 			db.Close()
 			return nil, err
 		}
