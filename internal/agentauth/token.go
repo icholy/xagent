@@ -3,6 +3,7 @@ package agentauth
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -28,16 +29,21 @@ func CreatePrivateKey() (ed25519.PrivateKey, error) {
 	return priv, nil
 }
 
-// DecodePrivateKey decodes a PEM-encoded Ed25519 private key.
+// DecodePrivateKey decodes a PEM-encoded PKCS#8 Ed25519 private key.
 func DecodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
 	block, _ := pem.Decode(data)
-	if block == nil || block.Type != "PRIVATE KEY" {
-		return nil, fmt.Errorf("invalid PEM block type")
+	if block == nil {
+		return nil, fmt.Errorf("invalid PEM data")
 	}
-	if len(block.Bytes) != ed25519.SeedSize {
-		return nil, fmt.Errorf("invalid key size: got %d, want %d", len(block.Bytes), ed25519.SeedSize)
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse private key: %w", err)
 	}
-	return ed25519.NewKeyFromSeed(block.Bytes), nil
+	priv, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("not an Ed25519 private key")
+	}
+	return priv, nil
 }
 
 // LoadOrCreatePrivateKey loads an Ed25519 private key from a file,
@@ -62,10 +68,14 @@ func LoadOrCreatePrivateKey(path string) (ed25519.PrivateKey, error) {
 		return nil, fmt.Errorf("create key directory: %w", err)
 	}
 
-	// Save key seed (first 32 bytes of private key)
+	// Marshal to PKCS#8 format
+	der, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		return nil, fmt.Errorf("marshal private key: %w", err)
+	}
 	block := &pem.Block{
 		Type:  "PRIVATE KEY",
-		Bytes: priv.Seed(),
+		Bytes: der,
 	}
 	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0600); err != nil {
 		return nil, fmt.Errorf("write key file: %w", err)
