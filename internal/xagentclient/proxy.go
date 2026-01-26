@@ -3,55 +3,38 @@ package xagentclient
 import (
 	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 )
 
 type UnixProxy struct {
-	socketPath string
-	listener   net.Listener
-	server     *http.Server
+	path     string
+	listener net.Listener
+	server   *http.Server
 }
 
-func NewUnixProxy(socketPath, targetURL string, tokenSource TokenSource) (*UnixProxy, error) {
-	target, err := url.Parse(targetURL)
-	if err != nil {
-		return nil, err
-	}
-
+func NewUnixProxy(path string, handler http.Handler) (*UnixProxy, error) {
 	// Remove existing socket file
-	os.Remove(socketPath)
+	os.Remove(path)
 
-	listener, err := net.Listen("unix", socketPath)
+	listener, err := net.Listen("unix", path)
 	if err != nil {
 		return nil, err
 	}
 
 	// Make socket world-accessible
-	os.Chmod(socketPath, 0777)
-
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	// Wrap transport to inject auth header
-	if tokenSource != nil {
-		proxy.Transport = &AuthTransport{
-			Transport: http.DefaultTransport,
-			Source:    tokenSource,
-		}
-	}
+	os.Chmod(path, 0777)
 
 	return &UnixProxy{
-		socketPath: socketPath,
-		listener:   listener,
+		path:     path,
+		listener: listener,
 		server: &http.Server{
-			Handler: proxy,
+			Handler: handler,
 		},
 	}, nil
 }
 
 func (p *UnixProxy) SocketPath() string {
-	return p.socketPath
+	return p.path
 }
 
 func (p *UnixProxy) Serve() error {
@@ -60,6 +43,6 @@ func (p *UnixProxy) Serve() error {
 
 func (p *UnixProxy) Close() error {
 	p.server.Close()
-	os.Remove(p.socketPath)
+	os.Remove(p.path)
 	return nil
 }

@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/xagentclient"
+	"github.com/icholy/xagent/internal/xmcp"
 )
 
 // TaskProxies manages per-task Unix socket proxies.
@@ -39,29 +42,40 @@ func (p *TaskProxies) Get(taskID int64) (*xagentclient.UnixProxy, bool) {
 
 // Start creates and starts a proxy for a task, returning the socket path.
 // If a proxy already exists for the task, it returns the existing socket path.
-func (p *TaskProxies) Start(taskID int64) (*xagentclient.UnixProxy, error) {
+func (p *TaskProxies) Start(task *model.Task) (*xagentclient.UnixProxy, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	// Check if proxy already exists
-	if proxy, ok := p.proxies[taskID]; ok {
+	if proxy, ok := p.proxies[task.ID]; ok {
 		return proxy, nil
 	}
 
-	path := fmt.Sprintf("/tmp/xagent-%d.sock", taskID)
-	proxy, err := xagentclient.NewUnixProxy(path, p.serverURL, p.auth)
+	// Create client to the upstream server
+	client := xagentclient.New(p.serverURL, p.auth)
+
+	// Create filter to enforce access control
+	filter := xmcp.NewAgentFilter(task, client)
+
+	// Create Connect RPC handler
+	rpcPath, handler := xagentv1connect.NewXAgentServiceHandler(filter)
+	mux := http.NewServeMux()
+	mux.Handle(rpcPath, handler)
+
+	path := fmt.Sprintf("/tmp/xagent-%d.sock", task.ID)
+	proxy, err := xagentclient.NewUnixProxy(path, mux)
 	if err != nil {
 		return nil, err
 	}
 
 	go func() {
 		if err := proxy.Serve(); err != http.ErrServerClosed {
-			p.log.Error("proxy failed", "task", taskID, "err", err)
+			p.log.Error("proxy failed", "task", task.ID, "err", err)
 		}
 	}()
 
-	p.proxies[taskID] = proxy
-	p.log.Debug("started proxy", "task", taskID, "socket", path)
+	p.proxies[task.ID] = proxy
+	p.log.Debug("started proxy", "task", task.ID, "socket", path)
 	return proxy, nil
 }
 

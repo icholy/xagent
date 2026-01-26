@@ -215,7 +215,6 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	r.log.Info("initialized running container count", "count", runningCount)
 
 	// Start proxies for running containers
-	// TODO: merge this with the loop below
 	for _, c := range runningContainers {
 		label := c.Labels["xagent.task"]
 		if label == "" {
@@ -226,7 +225,13 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			r.log.Error("invalid task ID in container label", "task", label, "error", err)
 			continue
 		}
-		if _, err := r.proxies.Start(taskID); err != nil {
+		resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+		if err != nil {
+			r.log.Error("failed to get task for running container", "task", taskID, "error", err)
+			continue
+		}
+		task := model.TaskFromProto(resp.Task)
+		if _, err := r.proxies.Start(task); err != nil {
 			r.log.Error("failed to start proxy for running container", "task", taskID, "error", err)
 		}
 	}
@@ -390,7 +395,7 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	if err != nil {
 		return err
 	}
-	if _, err := r.proxies.Start(task.ID); err != nil {
+	if _, err := r.proxies.Start(task); err != nil {
 		return fmt.Errorf("failed to start proxy: %w", err)
 	}
 
