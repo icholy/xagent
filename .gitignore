@@ -1,6 +1,7 @@
 /xagent
 /data/xagent.db*
 /data/*.json
+/data/secret.key
 /prebuilt/
 /webhook
 /internal/server/webui/
