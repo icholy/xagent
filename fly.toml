@@ -5,11 +5,11 @@ primary_region = "ord"
 
 [env]
   # Set these secrets via `fly secrets set`:
-  # DATABASE_URL
+  # XAGENT_BASE_URL
+  # XAGENT_DATABASE_URL
   # XAGENT_AUTH_DOMAIN
   # XAGENT_AUTH_CLIENT_ID
   # XAGENT_AUTH_CLIENT_SECRET
-  # XAGENT_BASE_URL
   # XAGENT_AUTH_DEVICE_CLIENT_ID
   # XAGENT_AUTH_ENCRYPTION_KEY
 
