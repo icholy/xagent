@@ -366,7 +366,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	}
 
 	// Build container config from workspace
-	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
+	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws, token)
 
 	name := fmt.Sprintf("xagent-%d", task.ID)
 	r.log.Info("creating container", "task", task.ID, "name", name, "image", ws.Container.Image, "workspace", task.Workspace)
@@ -414,6 +414,7 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 func (r *Runner) buildContainerConfig(
 	task *model.Task,
 	ws *workspace.Workspace,
+	token string,
 ) (*container.Config, *container.HostConfig, *network.NetworkingConfig) {
 	ctr := &ws.Container
 
@@ -438,6 +439,7 @@ func (r *Runner) buildContainerConfig(
 			"/usr/local/bin/xagent", "run",
 			"--server", "unix:///var/run/xagent.sock",
 			"--task", fmt.Sprint(task.ID),
+			"--token", token,
 		},
 		Env:        env,
 		WorkingDir: ctr.WorkingDir,
@@ -509,7 +511,6 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 		Prompt:     ws.Agent.Prompt,
 		McpServers: make(map[string]agent.McpServer),
 		Commands:   ws.Commands,
-		Token:      token,
 	}
 
 	// Copy agent-specific config
@@ -538,7 +539,15 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
 		Command: "/usr/local/bin/xagent",
-		Args:    []string{"mcp", "--mode", "container", "--server", "unix:///var/run/xagent.sock", "--task", taskIDStr, "--runner", task.Runner, "--workspace", task.Workspace},
+		Args: []string{
+			"mcp",
+			"--mode", "container",
+			"--server", "unix:///var/run/xagent.sock",
+			"--task", taskIDStr,
+			"--runner", task.Runner,
+			"--workspace", task.Workspace,
+			"--token", token,
+		},
 	}
 
 	for name, srv := range ws.Agent.McpServers {

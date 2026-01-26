@@ -31,6 +31,10 @@ var RunCommand = &cli.Command{
 			Usage:    "Task ID to execute",
 			Required: true,
 		},
+		&cli.StringFlag{
+			Name:  "token",
+			Usage: "Authentication token for the agent",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		// Set up SIGTERM handler to cancel with ErrStop

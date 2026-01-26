@@ -3,9 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
-	"strconv"
 
-	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/icholy/xagent/internal/xmcp"
@@ -44,6 +42,10 @@ var McpCommand = &cli.Command{
 			Aliases: []string{"w"},
 			Usage:   "Workspace name (required for container mode)",
 		},
+		&cli.StringFlag{
+			Name:  "token",
+			Usage: "Authentication token (required for container mode)",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		mode := cmd.String("mode")
@@ -64,15 +66,12 @@ var McpCommand = &cli.Command{
 			if !cmd.IsSet("workspace") {
 				return fmt.Errorf("--workspace is required for container mode")
 			}
+			if !cmd.IsSet("token") {
+				return fmt.Errorf("--token is required for container mode")
+			}
 			taskID := cmd.Int64("task")
-			cfg, err := agent.LoadConfig(strconv.FormatInt(taskID, 10))
-			if err != nil {
-				return fmt.Errorf("failed to load agent config: %w", err)
-			}
-			if cfg.Token == "" {
-				return fmt.Errorf("agent config missing token")
-			}
-			client := xagentclient.New(cmd.String("server"), agentauth.StaticTokenSource(cfg.Token))
+			token := cmd.String("token")
+			client := xagentclient.New(cmd.String("server"), agentauth.StaticTokenSource(token))
 			runner := cmd.String("runner")
 			workspace := cmd.String("workspace")
 			xmcp.NewServer(client, taskID, runner, workspace).AddTools(server)
