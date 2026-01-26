@@ -2,9 +2,14 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
@@ -107,10 +112,34 @@ var ServerCommand = &cli.Command{
 			},
 		})
 
+		httpServer := &http.Server{
+			Addr:    addr,
+			Handler: srv.Handler(),
+		}
+
+		// Set up signal handler for graceful shutdown
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+		go func() {
+			sig := <-sigCh
+			slog.Info("received signal, shutting down", "signal", sig)
+
+			// Give active requests time to complete
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			if err := httpServer.Shutdown(shutdownCtx); err != nil {
+				slog.Error("shutdown error", "error", err)
+			}
+		}()
+
 		slog.Info("starting server", "addr", addr, "db", dbPath)
-		if err := http.ListenAndServe(addr, srv.Handler()); err != nil {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("server error: %w", err)
 		}
+
+		slog.Info("server stopped")
 		return nil
 	},
 }
