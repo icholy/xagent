@@ -9,6 +9,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: xagent
+          POSTGRES_PASSWORD: xagent
+          POSTGRES_DB: xagent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U xagent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +38,8 @@ jobs:
         run: go mod download
 
       - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
         run: go test -v ./...
 
   webui:
