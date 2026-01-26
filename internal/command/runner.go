@@ -57,6 +57,12 @@ var RunnerCommand = &cli.Command{
 			Usage: "Directory containing prebuilt xagent binaries",
 			Value: "prebuilt",
 		},
+		&cli.StringFlag{
+			Name:    "secret-file",
+			Usage:   "Path to secret key file (auto-generated if missing)",
+			Value:   "data/secret.key",
+			Sources: cli.EnvVars("XAGENT_SECRET_FILE"),
+		},
 		&cli.IntFlag{
 			Name:  "concurrency",
 			Usage: "Maximum number of concurrent tasks (0 for unlimited)",
@@ -83,6 +89,7 @@ var RunnerCommand = &cli.Command{
 		configPath := cmd.String("config")
 		pollInterval := cmd.Duration("poll")
 		prebuiltDir := cmd.String("prebuilt")
+		secretFile := cmd.String("secret-file")
 		concurrency := cmd.Int("concurrency")
 		autoprune := cmd.Bool("autoprune")
 		runnerID := cmd.String("id")
@@ -114,6 +121,7 @@ var RunnerCommand = &cli.Command{
 		r, err := runner.New(runner.Options{
 			ServerURL:   serverAddr,
 			PrebuiltDir: prebuiltDir,
+			SecretFile:  secretFile,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,

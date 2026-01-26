@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,6 +22,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -33,7 +35,8 @@ import (
 type Runner struct {
 	docker      *client.Client
 	client      xagentclient.Client
-	proxies     *TaskProxies
+	proxy       *AgentProxy
+	privateKey  ed25519.PrivateKey
 	prebuiltDir string
 	workspaces  *workspace.Config
 	runnerID    string
@@ -45,6 +48,7 @@ type Runner struct {
 type Options struct {
 	ServerURL   string
 	PrebuiltDir string
+	SecretFile  string
 	Workspaces  *workspace.Config
 	Concurrency int
 	RunnerID    string
@@ -58,6 +62,12 @@ func New(opts Options) (*Runner, error) {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
 
+	// Load or create private key
+	privateKey, err := agentauth.LoadOrCreatePrivateKey(opts.SecretFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load private key: %w", err)
+	}
+
 	// Use math.MaxInt64 if no limit is set (concurrency <= 0)
 	concurrency := int64(opts.Concurrency)
 	if concurrency <= 0 {
@@ -66,10 +76,16 @@ func New(opts Options) (*Runner, error) {
 
 	log := cmp.Or(opts.Log, slog.Default())
 
+	proxy := NewProxy(opts.ServerURL, opts.Auth, privateKey, log)
+	if err := proxy.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start proxy: %w", err)
+	}
+
 	return &Runner{
 		docker:      docker,
 		client:      xagentclient.New(opts.ServerURL, opts.Auth),
-		proxies:     NewTaskProxies(opts.ServerURL, opts.Auth, log),
+		proxy:       proxy,
+		privateKey:  privateKey,
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
@@ -81,7 +97,7 @@ func New(opts Options) (*Runner, error) {
 
 func (r *Runner) Close() error {
 	return errors.Join(
-		r.proxies.Close(),
+		r.proxy.Close(),
 		r.docker.Close(),
 	)
 }
@@ -214,28 +230,6 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	r.sem.Set(runningCount)
 	r.log.Info("initialized running container count", "count", runningCount)
 
-	// Start proxies for running containers
-	for _, c := range runningContainers {
-		label := c.Labels["xagent.task"]
-		if label == "" {
-			continue
-		}
-		taskID, err := strconv.ParseInt(label, 10, 64)
-		if err != nil {
-			r.log.Error("invalid task ID in container label", "task", label, "error", err)
-			continue
-		}
-		resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-		if err != nil {
-			r.log.Error("failed to get task for running container", "task", taskID, "error", err)
-			continue
-		}
-		task := model.TaskFromProto(resp.Task)
-		if _, err := r.proxies.Start(task); err != nil {
-			r.log.Error("failed to start proxy for running container", "task", taskID, "error", err)
-		}
-	}
-
 	// Find all exited xagent containers
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		All:     true,
@@ -361,14 +355,18 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		return "", fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	// the proxy should already be started if we're here
-	proxy, ok := r.proxies.Get(task.ID)
-	if !ok {
-		return "", fmt.Errorf("attempting to create runner without proxy running")
+	// Generate JWT for this task
+	token, err := agentauth.SignToken(r.privateKey, &agentauth.TaskClaims{
+		TaskID:    task.ID,
+		Workspace: task.Workspace,
+		Runner:    task.Runner,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
 	// Build container config from workspace
-	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws, proxy)
+	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws)
 
 	name := fmt.Sprintf("xagent-%d", task.ID)
 	r.log.Info("creating container", "task", task.ID, "name", name, "image", ws.Container.Image, "workspace", task.Workspace)
@@ -383,7 +381,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	}
 
 	// Copy config into container
-	if err := r.copyConfig(ctx, resp.ID, task, ws); err != nil {
+	if err := r.copyConfig(ctx, resp.ID, task, ws, token); err != nil {
 		return "", fmt.Errorf("failed to copy config: %w", err)
 	}
 
@@ -395,9 +393,6 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	if err != nil {
 		return err
 	}
-	if _, err := r.proxies.Start(task); err != nil {
-		return fmt.Errorf("failed to start proxy: %w", err)
-	}
 
 	var containerID string
 	if ok {
@@ -406,13 +401,11 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 	} else {
 		containerID, err = r.create(ctx, task)
 		if err != nil {
-			r.proxies.Stop(task.ID)
 			return err
 		}
 	}
 
 	if err := r.docker.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-		r.proxies.Stop(task.ID)
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 	return nil
@@ -421,7 +414,6 @@ func (r *Runner) start(ctx context.Context, task *model.Task) error {
 func (r *Runner) buildContainerConfig(
 	task *model.Task,
 	ws *workspace.Workspace,
-	proxy *xagentclient.UnixProxy,
 ) (*container.Config, *container.HostConfig, *network.NetworkingConfig) {
 	ctr := &ws.Container
 
@@ -433,7 +425,7 @@ func (r *Runner) buildContainerConfig(
 	}
 
 	// Build binds (volumes) - always include the socket
-	binds := append([]string{proxy.SocketPath() + ":/var/run/xagent.sock"}, ctr.Volumes...)
+	binds := append([]string{r.proxy.SocketPath() + ":/var/run/xagent.sock"}, ctr.Volumes...)
 
 	config := &container.Config{
 		Image: ctr.Image,
@@ -507,7 +499,7 @@ func (r *Runner) copyBinary(ctx context.Context, containerID, image string) erro
 	return r.docker.CopyToContainer(ctx, containerID, "/usr/local/bin", &buf, container.CopyToContainerOptions{})
 }
 
-func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model.Task, ws *workspace.Workspace) error {
+func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model.Task, ws *workspace.Workspace, token string) error {
 	taskIDStr := strconv.FormatInt(task.ID, 10)
 
 	// Convert workspace to agent config format
@@ -517,6 +509,7 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 		Prompt:     ws.Agent.Prompt,
 		McpServers: make(map[string]agent.McpServer),
 		Commands:   ws.Commands,
+		Token:      token,
 	}
 
 	// Copy agent-specific config
@@ -597,9 +590,6 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				}
 			case events.ActionDie:
 				r.sem.Release(1)
-				if err := r.proxies.Stop(taskID); err != nil {
-					r.log.Error("failed to stop proxy", "task", taskID, "error", err)
-				}
 				// Use version 0 to bypass version check (spontaneous events)
 				exitCode := event.Actor.Attributes["exitCode"]
 				if exitCode == "0" {

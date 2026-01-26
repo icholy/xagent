@@ -3,7 +3,10 @@ package command
 import (
 	"context"
 	"fmt"
+	"strconv"
 
+	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/icholy/xagent/internal/xmcp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -44,7 +47,6 @@ var McpCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		mode := cmd.String("mode")
-		client := xagentclient.New(cmd.String("server"), nil)
 
 		server := mcp.NewServer(&mcp.Implementation{
 			Name:    "xagent",
@@ -63,10 +65,19 @@ var McpCommand = &cli.Command{
 				return fmt.Errorf("--workspace is required for container mode")
 			}
 			taskID := cmd.Int64("task")
+			cfg, err := agent.LoadConfig(strconv.FormatInt(taskID, 10))
+			if err != nil {
+				return fmt.Errorf("failed to load agent config: %w", err)
+			}
+			if cfg.Token == "" {
+				return fmt.Errorf("agent config missing token")
+			}
+			client := xagentclient.New(cmd.String("server"), agentauth.StaticTokenSource(cfg.Token))
 			runner := cmd.String("runner")
 			workspace := cmd.String("workspace")
 			xmcp.NewServer(client, taskID, runner, workspace).AddTools(server)
 		case "external":
+			client := xagentclient.New(cmd.String("server"), nil)
 			xmcp.NewExternalServer(client).AddTools(server)
 		default:
 			return fmt.Errorf("unknown mode: %s (must be 'container' or 'external')", mode)

@@ -22,6 +22,7 @@ type Config struct {
 	Copilot    *CopilotOptions      `json:"copilot,omitempty"`
 	Cursor     *CursorOptions       `json:"cursor,omitempty"`
 	Dummy      *DummyOptions        `json:"dummy,omitempty"`
+	Token      string               `json:"token,omitempty"`
 
 	// Agent-managed state
 	Setup   bool `json:"setup,omitempty"`
