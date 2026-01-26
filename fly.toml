@@ -1,0 +1,31 @@
+app = "xagent"
+primary_region = "ord"
+
+[build]
+
+[env]
+  # Set these secrets via `fly secrets set`:
+  # DATABASE_URL
+  # XAGENT_AUTH_DOMAIN
+  # XAGENT_AUTH_CLIENT_ID
+  # XAGENT_AUTH_CLIENT_SECRET
+  # XAGENT_BASE_URL
+  # XAGENT_AUTH_DEVICE_CLIENT_ID
+  # XAGENT_AUTH_ENCRYPTION_KEY
+
+[http_service]
+  internal_port = 6464
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
