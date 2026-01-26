@@ -3,14 +3,15 @@ package store
 import (
 	"context"
 	"database/sql"
-	_ "embed"
+	"embed"
 
 	"github.com/icholy/xagent/internal/store/sqlc"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 )
 
-//go:embed sql/schema.sql
-var schema string
+//go:embed sql/migrations/*.sql
+var migrations embed.FS
 
 // Store provides access to all database operations.
 type Store struct {
@@ -42,14 +43,24 @@ func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error
 	return f(tx)
 }
 
-func Open(dsn string) (*sql.DB, error) {
+func Migrate(db *sql.DB) error {
+	goose.SetBaseFS(migrations)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	return goose.Up(db, "sql/migrations")
+}
+
+func Open(dsn string, migrate bool) (*sql.DB, error) {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(schema); err != nil {
-		db.Close()
-		return nil, err
+	if migrate {
+		if err := Migrate(db); err != nil {
+			db.Close()
+			return nil, err
+		}
 	}
 	return db, nil
 }

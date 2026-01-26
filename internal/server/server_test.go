@@ -32,7 +32,7 @@ func setupTestServer(t *testing.T) *Server {
 	}
 
 	// Open the database (this will create and migrate it)
-	db, err := store.Open(dsn)
+	db, err := store.Open(dsn, true)
 	assert.NilError(t, err)
 
 	// Clean up the database when the test completes

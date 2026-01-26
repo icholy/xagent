@@ -75,7 +75,7 @@ var ServerCommand = &cli.Command{
 		dbPath := cmd.String("db")
 		notifyFlag := cmd.Bool("notify")
 
-		db, err := store.Open(dbPath)
+		db, err := store.Open(dbPath, true)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
