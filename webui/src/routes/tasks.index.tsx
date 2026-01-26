@@ -33,7 +33,7 @@ function TasksPage() {
   const [searchQuery, setSearchQuery] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery(listTasks, {}, {
-    refetchInterval: 3000,
+    refetchInterval: 6000,
   })
 
   if (isLoading) {
