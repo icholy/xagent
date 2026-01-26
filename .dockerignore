@@ -3,4 +3,6 @@
 /prebuilt/
 /internal/server/webui/
 /webui/node_modules/
+/terraform
+/webhook
 .env
