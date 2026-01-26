@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -112,7 +113,9 @@ func (a *Auth) Token(ctx context.Context) (string, error) {
 	}
 	// Try to refresh
 	if a.token != nil && a.token.RefreshToken != "" {
-		if err := a.refresh(ctx); err == nil {
+		if err := a.refresh(ctx); err != nil {
+			slog.Error("token refresh failed", "error", err)
+		} else {
 			return a.token.AccessToken, nil
 		}
 	}
