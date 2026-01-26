@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/icholy/xagent/internal/xmcp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -69,12 +70,14 @@ var McpCommand = &cli.Command{
 			if !cmd.IsSet("token") {
 				return fmt.Errorf("--token is required for container mode")
 			}
-			taskID := cmd.Int64("task")
 			token := cmd.String("token")
 			client := xagentclient.New(cmd.String("server"), agentauth.StaticTokenSource(token))
-			runner := cmd.String("runner")
-			workspace := cmd.String("workspace")
-			xmcp.NewServer(client, taskID, runner, workspace).AddTools(server)
+			task := &model.Task{
+				ID:        cmd.Int64("task"),
+				Runner:    cmd.String("runner"),
+				Workspace: cmd.String("workspace"),
+			}
+			xmcp.NewServer(client, task).AddTools(server)
 		case "external":
 			client := xagentclient.New(cmd.String("server"), nil)
 			xmcp.NewExternalServer(client).AddTools(server)

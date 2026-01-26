@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gotest.tools/v3/assert"
@@ -51,7 +52,11 @@ func TestGetMyTask(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, 123, "test-runner", "test-workspace")
+	srv := NewServer(client, &model.Task{
+		ID:        123,
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
 	session := setupTestSession(t, srv, t.Context())
 
 	// Call the tool through the MCP framework
@@ -94,7 +99,8 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 
 	// Wrap client with AgentFilter to enforce authorization
 	filter := NewAgentFilter(client)
-	srv := NewServer(filter, parentTaskID, "test-runner", "test-workspace")
+	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
+	srv := NewServer(filter, task)
 
 	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{
 		TaskID:    parentTaskID,

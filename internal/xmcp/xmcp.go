@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -16,24 +17,20 @@ import (
 )
 
 type Server struct {
-	client    xagentclient.Client
-	taskID    int64
-	runner    string
-	workspace string
+	client xagentclient.Client
+	task   *model.Task
 }
 
-func NewServer(client xagentclient.Client, taskID int64, runner, workspace string) *Server {
+func NewServer(client xagentclient.Client, task *model.Task) *Server {
 	return &Server{
-		client:    client,
-		taskID:    taskID,
-		runner:    runner,
-		workspace: workspace,
+		client: client,
+		task:   task,
 	}
 }
 
 func (s *Server) log(ctx context.Context, format string, args ...any) {
 	_, err := s.client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
-		TaskId: s.taskID,
+		TaskId: s.task.ID,
 		Entries: []*xagentv1.LogEntry{
 			{Type: "mcp", Content: fmt.Sprintf(format, args...)},
 		},
@@ -95,7 +92,7 @@ type createLinkInput struct {
 
 func (s *Server) createLink(ctx context.Context, req *mcp.CallToolRequest, input createLinkInput) (*mcp.CallToolResult, any, error) {
 	_, err := s.client.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-		TaskId:    s.taskID,
+		TaskId:    s.task.ID,
 		Relevance: input.Relevance,
 		Url:       input.URL,
 		Title:     input.Title,
@@ -115,7 +112,7 @@ type reportInput struct {
 
 func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input reportInput) (*mcp.CallToolResult, any, error) {
 	_, err := s.client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
-		TaskId: s.taskID,
+		TaskId: s.task.ID,
 		Entries: []*xagentv1.LogEntry{
 			{Type: "llm", Content: input.Message},
 		},
@@ -128,7 +125,7 @@ func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input rep
 }
 
 func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input any) (*mcp.CallToolResult, any, error) {
-	resp, err := s.client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: s.taskID})
+	resp, err := s.client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: s.task.ID})
 	if err != nil {
 		return errorResult("failed to get task: %v", err), nil, nil
 	}
@@ -145,9 +142,9 @@ type createChildTaskInput struct {
 func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
 	resp, err := s.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
-		Parent:    s.taskID,
-		Runner:    s.runner,
-		Workspace: s.workspace,
+		Parent:    s.task.ID,
+		Runner:    s.task.Runner,
+		Workspace: s.task.Workspace,
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
 		},
@@ -166,7 +163,7 @@ type updateMyTaskInput struct {
 
 func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
 	_, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:   s.taskID,
+		Id:   s.task.ID,
 		Name: input.Name,
 	})
 	if err != nil {
@@ -179,7 +176,7 @@ func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, inp
 
 func (s *Server) listChildTasks(ctx context.Context, req *mcp.CallToolRequest, input any) (*mcp.CallToolResult, any, error) {
 	resp, err := s.client.ListChildTasks(ctx, &xagentv1.ListChildTasksRequest{
-		ParentId: s.taskID,
+		ParentId: s.task.ID,
 	})
 	if err != nil {
 		return errorResult("failed to list children: %v", err), nil, nil
