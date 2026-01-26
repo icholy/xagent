@@ -22,7 +22,7 @@ import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
@@ -163,6 +163,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
             onClick={handleArchive}
             disabled={archiveMutation.isPending}
           >
+            {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Archive
           </Button>
         )}
