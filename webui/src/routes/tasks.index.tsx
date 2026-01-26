@@ -135,11 +135,10 @@ function TasksPage() {
 }
 
 function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
-  const archiveMutation = useMutation(archiveTask)
+  const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: task.id })
-    onUpdate()
   }
 
   return (

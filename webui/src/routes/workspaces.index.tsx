@@ -33,14 +33,13 @@ function WorkspacesPage() {
   const { data, isLoading, error, refetch } = useQuery(listWorkspaces, {}, {
     refetchInterval: 6000,
   })
-  const clearMutation = useMutation(clearWorkspaces)
+  const clearMutation = useMutation(clearWorkspaces, { onSuccess: () => refetch() })
 
   const handleClear = async () => {
     await clearMutation.mutateAsync({
       runnerId: selectedRunner === ALL_RUNNERS ? '' : selectedRunner,
     })
     setSelectedRunner(ALL_RUNNERS)
-    refetch()
   }
 
   if (isLoading) {

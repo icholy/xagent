@@ -57,25 +57,22 @@ function TaskDetail() {
     { refetchInterval: 6000 }
   )
 
-  const updateMutation = useMutation(updateTask)
-  const removeEventMutation = useMutation(removeEventTask)
-  const archiveMutation = useMutation(archiveTask)
-  const cancelMutation = useMutation(cancelTask)
-  const restartMutation = useMutation(restartTask)
+  const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
+  const removeEventMutation = useMutation(removeEventTask, { onSuccess: () => refetch() })
+  const archiveMutation = useMutation(archiveTask, { onSuccess: () => refetch() })
+  const cancelMutation = useMutation(cancelTask, { onSuccess: () => refetch() })
+  const restartMutation = useMutation(restartTask, { onSuccess: () => refetch() })
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: taskId })
-    refetch()
   }
 
   const handleCancel = async () => {
     await cancelMutation.mutateAsync({ id: taskId })
-    refetch()
   }
 
   const handleRestart = async () => {
     await restartMutation.mutateAsync({ id: taskId })
-    refetch()
   }
 
   const handleAddInstruction = async (e: React.FormEvent) => {
@@ -87,12 +84,10 @@ function TaskDetail() {
       addInstructions: [{ text: instruction, url: '' }],
     })
     setInstruction('')
-    refetch()
   }
 
   const handleUnlinkEvent = async (eventId: bigint) => {
     await removeEventMutation.mutateAsync({ eventId, taskId })
-    refetch()
   }
 
   if (isLoading) {
@@ -353,11 +348,10 @@ function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => v
 }
 
 function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
-  const archiveMutation = useMutation(archiveTask)
+  const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: task.id })
-    onUpdate()
   }
 
   return (
