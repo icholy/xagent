@@ -25,10 +25,6 @@ func NewTaskProxy(taskID int64, client xagentv1connect.XAgentServiceClient) *Tas
 	}
 }
 
-func errPermissionDenied(msg string) error {
-	return connect.NewError(connect.CodePermissionDenied, errors.New(msg))
-}
-
 func (p *TaskProxy) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	if req.TaskId != p.taskID {
 		return nil, errPermissionDenied("can only create links for own task")
@@ -107,4 +103,8 @@ func (p *TaskProxy) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest)
 		}
 	}
 	return p.client.ListLogs(ctx, req)
+}
+
+func errPermissionDenied(msg string) error {
+	return connect.NewError(connect.CodePermissionDenied, errors.New(msg))
 }
