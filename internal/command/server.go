@@ -50,14 +50,9 @@ var ServerCommand = &cli.Command{
 			Sources: cli.EnvVars("XAGENT_AUTH_CLIENT_SECRET"),
 		},
 		&cli.StringFlag{
-			Name:    "auth-redirect-uri",
-			Usage:   "OAuth redirect URI after login",
-			Sources: cli.EnvVars("XAGENT_AUTH_REDIRECT_URI"),
-		},
-		&cli.StringFlag{
-			Name:    "auth-post-logout-uri",
-			Usage:   "URI to redirect to after logout",
-			Sources: cli.EnvVars("XAGENT_AUTH_POST_LOGOUT_URI"),
+			Name:    "base-url",
+			Usage:   "Base URL for the server (e.g. https://xagent.example.com)",
+			Sources: cli.EnvVars("XAGENT_BASE_URL"),
 		},
 		&cli.StringFlag{
 			Name:    "auth-device-client-id",
@@ -84,6 +79,7 @@ var ServerCommand = &cli.Command{
 		st := store.New(db)
 
 		domain := cmd.String("auth-domain")
+		baseURL := cmd.String("base-url")
 		key, err := apiauth.DecodeEncryptionKey(cmd.String("auth-encryption-key"))
 		if err != nil {
 			return fmt.Errorf("invalid encryption key: %w", err)
@@ -92,8 +88,8 @@ var ServerCommand = &cli.Command{
 			Domain:        domain,
 			ClientID:      cmd.String("auth-client-id"),
 			ClientSecret:  cmd.String("auth-client-secret"),
-			RedirectURI:   cmd.String("auth-redirect-uri"),
-			PostLogoutURI: cmd.String("auth-post-logout-uri"),
+			RedirectURI:   baseURL + "/auth/callback",
+			PostLogoutURI: baseURL + "/",
 			EncryptionKey: key,
 		})
 		if err != nil {
