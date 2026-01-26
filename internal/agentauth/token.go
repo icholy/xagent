@@ -90,7 +90,7 @@ func SignToken(key ed25519.PrivateKey, claims *TaskClaims) (string, error) {
 func VerifyToken(key ed25519.PrivateKey, tokenStr string) (*TaskClaims, error) {
 	// Ed25519 public key is derived from private key
 	pubKey := key.Public()
-	token, err := jwt.ParseWithClaims(tokenStr, &TaskClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &TaskClaims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
