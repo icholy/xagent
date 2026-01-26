@@ -13,8 +13,13 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func setupTestSession(t *testing.T, srv *Server, ctx context.Context) *mcp.ClientSession {
+func setupTestSession(t *testing.T, srv *Server, claims *agentauth.TaskClaims) *mcp.ClientSession {
 	t.Helper()
+
+	ctx := t.Context()
+	if claims != nil {
+		ctx = agentauth.ContextWithClaims(ctx, claims)
+	}
 
 	// Create MCP server and add tools
 	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "v1.0.0"}, nil)
@@ -57,7 +62,7 @@ func TestGetMyTask(t *testing.T) {
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
-	session := setupTestSession(t, srv, t.Context())
+	session := setupTestSession(t, srv, nil)
 
 	// Call the tool through the MCP framework
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -101,13 +106,11 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	filter := NewAgentFilter(client)
 	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
 	srv := NewServer(filter, task)
-
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{
+	session := setupTestSession(t, srv, &agentauth.TaskClaims{
 		TaskID:    parentTaskID,
 		Workspace: "test-workspace",
 		Runner:    "test-runner",
 	})
-	session := setupTestSession(t, srv, ctx)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "update_child_task",
