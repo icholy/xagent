@@ -58,9 +58,8 @@ func (p *TaskProxies) Start(task *model.Task) (*xagentclient.UnixProxy, error) {
 	filter := xmcp.NewAgentFilter(task, client)
 
 	// Create Connect RPC handler
-	rpcPath, handler := xagentv1connect.NewXAgentServiceHandler(filter)
 	mux := http.NewServeMux()
-	mux.Handle(rpcPath, handler)
+	mux.Handle(xagentv1connect.NewXAgentServiceHandler(filter))
 
 	path := fmt.Sprintf("/tmp/xagent-%d.sock", task.ID)
 	proxy, err := xagentclient.NewUnixProxy(path, mux)
