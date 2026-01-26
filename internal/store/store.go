@@ -18,6 +18,7 @@ func init() {
 	if err := goose.SetDialect("postgres"); err != nil {
 		panic(err)
 	}
+	goose.SetLogger(goose.NopLogger())
 }
 
 // Store provides access to all database operations.

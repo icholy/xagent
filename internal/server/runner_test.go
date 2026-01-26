@@ -9,7 +9,7 @@ import (
 
 func TestSubmitRunnerEvents(t *testing.T) {
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 
 	// Create a task (starts as pending with start command)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -66,8 +66,8 @@ func TestSubmitRunnerEvents(t *testing.T) {
 func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -88,7 +88,7 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 func TestListRunnerTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task for runner-1",
 		Workspace: "test-workspace",
@@ -116,7 +116,7 @@ func TestListRunnerTasks(t *testing.T) {
 func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with command",
 		Workspace: "test-workspace",
@@ -143,8 +143,8 @@ func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 func TestListRunnerTasks_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 	_, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",

@@ -10,7 +10,7 @@ import (
 func TestCreateLink(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Link",
 		Workspace: "test-workspace",
@@ -36,8 +36,8 @@ func TestCreateLink(t *testing.T) {
 func TestCreateLink_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -58,7 +58,7 @@ func TestCreateLink_Permissions(t *testing.T) {
 func TestListLinks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Links",
 		Workspace: "test-workspace",
@@ -90,8 +90,8 @@ func TestListLinks(t *testing.T) {
 func TestListLinks_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -117,7 +117,7 @@ func TestListLinks_Permissions(t *testing.T) {
 func TestFindLinksByURL(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
 		Workspace: "test-workspace",
@@ -154,8 +154,8 @@ func TestFindLinksByURL(t *testing.T) {
 func TestFindLinksByURL_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 	taskA, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",

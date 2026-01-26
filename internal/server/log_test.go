@@ -10,7 +10,7 @@ import (
 func TestUploadLogs(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
 		Workspace: "test-workspace",
@@ -33,8 +33,8 @@ func TestUploadLogs(t *testing.T) {
 func TestUploadLogs_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -56,7 +56,7 @@ func TestUploadLogs_Permissions(t *testing.T) {
 func TestListLogs(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
 		Workspace: "test-workspace",
@@ -86,8 +86,8 @@ func TestListLogs(t *testing.T) {
 func TestListLogs_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",

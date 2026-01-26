@@ -9,7 +9,7 @@ import (
 
 func TestRegisterWorkspaces(t *testing.T) {
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 
 	// Register workspaces
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
@@ -32,8 +32,8 @@ func TestRegisterWorkspaces(t *testing.T) {
 func TestRegisterWorkspaces_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 
 	// User A registers workspaces
 	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
@@ -69,8 +69,8 @@ func TestRegisterWorkspaces_Permissions(t *testing.T) {
 func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	// Arrange - both users register workspaces for the same runner ID
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 
 	// User A registers workspaces for runner-1
 	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
@@ -113,7 +113,7 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 
 func TestClearWorkspaces(t *testing.T) {
 	srv := setupTestServer(t)
-	ctx := withUserID(t, "")
+	ctx := randomUserID(t)
 
 	// Register workspaces
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
@@ -142,8 +142,8 @@ func TestClearWorkspaces(t *testing.T) {
 
 func TestClearWorkspaces_Permissions(t *testing.T) {
 	srv := setupTestServer(t)
-	userA := withUserID(t, "")
-	userB := withUserID(t, "")
+	userA := randomUserID(t)
+	userB := randomUserID(t)
 
 	// User A registers workspaces
 	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{

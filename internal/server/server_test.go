@@ -11,13 +11,11 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// withUserID creates a context with an authenticated user for testing.
+// randomUserID creates a context with an authenticated user for testing.
 // If id is empty, a random UUID is generated.
-func withUserID(t *testing.T, id string) context.Context {
+func randomUserID(t *testing.T) context.Context {
 	t.Helper()
-	if id == "" {
-		id = uuid.NewString()
-	}
+	id := uuid.NewString()
 	return apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: id})
 }
 
