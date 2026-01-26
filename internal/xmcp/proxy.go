@@ -13,8 +13,10 @@ import (
 // It only allows operations on the proxy's own task or its direct children.
 type TaskProxy struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
-	taskID int64
-	client xagentv1connect.XAgentServiceClient
+	taskID    int64
+	workspace string
+	runner    string
+	client    xagentv1connect.XAgentServiceClient
 }
 
 // NewTaskProxy creates a new task-scoped proxy.
@@ -42,6 +44,12 @@ func (p *TaskProxy) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequ
 func (p *TaskProxy) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	if req.Parent != p.taskID {
 		return nil, errPermissionDenied("can only create child tasks of own task")
+	}
+	if req.Workspace != p.workspace {
+		return nil, errPermissionDenied("can only create tasks in same workspace")
+	}
+	if req.Runner != p.runner {
+		return nil, errPermissionDenied("can only create tasks in same runner")
 	}
 	return p.client.CreateTask(ctx, req)
 }
