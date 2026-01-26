@@ -27,7 +27,7 @@ var ServerCommand = &cli.Command{
 			Name:    "db",
 			Aliases: []string{"d"},
 			Usage:   "PostgreSQL connection string",
-			Sources: cli.EnvVars("DATABASE_URL"),
+			Sources: cli.EnvVars("XAGENT_DATABASE_URL"),
 		},
 		&cli.BoolFlag{
 			Name:  "notify",

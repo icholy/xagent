@@ -21,7 +21,7 @@ services:
       - "6464:6464"
     env_file: .env
     environment:
-      DATABASE_URL: postgres://xagent:xagent@postgres:5432/xagent?sslmode=disable
+      XAGENT_DATABASE_URL: postgres://xagent:xagent@postgres:5432/xagent?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
