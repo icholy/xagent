@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { RelativeTime } from '@/components/relative-time'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/workspaces/')({
   component: WorkspacesPage,
@@ -86,7 +86,7 @@ function WorkspacesPage() {
             onClick={handleClear}
             disabled={clearMutation.isPending || allWorkspaces.length === 0}
           >
-            <Trash2 className="h-4 w-4" />
+            {clearMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             Clear
           </Button>
         </div>

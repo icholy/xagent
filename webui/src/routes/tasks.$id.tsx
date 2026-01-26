@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
-import { Plus } from 'lucide-react'
+import { Plus, Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   component: TaskDetail,
@@ -139,6 +139,7 @@ function TaskDetail() {
               onClick={handleCancel}
               disabled={isMutating}
             >
+              {cancelMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Cancel
             </Button>
           )}
@@ -149,6 +150,7 @@ function TaskDetail() {
               onClick={handleRestart}
               disabled={isMutating}
             >
+              {restartMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Restart
             </Button>
           )}
@@ -159,6 +161,7 @@ function TaskDetail() {
               onClick={handleArchive}
               disabled={isMutating}
             >
+              {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Archive
             </Button>
           )}
@@ -236,7 +239,7 @@ function TaskDetail() {
             />
             <div className="flex justify-start">
               <Button type="submit" disabled={updateMutation.isPending}>
-                <Plus className="h-4 w-4" />
+                {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Instruction
               </Button>
             </div>
@@ -387,6 +390,7 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
             onClick={handleArchive}
             disabled={archiveMutation.isPending}
           >
+            {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Archive
           </Button>
         )}
