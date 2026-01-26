@@ -9,7 +9,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-//go:embed sqlc/schema.sql
+//go:embed sql/schema.sql
 var schema string
 
 // Store provides access to all database operations.
