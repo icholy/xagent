@@ -32,3 +32,8 @@ run = "rm -rf ./data/xagent.db*"
 [tasks.env]
 description = "Decrypt secrets.yml to .env"
 run = "sops -d --output-type dotenv sops.env.yml > .env"
+
+[tasks.test]
+description = "Run tests"
+env = { TEST_DATABASE_URL = "postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable" }
+run = "go test ./..."
