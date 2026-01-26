@@ -90,9 +90,16 @@ function TaskDetail() {
     refetch()
   }
 
+  const [unlinkingEventId, setUnlinkingEventId] = useState<bigint | null>(null)
+
   const handleUnlinkEvent = async (eventId: bigint) => {
-    await removeEventMutation.mutateAsync({ eventId, taskId })
-    refetch()
+    setUnlinkingEventId(eventId)
+    try {
+      await removeEventMutation.mutateAsync({ eventId, taskId })
+      refetch()
+    } finally {
+      setUnlinkingEventId(null)
+    }
   }
 
   if (isLoading) {
@@ -262,7 +269,7 @@ function TaskDetail() {
           <EventsTable
             events={events}
             onUnlink={handleUnlinkEvent}
-            isUnlinking={removeEventMutation.isPending}
+            unlinkingEventId={unlinkingEventId}
           />
         </div>
       )}
@@ -402,11 +409,11 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
 function EventsTable({
   events,
   onUnlink,
-  isUnlinking,
+  unlinkingEventId,
 }: {
   events: Event[]
   onUnlink: (eventId: bigint) => void
-  isUnlinking: boolean
+  unlinkingEventId: bigint | null
 }) {
   return (
     <Table>
@@ -458,8 +465,9 @@ function EventsTable({
                   variant="destructive"
                   size="sm"
                   onClick={() => onUnlink(event.id)}
-                  disabled={isUnlinking}
+                  disabled={unlinkingEventId !== null}
                 >
+                  {unlinkingEventId === event.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Remove
                 </Button>
               </TableCell>
