@@ -22,7 +22,7 @@ import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { Plus, Search, Loader2 } from 'lucide-react'
+import { Plus, Search, Loader2, X } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
@@ -73,12 +73,21 @@ function TasksPage() {
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              type="search"
+              type="text"
               placeholder="Search tasks..."
-              className="pl-8 w-48"
+              className="pl-8 pr-8 w-48"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
