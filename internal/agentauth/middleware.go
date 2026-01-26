@@ -17,6 +17,11 @@ func ClaimsFromContext(ctx context.Context) (*TaskClaims, bool) {
 	return claims, ok
 }
 
+// ContextWithClaims returns a new context with the given claims attached.
+func ContextWithClaims(ctx context.Context, claims *TaskClaims) context.Context {
+	return context.WithValue(ctx, claimsContextKey, claims)
+}
+
 // Middleware extracts and validates the agent JWT from the Authorization header.
 // It stores the verified claims in the request context for use by handlers.
 func Middleware(key ed25519.PrivateKey) func(http.Handler) http.Handler {
@@ -40,7 +45,7 @@ func Middleware(key ed25519.PrivateKey) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), claimsContextKey, claims)
+			ctx := ContextWithClaims(r.Context(), claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
