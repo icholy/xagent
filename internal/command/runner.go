@@ -68,11 +68,6 @@ var RunnerCommand = &cli.Command{
 			Usage: "Maximum number of concurrent tasks (0 for unlimited)",
 			Value: 0,
 		},
-		&cli.BoolFlag{
-			Name:  "autoprune",
-			Usage: "Automatically remove containers for archived tasks",
-			Value: true,
-		},
 		&cli.StringFlag{
 			Name:  "id",
 			Usage: "Unique identifier for this runner",
@@ -91,7 +86,6 @@ var RunnerCommand = &cli.Command{
 		prebuiltDir := cmd.String("prebuilt")
 		secretFile := cmd.String("secret-file")
 		concurrency := cmd.Int("concurrency")
-		autoprune := cmd.Bool("autoprune")
 		runnerID := cmd.String("id")
 		debug := cmd.Bool("debug")
 
@@ -159,16 +153,14 @@ var RunnerCommand = &cli.Command{
 			return fmt.Errorf("failed to reconcile: %w", err)
 		}
 
-		// Start autoprune goroutine if enabled
-		if autoprune {
-			go func() {
-				for common.SleepContext(ctx, pollInterval) {
-					if err := r.Prune(ctx); err != nil {
-						log.Error("failed to prune containers", "error", err)
-					}
+		// Start autoprune goroutine
+		go func() {
+			for common.SleepContext(ctx, pollInterval) {
+				if err := r.Prune(ctx); err != nil {
+					log.Error("failed to prune containers", "error", err)
 				}
-			}()
-		}
+			}
+		}()
 
 		for {
 			if err := r.Poll(ctx); err != nil {
