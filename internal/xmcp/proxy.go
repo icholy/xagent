@@ -86,14 +86,14 @@ func (p *TaskProxy) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDet
 	if req.Id == p.taskID {
 		return p.client.GetTaskDetails(ctx, req)
 	}
-	ok, err := p.isChild(ctx, req.Id)
+	details, err := p.client.GetTaskDetails(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
+	if details.Task.Parent != p.taskID {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
-	return p.client.GetTaskDetails(ctx, req)
+	return details, nil
 }
 
 func (p *TaskProxy) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
