@@ -9,6 +9,7 @@ import (
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gotest.tools/v3/assert"
 )
@@ -42,7 +43,7 @@ func setupTestSession(t *testing.T, srv *Server, claims *agentauth.TaskClaims) *
 }
 
 func TestGetMyTask(t *testing.T) {
-	client := &ClientMock{
+	client := &xagentclient.ClientMock{
 		GetTaskDetailsFunc: func(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 			assert.Equal(t, req.Id, int64(123))
 			return &xagentv1.GetTaskDetailsResponse{
@@ -89,7 +90,7 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	parentTaskID := int64(123)
 	childTaskID := int64(456)
 
-	client := &ClientMock{
+	client := &xagentclient.ClientMock{
 		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			assert.Equal(t, req.Id, childTaskID)
 			return &xagentv1.GetTaskResponse{

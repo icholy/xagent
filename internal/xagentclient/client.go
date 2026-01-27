@@ -1,3 +1,5 @@
+//go:generate go tool moq -out client_moq.go . Client
+
 package xagentclient
 
 import (
