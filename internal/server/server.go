@@ -60,7 +60,7 @@ func (s *Server) Handler() http.Handler {
 	// Device flow discovery endpoint (public)
 	mux.HandleFunc(deviceauth.DiscoveryPath, s.handleDeviceConfig)
 	// Auth routes (login, callback, logout)
-	mux.Handle("/auth/", s.auth.Handler)
+	mux.Handle("/auth/", s.auth.Handler())
 	// Connect RPC API (protected)
 	// HTTP middleware checks auth and attaches UserInfo to context
 	// Connect interceptor enforces auth with proper RPC error responses

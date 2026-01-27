@@ -45,21 +45,30 @@ type Config struct {
 	PostLogoutURI string
 	EncryptionKey []byte
 	Scopes        []string
+	// Disable authentication (for development only).
+	// When true, all requests are authenticated as a default "dev" user.
+	Disable bool
 }
 
 // Auth provides hybrid authentication supporting both cookie-based sessions
 // (for web UI) and Bearer tokens (for API calls).
 type Auth struct {
+	// disabled indicates auth is disabled (all requests get a default user)
+	disabled bool
 	// cookie middleware
 	cookie *authentication.Interceptor[*openid.DefaultContext]
 	// bearer token middleware
 	bearer *middlewarex.Interceptor[*oauth.IntrospectionContext]
-	// Handler handles /auth/* routes (login, callback, logout)
-	Handler http.Handler
+	// handler handles /auth/* routes (login, callback, logout)
+	handler http.Handler
 }
 
 // New creates a new Auth instance with both cookie and bearer token support.
+// If cfg.Disable is true, authentication is bypassed and all requests get a default user.
 func New(ctx context.Context, cfg Config) (*Auth, error) {
+	if cfg.Disable {
+		return &Auth{disabled: true}, nil
+	}
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail}
 	}
@@ -100,7 +109,7 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	return &Auth{
 		cookie:  authentication.Middleware(authN),
 		bearer:  middlewarex.New(authZ),
-		Handler: authN,
+		handler: authN,
 	}, nil
 }
 
@@ -110,6 +119,9 @@ const AuthTypeHeader = "X-Auth-Type"
 // RequireAuth returns middleware that requires either a valid Bearer token
 // or an authenticated cookie session.
 func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
+	if a.disabled {
+		return a.attachDefaultUser()
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// CLI/device clients send X-Auth-Type: bearer
@@ -126,6 +138,9 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 // CheckAuth returns middleware that checks for valid authentication and
 // populates context, but does not reject unauthenticated requests.
 func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
+	if a.disabled {
+		return a.attachDefaultUser()
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// CLI/device clients send X-Auth-Type: bearer
@@ -153,11 +168,39 @@ func RequireUserInterceptor() connect.UnaryInterceptorFunc {
 
 // AttachUserInfo extracts user info from auth context and attaches it to the request context.
 func (a *Auth) AttachUserInfo() func(http.Handler) http.Handler {
+	if a.disabled {
+		return a.attachDefaultUser()
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if user := a.User(r); user != nil {
 				r = r.WithContext(WithUser(r.Context(), user))
 			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// Handler returns the HTTP handler for auth routes (login, callback, logout).
+func (a *Auth) Handler() http.Handler {
+	if a.disabled {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		})
+	}
+	return a.handler
+}
+
+// attachDefaultUser returns middleware that attaches a default user to all requests.
+func (a *Auth) attachDefaultUser() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user := &UserInfo{
+				ID:    "dev",
+				Email: "dev@localhost",
+				Name:  "Developer",
+			}
+			r = r.WithContext(WithUser(r.Context(), user))
 			next.ServeHTTP(w, r)
 		})
 	}

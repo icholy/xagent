@@ -69,11 +69,16 @@ var ServerCommand = &cli.Command{
 			Usage:   "Hex-encoded 32-byte key for session encryption (generated if not set)",
 			Sources: cli.EnvVars("XAGENT_AUTH_ENCRYPTION_KEY"),
 		},
+		&cli.BoolFlag{
+			Name:  "no-auth",
+			Usage: "Disable authentication (for development only)",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
 		dbPath := cmd.String("db")
 		notifyFlag := cmd.Bool("notify")
+		noAuth := cmd.Bool("no-auth")
 
 		db, err := store.Open(dbPath, true)
 		if err != nil {
@@ -86,8 +91,11 @@ var ServerCommand = &cli.Command{
 		domain := cmd.String("auth-domain")
 		baseURL := cmd.String("base-url")
 		key, err := apiauth.DecodeEncryptionKey(cmd.String("auth-encryption-key"))
-		if err != nil {
+		if err != nil && !noAuth {
 			return fmt.Errorf("invalid encryption key: %w", err)
+		}
+		if noAuth {
+			slog.Warn("authentication disabled")
 		}
 		auth, err := apiauth.New(ctx, apiauth.Config{
 			Domain:        domain,
@@ -96,6 +104,7 @@ var ServerCommand = &cli.Command{
 			RedirectURI:   baseURL + "/auth/callback",
 			PostLogoutURI: baseURL,
 			EncryptionKey: key,
+			Disable:       noAuth,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
