@@ -142,7 +142,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 		switch task.Command {
 		case model.TaskCommandStop:
 			g.Go(func() error {
-				if err := r.kill(ctx, task); err != nil {
+				if err := r.Kill(ctx, task); err != nil {
 					r.log.Error("failed to stop task", "task", task.ID, "error", err)
 				}
 				if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
@@ -153,7 +153,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 		case model.TaskCommandRestart:
 			g.Go(func() error {
 				// Kill existing container if running
-				if err := r.kill(ctx, task); err != nil {
+				if err := r.Kill(ctx, task); err != nil {
 					r.log.Error("failed to kill task for restart", "task", task.ID, "error", err)
 				}
 				// Atomically acquire a semaphore slot before starting
@@ -161,7 +161,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 					r.log.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
 				}
-				if err := r.start(ctx, task); err != nil {
+				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "error", err)
 					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
@@ -197,7 +197,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 					r.log.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
 				}
-				if err := r.start(ctx, task); err != nil {
+				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "error", err)
 					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
@@ -313,7 +313,7 @@ func (r *Runner) isRunning(ctx context.Context, task *model.Task) (bool, error) 
 	return c.State == "running", nil
 }
 
-func (r *Runner) kill(ctx context.Context, task *model.Task) error {
+func (r *Runner) Kill(ctx context.Context, task *model.Task) error {
 	c, ok, err := r.find(ctx, task.ID)
 	if err != nil {
 		return err
@@ -388,7 +388,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	return resp.ID, nil
 }
 
-func (r *Runner) start(ctx context.Context, task *model.Task) error {
+func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 	c, ok, err := r.find(ctx, task.ID)
 	if err != nil {
 		return err
