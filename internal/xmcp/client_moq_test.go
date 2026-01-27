@@ -89,6 +89,9 @@ var _ xagentclient.Client = &ClientMock{}
 //			ListWorkspacesFunc: func(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
 //				panic("mock out the ListWorkspaces method")
 //			},
+//			PingFunc: func(contextMoqParam context.Context, pingRequest *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
+//				panic("mock out the Ping method")
+//			},
 //			ProcessEventFunc: func(contextMoqParam context.Context, processEventRequest *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
 //				panic("mock out the ProcessEvent method")
 //			},
@@ -185,6 +188,9 @@ type ClientMock struct {
 
 	// ListWorkspacesFunc mocks the ListWorkspaces method.
 	ListWorkspacesFunc func(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error)
+
+	// PingFunc mocks the Ping method.
+	PingFunc func(contextMoqParam context.Context, pingRequest *xagentv1.PingRequest) (*xagentv1.PingResponse, error)
 
 	// ProcessEventFunc mocks the ProcessEvent method.
 	ProcessEventFunc func(contextMoqParam context.Context, processEventRequest *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error)
@@ -370,6 +376,13 @@ type ClientMock struct {
 			// ListWorkspacesRequest is the listWorkspacesRequest argument value.
 			ListWorkspacesRequest *xagentv1.ListWorkspacesRequest
 		}
+		// Ping holds details about calls to the Ping method.
+		Ping []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// PingRequest is the pingRequest argument value.
+			PingRequest *xagentv1.PingRequest
+		}
 		// ProcessEvent holds details about calls to the ProcessEvent method.
 		ProcessEvent []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -443,6 +456,7 @@ type ClientMock struct {
 	lockListRunnerTasks    sync.RWMutex
 	lockListTasks          sync.RWMutex
 	lockListWorkspaces     sync.RWMutex
+	lockPing               sync.RWMutex
 	lockProcessEvent       sync.RWMutex
 	lockRegisterWorkspaces sync.RWMutex
 	lockRemoveEventTask    sync.RWMutex
@@ -1277,6 +1291,42 @@ func (mock *ClientMock) ListWorkspacesCalls() []struct {
 	mock.lockListWorkspaces.RLock()
 	calls = mock.calls.ListWorkspaces
 	mock.lockListWorkspaces.RUnlock()
+	return calls
+}
+
+// Ping calls PingFunc.
+func (mock *ClientMock) Ping(contextMoqParam context.Context, pingRequest *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
+	if mock.PingFunc == nil {
+		panic("ClientMock.PingFunc: method is nil but Client.Ping was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam context.Context
+		PingRequest     *xagentv1.PingRequest
+	}{
+		ContextMoqParam: contextMoqParam,
+		PingRequest:     pingRequest,
+	}
+	mock.lockPing.Lock()
+	mock.calls.Ping = append(mock.calls.Ping, callInfo)
+	mock.lockPing.Unlock()
+	return mock.PingFunc(contextMoqParam, pingRequest)
+}
+
+// PingCalls gets all the calls that were made to Ping.
+// Check the length with:
+//
+//	len(mockedClient.PingCalls())
+func (mock *ClientMock) PingCalls() []struct {
+	ContextMoqParam context.Context
+	PingRequest     *xagentv1.PingRequest
+} {
+	var calls []struct {
+		ContextMoqParam context.Context
+		PingRequest     *xagentv1.PingRequest
+	}
+	mock.lockPing.RLock()
+	calls = mock.calls.Ping
+	mock.lockPing.RUnlock()
 	return calls
 }
 

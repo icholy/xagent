@@ -7,6 +7,7 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1";
 
 service XAgentService {
+  rpc Ping(PingRequest) returns (PingResponse);
   rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc ListRunnerTasks(ListRunnerTasksRequest) returns (ListRunnerTasksResponse);
@@ -38,6 +39,10 @@ service XAgentService {
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
   rpc ClearWorkspaces(ClearWorkspacesRequest) returns (ClearWorkspacesResponse);
 }
+
+message PingRequest {}
+
+message PingResponse {}
 
 message Instruction {
   string text = 1;

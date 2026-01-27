@@ -87,6 +87,10 @@ func (s *Server) userID(ctx context.Context) string {
 	return u.ID
 }
 
+func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
+	return &xagentv1.PingResponse{}, nil
+}
+
 func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
 	u := apiauth.User(ctx)
 	if u == nil {

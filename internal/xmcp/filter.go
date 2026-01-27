@@ -33,6 +33,10 @@ func (p *AgentFilter) claims(ctx context.Context) (*agentauth.TaskClaims, error)
 	return claims, nil
 }
 
+func (p *AgentFilter) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
+	return &xagentv1.PingResponse{}, nil
+}
+
 func (p *AgentFilter) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	claims, err := p.claims(ctx)
 	if err != nil {
