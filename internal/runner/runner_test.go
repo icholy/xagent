@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
@@ -39,40 +40,34 @@ func TestRunnerStart(t *testing.T) {
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
-	// Create workspace config with dummy agent
-	workspaces := &workspace.Config{
-		Workspaces: map[string]workspace.Workspace{
-			"test": {
-				Container: workspace.Container{
-					Image: "alpine:latest",
-				},
-				Agent: workspace.Agent{
-					Type: "dummy",
-					Dummy: &workspace.DummyConfig{
-						Sleep: 1,
-					},
-				},
-			},
-		},
-	}
-
-	// Create a temporary secret file
-	secretFile := t.TempDir() + "/secret.key"
-
 	// Create runner
 	r, err := New(Options{
 		ServerURL:   ts.URL,
 		PrebuiltDir: prebuiltDir,
-		SecretFile:  secretFile,
-		Workspaces:  workspaces,
+		SecretFile:  filepath.Join(t.TempDir(), "secret.key"),
+		Workspaces: &workspace.Config{
+			Workspaces: map[string]workspace.Workspace{
+				"test": {
+					Container: workspace.Container{
+						Image: "alpine:latest",
+					},
+					Agent: workspace.Agent{
+						Type: "dummy",
+						Dummy: &workspace.DummyConfig{
+							Sleep: 1,
+						},
+					},
+				},
+			},
+		},
 		Concurrency: 1,
 		RunnerID:    "test-runner",
 	})
 	assert.NilError(t, err)
 	t.Cleanup(func() { r.Close() })
 
-	// Create a task
-	task := &model.Task{
+	// Start a task
+	err = r.Start(ctx, &model.Task{
 		ID:        1,
 		Name:      "test-task",
 		Runner:    "test-runner",
@@ -83,10 +78,7 @@ func TestRunnerStart(t *testing.T) {
 		Status:  model.TaskStatusPending,
 		Command: model.TaskCommandStart,
 		Version: 1,
-	}
-
-	// Start the task
-	err = r.Start(ctx, task)
+	})
 	assert.NilError(t, err)
 
 	// Wait for the container to exit
