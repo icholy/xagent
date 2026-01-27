@@ -541,7 +541,6 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 		Command: "/usr/local/bin/xagent",
 		Args: []string{
 			"mcp",
-			"--mode", "container",
 			"--server", "unix:///var/run/xagent.sock",
 			"--task", taskIDStr,
 			"--runner", task.Runner,
