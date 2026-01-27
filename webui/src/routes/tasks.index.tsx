@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { useLocalStorage } from 'usehooks-ts'
-import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { listTasks, archiveTask, cancelTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
-import { canArchiveTask, isChildTask } from '@/lib/task'
+import { canArchiveTask, canCancelTask, isChildTask } from '@/lib/task'
 import {
   Table,
   TableBody,
@@ -136,10 +136,17 @@ function TasksPage() {
 
 function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
+  const cancelMutation = useMutation(cancelTask, { onSuccess: () => onUpdate() })
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: task.id })
   }
+
+  const handleCancel = async () => {
+    await cancelMutation.mutateAsync({ id: task.id })
+  }
+
+  const isMutating = archiveMutation.isPending || cancelMutation.isPending
 
   return (
     <TableRow className={cn(isChildTask(task) && 'bg-muted/30')}>
@@ -164,17 +171,30 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
         {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
       </TableCell>
       <TableCell>
-        {canArchiveTask(task) && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleArchive}
-            disabled={archiveMutation.isPending}
-          >
-            {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Archive
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {canCancelTask(task) && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleCancel}
+              disabled={isMutating}
+            >
+              {cancelMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Stop
+            </Button>
+          )}
+          {canArchiveTask(task) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleArchive}
+              disabled={isMutating}
+            >
+              {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Archive
+            </Button>
+          )}
+        </div>
       </TableCell>
     </TableRow>
   )
