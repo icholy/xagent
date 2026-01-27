@@ -239,8 +239,12 @@ func (t *Task) applyRunnerEventFailed() bool {
 
 // Archive transitions the task to archived status.
 // Returns true if the transition is valid and was applied.
-// Only valid from completed, failed, or cancelled status.
+// Only valid from completed, failed, or cancelled status, and only if there is no pending command.
 func (t *Task) Archive() bool {
+	// Cannot archive if there's a pending command - the runner might pick it up
+	if t.Command != "" {
+		return false
+	}
 	switch t.Status {
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
 		t.Status = TaskStatusArchived
@@ -254,6 +258,7 @@ func (t *Task) Archive() bool {
 // Returns true if the transition is valid and was applied.
 // For running or restarting tasks: sets status to cancelling, command to stop, increments version.
 // For pending tasks: sets status to cancelled directly (no runner action needed).
+// For terminal states with a pending command: clears the command to prevent runner from picking it up.
 func (t *Task) Cancel() bool {
 	switch t.Status {
 	case TaskStatusRunning, TaskStatusRestarting:
@@ -263,7 +268,15 @@ func (t *Task) Cancel() bool {
 		return true
 	case TaskStatusPending:
 		t.Status = TaskStatusCancelled
+		t.Command = ""
 		return true
+	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
+		// Allow cancelling if there's a pending command to clear
+		if t.Command != "" {
+			t.Command = ""
+			return true
+		}
+		return false
 	default:
 		return false
 	}

@@ -1,6 +1,6 @@
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 
-type TaskLike = Pick<Task, 'status'>
+type TaskLike = Pick<Task, 'status' | 'command'>
 type TaskWithParent = Pick<Task, 'parent'>
 
 export function isChildTask(task: TaskWithParent): boolean {
@@ -8,11 +8,15 @@ export function isChildTask(task: TaskWithParent): boolean {
 }
 
 export function canArchiveTask(task: TaskLike): boolean {
-  return task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'
+  const isTerminal = task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'
+  const hasCommand = task.command !== ''
+  return isTerminal && !hasCommand
 }
 
 export function canCancelTask(task: TaskLike): boolean {
-  return task.status === 'pending' || task.status === 'running' || task.status === 'restarting'
+  const isActive = task.status === 'pending' || task.status === 'running' || task.status === 'restarting'
+  const hasCommand = task.command !== ''
+  return isActive || hasCommand
 }
 
 export function canRestartTask(task: TaskLike): boolean {

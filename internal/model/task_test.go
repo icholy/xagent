@@ -399,6 +399,24 @@ func TestTask_Archive(t *testing.T) {
 			after:  Task{Status: TaskStatusArchived},
 			want:   false,
 		},
+		{
+			name:   "from completed with command fails",
+			before: Task{Status: TaskStatusCompleted, Command: TaskCommandStart},
+			after:  Task{Status: TaskStatusCompleted, Command: TaskCommandStart},
+			want:   false,
+		},
+		{
+			name:   "from failed with command fails",
+			before: Task{Status: TaskStatusFailed, Command: TaskCommandRestart},
+			after:  Task{Status: TaskStatusFailed, Command: TaskCommandRestart},
+			want:   false,
+		},
+		{
+			name:   "from cancelled with command fails",
+			before: Task{Status: TaskStatusCancelled, Command: TaskCommandStart},
+			after:  Task{Status: TaskStatusCancelled, Command: TaskCommandStart},
+			want:   false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -431,16 +449,34 @@ func TestTask_Cancel(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "from completed fails",
+			name:   "from pending with command clears command",
+			before: Task{Status: TaskStatusPending, Command: TaskCommandStart},
+			after:  Task{Status: TaskStatusCancelled},
+			want:   true,
+		},
+		{
+			name:   "from completed fails without command",
 			before: Task{Status: TaskStatusCompleted},
 			after:  Task{Status: TaskStatusCompleted},
 			want:   false,
 		},
 		{
-			name:   "from failed fails",
+			name:   "from completed with command clears command",
+			before: Task{Status: TaskStatusCompleted, Command: TaskCommandStart},
+			after:  Task{Status: TaskStatusCompleted},
+			want:   true,
+		},
+		{
+			name:   "from failed fails without command",
 			before: Task{Status: TaskStatusFailed},
 			after:  Task{Status: TaskStatusFailed},
 			want:   false,
+		},
+		{
+			name:   "from failed with command clears command",
+			before: Task{Status: TaskStatusFailed, Command: TaskCommandRestart},
+			after:  Task{Status: TaskStatusFailed},
+			want:   true,
 		},
 		{
 			name:   "from restarting succeeds",
@@ -455,10 +491,16 @@ func TestTask_Cancel(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "from cancelled fails",
+			name:   "from cancelled fails without command",
 			before: Task{Status: TaskStatusCancelled},
 			after:  Task{Status: TaskStatusCancelled},
 			want:   false,
+		},
+		{
+			name:   "from cancelled with command clears command",
+			before: Task{Status: TaskStatusCancelled, Command: TaskCommandStart},
+			after:  Task{Status: TaskStatusCancelled},
+			want:   true,
 		},
 		{
 			name:   "from archived fails",
