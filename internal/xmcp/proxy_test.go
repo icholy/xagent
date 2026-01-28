@@ -11,11 +11,8 @@ import (
 
 func TestProxy(t *testing.T) {
 	t1, t2 := mcp.NewInMemoryTransports()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
-
 	err := Proxy(ctx, t1, t2)
-	// Should return when context is cancelled or EOF
-	assert.Assert(t, err != nil || ctx.Err() != nil)
+	assert.ErrorContains(t, err, "context deadline exceeded")
 }
