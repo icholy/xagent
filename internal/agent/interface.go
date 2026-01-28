@@ -71,6 +71,15 @@ type CursorOptions struct {
 type DummyOptions struct {
 	// Sleep duration in seconds. If -1, sleeps forever.
 	Sleep int
+	// ToolCalls specifies MCP tool calls to make.
+	ToolCalls []DummyToolCall
+}
+
+// DummyToolCall specifies an MCP tool call to make.
+type DummyToolCall struct {
+	Server    string         `json:"server" yaml:"server"`
+	Name      string         `json:"name" yaml:"name"`
+	Arguments map[string]any `json:"arguments,omitempty" yaml:"arguments"`
 }
 
 // NewAgent creates an Agent based on the type specified in options.

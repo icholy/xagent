@@ -2,10 +2,13 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"os/exec"
 	"time"
 
 	"github.com/icholy/xagent/internal/common"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // DummyAgent is a no-op agent implementation for testing.
@@ -23,6 +26,11 @@ type DummyAgent struct {
 func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) error {
 	a.log.Info("dummy agent received prompt", "text", prompt, "resume", resume)
 
+	// Execute configured tool calls
+	if err := a.doToolCalls(ctx); err != nil {
+		return err
+	}
+
 	if a.options != nil && a.options.Sleep != 0 {
 		if a.options.Sleep == -1 {
 			a.log.Info("dummy agent sleeping forever")
@@ -37,6 +45,58 @@ func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) err
 	}
 
 	return nil
+}
+
+// doToolCalls executes the configured MCP tool calls.
+func (a *DummyAgent) doToolCalls(ctx context.Context) error {
+	if a.options == nil {
+		return nil
+	}
+	for _, tc := range a.options.ToolCalls {
+		session, err := a.connectMCP(ctx, tc.Server)
+		if err != nil {
+			return err
+		}
+		a.log.Info("calling tool", "server", tc.Server, "name", tc.Name)
+		result, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      tc.Name,
+			Arguments: tc.Arguments,
+		})
+		session.Close()
+		if err != nil {
+			return err
+		}
+		a.log.Info("tool result", "name", tc.Name, "result", result)
+	}
+	return nil
+}
+
+// connectMCP connects to a stdio MCP server and returns the session.
+func (a *DummyAgent) connectMCP(ctx context.Context, name string) (*mcp.ClientSession, error) {
+	mcpConfig, ok := a.mcpServers[name]
+	if !ok {
+		return nil, fmt.Errorf("MCP server not found: %s", name)
+	}
+
+	if mcpConfig.Type != "stdio" {
+		return nil, fmt.Errorf("MCP server %s is not stdio type: %s", name, mcpConfig.Type)
+	}
+
+	a.log.Info("connecting to MCP server", "name", name, "command", mcpConfig.Command, "args", mcpConfig.Args)
+
+	cmd := exec.CommandContext(ctx, mcpConfig.Command, mcpConfig.Args...)
+	cmd.Dir = a.cwd
+	for k, v := range mcpConfig.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "dummy-agent",
+		Version: "1.0.0",
+	}, nil)
+
+	transport := &mcp.CommandTransport{Command: cmd}
+	return client.Connect(ctx, transport, nil)
 }
 
 // Close does nothing and returns nil.
