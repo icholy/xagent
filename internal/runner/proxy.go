@@ -26,15 +26,21 @@ type AgentProxy struct {
 	socketPath string
 }
 
-// NewProxy creates a new Proxy.
-func NewProxy(serverURL string, auth xagentclient.TokenSource, privateKey ed25519.PrivateKey, log *slog.Logger) *AgentProxy {
+// NewProxy creates a new Proxy. The secretFile is the path to the Ed25519
+// private key used for signing and verifying agent tokens. If the file does
+// not exist, a new key is generated and saved.
+func NewProxy(serverURL string, auth xagentclient.TokenSource, secretFile string, log *slog.Logger) (*AgentProxy, error) {
+	privateKey, err := agentauth.LoadOrCreatePrivateKey(secretFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load private key: %w", err)
+	}
 	return &AgentProxy{
 		serverURL:  serverURL,
 		auth:       auth,
 		privateKey: privateKey,
 		log:        log,
 		socketPath: randomSocketPath(),
-	}
+	}, nil
 }
 
 // randomSocketPath generates a random socket path in the system temp directory.
@@ -47,6 +53,11 @@ func randomSocketPath() string {
 // SocketPath returns the path to the Unix socket.
 func (p *AgentProxy) SocketPath() string {
 	return p.socketPath
+}
+
+// SignToken creates a JWT signed with the proxy's private key.
+func (p *AgentProxy) SignToken(claims *agentauth.TaskClaims) (string, error) {
+	return agentauth.SignToken(p.privateKey, claims)
 }
 
 // Start creates and starts the proxy.
