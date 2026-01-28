@@ -2,8 +2,6 @@ package command
 
 import (
 	"context"
-	"net"
-	"net/http"
 
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/model"
@@ -46,57 +44,22 @@ var McpCommand = &cli.Command{
 			Usage:    "Authentication token",
 			Required: true,
 		},
-		&cli.BoolFlag{
-			Name:  "proxy",
-			Usage: "Proxy stdio to a streamable HTTP MCP server on the domain socket",
-		},
-		&cli.StringFlag{
-			Name:  "socket",
-			Usage: "Path to the Unix domain socket (used with --proxy)",
-			Value: "/var/run/xagent.sock",
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		if cmd.Bool("proxy") {
-			return runProxy(ctx, cmd)
+		server := mcp.NewServer(&mcp.Implementation{
+			Name:    "xagent",
+			Version: "1.0.0",
+		}, nil)
+
+		token := cmd.String("token")
+		client := xagentclient.New(cmd.String("server"), agentauth.StaticTokenSource(token))
+		task := &model.Task{
+			ID:        cmd.Int64("task"),
+			Runner:    cmd.String("runner"),
+			Workspace: cmd.String("workspace"),
 		}
-		return runServer(ctx, cmd)
+		xmcp.NewServer(client, task).AddTools(server)
+
+		return server.Run(ctx, &mcp.StdioTransport{})
 	},
-}
-
-func runServer(ctx context.Context, cmd *cli.Command) error {
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "xagent",
-		Version: "1.0.0",
-	}, nil)
-
-	token := cmd.String("token")
-	client := xagentclient.New(cmd.String("server"), agentauth.StaticTokenSource(token))
-	task := &model.Task{
-		ID:        cmd.Int64("task"),
-		Runner:    cmd.String("runner"),
-		Workspace: cmd.String("workspace"),
-	}
-	xmcp.NewServer(client, task).AddTools(server)
-
-	return server.Run(ctx, &mcp.StdioTransport{})
-}
-
-func runProxy(ctx context.Context, cmd *cli.Command) error {
-	socketPath := cmd.String("socket")
-	token := cmd.String("token")
-	remote := &mcp.StreamableClientTransport{
-		Endpoint: "http://localhost/mcp",
-		HTTPClient: &http.Client{
-			Transport: &xagentclient.AuthTransport{
-				Source: agentauth.StaticTokenSource(token),
-				Transport: &http.Transport{
-					DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-						return net.Dial("unix", socketPath)
-					},
-				},
-			},
-		},
-	}
-	return xmcp.Proxy(ctx, &mcp.StdioTransport{}, remote)
 }
