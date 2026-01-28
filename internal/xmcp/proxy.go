@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net"
-	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sync/errgroup"
@@ -19,14 +18,7 @@ type Proxy struct {
 }
 
 // NewProxy creates a new Proxy that will connect to the given Unix socket path.
-// If stdin is nil, os.Stdin is used. If stdout is nil, os.Stdout is used.
 func NewProxy(socketPath string, stdin io.ReadCloser, stdout io.WriteCloser) *Proxy {
-	if stdin == nil {
-		stdin = os.Stdin
-	}
-	if stdout == nil {
-		stdout = nopWriteCloser{os.Stdout}
-	}
 	return &Proxy{
 		socketPath: socketPath,
 		stdin:      stdin,
@@ -89,13 +81,6 @@ func forward(ctx context.Context, src, dst mcp.Connection) error {
 		}
 	}
 }
-
-// nopWriteCloser wraps an io.Writer to implement io.WriteCloser with a no-op Close.
-type nopWriteCloser struct {
-	io.Writer
-}
-
-func (nopWriteCloser) Close() error { return nil }
 
 // SocketTransport implements mcp.Transport for connecting to a Unix domain socket.
 type SocketTransport struct {
