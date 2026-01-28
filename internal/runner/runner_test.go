@@ -27,8 +27,6 @@ func TestRunnerStart(t *testing.T) {
 		t.Skip("prebuilt directory not found")
 	}
 
-	ctx := t.Context()
-
 	task := &model.Task{
 		ID:        1,
 		Name:      "test-task",
@@ -87,7 +85,7 @@ func TestRunnerStart(t *testing.T) {
 	t.Cleanup(func() { r.Close() })
 
 	// Start a task
-	err = r.Start(ctx, task)
+	err = r.Start(t.Context(), task)
 	assert.NilError(t, err)
 
 	// Wait for the container to exit
@@ -95,11 +93,11 @@ func TestRunnerStart(t *testing.T) {
 	assert.NilError(t, err)
 	defer docker.Close()
 
-	err = dockerx.ContainerWait(ctx, docker, "xagent-1", container.WaitConditionNotRunning)
+	err = dockerx.ContainerWait(t.Context(), docker, "xagent-1", container.WaitConditionNotRunning)
 	assert.NilError(t, err)
 
 	// Remove the container
-	err = docker.ContainerRemove(ctx, "xagent-1", container.RemoveOptions{})
+	err = docker.ContainerRemove(t.Context(), "xagent-1", container.RemoveOptions{})
 	assert.NilError(t, err)
 
 	// Verify get_my_task was called
