@@ -29,18 +29,26 @@ func TestRunnerStart(t *testing.T) {
 
 	ctx := t.Context()
 
+	task := &model.Task{
+		ID:        1,
+		Name:      "test-task",
+		Runner:    "test-runner",
+		Workspace: "test",
+		Instructions: []model.Instruction{
+			{Text: "Hello from test"},
+		},
+		Status:  model.TaskStatusPending,
+		Command: model.TaskCommandStart,
+		Version: 1,
+	}
+
 	// Create mock client
 	mock := &xagentclient.ClientMock{
 		SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
 		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-			return &xagentv1.GetTaskDetailsResponse{
-				Task: &xagentv1.Task{
-					Id:   req.Id,
-					Name: "test-task",
-				},
-			}, nil
+			return &xagentv1.GetTaskDetailsResponse{Task: task.Proto()}, nil
 		},
 	}
 
@@ -79,18 +87,7 @@ func TestRunnerStart(t *testing.T) {
 	t.Cleanup(func() { r.Close() })
 
 	// Start a task
-	err = r.Start(ctx, &model.Task{
-		ID:        1,
-		Name:      "test-task",
-		Runner:    "test-runner",
-		Workspace: "test",
-		Instructions: []model.Instruction{
-			{Text: "Hello from test"},
-		},
-		Status:  model.TaskStatusPending,
-		Command: model.TaskCommandStart,
-		Version: 1,
-	})
+	err = r.Start(ctx, task)
 	assert.NilError(t, err)
 
 	// Wait for the container to exit
