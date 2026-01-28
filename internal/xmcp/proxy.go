@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/sync/errgroup"
 )
 
 // Proxy implements an stdio MCP proxy that forwards messages through a Unix domain socket.
@@ -61,27 +62,19 @@ func (p *Proxy) Run(ctx context.Context) error {
 	}
 	defer socketConn.Close()
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	errCh := make(chan error, 2)
+	g, ctx := errgroup.WithContext(ctx)
 
 	// Forward stdin to socket
-	go func() {
-		errCh <- forward(ctx, stdioConn, socketConn)
-	}()
+	g.Go(func() error {
+		return forward(ctx, stdioConn, socketConn)
+	})
 
 	// Forward socket to stdout
-	go func() {
-		errCh <- forward(ctx, socketConn, stdioConn)
-	}()
+	g.Go(func() error {
+		return forward(ctx, socketConn, stdioConn)
+	})
 
-	select {
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return g.Wait()
 }
 
 // forward reads messages from src and writes them to dst.
