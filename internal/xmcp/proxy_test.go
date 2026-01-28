@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -143,8 +142,10 @@ func TestSocketTransport(t *testing.T) {
 }
 
 func TestNewProxy(t *testing.T) {
-	// Test with nil stdin/stdout (defaults to os.Stdin/os.Stdout)
-	proxy := NewProxy("/test.sock", nil, nil)
+	stdinR, _ := io.Pipe()
+	_, stdoutW := io.Pipe()
+	proxy := NewProxy("/test.sock", stdinR, stdoutW)
 	assert.Equal(t, proxy.socketPath, "/test.sock")
-	assert.Equal(t, proxy.stdin, os.Stdin)
+	assert.Equal(t, proxy.stdin, stdinR)
+	assert.Equal(t, proxy.stdout, stdoutW)
 }
