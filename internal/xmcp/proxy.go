@@ -2,10 +2,27 @@ package xmcp
 
 import (
 	"context"
+	"net"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sync/errgroup"
 )
+
+// UnixSocketTransport implements mcp.Transport for connecting to a Unix domain socket.
+type UnixSocketTransport struct {
+	SocketPath string
+}
+
+// Connect implements the mcp.Transport interface by dialing the Unix socket
+// and returning an MCP Connection.
+func (t *UnixSocketTransport) Connect(ctx context.Context) (mcp.Connection, error) {
+	conn, err := net.Dial("unix", t.SocketPath)
+	if err != nil {
+		return nil, err
+	}
+	transport := &mcp.IOTransport{Reader: conn, Writer: conn}
+	return transport.Connect(ctx)
+}
 
 // Proxy creates bidirectional message forwarding between two MCP transports.
 // It blocks until the context is cancelled or an error occurs.
