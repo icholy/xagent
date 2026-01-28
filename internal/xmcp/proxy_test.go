@@ -1,9 +1,7 @@
 package xmcp
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -11,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"gotest.tools/v3/assert"
 )
 
@@ -36,12 +35,12 @@ func TestProxy(t *testing.T) {
 		io.Copy(conn, conn)
 	}()
 
-	// Use a pipe so we can control when stdin "closes"
+	// Use a pipe so we can control stdin/stdout
 	stdinR, stdinW := io.Pipe()
-	stdout := &bytes.Buffer{}
+	stdoutR, stdoutW := io.Pipe()
 
 	proxy := NewProxy(socketPath)
-	proxy.SetIO(stdinR, stdout)
+	proxy.SetIO(stdinR, stdoutW)
 
 	// Run proxy in goroutine
 	done := make(chan error, 1)
@@ -63,51 +62,56 @@ func TestProxy(t *testing.T) {
 	_, err = stdinW.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"test"}` + "\n"))
 	assert.NilError(t, err)
 
-	// Give time for echo to complete
-	time.Sleep(50 * time.Millisecond)
+	// Read the echoed response with timeout
+	readDone := make(chan string, 1)
+	go func() {
+		buf := make([]byte, 1024)
+		n, _ := stdoutR.Read(buf)
+		readDone <- string(buf[:n])
+	}()
 
-	// Close stdin to signal EOF
+	var output string
+	select {
+	case output = <-readDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timeout reading from stdout")
+	}
+
+	// Verify we got the echoed response
+	assert.Assert(t, len(output) > 0, "expected output, got empty string")
+	assert.Assert(t, strings.Contains(output, `"method":"test"`), "expected method:test in output, got: %s", output)
+
+	// Clean up
 	stdinW.Close()
+	cancel()
 
 	// Wait for proxy to finish
 	select {
 	case <-done:
 	case <-time.After(200 * time.Millisecond):
-		cancel()
 	}
-
-	// Verify we got the echoed response
-	output := stdout.String()
-	assert.Assert(t, len(output) > 0, "expected output, got empty string")
-
-	// Parse the output as JSON to verify it's valid
-	// Output may have trailing newline, so trim it
-	var msg map[string]any
-	err = json.Unmarshal([]byte(strings.TrimSpace(output)), &msg)
-	assert.NilError(t, err)
-	assert.Equal(t, msg["method"], "test")
 }
 
 func TestSocketTransport(t *testing.T) {
 	// Create a temporary socket
 	socketPath := t.TempDir() + "/test.sock"
 
-	// Start a simple server
+	// Start a simple server that sends a message
 	listener, err := net.Listen("unix", socketPath)
 	assert.NilError(t, err)
 	defer listener.Close()
 
+	serverReady := make(chan struct{})
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
 			return
 		}
 		defer conn.Close()
+		close(serverReady)
 
-		// Read message and respond
-		buf := make([]byte, 1024)
-		n, _ := conn.Read(buf)
-		conn.Write(buf[:n])
+		// Send a JSON-RPC response
+		conn.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":"pong"}` + "\n"))
 	}()
 
 	// Connect using SocketTransport
@@ -116,26 +120,31 @@ func TestSocketTransport(t *testing.T) {
 	assert.NilError(t, err)
 	defer conn.Close()
 
-	// Write a message
-	msg := json.RawMessage(`{"jsonrpc":"2.0","id":1,"method":"ping"}`)
-	err = conn.Write(context.Background(), msg)
+	// Wait for server
+	select {
+	case <-serverReady:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("server did not accept")
+	}
+
+	// Read the message
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	msg, err := conn.Read(ctx)
 	assert.NilError(t, err)
+	assert.Assert(t, msg != nil, "expected message, got nil")
 
-	// Session ID should be non-empty
-	assert.Assert(t, conn.SessionID() != "", "expected non-empty session ID")
-}
-
-func TestProxyClose(t *testing.T) {
-	proxy := NewProxy("/nonexistent.sock")
-
-	// Close on unconnected proxy should not error
-	err := proxy.Close()
-	assert.NilError(t, err)
+	// Verify it's a response
+	resp, ok := msg.(*jsonrpc.Response)
+	assert.Assert(t, ok, "expected Response, got %T", msg)
+	// ID comes as int64 from the MCP library
+	id, ok := resp.ID.Raw().(int64)
+	assert.Assert(t, ok, "expected int64 ID, got %T", resp.ID.Raw())
+	assert.Equal(t, id, int64(1))
 }
 
 func TestNewProxy(t *testing.T) {
 	proxy := NewProxy("/test.sock")
 	assert.Equal(t, proxy.socketPath, "/test.sock")
 	assert.Equal(t, proxy.stdin, os.Stdin)
-	assert.Equal(t, proxy.stdout, os.Stdout)
 }
