@@ -63,6 +63,8 @@ type CursorConfig struct {
 type DummyConfig struct {
 	// Sleep duration in seconds. If -1, sleeps forever.
 	Sleep int `yaml:"sleep"`
+	// ToolCalls specifies MCP tool calls to make.
+	ToolCalls []agent.DummyToolCall `yaml:"tool_calls"`
 }
 
 func (w *Workspace) Validate() error {

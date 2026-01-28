@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -33,6 +34,14 @@ func TestRunnerStart(t *testing.T) {
 		SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
+		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
+			return &xagentv1.GetTaskDetailsResponse{
+				Task: &xagentv1.Task{
+					Id:   req.Id,
+					Name: "test-task",
+				},
+			}, nil
+		},
 	}
 
 	// Create httptest server with the mock
@@ -55,6 +64,9 @@ func TestRunnerStart(t *testing.T) {
 						Type: "dummy",
 						Dummy: &workspace.DummyConfig{
 							Sleep: 1,
+							ToolCalls: []agent.DummyToolCall{
+								{Server: "xagent", Name: "get_my_task"},
+							},
 						},
 					},
 				},
@@ -92,4 +104,7 @@ func TestRunnerStart(t *testing.T) {
 	// Remove the container
 	err = docker.ContainerRemove(ctx, "xagent-1", container.RemoveOptions{})
 	assert.NilError(t, err)
+
+	// Verify get_my_task was called
+	assert.Equal(t, len(mock.GetTaskDetailsCalls()), 1)
 }

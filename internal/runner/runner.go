@@ -531,7 +531,8 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 	}
 	if ws.Agent.Dummy != nil {
 		cfg.Dummy = &agent.DummyOptions{
-			Sleep: ws.Agent.Dummy.Sleep,
+			Sleep:     ws.Agent.Dummy.Sleep,
+			ToolCalls: ws.Agent.Dummy.ToolCalls,
 		}
 	}
 
