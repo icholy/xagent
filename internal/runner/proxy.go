@@ -2,9 +2,13 @@ package runner
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
@@ -19,6 +23,7 @@ type AgentProxy struct {
 	privateKey ed25519.PrivateKey
 	log        *slog.Logger
 	proxy      *xagentclient.UnixProxy
+	socketPath string
 }
 
 // NewProxy creates a new Proxy.
@@ -28,12 +33,20 @@ func NewProxy(serverURL string, auth xagentclient.TokenSource, privateKey ed2551
 		auth:       auth,
 		privateKey: privateKey,
 		log:        log,
+		socketPath: randomSocketPath(),
 	}
+}
+
+// randomSocketPath generates a random socket path in the system temp directory.
+func randomSocketPath() string {
+	var b [8]byte
+	rand.Read(b[:])
+	return filepath.Join(os.TempDir(), "xagent-"+hex.EncodeToString(b[:])+".sock")
 }
 
 // SocketPath returns the path to the Unix socket.
 func (p *AgentProxy) SocketPath() string {
-	return "/tmp/xagent.sock"
+	return p.socketPath
 }
 
 // Start creates and starts the proxy.
