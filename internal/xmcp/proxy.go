@@ -81,19 +81,3 @@ func forward(ctx context.Context, src, dst mcp.Connection) error {
 		}
 	}
 }
-
-// SocketTransport implements mcp.Transport for connecting to a Unix domain socket.
-type SocketTransport struct {
-	SocketPath string
-}
-
-// Connect implements the mcp.Transport interface by dialing the Unix socket
-// and returning an MCP Connection.
-func (t *SocketTransport) Connect(ctx context.Context) (mcp.Connection, error) {
-	conn, err := net.Dial("unix", t.SocketPath)
-	if err != nil {
-		return nil, err
-	}
-	transport := &mcp.IOTransport{Reader: conn, Writer: conn}
-	return transport.Connect(ctx)
-}
