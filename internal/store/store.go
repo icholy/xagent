@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"embed"
 
+	"github.com/XSAM/otelsql"
 	"github.com/icholy/xagent/internal/store/sqlc"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 //go:embed sql/migrations/*.sql
@@ -52,7 +54,12 @@ func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error
 }
 
 func Open(dsn string, migrate bool) (*sql.DB, error) {
-	db, err := sql.Open("pgx", dsn)
+	db, err := otelsql.Open("pgx", dsn,
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+		otelsql.WithSpanOptions(otelsql.SpanOptions{
+			DisableErrSkip: true,
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}

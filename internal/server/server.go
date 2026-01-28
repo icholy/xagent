@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/otelconnect"
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/model"
@@ -22,6 +23,7 @@ import (
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/justinas/alice"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type Server struct {
@@ -64,13 +66,17 @@ func (s *Server) Handler() http.Handler {
 	// Connect RPC API (protected)
 	// HTTP middleware checks auth and attaches UserInfo to context
 	// Connect interceptor enforces auth with proper RPC error responses
+	otelInterceptor, err := otelconnect.NewInterceptor()
+	if err != nil {
+		s.log.Error("failed to create otelconnect interceptor", "error", err)
+	}
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s,
-		connect.WithInterceptors(apiauth.RequireUserInterceptor()),
+		connect.WithInterceptors(otelInterceptor, apiauth.RequireUserInterceptor()),
 	)
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/", s.auth.RequireAuth()(WebUI()))
-	return mux
+	return otelhttp.NewHandler(mux, "xagent")
 }
 
 func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {

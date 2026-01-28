@@ -13,6 +13,7 @@ import (
 
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/server"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/urfave/cli/v3"
@@ -73,12 +74,34 @@ var ServerCommand = &cli.Command{
 			Name:  "no-auth",
 			Usage: "Disable authentication (for development only)",
 		},
+		&cli.StringFlag{
+			Name:    "otel-endpoint",
+			Usage:   "OpenTelemetry OTLP endpoint (e.g. localhost:4318)",
+			Sources: cli.EnvVars("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		},
+		&cli.BoolFlag{
+			Name:    "otel-insecure",
+			Usage:   "Use insecure connection for OTLP exporter",
+			Sources: cli.EnvVars("OTEL_EXPORTER_OTLP_INSECURE"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
 		dbPath := cmd.String("db")
 		notifyFlag := cmd.Bool("notify")
 		noAuth := cmd.Bool("no-auth")
+
+		// Initialize OpenTelemetry
+		otelShutdown, err := otelx.Setup(ctx, otelx.Config{
+			ServiceName:    "xagent-server",
+			ServiceVersion: "1.0.0",
+			Endpoint:       cmd.String("otel-endpoint"),
+			Insecure:       cmd.Bool("otel-insecure"),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
+		}
+		defer otelShutdown(context.Background())
 
 		db, err := store.Open(dbPath, true)
 		if err != nil {
