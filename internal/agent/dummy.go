@@ -25,13 +25,17 @@ type DummyAgent struct {
 // Otherwise, it does nothing and returns nil.
 func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) error {
 	a.log.Info("dummy agent received prompt", "text", prompt, "resume", resume)
-
-	// Execute configured tool calls
 	if err := a.doToolCalls(ctx); err != nil {
 		return err
 	}
+	if err := a.doSleep(ctx); err != nil {
+		return err
+	}
+	return nil
+}
 
-	if a.options != nil && a.options.Sleep != 0 {
+func (a *DummyAgent) doSleep(ctx context.Context) error {
+	if a.options == nil || a.options.Sleep == 0 {
 		if a.options.Sleep == -1 {
 			a.log.Info("dummy agent sleeping forever")
 			<-ctx.Done()
@@ -43,7 +47,6 @@ func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) err
 			return ctx.Err()
 		}
 	}
-
 	return nil
 }
 
