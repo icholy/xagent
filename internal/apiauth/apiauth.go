@@ -6,13 +6,13 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
-	"github.com/icholy/xagent/internal/zitadel/middlewarex"
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authentication"
 	openid "github.com/zitadel/zitadel-go/v3/pkg/authentication/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authorization"
 	"github.com/zitadel/zitadel-go/v3/pkg/authorization/oauth"
+	"github.com/zitadel/zitadel-go/v3/pkg/http/middleware"
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 )
 
@@ -58,7 +58,7 @@ type Auth struct {
 	// cookie middleware
 	cookie *authentication.Interceptor[*openid.DefaultContext]
 	// bearer token middleware
-	bearer *middlewarex.Interceptor[*oauth.IntrospectionContext]
+	bearer *middleware.Interceptor[*oauth.IntrospectionContext]
 	// handler handles /auth/* routes (login, callback, logout)
 	handler http.Handler
 }
@@ -108,7 +108,7 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	}
 	return &Auth{
 		cookie:  authentication.Middleware(authN),
-		bearer:  middlewarex.New(authZ),
+		bearer:  middleware.New(authZ),
 		handler: authN,
 	}, nil
 }
