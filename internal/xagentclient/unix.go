@@ -1,6 +1,7 @@
 package xagentclient
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -14,7 +15,9 @@ type UnixProxy struct {
 
 func NewUnixProxy(path string, handler http.Handler) (*UnixProxy, error) {
 	// Remove existing socket file
-	os.Remove(path)
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
 
 	listener, err := net.Listen("unix", path)
 	if err != nil {
