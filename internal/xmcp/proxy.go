@@ -2,68 +2,34 @@ package xmcp
 
 import (
 	"context"
-	"io"
-	"net"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sync/errgroup"
 )
 
-// Proxy implements an stdio MCP proxy that forwards messages through a Unix domain socket.
-// It uses the MCP library's transport infrastructure to handle JSON-RPC message framing.
-type Proxy struct {
-	socketPath string
-	stdin      io.ReadCloser
-	stdout     io.WriteCloser
-}
-
-// NewProxy creates a new Proxy that will connect to the given Unix socket path.
-func NewProxy(socketPath string, stdin io.ReadCloser, stdout io.WriteCloser) *Proxy {
-	return &Proxy{
-		socketPath: socketPath,
-		stdin:      stdin,
-		stdout:     stdout,
-	}
-}
-
-// Run starts the proxy and blocks until the context is cancelled or an error occurs.
-// It connects to the Unix socket and creates bidirectional message forwarding
-// between stdio and the socket using MCP transports.
-func (p *Proxy) Run(ctx context.Context) error {
-	// Connect to the Unix socket
-	conn, err := net.Dial("unix", p.socketPath)
+// Proxy creates bidirectional message forwarding between two MCP transports.
+// It blocks until the context is cancelled or an error occurs.
+func Proxy(ctx context.Context, t1, t2 mcp.Transport) error {
+	conn1, err := t1.Connect(ctx)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer conn1.Close()
 
-	// Create transports using the MCP library
-	stdioTransport := &mcp.IOTransport{Reader: p.stdin, Writer: p.stdout}
-	socketTransport := &mcp.IOTransport{Reader: conn, Writer: conn}
-
-	// Connect both transports to get connections
-	stdioConn, err := stdioTransport.Connect(ctx)
+	conn2, err := t2.Connect(ctx)
 	if err != nil {
 		return err
 	}
-	defer stdioConn.Close()
-
-	socketConn, err := socketTransport.Connect(ctx)
-	if err != nil {
-		return err
-	}
-	defer socketConn.Close()
+	defer conn2.Close()
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Forward stdin to socket
 	g.Go(func() error {
-		return forward(ctx, stdioConn, socketConn)
+		return forward(ctx, conn1, conn2)
 	})
 
-	// Forward socket to stdout
 	g.Go(func() error {
-		return forward(ctx, socketConn, stdioConn)
+		return forward(ctx, conn2, conn1)
 	})
 
 	return g.Wait()
