@@ -101,7 +101,12 @@ func NewAgent(opts Options) (Agent, error) {
 			options:    opts.Cursor,
 		}, nil
 	case TypeDummy:
-		return &DummyAgent{log: log, options: opts.Dummy}, nil
+		return &DummyAgent{
+			log:        log,
+			cwd:        cmp.Or(opts.Cwd, "."),
+			mcpServers: opts.McpServers,
+			options:    opts.Dummy,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown agent type: %s", opts.Type)
 	}

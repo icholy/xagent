@@ -10,8 +10,10 @@ import (
 
 // DummyAgent is a no-op agent implementation for testing.
 type DummyAgent struct {
-	log     *slog.Logger
-	options *DummyOptions
+	log        *slog.Logger
+	cwd        string
+	mcpServers map[string]McpServer
+	options    *DummyOptions
 }
 
 // Prompt handles the prompt based on the configured options.
