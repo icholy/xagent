@@ -14,5 +14,5 @@ func TestProxy(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	err := Proxy(ctx, t1, t2)
-	assert.ErrorContains(t, err, "context deadline exceeded")
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
