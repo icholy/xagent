@@ -39,8 +39,7 @@ func TestProxy(t *testing.T) {
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 
-	proxy := NewProxy(socketPath)
-	proxy.SetIO(stdinR, stdoutW)
+	proxy := NewProxy(socketPath, stdinR, stdoutW)
 
 	// Run proxy in goroutine
 	done := make(chan error, 1)
@@ -144,7 +143,8 @@ func TestSocketTransport(t *testing.T) {
 }
 
 func TestNewProxy(t *testing.T) {
-	proxy := NewProxy("/test.sock")
+	// Test with nil stdin/stdout (defaults to os.Stdin/os.Stdout)
+	proxy := NewProxy("/test.sock", nil, nil)
 	assert.Equal(t, proxy.socketPath, "/test.sock")
 	assert.Equal(t, proxy.stdin, os.Stdin)
 }

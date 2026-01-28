@@ -18,11 +18,18 @@ type Proxy struct {
 }
 
 // NewProxy creates a new Proxy that will connect to the given Unix socket path.
-func NewProxy(socketPath string) *Proxy {
+// If stdin is nil, os.Stdin is used. If stdout is nil, os.Stdout is used.
+func NewProxy(socketPath string, stdin io.ReadCloser, stdout io.WriteCloser) *Proxy {
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	if stdout == nil {
+		stdout = nopWriteCloser{os.Stdout}
+	}
 	return &Proxy{
 		socketPath: socketPath,
-		stdin:      os.Stdin,
-		stdout:     nopWriteCloser{os.Stdout},
+		stdin:      stdin,
+		stdout:     stdout,
 	}
 }
 
@@ -88,12 +95,6 @@ func forward(ctx context.Context, src, dst mcp.Connection) error {
 			return err
 		}
 	}
-}
-
-// SetIO allows overriding stdin/stdout for testing.
-func (p *Proxy) SetIO(stdin io.ReadCloser, stdout io.WriteCloser) {
-	p.stdin = stdin
-	p.stdout = stdout
 }
 
 // nopWriteCloser wraps an io.Writer to implement io.WriteCloser with a no-op Close.
