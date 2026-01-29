@@ -2,8 +2,6 @@ package runner
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -33,15 +31,15 @@ func NewProxy(serverURL string, auth xagentclient.TokenSource, privateKey ed2551
 		auth:       auth,
 		privateKey: privateKey,
 		log:        log,
-		socketPath: randomSocketPath(),
+		socketPath: socketPath(),
 	}
 }
 
-// randomSocketPath generates a random socket path in the system temp directory.
-func randomSocketPath() string {
-	var b [8]byte
-	rand.Read(b[:])
-	return filepath.Join(os.TempDir(), "xagent-"+hex.EncodeToString(b[:])+".sock")
+// socketPath returns a fixed socket path in the system temp directory.
+// Using a fixed path ensures that existing containers with bind mounts
+// to this socket can be restarted after a runner reboot.
+func socketPath() string {
+	return filepath.Join(os.TempDir(), "xagent.sock")
 }
 
 // SocketPath returns the path to the Unix socket.
