@@ -45,7 +45,10 @@ var TaskDeleteCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load token: %w", err)
 		}
-		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: token})
+		if !token.Valid() {
+			return fmt.Errorf("no valid token available, run login to authenticate")
+		}
+		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Token: token.APIKey})
 		if _, err := client.DeleteTask(ctx, &xagentv1.DeleteTaskRequest{Id: taskID}); err != nil {
 			return fmt.Errorf("failed to delete task: %w", err)
 		}
