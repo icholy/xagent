@@ -6,6 +6,7 @@ import { defineConfig } from "vite"
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: "/ui/",
   plugins: [TanStackRouterVite(), react(), tailwindcss()],
   build: {
     outDir: "../internal/server/webui",

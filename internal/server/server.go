@@ -72,7 +72,8 @@ func (s *Server) Handler() http.Handler {
 	)
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
 	// React UI (SPA with client-side routing, protected by cookie auth)
-	mux.Handle("/", s.auth.RequireAuth()(WebUI()))
+	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
+	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
 	return otelhttp.NewHandler(mux, "xagent")
 }
 
