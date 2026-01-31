@@ -3,7 +3,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@connectrpc/connect-query'
 import { createKey } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { CreateKeyResponse } from '@/gen/xagent/v1/xagent_pb'
-import { timestampFromDate } from '@bufbuild/protobuf/wkt'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +16,6 @@ export const Route = createFileRoute('/keys/new')({
 function NewKeyPage() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
-  const [expiresIn, setExpiresIn] = useState('')
   const [created, setCreated] = useState<CreateKeyResponse | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -30,21 +28,7 @@ function NewKeyPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-
-    let expiresAt: ReturnType<typeof timestampFromDate> | undefined
-    if (expiresIn) {
-      const days = parseInt(expiresIn, 10)
-      if (days > 0) {
-        const date = new Date()
-        date.setDate(date.getDate() + days)
-        expiresAt = timestampFromDate(date)
-      }
-    }
-
-    await mutation.mutateAsync({
-      name: name.trim(),
-      expiresAt,
-    })
+    await mutation.mutateAsync({ name: name.trim() })
   }
 
   const handleCopy = async () => {
@@ -112,18 +96,6 @@ function NewKeyPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="expiresIn">Expires in (days)</Label>
-              <Input
-                id="expiresIn"
-                type="number"
-                min="1"
-                placeholder="Leave empty for no expiration"
-                value={expiresIn}
-                onChange={(e) => setExpiresIn(e.target.value)}
               />
             </div>
 

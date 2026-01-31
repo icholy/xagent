@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
@@ -93,17 +92,11 @@ function KeyRow({
   apiKey: Key
   onDelete: () => void
 }) {
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const deleteMutation = useMutation(deleteKey, {
     onSuccess: () => onDelete(),
   })
 
   const handleDelete = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true)
-      setTimeout(() => setConfirmDelete(false), 3000)
-      return
-    }
     await deleteMutation.mutateAsync({ id: apiKey.id })
   }
 
@@ -141,7 +134,7 @@ function KeyRow({
           ) : (
             <Trash2 className="h-4 w-4" />
           )}
-          {confirmDelete ? 'Confirm' : 'Delete'}
+          Delete
         </Button>
       </TableCell>
     </TableRow>
