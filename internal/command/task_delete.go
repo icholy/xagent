@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/icholy/xagent/internal/deviceauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/tokenfile"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
@@ -41,7 +41,7 @@ var TaskDeleteCommand = &cli.Command{
 		}
 
 		serverURL := cmd.String("server")
-		token, err := deviceauth.LoadToken(cmd.String("token-file"))
+		token, err := tokenfile.Load(cmd.String("token-file"))
 		if err != nil {
 			return fmt.Errorf("failed to load token: %w", err)
 		}

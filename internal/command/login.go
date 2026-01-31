@@ -7,6 +7,7 @@ import (
 
 	"github.com/icholy/xagent/internal/deviceauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/tokenfile"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -63,8 +64,8 @@ var LoginCommand = &cli.Command{
 		}
 
 		// Save the API key to the token file
-		token := &deviceauth.Token{APIKey: resp.RawToken}
-		if err := deviceauth.SaveToken(cmd.String("token-file"), token); err != nil {
+		token := &tokenfile.Token{APIKey: resp.RawToken}
+		if err := tokenfile.Save(cmd.String("token-file"), token); err != nil {
 			return fmt.Errorf("save token: %w", err)
 		}
 
