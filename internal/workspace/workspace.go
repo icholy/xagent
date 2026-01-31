@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/expandvar"
 	"gopkg.in/yaml.v3"
@@ -103,6 +105,29 @@ func (c *Container) Validate() error {
 		return fmt.Errorf("image is required")
 	}
 	return nil
+}
+
+// HostConfig returns the Docker host configuration for this container.
+func (c *Container) HostConfig() *container.HostConfig {
+	return &container.HostConfig{
+		Binds:    c.Volumes,
+		GroupAdd: c.GroupAdd,
+		Runtime:  c.Runtime,
+	}
+}
+
+// NetworkingConfig returns the Docker networking configuration for this container.
+func (c *Container) NetworkingConfig() *network.NetworkingConfig {
+	if len(c.Networks) == 0 {
+		return nil
+	}
+	endpoints := make(map[string]*network.EndpointSettings, len(c.Networks))
+	for _, net := range c.Networks {
+		endpoints[net] = &network.EndpointSettings{}
+	}
+	return &network.NetworkingConfig{
+		EndpointsConfig: endpoints,
+	}
 }
 
 // ExpandFunc is called for each ${namespace:value} found in the config.

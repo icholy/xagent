@@ -425,9 +425,6 @@ func (r *Runner) buildContainerConfig(
 		env = append(env, k+"="+v)
 	}
 
-	// Build binds (volumes) - always include the socket
-	binds := append([]string{r.proxy.SocketPath() + ":/var/run/xagent.sock"}, ctr.Volumes...)
-
 	config := &container.Config{
 		Image: ctr.Image,
 		User:  ctr.User,
@@ -445,23 +442,11 @@ func (r *Runner) buildContainerConfig(
 		WorkingDir: ctr.WorkingDir,
 	}
 
-	hostConfig := &container.HostConfig{
-		Binds:    binds,
-		GroupAdd: ctr.GroupAdd,
-		Runtime:  ctr.Runtime,
-	}
+	hostConfig := ctr.HostConfig()
+	// Prepend the socket mount
+	hostConfig.Binds = append([]string{r.proxy.SocketPath() + ":/var/run/xagent.sock"}, hostConfig.Binds...)
 
-	var networkConfig *network.NetworkingConfig
-	if len(ctr.Networks) > 0 {
-		networkConfig = &network.NetworkingConfig{
-			EndpointsConfig: make(map[string]*network.EndpointSettings),
-		}
-		for _, net := range ctr.Networks {
-			networkConfig.EndpointsConfig[net] = &network.EndpointSettings{}
-		}
-	}
-
-	return config, hostConfig, networkConfig
+	return config, hostConfig, ctr.NetworkingConfig()
 }
 
 func (r *Runner) copyBinary(ctx context.Context, containerID, image string) error {
