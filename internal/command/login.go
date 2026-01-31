@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/icholy/xagent/internal/deviceauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -12,6 +13,14 @@ import (
 	"github.com/urfave/cli/v3"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
+
+func defaultKeyName() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "cli"
+	}
+	return hostname
+}
 
 var LoginCommand = &cli.Command{
 	Name:  "login",
@@ -33,7 +42,7 @@ var LoginCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:  "key-name",
 			Usage: "Name for the API key",
-			Value: "cli",
+			Value: defaultKeyName(),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -57,7 +66,7 @@ var LoginCommand = &cli.Command{
 			AuthType: "bearer",
 		})
 		resp, err := client.CreateKey(ctx, &xagentv1.CreateKeyRequest{
-			Name: cmp.Or(cmd.String("key-name"), "cli"),
+			Name: cmp.Or(cmd.String("key-name"), defaultKeyName()),
 		})
 		if err != nil {
 			return fmt.Errorf("create API key: %w", err)
