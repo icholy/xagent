@@ -20,9 +20,9 @@ type Client = xagentv1connect.XAgentServiceClient
 type Options struct {
 	// BaseURL is the server URL. Supports unix socket URLs: unix:///path/to/socket
 	BaseURL string
-	// Source provides access tokens for authentication.
-	// If nil, no authentication is performed.
-	Source TokenSource
+	// Token is the authentication token.
+	// If empty, no authentication is performed.
+	Token string
 	// AuthType is the value of the X-Auth-Type header.
 	// Defaults to "key" if empty.
 	AuthType string
@@ -40,10 +40,10 @@ func New(opts Options) Client {
 			},
 		}
 	}
-	if opts.Source != nil {
+	if opts.Token != "" {
 		transport = &AuthTransport{
 			Transport: transport,
-			Source:    opts.Source,
+			Token:     opts.Token,
 			AuthType:  opts.AuthType,
 		}
 	}

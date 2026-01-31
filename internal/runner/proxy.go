@@ -18,7 +18,7 @@ import (
 // AgentProxy manages a single Unix socket proxy for all tasks.
 type AgentProxy struct {
 	serverURL  string
-	auth       xagentclient.TokenSource
+	token      string
 	privateKey ed25519.PrivateKey
 	log        *slog.Logger
 	proxy      *xagentclient.UnixProxy
@@ -28,7 +28,7 @@ type AgentProxy struct {
 // AgentProxyOptions configures the AgentProxy.
 type AgentProxyOptions struct {
 	ServerURL  string
-	Auth       xagentclient.TokenSource
+	Token      string
 	PrivateKey ed25519.PrivateKey
 	Log        *slog.Logger
 	SocketPath string // defaults to /tmp/xagent.sock
@@ -41,7 +41,7 @@ func NewProxy(opts AgentProxyOptions) *AgentProxy {
 	}
 	return &AgentProxy{
 		serverURL:  opts.ServerURL,
-		auth:       opts.Auth,
+		token:      opts.Token,
 		privateKey: opts.PrivateKey,
 		log:        opts.Log,
 		socketPath: opts.SocketPath,
@@ -60,7 +60,7 @@ func (p *AgentProxy) Start() error {
 	}
 
 	// Create client to the upstream server
-	client := xagentclient.New(xagentclient.Options{BaseURL: p.serverURL, Source: p.auth})
+	client := xagentclient.New(xagentclient.Options{BaseURL: p.serverURL, Token: p.token})
 
 	// Create filter to enforce access control
 	filter := xmcp.NewAgentFilter(client)

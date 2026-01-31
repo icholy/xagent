@@ -16,9 +16,6 @@ import (
 
 var scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail}
 
-// ErrNoToken is returned when no valid token is available
-var ErrNoToken = fmt.Errorf("no valid token available, run login to authenticate")
-
 // Token stores the API key
 type Token struct {
 	APIKey string `json:"api_key"`
@@ -27,14 +24,6 @@ type Token struct {
 // Valid reports whether the token has a non-empty API key
 func (t *Token) Valid() bool {
 	return t != nil && t.APIKey != ""
-}
-
-// Token implements xagentclient.TokenSource.
-func (t *Token) Token(_ context.Context) (string, error) {
-	if t.Valid() {
-		return t.APIKey, nil
-	}
-	return "", ErrNoToken
 }
 
 // LoadToken reads a token from a JSON file.
@@ -141,7 +130,7 @@ func DeviceFlow(ctx context.Context, opts DeviceFlowOptions) error {
 func createAPIKey(ctx context.Context, serverURL, keyName, accessToken string) (string, error) {
 	client := xagentclient.New(xagentclient.Options{
 		BaseURL:  serverURL,
-		Source:   staticTokenSource(accessToken),
+		Token:    accessToken,
 		AuthType: "bearer",
 	})
 	resp, err := client.CreateKey(ctx, &xagentv1.CreateKeyRequest{
@@ -153,8 +142,3 @@ func createAPIKey(ctx context.Context, serverURL, keyName, accessToken string) (
 	return resp.RawToken, nil
 }
 
-type staticTokenSource string
-
-func (s staticTokenSource) Token(_ context.Context) (string, error) {
-	return string(s), nil
-}

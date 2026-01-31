@@ -6,7 +6,6 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
-	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/webhook"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
@@ -23,7 +22,7 @@ func mustEnv(name string) string {
 func main() {
 	client := xagentclient.New(xagentclient.Options{
 		BaseURL: mustEnv("XAGENT_SERVER"),
-		Source:  agentauth.StaticTokenSource(mustEnv("XAGENT_TOKEN")),
+		Token:   mustEnv("XAGENT_TOKEN"),
 	})
 
 	handler := webhook.NewHandler(&webhook.Config{

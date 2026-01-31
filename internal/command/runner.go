@@ -99,9 +99,12 @@ var RunnerCommand = &cli.Command{
 			log = slog.New(handler)
 		}
 
-		auth, err := deviceauth.LoadToken(cmd.String("token-file"))
+		token, err := deviceauth.LoadToken(cmd.String("token-file"))
 		if err != nil {
 			return fmt.Errorf("failed to load token: %w", err)
+		}
+		if !token.Valid() {
+			return fmt.Errorf("no valid token available, run login to authenticate")
 		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
@@ -117,7 +120,7 @@ var RunnerCommand = &cli.Command{
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
 			Log:         log,
-			Auth:        auth,
+			Auth:        token.APIKey,
 		})
 		if err != nil {
 			return err

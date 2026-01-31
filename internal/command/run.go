@@ -11,7 +11,6 @@ import (
 	"syscall"
 
 	"github.com/icholy/xagent/internal/agent"
-	"github.com/icholy/xagent/internal/agentauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
@@ -53,7 +52,7 @@ var RunCommand = &cli.Command{
 		// Make sure the server is reachable
 		client := xagentclient.New(xagentclient.Options{
 			BaseURL: cmd.String("server"),
-			Source:  agentauth.StaticTokenSource(cmd.String("token")),
+			Token:   cmd.String("token"),
 		})
 		if _, err := client.Ping(ctx, &xagentv1.PingRequest{}); err != nil {
 			return fmt.Errorf("failed to ping server: %w", err)
