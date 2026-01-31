@@ -20,6 +20,26 @@ const (
 	TaskStatusCancelled  TaskStatus = "cancelled"
 )
 
+var taskStatusToProto = map[TaskStatus]xagentv1.TaskStatus{
+	TaskStatusPending:    xagentv1.TaskStatus_TASK_STATUS_PENDING,
+	TaskStatusRunning:    xagentv1.TaskStatus_TASK_STATUS_RUNNING,
+	TaskStatusRestarting: xagentv1.TaskStatus_TASK_STATUS_RESTARTING,
+	TaskStatusCancelling: xagentv1.TaskStatus_TASK_STATUS_CANCELLING,
+	TaskStatusCompleted:  xagentv1.TaskStatus_TASK_STATUS_COMPLETED,
+	TaskStatusFailed:     xagentv1.TaskStatus_TASK_STATUS_FAILED,
+	TaskStatusCancelled:  xagentv1.TaskStatus_TASK_STATUS_CANCELLED,
+}
+
+var taskStatusFromProto = map[xagentv1.TaskStatus]TaskStatus{
+	xagentv1.TaskStatus_TASK_STATUS_PENDING:    TaskStatusPending,
+	xagentv1.TaskStatus_TASK_STATUS_RUNNING:    TaskStatusRunning,
+	xagentv1.TaskStatus_TASK_STATUS_RESTARTING: TaskStatusRestarting,
+	xagentv1.TaskStatus_TASK_STATUS_CANCELLING: TaskStatusCancelling,
+	xagentv1.TaskStatus_TASK_STATUS_COMPLETED:  TaskStatusCompleted,
+	xagentv1.TaskStatus_TASK_STATUS_FAILED:     TaskStatusFailed,
+	xagentv1.TaskStatus_TASK_STATUS_CANCELLED:  TaskStatusCancelled,
+}
+
 // TaskCommand represents a command to be executed by the runner.
 type TaskCommand string
 
@@ -28,6 +48,32 @@ const (
 	TaskCommandStop    TaskCommand = "stop"
 	TaskCommandStart   TaskCommand = "start"
 )
+
+var taskCommandToProto = map[TaskCommand]xagentv1.TaskCommand{
+	"":                 xagentv1.TaskCommand_TASK_COMMAND_UNSPECIFIED,
+	TaskCommandRestart: xagentv1.TaskCommand_TASK_COMMAND_RESTART,
+	TaskCommandStop:    xagentv1.TaskCommand_TASK_COMMAND_STOP,
+	TaskCommandStart:   xagentv1.TaskCommand_TASK_COMMAND_START,
+}
+
+var taskCommandFromProto = map[xagentv1.TaskCommand]TaskCommand{
+	xagentv1.TaskCommand_TASK_COMMAND_UNSPECIFIED: "",
+	xagentv1.TaskCommand_TASK_COMMAND_RESTART:     TaskCommandRestart,
+	xagentv1.TaskCommand_TASK_COMMAND_STOP:        TaskCommandStop,
+	xagentv1.TaskCommand_TASK_COMMAND_START:       TaskCommandStart,
+}
+
+var runnerEventTypeToProto = map[RunnerEventType]xagentv1.RunnerEventType{
+	RunnerEventStarted: xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STARTED,
+	RunnerEventStopped: xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STOPPED,
+	RunnerEventFailed:  xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED,
+}
+
+var runnerEventTypeFromProto = map[xagentv1.RunnerEventType]RunnerEventType{
+	xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STARTED: RunnerEventStarted,
+	xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STOPPED: RunnerEventStopped,
+	xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED:  RunnerEventFailed,
+}
 
 // Instruction represents a task instruction with text and optional source URL.
 type Instruction struct {
@@ -81,8 +127,8 @@ func (t *Task) Proto() *xagentv1.Task {
 		Runner:       t.Runner,
 		Workspace:    t.Workspace,
 		Instructions: instructions,
-		Status:       string(t.Status),
-		Command:      string(t.Command),
+		Status:       taskStatusToProto[t.Status],
+		Command:      taskCommandToProto[t.Command],
 		Version:      t.Version,
 		Archived:     t.Archived,
 		CreatedAt:    timestamppb.New(t.CreatedAt),
@@ -117,8 +163,8 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		Runner:       pb.Runner,
 		Workspace:    pb.Workspace,
 		Instructions: instructions,
-		Status:       TaskStatus(pb.Status),
-		Command:      TaskCommand(pb.Command),
+		Status:       taskStatusFromProto[pb.Status],
+		Command:      taskCommandFromProto[pb.Command],
 		Version:      pb.Version,
 		Archived:     pb.Archived,
 		CreatedAt:    createdAt,
@@ -147,7 +193,7 @@ type RunnerEvent struct {
 func (r *RunnerEvent) Proto() *xagentv1.RunnerEvent {
 	return &xagentv1.RunnerEvent{
 		TaskId:    r.TaskID,
-		Event:     string(r.Event),
+		Event:     runnerEventTypeToProto[r.Event],
 		Version:   r.Version,
 		Reconcile: r.Reconcile,
 	}
@@ -157,7 +203,7 @@ func (r *RunnerEvent) Proto() *xagentv1.RunnerEvent {
 func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 	return RunnerEvent{
 		TaskID:    pb.TaskId,
-		Event:     RunnerEventType(pb.Event),
+		Event:     runnerEventTypeFromProto[pb.Event],
 		Version:   pb.Version,
 		Reconcile: pb.Reconcile,
 	}

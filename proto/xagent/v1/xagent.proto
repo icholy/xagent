@@ -61,6 +61,31 @@ message TaskActions {
   bool unarchive = 5;
 }
 
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_RUNNING = 2;
+  TASK_STATUS_RESTARTING = 3;
+  TASK_STATUS_CANCELLING = 4;
+  TASK_STATUS_COMPLETED = 5;
+  TASK_STATUS_FAILED = 6;
+  TASK_STATUS_CANCELLED = 7;
+}
+
+enum TaskCommand {
+  TASK_COMMAND_UNSPECIFIED = 0;
+  TASK_COMMAND_RESTART = 1;
+  TASK_COMMAND_STOP = 2;
+  TASK_COMMAND_START = 3;
+}
+
+enum RunnerEventType {
+  RUNNER_EVENT_TYPE_UNSPECIFIED = 0;
+  RUNNER_EVENT_TYPE_STARTED = 1;
+  RUNNER_EVENT_TYPE_STOPPED = 2;
+  RUNNER_EVENT_TYPE_FAILED = 3;
+}
+
 message Task {
   int64 id = 1;
   string name = 2;
@@ -68,10 +93,10 @@ message Task {
   string workspace = 4;
   string runner = 5;  // Runner ID that handles this task
   repeated Instruction instructions = 6;
-  string status = 7;
+  TaskStatus status = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
-  string command = 10;  // "restart", "stop", or empty
+  TaskCommand command = 10;
   int64 version = 11;  // Incremented when command changes
   TaskActions actions = 12;
   bool archived = 13;
@@ -328,7 +353,7 @@ message ProcessEventResponse {
 
 message RunnerEvent {
   int64 task_id = 1;
-  string event = 2;     // "started", "stopped", "failed"
+  RunnerEventType event = 2;
   int64 version = 3;    // Current version, or 0 for bypass
   bool reconcile = 4;   // True if from reconciliation, not real-time
 }

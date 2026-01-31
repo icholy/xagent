@@ -122,7 +122,7 @@ func (r *Runner) RegisterWorkspaces(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) submit(ctx context.Context, taskID int64, event string, version int64) error {
+func (r *Runner) submit(ctx context.Context, taskID int64, event xagentv1.RunnerEventType, version int64) error {
 	_, err := r.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{TaskId: taskID, Event: event, Version: version},
@@ -148,7 +148,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Kill(ctx, task); err != nil {
 					r.log.Error("failed to stop task", "task", task.ID, "error", err)
 				}
-				if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
+				if err := r.submit(ctx, task.ID, xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STOPPED, task.Version); err != nil {
 					r.log.Error("failed to send stopped event", "task", task.ID, "error", err)
 				}
 				return nil
@@ -167,7 +167,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "error", err)
-					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
+					if err := r.submit(ctx, task.ID, xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED, task.Version); err != nil {
 						r.log.Error("failed to send failed event", "task", task.ID, "error", err)
 					}
 					return nil
@@ -203,7 +203,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "error", err)
-					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
+					if err := r.submit(ctx, task.ID, xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED, task.Version); err != nil {
 						r.log.Error("failed to send failed event", "task", task.ID, "error", err)
 					}
 					return nil
@@ -259,7 +259,7 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			r.log.Error("failed to get task", "task", taskID, "error", err)
 			continue
 		}
-		if task.Task.Status != "running" {
+		if task.Task.Status != xagentv1.TaskStatus_TASK_STATUS_RUNNING {
 			continue
 		}
 
@@ -274,12 +274,12 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		exitCode := info.State.ExitCode
 		if exitCode == 0 {
 			r.log.Info("reconcile: container exited successfully", "task", taskID)
-			if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
+			if err := r.submit(ctx, taskID, xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STOPPED, 0); err != nil {
 				r.log.Error("failed to send stopped event", "task", taskID, "error", err)
 			}
 		} else {
 			r.log.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
-			if err := r.submit(ctx, taskID, "failed", 0); err != nil {
+			if err := r.submit(ctx, taskID, xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED, 0); err != nil {
 				r.log.Error("failed to send failed event", "task", taskID, "error", err)
 			}
 		}
@@ -524,7 +524,7 @@ func (r *Runner) Monitor(ctx context.Context) error {
 			case events.ActionStart:
 				r.log.Info("container started", "task", taskID)
 				// Use version 0 to bypass version check (spontaneous events)
-				if err := r.submit(ctx, taskID, "started", 0); err != nil {
+				if err := r.submit(ctx, taskID, xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STARTED, 0); err != nil {
 					r.log.Error("failed to send started event", "task", taskID, "error", err)
 				}
 			case events.ActionDie:
@@ -533,12 +533,12 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				exitCode := event.Actor.Attributes["exitCode"]
 				if exitCode == "0" {
 					r.log.Info("container exited successfully", "task", taskID)
-					if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
+					if err := r.submit(ctx, taskID, xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STOPPED, 0); err != nil {
 						r.log.Error("failed to send stopped event", "task", taskID, "error", err)
 					}
 				} else {
 					r.log.Error("container exited with error", "task", taskID, "exitCode", exitCode)
-					if err := r.submit(ctx, taskID, "failed", 0); err != nil {
+					if err := r.submit(ctx, taskID, xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED, 0); err != nil {
 						r.log.Error("failed to send failed event", "task", taskID, "error", err)
 					}
 				}
