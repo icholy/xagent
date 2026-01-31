@@ -237,17 +237,25 @@ func (t *Task) applyRunnerEventFailed() bool {
 	}
 }
 
-// Archive transitions the task to archived status.
-// Returns true if the transition is valid and was applied.
-// Only valid from completed, failed, or cancelled status.
-func (t *Task) Archive() bool {
+// CanArchive returns true if the task can be archived.
+func (t *Task) CanArchive() bool {
 	switch t.Status {
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
-		t.Status = TaskStatusArchived
 		return true
 	default:
 		return false
 	}
+}
+
+// Archive transitions the task to archived status.
+// Returns true if the transition is valid and was applied.
+// Only valid from completed, failed, or cancelled status.
+func (t *Task) Archive() bool {
+	if !t.CanArchive() {
+		return false
+	}
+	t.Status = TaskStatusArchived
+	return true
 }
 
 // Cancel transitions the task to cancelling/cancelled status and sets the stop command.
