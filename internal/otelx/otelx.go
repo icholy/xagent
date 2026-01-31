@@ -20,14 +20,29 @@ type Config struct {
 	ServiceVersion string
 }
 
+// Provider manages the OpenTelemetry trace provider and exporter.
+type Provider struct {
+	tp       *sdktrace.TracerProvider
+	exporter sdktrace.SpanExporter
+}
+
+// Shutdown gracefully shuts down the trace provider and exporter.
+func (p *Provider) Shutdown(ctx context.Context) error {
+	if p.tp == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return errors.Join(p.tp.Shutdown(ctx), p.exporter.Shutdown(ctx))
+}
+
 // Setup initializes OpenTelemetry with the given configuration.
-// It returns a shutdown function that should be called when the application exits.
 // The OTLP exporter is configured via standard OTel environment variables
 // (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_INSECURE, etc.).
 // If OTEL_EXPORTER_OTLP_ENDPOINT is not set, Setup is a no-op.
-func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error) {
+func NewProvider(ctx context.Context, cfg Config) (*Provider, error) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
-		return func(context.Context) error { return nil }, nil
+		return &Provider{}, nil
 	}
 
 	res, err := resource.Merge(
@@ -58,11 +73,5 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 		propagation.Baggage{},
 	))
 
-	shutdown := func(ctx context.Context) error {
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		return errors.Join(tp.Shutdown(ctx), exporter.Shutdown(ctx))
-	}
-
-	return shutdown, nil
+	return &Provider{tp: tp, exporter: exporter}, nil
 }

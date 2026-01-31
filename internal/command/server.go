@@ -82,14 +82,14 @@ var ServerCommand = &cli.Command{
 		noAuth := cmd.Bool("no-auth")
 
 		// Initialize OpenTelemetry (configured via OTEL_EXPORTER_OTLP_ENDPOINT env var)
-		otelShutdown, err := otelx.Setup(ctx, otelx.Config{
+		otel, err := otelx.NewProvider(ctx, otelx.Config{
 			ServiceName:    "xagent-server",
 			ServiceVersion: "1.0.0",
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
 		}
-		defer otelShutdown(context.Background())
+		defer otel.Shutdown(ctx)
 
 		db, err := store.Open(dbPath, true)
 		if err != nil {
