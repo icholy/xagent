@@ -26,11 +26,11 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	return p.tp.Shutdown(ctx)
 }
 
-// NewProvider initializes OpenTelemetry.
+// Setup initializes OpenTelemetry.
 // The OTLP exporter is configured via standard OTel environment variables
 // (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_INSECURE, etc.).
-// If OTEL_EXPORTER_OTLP_ENDPOINT is not set, NewProvider is a no-op.
-func NewProvider(ctx context.Context) (*Provider, error) {
+// If OTEL_EXPORTER_OTLP_ENDPOINT is not set, Setup is a no-op.
+func Setup(ctx context.Context) (*Provider, error) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
 		return &Provider{}, nil
 	}
