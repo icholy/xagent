@@ -287,21 +287,39 @@ func (t *Task) Cancel() bool {
 	return true
 }
 
+// CanRestart returns true if the task can be restarted.
+func (t *Task) CanRestart() bool {
+	switch t.Status {
+	case TaskStatusRunning, TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Restart transitions the task to pending/restarting status and sets the restart command.
 // Returns true if the transition is valid and was applied.
 // For running tasks: sets status to restarting, command to restart, increments version.
 // For completed, failed, or cancelled tasks: sets status to pending, command to restart, increments version.
 func (t *Task) Restart() bool {
+	if !t.CanRestart() {
+		return false
+	}
 	switch t.Status {
 	case TaskStatusRunning:
 		t.Status = TaskStatusRestarting
-		t.Command = TaskCommandRestart
-		t.Version++
-		return true
-	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
+	default:
 		t.Status = TaskStatusPending
-		t.Command = TaskCommandRestart
-		t.Version++
+	}
+	t.Command = TaskCommandRestart
+	t.Version++
+	return true
+}
+
+// CanStart returns true if the task can be started.
+func (t *Task) CanStart() bool {
+	switch t.Status {
+	case TaskStatusRunning, TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
 		return true
 	default:
 		return false
@@ -313,19 +331,13 @@ func (t *Task) Restart() bool {
 // For running tasks: sets command to start (container continues, will restart after exit).
 // For completed, failed, or cancelled tasks: sets status to pending, command to start, increments version.
 func (t *Task) Start() bool {
-	switch t.Status {
-	case TaskStatusRunning:
-		// Don't change status - let it continue running
-		// Just set command so it restarts after exiting
-		t.Command = TaskCommandStart
-		t.Version++
-		return true
-	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
-		t.Status = TaskStatusPending
-		t.Command = TaskCommandStart
-		t.Version++
-		return true
-	default:
+	if !t.CanStart() {
 		return false
 	}
+	if t.Status != TaskStatusRunning {
+		t.Status = TaskStatusPending
+	}
+	t.Command = TaskCommandStart
+	t.Version++
+	return true
 }
