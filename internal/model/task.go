@@ -258,23 +258,33 @@ func (t *Task) Archive() bool {
 	return true
 }
 
+// CanCancel returns true if the task can be cancelled.
+func (t *Task) CanCancel() bool {
+	switch t.Status {
+	case TaskStatusRunning, TaskStatusRestarting, TaskStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Cancel transitions the task to cancelling/cancelled status and sets the stop command.
 // Returns true if the transition is valid and was applied.
 // For running or restarting tasks: sets status to cancelling, command to stop, increments version.
 // For pending tasks: sets status to cancelled directly (no runner action needed).
 func (t *Task) Cancel() bool {
+	if !t.CanCancel() {
+		return false
+	}
 	switch t.Status {
 	case TaskStatusRunning, TaskStatusRestarting:
 		t.Status = TaskStatusCancelling
 		t.Command = TaskCommandStop
 		t.Version++
-		return true
 	case TaskStatusPending:
 		t.Status = TaskStatusCancelled
-		return true
-	default:
-		return false
 	}
+	return true
 }
 
 // Restart transitions the task to pending/restarting status and sets the restart command.
