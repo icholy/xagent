@@ -14,7 +14,6 @@ import (
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
-	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
 func defaultRunnerID() string {
@@ -101,27 +100,10 @@ var RunnerCommand = &cli.Command{
 		}
 
 		auth, err := deviceauth.New(deviceauth.Options{
-			DiscoveryURL: deviceauth.DiscoveryURL(serverAddr),
-			ServerURL:    serverAddr,
-			TokenFile:    cmd.String("token-file"),
-			KeyName:      fmt.Sprintf("runner-%s", runnerID),
-			Display: func(resp *oidc.DeviceAuthorizationResponse) error {
-				fmt.Printf("\nTo authenticate, visit: %s\n\n", resp.VerificationURIComplete)
-				fmt.Println("Waiting for authentication...")
-				return nil
-			},
+			TokenFile: cmd.String("token-file"),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
-		}
-
-		// If no valid token exists, run device flow to authenticate and create an API key
-		if _, err := auth.Token(ctx); errors.Is(err, deviceauth.ErrNoToken) {
-			log.Info("no valid token found, starting device authentication flow")
-			if err := auth.DeviceFlow(ctx); err != nil {
-				return fmt.Errorf("authentication failed: %w", err)
-			}
-			log.Info("authentication successful, API key created")
 		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
