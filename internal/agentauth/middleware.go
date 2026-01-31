@@ -51,14 +51,3 @@ func Middleware(key ed25519.PrivateKey) func(http.Handler) http.Handler {
 	}
 }
 
-// TokenSource provides access tokens for authentication.
-type TokenSource interface {
-	Token(ctx context.Context) (string, error)
-}
-
-// StaticTokenSource returns a fixed token.
-type StaticTokenSource string
-
-func (s StaticTokenSource) Token(ctx context.Context) (string, error) {
-	return string(s), nil
-}

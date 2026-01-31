@@ -3,7 +3,6 @@ package command
 import (
 	"context"
 
-	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/icholy/xagent/internal/xmcp"
@@ -51,8 +50,7 @@ var McpCommand = &cli.Command{
 			Version: "1.0.0",
 		}, nil)
 
-		token := cmd.String("token")
-		client := xagentclient.New(xagentclient.Options{BaseURL: cmd.String("server"), Source: agentauth.StaticTokenSource(token)})
+		client := xagentclient.New(xagentclient.Options{BaseURL: cmd.String("server"), Token: cmd.String("token")})
 		task := &model.Task{
 			ID:        cmd.Int64("task"),
 			Runner:    cmd.String("runner"),

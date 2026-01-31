@@ -50,7 +50,7 @@ type Options struct {
 	Concurrency int
 	RunnerID    string
 	Log         *slog.Logger
-	Auth        xagentclient.TokenSource
+	Auth        string
 	SocketPath  string // defaults to /tmp/xagent.sock
 }
 
@@ -76,7 +76,7 @@ func New(opts Options) (*Runner, error) {
 
 	proxy := NewProxy(AgentProxyOptions{
 		ServerURL:  opts.ServerURL,
-		Auth:       opts.Auth,
+		Token:      opts.Auth,
 		PrivateKey: privateKey,
 		Log:        log,
 		SocketPath: opts.SocketPath,
@@ -87,7 +87,7 @@ func New(opts Options) (*Runner, error) {
 
 	return &Runner{
 		docker:      docker,
-		client:      xagentclient.New(xagentclient.Options{BaseURL: opts.ServerURL, Source: opts.Auth}),
+		client:      xagentclient.New(xagentclient.Options{BaseURL: opts.ServerURL, Token: opts.Auth}),
 		proxy:       proxy,
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
