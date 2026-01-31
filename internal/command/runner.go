@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/common"
-	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/runner"
+	"github.com/icholy/xagent/internal/tokenfile"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
@@ -99,7 +99,7 @@ var RunnerCommand = &cli.Command{
 			log = slog.New(handler)
 		}
 
-		token, err := deviceauth.LoadToken(cmd.String("token-file"))
+		token, err := tokenfile.Load(cmd.String("token-file"))
 		if err != nil {
 			return fmt.Errorf("failed to load token: %w", err)
 		}
