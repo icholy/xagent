@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/expandvar"
