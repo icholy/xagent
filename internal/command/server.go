@@ -35,11 +35,6 @@ var ServerCommand = &cli.Command{
 			Usage:   "PostgreSQL connection string",
 			Sources: cli.EnvVars("XAGENT_DATABASE_URL"),
 		},
-		&cli.BoolFlag{
-			Name:  "notify",
-			Usage: "Send system notification when a task finishes",
-			Value: true,
-		},
 		&cli.StringFlag{
 			Name:    "auth-domain",
 			Usage:   "ZITADEL domain (e.g. instance.zitadel.cloud)",
@@ -78,7 +73,6 @@ var ServerCommand = &cli.Command{
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
 		dbPath := cmd.String("db")
-		notifyFlag := cmd.Bool("notify")
 		noAuth := cmd.Bool("no-auth")
 
 		// Initialize OpenTelemetry (configured via OTEL_EXPORTER_OTLP_ENDPOINT env var)
@@ -119,9 +113,8 @@ var ServerCommand = &cli.Command{
 		}
 
 		srv := server.New(server.Options{
-			Store:  st,
-			Notify: notifyFlag,
-			Auth:   auth,
+			Store: st,
+			Auth:  auth,
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",
