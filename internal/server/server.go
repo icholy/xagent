@@ -18,7 +18,6 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
@@ -30,7 +29,6 @@ type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
 	log       *slog.Logger
 	store     *store.Store
-	notify    bool
 	auth      *apiauth.Auth
 	discovery deviceauth.DiscoveryConfig
 }
@@ -38,7 +36,6 @@ type Server struct {
 type Options struct {
 	Log       *slog.Logger
 	Store     *store.Store
-	Notify    bool
 	Auth      *apiauth.Auth
 	Discovery deviceauth.DiscoveryConfig
 }
@@ -51,7 +48,6 @@ func New(opts Options) *Server {
 	return &Server{
 		log:       log,
 		store:     opts.Store,
-		notify:    opts.Notify,
 		auth:      opts.Auth,
 		discovery: opts.Discovery,
 	}
@@ -700,9 +696,6 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			}
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		if s.notify && applied && task.Command == "" {
-			s.sendNotification(task, event.Event)
-		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
 }
@@ -729,25 +722,6 @@ func (s *Server) toRunnerEventLog(e model.RunnerEvent) (model.Log, bool) {
 		}, true
 	default:
 		return model.Log{}, false
-	}
-}
-
-func (s *Server) sendNotification(task *model.Task, event model.RunnerEventType) {
-	displayName := fmt.Sprintf("Task %d", task.ID)
-	if task.Name != "" {
-		displayName = fmt.Sprintf("%q", task.Name)
-	}
-	var message string
-	switch event {
-	case model.RunnerEventStopped:
-		message = fmt.Sprintf("%s completed", displayName)
-	case model.RunnerEventFailed:
-		message = fmt.Sprintf("%s failed", displayName)
-	default:
-		return
-	}
-	if err := notify.Send("xagent", message); err != nil {
-		s.log.Error("failed to send notification", "task", task.ID, "error", err)
 	}
 }
 
