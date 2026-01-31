@@ -39,10 +39,6 @@ service XAgentService {
   rpc RegisterWorkspaces(RegisterWorkspacesRequest) returns (RegisterWorkspacesResponse);
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
   rpc ClearWorkspaces(ClearWorkspacesRequest) returns (ClearWorkspacesResponse);
-  rpc CreateWebhook(CreateWebhookRequest) returns (CreateWebhookResponse);
-  rpc GetWebhook(GetWebhookRequest) returns (GetWebhookResponse);
-  rpc ListWebhooks(ListWebhooksRequest) returns (ListWebhooksResponse);
-  rpc DeleteWebhook(DeleteWebhookRequest) returns (DeleteWebhookResponse);
   rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse);
   rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
@@ -367,39 +363,6 @@ message ClearWorkspacesRequest {
 }
 
 message ClearWorkspacesResponse {}
-
-message Webhook {
-  string uuid = 1;
-  google.protobuf.Timestamp created_at = 2;
-}
-
-message CreateWebhookRequest {
-  string secret = 1;
-}
-
-message CreateWebhookResponse {
-  Webhook webhook = 1;
-}
-
-message GetWebhookRequest {
-  string uuid = 1;
-}
-
-message GetWebhookResponse {
-  Webhook webhook = 1;
-}
-
-message ListWebhooksRequest {}
-
-message ListWebhooksResponse {
-  repeated Webhook webhooks = 1;
-}
-
-message DeleteWebhookRequest {
-  string uuid = 1;
-}
-
-message DeleteWebhookResponse {}
 
 message Key {
   string id = 1;

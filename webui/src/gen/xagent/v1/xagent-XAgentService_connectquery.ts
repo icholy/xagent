@@ -165,26 +165,6 @@ export const listWorkspaces = XAgentService.method.listWorkspaces;
 export const clearWorkspaces = XAgentService.method.clearWorkspaces;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.CreateWebhook
- */
-export const createWebhook = XAgentService.method.createWebhook;
-
-/**
- * @generated from rpc xagent.v1.XAgentService.GetWebhook
- */
-export const getWebhook = XAgentService.method.getWebhook;
-
-/**
- * @generated from rpc xagent.v1.XAgentService.ListWebhooks
- */
-export const listWebhooks = XAgentService.method.listWebhooks;
-
-/**
- * @generated from rpc xagent.v1.XAgentService.DeleteWebhook
- */
-export const deleteWebhook = XAgentService.method.deleteWebhook;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.CreateKey
  */
 export const createKey = XAgentService.method.createKey;
