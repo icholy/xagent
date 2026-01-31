@@ -60,6 +60,11 @@ export const deleteTask = XAgentService.method.deleteTask;
 export const archiveTask = XAgentService.method.archiveTask;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.UnarchiveTask
+ */
+export const unarchiveTask = XAgentService.method.unarchiveTask;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.CancelTask
  */
 export const cancelTask = XAgentService.method.cancelTask;
