@@ -34,21 +34,17 @@ func NewProvider(ctx context.Context) (*Provider, error) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
 		return &Provider{}, nil
 	}
-
 	exporter, err := otlptracehttp.New(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 	)
-
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-
 	return &Provider{tp: tp}, nil
 }
