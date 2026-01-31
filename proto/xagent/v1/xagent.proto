@@ -43,6 +43,9 @@ service XAgentService {
   rpc GetWebhook(GetWebhookRequest) returns (GetWebhookResponse);
   rpc ListWebhooks(ListWebhooksRequest) returns (ListWebhooksResponse);
   rpc DeleteWebhook(DeleteWebhookRequest) returns (DeleteWebhookResponse);
+  rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse);
+  rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
+  rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
 }
 
 message PingRequest {}
@@ -397,3 +400,32 @@ message DeleteWebhookRequest {
 }
 
 message DeleteWebhookResponse {}
+
+message Key {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message CreateKeyRequest {
+  string name = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message CreateKeyResponse {
+  Key key = 1;
+  string raw_token = 2;
+}
+
+message ListKeysRequest {}
+
+message ListKeysResponse {
+  repeated Key keys = 1;
+}
+
+message DeleteKeyRequest {
+  string id = 1;
+}
+
+message DeleteKeyResponse {}

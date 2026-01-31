@@ -135,6 +135,12 @@ const (
 	// XAgentServiceDeleteWebhookProcedure is the fully-qualified name of the XAgentService's
 	// DeleteWebhook RPC.
 	XAgentServiceDeleteWebhookProcedure = "/xagent.v1.XAgentService/DeleteWebhook"
+	// XAgentServiceCreateKeyProcedure is the fully-qualified name of the XAgentService's CreateKey RPC.
+	XAgentServiceCreateKeyProcedure = "/xagent.v1.XAgentService/CreateKey"
+	// XAgentServiceListKeysProcedure is the fully-qualified name of the XAgentService's ListKeys RPC.
+	XAgentServiceListKeysProcedure = "/xagent.v1.XAgentService/ListKeys"
+	// XAgentServiceDeleteKeyProcedure is the fully-qualified name of the XAgentService's DeleteKey RPC.
+	XAgentServiceDeleteKeyProcedure = "/xagent.v1.XAgentService/DeleteKey"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -175,6 +181,9 @@ type XAgentServiceClient interface {
 	GetWebhook(context.Context, *v1.GetWebhookRequest) (*v1.GetWebhookResponse, error)
 	ListWebhooks(context.Context, *v1.ListWebhooksRequest) (*v1.ListWebhooksResponse, error)
 	DeleteWebhook(context.Context, *v1.DeleteWebhookRequest) (*v1.DeleteWebhookResponse, error)
+	CreateKey(context.Context, *v1.CreateKeyRequest) (*v1.CreateKeyResponse, error)
+	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
+	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -404,6 +413,24 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("DeleteWebhook")),
 			connect.WithClientOptions(opts...),
 		),
+		createKey: connect.NewClient[v1.CreateKeyRequest, v1.CreateKeyResponse](
+			httpClient,
+			baseURL+XAgentServiceCreateKeyProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("CreateKey")),
+			connect.WithClientOptions(opts...),
+		),
+		listKeys: connect.NewClient[v1.ListKeysRequest, v1.ListKeysResponse](
+			httpClient,
+			baseURL+XAgentServiceListKeysProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ListKeys")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteKey: connect.NewClient[v1.DeleteKeyRequest, v1.DeleteKeyResponse](
+			httpClient,
+			baseURL+XAgentServiceDeleteKeyProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("DeleteKey")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -445,6 +472,9 @@ type xAgentServiceClient struct {
 	getWebhook         *connect.Client[v1.GetWebhookRequest, v1.GetWebhookResponse]
 	listWebhooks       *connect.Client[v1.ListWebhooksRequest, v1.ListWebhooksResponse]
 	deleteWebhook      *connect.Client[v1.DeleteWebhookRequest, v1.DeleteWebhookResponse]
+	createKey          *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
+	listKeys           *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
+	deleteKey          *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -771,6 +801,33 @@ func (c *xAgentServiceClient) DeleteWebhook(ctx context.Context, req *v1.DeleteW
 	return nil, err
 }
 
+// CreateKey calls xagent.v1.XAgentService.CreateKey.
+func (c *xAgentServiceClient) CreateKey(ctx context.Context, req *v1.CreateKeyRequest) (*v1.CreateKeyResponse, error) {
+	response, err := c.createKey.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// ListKeys calls xagent.v1.XAgentService.ListKeys.
+func (c *xAgentServiceClient) ListKeys(ctx context.Context, req *v1.ListKeysRequest) (*v1.ListKeysResponse, error) {
+	response, err := c.listKeys.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// DeleteKey calls xagent.v1.XAgentService.DeleteKey.
+func (c *xAgentServiceClient) DeleteKey(ctx context.Context, req *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error) {
+	response, err := c.deleteKey.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -809,6 +866,9 @@ type XAgentServiceHandler interface {
 	GetWebhook(context.Context, *v1.GetWebhookRequest) (*v1.GetWebhookResponse, error)
 	ListWebhooks(context.Context, *v1.ListWebhooksRequest) (*v1.ListWebhooksResponse, error)
 	DeleteWebhook(context.Context, *v1.DeleteWebhookRequest) (*v1.DeleteWebhookResponse, error)
+	CreateKey(context.Context, *v1.CreateKeyRequest) (*v1.CreateKeyResponse, error)
+	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
+	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1034,6 +1094,24 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("DeleteWebhook")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceCreateKeyHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceCreateKeyProcedure,
+		svc.CreateKey,
+		connect.WithSchema(xAgentServiceMethods.ByName("CreateKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceListKeysHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceListKeysProcedure,
+		svc.ListKeys,
+		connect.WithSchema(xAgentServiceMethods.ByName("ListKeys")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceDeleteKeyHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceDeleteKeyProcedure,
+		svc.DeleteKey,
+		connect.WithSchema(xAgentServiceMethods.ByName("DeleteKey")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1108,6 +1186,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListWebhooksHandler.ServeHTTP(w, r)
 		case XAgentServiceDeleteWebhookProcedure:
 			xAgentServiceDeleteWebhookHandler.ServeHTTP(w, r)
+		case XAgentServiceCreateKeyProcedure:
+			xAgentServiceCreateKeyHandler.ServeHTTP(w, r)
+		case XAgentServiceListKeysProcedure:
+			xAgentServiceListKeysHandler.ServeHTTP(w, r)
+		case XAgentServiceDeleteKeyProcedure:
+			xAgentServiceDeleteKeyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1259,4 +1343,16 @@ func (UnimplementedXAgentServiceHandler) ListWebhooks(context.Context, *v1.ListW
 
 func (UnimplementedXAgentServiceHandler) DeleteWebhook(context.Context, *v1.DeleteWebhookRequest) (*v1.DeleteWebhookResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteWebhook is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) CreateKey(context.Context, *v1.CreateKeyRequest) (*v1.CreateKeyResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateKey is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListKeys is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteKey is not implemented"))
 }

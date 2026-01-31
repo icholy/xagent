@@ -106,6 +106,7 @@ var ServerCommand = &cli.Command{
 			RedirectURI:   baseURL + "/auth/callback",
 			PostLogoutURI: baseURL,
 			EncryptionKey: key,
+			KeyValidator:  &storeKeyValidator{store: st},
 			Disable:       noAuth,
 		})
 		if err != nil {
@@ -152,4 +153,20 @@ var ServerCommand = &cli.Command{
 		slog.Info("server stopped")
 		return nil
 	},
+}
+
+// storeKeyValidator implements apiauth.KeyValidator using the store.
+type storeKeyValidator struct {
+	store *store.Store
+}
+
+func (v *storeKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*apiauth.UserInfo, error) {
+	key, err := v.store.GetKeyByHash(ctx, nil, keyHash)
+	if err != nil {
+		return nil, err
+	}
+	if key.IsExpired() {
+		return nil, fmt.Errorf("key expired")
+	}
+	return &apiauth.UserInfo{ID: key.Owner}, nil
 }
