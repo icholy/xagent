@@ -70,6 +70,16 @@ function TasksPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
+              Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
+            </Label>
+            <Switch
+              id="show-child-tasks"
+              checked={showChildTasks}
+              onCheckedChange={setShowChildTasks}
+            />
+          </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -88,16 +98,6 @@ function TasksPage() {
                 <X className="h-4 w-4" />
               </button>
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
-              Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
-            </Label>
-            <Switch
-              id="show-child-tasks"
-              checked={showChildTasks}
-              onCheckedChange={setShowChildTasks}
-            />
           </div>
           <Link to="/tasks/new">
             <Button>
