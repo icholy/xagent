@@ -43,9 +43,6 @@ var _ Client = &ClientMock{}
 //			CreateTaskFunc: func(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 //				panic("mock out the CreateTask method")
 //			},
-//			CreateWebhookFunc: func(contextMoqParam context.Context, createWebhookRequest *xagentv1.CreateWebhookRequest) (*xagentv1.CreateWebhookResponse, error) {
-//				panic("mock out the CreateWebhook method")
-//			},
 //			DeleteEventFunc: func(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
 //				panic("mock out the DeleteEvent method")
 //			},
@@ -54,9 +51,6 @@ var _ Client = &ClientMock{}
 //			},
 //			DeleteTaskFunc: func(contextMoqParam context.Context, deleteTaskRequest *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error) {
 //				panic("mock out the DeleteTask method")
-//			},
-//			DeleteWebhookFunc: func(contextMoqParam context.Context, deleteWebhookRequest *xagentv1.DeleteWebhookRequest) (*xagentv1.DeleteWebhookResponse, error) {
-//				panic("mock out the DeleteWebhook method")
 //			},
 //			FindLinksByURLFunc: func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
 //				panic("mock out the FindLinksByURL method")
@@ -72,9 +66,6 @@ var _ Client = &ClientMock{}
 //			},
 //			GetTaskDetailsFunc: func(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 //				panic("mock out the GetTaskDetails method")
-//			},
-//			GetWebhookFunc: func(contextMoqParam context.Context, getWebhookRequest *xagentv1.GetWebhookRequest) (*xagentv1.GetWebhookResponse, error) {
-//				panic("mock out the GetWebhook method")
 //			},
 //			ListChildTasksFunc: func(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
 //				panic("mock out the ListChildTasks method")
@@ -102,9 +93,6 @@ var _ Client = &ClientMock{}
 //			},
 //			ListTasksFunc: func(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 //				panic("mock out the ListTasks method")
-//			},
-//			ListWebhooksFunc: func(contextMoqParam context.Context, listWebhooksRequest *xagentv1.ListWebhooksRequest) (*xagentv1.ListWebhooksResponse, error) {
-//				panic("mock out the ListWebhooks method")
 //			},
 //			ListWorkspacesFunc: func(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
 //				panic("mock out the ListWorkspaces method")
@@ -167,9 +155,6 @@ type ClientMock struct {
 	// CreateTaskFunc mocks the CreateTask method.
 	CreateTaskFunc func(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error)
 
-	// CreateWebhookFunc mocks the CreateWebhook method.
-	CreateWebhookFunc func(contextMoqParam context.Context, createWebhookRequest *xagentv1.CreateWebhookRequest) (*xagentv1.CreateWebhookResponse, error)
-
 	// DeleteEventFunc mocks the DeleteEvent method.
 	DeleteEventFunc func(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error)
 
@@ -178,9 +163,6 @@ type ClientMock struct {
 
 	// DeleteTaskFunc mocks the DeleteTask method.
 	DeleteTaskFunc func(contextMoqParam context.Context, deleteTaskRequest *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error)
-
-	// DeleteWebhookFunc mocks the DeleteWebhook method.
-	DeleteWebhookFunc func(contextMoqParam context.Context, deleteWebhookRequest *xagentv1.DeleteWebhookRequest) (*xagentv1.DeleteWebhookResponse, error)
 
 	// FindLinksByURLFunc mocks the FindLinksByURL method.
 	FindLinksByURLFunc func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error)
@@ -196,9 +178,6 @@ type ClientMock struct {
 
 	// GetTaskDetailsFunc mocks the GetTaskDetails method.
 	GetTaskDetailsFunc func(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error)
-
-	// GetWebhookFunc mocks the GetWebhook method.
-	GetWebhookFunc func(contextMoqParam context.Context, getWebhookRequest *xagentv1.GetWebhookRequest) (*xagentv1.GetWebhookResponse, error)
 
 	// ListChildTasksFunc mocks the ListChildTasks method.
 	ListChildTasksFunc func(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error)
@@ -226,9 +205,6 @@ type ClientMock struct {
 
 	// ListTasksFunc mocks the ListTasks method.
 	ListTasksFunc func(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error)
-
-	// ListWebhooksFunc mocks the ListWebhooks method.
-	ListWebhooksFunc func(contextMoqParam context.Context, listWebhooksRequest *xagentv1.ListWebhooksRequest) (*xagentv1.ListWebhooksResponse, error)
 
 	// ListWorkspacesFunc mocks the ListWorkspaces method.
 	ListWorkspacesFunc func(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error)
@@ -318,13 +294,6 @@ type ClientMock struct {
 			// CreateTaskRequest is the createTaskRequest argument value.
 			CreateTaskRequest *xagentv1.CreateTaskRequest
 		}
-		// CreateWebhook holds details about calls to the CreateWebhook method.
-		CreateWebhook []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// CreateWebhookRequest is the createWebhookRequest argument value.
-			CreateWebhookRequest *xagentv1.CreateWebhookRequest
-		}
 		// DeleteEvent holds details about calls to the DeleteEvent method.
 		DeleteEvent []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -345,13 +314,6 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// DeleteTaskRequest is the deleteTaskRequest argument value.
 			DeleteTaskRequest *xagentv1.DeleteTaskRequest
-		}
-		// DeleteWebhook holds details about calls to the DeleteWebhook method.
-		DeleteWebhook []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// DeleteWebhookRequest is the deleteWebhookRequest argument value.
-			DeleteWebhookRequest *xagentv1.DeleteWebhookRequest
 		}
 		// FindLinksByURL holds details about calls to the FindLinksByURL method.
 		FindLinksByURL []struct {
@@ -387,13 +349,6 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// GetTaskDetailsRequest is the getTaskDetailsRequest argument value.
 			GetTaskDetailsRequest *xagentv1.GetTaskDetailsRequest
-		}
-		// GetWebhook holds details about calls to the GetWebhook method.
-		GetWebhook []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// GetWebhookRequest is the getWebhookRequest argument value.
-			GetWebhookRequest *xagentv1.GetWebhookRequest
 		}
 		// ListChildTasks holds details about calls to the ListChildTasks method.
 		ListChildTasks []struct {
@@ -457,13 +412,6 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// ListTasksRequest is the listTasksRequest argument value.
 			ListTasksRequest *xagentv1.ListTasksRequest
-		}
-		// ListWebhooks holds details about calls to the ListWebhooks method.
-		ListWebhooks []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// ListWebhooksRequest is the listWebhooksRequest argument value.
-			ListWebhooksRequest *xagentv1.ListWebhooksRequest
 		}
 		// ListWorkspaces holds details about calls to the ListWorkspaces method.
 		ListWorkspaces []struct {
@@ -544,17 +492,14 @@ type ClientMock struct {
 	lockCreateKey          sync.RWMutex
 	lockCreateLink         sync.RWMutex
 	lockCreateTask         sync.RWMutex
-	lockCreateWebhook      sync.RWMutex
 	lockDeleteEvent        sync.RWMutex
 	lockDeleteKey          sync.RWMutex
 	lockDeleteTask         sync.RWMutex
-	lockDeleteWebhook      sync.RWMutex
 	lockFindLinksByURL     sync.RWMutex
 	lockGetEvent           sync.RWMutex
 	lockGetProfile         sync.RWMutex
 	lockGetTask            sync.RWMutex
 	lockGetTaskDetails     sync.RWMutex
-	lockGetWebhook         sync.RWMutex
 	lockListChildTasks     sync.RWMutex
 	lockListEventTasks     sync.RWMutex
 	lockListEvents         sync.RWMutex
@@ -564,7 +509,6 @@ type ClientMock struct {
 	lockListLogs           sync.RWMutex
 	lockListRunnerTasks    sync.RWMutex
 	lockListTasks          sync.RWMutex
-	lockListWebhooks       sync.RWMutex
 	lockListWorkspaces     sync.RWMutex
 	lockPing               sync.RWMutex
 	lockProcessEvent       sync.RWMutex
@@ -865,42 +809,6 @@ func (mock *ClientMock) CreateTaskCalls() []struct {
 	return calls
 }
 
-// CreateWebhook calls CreateWebhookFunc.
-func (mock *ClientMock) CreateWebhook(contextMoqParam context.Context, createWebhookRequest *xagentv1.CreateWebhookRequest) (*xagentv1.CreateWebhookResponse, error) {
-	if mock.CreateWebhookFunc == nil {
-		panic("ClientMock.CreateWebhookFunc: method is nil but Client.CreateWebhook was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam      context.Context
-		CreateWebhookRequest *xagentv1.CreateWebhookRequest
-	}{
-		ContextMoqParam:      contextMoqParam,
-		CreateWebhookRequest: createWebhookRequest,
-	}
-	mock.lockCreateWebhook.Lock()
-	mock.calls.CreateWebhook = append(mock.calls.CreateWebhook, callInfo)
-	mock.lockCreateWebhook.Unlock()
-	return mock.CreateWebhookFunc(contextMoqParam, createWebhookRequest)
-}
-
-// CreateWebhookCalls gets all the calls that were made to CreateWebhook.
-// Check the length with:
-//
-//	len(mockedClient.CreateWebhookCalls())
-func (mock *ClientMock) CreateWebhookCalls() []struct {
-	ContextMoqParam      context.Context
-	CreateWebhookRequest *xagentv1.CreateWebhookRequest
-} {
-	var calls []struct {
-		ContextMoqParam      context.Context
-		CreateWebhookRequest *xagentv1.CreateWebhookRequest
-	}
-	mock.lockCreateWebhook.RLock()
-	calls = mock.calls.CreateWebhook
-	mock.lockCreateWebhook.RUnlock()
-	return calls
-}
-
 // DeleteEvent calls DeleteEventFunc.
 func (mock *ClientMock) DeleteEvent(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
 	if mock.DeleteEventFunc == nil {
@@ -1006,42 +914,6 @@ func (mock *ClientMock) DeleteTaskCalls() []struct {
 	mock.lockDeleteTask.RLock()
 	calls = mock.calls.DeleteTask
 	mock.lockDeleteTask.RUnlock()
-	return calls
-}
-
-// DeleteWebhook calls DeleteWebhookFunc.
-func (mock *ClientMock) DeleteWebhook(contextMoqParam context.Context, deleteWebhookRequest *xagentv1.DeleteWebhookRequest) (*xagentv1.DeleteWebhookResponse, error) {
-	if mock.DeleteWebhookFunc == nil {
-		panic("ClientMock.DeleteWebhookFunc: method is nil but Client.DeleteWebhook was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam      context.Context
-		DeleteWebhookRequest *xagentv1.DeleteWebhookRequest
-	}{
-		ContextMoqParam:      contextMoqParam,
-		DeleteWebhookRequest: deleteWebhookRequest,
-	}
-	mock.lockDeleteWebhook.Lock()
-	mock.calls.DeleteWebhook = append(mock.calls.DeleteWebhook, callInfo)
-	mock.lockDeleteWebhook.Unlock()
-	return mock.DeleteWebhookFunc(contextMoqParam, deleteWebhookRequest)
-}
-
-// DeleteWebhookCalls gets all the calls that were made to DeleteWebhook.
-// Check the length with:
-//
-//	len(mockedClient.DeleteWebhookCalls())
-func (mock *ClientMock) DeleteWebhookCalls() []struct {
-	ContextMoqParam      context.Context
-	DeleteWebhookRequest *xagentv1.DeleteWebhookRequest
-} {
-	var calls []struct {
-		ContextMoqParam      context.Context
-		DeleteWebhookRequest *xagentv1.DeleteWebhookRequest
-	}
-	mock.lockDeleteWebhook.RLock()
-	calls = mock.calls.DeleteWebhook
-	mock.lockDeleteWebhook.RUnlock()
 	return calls
 }
 
@@ -1222,42 +1094,6 @@ func (mock *ClientMock) GetTaskDetailsCalls() []struct {
 	mock.lockGetTaskDetails.RLock()
 	calls = mock.calls.GetTaskDetails
 	mock.lockGetTaskDetails.RUnlock()
-	return calls
-}
-
-// GetWebhook calls GetWebhookFunc.
-func (mock *ClientMock) GetWebhook(contextMoqParam context.Context, getWebhookRequest *xagentv1.GetWebhookRequest) (*xagentv1.GetWebhookResponse, error) {
-	if mock.GetWebhookFunc == nil {
-		panic("ClientMock.GetWebhookFunc: method is nil but Client.GetWebhook was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam   context.Context
-		GetWebhookRequest *xagentv1.GetWebhookRequest
-	}{
-		ContextMoqParam:   contextMoqParam,
-		GetWebhookRequest: getWebhookRequest,
-	}
-	mock.lockGetWebhook.Lock()
-	mock.calls.GetWebhook = append(mock.calls.GetWebhook, callInfo)
-	mock.lockGetWebhook.Unlock()
-	return mock.GetWebhookFunc(contextMoqParam, getWebhookRequest)
-}
-
-// GetWebhookCalls gets all the calls that were made to GetWebhook.
-// Check the length with:
-//
-//	len(mockedClient.GetWebhookCalls())
-func (mock *ClientMock) GetWebhookCalls() []struct {
-	ContextMoqParam   context.Context
-	GetWebhookRequest *xagentv1.GetWebhookRequest
-} {
-	var calls []struct {
-		ContextMoqParam   context.Context
-		GetWebhookRequest *xagentv1.GetWebhookRequest
-	}
-	mock.lockGetWebhook.RLock()
-	calls = mock.calls.GetWebhook
-	mock.lockGetWebhook.RUnlock()
 	return calls
 }
 
@@ -1582,42 +1418,6 @@ func (mock *ClientMock) ListTasksCalls() []struct {
 	mock.lockListTasks.RLock()
 	calls = mock.calls.ListTasks
 	mock.lockListTasks.RUnlock()
-	return calls
-}
-
-// ListWebhooks calls ListWebhooksFunc.
-func (mock *ClientMock) ListWebhooks(contextMoqParam context.Context, listWebhooksRequest *xagentv1.ListWebhooksRequest) (*xagentv1.ListWebhooksResponse, error) {
-	if mock.ListWebhooksFunc == nil {
-		panic("ClientMock.ListWebhooksFunc: method is nil but Client.ListWebhooks was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam     context.Context
-		ListWebhooksRequest *xagentv1.ListWebhooksRequest
-	}{
-		ContextMoqParam:     contextMoqParam,
-		ListWebhooksRequest: listWebhooksRequest,
-	}
-	mock.lockListWebhooks.Lock()
-	mock.calls.ListWebhooks = append(mock.calls.ListWebhooks, callInfo)
-	mock.lockListWebhooks.Unlock()
-	return mock.ListWebhooksFunc(contextMoqParam, listWebhooksRequest)
-}
-
-// ListWebhooksCalls gets all the calls that were made to ListWebhooks.
-// Check the length with:
-//
-//	len(mockedClient.ListWebhooksCalls())
-func (mock *ClientMock) ListWebhooksCalls() []struct {
-	ContextMoqParam     context.Context
-	ListWebhooksRequest *xagentv1.ListWebhooksRequest
-} {
-	var calls []struct {
-		ContextMoqParam     context.Context
-		ListWebhooksRequest *xagentv1.ListWebhooksRequest
-	}
-	mock.lockListWebhooks.RLock()
-	calls = mock.calls.ListWebhooks
-	mock.lockListWebhooks.RUnlock()
 	return calls
 }
 

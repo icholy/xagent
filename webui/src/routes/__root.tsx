@@ -62,12 +62,6 @@ function RootComponent() {
               Workspaces
             </Link>
             <Link
-              to="/webhooks"
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Webhooks
-            </Link>
-            <Link
               to="/keys"
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >

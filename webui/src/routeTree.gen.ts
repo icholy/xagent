@@ -11,11 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspacesIndexRouteImport } from './routes/workspaces.index'
-import { Route as WebhooksIndexRouteImport } from './routes/webhooks.index'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
 import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
-import { Route as WebhooksNewRouteImport } from './routes/webhooks.new'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
 import { Route as KeysNewRouteImport } from './routes/keys.new'
@@ -32,11 +30,6 @@ const WorkspacesIndexRoute = WorkspacesIndexRouteImport.update({
   path: '/workspaces/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WebhooksIndexRoute = WebhooksIndexRouteImport.update({
-  id: '/webhooks/',
-  path: '/webhooks/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TasksIndexRoute = TasksIndexRouteImport.update({
   id: '/tasks/',
   path: '/tasks/',
@@ -50,11 +43,6 @@ const KeysIndexRoute = KeysIndexRouteImport.update({
 const EventsIndexRoute = EventsIndexRouteImport.update({
   id: '/events/',
   path: '/events/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WebhooksNewRoute = WebhooksNewRouteImport.update({
-  id: '/webhooks/new',
-  path: '/webhooks/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasksNewRoute = TasksNewRouteImport.update({
@@ -90,11 +78,9 @@ export interface FileRoutesByFullPath {
   '/keys/new': typeof KeysNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
-  '/webhooks/new': typeof WebhooksNewRoute
   '/events': typeof EventsIndexRoute
   '/keys': typeof KeysIndexRoute
   '/tasks': typeof TasksIndexRoute
-  '/webhooks': typeof WebhooksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -104,11 +90,9 @@ export interface FileRoutesByTo {
   '/keys/new': typeof KeysNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
-  '/webhooks/new': typeof WebhooksNewRoute
   '/events': typeof EventsIndexRoute
   '/keys': typeof KeysIndexRoute
   '/tasks': typeof TasksIndexRoute
-  '/webhooks': typeof WebhooksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
 }
 export interface FileRoutesById {
@@ -119,11 +103,9 @@ export interface FileRoutesById {
   '/keys/new': typeof KeysNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
-  '/webhooks/new': typeof WebhooksNewRoute
   '/events/': typeof EventsIndexRoute
   '/keys/': typeof KeysIndexRoute
   '/tasks/': typeof TasksIndexRoute
-  '/webhooks/': typeof WebhooksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
 }
 export interface FileRouteTypes {
@@ -135,11 +117,9 @@ export interface FileRouteTypes {
     | '/keys/new'
     | '/tasks/$id'
     | '/tasks/new'
-    | '/webhooks/new'
     | '/events'
     | '/keys'
     | '/tasks'
-    | '/webhooks'
     | '/workspaces'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -149,11 +129,9 @@ export interface FileRouteTypes {
     | '/keys/new'
     | '/tasks/$id'
     | '/tasks/new'
-    | '/webhooks/new'
     | '/events'
     | '/keys'
     | '/tasks'
-    | '/webhooks'
     | '/workspaces'
   id:
     | '__root__'
@@ -163,11 +141,9 @@ export interface FileRouteTypes {
     | '/keys/new'
     | '/tasks/$id'
     | '/tasks/new'
-    | '/webhooks/new'
     | '/events/'
     | '/keys/'
     | '/tasks/'
-    | '/webhooks/'
     | '/workspaces/'
   fileRoutesById: FileRoutesById
 }
@@ -178,11 +154,9 @@ export interface RootRouteChildren {
   KeysNewRoute: typeof KeysNewRoute
   TasksIdRoute: typeof TasksIdRoute
   TasksNewRoute: typeof TasksNewRoute
-  WebhooksNewRoute: typeof WebhooksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
   KeysIndexRoute: typeof KeysIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
-  WebhooksIndexRoute: typeof WebhooksIndexRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
 }
 
@@ -200,13 +174,6 @@ declare module '@tanstack/react-router' {
       path: '/workspaces'
       fullPath: '/workspaces'
       preLoaderRoute: typeof WorkspacesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/webhooks/': {
-      id: '/webhooks/'
-      path: '/webhooks'
-      fullPath: '/webhooks'
-      preLoaderRoute: typeof WebhooksIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks/': {
@@ -228,13 +195,6 @@ declare module '@tanstack/react-router' {
       path: '/events'
       fullPath: '/events'
       preLoaderRoute: typeof EventsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/webhooks/new': {
-      id: '/webhooks/new'
-      path: '/webhooks/new'
-      fullPath: '/webhooks/new'
-      preLoaderRoute: typeof WebhooksNewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks/new': {
@@ -282,11 +242,9 @@ const rootRouteChildren: RootRouteChildren = {
   KeysNewRoute: KeysNewRoute,
   TasksIdRoute: TasksIdRoute,
   TasksNewRoute: TasksNewRoute,
-  WebhooksNewRoute: WebhooksNewRoute,
   EventsIndexRoute: EventsIndexRoute,
   KeysIndexRoute: KeysIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
-  WebhooksIndexRoute: WebhooksIndexRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
 }
 export const routeTree = rootRouteImport

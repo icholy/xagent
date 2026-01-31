@@ -66,13 +66,6 @@ type TaskLink struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type Webhook struct {
-	Uuid      string    `json:"uuid"`
-	Secret    string    `json:"secret"`
-	Owner     string    `json:"owner"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 type Workspace struct {
 	ID        int64     `json:"id"`
 	RunnerID  string    `json:"runner_id"`
