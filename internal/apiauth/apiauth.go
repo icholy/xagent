@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"connectrpc.com/connect"
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
@@ -36,6 +37,11 @@ func WithUser(ctx context.Context, user *UserInfo) context.Context {
 	return context.WithValue(ctx, userInfoKey{}, user)
 }
 
+// KeyValidator validates API keys and returns the associated user.
+type KeyValidator interface {
+	ValidateKey(ctx context.Context, keyHash string) (*UserInfo, error)
+}
+
 // Config holds the configuration for ZITADEL authentication.
 type Config struct {
 	Domain        string
@@ -45,6 +51,8 @@ type Config struct {
 	PostLogoutURI string
 	EncryptionKey []byte
 	Scopes        []string
+	// KeyValidator validates xat_ API keys.
+	KeyValidator KeyValidator
 	// Disable authentication (for development only).
 	// When true, all requests are authenticated as a default "dev" user.
 	Disable bool
@@ -59,6 +67,8 @@ type Auth struct {
 	cookie *authentication.Interceptor[*openid.DefaultContext]
 	// bearer token middleware
 	bearer *middleware.Interceptor[*oauth.IntrospectionContext]
+	// keyValidator validates xat_ API keys
+	keyValidator KeyValidator
 	// handler handles /auth/* routes (login, callback, logout)
 	handler http.Handler
 }
@@ -107,9 +117,10 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		return nil, err
 	}
 	return &Auth{
-		cookie:  authentication.Middleware(authN),
-		bearer:  middleware.New(authZ),
-		handler: authN,
+		cookie:       authentication.Middleware(authN),
+		bearer:       middleware.New(authZ),
+		keyValidator: cfg.KeyValidator,
+		handler:      authN,
 	}, nil
 }
 
@@ -124,6 +135,20 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check for xat_ API key in Authorization header
+			if a.keyValidator != nil {
+				if rawKey, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && IsAPIKey(rawKey) {
+					hash := HashKey(rawKey)
+					user, err := a.keyValidator.ValidateKey(r.Context(), hash)
+					if err != nil || user == nil {
+						http.Error(w, "invalid API key", http.StatusUnauthorized)
+						return
+					}
+					r = r.WithContext(WithUser(r.Context(), user))
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 			// CLI/device clients send X-Auth-Type: bearer
 			if r.Header.Get(AuthTypeHeader) == "bearer" {
 				a.bearer.RequireAuthorization()(next).ServeHTTP(w, r)
@@ -143,6 +168,18 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check for xat_ API key in Authorization header
+			if a.keyValidator != nil {
+				if rawKey, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && IsAPIKey(rawKey) {
+					hash := HashKey(rawKey)
+					user, err := a.keyValidator.ValidateKey(r.Context(), hash)
+					if err == nil && user != nil {
+						r = r.WithContext(WithUser(r.Context(), user))
+					}
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 			// CLI/device clients send X-Auth-Type: bearer
 			if r.Header.Get(AuthTypeHeader) == "bearer" {
 				a.bearer.CheckAuthorization()(next).ServeHTTP(w, r)
@@ -207,8 +244,12 @@ func (a *Auth) attachDefaultUser() func(http.Handler) http.Handler {
 }
 
 // User returns the authenticated user's information.
-// Works with both Bearer token and cookie authentication.
+// Works with API keys, Bearer tokens, and cookie authentication.
 func (a *Auth) User(r *http.Request) *UserInfo {
+	// If UserInfo already set (e.g., by API key in CheckAuth), return it
+	if user := User(r.Context()); user != nil {
+		return user
+	}
 	if r.Header.Get(AuthTypeHeader) == "bearer" {
 		if ctx := a.bearer.Context(r.Context()); ctx != nil {
 			return &UserInfo{

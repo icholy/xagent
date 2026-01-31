@@ -34,6 +34,9 @@ var _ Client = &ClientMock{}
 //			CreateEventFunc: func(contextMoqParam context.Context, createEventRequest *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
 //				panic("mock out the CreateEvent method")
 //			},
+//			CreateKeyFunc: func(contextMoqParam context.Context, createKeyRequest *xagentv1.CreateKeyRequest) (*xagentv1.CreateKeyResponse, error) {
+//				panic("mock out the CreateKey method")
+//			},
 //			CreateLinkFunc: func(contextMoqParam context.Context, createLinkRequest *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 //				panic("mock out the CreateLink method")
 //			},
@@ -45,6 +48,9 @@ var _ Client = &ClientMock{}
 //			},
 //			DeleteEventFunc: func(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
 //				panic("mock out the DeleteEvent method")
+//			},
+//			DeleteKeyFunc: func(contextMoqParam context.Context, deleteKeyRequest *xagentv1.DeleteKeyRequest) (*xagentv1.DeleteKeyResponse, error) {
+//				panic("mock out the DeleteKey method")
 //			},
 //			DeleteTaskFunc: func(contextMoqParam context.Context, deleteTaskRequest *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error) {
 //				panic("mock out the DeleteTask method")
@@ -81,6 +87,9 @@ var _ Client = &ClientMock{}
 //			},
 //			ListEventsByTaskFunc: func(contextMoqParam context.Context, listEventsByTaskRequest *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 //				panic("mock out the ListEventsByTask method")
+//			},
+//			ListKeysFunc: func(contextMoqParam context.Context, listKeysRequest *xagentv1.ListKeysRequest) (*xagentv1.ListKeysResponse, error) {
+//				panic("mock out the ListKeys method")
 //			},
 //			ListLinksFunc: func(contextMoqParam context.Context, listLinksRequest *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
 //				panic("mock out the ListLinks method")
@@ -149,6 +158,9 @@ type ClientMock struct {
 	// CreateEventFunc mocks the CreateEvent method.
 	CreateEventFunc func(contextMoqParam context.Context, createEventRequest *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error)
 
+	// CreateKeyFunc mocks the CreateKey method.
+	CreateKeyFunc func(contextMoqParam context.Context, createKeyRequest *xagentv1.CreateKeyRequest) (*xagentv1.CreateKeyResponse, error)
+
 	// CreateLinkFunc mocks the CreateLink method.
 	CreateLinkFunc func(contextMoqParam context.Context, createLinkRequest *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error)
 
@@ -160,6 +172,9 @@ type ClientMock struct {
 
 	// DeleteEventFunc mocks the DeleteEvent method.
 	DeleteEventFunc func(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error)
+
+	// DeleteKeyFunc mocks the DeleteKey method.
+	DeleteKeyFunc func(contextMoqParam context.Context, deleteKeyRequest *xagentv1.DeleteKeyRequest) (*xagentv1.DeleteKeyResponse, error)
 
 	// DeleteTaskFunc mocks the DeleteTask method.
 	DeleteTaskFunc func(contextMoqParam context.Context, deleteTaskRequest *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error)
@@ -196,6 +211,9 @@ type ClientMock struct {
 
 	// ListEventsByTaskFunc mocks the ListEventsByTask method.
 	ListEventsByTaskFunc func(contextMoqParam context.Context, listEventsByTaskRequest *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error)
+
+	// ListKeysFunc mocks the ListKeys method.
+	ListKeysFunc func(contextMoqParam context.Context, listKeysRequest *xagentv1.ListKeysRequest) (*xagentv1.ListKeysResponse, error)
 
 	// ListLinksFunc mocks the ListLinks method.
 	ListLinksFunc func(contextMoqParam context.Context, listLinksRequest *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error)
@@ -279,6 +297,13 @@ type ClientMock struct {
 			// CreateEventRequest is the createEventRequest argument value.
 			CreateEventRequest *xagentv1.CreateEventRequest
 		}
+		// CreateKey holds details about calls to the CreateKey method.
+		CreateKey []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// CreateKeyRequest is the createKeyRequest argument value.
+			CreateKeyRequest *xagentv1.CreateKeyRequest
+		}
 		// CreateLink holds details about calls to the CreateLink method.
 		CreateLink []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -306,6 +331,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// DeleteEventRequest is the deleteEventRequest argument value.
 			DeleteEventRequest *xagentv1.DeleteEventRequest
+		}
+		// DeleteKey holds details about calls to the DeleteKey method.
+		DeleteKey []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// DeleteKeyRequest is the deleteKeyRequest argument value.
+			DeleteKeyRequest *xagentv1.DeleteKeyRequest
 		}
 		// DeleteTask holds details about calls to the DeleteTask method.
 		DeleteTask []struct {
@@ -390,6 +422,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// ListEventsByTaskRequest is the listEventsByTaskRequest argument value.
 			ListEventsByTaskRequest *xagentv1.ListEventsByTaskRequest
+		}
+		// ListKeys holds details about calls to the ListKeys method.
+		ListKeys []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// ListKeysRequest is the listKeysRequest argument value.
+			ListKeysRequest *xagentv1.ListKeysRequest
 		}
 		// ListLinks holds details about calls to the ListLinks method.
 		ListLinks []struct {
@@ -502,10 +541,12 @@ type ClientMock struct {
 	lockCancelTask         sync.RWMutex
 	lockClearWorkspaces    sync.RWMutex
 	lockCreateEvent        sync.RWMutex
+	lockCreateKey          sync.RWMutex
 	lockCreateLink         sync.RWMutex
 	lockCreateTask         sync.RWMutex
 	lockCreateWebhook      sync.RWMutex
 	lockDeleteEvent        sync.RWMutex
+	lockDeleteKey          sync.RWMutex
 	lockDeleteTask         sync.RWMutex
 	lockDeleteWebhook      sync.RWMutex
 	lockFindLinksByURL     sync.RWMutex
@@ -518,6 +559,7 @@ type ClientMock struct {
 	lockListEventTasks     sync.RWMutex
 	lockListEvents         sync.RWMutex
 	lockListEventsByTask   sync.RWMutex
+	lockListKeys           sync.RWMutex
 	lockListLinks          sync.RWMutex
 	lockListLogs           sync.RWMutex
 	lockListRunnerTasks    sync.RWMutex
@@ -715,6 +757,42 @@ func (mock *ClientMock) CreateEventCalls() []struct {
 	return calls
 }
 
+// CreateKey calls CreateKeyFunc.
+func (mock *ClientMock) CreateKey(contextMoqParam context.Context, createKeyRequest *xagentv1.CreateKeyRequest) (*xagentv1.CreateKeyResponse, error) {
+	if mock.CreateKeyFunc == nil {
+		panic("ClientMock.CreateKeyFunc: method is nil but Client.CreateKey was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam  context.Context
+		CreateKeyRequest *xagentv1.CreateKeyRequest
+	}{
+		ContextMoqParam:  contextMoqParam,
+		CreateKeyRequest: createKeyRequest,
+	}
+	mock.lockCreateKey.Lock()
+	mock.calls.CreateKey = append(mock.calls.CreateKey, callInfo)
+	mock.lockCreateKey.Unlock()
+	return mock.CreateKeyFunc(contextMoqParam, createKeyRequest)
+}
+
+// CreateKeyCalls gets all the calls that were made to CreateKey.
+// Check the length with:
+//
+//	len(mockedClient.CreateKeyCalls())
+func (mock *ClientMock) CreateKeyCalls() []struct {
+	ContextMoqParam  context.Context
+	CreateKeyRequest *xagentv1.CreateKeyRequest
+} {
+	var calls []struct {
+		ContextMoqParam  context.Context
+		CreateKeyRequest *xagentv1.CreateKeyRequest
+	}
+	mock.lockCreateKey.RLock()
+	calls = mock.calls.CreateKey
+	mock.lockCreateKey.RUnlock()
+	return calls
+}
+
 // CreateLink calls CreateLinkFunc.
 func (mock *ClientMock) CreateLink(contextMoqParam context.Context, createLinkRequest *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	if mock.CreateLinkFunc == nil {
@@ -856,6 +934,42 @@ func (mock *ClientMock) DeleteEventCalls() []struct {
 	mock.lockDeleteEvent.RLock()
 	calls = mock.calls.DeleteEvent
 	mock.lockDeleteEvent.RUnlock()
+	return calls
+}
+
+// DeleteKey calls DeleteKeyFunc.
+func (mock *ClientMock) DeleteKey(contextMoqParam context.Context, deleteKeyRequest *xagentv1.DeleteKeyRequest) (*xagentv1.DeleteKeyResponse, error) {
+	if mock.DeleteKeyFunc == nil {
+		panic("ClientMock.DeleteKeyFunc: method is nil but Client.DeleteKey was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam  context.Context
+		DeleteKeyRequest *xagentv1.DeleteKeyRequest
+	}{
+		ContextMoqParam:  contextMoqParam,
+		DeleteKeyRequest: deleteKeyRequest,
+	}
+	mock.lockDeleteKey.Lock()
+	mock.calls.DeleteKey = append(mock.calls.DeleteKey, callInfo)
+	mock.lockDeleteKey.Unlock()
+	return mock.DeleteKeyFunc(contextMoqParam, deleteKeyRequest)
+}
+
+// DeleteKeyCalls gets all the calls that were made to DeleteKey.
+// Check the length with:
+//
+//	len(mockedClient.DeleteKeyCalls())
+func (mock *ClientMock) DeleteKeyCalls() []struct {
+	ContextMoqParam  context.Context
+	DeleteKeyRequest *xagentv1.DeleteKeyRequest
+} {
+	var calls []struct {
+		ContextMoqParam  context.Context
+		DeleteKeyRequest *xagentv1.DeleteKeyRequest
+	}
+	mock.lockDeleteKey.RLock()
+	calls = mock.calls.DeleteKey
+	mock.lockDeleteKey.RUnlock()
 	return calls
 }
 
@@ -1288,6 +1402,42 @@ func (mock *ClientMock) ListEventsByTaskCalls() []struct {
 	mock.lockListEventsByTask.RLock()
 	calls = mock.calls.ListEventsByTask
 	mock.lockListEventsByTask.RUnlock()
+	return calls
+}
+
+// ListKeys calls ListKeysFunc.
+func (mock *ClientMock) ListKeys(contextMoqParam context.Context, listKeysRequest *xagentv1.ListKeysRequest) (*xagentv1.ListKeysResponse, error) {
+	if mock.ListKeysFunc == nil {
+		panic("ClientMock.ListKeysFunc: method is nil but Client.ListKeys was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam context.Context
+		ListKeysRequest *xagentv1.ListKeysRequest
+	}{
+		ContextMoqParam: contextMoqParam,
+		ListKeysRequest: listKeysRequest,
+	}
+	mock.lockListKeys.Lock()
+	mock.calls.ListKeys = append(mock.calls.ListKeys, callInfo)
+	mock.lockListKeys.Unlock()
+	return mock.ListKeysFunc(contextMoqParam, listKeysRequest)
+}
+
+// ListKeysCalls gets all the calls that were made to ListKeys.
+// Check the length with:
+//
+//	len(mockedClient.ListKeysCalls())
+func (mock *ClientMock) ListKeysCalls() []struct {
+	ContextMoqParam context.Context
+	ListKeysRequest *xagentv1.ListKeysRequest
+} {
+	var calls []struct {
+		ContextMoqParam context.Context
+		ListKeysRequest *xagentv1.ListKeysRequest
+	}
+	mock.lockListKeys.RLock()
+	calls = mock.calls.ListKeys
+	mock.lockListKeys.RUnlock()
 	return calls
 }
 

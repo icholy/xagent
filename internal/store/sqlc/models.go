@@ -5,6 +5,7 @@
 package sqlc
 
 import (
+	"database/sql"
 	"time"
 )
 
@@ -20,6 +21,15 @@ type Event struct {
 type EventTask struct {
 	EventID int64 `json:"event_id"`
 	TaskID  int64 `json:"task_id"`
+}
+
+type Key struct {
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	TokenHash string       `json:"token_hash"`
+	Owner     string       `json:"owner"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	CreatedAt time.Time    `json:"created_at"`
 }
 
 type Log struct {
