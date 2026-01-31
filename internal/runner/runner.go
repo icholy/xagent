@@ -504,37 +504,7 @@ func (r *Runner) copyBinary(ctx context.Context, containerID, image string) erro
 func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model.Task, ws *workspace.Workspace, token string) error {
 	taskIDStr := strconv.FormatInt(task.ID, 10)
 
-	// Convert workspace to agent config format
-	cfg := agent.Config{
-		Type:       ws.Agent.Type,
-		Cwd:        ws.Agent.Cwd,
-		Prompt:     ws.Agent.Prompt,
-		McpServers: make(map[string]agent.McpServer),
-		Commands:   ws.Commands,
-	}
-
-	// Copy agent-specific config
-	if ws.Agent.Claude != nil {
-		cfg.Claude = &agent.ClaudeOptions{
-			Model: ws.Agent.Claude.Model,
-		}
-	}
-	if ws.Agent.Copilot != nil {
-		cfg.Copilot = &agent.CopilotOptions{
-			Model: ws.Agent.Copilot.Model,
-		}
-	}
-	if ws.Agent.Cursor != nil {
-		cfg.Cursor = &agent.CursorOptions{
-			Model: ws.Agent.Cursor.Model,
-		}
-	}
-	if ws.Agent.Dummy != nil {
-		cfg.Dummy = &agent.DummyOptions{
-			Sleep:     ws.Agent.Dummy.Sleep,
-			ToolCalls: ws.Agent.Dummy.ToolCalls,
-		}
-	}
+	cfg := ws.AgentConfig()
 
 	// Inject xagent MCP server for link creation
 	cfg.McpServers["xagent"] = agent.McpServer{
@@ -548,17 +518,6 @@ func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model
 			"--workspace", task.Workspace,
 			"--token", token,
 		},
-	}
-
-	for name, srv := range ws.Agent.McpServers {
-		cfg.McpServers[name] = agent.McpServer{
-			Type:    srv.Type,
-			URL:     srv.URL,
-			Headers: srv.Headers,
-			Command: srv.Command,
-			Args:    srv.Args,
-			Env:     srv.Env,
-		}
 	}
 
 	data, err := cfg.Tar(taskIDStr)

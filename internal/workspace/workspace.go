@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"strings"
@@ -191,4 +192,38 @@ func (c *Config) Get(name string) (*Workspace, error) {
 		return nil, fmt.Errorf("workspace %q not found", name)
 	}
 	return &ws, nil
+}
+
+// AgentConfig converts the workspace agent configuration into an agent.Config.
+func (w *Workspace) AgentConfig() agent.Config {
+	cfg := agent.Config{
+		Type:       w.Agent.Type,
+		Cwd:        w.Agent.Cwd,
+		Prompt:     w.Agent.Prompt,
+		McpServers: make(map[string]agent.McpServer),
+		Commands:   w.Commands,
+	}
+	if w.Agent.Claude != nil {
+		cfg.Claude = &agent.ClaudeOptions{
+			Model: w.Agent.Claude.Model,
+		}
+	}
+	if w.Agent.Copilot != nil {
+		cfg.Copilot = &agent.CopilotOptions{
+			Model: w.Agent.Copilot.Model,
+		}
+	}
+	if w.Agent.Cursor != nil {
+		cfg.Cursor = &agent.CursorOptions{
+			Model: w.Agent.Cursor.Model,
+		}
+	}
+	if w.Agent.Dummy != nil {
+		cfg.Dummy = &agent.DummyOptions{
+			Sleep:     w.Agent.Dummy.Sleep,
+			ToolCalls: w.Agent.Dummy.ToolCalls,
+		}
+	}
+	maps.Copy(cfg.McpServers, w.Agent.McpServers)
+	return cfg
 }
