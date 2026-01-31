@@ -14,6 +14,7 @@ import type { Task, TaskLink, Event, LogEntry } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
 import { canArchiveTask, canUnarchiveTask, canCancelTask, canRestartTask, isArchivedTask } from '@/lib/task'
+import { ArchivedBadge } from '@/components/archived-badge'
 import {
   Table,
   TableBody,
@@ -207,6 +208,7 @@ function TaskDetail() {
             <span className="text-muted-foreground">Status:</span>
             <StatusBadge task={task} />
             <CommandBadge task={task} />
+            <ArchivedBadge task={task} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Created:</span>
