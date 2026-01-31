@@ -1,10 +1,12 @@
 package command
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 
 	"github.com/icholy/xagent/internal/deviceauth"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -35,18 +37,35 @@ var LoginCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
-		if err := deviceauth.DeviceFlow(ctx, deviceauth.DeviceFlowOptions{
+		accessToken, err := deviceauth.DeviceFlow(ctx, deviceauth.DeviceFlowOptions{
 			DiscoveryURL: deviceauth.DiscoveryURL(serverAddr),
-			ServerURL:    serverAddr,
-			TokenFile:    cmd.String("token-file"),
-			KeyName:      cmd.String("key-name"),
 			Display: func(resp *oidc.DeviceAuthorizationResponse) error {
 				fmt.Printf("\nTo authenticate, visit: %s\n\n", resp.VerificationURIComplete)
 				fmt.Println("Waiting for authentication...")
 				return nil
 			},
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
+		}
+
+		// Use the short-lived OIDC token to create an API key
+		client := xagentclient.New(xagentclient.Options{
+			BaseURL:  serverAddr,
+			Token:    accessToken,
+			AuthType: "bearer",
+		})
+		resp, err := client.CreateKey(ctx, &xagentv1.CreateKeyRequest{
+			Name: cmp.Or(cmd.String("key-name"), "cli"),
+		})
+		if err != nil {
+			return fmt.Errorf("create API key: %w", err)
+		}
+
+		// Save the API key to the token file
+		token := &deviceauth.Token{APIKey: resp.RawToken}
+		if err := deviceauth.SaveToken(cmd.String("token-file"), token); err != nil {
+			return fmt.Errorf("save token: %w", err)
 		}
 
 		fmt.Println("Authentication successful!")

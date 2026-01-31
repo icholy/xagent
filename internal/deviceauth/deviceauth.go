@@ -8,8 +8,6 @@ import (
 	"os"
 	"time"
 
-	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
@@ -57,23 +55,20 @@ type DeviceFlowOptions struct {
 	DiscoveryURL string // Full URL to the discovery endpoint
 	Issuer       string // ZITADEL issuer URL
 	ClientID     string // Native app client ID
-	ServerURL    string // Base URL of the xagent server (used to create API key)
-	TokenFile    string // Path to token storage file
-	KeyName      string // Name for the API key
 	Display      func(auth *oidc.DeviceAuthorizationResponse) error
 }
 
-// DeviceFlow initiates a device authorization flow and creates an API key.
-func DeviceFlow(ctx context.Context, opts DeviceFlowOptions) error {
+// DeviceFlow initiates a device authorization flow and returns the access token.
+func DeviceFlow(ctx context.Context, opts DeviceFlowOptions) (string, error) {
 	if opts.Display == nil {
-		return fmt.Errorf("DeviceFlow requires Display to be set")
+		return "", fmt.Errorf("DeviceFlow requires Display to be set")
 	}
 
 	// Fetch discovery config if DiscoveryURL is provided
 	if opts.DiscoveryURL != "" {
 		discovery, err := FetchDiscoveryConfig(opts.DiscoveryURL)
 		if err != nil {
-			return fmt.Errorf("fetch discovery config: %w", err)
+			return "", fmt.Errorf("fetch discovery config: %w", err)
 		}
 		if opts.ClientID == "" {
 			opts.ClientID = discovery.ClientID
@@ -81,7 +76,7 @@ func DeviceFlow(ctx context.Context, opts DeviceFlowOptions) error {
 		if opts.Issuer == "" {
 			issuer, err := discovery.Issuer()
 			if err != nil {
-				return fmt.Errorf("parse issuer: %w", err)
+				return "", fmt.Errorf("parse issuer: %w", err)
 			}
 			opts.Issuer = issuer
 		}
@@ -97,48 +92,22 @@ func DeviceFlow(ctx context.Context, opts DeviceFlowOptions) error {
 		scopes,
 	)
 	if err != nil {
-		return fmt.Errorf("create relying party: %w", err)
+		return "", fmt.Errorf("create relying party: %w", err)
 	}
 
 	deviceAuth, err := rp.DeviceAuthorization(ctx, scopes, provider, nil)
 	if err != nil {
-		return fmt.Errorf("device authorization: %w", err)
+		return "", fmt.Errorf("device authorization: %w", err)
 	}
 	if err := opts.Display(deviceAuth); err != nil {
-		return fmt.Errorf("display: %w", err)
+		return "", fmt.Errorf("display: %w", err)
 	}
 	interval := time.Duration(cmp.Or(deviceAuth.Interval, 5)) * time.Second
 	tokens, err := rp.DeviceAccessToken(ctx, deviceAuth.DeviceCode, interval, provider)
 	if err != nil {
-		return fmt.Errorf("device access token: %w", err)
+		return "", fmt.Errorf("device access token: %w", err)
 	}
 
-	// Use the short-lived OIDC token to create an API key
-	apiKey, err := createAPIKey(ctx, opts.ServerURL, opts.KeyName, tokens.AccessToken)
-	if err != nil {
-		return fmt.Errorf("create API key: %w", err)
-	}
-
-	token := &Token{APIKey: apiKey}
-	if err := SaveToken(opts.TokenFile, token); err != nil {
-		return fmt.Errorf("save token: %w", err)
-	}
-	return nil
-}
-
-// createAPIKey uses a short-lived OIDC bearer token to create an API key on the server.
-func createAPIKey(ctx context.Context, serverURL, keyName, accessToken string) (string, error) {
-	client := xagentclient.New(xagentclient.Options{
-		BaseURL:  serverURL,
-		Token:    accessToken,
-		AuthType: "bearer",
-	})
-	resp, err := client.CreateKey(ctx, &xagentv1.CreateKeyRequest{
-		Name: cmp.Or(keyName, "runner"),
-	})
-	if err != nil {
-		return "", err
-	}
-	return resp.RawToken, nil
+	return tokens.AccessToken, nil
 }
 
