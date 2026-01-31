@@ -53,6 +53,7 @@ func TestGetTask(t *testing.T) {
 		},
 		Status:    "pending",
 		Command:   "start",
+		Actions:   &xagentv1.TaskActions{Cancel: true},
 		Version:   1,
 		CreatedAt: getResp.Task.CreatedAt, // Copy timestamps since we can't predict them
 		UpdatedAt: getResp.Task.UpdatedAt,
@@ -133,6 +134,7 @@ func TestCreateTask(t *testing.T) {
 		},
 		Status:    "pending",
 		Command:   "start",
+		Actions:   &xagentv1.TaskActions{Cancel: true},
 		Version:   1,
 		CreatedAt: resp.Task.CreatedAt,
 		UpdatedAt: resp.Task.UpdatedAt,
