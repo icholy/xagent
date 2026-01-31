@@ -27,11 +27,19 @@ var LoginCommand = &cli.Command{
 			Value:   "data/token.json",
 			Sources: cli.EnvVars("XAGENT_TOKEN_FILE"),
 		},
+		&cli.StringFlag{
+			Name:  "key-name",
+			Usage: "Name for the API key",
+			Value: "cli",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		serverAddr := cmd.String("server")
 		auth, err := deviceauth.New(deviceauth.Options{
-			DiscoveryURL: deviceauth.DiscoveryURL(cmd.String("server")),
+			DiscoveryURL: deviceauth.DiscoveryURL(serverAddr),
+			ServerURL:    serverAddr,
 			TokenFile:    cmd.String("token-file"),
+			KeyName:      cmd.String("key-name"),
 			Display: func(resp *oidc.DeviceAuthorizationResponse) error {
 				fmt.Printf("\nTo authenticate, visit: %s\n\n", resp.VerificationURIComplete)
 				fmt.Println("Waiting for authentication...")

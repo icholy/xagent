@@ -5,27 +5,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"sync"
 	"time"
 
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
-var scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail, oidc.ScopeOfflineAccess}
+var scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail}
 
-// Token stores the access and refresh tokens
+// Token stores the API key
 type Token struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-	Expiry       time.Time `json:"expiry"`
+	APIKey string `json:"api_key"`
 }
 
-// Valid reports whether the access token is valid
+// Valid reports whether the token has a non-empty API key
 func (t *Token) Valid() bool {
-	return t != nil && t.AccessToken != "" && t.Expiry.After(time.Now().Add(time.Minute))
+	return t != nil && t.APIKey != ""
 }
 
 // Options configures the Auth client
@@ -33,11 +32,13 @@ type Options struct {
 	DiscoveryURL string // Full URL to the discovery endpoint (e.g., http://localhost:6464/device/config)
 	Issuer       string // ZITADEL issuer URL (e.g., https://instance.zitadel.cloud)
 	ClientID     string // Native app client ID
+	ServerURL    string // Base URL of the xagent server (used to create API key)
 	TokenFile    string // Path to token storage file
+	KeyName      string // Name for the API key (e.g., "runner-<hostname>")
 	Display      func(auth *oidc.DeviceAuthorizationResponse) error
 }
 
-// Auth handles device authorization flow and token management
+// Auth handles device authorization flow and API key management
 type Auth struct {
 	config   Options
 	provider rp.RelyingParty
@@ -100,29 +101,20 @@ func (a *Auth) init(ctx context.Context) error {
 }
 
 // ErrNoToken is returned when no valid token is available
-var ErrNoToken = fmt.Errorf("no valid token available, run DeviceFlow() to authenticate")
+var ErrNoToken = fmt.Errorf("no valid token available, run login to authenticate")
 
-// Token returns a valid access token, refreshing if needed.
-// Returns ErrNoToken if no token exists or refresh fails.
-func (a *Auth) Token(ctx context.Context) (string, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	// Token is still valid
+// Token returns the API key.
+// Returns ErrNoToken if no API key exists.
+func (a *Auth) Token(_ context.Context) (string, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	if a.token.Valid() {
-		return a.token.AccessToken, nil
-	}
-	// Try to refresh
-	if a.token != nil && a.token.RefreshToken != "" {
-		if err := a.refresh(ctx); err != nil {
-			slog.Error("token refresh failed", "error", err)
-		} else {
-			return a.token.AccessToken, nil
-		}
+		return a.token.APIKey, nil
 	}
 	return "", ErrNoToken
 }
 
-// DeviceFlow initiates a new device authorization flow, even if a valid token exists
+// DeviceFlow initiates a device authorization flow and creates an API key.
 func (a *Auth) DeviceFlow(ctx context.Context) error {
 	if a.config.Display == nil {
 		return fmt.Errorf("DeviceFlow requires Display to be set")
@@ -144,33 +136,15 @@ func (a *Auth) DeviceFlow(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("device access token: %w", err)
 	}
-	a.token = &Token{
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
 
-		// TODO: maybe use the exp from the JWT ?
-		Expiry: time.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second),
-	}
-	if err := a.save(); err != nil {
-		return fmt.Errorf("save token: %w", err)
-	}
-	return nil
-}
-
-// refresh the tokens
-func (a *Auth) refresh(ctx context.Context) error {
-	if err := a.init(ctx); err != nil {
-		return err
-	}
-	tokens, err := rp.RefreshTokens[*oidc.IDTokenClaims](ctx, a.provider, a.token.RefreshToken, "", "")
+	// Use the short-lived OIDC token to create an API key
+	apiKey, err := a.createAPIKey(ctx, tokens.AccessToken)
 	if err != nil {
-		return fmt.Errorf("refresh: %w", err)
+		return fmt.Errorf("create API key: %w", err)
 	}
-	a.token.AccessToken = tokens.AccessToken
-	a.token.Expiry = tokens.Expiry
-	// Update refresh token if a new one was issued
-	if tokens.RefreshToken != "" {
-		a.token.RefreshToken = tokens.RefreshToken
+
+	a.token = &Token{
+		APIKey: apiKey,
 	}
 	if err := a.save(); err != nil {
 		return fmt.Errorf("save token: %w", err)
@@ -178,7 +152,34 @@ func (a *Auth) refresh(ctx context.Context) error {
 	return nil
 }
 
-// load the tokens from the a file
+// createAPIKey uses a short-lived OIDC bearer token to create an API key on the server.
+func (a *Auth) createAPIKey(ctx context.Context, accessToken string) (string, error) {
+	source := staticTokenSource{token: accessToken, bearer: true}
+	client := xagentclient.New(a.config.ServerURL, source)
+	keyName := cmp.Or(a.config.KeyName, "runner")
+	resp, err := client.CreateKey(ctx, &xagentv1.CreateKeyRequest{
+		Name: keyName,
+	})
+	if err != nil {
+		return "", err
+	}
+	return resp.RawToken, nil
+}
+
+type staticTokenSource struct {
+	token  string
+	bearer bool
+}
+
+func (s staticTokenSource) Token(_ context.Context) (string, error) {
+	return s.token, nil
+}
+
+func (s staticTokenSource) IsBearer() bool {
+	return s.bearer
+}
+
+// load the token from a file
 func (a *Auth) load() error {
 	data, err := os.ReadFile(a.config.TokenFile)
 	if err != nil {
@@ -195,7 +196,7 @@ func (a *Auth) load() error {
 	return nil
 }
 
-// save the tokens to a file
+// save the token to a file
 func (a *Auth) save() error {
 	if a.config.TokenFile == "" {
 		return nil
