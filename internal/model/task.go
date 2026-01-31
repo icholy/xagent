@@ -8,72 +8,36 @@ import (
 )
 
 // TaskStatus represents the current state of a task.
-type TaskStatus string
+type TaskStatus = xagentv1.TaskStatus
 
 const (
-	TaskStatusPending    TaskStatus = "pending"
-	TaskStatusRunning    TaskStatus = "running"
-	TaskStatusRestarting TaskStatus = "restarting"
-	TaskStatusCancelling TaskStatus = "cancelling"
-	TaskStatusCompleted  TaskStatus = "completed"
-	TaskStatusFailed     TaskStatus = "failed"
-	TaskStatusCancelled  TaskStatus = "cancelled"
+	TaskStatusPending    = xagentv1.TaskStatus_TASK_STATUS_PENDING
+	TaskStatusRunning    = xagentv1.TaskStatus_TASK_STATUS_RUNNING
+	TaskStatusRestarting = xagentv1.TaskStatus_TASK_STATUS_RESTARTING
+	TaskStatusCancelling = xagentv1.TaskStatus_TASK_STATUS_CANCELLING
+	TaskStatusCompleted  = xagentv1.TaskStatus_TASK_STATUS_COMPLETED
+	TaskStatusFailed     = xagentv1.TaskStatus_TASK_STATUS_FAILED
+	TaskStatusCancelled  = xagentv1.TaskStatus_TASK_STATUS_CANCELLED
 )
-
-var taskStatusToProto = map[TaskStatus]xagentv1.TaskStatus{
-	TaskStatusPending:    xagentv1.TaskStatus_TASK_STATUS_PENDING,
-	TaskStatusRunning:    xagentv1.TaskStatus_TASK_STATUS_RUNNING,
-	TaskStatusRestarting: xagentv1.TaskStatus_TASK_STATUS_RESTARTING,
-	TaskStatusCancelling: xagentv1.TaskStatus_TASK_STATUS_CANCELLING,
-	TaskStatusCompleted:  xagentv1.TaskStatus_TASK_STATUS_COMPLETED,
-	TaskStatusFailed:     xagentv1.TaskStatus_TASK_STATUS_FAILED,
-	TaskStatusCancelled:  xagentv1.TaskStatus_TASK_STATUS_CANCELLED,
-}
-
-var taskStatusFromProto = map[xagentv1.TaskStatus]TaskStatus{
-	xagentv1.TaskStatus_TASK_STATUS_PENDING:    TaskStatusPending,
-	xagentv1.TaskStatus_TASK_STATUS_RUNNING:    TaskStatusRunning,
-	xagentv1.TaskStatus_TASK_STATUS_RESTARTING: TaskStatusRestarting,
-	xagentv1.TaskStatus_TASK_STATUS_CANCELLING: TaskStatusCancelling,
-	xagentv1.TaskStatus_TASK_STATUS_COMPLETED:  TaskStatusCompleted,
-	xagentv1.TaskStatus_TASK_STATUS_FAILED:     TaskStatusFailed,
-	xagentv1.TaskStatus_TASK_STATUS_CANCELLED:  TaskStatusCancelled,
-}
 
 // TaskCommand represents a command to be executed by the runner.
-type TaskCommand string
+type TaskCommand = xagentv1.TaskCommand
 
 const (
-	TaskCommandRestart TaskCommand = "restart"
-	TaskCommandStop    TaskCommand = "stop"
-	TaskCommandStart   TaskCommand = "start"
+	TaskCommandUnspecified = xagentv1.TaskCommand_TASK_COMMAND_UNSPECIFIED
+	TaskCommandRestart     = xagentv1.TaskCommand_TASK_COMMAND_RESTART
+	TaskCommandStop        = xagentv1.TaskCommand_TASK_COMMAND_STOP
+	TaskCommandStart       = xagentv1.TaskCommand_TASK_COMMAND_START
 )
 
-var taskCommandToProto = map[TaskCommand]xagentv1.TaskCommand{
-	"":                 xagentv1.TaskCommand_TASK_COMMAND_UNSPECIFIED,
-	TaskCommandRestart: xagentv1.TaskCommand_TASK_COMMAND_RESTART,
-	TaskCommandStop:    xagentv1.TaskCommand_TASK_COMMAND_STOP,
-	TaskCommandStart:   xagentv1.TaskCommand_TASK_COMMAND_START,
-}
+// RunnerEventType represents the type of event reported by the runner.
+type RunnerEventType = xagentv1.RunnerEventType
 
-var taskCommandFromProto = map[xagentv1.TaskCommand]TaskCommand{
-	xagentv1.TaskCommand_TASK_COMMAND_UNSPECIFIED: "",
-	xagentv1.TaskCommand_TASK_COMMAND_RESTART:     TaskCommandRestart,
-	xagentv1.TaskCommand_TASK_COMMAND_STOP:        TaskCommandStop,
-	xagentv1.TaskCommand_TASK_COMMAND_START:       TaskCommandStart,
-}
-
-var runnerEventTypeToProto = map[RunnerEventType]xagentv1.RunnerEventType{
-	RunnerEventStarted: xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STARTED,
-	RunnerEventStopped: xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STOPPED,
-	RunnerEventFailed:  xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED,
-}
-
-var runnerEventTypeFromProto = map[xagentv1.RunnerEventType]RunnerEventType{
-	xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STARTED: RunnerEventStarted,
-	xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STOPPED: RunnerEventStopped,
-	xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED:  RunnerEventFailed,
-}
+const (
+	RunnerEventStarted = xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STARTED
+	RunnerEventStopped = xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_STOPPED
+	RunnerEventFailed  = xagentv1.RunnerEventType_RUNNER_EVENT_TYPE_FAILED
+)
 
 // Instruction represents a task instruction with text and optional source URL.
 type Instruction struct {
@@ -127,8 +91,8 @@ func (t *Task) Proto() *xagentv1.Task {
 		Runner:       t.Runner,
 		Workspace:    t.Workspace,
 		Instructions: instructions,
-		Status:       taskStatusToProto[t.Status],
-		Command:      taskCommandToProto[t.Command],
+		Status:       t.Status,
+		Command:      t.Command,
 		Version:      t.Version,
 		Archived:     t.Archived,
 		CreatedAt:    timestamppb.New(t.CreatedAt),
@@ -163,23 +127,14 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		Runner:       pb.Runner,
 		Workspace:    pb.Workspace,
 		Instructions: instructions,
-		Status:       taskStatusFromProto[pb.Status],
-		Command:      taskCommandFromProto[pb.Command],
+		Status:       pb.Status,
+		Command:      pb.Command,
 		Version:      pb.Version,
 		Archived:     pb.Archived,
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
 	}
 }
-
-// RunnerEventType represents the type of event reported by the runner.
-type RunnerEventType string
-
-const (
-	RunnerEventStarted RunnerEventType = "started"
-	RunnerEventStopped RunnerEventType = "stopped"
-	RunnerEventFailed  RunnerEventType = "failed"
-)
 
 // RunnerEvent represents an event from the runner about a task's container.
 type RunnerEvent struct {
@@ -193,7 +148,7 @@ type RunnerEvent struct {
 func (r *RunnerEvent) Proto() *xagentv1.RunnerEvent {
 	return &xagentv1.RunnerEvent{
 		TaskId:    r.TaskID,
-		Event:     runnerEventTypeToProto[r.Event],
+		Event:     r.Event,
 		Version:   r.Version,
 		Reconcile: r.Reconcile,
 	}
@@ -203,7 +158,7 @@ func (r *RunnerEvent) Proto() *xagentv1.RunnerEvent {
 func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 	return RunnerEvent{
 		TaskID:    pb.TaskId,
-		Event:     runnerEventTypeFromProto[pb.Event],
+		Event:     pb.Event,
 		Version:   pb.Version,
 		Reconcile: pb.Reconcile,
 	}
@@ -247,7 +202,7 @@ func (t *Task) applyRunnerEventStarted() bool {
 	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning:
 		if t.Command == TaskCommandRestart || t.Command == TaskCommandStart {
 			t.Status = TaskStatusRunning
-			t.Command = ""
+			t.Command = TaskCommandUnspecified
 			return true
 		}
 		return false
@@ -266,7 +221,7 @@ func (t *Task) applyRunnerEventStopped() bool {
 	case TaskStatusRunning:
 		if t.Command == TaskCommandStop {
 			t.Status = TaskStatusCancelled
-			t.Command = ""
+			t.Command = TaskCommandUnspecified
 			return true
 		}
 		if t.Command == TaskCommandStart {
@@ -276,7 +231,7 @@ func (t *Task) applyRunnerEventStopped() bool {
 			// Keep command as "start" so runner will start it
 			return true
 		}
-		if t.Command == "" {
+		if t.Command == TaskCommandUnspecified {
 			t.Status = TaskStatusCompleted
 			return true
 		}
@@ -284,7 +239,7 @@ func (t *Task) applyRunnerEventStopped() bool {
 	case TaskStatusCancelling:
 		if t.Command == TaskCommandStop {
 			t.Status = TaskStatusCancelled
-			t.Command = ""
+			t.Command = TaskCommandUnspecified
 			return true
 		}
 		return false
@@ -297,7 +252,7 @@ func (t *Task) applyRunnerEventFailed() bool {
 	switch t.Status {
 	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
 		t.Status = TaskStatusFailed
-		t.Command = ""
+		t.Command = TaskCommandUnspecified
 		return true
 	default:
 		return false
@@ -306,7 +261,7 @@ func (t *Task) applyRunnerEventFailed() bool {
 
 // CanArchive returns true if the task can be archived.
 func (t *Task) CanArchive() bool {
-	if t.Archived || t.Command != "" {
+	if t.Archived || t.Command != TaskCommandUnspecified {
 		return false
 	}
 	switch t.Status {
@@ -371,7 +326,7 @@ func (t *Task) Cancel() bool {
 		t.Version++
 	case TaskStatusPending:
 		t.Status = TaskStatusCancelled
-		t.Command = ""
+		t.Command = TaskCommandUnspecified
 	}
 	return true
 }

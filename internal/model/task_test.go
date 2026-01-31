@@ -358,7 +358,7 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 				Status: TaskStatusRunning,
 			},
 			event: RunnerEvent{
-				Event: RunnerEventType("unknown"),
+				Event: RunnerEventType(99),
 			},
 			changed: false,
 		},

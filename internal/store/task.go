@@ -4,11 +4,47 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
+
+var taskStatusToDB = map[model.TaskStatus]string{
+	model.TaskStatusPending:    "pending",
+	model.TaskStatusRunning:    "running",
+	model.TaskStatusRestarting: "restarting",
+	model.TaskStatusCancelling: "cancelling",
+	model.TaskStatusCompleted:  "completed",
+	model.TaskStatusFailed:     "failed",
+	model.TaskStatusCancelled:  "cancelled",
+}
+
+var taskStatusFromDB = map[string]model.TaskStatus{
+	"pending":    model.TaskStatusPending,
+	"running":    model.TaskStatusRunning,
+	"restarting": model.TaskStatusRestarting,
+	"cancelling": model.TaskStatusCancelling,
+	"completed":  model.TaskStatusCompleted,
+	"failed":     model.TaskStatusFailed,
+	"cancelled":  model.TaskStatusCancelled,
+}
+
+var taskCommandToDB = map[model.TaskCommand]string{
+	xagentv1.TaskCommand_TASK_COMMAND_UNSPECIFIED: "",
+	model.TaskCommandRestart:                      "restart",
+	model.TaskCommandStop:                          "stop",
+	model.TaskCommandStart:                         "start",
+}
+
+var taskCommandFromDB = map[string]model.TaskCommand{
+	"":        xagentv1.TaskCommand_TASK_COMMAND_UNSPECIFIED,
+	"restart": model.TaskCommandRestart,
+	"stop":    model.TaskCommandStop,
+	"start":   model.TaskCommandStart,
+}
 
 func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	instructions, err := json.Marshal(task.Instructions)
@@ -22,8 +58,8 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 		Runner:       task.Runner,
 		Workspace:    task.Workspace,
 		Instructions: string(instructions),
-		Status:       string(task.Status),
-		Command:      string(task.Command),
+		Status:       taskStatusToDB[task.Status],
+		Command:      taskCommandToDB[task.Command],
 		Version:      task.Version,
 		Owner:        task.Owner,
 		CreatedAt:    now,
@@ -107,8 +143,8 @@ func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 		Runner:       task.Runner,
 		Workspace:    task.Workspace,
 		Instructions: string(instructions),
-		Status:       string(task.Status),
-		Command:      string(task.Command),
+		Status:       taskStatusToDB[task.Status],
+		Command:      taskCommandToDB[task.Command],
 		Version:      task.Version,
 		UpdatedAt:    task.UpdatedAt,
 		Archived:     task.Archived,
@@ -129,6 +165,14 @@ func toModelTask(row sqlc.Task) (*model.Task, error) {
 	if err := json.Unmarshal([]byte(row.Instructions), &instructions); err != nil {
 		return nil, err
 	}
+	status, ok := taskStatusFromDB[row.Status]
+	if !ok {
+		return nil, fmt.Errorf("unknown task status: %q", row.Status)
+	}
+	command, ok := taskCommandFromDB[row.Command]
+	if !ok {
+		return nil, fmt.Errorf("unknown task command: %q", row.Command)
+	}
 	return &model.Task{
 		ID:           row.ID,
 		Name:         row.Name,
@@ -136,8 +180,8 @@ func toModelTask(row sqlc.Task) (*model.Task, error) {
 		Runner:       row.Runner,
 		Workspace:    row.Workspace,
 		Instructions: instructions,
-		Status:       model.TaskStatus(row.Status),
-		Command:      model.TaskCommand(row.Command),
+		Status:       status,
+		Command:      command,
 		Version:      row.Version,
 		Owner:        row.Owner,
 		Archived:     row.Archived,
