@@ -2,7 +2,6 @@ package otelx
 
 import (
 	"context"
-	"errors"
 	"os"
 	"time"
 
@@ -12,20 +11,19 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-// Provider manages the OpenTelemetry trace provider and exporter.
+// Provider manages the OpenTelemetry trace provider.
 type Provider struct {
-	tp       *sdktrace.TracerProvider
-	exporter sdktrace.SpanExporter
+	tp *sdktrace.TracerProvider
 }
 
-// Shutdown gracefully shuts down the trace provider and exporter.
+// Shutdown gracefully shuts down the trace provider.
 func (p *Provider) Shutdown(ctx context.Context) error {
 	if p.tp == nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	return errors.Join(p.tp.Shutdown(ctx), p.exporter.Shutdown(ctx))
+	return p.tp.Shutdown(ctx)
 }
 
 // NewProvider initializes OpenTelemetry.
@@ -52,5 +50,5 @@ func NewProvider(ctx context.Context) (*Provider, error) {
 		propagation.Baggage{},
 	))
 
-	return &Provider{tp: tp, exporter: exporter}, nil
+	return &Provider{tp: tp}, nil
 }
