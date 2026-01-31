@@ -404,6 +404,7 @@ func TestTask_Archive(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			task := tt.before
+			assert.Equal(t, task.CanArchive(), tt.want)
 			got := task.Archive()
 			assert.Equal(t, got, tt.want)
 			assert.DeepEqual(t, task, tt.after)
@@ -471,6 +472,7 @@ func TestTask_Cancel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			task := tt.before
+			assert.Equal(t, task.CanCancel(), tt.want)
 			got := task.Cancel()
 			assert.Equal(t, got, tt.want)
 			assert.DeepEqual(t, task, tt.after)
@@ -538,6 +540,7 @@ func TestTask_Restart(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			task := tt.before
+			assert.Equal(t, task.CanRestart(), tt.want)
 			got := task.Restart()
 			assert.Equal(t, got, tt.want)
 			assert.DeepEqual(t, task, tt.after)
@@ -605,6 +608,7 @@ func TestTask_Start(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			task := tt.before
+			assert.Equal(t, task.CanStart(), tt.want)
 			got := task.Start()
 			assert.Equal(t, got, tt.want)
 			assert.DeepEqual(t, task, tt.after)
