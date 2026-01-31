@@ -189,6 +189,11 @@ func (t *Task) applyRunnerEventStarted() bool {
 			return true
 		}
 		return false
+	case TaskStatusCancelled:
+		t.Status = TaskStatusCancelling
+		t.Command = TaskCommandStop
+		t.Version++
+		return true
 	default:
 		return false
 	}

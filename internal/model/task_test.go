@@ -99,6 +99,21 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: false,
 		},
 		{
+			name: "started: cancelled -> cancelling with stop",
+			before: Task{
+				Status: TaskStatusCancelled,
+			},
+			after: Task{
+				Status:  TaskStatusCancelling,
+				Command: TaskCommandStop,
+				Version: 1,
+			},
+			event: RunnerEvent{
+				Event: RunnerEventStarted,
+			},
+			changed: true,
+		},
+		{
 			name: "started: completed status returns false",
 			before: Task{
 				Status: TaskStatusCompleted,
