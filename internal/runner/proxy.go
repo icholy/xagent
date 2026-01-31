@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/icholy/xagent/internal/xmcp"
@@ -85,6 +86,15 @@ func (p *AgentProxy) Start() error {
 	p.proxy = proxy
 	p.log.Debug("started proxy", "socket", p.SocketPath())
 	return nil
+}
+
+// SignToken creates a signed JWT for the given task.
+func (p *AgentProxy) SignToken(task *model.Task) (string, error) {
+	return agentauth.SignToken(p.privateKey, &agentauth.TaskClaims{
+		TaskID:    task.ID,
+		Workspace: task.Workspace,
+		Runner:    task.Runner,
+	})
 }
 
 // Close stops the proxy.

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -36,7 +35,6 @@ type Runner struct {
 	docker      *client.Client
 	client      xagentclient.Client
 	proxy       *AgentProxy
-	privateKey  ed25519.PrivateKey
 	prebuiltDir string
 	workspaces  *workspace.Config
 	runnerID    string
@@ -92,7 +90,6 @@ func New(opts Options) (*Runner, error) {
 		docker:      docker,
 		client:      xagentclient.New(opts.ServerURL, opts.Auth),
 		proxy:       proxy,
-		privateKey:  privateKey,
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
@@ -363,11 +360,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	}
 
 	// Generate JWT for this task
-	token, err := agentauth.SignToken(r.privateKey, &agentauth.TaskClaims{
-		TaskID:    task.ID,
-		Workspace: task.Workspace,
-		Runner:    task.Runner,
-	})
+	token, err := r.proxy.SignToken(task)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
