@@ -366,13 +366,6 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 
 	wc := &ws.Container
 
-	// Build environment variables
-	env := make([]string, 0, len(wc.Environment)+1)
-	env = append(env, fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID))
-	for k, v := range wc.Environment {
-		env = append(env, k+"="+v)
-	}
-
 	name := fmt.Sprintf("xagent-%d", task.ID)
 	r.log.Info("creating container", "task", task.ID, "name", name, "image", wc.Image, "workspace", task.Workspace)
 
@@ -390,7 +383,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 				"--task", fmt.Sprint(task.ID),
 				"--token", token,
 			},
-			Env:        env,
+			Env:        append(wc.Environ(), fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID)),
 			WorkingDir: wc.WorkingDir,
 		},
 		&container.HostConfig{

@@ -99,6 +99,15 @@ type Container struct {
 	Environment map[string]string `yaml:"environment"`
 }
 
+// Environ returns the environment variables as a slice of "key=value" strings.
+func (c *Container) Environ() []string {
+	env := make([]string, 0, len(c.Environment))
+	for k, v := range c.Environment {
+		env = append(env, k+"="+v)
+	}
+	return env
+}
+
 func (c *Container) Validate() error {
 	if c.Image == "" {
 		return fmt.Errorf("image is required")
