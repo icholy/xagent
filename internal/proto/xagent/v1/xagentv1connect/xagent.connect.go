@@ -123,6 +123,18 @@ const (
 	// XAgentServiceClearWorkspacesProcedure is the fully-qualified name of the XAgentService's
 	// ClearWorkspaces RPC.
 	XAgentServiceClearWorkspacesProcedure = "/xagent.v1.XAgentService/ClearWorkspaces"
+	// XAgentServiceCreateWebhookProcedure is the fully-qualified name of the XAgentService's
+	// CreateWebhook RPC.
+	XAgentServiceCreateWebhookProcedure = "/xagent.v1.XAgentService/CreateWebhook"
+	// XAgentServiceGetWebhookProcedure is the fully-qualified name of the XAgentService's GetWebhook
+	// RPC.
+	XAgentServiceGetWebhookProcedure = "/xagent.v1.XAgentService/GetWebhook"
+	// XAgentServiceListWebhooksProcedure is the fully-qualified name of the XAgentService's
+	// ListWebhooks RPC.
+	XAgentServiceListWebhooksProcedure = "/xagent.v1.XAgentService/ListWebhooks"
+	// XAgentServiceDeleteWebhookProcedure is the fully-qualified name of the XAgentService's
+	// DeleteWebhook RPC.
+	XAgentServiceDeleteWebhookProcedure = "/xagent.v1.XAgentService/DeleteWebhook"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -159,6 +171,10 @@ type XAgentServiceClient interface {
 	RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error)
 	ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error)
 	ClearWorkspaces(context.Context, *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error)
+	CreateWebhook(context.Context, *v1.CreateWebhookRequest) (*v1.CreateWebhookResponse, error)
+	GetWebhook(context.Context, *v1.GetWebhookRequest) (*v1.GetWebhookResponse, error)
+	ListWebhooks(context.Context, *v1.ListWebhooksRequest) (*v1.ListWebhooksResponse, error)
+	DeleteWebhook(context.Context, *v1.DeleteWebhookRequest) (*v1.DeleteWebhookResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -364,6 +380,30 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("ClearWorkspaces")),
 			connect.WithClientOptions(opts...),
 		),
+		createWebhook: connect.NewClient[v1.CreateWebhookRequest, v1.CreateWebhookResponse](
+			httpClient,
+			baseURL+XAgentServiceCreateWebhookProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("CreateWebhook")),
+			connect.WithClientOptions(opts...),
+		),
+		getWebhook: connect.NewClient[v1.GetWebhookRequest, v1.GetWebhookResponse](
+			httpClient,
+			baseURL+XAgentServiceGetWebhookProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GetWebhook")),
+			connect.WithClientOptions(opts...),
+		),
+		listWebhooks: connect.NewClient[v1.ListWebhooksRequest, v1.ListWebhooksResponse](
+			httpClient,
+			baseURL+XAgentServiceListWebhooksProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ListWebhooks")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteWebhook: connect.NewClient[v1.DeleteWebhookRequest, v1.DeleteWebhookResponse](
+			httpClient,
+			baseURL+XAgentServiceDeleteWebhookProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("DeleteWebhook")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -401,6 +441,10 @@ type xAgentServiceClient struct {
 	registerWorkspaces *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
 	listWorkspaces     *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
 	clearWorkspaces    *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
+	createWebhook      *connect.Client[v1.CreateWebhookRequest, v1.CreateWebhookResponse]
+	getWebhook         *connect.Client[v1.GetWebhookRequest, v1.GetWebhookResponse]
+	listWebhooks       *connect.Client[v1.ListWebhooksRequest, v1.ListWebhooksResponse]
+	deleteWebhook      *connect.Client[v1.DeleteWebhookRequest, v1.DeleteWebhookResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -691,6 +735,42 @@ func (c *xAgentServiceClient) ClearWorkspaces(ctx context.Context, req *v1.Clear
 	return nil, err
 }
 
+// CreateWebhook calls xagent.v1.XAgentService.CreateWebhook.
+func (c *xAgentServiceClient) CreateWebhook(ctx context.Context, req *v1.CreateWebhookRequest) (*v1.CreateWebhookResponse, error) {
+	response, err := c.createWebhook.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// GetWebhook calls xagent.v1.XAgentService.GetWebhook.
+func (c *xAgentServiceClient) GetWebhook(ctx context.Context, req *v1.GetWebhookRequest) (*v1.GetWebhookResponse, error) {
+	response, err := c.getWebhook.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// ListWebhooks calls xagent.v1.XAgentService.ListWebhooks.
+func (c *xAgentServiceClient) ListWebhooks(ctx context.Context, req *v1.ListWebhooksRequest) (*v1.ListWebhooksResponse, error) {
+	response, err := c.listWebhooks.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// DeleteWebhook calls xagent.v1.XAgentService.DeleteWebhook.
+func (c *xAgentServiceClient) DeleteWebhook(ctx context.Context, req *v1.DeleteWebhookRequest) (*v1.DeleteWebhookResponse, error) {
+	response, err := c.deleteWebhook.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -725,6 +805,10 @@ type XAgentServiceHandler interface {
 	RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error)
 	ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error)
 	ClearWorkspaces(context.Context, *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error)
+	CreateWebhook(context.Context, *v1.CreateWebhookRequest) (*v1.CreateWebhookResponse, error)
+	GetWebhook(context.Context, *v1.GetWebhookRequest) (*v1.GetWebhookResponse, error)
+	ListWebhooks(context.Context, *v1.ListWebhooksRequest) (*v1.ListWebhooksResponse, error)
+	DeleteWebhook(context.Context, *v1.DeleteWebhookRequest) (*v1.DeleteWebhookResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -926,6 +1010,30 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("ClearWorkspaces")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceCreateWebhookHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceCreateWebhookProcedure,
+		svc.CreateWebhook,
+		connect.WithSchema(xAgentServiceMethods.ByName("CreateWebhook")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceGetWebhookHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGetWebhookProcedure,
+		svc.GetWebhook,
+		connect.WithSchema(xAgentServiceMethods.ByName("GetWebhook")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceListWebhooksHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceListWebhooksProcedure,
+		svc.ListWebhooks,
+		connect.WithSchema(xAgentServiceMethods.ByName("ListWebhooks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceDeleteWebhookHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceDeleteWebhookProcedure,
+		svc.DeleteWebhook,
+		connect.WithSchema(xAgentServiceMethods.ByName("DeleteWebhook")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -992,6 +1100,14 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListWorkspacesHandler.ServeHTTP(w, r)
 		case XAgentServiceClearWorkspacesProcedure:
 			xAgentServiceClearWorkspacesHandler.ServeHTTP(w, r)
+		case XAgentServiceCreateWebhookProcedure:
+			xAgentServiceCreateWebhookHandler.ServeHTTP(w, r)
+		case XAgentServiceGetWebhookProcedure:
+			xAgentServiceGetWebhookHandler.ServeHTTP(w, r)
+		case XAgentServiceListWebhooksProcedure:
+			xAgentServiceListWebhooksHandler.ServeHTTP(w, r)
+		case XAgentServiceDeleteWebhookProcedure:
+			xAgentServiceDeleteWebhookHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1127,4 +1243,20 @@ func (UnimplementedXAgentServiceHandler) ListWorkspaces(context.Context, *v1.Lis
 
 func (UnimplementedXAgentServiceHandler) ClearWorkspaces(context.Context, *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ClearWorkspaces is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) CreateWebhook(context.Context, *v1.CreateWebhookRequest) (*v1.CreateWebhookResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateWebhook is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) GetWebhook(context.Context, *v1.GetWebhookRequest) (*v1.GetWebhookResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetWebhook is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ListWebhooks(context.Context, *v1.ListWebhooksRequest) (*v1.ListWebhooksResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListWebhooks is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) DeleteWebhook(context.Context, *v1.DeleteWebhookRequest) (*v1.DeleteWebhookResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteWebhook is not implemented"))
 }

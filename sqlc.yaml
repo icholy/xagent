@@ -9,3 +9,6 @@ sql:
         out: "internal/store/sqlc"
         emit_json_tags: true
         emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "string"
