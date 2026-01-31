@@ -82,7 +82,7 @@ var ServerCommand = &cli.Command{
 		noAuth := cmd.Bool("no-auth")
 
 		// Initialize OpenTelemetry (configured via OTEL_EXPORTER_OTLP_ENDPOINT env var)
-		otel, err := otelx.NewProvider(ctx)
+		otel, err := otelx.Setup(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
 		}
