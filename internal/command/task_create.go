@@ -54,14 +54,11 @@ var TaskCreateCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverURL := cmd.String("server")
-		auth, err := deviceauth.New(deviceauth.Options{
-			DiscoveryURL: deviceauth.DiscoveryURL(serverURL),
-			TokenFile:    cmd.String("token-file"),
-		})
+		token, err := deviceauth.LoadToken(cmd.String("token-file"))
 		if err != nil {
-			return fmt.Errorf("failed to initialize auth: %w", err)
+			return fmt.Errorf("failed to load token: %w", err)
 		}
-		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: auth})
+		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: token})
 
 		texts := cmd.StringSlice("instruction")
 		instructions := make([]*xagentv1.Instruction, len(texts))

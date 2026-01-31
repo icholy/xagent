@@ -35,7 +35,7 @@ var LoginCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
-		auth, err := deviceauth.New(deviceauth.Options{
+		if err := deviceauth.DeviceFlow(ctx, deviceauth.DeviceFlowOptions{
 			DiscoveryURL: deviceauth.DiscoveryURL(serverAddr),
 			ServerURL:    serverAddr,
 			TokenFile:    cmd.String("token-file"),
@@ -45,12 +45,7 @@ var LoginCommand = &cli.Command{
 				fmt.Println("Waiting for authentication...")
 				return nil
 			},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to initialize auth: %w", err)
-		}
-
-		if err := auth.DeviceFlow(ctx); err != nil {
+		}); err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
 
