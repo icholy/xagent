@@ -183,3 +183,18 @@ export const listWebhooks = XAgentService.method.listWebhooks;
  * @generated from rpc xagent.v1.XAgentService.DeleteWebhook
  */
 export const deleteWebhook = XAgentService.method.deleteWebhook;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.CreateKey
+ */
+export const createKey = XAgentService.method.createKey;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.ListKeys
+ */
+export const listKeys = XAgentService.method.listKeys;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.DeleteKey
+ */
+export const deleteKey = XAgentService.method.deleteKey;
