@@ -61,14 +61,7 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 	shutdown := func(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		var errs []error
-		if err := tp.Shutdown(ctx); err != nil {
-			errs = append(errs, err)
-		}
-		if err := exporter.Shutdown(ctx); err != nil {
-			errs = append(errs, err)
-		}
-		return errors.Join(errs...)
+		return errors.Join(tp.Shutdown(ctx), exporter.Shutdown(ctx))
 	}
 
 	return shutdown, nil
