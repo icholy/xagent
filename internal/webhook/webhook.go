@@ -15,10 +15,10 @@ import (
 	"strings"
 
 	"github.com/andygrunwald/go-jira/v2/cloud"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/githubx"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/xagentclient"
 )
 
 // Event represents an xagent webhook event.
@@ -33,27 +33,29 @@ type Publisher interface {
 	Publish(event *Event) error
 }
 
-// SQSPublisher publishes events to an SQS queue.
-type SQSPublisher struct {
-	Client   *sqs.Client
-	QueueURL string
+// RPCPublisher publishes events directly to the xagent server via RPC.
+type RPCPublisher struct {
+	Client xagentclient.Client
 }
 
-// Publish sends an event to the SQS queue.
-func (p *SQSPublisher) Publish(event *Event) error {
-	eventJSON, err := json.Marshal(event)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
-	}
-
-	_, err = p.Client.SendMessage(context.Background(), &sqs.SendMessageInput{
-		QueueUrl:    &p.QueueURL,
-		MessageBody: aws.String(string(eventJSON)),
+// Publish creates and processes an event via the xagent RPC API.
+func (p *RPCPublisher) Publish(event *Event) error {
+	ctx := context.Background()
+	resp, err := p.Client.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+		Description: event.Description,
+		Data:        event.Data,
+		Url:         event.URL,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to send message to SQS: %w", err)
+		return fmt.Errorf("failed to create event: %w", err)
 	}
-
+	processResp, err := p.Client.ProcessEvent(ctx, &xagentv1.ProcessEventRequest{
+		Id: resp.Event.Id,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to process event: %w", err)
+	}
+	slog.Info("event processed", "event_id", resp.Event.Id, "task_ids", processResp.TaskIds)
 	return nil
 }
 

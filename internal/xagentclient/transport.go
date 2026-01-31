@@ -26,3 +26,14 @@ func (t *AuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("X-Auth-Type", "bearer")
 	return t.Transport.RoundTrip(req)
 }
+
+// StaticToken returns a TokenSource that always returns the same token.
+func StaticToken(token string) TokenSource {
+	return staticToken(token)
+}
+
+type staticToken string
+
+func (t staticToken) Token(_ context.Context) (string, error) {
+	return string(t), nil
+}

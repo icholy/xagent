@@ -1,15 +1,13 @@
 package main
 
 import (
-	"context"
 	"log/slog"
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"github.com/icholy/xagent/internal/webhook"
+	"github.com/icholy/xagent/internal/xagentclient"
 )
 
 func mustEnv(name string) string {
@@ -22,17 +20,13 @@ func mustEnv(name string) string {
 }
 
 func main() {
-	ctx := context.Background()
+	serverURL := mustEnv("XAGENT_SERVER")
+	token := mustEnv("XAGENT_TOKEN")
 
-	awsCfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		slog.Error("failed to load AWS config", "error", err)
-		os.Exit(1)
-	}
+	client := xagentclient.New(serverURL, xagentclient.StaticToken(token))
 
-	publisher := &webhook.SQSPublisher{
-		Client:   sqs.NewFromConfig(awsCfg),
-		QueueURL: mustEnv("SQS_QUEUE_URL"),
+	publisher := &webhook.RPCPublisher{
+		Client: client,
 	}
 
 	handler := webhook.NewHandler(&webhook.Config{

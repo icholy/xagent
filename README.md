@@ -88,24 +88,20 @@ For detailed CLI reference, see [CLAUDE.md](CLAUDE.md).
 
 ## Webhook Integration
 
-XAGENT supports webhook-based event integration with GitHub and Jira using AWS Lambda and SQS. This replaces the legacy polling approach with a more reliable, event-driven architecture.
+XAGENT supports webhook-based event integration with GitHub and Jira using AWS Lambda. Webhooks are received by a Lambda function and forwarded directly to the xagent server via RPC.
 
 ### Architecture
 
 ```
-GitHub/Jira Webhook → Lambda Function URL → SQS → xagent subscribe → xagent server
+GitHub/Jira Webhook → Lambda Function URL → xagent server (RPC)
 ```
 
 ### Quick Setup
 
 1. Deploy infrastructure using Terraform (see `terraform/` directory)
-2. Configure webhooks in GitHub/Jira with the Lambda Function URLs
-3. Start the subscriber:
-
-```bash
-export SQS_QUEUE_URL="<from terraform output>"
-xagent subscribe --workspace myworkspace
-```
+2. Generate an API key in the xagent web UI
+3. Configure the Lambda with `XAGENT_SERVER` and `XAGENT_TOKEN` environment variables
+4. Configure webhooks in GitHub/Jira with the Lambda Function URLs
 
 For detailed setup instructions, see [docs/WEBHOOK_SETUP.md](docs/WEBHOOK_SETUP.md).
 
