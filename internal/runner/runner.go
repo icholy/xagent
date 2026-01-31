@@ -23,7 +23,6 @@ import (
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/notify"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/safesem"
 	"github.com/icholy/xagent/internal/workspace"
@@ -40,7 +39,6 @@ type Runner struct {
 	runnerID    string
 	concurrency int64
 	sem         *safesem.Semaphore
-	notify      bool
 	log         *slog.Logger
 }
 
@@ -53,7 +51,6 @@ type Options struct {
 	RunnerID    string
 	Log         *slog.Logger
 	Auth        xagentclient.TokenSource
-	Notify      bool
 	SocketPath  string // defaults to /tmp/xagent.sock
 }
 
@@ -97,7 +94,6 @@ func New(opts Options) (*Runner, error) {
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
 		sem:         safesem.New(concurrency),
-		notify:      opts.Notify,
 		log:         log,
 	}, nil
 }
@@ -133,31 +129,6 @@ func (r *Runner) submit(ctx context.Context, taskID int64, event string, version
 		},
 	})
 	return err
-}
-
-func (r *Runner) sendNotification(taskID int64, event string) {
-	if !r.notify {
-		return
-	}
-	if event != "stopped" && event != "failed" {
-		return
-	}
-	displayName := fmt.Sprintf("Task %d", taskID)
-	// Try to get task name from server
-	resp, err := r.client.GetTask(context.Background(), &xagentv1.GetTaskRequest{Id: taskID})
-	if err == nil && resp.Task.Name != "" {
-		displayName = fmt.Sprintf("%q", resp.Task.Name)
-	}
-	var message string
-	switch event {
-	case "stopped":
-		message = fmt.Sprintf("%s completed", displayName)
-	case "failed":
-		message = fmt.Sprintf("%s failed", displayName)
-	}
-	if err := notify.Send("xagent", message); err != nil {
-		r.log.Error("failed to send notification", "task", taskID, "error", err)
-	}
 }
 
 func (r *Runner) Poll(ctx context.Context) error {
@@ -306,13 +277,11 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
 				r.log.Error("failed to send stopped event", "task", taskID, "error", err)
 			}
-			r.sendNotification(taskID, "stopped")
 		} else {
 			r.log.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
 			if err := r.submit(ctx, taskID, "failed", 0); err != nil {
 				r.log.Error("failed to send failed event", "task", taskID, "error", err)
 			}
-			r.sendNotification(taskID, "failed")
 		}
 	}
 
@@ -567,13 +536,11 @@ func (r *Runner) Monitor(ctx context.Context) error {
 					if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
 						r.log.Error("failed to send stopped event", "task", taskID, "error", err)
 					}
-					r.sendNotification(taskID, "stopped")
 				} else {
 					r.log.Error("container exited with error", "task", taskID, "exitCode", exitCode)
 					if err := r.submit(ctx, taskID, "failed", 0); err != nil {
 						r.log.Error("failed to send failed event", "task", taskID, "error", err)
 					}
-					r.sendNotification(taskID, "failed")
 				}
 			}
 
