@@ -49,6 +49,13 @@ message Instruction {
   string url = 2;
 }
 
+message TaskActions {
+  bool archive = 1;
+  bool cancel = 2;
+  bool restart = 3;
+  bool start = 4;
+}
+
 message Task {
   int64 id = 1;
   string name = 2;
@@ -61,6 +68,7 @@ message Task {
   google.protobuf.Timestamp updated_at = 9;
   string command = 10;  // "restart", "stop", or empty
   int64 version = 11;  // Incremented when command changes
+  TaskActions actions = 12;
 }
 
 message McpServer {

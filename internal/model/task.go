@@ -86,6 +86,12 @@ func (t *Task) Proto() *xagentv1.Task {
 		Version:      t.Version,
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
+		Actions: &xagentv1.TaskActions{
+			Archive: t.CanArchive(),
+			Cancel:  t.CanCancel(),
+			Restart: t.CanRestart(),
+			Start:   t.CanStart(),
+		},
 	}
 }
 
