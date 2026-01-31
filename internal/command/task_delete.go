@@ -41,14 +41,11 @@ var TaskDeleteCommand = &cli.Command{
 		}
 
 		serverURL := cmd.String("server")
-		auth, err := deviceauth.New(deviceauth.Options{
-			DiscoveryURL: deviceauth.DiscoveryURL(serverURL),
-			TokenFile:    cmd.String("token-file"),
-		})
+		token, err := deviceauth.LoadToken(cmd.String("token-file"))
 		if err != nil {
-			return fmt.Errorf("failed to initialize auth: %w", err)
+			return fmt.Errorf("failed to load token: %w", err)
 		}
-		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: auth})
+		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: token})
 		if _, err := client.DeleteTask(ctx, &xagentv1.DeleteTaskRequest{Id: taskID}); err != nil {
 			return fmt.Errorf("failed to delete task: %w", err)
 		}

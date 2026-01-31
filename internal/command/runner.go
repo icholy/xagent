@@ -99,11 +99,9 @@ var RunnerCommand = &cli.Command{
 			log = slog.New(handler)
 		}
 
-		auth, err := deviceauth.New(deviceauth.Options{
-			TokenFile: cmd.String("token-file"),
-		})
+		auth, err := deviceauth.LoadToken(cmd.String("token-file"))
 		if err != nil {
-			return fmt.Errorf("failed to initialize auth: %w", err)
+			return fmt.Errorf("failed to load token: %w", err)
 		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
