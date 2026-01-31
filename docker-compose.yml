@@ -17,6 +17,7 @@ services:
 
   server:
     build: .
+    command: ["./xagent", "server", "--no-auth"]
     ports:
       - "6464:6464"
     env_file: .env
