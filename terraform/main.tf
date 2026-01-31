@@ -33,40 +33,6 @@ provider "aws" {
   region = local.aws_region
 }
 
-# SQS Queue for xagent events
-resource "aws_sqs_queue" "xagent_events" {
-  name                       = "${local.project_name}-events"
-  visibility_timeout_seconds = 60
-  message_retention_seconds  = 172800 # 2 days
-  receive_wait_time_seconds  = 20      # Enable long polling
-
-  tags = {
-    Name    = "${local.project_name}-events"
-    Project = local.project_name
-  }
-}
-
-# Dead Letter Queue for failed events
-resource "aws_sqs_queue" "xagent_events_dlq" {
-  name                      = "${local.project_name}-events-dlq"
-  message_retention_seconds = 172800 # 2 days
-
-  tags = {
-    Name    = "${local.project_name}-events-dlq"
-    Project = local.project_name
-  }
-}
-
-# Redrive policy to send failed messages to DLQ
-resource "aws_sqs_queue_redrive_policy" "xagent_events" {
-  queue_url = aws_sqs_queue.xagent_events.id
-
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.xagent_events_dlq.arn
-    maxReceiveCount     = 3
-  })
-}
-
 # IAM role for Lambda functions
 resource "aws_iam_role" "lambda_exec" {
   name = "${local.project_name}-lambda-exec"
@@ -86,24 +52,6 @@ resource "aws_iam_role" "lambda_exec" {
     Name    = "${local.project_name}-lambda-exec"
     Project = local.project_name
   }
-}
-
-# IAM policy for Lambda to write to SQS
-resource "aws_iam_role_policy" "lambda_sqs" {
-  name = "${local.project_name}-lambda-sqs"
-  role = aws_iam_role.lambda_exec.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "sqs:SendMessage",
-        "sqs:GetQueueUrl"
-      ]
-      Resource = aws_sqs_queue.xagent_events.arn
-    }]
-  })
 }
 
 # Attach basic Lambda execution role
@@ -132,7 +80,8 @@ resource "aws_lambda_function" "webhooks" {
 
   environment {
     variables = {
-      SQS_QUEUE_URL         = aws_sqs_queue.xagent_events.url
+      XAGENT_SERVER         = data.sops_file.secrets.data["xagent_server"]
+      XAGENT_TOKEN          = data.sops_file.secrets.data["xagent_token"]
       GITHUB_WEBHOOK_SECRET = data.sops_file.secrets.data["github_webhook_secret"]
       JIRA_WEBHOOK_SECRET   = data.sops_file.secrets.data["jira_webhook_secret"]
       JIRA_BASE_URL         = data.sops_file.secrets.data["jira_base_url"]

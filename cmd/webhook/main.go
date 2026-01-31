@@ -1,15 +1,14 @@
 package main
 
 import (
-	"context"
 	"log/slog"
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
+	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/webhook"
+	"github.com/icholy/xagent/internal/xagentclient"
 )
 
 func mustEnv(name string) string {
@@ -22,24 +21,16 @@ func mustEnv(name string) string {
 }
 
 func main() {
-	ctx := context.Background()
-
-	awsCfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		slog.Error("failed to load AWS config", "error", err)
-		os.Exit(1)
-	}
-
-	publisher := &webhook.SQSPublisher{
-		Client:   sqs.NewFromConfig(awsCfg),
-		QueueURL: mustEnv("SQS_QUEUE_URL"),
-	}
+	client := xagentclient.New(xagentclient.Options{
+		BaseURL: mustEnv("XAGENT_SERVER"),
+		Source:  agentauth.StaticTokenSource(mustEnv("XAGENT_TOKEN")),
+	})
 
 	handler := webhook.NewHandler(&webhook.Config{
 		GitHubSecret: mustEnv("GITHUB_WEBHOOK_SECRET"),
 		JiraSecret:   mustEnv("JIRA_WEBHOOK_SECRET"),
 		JiraBaseURL:  mustEnv("JIRA_BASE_URL"),
-		Publisher:    publisher,
+		Publisher:    &webhook.RPCPublisher{Client: client},
 	})
 
 	lambda.Start(httpadapter.NewV2(handler).ProxyWithContext)
