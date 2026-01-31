@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file xagent/v1/xagent.proto.
  */
 export const file_xagent_v1_xagent: GenFile = /*@__PURE__*/
-  fileDesc("ChZ4YWdlbnQvdjEveGFnZW50LnByb3RvEgl4YWdlbnQudjEiDQoLUGluZ1JlcXVlc3QiDgoMUGluZ1Jlc3BvbnNlIigKC0luc3RydWN0aW9uEgwKBHRleHQYASABKAkSCwoDdXJsGAIgASgJIpMCCgRUYXNrEgoKAmlkGAEgASgDEgwKBG5hbWUYAiABKAkSDgoGcGFyZW50GAMgASgDEhEKCXdvcmtzcGFjZRgEIAEoCRIOCgZydW5uZXIYBSABKAkSLAoMaW5zdHJ1Y3Rpb25zGAYgAygLMhYueGFnZW50LnYxLkluc3RydWN0aW9uEg4KBnN0YXR1cxgHIAEoCRIuCgpjcmVhdGVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIPCgdjb21tYW5kGAogASgJEg8KB3ZlcnNpb24YCyABKAMikAEKCU1jcFNlcnZlchIMCgRuYW1lGAEgASgJEg8KB2NvbW1hbmQYAiABKAkSDAoEYXJncxgDIAMoCRIqCgNlbnYYBCADKAsyHS54YWdlbnQudjEuTWNwU2VydmVyLkVudkVudHJ5GioKCEVudkVudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiMgoHUHJvZmlsZRIKCgJpZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIMCgRuYW1lGAMgASgJIhMKEUdldFByb2ZpbGVSZXF1ZXN0IjkKEkdldFByb2ZpbGVSZXNwb25zZRIjCgdwcm9maWxlGAEgASgLMhIueGFnZW50LnYxLlByb2ZpbGUiEgoQTGlzdFRhc2tzUmVxdWVzdCIzChFMaXN0VGFza3NSZXNwb25zZRIeCgV0YXNrcxgBIAMoCzIPLnhhZ2VudC52MS5UYXNrIigKFkxpc3RSdW5uZXJUYXNrc1JlcXVlc3QSDgoGcnVubmVyGAEgASgJIjkKF0xpc3RSdW5uZXJUYXNrc1Jlc3BvbnNlEh4KBXRhc2tzGAEgAygLMg8ueGFnZW50LnYxLlRhc2siKgoVTGlzdENoaWxkVGFza3NSZXF1ZXN0EhEKCXBhcmVudF9pZBgBIAEoAyI4ChZMaXN0Q2hpbGRUYXNrc1Jlc3BvbnNlEh4KBXRhc2tzGAEgAygLMg8ueGFnZW50LnYxLlRhc2siggEKEUNyZWF0ZVRhc2tSZXF1ZXN0EgwKBG5hbWUYASABKAkSDgoGcGFyZW50GAIgASgDEhEKCXdvcmtzcGFjZRgDIAEoCRIsCgxpbnN0cnVjdGlvbnMYBCADKAsyFi54YWdlbnQudjEuSW5zdHJ1Y3Rpb24SDgoGcnVubmVyGAUgASgJIjMKEkNyZWF0ZVRhc2tSZXNwb25zZRIdCgR0YXNrGAEgASgLMg8ueGFnZW50LnYxLlRhc2siHAoOR2V0VGFza1JlcXVlc3QSCgoCaWQYASABKAMiMAoPR2V0VGFza1Jlc3BvbnNlEh0KBHRhc2sYASABKAsyDy54YWdlbnQudjEuVGFzayIjChVHZXRUYXNrRGV0YWlsc1JlcXVlc3QSCgoCaWQYASABKAMioAEKFkdldFRhc2tEZXRhaWxzUmVzcG9uc2USHQoEdGFzaxgBIAEoCzIPLnhhZ2VudC52MS5UYXNrEiEKCGNoaWxkcmVuGAIgAygLMg8ueGFnZW50LnYxLlRhc2sSIAoGZXZlbnRzGAMgAygLMhAueGFnZW50LnYxLkV2ZW50EiIKBWxpbmtzGAQgAygLMhMueGFnZW50LnYxLlRhc2tMaW5rInQKEVVwZGF0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDEgwKBG5hbWUYAiABKAkSMAoQYWRkX2luc3RydWN0aW9ucxgEIAMoCzIWLnhhZ2VudC52MS5JbnN0cnVjdGlvbhINCgVzdGFydBgFIAEoCEoECAMQBCIUChJVcGRhdGVUYXNrUmVzcG9uc2UiHwoRRGVsZXRlVGFza1JlcXVlc3QSCgoCaWQYASABKAMiFAoSRGVsZXRlVGFza1Jlc3BvbnNlIiAKEkFyY2hpdmVUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAyIVChNBcmNoaXZlVGFza1Jlc3BvbnNlIh8KEUNhbmNlbFRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIhQKEkNhbmNlbFRhc2tSZXNwb25zZSIgChJSZXN0YXJ0VGFza1JlcXVlc3QSCgoCaWQYASABKAMiFQoTUmVzdGFydFRhc2tSZXNwb25zZSJZCghMb2dFbnRyeRIMCgR0eXBlGAEgASgJEg8KB2NvbnRlbnQYAiABKAkSLgoKY3JlYXRlZF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiSgoRVXBsb2FkTG9nc1JlcXVlc3QSDwoHdGFza19pZBgBIAEoAxIkCgdlbnRyaWVzGAIgAygLMhMueGFnZW50LnYxLkxvZ0VudHJ5IhQKElVwbG9hZExvZ3NSZXNwb25zZSIiCg9MaXN0TG9nc1JlcXVlc3QSDwoHdGFza19pZBgBIAEoAyI4ChBMaXN0TG9nc1Jlc3BvbnNlEiQKB2VudHJpZXMYASADKAsyEy54YWdlbnQudjEuTG9nRW50cnkilgEKCFRhc2tMaW5rEgoKAmlkGAEgASgDEg8KB3Rhc2tfaWQYAiABKAMSEQoJcmVsZXZhbmNlGAMgASgJEgsKA3VybBgEIAEoCRINCgV0aXRsZRgFIAEoCRIOCgZub3RpZnkYBiABKAgSLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiYwoRQ3JlYXRlTGlua1JlcXVlc3QSDwoHdGFza19pZBgBIAEoAxIRCglyZWxldmFuY2UYAiABKAkSCwoDdXJsGAMgASgJEg0KBXRpdGxlGAQgASgJEg4KBm5vdGlmeRgFIAEoCCI3ChJDcmVhdGVMaW5rUmVzcG9uc2USIQoEbGluaxgBIAEoCzITLnhhZ2VudC52MS5UYXNrTGluayIjChBMaXN0TGlua3NSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAMiNwoRTGlzdExpbmtzUmVzcG9uc2USIgoFbGlua3MYASADKAsyEy54YWdlbnQudjEuVGFza0xpbmsiJAoVRmluZExpbmtzQnlVUkxSZXF1ZXN0EgsKA3VybBgBIAEoCSI8ChZGaW5kTGlua3NCeVVSTFJlc3BvbnNlEiIKBWxpbmtzGAEgAygLMhMueGFnZW50LnYxLlRhc2tMaW5rInMKBUV2ZW50EgoKAmlkGAEgASgDEhMKC2Rlc2NyaXB0aW9uGAIgASgJEgwKBGRhdGEYAyABKAkSCwoDdXJsGAQgASgJEi4KCmNyZWF0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIiIKEUxpc3RFdmVudHNSZXF1ZXN0Eg0KBWxpbWl0GAEgASgFIjYKEkxpc3RFdmVudHNSZXNwb25zZRIgCgZldmVudHMYASADKAsyEC54YWdlbnQudjEuRXZlbnQiRAoSQ3JlYXRlRXZlbnRSZXF1ZXN0EhMKC2Rlc2NyaXB0aW9uGAEgASgJEgwKBGRhdGEYAiABKAkSCwoDdXJsGAMgASgJIjYKE0NyZWF0ZUV2ZW50UmVzcG9uc2USHwoFZXZlbnQYASABKAsyEC54YWdlbnQudjEuRXZlbnQiHQoPR2V0RXZlbnRSZXF1ZXN0EgoKAmlkGAEgASgDIjMKEEdldEV2ZW50UmVzcG9uc2USHwoFZXZlbnQYASABKAsyEC54YWdlbnQudjEuRXZlbnQiIAoSRGVsZXRlRXZlbnRSZXF1ZXN0EgoKAmlkGAEgASgDIhUKE0RlbGV0ZUV2ZW50UmVzcG9uc2UiOAoTQWRkRXZlbnRUYXNrUmVxdWVzdBIQCghldmVudF9pZBgBIAEoAxIPCgd0YXNrX2lkGAIgASgDIhYKFEFkZEV2ZW50VGFza1Jlc3BvbnNlIjsKFlJlbW92ZUV2ZW50VGFza1JlcXVlc3QSEAoIZXZlbnRfaWQYASABKAMSDwoHdGFza19pZBgCIAEoAyIZChdSZW1vdmVFdmVudFRhc2tSZXNwb25zZSIpChVMaXN0RXZlbnRUYXNrc1JlcXVlc3QSEAoIZXZlbnRfaWQYASABKAMiKgoWTGlzdEV2ZW50VGFza3NSZXNwb25zZRIQCgh0YXNrX2lkcxgBIAMoAyIqChdMaXN0RXZlbnRzQnlUYXNrUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgDIjwKGExpc3RFdmVudHNCeVRhc2tSZXNwb25zZRIgCgZldmVudHMYASADKAsyEC54YWdlbnQudjEuRXZlbnQiIQoTUHJvY2Vzc0V2ZW50UmVxdWVzdBIKCgJpZBgBIAEoAyIoChRQcm9jZXNzRXZlbnRSZXNwb25zZRIQCgh0YXNrX2lkcxgBIAMoAyJRCgtSdW5uZXJFdmVudBIPCgd0YXNrX2lkGAEgASgDEg0KBWV2ZW50GAIgASgJEg8KB3ZlcnNpb24YAyABKAMSEQoJcmVjb25jaWxlGAQgASgIIkMKGVN1Ym1pdFJ1bm5lckV2ZW50c1JlcXVlc3QSJgoGZXZlbnRzGAEgAygLMhYueGFnZW50LnYxLlJ1bm5lckV2ZW50IhwKGlN1Ym1pdFJ1bm5lckV2ZW50c1Jlc3BvbnNlImYKE1JlZ2lzdGVyZWRXb3Jrc3BhY2USDAoEbmFtZRgBIAEoCRIRCglydW5uZXJfaWQYAiABKAkSLgoKdXBkYXRlZF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiYgoZUmVnaXN0ZXJXb3Jrc3BhY2VzUmVxdWVzdBIRCglydW5uZXJfaWQYASABKAkSMgoKd29ya3NwYWNlcxgCIAMoCzIeLnhhZ2VudC52MS5SZWdpc3RlcmVkV29ya3NwYWNlIhwKGlJlZ2lzdGVyV29ya3NwYWNlc1Jlc3BvbnNlIhcKFUxpc3RXb3Jrc3BhY2VzUmVxdWVzdCJMChZMaXN0V29ya3NwYWNlc1Jlc3BvbnNlEjIKCndvcmtzcGFjZXMYASADKAsyHi54YWdlbnQudjEuUmVnaXN0ZXJlZFdvcmtzcGFjZSIrChZDbGVhcldvcmtzcGFjZXNSZXF1ZXN0EhEKCXJ1bm5lcl9pZBgBIAEoCSIZChdDbGVhcldvcmtzcGFjZXNSZXNwb25zZTK6EwoNWEFnZW50U2VydmljZRI3CgRQaW5nEhYueGFnZW50LnYxLlBpbmdSZXF1ZXN0GhcueGFnZW50LnYxLlBpbmdSZXNwb25zZRJJCgpHZXRQcm9maWxlEhwueGFnZW50LnYxLkdldFByb2ZpbGVSZXF1ZXN0Gh0ueGFnZW50LnYxLkdldFByb2ZpbGVSZXNwb25zZRJGCglMaXN0VGFza3MSGy54YWdlbnQudjEuTGlzdFRhc2tzUmVxdWVzdBocLnhhZ2VudC52MS5MaXN0VGFza3NSZXNwb25zZRJYCg9MaXN0UnVubmVyVGFza3MSIS54YWdlbnQudjEuTGlzdFJ1bm5lclRhc2tzUmVxdWVzdBoiLnhhZ2VudC52MS5MaXN0UnVubmVyVGFza3NSZXNwb25zZRJVCg5MaXN0Q2hpbGRUYXNrcxIgLnhhZ2VudC52MS5MaXN0Q2hpbGRUYXNrc1JlcXVlc3QaIS54YWdlbnQudjEuTGlzdENoaWxkVGFza3NSZXNwb25zZRJJCgpDcmVhdGVUYXNrEhwueGFnZW50LnYxLkNyZWF0ZVRhc2tSZXF1ZXN0Gh0ueGFnZW50LnYxLkNyZWF0ZVRhc2tSZXNwb25zZRJACgdHZXRUYXNrEhkueGFnZW50LnYxLkdldFRhc2tSZXF1ZXN0GhoueGFnZW50LnYxLkdldFRhc2tSZXNwb25zZRJVCg5HZXRUYXNrRGV0YWlscxIgLnhhZ2VudC52MS5HZXRUYXNrRGV0YWlsc1JlcXVlc3QaIS54YWdlbnQudjEuR2V0VGFza0RldGFpbHNSZXNwb25zZRJJCgpVcGRhdGVUYXNrEhwueGFnZW50LnYxLlVwZGF0ZVRhc2tSZXF1ZXN0Gh0ueGFnZW50LnYxLlVwZGF0ZVRhc2tSZXNwb25zZRJJCgpEZWxldGVUYXNrEhwueGFnZW50LnYxLkRlbGV0ZVRhc2tSZXF1ZXN0Gh0ueGFnZW50LnYxLkRlbGV0ZVRhc2tSZXNwb25zZRJMCgtBcmNoaXZlVGFzaxIdLnhhZ2VudC52MS5BcmNoaXZlVGFza1JlcXVlc3QaHi54YWdlbnQudjEuQXJjaGl2ZVRhc2tSZXNwb25zZRJJCgpDYW5jZWxUYXNrEhwueGFnZW50LnYxLkNhbmNlbFRhc2tSZXF1ZXN0Gh0ueGFnZW50LnYxLkNhbmNlbFRhc2tSZXNwb25zZRJMCgtSZXN0YXJ0VGFzaxIdLnhhZ2VudC52MS5SZXN0YXJ0VGFza1JlcXVlc3QaHi54YWdlbnQudjEuUmVzdGFydFRhc2tSZXNwb25zZRJJCgpVcGxvYWRMb2dzEhwueGFnZW50LnYxLlVwbG9hZExvZ3NSZXF1ZXN0Gh0ueGFnZW50LnYxLlVwbG9hZExvZ3NSZXNwb25zZRJDCghMaXN0TG9ncxIaLnhhZ2VudC52MS5MaXN0TG9nc1JlcXVlc3QaGy54YWdlbnQudjEuTGlzdExvZ3NSZXNwb25zZRJJCgpDcmVhdGVMaW5rEhwueGFnZW50LnYxLkNyZWF0ZUxpbmtSZXF1ZXN0Gh0ueGFnZW50LnYxLkNyZWF0ZUxpbmtSZXNwb25zZRJGCglMaXN0TGlua3MSGy54YWdlbnQudjEuTGlzdExpbmtzUmVxdWVzdBocLnhhZ2VudC52MS5MaXN0TGlua3NSZXNwb25zZRJVCg5GaW5kTGlua3NCeVVSTBIgLnhhZ2VudC52MS5GaW5kTGlua3NCeVVSTFJlcXVlc3QaIS54YWdlbnQudjEuRmluZExpbmtzQnlVUkxSZXNwb25zZRJJCgpMaXN0RXZlbnRzEhwueGFnZW50LnYxLkxpc3RFdmVudHNSZXF1ZXN0Gh0ueGFnZW50LnYxLkxpc3RFdmVudHNSZXNwb25zZRJMCgtDcmVhdGVFdmVudBIdLnhhZ2VudC52MS5DcmVhdGVFdmVudFJlcXVlc3QaHi54YWdlbnQudjEuQ3JlYXRlRXZlbnRSZXNwb25zZRJDCghHZXRFdmVudBIaLnhhZ2VudC52MS5HZXRFdmVudFJlcXVlc3QaGy54YWdlbnQudjEuR2V0RXZlbnRSZXNwb25zZRJMCgtEZWxldGVFdmVudBIdLnhhZ2VudC52MS5EZWxldGVFdmVudFJlcXVlc3QaHi54YWdlbnQudjEuRGVsZXRlRXZlbnRSZXNwb25zZRJPCgxBZGRFdmVudFRhc2sSHi54YWdlbnQudjEuQWRkRXZlbnRUYXNrUmVxdWVzdBofLnhhZ2VudC52MS5BZGRFdmVudFRhc2tSZXNwb25zZRJYCg9SZW1vdmVFdmVudFRhc2sSIS54YWdlbnQudjEuUmVtb3ZlRXZlbnRUYXNrUmVxdWVzdBoiLnhhZ2VudC52MS5SZW1vdmVFdmVudFRhc2tSZXNwb25zZRJVCg5MaXN0RXZlbnRUYXNrcxIgLnhhZ2VudC52MS5MaXN0RXZlbnRUYXNrc1JlcXVlc3QaIS54YWdlbnQudjEuTGlzdEV2ZW50VGFza3NSZXNwb25zZRJbChBMaXN0RXZlbnRzQnlUYXNrEiIueGFnZW50LnYxLkxpc3RFdmVudHNCeVRhc2tSZXF1ZXN0GiMueGFnZW50LnYxLkxpc3RFdmVudHNCeVRhc2tSZXNwb25zZRJPCgxQcm9jZXNzRXZlbnQSHi54YWdlbnQudjEuUHJvY2Vzc0V2ZW50UmVxdWVzdBofLnhhZ2VudC52MS5Qcm9jZXNzRXZlbnRSZXNwb25zZRJhChJTdWJtaXRSdW5uZXJFdmVudHMSJC54YWdlbnQudjEuU3VibWl0UnVubmVyRXZlbnRzUmVxdWVzdBolLnhhZ2VudC52MS5TdWJtaXRSdW5uZXJFdmVudHNSZXNwb25zZRJhChJSZWdpc3RlcldvcmtzcGFjZXMSJC54YWdlbnQudjEuUmVnaXN0ZXJXb3Jrc3BhY2VzUmVxdWVzdBolLnhhZ2VudC52MS5SZWdpc3RlcldvcmtzcGFjZXNSZXNwb25zZRJVCg5MaXN0V29ya3NwYWNlcxIgLnhhZ2VudC52MS5MaXN0V29ya3NwYWNlc1JlcXVlc3QaIS54YWdlbnQudjEuTGlzdFdvcmtzcGFjZXNSZXNwb25zZRJYCg9DbGVhcldvcmtzcGFjZXMSIS54YWdlbnQudjEuQ2xlYXJXb3Jrc3BhY2VzUmVxdWVzdBoiLnhhZ2VudC52MS5DbGVhcldvcmtzcGFjZXNSZXNwb25zZUI8WjpnaXRodWIuY29tL2ljaG9seS94YWdlbnQvaW50ZXJuYWwvcHJvdG8veGFnZW50L3YxO3hhZ2VudHYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChZ4YWdlbnQvdjEveGFnZW50LnByb3RvEgl4YWdlbnQudjEiDQoLUGluZ1JlcXVlc3QiDgoMUGluZ1Jlc3BvbnNlIigKC0luc3RydWN0aW9uEgwKBHRleHQYASABKAkSCwoDdXJsGAIgASgJIk4KC1Rhc2tBY3Rpb25zEg8KB2FyY2hpdmUYASABKAgSDgoGY2FuY2VsGAIgASgIEg8KB3Jlc3RhcnQYAyABKAgSDQoFc3RhcnQYBCABKAgivAIKBFRhc2sSCgoCaWQYASABKAMSDAoEbmFtZRgCIAEoCRIOCgZwYXJlbnQYAyABKAMSEQoJd29ya3NwYWNlGAQgASgJEg4KBnJ1bm5lchgFIAEoCRIsCgxpbnN0cnVjdGlvbnMYBiADKAsyFi54YWdlbnQudjEuSW5zdHJ1Y3Rpb24SDgoGc3RhdHVzGAcgASgJEi4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi4KCnVwZGF0ZWRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg8KB2NvbW1hbmQYCiABKAkSDwoHdmVyc2lvbhgLIAEoAxInCgdhY3Rpb25zGAwgASgLMhYueGFnZW50LnYxLlRhc2tBY3Rpb25zIpABCglNY3BTZXJ2ZXISDAoEbmFtZRgBIAEoCRIPCgdjb21tYW5kGAIgASgJEgwKBGFyZ3MYAyADKAkSKgoDZW52GAQgAygLMh0ueGFnZW50LnYxLk1jcFNlcnZlci5FbnZFbnRyeRoqCghFbnZFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIjIKB1Byb2ZpbGUSCgoCaWQYASABKAkSDQoFZW1haWwYAiABKAkSDAoEbmFtZRgDIAEoCSITChFHZXRQcm9maWxlUmVxdWVzdCI5ChJHZXRQcm9maWxlUmVzcG9uc2USIwoHcHJvZmlsZRgBIAEoCzISLnhhZ2VudC52MS5Qcm9maWxlIhIKEExpc3RUYXNrc1JlcXVlc3QiMwoRTGlzdFRhc2tzUmVzcG9uc2USHgoFdGFza3MYASADKAsyDy54YWdlbnQudjEuVGFzayIoChZMaXN0UnVubmVyVGFza3NSZXF1ZXN0Eg4KBnJ1bm5lchgBIAEoCSI5ChdMaXN0UnVubmVyVGFza3NSZXNwb25zZRIeCgV0YXNrcxgBIAMoCzIPLnhhZ2VudC52MS5UYXNrIioKFUxpc3RDaGlsZFRhc2tzUmVxdWVzdBIRCglwYXJlbnRfaWQYASABKAMiOAoWTGlzdENoaWxkVGFza3NSZXNwb25zZRIeCgV0YXNrcxgBIAMoCzIPLnhhZ2VudC52MS5UYXNrIoIBChFDcmVhdGVUYXNrUmVxdWVzdBIMCgRuYW1lGAEgASgJEg4KBnBhcmVudBgCIAEoAxIRCgl3b3Jrc3BhY2UYAyABKAkSLAoMaW5zdHJ1Y3Rpb25zGAQgAygLMhYueGFnZW50LnYxLkluc3RydWN0aW9uEg4KBnJ1bm5lchgFIAEoCSIzChJDcmVhdGVUYXNrUmVzcG9uc2USHQoEdGFzaxgBIAEoCzIPLnhhZ2VudC52MS5UYXNrIhwKDkdldFRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIjAKD0dldFRhc2tSZXNwb25zZRIdCgR0YXNrGAEgASgLMg8ueGFnZW50LnYxLlRhc2siIwoVR2V0VGFza0RldGFpbHNSZXF1ZXN0EgoKAmlkGAEgASgDIqABChZHZXRUYXNrRGV0YWlsc1Jlc3BvbnNlEh0KBHRhc2sYASABKAsyDy54YWdlbnQudjEuVGFzaxIhCghjaGlsZHJlbhgCIAMoCzIPLnhhZ2VudC52MS5UYXNrEiAKBmV2ZW50cxgDIAMoCzIQLnhhZ2VudC52MS5FdmVudBIiCgVsaW5rcxgEIAMoCzITLnhhZ2VudC52MS5UYXNrTGluayJ0ChFVcGRhdGVUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAxIMCgRuYW1lGAIgASgJEjAKEGFkZF9pbnN0cnVjdGlvbnMYBCADKAsyFi54YWdlbnQudjEuSW5zdHJ1Y3Rpb24SDQoFc3RhcnQYBSABKAhKBAgDEAQiFAoSVXBkYXRlVGFza1Jlc3BvbnNlIh8KEURlbGV0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIhQKEkRlbGV0ZVRhc2tSZXNwb25zZSIgChJBcmNoaXZlVGFza1JlcXVlc3QSCgoCaWQYASABKAMiFQoTQXJjaGl2ZVRhc2tSZXNwb25zZSIfChFDYW5jZWxUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAyIUChJDYW5jZWxUYXNrUmVzcG9uc2UiIAoSUmVzdGFydFRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIhUKE1Jlc3RhcnRUYXNrUmVzcG9uc2UiWQoITG9nRW50cnkSDAoEdHlwZRgBIAEoCRIPCgdjb250ZW50GAIgASgJEi4KCmNyZWF0ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIkoKEVVwbG9hZExvZ3NSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAMSJAoHZW50cmllcxgCIAMoCzITLnhhZ2VudC52MS5Mb2dFbnRyeSIUChJVcGxvYWRMb2dzUmVzcG9uc2UiIgoPTGlzdExvZ3NSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAMiOAoQTGlzdExvZ3NSZXNwb25zZRIkCgdlbnRyaWVzGAEgAygLMhMueGFnZW50LnYxLkxvZ0VudHJ5IpYBCghUYXNrTGluaxIKCgJpZBgBIAEoAxIPCgd0YXNrX2lkGAIgASgDEhEKCXJlbGV2YW5jZRgDIAEoCRILCgN1cmwYBCABKAkSDQoFdGl0bGUYBSABKAkSDgoGbm90aWZ5GAYgASgIEi4KCmNyZWF0ZWRfYXQYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wImMKEUNyZWF0ZUxpbmtSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAMSEQoJcmVsZXZhbmNlGAIgASgJEgsKA3VybBgDIAEoCRINCgV0aXRsZRgEIAEoCRIOCgZub3RpZnkYBSABKAgiNwoSQ3JlYXRlTGlua1Jlc3BvbnNlEiEKBGxpbmsYASABKAsyEy54YWdlbnQudjEuVGFza0xpbmsiIwoQTGlzdExpbmtzUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgDIjcKEUxpc3RMaW5rc1Jlc3BvbnNlEiIKBWxpbmtzGAEgAygLMhMueGFnZW50LnYxLlRhc2tMaW5rIiQKFUZpbmRMaW5rc0J5VVJMUmVxdWVzdBILCgN1cmwYASABKAkiPAoWRmluZExpbmtzQnlVUkxSZXNwb25zZRIiCgVsaW5rcxgBIAMoCzITLnhhZ2VudC52MS5UYXNrTGluayJzCgVFdmVudBIKCgJpZBgBIAEoAxITCgtkZXNjcmlwdGlvbhgCIAEoCRIMCgRkYXRhGAMgASgJEgsKA3VybBgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIiChFMaXN0RXZlbnRzUmVxdWVzdBINCgVsaW1pdBgBIAEoBSI2ChJMaXN0RXZlbnRzUmVzcG9uc2USIAoGZXZlbnRzGAEgAygLMhAueGFnZW50LnYxLkV2ZW50IkQKEkNyZWF0ZUV2ZW50UmVxdWVzdBITCgtkZXNjcmlwdGlvbhgBIAEoCRIMCgRkYXRhGAIgASgJEgsKA3VybBgDIAEoCSI2ChNDcmVhdGVFdmVudFJlc3BvbnNlEh8KBWV2ZW50GAEgASgLMhAueGFnZW50LnYxLkV2ZW50Ih0KD0dldEV2ZW50UmVxdWVzdBIKCgJpZBgBIAEoAyIzChBHZXRFdmVudFJlc3BvbnNlEh8KBWV2ZW50GAEgASgLMhAueGFnZW50LnYxLkV2ZW50IiAKEkRlbGV0ZUV2ZW50UmVxdWVzdBIKCgJpZBgBIAEoAyIVChNEZWxldGVFdmVudFJlc3BvbnNlIjgKE0FkZEV2ZW50VGFza1JlcXVlc3QSEAoIZXZlbnRfaWQYASABKAMSDwoHdGFza19pZBgCIAEoAyIWChRBZGRFdmVudFRhc2tSZXNwb25zZSI7ChZSZW1vdmVFdmVudFRhc2tSZXF1ZXN0EhAKCGV2ZW50X2lkGAEgASgDEg8KB3Rhc2tfaWQYAiABKAMiGQoXUmVtb3ZlRXZlbnRUYXNrUmVzcG9uc2UiKQoVTGlzdEV2ZW50VGFza3NSZXF1ZXN0EhAKCGV2ZW50X2lkGAEgASgDIioKFkxpc3RFdmVudFRhc2tzUmVzcG9uc2USEAoIdGFza19pZHMYASADKAMiKgoXTGlzdEV2ZW50c0J5VGFza1JlcXVlc3QSDwoHdGFza19pZBgBIAEoAyI8ChhMaXN0RXZlbnRzQnlUYXNrUmVzcG9uc2USIAoGZXZlbnRzGAEgAygLMhAueGFnZW50LnYxLkV2ZW50IiEKE1Byb2Nlc3NFdmVudFJlcXVlc3QSCgoCaWQYASABKAMiKAoUUHJvY2Vzc0V2ZW50UmVzcG9uc2USEAoIdGFza19pZHMYASADKAMiUQoLUnVubmVyRXZlbnQSDwoHdGFza19pZBgBIAEoAxINCgVldmVudBgCIAEoCRIPCgd2ZXJzaW9uGAMgASgDEhEKCXJlY29uY2lsZRgEIAEoCCJDChlTdWJtaXRSdW5uZXJFdmVudHNSZXF1ZXN0EiYKBmV2ZW50cxgBIAMoCzIWLnhhZ2VudC52MS5SdW5uZXJFdmVudCIcChpTdWJtaXRSdW5uZXJFdmVudHNSZXNwb25zZSJmChNSZWdpc3RlcmVkV29ya3NwYWNlEgwKBG5hbWUYASABKAkSEQoJcnVubmVyX2lkGAIgASgJEi4KCnVwZGF0ZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wImIKGVJlZ2lzdGVyV29ya3NwYWNlc1JlcXVlc3QSEQoJcnVubmVyX2lkGAEgASgJEjIKCndvcmtzcGFjZXMYAiADKAsyHi54YWdlbnQudjEuUmVnaXN0ZXJlZFdvcmtzcGFjZSIcChpSZWdpc3RlcldvcmtzcGFjZXNSZXNwb25zZSIXChVMaXN0V29ya3NwYWNlc1JlcXVlc3QiTAoWTGlzdFdvcmtzcGFjZXNSZXNwb25zZRIyCgp3b3Jrc3BhY2VzGAEgAygLMh4ueGFnZW50LnYxLlJlZ2lzdGVyZWRXb3Jrc3BhY2UiKwoWQ2xlYXJXb3Jrc3BhY2VzUmVxdWVzdBIRCglydW5uZXJfaWQYASABKAkiGQoXQ2xlYXJXb3Jrc3BhY2VzUmVzcG9uc2UyuhMKDVhBZ2VudFNlcnZpY2USNwoEUGluZxIWLnhhZ2VudC52MS5QaW5nUmVxdWVzdBoXLnhhZ2VudC52MS5QaW5nUmVzcG9uc2USSQoKR2V0UHJvZmlsZRIcLnhhZ2VudC52MS5HZXRQcm9maWxlUmVxdWVzdBodLnhhZ2VudC52MS5HZXRQcm9maWxlUmVzcG9uc2USRgoJTGlzdFRhc2tzEhsueGFnZW50LnYxLkxpc3RUYXNrc1JlcXVlc3QaHC54YWdlbnQudjEuTGlzdFRhc2tzUmVzcG9uc2USWAoPTGlzdFJ1bm5lclRhc2tzEiEueGFnZW50LnYxLkxpc3RSdW5uZXJUYXNrc1JlcXVlc3QaIi54YWdlbnQudjEuTGlzdFJ1bm5lclRhc2tzUmVzcG9uc2USVQoOTGlzdENoaWxkVGFza3MSIC54YWdlbnQudjEuTGlzdENoaWxkVGFza3NSZXF1ZXN0GiEueGFnZW50LnYxLkxpc3RDaGlsZFRhc2tzUmVzcG9uc2USSQoKQ3JlYXRlVGFzaxIcLnhhZ2VudC52MS5DcmVhdGVUYXNrUmVxdWVzdBodLnhhZ2VudC52MS5DcmVhdGVUYXNrUmVzcG9uc2USQAoHR2V0VGFzaxIZLnhhZ2VudC52MS5HZXRUYXNrUmVxdWVzdBoaLnhhZ2VudC52MS5HZXRUYXNrUmVzcG9uc2USVQoOR2V0VGFza0RldGFpbHMSIC54YWdlbnQudjEuR2V0VGFza0RldGFpbHNSZXF1ZXN0GiEueGFnZW50LnYxLkdldFRhc2tEZXRhaWxzUmVzcG9uc2USSQoKVXBkYXRlVGFzaxIcLnhhZ2VudC52MS5VcGRhdGVUYXNrUmVxdWVzdBodLnhhZ2VudC52MS5VcGRhdGVUYXNrUmVzcG9uc2USSQoKRGVsZXRlVGFzaxIcLnhhZ2VudC52MS5EZWxldGVUYXNrUmVxdWVzdBodLnhhZ2VudC52MS5EZWxldGVUYXNrUmVzcG9uc2USTAoLQXJjaGl2ZVRhc2sSHS54YWdlbnQudjEuQXJjaGl2ZVRhc2tSZXF1ZXN0Gh4ueGFnZW50LnYxLkFyY2hpdmVUYXNrUmVzcG9uc2USSQoKQ2FuY2VsVGFzaxIcLnhhZ2VudC52MS5DYW5jZWxUYXNrUmVxdWVzdBodLnhhZ2VudC52MS5DYW5jZWxUYXNrUmVzcG9uc2USTAoLUmVzdGFydFRhc2sSHS54YWdlbnQudjEuUmVzdGFydFRhc2tSZXF1ZXN0Gh4ueGFnZW50LnYxLlJlc3RhcnRUYXNrUmVzcG9uc2USSQoKVXBsb2FkTG9ncxIcLnhhZ2VudC52MS5VcGxvYWRMb2dzUmVxdWVzdBodLnhhZ2VudC52MS5VcGxvYWRMb2dzUmVzcG9uc2USQwoITGlzdExvZ3MSGi54YWdlbnQudjEuTGlzdExvZ3NSZXF1ZXN0GhsueGFnZW50LnYxLkxpc3RMb2dzUmVzcG9uc2USSQoKQ3JlYXRlTGluaxIcLnhhZ2VudC52MS5DcmVhdGVMaW5rUmVxdWVzdBodLnhhZ2VudC52MS5DcmVhdGVMaW5rUmVzcG9uc2USRgoJTGlzdExpbmtzEhsueGFnZW50LnYxLkxpc3RMaW5rc1JlcXVlc3QaHC54YWdlbnQudjEuTGlzdExpbmtzUmVzcG9uc2USVQoORmluZExpbmtzQnlVUkwSIC54YWdlbnQudjEuRmluZExpbmtzQnlVUkxSZXF1ZXN0GiEueGFnZW50LnYxLkZpbmRMaW5rc0J5VVJMUmVzcG9uc2USSQoKTGlzdEV2ZW50cxIcLnhhZ2VudC52MS5MaXN0RXZlbnRzUmVxdWVzdBodLnhhZ2VudC52MS5MaXN0RXZlbnRzUmVzcG9uc2USTAoLQ3JlYXRlRXZlbnQSHS54YWdlbnQudjEuQ3JlYXRlRXZlbnRSZXF1ZXN0Gh4ueGFnZW50LnYxLkNyZWF0ZUV2ZW50UmVzcG9uc2USQwoIR2V0RXZlbnQSGi54YWdlbnQudjEuR2V0RXZlbnRSZXF1ZXN0GhsueGFnZW50LnYxLkdldEV2ZW50UmVzcG9uc2USTAoLRGVsZXRlRXZlbnQSHS54YWdlbnQudjEuRGVsZXRlRXZlbnRSZXF1ZXN0Gh4ueGFnZW50LnYxLkRlbGV0ZUV2ZW50UmVzcG9uc2USTwoMQWRkRXZlbnRUYXNrEh4ueGFnZW50LnYxLkFkZEV2ZW50VGFza1JlcXVlc3QaHy54YWdlbnQudjEuQWRkRXZlbnRUYXNrUmVzcG9uc2USWAoPUmVtb3ZlRXZlbnRUYXNrEiEueGFnZW50LnYxLlJlbW92ZUV2ZW50VGFza1JlcXVlc3QaIi54YWdlbnQudjEuUmVtb3ZlRXZlbnRUYXNrUmVzcG9uc2USVQoOTGlzdEV2ZW50VGFza3MSIC54YWdlbnQudjEuTGlzdEV2ZW50VGFza3NSZXF1ZXN0GiEueGFnZW50LnYxLkxpc3RFdmVudFRhc2tzUmVzcG9uc2USWwoQTGlzdEV2ZW50c0J5VGFzaxIiLnhhZ2VudC52MS5MaXN0RXZlbnRzQnlUYXNrUmVxdWVzdBojLnhhZ2VudC52MS5MaXN0RXZlbnRzQnlUYXNrUmVzcG9uc2USTwoMUHJvY2Vzc0V2ZW50Eh4ueGFnZW50LnYxLlByb2Nlc3NFdmVudFJlcXVlc3QaHy54YWdlbnQudjEuUHJvY2Vzc0V2ZW50UmVzcG9uc2USYQoSU3VibWl0UnVubmVyRXZlbnRzEiQueGFnZW50LnYxLlN1Ym1pdFJ1bm5lckV2ZW50c1JlcXVlc3QaJS54YWdlbnQudjEuU3VibWl0UnVubmVyRXZlbnRzUmVzcG9uc2USYQoSUmVnaXN0ZXJXb3Jrc3BhY2VzEiQueGFnZW50LnYxLlJlZ2lzdGVyV29ya3NwYWNlc1JlcXVlc3QaJS54YWdlbnQudjEuUmVnaXN0ZXJXb3Jrc3BhY2VzUmVzcG9uc2USVQoOTGlzdFdvcmtzcGFjZXMSIC54YWdlbnQudjEuTGlzdFdvcmtzcGFjZXNSZXF1ZXN0GiEueGFnZW50LnYxLkxpc3RXb3Jrc3BhY2VzUmVzcG9uc2USWAoPQ2xlYXJXb3Jrc3BhY2VzEiEueGFnZW50LnYxLkNsZWFyV29ya3NwYWNlc1JlcXVlc3QaIi54YWdlbnQudjEuQ2xlYXJXb3Jrc3BhY2VzUmVzcG9uc2VCPFo6Z2l0aHViLmNvbS9pY2hvbHkveGFnZW50L2ludGVybmFsL3Byb3RvL3hhZ2VudC92MTt4YWdlbnR2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message xagent.v1.PingRequest
@@ -61,6 +61,38 @@ export type Instruction = Message<"xagent.v1.Instruction"> & {
  */
 export const InstructionSchema: GenMessage<Instruction> = /*@__PURE__*/
   messageDesc(file_xagent_v1_xagent, 2);
+
+/**
+ * @generated from message xagent.v1.TaskActions
+ */
+export type TaskActions = Message<"xagent.v1.TaskActions"> & {
+  /**
+   * @generated from field: bool archive = 1;
+   */
+  archive: boolean;
+
+  /**
+   * @generated from field: bool cancel = 2;
+   */
+  cancel: boolean;
+
+  /**
+   * @generated from field: bool restart = 3;
+   */
+  restart: boolean;
+
+  /**
+   * @generated from field: bool start = 4;
+   */
+  start: boolean;
+};
+
+/**
+ * Describes the message xagent.v1.TaskActions.
+ * Use `create(TaskActionsSchema)` to create a new message.
+ */
+export const TaskActionsSchema: GenMessage<TaskActions> = /*@__PURE__*/
+  messageDesc(file_xagent_v1_xagent, 3);
 
 /**
  * @generated from message xagent.v1.Task
@@ -126,6 +158,11 @@ export type Task = Message<"xagent.v1.Task"> & {
    * @generated from field: int64 version = 11;
    */
   version: bigint;
+
+  /**
+   * @generated from field: xagent.v1.TaskActions actions = 12;
+   */
+  actions?: TaskActions;
 };
 
 /**
@@ -133,7 +170,7 @@ export type Task = Message<"xagent.v1.Task"> & {
  * Use `create(TaskSchema)` to create a new message.
  */
 export const TaskSchema: GenMessage<Task> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 3);
+  messageDesc(file_xagent_v1_xagent, 4);
 
 /**
  * @generated from message xagent.v1.McpServer
@@ -165,7 +202,7 @@ export type McpServer = Message<"xagent.v1.McpServer"> & {
  * Use `create(McpServerSchema)` to create a new message.
  */
 export const McpServerSchema: GenMessage<McpServer> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 4);
+  messageDesc(file_xagent_v1_xagent, 5);
 
 /**
  * @generated from message xagent.v1.Profile
@@ -192,7 +229,7 @@ export type Profile = Message<"xagent.v1.Profile"> & {
  * Use `create(ProfileSchema)` to create a new message.
  */
 export const ProfileSchema: GenMessage<Profile> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 5);
+  messageDesc(file_xagent_v1_xagent, 6);
 
 /**
  * @generated from message xagent.v1.GetProfileRequest
@@ -205,7 +242,7 @@ export type GetProfileRequest = Message<"xagent.v1.GetProfileRequest"> & {
  * Use `create(GetProfileRequestSchema)` to create a new message.
  */
 export const GetProfileRequestSchema: GenMessage<GetProfileRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 6);
+  messageDesc(file_xagent_v1_xagent, 7);
 
 /**
  * @generated from message xagent.v1.GetProfileResponse
@@ -222,7 +259,7 @@ export type GetProfileResponse = Message<"xagent.v1.GetProfileResponse"> & {
  * Use `create(GetProfileResponseSchema)` to create a new message.
  */
 export const GetProfileResponseSchema: GenMessage<GetProfileResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 7);
+  messageDesc(file_xagent_v1_xagent, 8);
 
 /**
  * @generated from message xagent.v1.ListTasksRequest
@@ -235,7 +272,7 @@ export type ListTasksRequest = Message<"xagent.v1.ListTasksRequest"> & {
  * Use `create(ListTasksRequestSchema)` to create a new message.
  */
 export const ListTasksRequestSchema: GenMessage<ListTasksRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 8);
+  messageDesc(file_xagent_v1_xagent, 9);
 
 /**
  * @generated from message xagent.v1.ListTasksResponse
@@ -252,7 +289,7 @@ export type ListTasksResponse = Message<"xagent.v1.ListTasksResponse"> & {
  * Use `create(ListTasksResponseSchema)` to create a new message.
  */
 export const ListTasksResponseSchema: GenMessage<ListTasksResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 9);
+  messageDesc(file_xagent_v1_xagent, 10);
 
 /**
  * @generated from message xagent.v1.ListRunnerTasksRequest
@@ -271,7 +308,7 @@ export type ListRunnerTasksRequest = Message<"xagent.v1.ListRunnerTasksRequest">
  * Use `create(ListRunnerTasksRequestSchema)` to create a new message.
  */
 export const ListRunnerTasksRequestSchema: GenMessage<ListRunnerTasksRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 10);
+  messageDesc(file_xagent_v1_xagent, 11);
 
 /**
  * @generated from message xagent.v1.ListRunnerTasksResponse
@@ -288,7 +325,7 @@ export type ListRunnerTasksResponse = Message<"xagent.v1.ListRunnerTasksResponse
  * Use `create(ListRunnerTasksResponseSchema)` to create a new message.
  */
 export const ListRunnerTasksResponseSchema: GenMessage<ListRunnerTasksResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 11);
+  messageDesc(file_xagent_v1_xagent, 12);
 
 /**
  * @generated from message xagent.v1.ListChildTasksRequest
@@ -305,7 +342,7 @@ export type ListChildTasksRequest = Message<"xagent.v1.ListChildTasksRequest"> &
  * Use `create(ListChildTasksRequestSchema)` to create a new message.
  */
 export const ListChildTasksRequestSchema: GenMessage<ListChildTasksRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 12);
+  messageDesc(file_xagent_v1_xagent, 13);
 
 /**
  * @generated from message xagent.v1.ListChildTasksResponse
@@ -322,7 +359,7 @@ export type ListChildTasksResponse = Message<"xagent.v1.ListChildTasksResponse">
  * Use `create(ListChildTasksResponseSchema)` to create a new message.
  */
 export const ListChildTasksResponseSchema: GenMessage<ListChildTasksResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 13);
+  messageDesc(file_xagent_v1_xagent, 14);
 
 /**
  * @generated from message xagent.v1.CreateTaskRequest
@@ -361,7 +398,7 @@ export type CreateTaskRequest = Message<"xagent.v1.CreateTaskRequest"> & {
  * Use `create(CreateTaskRequestSchema)` to create a new message.
  */
 export const CreateTaskRequestSchema: GenMessage<CreateTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 14);
+  messageDesc(file_xagent_v1_xagent, 15);
 
 /**
  * @generated from message xagent.v1.CreateTaskResponse
@@ -378,7 +415,7 @@ export type CreateTaskResponse = Message<"xagent.v1.CreateTaskResponse"> & {
  * Use `create(CreateTaskResponseSchema)` to create a new message.
  */
 export const CreateTaskResponseSchema: GenMessage<CreateTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 15);
+  messageDesc(file_xagent_v1_xagent, 16);
 
 /**
  * @generated from message xagent.v1.GetTaskRequest
@@ -395,7 +432,7 @@ export type GetTaskRequest = Message<"xagent.v1.GetTaskRequest"> & {
  * Use `create(GetTaskRequestSchema)` to create a new message.
  */
 export const GetTaskRequestSchema: GenMessage<GetTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 16);
+  messageDesc(file_xagent_v1_xagent, 17);
 
 /**
  * @generated from message xagent.v1.GetTaskResponse
@@ -412,7 +449,7 @@ export type GetTaskResponse = Message<"xagent.v1.GetTaskResponse"> & {
  * Use `create(GetTaskResponseSchema)` to create a new message.
  */
 export const GetTaskResponseSchema: GenMessage<GetTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 17);
+  messageDesc(file_xagent_v1_xagent, 18);
 
 /**
  * @generated from message xagent.v1.GetTaskDetailsRequest
@@ -429,7 +466,7 @@ export type GetTaskDetailsRequest = Message<"xagent.v1.GetTaskDetailsRequest"> &
  * Use `create(GetTaskDetailsRequestSchema)` to create a new message.
  */
 export const GetTaskDetailsRequestSchema: GenMessage<GetTaskDetailsRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 18);
+  messageDesc(file_xagent_v1_xagent, 19);
 
 /**
  * @generated from message xagent.v1.GetTaskDetailsResponse
@@ -461,7 +498,7 @@ export type GetTaskDetailsResponse = Message<"xagent.v1.GetTaskDetailsResponse">
  * Use `create(GetTaskDetailsResponseSchema)` to create a new message.
  */
 export const GetTaskDetailsResponseSchema: GenMessage<GetTaskDetailsResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 19);
+  messageDesc(file_xagent_v1_xagent, 20);
 
 /**
  * @generated from message xagent.v1.UpdateTaskRequest
@@ -495,7 +532,7 @@ export type UpdateTaskRequest = Message<"xagent.v1.UpdateTaskRequest"> & {
  * Use `create(UpdateTaskRequestSchema)` to create a new message.
  */
 export const UpdateTaskRequestSchema: GenMessage<UpdateTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 20);
+  messageDesc(file_xagent_v1_xagent, 21);
 
 /**
  * @generated from message xagent.v1.UpdateTaskResponse
@@ -508,7 +545,7 @@ export type UpdateTaskResponse = Message<"xagent.v1.UpdateTaskResponse"> & {
  * Use `create(UpdateTaskResponseSchema)` to create a new message.
  */
 export const UpdateTaskResponseSchema: GenMessage<UpdateTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 21);
+  messageDesc(file_xagent_v1_xagent, 22);
 
 /**
  * @generated from message xagent.v1.DeleteTaskRequest
@@ -525,7 +562,7 @@ export type DeleteTaskRequest = Message<"xagent.v1.DeleteTaskRequest"> & {
  * Use `create(DeleteTaskRequestSchema)` to create a new message.
  */
 export const DeleteTaskRequestSchema: GenMessage<DeleteTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 22);
+  messageDesc(file_xagent_v1_xagent, 23);
 
 /**
  * @generated from message xagent.v1.DeleteTaskResponse
@@ -538,7 +575,7 @@ export type DeleteTaskResponse = Message<"xagent.v1.DeleteTaskResponse"> & {
  * Use `create(DeleteTaskResponseSchema)` to create a new message.
  */
 export const DeleteTaskResponseSchema: GenMessage<DeleteTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 23);
+  messageDesc(file_xagent_v1_xagent, 24);
 
 /**
  * @generated from message xagent.v1.ArchiveTaskRequest
@@ -555,7 +592,7 @@ export type ArchiveTaskRequest = Message<"xagent.v1.ArchiveTaskRequest"> & {
  * Use `create(ArchiveTaskRequestSchema)` to create a new message.
  */
 export const ArchiveTaskRequestSchema: GenMessage<ArchiveTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 24);
+  messageDesc(file_xagent_v1_xagent, 25);
 
 /**
  * @generated from message xagent.v1.ArchiveTaskResponse
@@ -568,7 +605,7 @@ export type ArchiveTaskResponse = Message<"xagent.v1.ArchiveTaskResponse"> & {
  * Use `create(ArchiveTaskResponseSchema)` to create a new message.
  */
 export const ArchiveTaskResponseSchema: GenMessage<ArchiveTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 25);
+  messageDesc(file_xagent_v1_xagent, 26);
 
 /**
  * @generated from message xagent.v1.CancelTaskRequest
@@ -585,7 +622,7 @@ export type CancelTaskRequest = Message<"xagent.v1.CancelTaskRequest"> & {
  * Use `create(CancelTaskRequestSchema)` to create a new message.
  */
 export const CancelTaskRequestSchema: GenMessage<CancelTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 26);
+  messageDesc(file_xagent_v1_xagent, 27);
 
 /**
  * @generated from message xagent.v1.CancelTaskResponse
@@ -598,7 +635,7 @@ export type CancelTaskResponse = Message<"xagent.v1.CancelTaskResponse"> & {
  * Use `create(CancelTaskResponseSchema)` to create a new message.
  */
 export const CancelTaskResponseSchema: GenMessage<CancelTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 27);
+  messageDesc(file_xagent_v1_xagent, 28);
 
 /**
  * @generated from message xagent.v1.RestartTaskRequest
@@ -615,7 +652,7 @@ export type RestartTaskRequest = Message<"xagent.v1.RestartTaskRequest"> & {
  * Use `create(RestartTaskRequestSchema)` to create a new message.
  */
 export const RestartTaskRequestSchema: GenMessage<RestartTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 28);
+  messageDesc(file_xagent_v1_xagent, 29);
 
 /**
  * @generated from message xagent.v1.RestartTaskResponse
@@ -628,7 +665,7 @@ export type RestartTaskResponse = Message<"xagent.v1.RestartTaskResponse"> & {
  * Use `create(RestartTaskResponseSchema)` to create a new message.
  */
 export const RestartTaskResponseSchema: GenMessage<RestartTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 29);
+  messageDesc(file_xagent_v1_xagent, 30);
 
 /**
  * @generated from message xagent.v1.LogEntry
@@ -655,7 +692,7 @@ export type LogEntry = Message<"xagent.v1.LogEntry"> & {
  * Use `create(LogEntrySchema)` to create a new message.
  */
 export const LogEntrySchema: GenMessage<LogEntry> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 30);
+  messageDesc(file_xagent_v1_xagent, 31);
 
 /**
  * @generated from message xagent.v1.UploadLogsRequest
@@ -677,7 +714,7 @@ export type UploadLogsRequest = Message<"xagent.v1.UploadLogsRequest"> & {
  * Use `create(UploadLogsRequestSchema)` to create a new message.
  */
 export const UploadLogsRequestSchema: GenMessage<UploadLogsRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 31);
+  messageDesc(file_xagent_v1_xagent, 32);
 
 /**
  * @generated from message xagent.v1.UploadLogsResponse
@@ -690,7 +727,7 @@ export type UploadLogsResponse = Message<"xagent.v1.UploadLogsResponse"> & {
  * Use `create(UploadLogsResponseSchema)` to create a new message.
  */
 export const UploadLogsResponseSchema: GenMessage<UploadLogsResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 32);
+  messageDesc(file_xagent_v1_xagent, 33);
 
 /**
  * @generated from message xagent.v1.ListLogsRequest
@@ -707,7 +744,7 @@ export type ListLogsRequest = Message<"xagent.v1.ListLogsRequest"> & {
  * Use `create(ListLogsRequestSchema)` to create a new message.
  */
 export const ListLogsRequestSchema: GenMessage<ListLogsRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 33);
+  messageDesc(file_xagent_v1_xagent, 34);
 
 /**
  * @generated from message xagent.v1.ListLogsResponse
@@ -724,7 +761,7 @@ export type ListLogsResponse = Message<"xagent.v1.ListLogsResponse"> & {
  * Use `create(ListLogsResponseSchema)` to create a new message.
  */
 export const ListLogsResponseSchema: GenMessage<ListLogsResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 34);
+  messageDesc(file_xagent_v1_xagent, 35);
 
 /**
  * @generated from message xagent.v1.TaskLink
@@ -771,7 +808,7 @@ export type TaskLink = Message<"xagent.v1.TaskLink"> & {
  * Use `create(TaskLinkSchema)` to create a new message.
  */
 export const TaskLinkSchema: GenMessage<TaskLink> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 35);
+  messageDesc(file_xagent_v1_xagent, 36);
 
 /**
  * @generated from message xagent.v1.CreateLinkRequest
@@ -808,7 +845,7 @@ export type CreateLinkRequest = Message<"xagent.v1.CreateLinkRequest"> & {
  * Use `create(CreateLinkRequestSchema)` to create a new message.
  */
 export const CreateLinkRequestSchema: GenMessage<CreateLinkRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 36);
+  messageDesc(file_xagent_v1_xagent, 37);
 
 /**
  * @generated from message xagent.v1.CreateLinkResponse
@@ -825,7 +862,7 @@ export type CreateLinkResponse = Message<"xagent.v1.CreateLinkResponse"> & {
  * Use `create(CreateLinkResponseSchema)` to create a new message.
  */
 export const CreateLinkResponseSchema: GenMessage<CreateLinkResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 37);
+  messageDesc(file_xagent_v1_xagent, 38);
 
 /**
  * @generated from message xagent.v1.ListLinksRequest
@@ -842,7 +879,7 @@ export type ListLinksRequest = Message<"xagent.v1.ListLinksRequest"> & {
  * Use `create(ListLinksRequestSchema)` to create a new message.
  */
 export const ListLinksRequestSchema: GenMessage<ListLinksRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 38);
+  messageDesc(file_xagent_v1_xagent, 39);
 
 /**
  * @generated from message xagent.v1.ListLinksResponse
@@ -859,7 +896,7 @@ export type ListLinksResponse = Message<"xagent.v1.ListLinksResponse"> & {
  * Use `create(ListLinksResponseSchema)` to create a new message.
  */
 export const ListLinksResponseSchema: GenMessage<ListLinksResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 39);
+  messageDesc(file_xagent_v1_xagent, 40);
 
 /**
  * @generated from message xagent.v1.FindLinksByURLRequest
@@ -876,7 +913,7 @@ export type FindLinksByURLRequest = Message<"xagent.v1.FindLinksByURLRequest"> &
  * Use `create(FindLinksByURLRequestSchema)` to create a new message.
  */
 export const FindLinksByURLRequestSchema: GenMessage<FindLinksByURLRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 40);
+  messageDesc(file_xagent_v1_xagent, 41);
 
 /**
  * @generated from message xagent.v1.FindLinksByURLResponse
@@ -893,7 +930,7 @@ export type FindLinksByURLResponse = Message<"xagent.v1.FindLinksByURLResponse">
  * Use `create(FindLinksByURLResponseSchema)` to create a new message.
  */
 export const FindLinksByURLResponseSchema: GenMessage<FindLinksByURLResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 41);
+  messageDesc(file_xagent_v1_xagent, 42);
 
 /**
  * @generated from message xagent.v1.Event
@@ -930,7 +967,7 @@ export type Event = Message<"xagent.v1.Event"> & {
  * Use `create(EventSchema)` to create a new message.
  */
 export const EventSchema: GenMessage<Event> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 42);
+  messageDesc(file_xagent_v1_xagent, 43);
 
 /**
  * @generated from message xagent.v1.ListEventsRequest
@@ -949,7 +986,7 @@ export type ListEventsRequest = Message<"xagent.v1.ListEventsRequest"> & {
  * Use `create(ListEventsRequestSchema)` to create a new message.
  */
 export const ListEventsRequestSchema: GenMessage<ListEventsRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 43);
+  messageDesc(file_xagent_v1_xagent, 44);
 
 /**
  * @generated from message xagent.v1.ListEventsResponse
@@ -966,7 +1003,7 @@ export type ListEventsResponse = Message<"xagent.v1.ListEventsResponse"> & {
  * Use `create(ListEventsResponseSchema)` to create a new message.
  */
 export const ListEventsResponseSchema: GenMessage<ListEventsResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 44);
+  messageDesc(file_xagent_v1_xagent, 45);
 
 /**
  * @generated from message xagent.v1.CreateEventRequest
@@ -993,7 +1030,7 @@ export type CreateEventRequest = Message<"xagent.v1.CreateEventRequest"> & {
  * Use `create(CreateEventRequestSchema)` to create a new message.
  */
 export const CreateEventRequestSchema: GenMessage<CreateEventRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 45);
+  messageDesc(file_xagent_v1_xagent, 46);
 
 /**
  * @generated from message xagent.v1.CreateEventResponse
@@ -1010,7 +1047,7 @@ export type CreateEventResponse = Message<"xagent.v1.CreateEventResponse"> & {
  * Use `create(CreateEventResponseSchema)` to create a new message.
  */
 export const CreateEventResponseSchema: GenMessage<CreateEventResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 46);
+  messageDesc(file_xagent_v1_xagent, 47);
 
 /**
  * @generated from message xagent.v1.GetEventRequest
@@ -1027,7 +1064,7 @@ export type GetEventRequest = Message<"xagent.v1.GetEventRequest"> & {
  * Use `create(GetEventRequestSchema)` to create a new message.
  */
 export const GetEventRequestSchema: GenMessage<GetEventRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 47);
+  messageDesc(file_xagent_v1_xagent, 48);
 
 /**
  * @generated from message xagent.v1.GetEventResponse
@@ -1044,7 +1081,7 @@ export type GetEventResponse = Message<"xagent.v1.GetEventResponse"> & {
  * Use `create(GetEventResponseSchema)` to create a new message.
  */
 export const GetEventResponseSchema: GenMessage<GetEventResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 48);
+  messageDesc(file_xagent_v1_xagent, 49);
 
 /**
  * @generated from message xagent.v1.DeleteEventRequest
@@ -1061,7 +1098,7 @@ export type DeleteEventRequest = Message<"xagent.v1.DeleteEventRequest"> & {
  * Use `create(DeleteEventRequestSchema)` to create a new message.
  */
 export const DeleteEventRequestSchema: GenMessage<DeleteEventRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 49);
+  messageDesc(file_xagent_v1_xagent, 50);
 
 /**
  * @generated from message xagent.v1.DeleteEventResponse
@@ -1074,7 +1111,7 @@ export type DeleteEventResponse = Message<"xagent.v1.DeleteEventResponse"> & {
  * Use `create(DeleteEventResponseSchema)` to create a new message.
  */
 export const DeleteEventResponseSchema: GenMessage<DeleteEventResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 50);
+  messageDesc(file_xagent_v1_xagent, 51);
 
 /**
  * @generated from message xagent.v1.AddEventTaskRequest
@@ -1096,7 +1133,7 @@ export type AddEventTaskRequest = Message<"xagent.v1.AddEventTaskRequest"> & {
  * Use `create(AddEventTaskRequestSchema)` to create a new message.
  */
 export const AddEventTaskRequestSchema: GenMessage<AddEventTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 51);
+  messageDesc(file_xagent_v1_xagent, 52);
 
 /**
  * @generated from message xagent.v1.AddEventTaskResponse
@@ -1109,7 +1146,7 @@ export type AddEventTaskResponse = Message<"xagent.v1.AddEventTaskResponse"> & {
  * Use `create(AddEventTaskResponseSchema)` to create a new message.
  */
 export const AddEventTaskResponseSchema: GenMessage<AddEventTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 52);
+  messageDesc(file_xagent_v1_xagent, 53);
 
 /**
  * @generated from message xagent.v1.RemoveEventTaskRequest
@@ -1131,7 +1168,7 @@ export type RemoveEventTaskRequest = Message<"xagent.v1.RemoveEventTaskRequest">
  * Use `create(RemoveEventTaskRequestSchema)` to create a new message.
  */
 export const RemoveEventTaskRequestSchema: GenMessage<RemoveEventTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 53);
+  messageDesc(file_xagent_v1_xagent, 54);
 
 /**
  * @generated from message xagent.v1.RemoveEventTaskResponse
@@ -1144,7 +1181,7 @@ export type RemoveEventTaskResponse = Message<"xagent.v1.RemoveEventTaskResponse
  * Use `create(RemoveEventTaskResponseSchema)` to create a new message.
  */
 export const RemoveEventTaskResponseSchema: GenMessage<RemoveEventTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 54);
+  messageDesc(file_xagent_v1_xagent, 55);
 
 /**
  * @generated from message xagent.v1.ListEventTasksRequest
@@ -1161,7 +1198,7 @@ export type ListEventTasksRequest = Message<"xagent.v1.ListEventTasksRequest"> &
  * Use `create(ListEventTasksRequestSchema)` to create a new message.
  */
 export const ListEventTasksRequestSchema: GenMessage<ListEventTasksRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 55);
+  messageDesc(file_xagent_v1_xagent, 56);
 
 /**
  * @generated from message xagent.v1.ListEventTasksResponse
@@ -1178,7 +1215,7 @@ export type ListEventTasksResponse = Message<"xagent.v1.ListEventTasksResponse">
  * Use `create(ListEventTasksResponseSchema)` to create a new message.
  */
 export const ListEventTasksResponseSchema: GenMessage<ListEventTasksResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 56);
+  messageDesc(file_xagent_v1_xagent, 57);
 
 /**
  * @generated from message xagent.v1.ListEventsByTaskRequest
@@ -1195,7 +1232,7 @@ export type ListEventsByTaskRequest = Message<"xagent.v1.ListEventsByTaskRequest
  * Use `create(ListEventsByTaskRequestSchema)` to create a new message.
  */
 export const ListEventsByTaskRequestSchema: GenMessage<ListEventsByTaskRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 57);
+  messageDesc(file_xagent_v1_xagent, 58);
 
 /**
  * @generated from message xagent.v1.ListEventsByTaskResponse
@@ -1212,7 +1249,7 @@ export type ListEventsByTaskResponse = Message<"xagent.v1.ListEventsByTaskRespon
  * Use `create(ListEventsByTaskResponseSchema)` to create a new message.
  */
 export const ListEventsByTaskResponseSchema: GenMessage<ListEventsByTaskResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 58);
+  messageDesc(file_xagent_v1_xagent, 59);
 
 /**
  * @generated from message xagent.v1.ProcessEventRequest
@@ -1229,7 +1266,7 @@ export type ProcessEventRequest = Message<"xagent.v1.ProcessEventRequest"> & {
  * Use `create(ProcessEventRequestSchema)` to create a new message.
  */
 export const ProcessEventRequestSchema: GenMessage<ProcessEventRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 59);
+  messageDesc(file_xagent_v1_xagent, 60);
 
 /**
  * @generated from message xagent.v1.ProcessEventResponse
@@ -1246,7 +1283,7 @@ export type ProcessEventResponse = Message<"xagent.v1.ProcessEventResponse"> & {
  * Use `create(ProcessEventResponseSchema)` to create a new message.
  */
 export const ProcessEventResponseSchema: GenMessage<ProcessEventResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 60);
+  messageDesc(file_xagent_v1_xagent, 61);
 
 /**
  * @generated from message xagent.v1.RunnerEvent
@@ -1284,7 +1321,7 @@ export type RunnerEvent = Message<"xagent.v1.RunnerEvent"> & {
  * Use `create(RunnerEventSchema)` to create a new message.
  */
 export const RunnerEventSchema: GenMessage<RunnerEvent> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 61);
+  messageDesc(file_xagent_v1_xagent, 62);
 
 /**
  * @generated from message xagent.v1.SubmitRunnerEventsRequest
@@ -1301,7 +1338,7 @@ export type SubmitRunnerEventsRequest = Message<"xagent.v1.SubmitRunnerEventsReq
  * Use `create(SubmitRunnerEventsRequestSchema)` to create a new message.
  */
 export const SubmitRunnerEventsRequestSchema: GenMessage<SubmitRunnerEventsRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 62);
+  messageDesc(file_xagent_v1_xagent, 63);
 
 /**
  * @generated from message xagent.v1.SubmitRunnerEventsResponse
@@ -1314,7 +1351,7 @@ export type SubmitRunnerEventsResponse = Message<"xagent.v1.SubmitRunnerEventsRe
  * Use `create(SubmitRunnerEventsResponseSchema)` to create a new message.
  */
 export const SubmitRunnerEventsResponseSchema: GenMessage<SubmitRunnerEventsResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 63);
+  messageDesc(file_xagent_v1_xagent, 64);
 
 /**
  * @generated from message xagent.v1.RegisteredWorkspace
@@ -1341,7 +1378,7 @@ export type RegisteredWorkspace = Message<"xagent.v1.RegisteredWorkspace"> & {
  * Use `create(RegisteredWorkspaceSchema)` to create a new message.
  */
 export const RegisteredWorkspaceSchema: GenMessage<RegisteredWorkspace> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 64);
+  messageDesc(file_xagent_v1_xagent, 65);
 
 /**
  * @generated from message xagent.v1.RegisterWorkspacesRequest
@@ -1363,7 +1400,7 @@ export type RegisterWorkspacesRequest = Message<"xagent.v1.RegisterWorkspacesReq
  * Use `create(RegisterWorkspacesRequestSchema)` to create a new message.
  */
 export const RegisterWorkspacesRequestSchema: GenMessage<RegisterWorkspacesRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 65);
+  messageDesc(file_xagent_v1_xagent, 66);
 
 /**
  * @generated from message xagent.v1.RegisterWorkspacesResponse
@@ -1376,7 +1413,7 @@ export type RegisterWorkspacesResponse = Message<"xagent.v1.RegisterWorkspacesRe
  * Use `create(RegisterWorkspacesResponseSchema)` to create a new message.
  */
 export const RegisterWorkspacesResponseSchema: GenMessage<RegisterWorkspacesResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 66);
+  messageDesc(file_xagent_v1_xagent, 67);
 
 /**
  * @generated from message xagent.v1.ListWorkspacesRequest
@@ -1389,7 +1426,7 @@ export type ListWorkspacesRequest = Message<"xagent.v1.ListWorkspacesRequest"> &
  * Use `create(ListWorkspacesRequestSchema)` to create a new message.
  */
 export const ListWorkspacesRequestSchema: GenMessage<ListWorkspacesRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 67);
+  messageDesc(file_xagent_v1_xagent, 68);
 
 /**
  * @generated from message xagent.v1.ListWorkspacesResponse
@@ -1406,7 +1443,7 @@ export type ListWorkspacesResponse = Message<"xagent.v1.ListWorkspacesResponse">
  * Use `create(ListWorkspacesResponseSchema)` to create a new message.
  */
 export const ListWorkspacesResponseSchema: GenMessage<ListWorkspacesResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 68);
+  messageDesc(file_xagent_v1_xagent, 69);
 
 /**
  * @generated from message xagent.v1.ClearWorkspacesRequest
@@ -1425,7 +1462,7 @@ export type ClearWorkspacesRequest = Message<"xagent.v1.ClearWorkspacesRequest">
  * Use `create(ClearWorkspacesRequestSchema)` to create a new message.
  */
 export const ClearWorkspacesRequestSchema: GenMessage<ClearWorkspacesRequest> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 69);
+  messageDesc(file_xagent_v1_xagent, 70);
 
 /**
  * @generated from message xagent.v1.ClearWorkspacesResponse
@@ -1438,7 +1475,7 @@ export type ClearWorkspacesResponse = Message<"xagent.v1.ClearWorkspacesResponse
  * Use `create(ClearWorkspacesResponseSchema)` to create a new message.
  */
 export const ClearWorkspacesResponseSchema: GenMessage<ClearWorkspacesResponse> = /*@__PURE__*/
-  messageDesc(file_xagent_v1_xagent, 70);
+  messageDesc(file_xagent_v1_xagent, 71);
 
 /**
  * @generated from service xagent.v1.XAgentService
