@@ -78,11 +78,6 @@ var RunnerCommand = &cli.Command{
 			Usage: "Enable debug logging",
 			Value: false,
 		},
-		&cli.BoolFlag{
-			Name:  "notify",
-			Usage: "Send system notification when a task finishes",
-			Value: true,
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -93,7 +88,6 @@ var RunnerCommand = &cli.Command{
 		concurrency := cmd.Int("concurrency")
 		runnerID := cmd.String("id")
 		debug := cmd.Bool("debug")
-		notifyFlag := cmd.Bool("notify")
 
 		// Create logger if debug is enabled
 		log := slog.Default()
@@ -127,7 +121,6 @@ var RunnerCommand = &cli.Command{
 			RunnerID:    runnerID,
 			Log:         log,
 			Auth:        auth,
-			Notify:      notifyFlag,
 		})
 		if err != nil {
 			return err
