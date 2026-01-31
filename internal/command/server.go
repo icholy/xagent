@@ -84,7 +84,7 @@ var ServerCommand = &cli.Command{
 		// Initialize OpenTelemetry (configured via OTEL_EXPORTER_OTLP_ENDPOINT env var)
 		otel, err := otelx.NewProvider(ctx, otelx.Config{
 			ServiceName:    "xagent-server",
-			ServiceVersion: "1.0.0",
+			ServiceVersion: "0.0.1",
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
