@@ -10,6 +10,13 @@ type TokenSource interface {
 	Token(ctx context.Context) (string, error)
 }
 
+// StaticTokenSource returns a fixed token.
+type StaticTokenSource string
+
+func (s StaticTokenSource) Token(_ context.Context) (string, error) {
+	return string(s), nil
+}
+
 // AuthTransport injects Bearer tokens into requests.
 type AuthTransport struct {
 	Transport http.RoundTripper
