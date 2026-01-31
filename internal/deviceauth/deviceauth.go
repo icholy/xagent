@@ -154,7 +154,11 @@ func (a *Auth) DeviceFlow(ctx context.Context) error {
 
 // createAPIKey uses a short-lived OIDC bearer token to create an API key on the server.
 func (a *Auth) createAPIKey(ctx context.Context, accessToken string) (string, error) {
-	client := xagentclient.New(xagentclient.Options{BaseURL: a.config.ServerURL, Source: staticTokenSource(accessToken), AuthType: "bearer"})
+	client := xagentclient.New(xagentclient.Options{
+		BaseURL:  a.config.ServerURL,
+		Source:   staticTokenSource(accessToken),
+		AuthType: "bearer",
+	})
 	keyName := cmp.Or(a.config.KeyName, "runner")
 	resp, err := client.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: keyName,
