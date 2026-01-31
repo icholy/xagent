@@ -15,6 +15,7 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
+	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/model"
@@ -773,3 +774,61 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 	}
 	return &xagentv1.ClearWorkspacesResponse{}, nil
 }
+
+func (s *Server) CreateWebhook(ctx context.Context, req *xagentv1.CreateWebhookRequest) (*xagentv1.CreateWebhookResponse, error) {
+	userID := s.userID(ctx)
+	if req.Secret == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("secret is required"))
+	}
+	webhook := &model.Webhook{
+		UUID:   uuid.NewString(),
+		Secret: req.Secret,
+		Owner:  userID,
+	}
+	if err := s.store.CreateWebhook(ctx, nil, webhook); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("webhook created", "uuid", webhook.UUID, "owner", userID)
+	return &xagentv1.CreateWebhookResponse{
+		Webhook: webhook.Proto(),
+	}, nil
+}
+
+func (s *Server) GetWebhook(ctx context.Context, req *xagentv1.GetWebhookRequest) (*xagentv1.GetWebhookResponse, error) {
+	userID := s.userID(ctx)
+	webhook, err := s.store.GetWebhook(ctx, nil, req.Uuid, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("webhook %s not found", req.Uuid))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return &xagentv1.GetWebhookResponse{
+		Webhook: webhook.Proto(),
+	}, nil
+}
+
+func (s *Server) ListWebhooks(ctx context.Context, req *xagentv1.ListWebhooksRequest) (*xagentv1.ListWebhooksResponse, error) {
+	userID := s.userID(ctx)
+	webhooks, err := s.store.ListWebhooks(ctx, nil, userID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp := &xagentv1.ListWebhooksResponse{
+		Webhooks: make([]*xagentv1.Webhook, len(webhooks)),
+	}
+	for i, w := range webhooks {
+		resp.Webhooks[i] = w.Proto()
+	}
+	return resp, nil
+}
+
+func (s *Server) DeleteWebhook(ctx context.Context, req *xagentv1.DeleteWebhookRequest) (*xagentv1.DeleteWebhookResponse, error) {
+	userID := s.userID(ctx)
+	if err := s.store.DeleteWebhook(ctx, nil, req.Uuid, userID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("webhook deleted", "uuid", req.Uuid)
+	return &xagentv1.DeleteWebhookResponse{}, nil
+}
+

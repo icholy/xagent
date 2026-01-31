@@ -3660,6 +3660,7 @@ func (x *Webhook) GetCreatedAt() *timestamppb.Timestamp {
 
 type CreateWebhookRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Secret        string                 `protobuf:"bytes,1,opt,name=secret,proto3" json:"secret,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3694,10 +3695,16 @@ func (*CreateWebhookRequest) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{75}
 }
 
+func (x *CreateWebhookRequest) GetSecret() string {
+	if x != nil {
+		return x.Secret
+	}
+	return ""
+}
+
 type CreateWebhookResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Webhook       *Webhook               `protobuf:"bytes,1,opt,name=webhook,proto3" json:"webhook,omitempty"`
-	Secret        string                 `protobuf:"bytes,2,opt,name=secret,proto3" json:"secret,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3737,13 +3744,6 @@ func (x *CreateWebhookResponse) GetWebhook() *Webhook {
 		return x.Webhook
 	}
 	return nil
-}
-
-func (x *CreateWebhookResponse) GetSecret() string {
-	if x != nil {
-		return x.Secret
-	}
-	return ""
 }
 
 type GetWebhookRequest struct {
@@ -4205,11 +4205,11 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\aWebhook\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x129\n" +
 	"\n" +
-	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x16\n" +
-	"\x14CreateWebhookRequest\"]\n" +
+	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\".\n" +
+	"\x14CreateWebhookRequest\x12\x16\n" +
+	"\x06secret\x18\x01 \x01(\tR\x06secret\"E\n" +
 	"\x15CreateWebhookResponse\x12,\n" +
-	"\awebhook\x18\x01 \x01(\v2\x12.xagent.v1.WebhookR\awebhook\x12\x16\n" +
-	"\x06secret\x18\x02 \x01(\tR\x06secret\"'\n" +
+	"\awebhook\x18\x01 \x01(\v2\x12.xagent.v1.WebhookR\awebhook\"'\n" +
 	"\x11GetWebhookRequest\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"B\n" +
 	"\x12GetWebhookResponse\x12,\n" +
