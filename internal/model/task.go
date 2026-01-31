@@ -286,6 +286,7 @@ func (t *Task) Cancel() bool {
 		t.Version++
 	case TaskStatusPending:
 		t.Status = TaskStatusCancelled
+		t.Command = ""
 	}
 	return true
 }

@@ -438,6 +438,12 @@ func TestTask_Cancel(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "from pending with command clears command",
+			before: Task{Status: TaskStatusPending, Command: TaskCommandStart, Version: 1},
+			after:  Task{Status: TaskStatusCancelled, Version: 1},
+			want:   true,
+		},
+		{
 			name:   "from completed fails",
 			before: Task{Status: TaskStatusCompleted},
 			after:  Task{Status: TaskStatusCompleted},
