@@ -89,7 +89,7 @@ var SubscribeCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
 		}
-		xagent := xagentclient.New(serverURL, auth)
+		xagent := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: auth})
 
 		handler := &xagentEventHandler{
 			client: xagent,

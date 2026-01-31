@@ -87,7 +87,7 @@ func New(opts Options) (*Runner, error) {
 
 	return &Runner{
 		docker:      docker,
-		client:      xagentclient.New(opts.ServerURL, opts.Auth),
+		client:      xagentclient.New(xagentclient.Options{BaseURL: opts.ServerURL, Source: opts.Auth}),
 		proxy:       proxy,
 		prebuiltDir: opts.PrebuiltDir,
 		workspaces:  opts.Workspaces,

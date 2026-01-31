@@ -1,6 +1,7 @@
 package xagentclient
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 )
@@ -14,6 +15,9 @@ type TokenSource interface {
 type AuthTransport struct {
 	Transport http.RoundTripper
 	Source    TokenSource
+	// AuthType is the value of the X-Auth-Type header.
+	// Defaults to "key" if empty.
+	AuthType string
 }
 
 func (t *AuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -23,6 +27,6 @@ func (t *AuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	req = req.Clone(req.Context())
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("X-Auth-Type", "bearer")
+	req.Header.Set("X-Auth-Type", cmp.Or(t.AuthType, "key"))
 	return t.Transport.RoundTrip(req)
 }

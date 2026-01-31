@@ -60,7 +60,7 @@ func (p *AgentProxy) Start() error {
 	}
 
 	// Create client to the upstream server
-	client := xagentclient.New(p.serverURL, p.auth)
+	client := xagentclient.New(xagentclient.Options{BaseURL: p.serverURL, Source: p.auth})
 
 	// Create filter to enforce access control
 	filter := xmcp.NewAgentFilter(client)

@@ -76,7 +76,7 @@ var TaskUpdateCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
 		}
-		client := xagentclient.New(serverURL, auth)
+		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: auth})
 		if _, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 			Id:              taskID,
 			Name:            name,

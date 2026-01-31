@@ -25,7 +25,7 @@ func HashKey(raw string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// IsAPIKey returns true if the token has the xat_ prefix.
-func IsAPIKey(token string) bool {
+// IsKey returns true if the token has the xat_ prefix.
+func IsKey(token string) bool {
 	return strings.HasPrefix(token, apiKeyPrefix)
 }

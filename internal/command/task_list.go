@@ -40,7 +40,7 @@ var TaskListCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
 		}
-		client := xagentclient.New(serverURL, auth)
+		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: auth})
 
 		resp, err := client.ListTasks(ctx, &xagentv1.ListTasksRequest{})
 		if err != nil {

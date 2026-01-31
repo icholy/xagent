@@ -67,8 +67,8 @@ type Auth struct {
 	cookie *authentication.Interceptor[*openid.DefaultContext]
 	// bearer token middleware
 	bearer *middleware.Interceptor[*oauth.IntrospectionContext]
-	// keyValidator validates xat_ API keys
-	keyValidator KeyValidator
+	// validator validates xat_ API keys
+	validator KeyValidator
 	// handler handles /auth/* routes (login, callback, logout)
 	handler http.Handler
 }
@@ -117,15 +117,24 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		return nil, err
 	}
 	return &Auth{
-		cookie:       authentication.Middleware(authN),
-		bearer:       middleware.New(authZ),
-		keyValidator: cfg.KeyValidator,
-		handler:      authN,
+		cookie:    authentication.Middleware(authN),
+		bearer:    middleware.New(authZ),
+		validator: cfg.KeyValidator,
+		handler:   authN,
 	}, nil
 }
 
 // AuthTypeHeader is the header CLI/device clients send to indicate bearer auth.
 const AuthTypeHeader = "X-Auth-Type"
+
+// validateKey extracts and validates an API key from the Authorization header.
+func (a *Auth) validateKey(r *http.Request) (*UserInfo, error) {
+	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok {
+		return nil, errors.New("missing Bearer token")
+	}
+	return a.validator.ValidateKey(r.Context(), HashKey(raw))
+}
 
 // RequireAuth returns middleware that requires either a valid Bearer token
 // or an authenticated cookie session.
@@ -135,27 +144,20 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check for xat_ API key in Authorization header
-			if a.keyValidator != nil {
-				if rawKey, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && IsAPIKey(rawKey) {
-					hash := HashKey(rawKey)
-					user, err := a.keyValidator.ValidateKey(r.Context(), hash)
-					if err != nil || user == nil {
-						http.Error(w, "invalid API key", http.StatusUnauthorized)
-						return
-					}
-					r = r.WithContext(WithUser(r.Context(), user))
-					next.ServeHTTP(w, r)
+			switch r.Header.Get(AuthTypeHeader) {
+			case "key":
+				user, err := a.validateKey(r)
+				if err != nil || user == nil {
+					http.Error(w, "invalid API key", http.StatusUnauthorized)
 					return
 				}
-			}
-			// CLI/device clients send X-Auth-Type: bearer
-			if r.Header.Get(AuthTypeHeader) == "bearer" {
+				r = r.WithContext(WithUser(r.Context(), user))
+				next.ServeHTTP(w, r)
+			case "bearer":
 				a.bearer.RequireAuthorization()(next).ServeHTTP(w, r)
-				return
+			default:
+				a.cookie.RequireAuthentication()(next).ServeHTTP(w, r)
 			}
-			// Web clients use cookie auth
-			a.cookie.RequireAuthentication()(next).ServeHTTP(w, r)
 		})
 	}
 }
@@ -168,25 +170,18 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check for xat_ API key in Authorization header
-			if a.keyValidator != nil {
-				if rawKey, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && IsAPIKey(rawKey) {
-					hash := HashKey(rawKey)
-					user, err := a.keyValidator.ValidateKey(r.Context(), hash)
-					if err == nil && user != nil {
-						r = r.WithContext(WithUser(r.Context(), user))
-					}
-					next.ServeHTTP(w, r)
-					return
+			switch r.Header.Get(AuthTypeHeader) {
+			case "key":
+				user, err := a.validateKey(r)
+				if err == nil && user != nil {
+					r = r.WithContext(WithUser(r.Context(), user))
 				}
-			}
-			// CLI/device clients send X-Auth-Type: bearer
-			if r.Header.Get(AuthTypeHeader) == "bearer" {
+				next.ServeHTTP(w, r)
+			case "bearer":
 				a.bearer.CheckAuthorization()(next).ServeHTTP(w, r)
-				return
+			default:
+				a.cookie.CheckAuthentication()(next).ServeHTTP(w, r)
 			}
-			// Web clients use cookie auth
-			a.cookie.CheckAuthentication()(next).ServeHTTP(w, r)
 		})
 	}
 }

@@ -16,9 +16,21 @@ const DefaultURL = "https://xagent.choly.ca"
 
 type Client = xagentv1connect.XAgentServiceClient
 
-// New returns a Connect client for the given base URL.
-// Supports unix socket URLs: unix:///path/to/socket
-func New(baseURL string, tokenSource TokenSource) Client {
+// Options configures the xagent client.
+type Options struct {
+	// BaseURL is the server URL. Supports unix socket URLs: unix:///path/to/socket
+	BaseURL string
+	// Source provides access tokens for authentication.
+	// If nil, no authentication is performed.
+	Source TokenSource
+	// AuthType is the value of the X-Auth-Type header.
+	// Defaults to "key" if empty.
+	AuthType string
+}
+
+// New returns a Connect client.
+func New(opts Options) Client {
+	baseURL := opts.BaseURL
 	var transport http.RoundTripper = http.DefaultTransport
 	if socketPath, ok := strings.CutPrefix(baseURL, "unix://"); ok {
 		baseURL = "http://localhost"
@@ -28,10 +40,11 @@ func New(baseURL string, tokenSource TokenSource) Client {
 			},
 		}
 	}
-	if tokenSource != nil {
+	if opts.Source != nil {
 		transport = &AuthTransport{
 			Transport: transport,
-			Source:    tokenSource,
+			Source:    opts.Source,
+			AuthType:  opts.AuthType,
 		}
 	}
 	httpClient := &http.Client{Transport: transport}

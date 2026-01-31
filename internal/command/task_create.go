@@ -61,7 +61,7 @@ var TaskCreateCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
 		}
-		client := xagentclient.New(serverURL, auth)
+		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Source: auth})
 
 		texts := cmd.StringSlice("instruction")
 		instructions := make([]*xagentv1.Instruction, len(texts))

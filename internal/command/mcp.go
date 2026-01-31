@@ -52,7 +52,7 @@ var McpCommand = &cli.Command{
 		}, nil)
 
 		token := cmd.String("token")
-		client := xagentclient.New(cmd.String("server"), agentauth.StaticTokenSource(token))
+		client := xagentclient.New(xagentclient.Options{BaseURL: cmd.String("server"), Source: agentauth.StaticTokenSource(token)})
 		task := &model.Task{
 			ID:        cmd.Int64("task"),
 			Runner:    cmd.String("runner"),

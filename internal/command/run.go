@@ -51,10 +51,10 @@ var RunCommand = &cli.Command{
 		defer signal.Stop(sigCh)
 
 		// Make sure the server is reachable
-		client := xagentclient.New(
-			cmd.String("server"),
-			agentauth.StaticTokenSource(cmd.String("token")),
-		)
+		client := xagentclient.New(xagentclient.Options{
+			BaseURL: cmd.String("server"),
+			Source:  agentauth.StaticTokenSource(cmd.String("token")),
+		})
 		if _, err := client.Ping(ctx, &xagentv1.PingRequest{}); err != nil {
 			return fmt.Errorf("failed to ping server: %w", err)
 		}
