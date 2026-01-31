@@ -399,6 +399,12 @@ func TestTask_Archive(t *testing.T) {
 			after:  Task{Status: TaskStatusArchived},
 			want:   false,
 		},
+		{
+			name:   "with command fails",
+			before: Task{Status: TaskStatusCompleted, Command: TaskCommandStart},
+			after:  Task{Status: TaskStatusCompleted, Command: TaskCommandStart},
+			want:   false,
+		},
 	}
 
 	for _, tt := range tests {

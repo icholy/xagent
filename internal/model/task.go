@@ -239,6 +239,9 @@ func (t *Task) applyRunnerEventFailed() bool {
 
 // CanArchive returns true if the task can be archived.
 func (t *Task) CanArchive() bool {
+	if t.Command != "" {
+		return false
+	}
 	switch t.Status {
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
 		return true
