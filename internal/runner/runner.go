@@ -18,7 +18,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/agentauth"
@@ -365,18 +364,50 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	// Build container config from workspace
-	config, hostConfig, networkConfig := r.buildContainerConfig(task, ws, token)
+	wc := &ws.Container
+
+	// Build environment variables
+	env := make([]string, 0, len(wc.Environment)+1)
+	env = append(env, fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID))
+	for k, v := range wc.Environment {
+		env = append(env, k+"="+v)
+	}
 
 	name := fmt.Sprintf("xagent-%d", task.ID)
-	r.log.Info("creating container", "task", task.ID, "name", name, "image", ws.Container.Image, "workspace", task.Workspace)
-	resp, err := r.docker.ContainerCreate(ctx, config, hostConfig, networkConfig, nil, name)
+	r.log.Info("creating container", "task", task.ID, "name", name, "image", wc.Image, "workspace", task.Workspace)
+
+	resp, err := r.docker.ContainerCreate(ctx,
+		&container.Config{
+			Image: wc.Image,
+			User:  wc.User,
+			Labels: map[string]string{
+				"xagent":      "true",
+				"xagent.task": fmt.Sprint(task.ID),
+			},
+			Cmd: []string{
+				"/usr/local/bin/xagent", "run",
+				"--server", "unix:///var/run/xagent.sock",
+				"--task", fmt.Sprint(task.ID),
+				"--token", token,
+			},
+			Env:        env,
+			WorkingDir: wc.WorkingDir,
+		},
+		&container.HostConfig{
+			Binds:    append([]string{r.proxy.SocketPath() + ":/var/run/xagent.sock"}, wc.Volumes...),
+			GroupAdd: wc.GroupAdd,
+			Runtime:  wc.Runtime,
+		},
+		wc.NetworkingConfig(),
+		nil,
+		name,
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to create container: %w", err)
 	}
 
 	// Copy xagent binary into container
-	if err := r.copyBinary(ctx, resp.ID, ws.Container.Image); err != nil {
+	if err := r.copyBinary(ctx, resp.ID, wc.Image); err != nil {
 		return "", fmt.Errorf("failed to copy binary: %w", err)
 	}
 
@@ -409,44 +440,6 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 	return nil
-}
-
-func (r *Runner) buildContainerConfig(
-	task *model.Task,
-	ws *workspace.Workspace,
-	token string,
-) (*container.Config, *container.HostConfig, *network.NetworkingConfig) {
-	ctr := &ws.Container
-
-	// Build environment variables
-	env := make([]string, 0, len(ctr.Environment)+1)
-	env = append(env, fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID))
-	for k, v := range ctr.Environment {
-		env = append(env, k+"="+v)
-	}
-
-	config := &container.Config{
-		Image: ctr.Image,
-		User:  ctr.User,
-		Labels: map[string]string{
-			"xagent":      "true",
-			"xagent.task": fmt.Sprint(task.ID),
-		},
-		Cmd: []string{
-			"/usr/local/bin/xagent", "run",
-			"--server", "unix:///var/run/xagent.sock",
-			"--task", fmt.Sprint(task.ID),
-			"--token", token,
-		},
-		Env:        env,
-		WorkingDir: ctr.WorkingDir,
-	}
-
-	hostConfig := ctr.HostConfig()
-	// Prepend the socket mount
-	hostConfig.Binds = append([]string{r.proxy.SocketPath() + ":/var/run/xagent.sock"}, hostConfig.Binds...)
-
-	return config, hostConfig, ctr.NetworkingConfig()
 }
 
 func (r *Runner) copyBinary(ctx context.Context, containerID, image string) error {

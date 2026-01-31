@@ -107,15 +107,6 @@ func (c *Container) Validate() error {
 	return nil
 }
 
-// HostConfig returns the Docker host configuration for this container.
-func (c *Container) HostConfig() *container.HostConfig {
-	return &container.HostConfig{
-		Binds:    c.Volumes,
-		GroupAdd: c.GroupAdd,
-		Runtime:  c.Runtime,
-	}
-}
-
 // NetworkingConfig returns the Docker networking configuration for this container.
 func (c *Container) NetworkingConfig() *network.NetworkingConfig {
 	if len(c.Networks) == 0 {
