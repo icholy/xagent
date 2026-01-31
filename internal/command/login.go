@@ -64,7 +64,7 @@ var LoginCommand = &cli.Command{
 		}
 
 		// Save the API key to the token file
-		token := &tokenfile.Token{APIKey: resp.RawToken}
+		token := &tokenfile.File{APIKey: resp.RawToken}
 		if err := tokenfile.Save(cmd.String("token-file"), token); err != nil {
 			return fmt.Errorf("save token: %w", err)
 		}
