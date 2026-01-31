@@ -3,6 +3,7 @@ package otelx
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -17,14 +18,15 @@ import (
 type Config struct {
 	ServiceName    string
 	ServiceVersion string
-	Endpoint       string
-	Insecure       bool
 }
 
 // Setup initializes OpenTelemetry with the given configuration.
 // It returns a shutdown function that should be called when the application exits.
+// The OTLP exporter is configured via standard OTel environment variables
+// (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_INSECURE, etc.).
+// If OTEL_EXPORTER_OTLP_ENDPOINT is not set, Setup is a no-op.
 func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error) {
-	if cfg.Endpoint == "" {
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
 		return func(context.Context) error { return nil }, nil
 	}
 
@@ -40,14 +42,7 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 		return nil, err
 	}
 
-	opts := []otlptracehttp.Option{
-		otlptracehttp.WithEndpoint(cfg.Endpoint),
-	}
-	if cfg.Insecure {
-		opts = append(opts, otlptracehttp.WithInsecure())
-	}
-
-	exporter, err := otlptracehttp.New(ctx, opts...)
+	exporter, err := otlptracehttp.New(ctx)
 	if err != nil {
 		return nil, err
 	}

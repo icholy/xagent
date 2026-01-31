@@ -74,16 +74,6 @@ var ServerCommand = &cli.Command{
 			Name:  "no-auth",
 			Usage: "Disable authentication (for development only)",
 		},
-		&cli.StringFlag{
-			Name:    "otel-endpoint",
-			Usage:   "OpenTelemetry OTLP endpoint (e.g. localhost:4318)",
-			Sources: cli.EnvVars("OTEL_EXPORTER_OTLP_ENDPOINT"),
-		},
-		&cli.BoolFlag{
-			Name:    "otel-insecure",
-			Usage:   "Use insecure connection for OTLP exporter",
-			Sources: cli.EnvVars("OTEL_EXPORTER_OTLP_INSECURE"),
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
@@ -91,12 +81,10 @@ var ServerCommand = &cli.Command{
 		notifyFlag := cmd.Bool("notify")
 		noAuth := cmd.Bool("no-auth")
 
-		// Initialize OpenTelemetry
+		// Initialize OpenTelemetry (configured via OTEL_EXPORTER_OTLP_ENDPOINT env var)
 		otelShutdown, err := otelx.Setup(ctx, otelx.Config{
 			ServiceName:    "xagent-server",
 			ServiceVersion: "1.0.0",
-			Endpoint:       cmd.String("otel-endpoint"),
-			Insecure:       cmd.Bool("otel-insecure"),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
