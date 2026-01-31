@@ -28,6 +28,7 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 		Owner:        task.Owner,
 		CreatedAt:    now,
 		UpdatedAt:    now,
+		Archived:     task.Archived,
 	})
 	if err != nil {
 		return err
@@ -110,6 +111,7 @@ func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 		Command:      string(task.Command),
 		Version:      task.Version,
 		UpdatedAt:    task.UpdatedAt,
+		Archived:     task.Archived,
 		ID:           task.ID,
 		Owner:        task.Owner,
 	})
@@ -138,6 +140,7 @@ func toModelTask(row sqlc.Task) (*model.Task, error) {
 		Command:      model.TaskCommand(row.Command),
 		Version:      row.Version,
 		Owner:        row.Owner,
+		Archived:     row.Archived,
 		CreatedAt:    row.CreatedAt,
 		UpdatedAt:    row.UpdatedAt,
 	}, nil

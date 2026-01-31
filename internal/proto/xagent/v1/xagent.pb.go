@@ -152,6 +152,7 @@ type TaskActions struct {
 	Cancel        bool                   `protobuf:"varint,2,opt,name=cancel,proto3" json:"cancel,omitempty"`
 	Restart       bool                   `protobuf:"varint,3,opt,name=restart,proto3" json:"restart,omitempty"`
 	Start         bool                   `protobuf:"varint,4,opt,name=start,proto3" json:"start,omitempty"`
+	Unarchive     bool                   `protobuf:"varint,5,opt,name=unarchive,proto3" json:"unarchive,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -214,6 +215,13 @@ func (x *TaskActions) GetStart() bool {
 	return false
 }
 
+func (x *TaskActions) GetUnarchive() bool {
+	if x != nil {
+		return x.Unarchive
+	}
+	return false
+}
+
 type Task struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -228,6 +236,7 @@ type Task struct {
 	Command       string                 `protobuf:"bytes,10,opt,name=command,proto3" json:"command,omitempty"`  // "restart", "stop", or empty
 	Version       int64                  `protobuf:"varint,11,opt,name=version,proto3" json:"version,omitempty"` // Incremented when command changes
 	Actions       *TaskActions           `protobuf:"bytes,12,opt,name=actions,proto3" json:"actions,omitempty"`
+	Archived      bool                   `protobuf:"varint,13,opt,name=archived,proto3" json:"archived,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -344,6 +353,13 @@ func (x *Task) GetActions() *TaskActions {
 		return x.Actions
 	}
 	return nil
+}
+
+func (x *Task) GetArchived() bool {
+	if x != nil {
+		return x.Archived
+	}
+	return false
 }
 
 type McpServer struct {
@@ -1394,6 +1410,86 @@ func (*ArchiveTaskResponse) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{26}
 }
 
+type UnarchiveTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnarchiveTaskRequest) Reset() {
+	*x = UnarchiveTaskRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnarchiveTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnarchiveTaskRequest) ProtoMessage() {}
+
+func (x *UnarchiveTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnarchiveTaskRequest.ProtoReflect.Descriptor instead.
+func (*UnarchiveTaskRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *UnarchiveTaskRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type UnarchiveTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnarchiveTaskResponse) Reset() {
+	*x = UnarchiveTaskResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnarchiveTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnarchiveTaskResponse) ProtoMessage() {}
+
+func (x *UnarchiveTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnarchiveTaskResponse.ProtoReflect.Descriptor instead.
+func (*UnarchiveTaskResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{28}
+}
+
 type CancelTaskRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1403,7 +1499,7 @@ type CancelTaskRequest struct {
 
 func (x *CancelTaskRequest) Reset() {
 	*x = CancelTaskRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[27]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1415,7 +1511,7 @@ func (x *CancelTaskRequest) String() string {
 func (*CancelTaskRequest) ProtoMessage() {}
 
 func (x *CancelTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[27]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1428,7 +1524,7 @@ func (x *CancelTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTaskRequest.ProtoReflect.Descriptor instead.
 func (*CancelTaskRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{27}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CancelTaskRequest) GetId() int64 {
@@ -1446,7 +1542,7 @@ type CancelTaskResponse struct {
 
 func (x *CancelTaskResponse) Reset() {
 	*x = CancelTaskResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[28]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1458,7 +1554,7 @@ func (x *CancelTaskResponse) String() string {
 func (*CancelTaskResponse) ProtoMessage() {}
 
 func (x *CancelTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[28]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1471,7 +1567,7 @@ func (x *CancelTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTaskResponse.ProtoReflect.Descriptor instead.
 func (*CancelTaskResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{28}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{30}
 }
 
 type RestartTaskRequest struct {
@@ -1483,7 +1579,7 @@ type RestartTaskRequest struct {
 
 func (x *RestartTaskRequest) Reset() {
 	*x = RestartTaskRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[29]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1495,7 +1591,7 @@ func (x *RestartTaskRequest) String() string {
 func (*RestartTaskRequest) ProtoMessage() {}
 
 func (x *RestartTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[29]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1508,7 +1604,7 @@ func (x *RestartTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestartTaskRequest.ProtoReflect.Descriptor instead.
 func (*RestartTaskRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{29}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RestartTaskRequest) GetId() int64 {
@@ -1526,7 +1622,7 @@ type RestartTaskResponse struct {
 
 func (x *RestartTaskResponse) Reset() {
 	*x = RestartTaskResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[30]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1538,7 +1634,7 @@ func (x *RestartTaskResponse) String() string {
 func (*RestartTaskResponse) ProtoMessage() {}
 
 func (x *RestartTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[30]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1551,7 +1647,7 @@ func (x *RestartTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestartTaskResponse.ProtoReflect.Descriptor instead.
 func (*RestartTaskResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{30}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{32}
 }
 
 type LogEntry struct {
@@ -1565,7 +1661,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[31]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1577,7 +1673,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[31]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1590,7 +1686,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{31}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *LogEntry) GetType() string {
@@ -1624,7 +1720,7 @@ type UploadLogsRequest struct {
 
 func (x *UploadLogsRequest) Reset() {
 	*x = UploadLogsRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[32]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1636,7 +1732,7 @@ func (x *UploadLogsRequest) String() string {
 func (*UploadLogsRequest) ProtoMessage() {}
 
 func (x *UploadLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[32]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1649,7 +1745,7 @@ func (x *UploadLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadLogsRequest.ProtoReflect.Descriptor instead.
 func (*UploadLogsRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{32}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *UploadLogsRequest) GetTaskId() int64 {
@@ -1674,7 +1770,7 @@ type UploadLogsResponse struct {
 
 func (x *UploadLogsResponse) Reset() {
 	*x = UploadLogsResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[33]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1686,7 +1782,7 @@ func (x *UploadLogsResponse) String() string {
 func (*UploadLogsResponse) ProtoMessage() {}
 
 func (x *UploadLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[33]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1699,7 +1795,7 @@ func (x *UploadLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadLogsResponse.ProtoReflect.Descriptor instead.
 func (*UploadLogsResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{33}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{35}
 }
 
 type ListLogsRequest struct {
@@ -1711,7 +1807,7 @@ type ListLogsRequest struct {
 
 func (x *ListLogsRequest) Reset() {
 	*x = ListLogsRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[34]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1723,7 +1819,7 @@ func (x *ListLogsRequest) String() string {
 func (*ListLogsRequest) ProtoMessage() {}
 
 func (x *ListLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[34]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1736,7 +1832,7 @@ func (x *ListLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLogsRequest.ProtoReflect.Descriptor instead.
 func (*ListLogsRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{34}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListLogsRequest) GetTaskId() int64 {
@@ -1755,7 +1851,7 @@ type ListLogsResponse struct {
 
 func (x *ListLogsResponse) Reset() {
 	*x = ListLogsResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[35]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1767,7 +1863,7 @@ func (x *ListLogsResponse) String() string {
 func (*ListLogsResponse) ProtoMessage() {}
 
 func (x *ListLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[35]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1780,7 +1876,7 @@ func (x *ListLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLogsResponse.ProtoReflect.Descriptor instead.
 func (*ListLogsResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{35}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListLogsResponse) GetEntries() []*LogEntry {
@@ -1805,7 +1901,7 @@ type TaskLink struct {
 
 func (x *TaskLink) Reset() {
 	*x = TaskLink{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[36]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1817,7 +1913,7 @@ func (x *TaskLink) String() string {
 func (*TaskLink) ProtoMessage() {}
 
 func (x *TaskLink) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[36]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1830,7 +1926,7 @@ func (x *TaskLink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskLink.ProtoReflect.Descriptor instead.
 func (*TaskLink) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{36}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *TaskLink) GetId() int64 {
@@ -1895,7 +1991,7 @@ type CreateLinkRequest struct {
 
 func (x *CreateLinkRequest) Reset() {
 	*x = CreateLinkRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[37]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1907,7 +2003,7 @@ func (x *CreateLinkRequest) String() string {
 func (*CreateLinkRequest) ProtoMessage() {}
 
 func (x *CreateLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[37]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1920,7 +2016,7 @@ func (x *CreateLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLinkRequest.ProtoReflect.Descriptor instead.
 func (*CreateLinkRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{37}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CreateLinkRequest) GetTaskId() int64 {
@@ -1967,7 +2063,7 @@ type CreateLinkResponse struct {
 
 func (x *CreateLinkResponse) Reset() {
 	*x = CreateLinkResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[38]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1979,7 +2075,7 @@ func (x *CreateLinkResponse) String() string {
 func (*CreateLinkResponse) ProtoMessage() {}
 
 func (x *CreateLinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[38]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1992,7 +2088,7 @@ func (x *CreateLinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLinkResponse.ProtoReflect.Descriptor instead.
 func (*CreateLinkResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{38}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *CreateLinkResponse) GetLink() *TaskLink {
@@ -2011,7 +2107,7 @@ type ListLinksRequest struct {
 
 func (x *ListLinksRequest) Reset() {
 	*x = ListLinksRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[39]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2023,7 +2119,7 @@ func (x *ListLinksRequest) String() string {
 func (*ListLinksRequest) ProtoMessage() {}
 
 func (x *ListLinksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[39]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2036,7 +2132,7 @@ func (x *ListLinksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLinksRequest.ProtoReflect.Descriptor instead.
 func (*ListLinksRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{39}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ListLinksRequest) GetTaskId() int64 {
@@ -2055,7 +2151,7 @@ type ListLinksResponse struct {
 
 func (x *ListLinksResponse) Reset() {
 	*x = ListLinksResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[40]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2067,7 +2163,7 @@ func (x *ListLinksResponse) String() string {
 func (*ListLinksResponse) ProtoMessage() {}
 
 func (x *ListLinksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[40]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2080,7 +2176,7 @@ func (x *ListLinksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLinksResponse.ProtoReflect.Descriptor instead.
 func (*ListLinksResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{40}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListLinksResponse) GetLinks() []*TaskLink {
@@ -2099,7 +2195,7 @@ type FindLinksByURLRequest struct {
 
 func (x *FindLinksByURLRequest) Reset() {
 	*x = FindLinksByURLRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[41]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2111,7 +2207,7 @@ func (x *FindLinksByURLRequest) String() string {
 func (*FindLinksByURLRequest) ProtoMessage() {}
 
 func (x *FindLinksByURLRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[41]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2124,7 +2220,7 @@ func (x *FindLinksByURLRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FindLinksByURLRequest.ProtoReflect.Descriptor instead.
 func (*FindLinksByURLRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{41}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *FindLinksByURLRequest) GetUrl() string {
@@ -2143,7 +2239,7 @@ type FindLinksByURLResponse struct {
 
 func (x *FindLinksByURLResponse) Reset() {
 	*x = FindLinksByURLResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[42]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2155,7 +2251,7 @@ func (x *FindLinksByURLResponse) String() string {
 func (*FindLinksByURLResponse) ProtoMessage() {}
 
 func (x *FindLinksByURLResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[42]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2168,7 +2264,7 @@ func (x *FindLinksByURLResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FindLinksByURLResponse.ProtoReflect.Descriptor instead.
 func (*FindLinksByURLResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{42}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *FindLinksByURLResponse) GetLinks() []*TaskLink {
@@ -2191,7 +2287,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[43]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2203,7 +2299,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[43]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2216,7 +2312,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{43}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *Event) GetId() int64 {
@@ -2263,7 +2359,7 @@ type ListEventsRequest struct {
 
 func (x *ListEventsRequest) Reset() {
 	*x = ListEventsRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[44]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2275,7 +2371,7 @@ func (x *ListEventsRequest) String() string {
 func (*ListEventsRequest) ProtoMessage() {}
 
 func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[44]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2288,7 +2384,7 @@ func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListEventsRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{44}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ListEventsRequest) GetLimit() int32 {
@@ -2307,7 +2403,7 @@ type ListEventsResponse struct {
 
 func (x *ListEventsResponse) Reset() {
 	*x = ListEventsResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[45]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2319,7 +2415,7 @@ func (x *ListEventsResponse) String() string {
 func (*ListEventsResponse) ProtoMessage() {}
 
 func (x *ListEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[45]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2332,7 +2428,7 @@ func (x *ListEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListEventsResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{45}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListEventsResponse) GetEvents() []*Event {
@@ -2353,7 +2449,7 @@ type CreateEventRequest struct {
 
 func (x *CreateEventRequest) Reset() {
 	*x = CreateEventRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[46]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2365,7 +2461,7 @@ func (x *CreateEventRequest) String() string {
 func (*CreateEventRequest) ProtoMessage() {}
 
 func (x *CreateEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[46]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2378,7 +2474,7 @@ func (x *CreateEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEventRequest.ProtoReflect.Descriptor instead.
 func (*CreateEventRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{46}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *CreateEventRequest) GetDescription() string {
@@ -2411,7 +2507,7 @@ type CreateEventResponse struct {
 
 func (x *CreateEventResponse) Reset() {
 	*x = CreateEventResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[47]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2423,7 +2519,7 @@ func (x *CreateEventResponse) String() string {
 func (*CreateEventResponse) ProtoMessage() {}
 
 func (x *CreateEventResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[47]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2436,7 +2532,7 @@ func (x *CreateEventResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEventResponse.ProtoReflect.Descriptor instead.
 func (*CreateEventResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{47}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *CreateEventResponse) GetEvent() *Event {
@@ -2455,7 +2551,7 @@ type GetEventRequest struct {
 
 func (x *GetEventRequest) Reset() {
 	*x = GetEventRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[48]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2467,7 +2563,7 @@ func (x *GetEventRequest) String() string {
 func (*GetEventRequest) ProtoMessage() {}
 
 func (x *GetEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[48]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2480,7 +2576,7 @@ func (x *GetEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventRequest.ProtoReflect.Descriptor instead.
 func (*GetEventRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{48}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *GetEventRequest) GetId() int64 {
@@ -2499,7 +2595,7 @@ type GetEventResponse struct {
 
 func (x *GetEventResponse) Reset() {
 	*x = GetEventResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[49]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2511,7 +2607,7 @@ func (x *GetEventResponse) String() string {
 func (*GetEventResponse) ProtoMessage() {}
 
 func (x *GetEventResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[49]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2524,7 +2620,7 @@ func (x *GetEventResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventResponse.ProtoReflect.Descriptor instead.
 func (*GetEventResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{49}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *GetEventResponse) GetEvent() *Event {
@@ -2543,7 +2639,7 @@ type DeleteEventRequest struct {
 
 func (x *DeleteEventRequest) Reset() {
 	*x = DeleteEventRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[50]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2555,7 +2651,7 @@ func (x *DeleteEventRequest) String() string {
 func (*DeleteEventRequest) ProtoMessage() {}
 
 func (x *DeleteEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[50]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2568,7 +2664,7 @@ func (x *DeleteEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteEventRequest.ProtoReflect.Descriptor instead.
 func (*DeleteEventRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{50}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *DeleteEventRequest) GetId() int64 {
@@ -2586,7 +2682,7 @@ type DeleteEventResponse struct {
 
 func (x *DeleteEventResponse) Reset() {
 	*x = DeleteEventResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[51]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2598,7 +2694,7 @@ func (x *DeleteEventResponse) String() string {
 func (*DeleteEventResponse) ProtoMessage() {}
 
 func (x *DeleteEventResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[51]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2611,7 +2707,7 @@ func (x *DeleteEventResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteEventResponse.ProtoReflect.Descriptor instead.
 func (*DeleteEventResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{51}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{53}
 }
 
 type AddEventTaskRequest struct {
@@ -2624,7 +2720,7 @@ type AddEventTaskRequest struct {
 
 func (x *AddEventTaskRequest) Reset() {
 	*x = AddEventTaskRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[52]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2636,7 +2732,7 @@ func (x *AddEventTaskRequest) String() string {
 func (*AddEventTaskRequest) ProtoMessage() {}
 
 func (x *AddEventTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[52]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2649,7 +2745,7 @@ func (x *AddEventTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddEventTaskRequest.ProtoReflect.Descriptor instead.
 func (*AddEventTaskRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{52}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *AddEventTaskRequest) GetEventId() int64 {
@@ -2674,7 +2770,7 @@ type AddEventTaskResponse struct {
 
 func (x *AddEventTaskResponse) Reset() {
 	*x = AddEventTaskResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[53]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2686,7 +2782,7 @@ func (x *AddEventTaskResponse) String() string {
 func (*AddEventTaskResponse) ProtoMessage() {}
 
 func (x *AddEventTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[53]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2699,7 +2795,7 @@ func (x *AddEventTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddEventTaskResponse.ProtoReflect.Descriptor instead.
 func (*AddEventTaskResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{53}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{55}
 }
 
 type RemoveEventTaskRequest struct {
@@ -2712,7 +2808,7 @@ type RemoveEventTaskRequest struct {
 
 func (x *RemoveEventTaskRequest) Reset() {
 	*x = RemoveEventTaskRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[54]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2724,7 +2820,7 @@ func (x *RemoveEventTaskRequest) String() string {
 func (*RemoveEventTaskRequest) ProtoMessage() {}
 
 func (x *RemoveEventTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[54]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2737,7 +2833,7 @@ func (x *RemoveEventTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveEventTaskRequest.ProtoReflect.Descriptor instead.
 func (*RemoveEventTaskRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{54}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *RemoveEventTaskRequest) GetEventId() int64 {
@@ -2762,7 +2858,7 @@ type RemoveEventTaskResponse struct {
 
 func (x *RemoveEventTaskResponse) Reset() {
 	*x = RemoveEventTaskResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[55]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2774,7 +2870,7 @@ func (x *RemoveEventTaskResponse) String() string {
 func (*RemoveEventTaskResponse) ProtoMessage() {}
 
 func (x *RemoveEventTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[55]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2787,7 +2883,7 @@ func (x *RemoveEventTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveEventTaskResponse.ProtoReflect.Descriptor instead.
 func (*RemoveEventTaskResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{55}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{57}
 }
 
 type ListEventTasksRequest struct {
@@ -2799,7 +2895,7 @@ type ListEventTasksRequest struct {
 
 func (x *ListEventTasksRequest) Reset() {
 	*x = ListEventTasksRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[56]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2811,7 +2907,7 @@ func (x *ListEventTasksRequest) String() string {
 func (*ListEventTasksRequest) ProtoMessage() {}
 
 func (x *ListEventTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[56]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2824,7 +2920,7 @@ func (x *ListEventTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEventTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListEventTasksRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{56}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ListEventTasksRequest) GetEventId() int64 {
@@ -2843,7 +2939,7 @@ type ListEventTasksResponse struct {
 
 func (x *ListEventTasksResponse) Reset() {
 	*x = ListEventTasksResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[57]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2855,7 +2951,7 @@ func (x *ListEventTasksResponse) String() string {
 func (*ListEventTasksResponse) ProtoMessage() {}
 
 func (x *ListEventTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[57]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2868,7 +2964,7 @@ func (x *ListEventTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEventTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListEventTasksResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{57}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ListEventTasksResponse) GetTaskIds() []int64 {
@@ -2887,7 +2983,7 @@ type ListEventsByTaskRequest struct {
 
 func (x *ListEventsByTaskRequest) Reset() {
 	*x = ListEventsByTaskRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[58]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2899,7 +2995,7 @@ func (x *ListEventsByTaskRequest) String() string {
 func (*ListEventsByTaskRequest) ProtoMessage() {}
 
 func (x *ListEventsByTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[58]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2912,7 +3008,7 @@ func (x *ListEventsByTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEventsByTaskRequest.ProtoReflect.Descriptor instead.
 func (*ListEventsByTaskRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{58}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ListEventsByTaskRequest) GetTaskId() int64 {
@@ -2931,7 +3027,7 @@ type ListEventsByTaskResponse struct {
 
 func (x *ListEventsByTaskResponse) Reset() {
 	*x = ListEventsByTaskResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[59]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2943,7 +3039,7 @@ func (x *ListEventsByTaskResponse) String() string {
 func (*ListEventsByTaskResponse) ProtoMessage() {}
 
 func (x *ListEventsByTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[59]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2956,7 +3052,7 @@ func (x *ListEventsByTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEventsByTaskResponse.ProtoReflect.Descriptor instead.
 func (*ListEventsByTaskResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{59}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListEventsByTaskResponse) GetEvents() []*Event {
@@ -2975,7 +3071,7 @@ type ProcessEventRequest struct {
 
 func (x *ProcessEventRequest) Reset() {
 	*x = ProcessEventRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[60]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2987,7 +3083,7 @@ func (x *ProcessEventRequest) String() string {
 func (*ProcessEventRequest) ProtoMessage() {}
 
 func (x *ProcessEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[60]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3000,7 +3096,7 @@ func (x *ProcessEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessEventRequest.ProtoReflect.Descriptor instead.
 func (*ProcessEventRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{60}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ProcessEventRequest) GetId() int64 {
@@ -3019,7 +3115,7 @@ type ProcessEventResponse struct {
 
 func (x *ProcessEventResponse) Reset() {
 	*x = ProcessEventResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[61]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3031,7 +3127,7 @@ func (x *ProcessEventResponse) String() string {
 func (*ProcessEventResponse) ProtoMessage() {}
 
 func (x *ProcessEventResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[61]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3044,7 +3140,7 @@ func (x *ProcessEventResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessEventResponse.ProtoReflect.Descriptor instead.
 func (*ProcessEventResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{61}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ProcessEventResponse) GetTaskIds() []int64 {
@@ -3066,7 +3162,7 @@ type RunnerEvent struct {
 
 func (x *RunnerEvent) Reset() {
 	*x = RunnerEvent{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[62]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3078,7 +3174,7 @@ func (x *RunnerEvent) String() string {
 func (*RunnerEvent) ProtoMessage() {}
 
 func (x *RunnerEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[62]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3091,7 +3187,7 @@ func (x *RunnerEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunnerEvent.ProtoReflect.Descriptor instead.
 func (*RunnerEvent) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{62}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *RunnerEvent) GetTaskId() int64 {
@@ -3131,7 +3227,7 @@ type SubmitRunnerEventsRequest struct {
 
 func (x *SubmitRunnerEventsRequest) Reset() {
 	*x = SubmitRunnerEventsRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[63]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3143,7 +3239,7 @@ func (x *SubmitRunnerEventsRequest) String() string {
 func (*SubmitRunnerEventsRequest) ProtoMessage() {}
 
 func (x *SubmitRunnerEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[63]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3156,7 +3252,7 @@ func (x *SubmitRunnerEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitRunnerEventsRequest.ProtoReflect.Descriptor instead.
 func (*SubmitRunnerEventsRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{63}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *SubmitRunnerEventsRequest) GetEvents() []*RunnerEvent {
@@ -3174,7 +3270,7 @@ type SubmitRunnerEventsResponse struct {
 
 func (x *SubmitRunnerEventsResponse) Reset() {
 	*x = SubmitRunnerEventsResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[64]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3186,7 +3282,7 @@ func (x *SubmitRunnerEventsResponse) String() string {
 func (*SubmitRunnerEventsResponse) ProtoMessage() {}
 
 func (x *SubmitRunnerEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[64]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3199,7 +3295,7 @@ func (x *SubmitRunnerEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitRunnerEventsResponse.ProtoReflect.Descriptor instead.
 func (*SubmitRunnerEventsResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{64}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{66}
 }
 
 type RegisteredWorkspace struct {
@@ -3213,7 +3309,7 @@ type RegisteredWorkspace struct {
 
 func (x *RegisteredWorkspace) Reset() {
 	*x = RegisteredWorkspace{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[65]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3225,7 +3321,7 @@ func (x *RegisteredWorkspace) String() string {
 func (*RegisteredWorkspace) ProtoMessage() {}
 
 func (x *RegisteredWorkspace) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[65]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3238,7 +3334,7 @@ func (x *RegisteredWorkspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisteredWorkspace.ProtoReflect.Descriptor instead.
 func (*RegisteredWorkspace) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{65}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *RegisteredWorkspace) GetName() string {
@@ -3272,7 +3368,7 @@ type RegisterWorkspacesRequest struct {
 
 func (x *RegisterWorkspacesRequest) Reset() {
 	*x = RegisterWorkspacesRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[66]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3284,7 +3380,7 @@ func (x *RegisterWorkspacesRequest) String() string {
 func (*RegisterWorkspacesRequest) ProtoMessage() {}
 
 func (x *RegisterWorkspacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[66]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3297,7 +3393,7 @@ func (x *RegisterWorkspacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterWorkspacesRequest.ProtoReflect.Descriptor instead.
 func (*RegisterWorkspacesRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{66}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *RegisterWorkspacesRequest) GetRunnerId() string {
@@ -3322,7 +3418,7 @@ type RegisterWorkspacesResponse struct {
 
 func (x *RegisterWorkspacesResponse) Reset() {
 	*x = RegisterWorkspacesResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[67]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3334,7 +3430,7 @@ func (x *RegisterWorkspacesResponse) String() string {
 func (*RegisterWorkspacesResponse) ProtoMessage() {}
 
 func (x *RegisterWorkspacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[67]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3347,7 +3443,7 @@ func (x *RegisterWorkspacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterWorkspacesResponse.ProtoReflect.Descriptor instead.
 func (*RegisterWorkspacesResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{67}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{69}
 }
 
 type ListWorkspacesRequest struct {
@@ -3358,7 +3454,7 @@ type ListWorkspacesRequest struct {
 
 func (x *ListWorkspacesRequest) Reset() {
 	*x = ListWorkspacesRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[68]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3370,7 +3466,7 @@ func (x *ListWorkspacesRequest) String() string {
 func (*ListWorkspacesRequest) ProtoMessage() {}
 
 func (x *ListWorkspacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[68]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3383,7 +3479,7 @@ func (x *ListWorkspacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkspacesRequest.ProtoReflect.Descriptor instead.
 func (*ListWorkspacesRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{68}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{70}
 }
 
 type ListWorkspacesResponse struct {
@@ -3395,7 +3491,7 @@ type ListWorkspacesResponse struct {
 
 func (x *ListWorkspacesResponse) Reset() {
 	*x = ListWorkspacesResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[69]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3407,7 +3503,7 @@ func (x *ListWorkspacesResponse) String() string {
 func (*ListWorkspacesResponse) ProtoMessage() {}
 
 func (x *ListWorkspacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[69]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3420,7 +3516,7 @@ func (x *ListWorkspacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkspacesResponse.ProtoReflect.Descriptor instead.
 func (*ListWorkspacesResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{69}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ListWorkspacesResponse) GetWorkspaces() []*RegisteredWorkspace {
@@ -3439,7 +3535,7 @@ type ClearWorkspacesRequest struct {
 
 func (x *ClearWorkspacesRequest) Reset() {
 	*x = ClearWorkspacesRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[70]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3451,7 +3547,7 @@ func (x *ClearWorkspacesRequest) String() string {
 func (*ClearWorkspacesRequest) ProtoMessage() {}
 
 func (x *ClearWorkspacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[70]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3464,7 +3560,7 @@ func (x *ClearWorkspacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearWorkspacesRequest.ProtoReflect.Descriptor instead.
 func (*ClearWorkspacesRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{70}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ClearWorkspacesRequest) GetRunnerId() string {
@@ -3482,7 +3578,7 @@ type ClearWorkspacesResponse struct {
 
 func (x *ClearWorkspacesResponse) Reset() {
 	*x = ClearWorkspacesResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[71]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3494,7 +3590,7 @@ func (x *ClearWorkspacesResponse) String() string {
 func (*ClearWorkspacesResponse) ProtoMessage() {}
 
 func (x *ClearWorkspacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[71]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3507,7 +3603,7 @@ func (x *ClearWorkspacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearWorkspacesResponse.ProtoReflect.Descriptor instead.
 func (*ClearWorkspacesResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{71}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{73}
 }
 
 var File_xagent_v1_xagent_proto protoreflect.FileDescriptor
@@ -3519,12 +3615,13 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\fPingResponse\"3\n" +
 	"\vInstruction\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"o\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\x8d\x01\n" +
 	"\vTaskActions\x12\x18\n" +
 	"\aarchive\x18\x01 \x01(\bR\aarchive\x12\x16\n" +
 	"\x06cancel\x18\x02 \x01(\bR\x06cancel\x12\x18\n" +
 	"\arestart\x18\x03 \x01(\bR\arestart\x12\x14\n" +
-	"\x05start\x18\x04 \x01(\bR\x05start\"\xa8\x03\n" +
+	"\x05start\x18\x04 \x01(\bR\x05start\x12\x1c\n" +
+	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\xc4\x03\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -3540,7 +3637,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\acommand\x18\n" +
 	" \x01(\tR\acommand\x12\x18\n" +
 	"\aversion\x18\v \x01(\x03R\aversion\x120\n" +
-	"\aactions\x18\f \x01(\v2\x16.xagent.v1.TaskActionsR\aactions\"\xb6\x01\n" +
+	"\aactions\x18\f \x01(\v2\x16.xagent.v1.TaskActionsR\aactions\x12\x1a\n" +
+	"\barchived\x18\r \x01(\bR\barchived\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
@@ -3597,7 +3695,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x12DeleteTaskResponse\"$\n" +
 	"\x12ArchiveTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x15\n" +
-	"\x13ArchiveTaskResponse\"#\n" +
+	"\x13ArchiveTaskResponse\"&\n" +
+	"\x14UnarchiveTaskRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"\x17\n" +
+	"\x15UnarchiveTaskResponse\"#\n" +
 	"\x11CancelTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x14\n" +
 	"\x12CancelTaskResponse\"$\n" +
@@ -3712,7 +3813,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"workspaces\"5\n" +
 	"\x16ClearWorkspacesRequest\x12\x1b\n" +
 	"\trunner_id\x18\x01 \x01(\tR\brunnerId\"\x19\n" +
-	"\x17ClearWorkspacesResponse2\xba\x13\n" +
+	"\x17ClearWorkspacesResponse2\x8e\x14\n" +
 	"\rXAgentService\x127\n" +
 	"\x04Ping\x12\x16.xagent.v1.PingRequest\x1a\x17.xagent.v1.PingResponse\x12I\n" +
 	"\n" +
@@ -3728,7 +3829,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"UpdateTask\x12\x1c.xagent.v1.UpdateTaskRequest\x1a\x1d.xagent.v1.UpdateTaskResponse\x12I\n" +
 	"\n" +
 	"DeleteTask\x12\x1c.xagent.v1.DeleteTaskRequest\x1a\x1d.xagent.v1.DeleteTaskResponse\x12L\n" +
-	"\vArchiveTask\x12\x1d.xagent.v1.ArchiveTaskRequest\x1a\x1e.xagent.v1.ArchiveTaskResponse\x12I\n" +
+	"\vArchiveTask\x12\x1d.xagent.v1.ArchiveTaskRequest\x1a\x1e.xagent.v1.ArchiveTaskResponse\x12R\n" +
+	"\rUnarchiveTask\x12\x1f.xagent.v1.UnarchiveTaskRequest\x1a .xagent.v1.UnarchiveTaskResponse\x12I\n" +
 	"\n" +
 	"CancelTask\x12\x1c.xagent.v1.CancelTaskRequest\x1a\x1d.xagent.v1.CancelTaskResponse\x12L\n" +
 	"\vRestartTask\x12\x1d.xagent.v1.RestartTaskRequest\x1a\x1e.xagent.v1.RestartTaskResponse\x12I\n" +
@@ -3766,7 +3868,7 @@ func file_xagent_v1_xagent_proto_rawDescGZIP() []byte {
 	return file_xagent_v1_xagent_proto_rawDescData
 }
 
-var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
+var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 75)
 var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*PingRequest)(nil),                // 0: xagent.v1.PingRequest
 	(*PingResponse)(nil),               // 1: xagent.v1.PingResponse
@@ -3795,60 +3897,62 @@ var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*DeleteTaskResponse)(nil),         // 24: xagent.v1.DeleteTaskResponse
 	(*ArchiveTaskRequest)(nil),         // 25: xagent.v1.ArchiveTaskRequest
 	(*ArchiveTaskResponse)(nil),        // 26: xagent.v1.ArchiveTaskResponse
-	(*CancelTaskRequest)(nil),          // 27: xagent.v1.CancelTaskRequest
-	(*CancelTaskResponse)(nil),         // 28: xagent.v1.CancelTaskResponse
-	(*RestartTaskRequest)(nil),         // 29: xagent.v1.RestartTaskRequest
-	(*RestartTaskResponse)(nil),        // 30: xagent.v1.RestartTaskResponse
-	(*LogEntry)(nil),                   // 31: xagent.v1.LogEntry
-	(*UploadLogsRequest)(nil),          // 32: xagent.v1.UploadLogsRequest
-	(*UploadLogsResponse)(nil),         // 33: xagent.v1.UploadLogsResponse
-	(*ListLogsRequest)(nil),            // 34: xagent.v1.ListLogsRequest
-	(*ListLogsResponse)(nil),           // 35: xagent.v1.ListLogsResponse
-	(*TaskLink)(nil),                   // 36: xagent.v1.TaskLink
-	(*CreateLinkRequest)(nil),          // 37: xagent.v1.CreateLinkRequest
-	(*CreateLinkResponse)(nil),         // 38: xagent.v1.CreateLinkResponse
-	(*ListLinksRequest)(nil),           // 39: xagent.v1.ListLinksRequest
-	(*ListLinksResponse)(nil),          // 40: xagent.v1.ListLinksResponse
-	(*FindLinksByURLRequest)(nil),      // 41: xagent.v1.FindLinksByURLRequest
-	(*FindLinksByURLResponse)(nil),     // 42: xagent.v1.FindLinksByURLResponse
-	(*Event)(nil),                      // 43: xagent.v1.Event
-	(*ListEventsRequest)(nil),          // 44: xagent.v1.ListEventsRequest
-	(*ListEventsResponse)(nil),         // 45: xagent.v1.ListEventsResponse
-	(*CreateEventRequest)(nil),         // 46: xagent.v1.CreateEventRequest
-	(*CreateEventResponse)(nil),        // 47: xagent.v1.CreateEventResponse
-	(*GetEventRequest)(nil),            // 48: xagent.v1.GetEventRequest
-	(*GetEventResponse)(nil),           // 49: xagent.v1.GetEventResponse
-	(*DeleteEventRequest)(nil),         // 50: xagent.v1.DeleteEventRequest
-	(*DeleteEventResponse)(nil),        // 51: xagent.v1.DeleteEventResponse
-	(*AddEventTaskRequest)(nil),        // 52: xagent.v1.AddEventTaskRequest
-	(*AddEventTaskResponse)(nil),       // 53: xagent.v1.AddEventTaskResponse
-	(*RemoveEventTaskRequest)(nil),     // 54: xagent.v1.RemoveEventTaskRequest
-	(*RemoveEventTaskResponse)(nil),    // 55: xagent.v1.RemoveEventTaskResponse
-	(*ListEventTasksRequest)(nil),      // 56: xagent.v1.ListEventTasksRequest
-	(*ListEventTasksResponse)(nil),     // 57: xagent.v1.ListEventTasksResponse
-	(*ListEventsByTaskRequest)(nil),    // 58: xagent.v1.ListEventsByTaskRequest
-	(*ListEventsByTaskResponse)(nil),   // 59: xagent.v1.ListEventsByTaskResponse
-	(*ProcessEventRequest)(nil),        // 60: xagent.v1.ProcessEventRequest
-	(*ProcessEventResponse)(nil),       // 61: xagent.v1.ProcessEventResponse
-	(*RunnerEvent)(nil),                // 62: xagent.v1.RunnerEvent
-	(*SubmitRunnerEventsRequest)(nil),  // 63: xagent.v1.SubmitRunnerEventsRequest
-	(*SubmitRunnerEventsResponse)(nil), // 64: xagent.v1.SubmitRunnerEventsResponse
-	(*RegisteredWorkspace)(nil),        // 65: xagent.v1.RegisteredWorkspace
-	(*RegisterWorkspacesRequest)(nil),  // 66: xagent.v1.RegisterWorkspacesRequest
-	(*RegisterWorkspacesResponse)(nil), // 67: xagent.v1.RegisterWorkspacesResponse
-	(*ListWorkspacesRequest)(nil),      // 68: xagent.v1.ListWorkspacesRequest
-	(*ListWorkspacesResponse)(nil),     // 69: xagent.v1.ListWorkspacesResponse
-	(*ClearWorkspacesRequest)(nil),     // 70: xagent.v1.ClearWorkspacesRequest
-	(*ClearWorkspacesResponse)(nil),    // 71: xagent.v1.ClearWorkspacesResponse
-	nil,                                // 72: xagent.v1.McpServer.EnvEntry
-	(*timestamppb.Timestamp)(nil),      // 73: google.protobuf.Timestamp
+	(*UnarchiveTaskRequest)(nil),       // 27: xagent.v1.UnarchiveTaskRequest
+	(*UnarchiveTaskResponse)(nil),      // 28: xagent.v1.UnarchiveTaskResponse
+	(*CancelTaskRequest)(nil),          // 29: xagent.v1.CancelTaskRequest
+	(*CancelTaskResponse)(nil),         // 30: xagent.v1.CancelTaskResponse
+	(*RestartTaskRequest)(nil),         // 31: xagent.v1.RestartTaskRequest
+	(*RestartTaskResponse)(nil),        // 32: xagent.v1.RestartTaskResponse
+	(*LogEntry)(nil),                   // 33: xagent.v1.LogEntry
+	(*UploadLogsRequest)(nil),          // 34: xagent.v1.UploadLogsRequest
+	(*UploadLogsResponse)(nil),         // 35: xagent.v1.UploadLogsResponse
+	(*ListLogsRequest)(nil),            // 36: xagent.v1.ListLogsRequest
+	(*ListLogsResponse)(nil),           // 37: xagent.v1.ListLogsResponse
+	(*TaskLink)(nil),                   // 38: xagent.v1.TaskLink
+	(*CreateLinkRequest)(nil),          // 39: xagent.v1.CreateLinkRequest
+	(*CreateLinkResponse)(nil),         // 40: xagent.v1.CreateLinkResponse
+	(*ListLinksRequest)(nil),           // 41: xagent.v1.ListLinksRequest
+	(*ListLinksResponse)(nil),          // 42: xagent.v1.ListLinksResponse
+	(*FindLinksByURLRequest)(nil),      // 43: xagent.v1.FindLinksByURLRequest
+	(*FindLinksByURLResponse)(nil),     // 44: xagent.v1.FindLinksByURLResponse
+	(*Event)(nil),                      // 45: xagent.v1.Event
+	(*ListEventsRequest)(nil),          // 46: xagent.v1.ListEventsRequest
+	(*ListEventsResponse)(nil),         // 47: xagent.v1.ListEventsResponse
+	(*CreateEventRequest)(nil),         // 48: xagent.v1.CreateEventRequest
+	(*CreateEventResponse)(nil),        // 49: xagent.v1.CreateEventResponse
+	(*GetEventRequest)(nil),            // 50: xagent.v1.GetEventRequest
+	(*GetEventResponse)(nil),           // 51: xagent.v1.GetEventResponse
+	(*DeleteEventRequest)(nil),         // 52: xagent.v1.DeleteEventRequest
+	(*DeleteEventResponse)(nil),        // 53: xagent.v1.DeleteEventResponse
+	(*AddEventTaskRequest)(nil),        // 54: xagent.v1.AddEventTaskRequest
+	(*AddEventTaskResponse)(nil),       // 55: xagent.v1.AddEventTaskResponse
+	(*RemoveEventTaskRequest)(nil),     // 56: xagent.v1.RemoveEventTaskRequest
+	(*RemoveEventTaskResponse)(nil),    // 57: xagent.v1.RemoveEventTaskResponse
+	(*ListEventTasksRequest)(nil),      // 58: xagent.v1.ListEventTasksRequest
+	(*ListEventTasksResponse)(nil),     // 59: xagent.v1.ListEventTasksResponse
+	(*ListEventsByTaskRequest)(nil),    // 60: xagent.v1.ListEventsByTaskRequest
+	(*ListEventsByTaskResponse)(nil),   // 61: xagent.v1.ListEventsByTaskResponse
+	(*ProcessEventRequest)(nil),        // 62: xagent.v1.ProcessEventRequest
+	(*ProcessEventResponse)(nil),       // 63: xagent.v1.ProcessEventResponse
+	(*RunnerEvent)(nil),                // 64: xagent.v1.RunnerEvent
+	(*SubmitRunnerEventsRequest)(nil),  // 65: xagent.v1.SubmitRunnerEventsRequest
+	(*SubmitRunnerEventsResponse)(nil), // 66: xagent.v1.SubmitRunnerEventsResponse
+	(*RegisteredWorkspace)(nil),        // 67: xagent.v1.RegisteredWorkspace
+	(*RegisterWorkspacesRequest)(nil),  // 68: xagent.v1.RegisterWorkspacesRequest
+	(*RegisterWorkspacesResponse)(nil), // 69: xagent.v1.RegisterWorkspacesResponse
+	(*ListWorkspacesRequest)(nil),      // 70: xagent.v1.ListWorkspacesRequest
+	(*ListWorkspacesResponse)(nil),     // 71: xagent.v1.ListWorkspacesResponse
+	(*ClearWorkspacesRequest)(nil),     // 72: xagent.v1.ClearWorkspacesRequest
+	(*ClearWorkspacesResponse)(nil),    // 73: xagent.v1.ClearWorkspacesResponse
+	nil,                                // 74: xagent.v1.McpServer.EnvEntry
+	(*timestamppb.Timestamp)(nil),      // 75: google.protobuf.Timestamp
 }
 var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	2,  // 0: xagent.v1.Task.instructions:type_name -> xagent.v1.Instruction
-	73, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
-	73, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	75, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	75, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
 	3,  // 3: xagent.v1.Task.actions:type_name -> xagent.v1.TaskActions
-	72, // 4: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
+	74, // 4: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
 	6,  // 5: xagent.v1.GetProfileResponse.profile:type_name -> xagent.v1.Profile
 	4,  // 6: xagent.v1.ListTasksResponse.tasks:type_name -> xagent.v1.Task
 	4,  // 7: xagent.v1.ListRunnerTasksResponse.tasks:type_name -> xagent.v1.Task
@@ -3858,25 +3962,25 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	4,  // 11: xagent.v1.GetTaskResponse.task:type_name -> xagent.v1.Task
 	4,  // 12: xagent.v1.GetTaskDetailsResponse.task:type_name -> xagent.v1.Task
 	4,  // 13: xagent.v1.GetTaskDetailsResponse.children:type_name -> xagent.v1.Task
-	43, // 14: xagent.v1.GetTaskDetailsResponse.events:type_name -> xagent.v1.Event
-	36, // 15: xagent.v1.GetTaskDetailsResponse.links:type_name -> xagent.v1.TaskLink
+	45, // 14: xagent.v1.GetTaskDetailsResponse.events:type_name -> xagent.v1.Event
+	38, // 15: xagent.v1.GetTaskDetailsResponse.links:type_name -> xagent.v1.TaskLink
 	2,  // 16: xagent.v1.UpdateTaskRequest.add_instructions:type_name -> xagent.v1.Instruction
-	73, // 17: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
-	31, // 18: xagent.v1.UploadLogsRequest.entries:type_name -> xagent.v1.LogEntry
-	31, // 19: xagent.v1.ListLogsResponse.entries:type_name -> xagent.v1.LogEntry
-	73, // 20: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
-	36, // 21: xagent.v1.CreateLinkResponse.link:type_name -> xagent.v1.TaskLink
-	36, // 22: xagent.v1.ListLinksResponse.links:type_name -> xagent.v1.TaskLink
-	36, // 23: xagent.v1.FindLinksByURLResponse.links:type_name -> xagent.v1.TaskLink
-	73, // 24: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
-	43, // 25: xagent.v1.ListEventsResponse.events:type_name -> xagent.v1.Event
-	43, // 26: xagent.v1.CreateEventResponse.event:type_name -> xagent.v1.Event
-	43, // 27: xagent.v1.GetEventResponse.event:type_name -> xagent.v1.Event
-	43, // 28: xagent.v1.ListEventsByTaskResponse.events:type_name -> xagent.v1.Event
-	62, // 29: xagent.v1.SubmitRunnerEventsRequest.events:type_name -> xagent.v1.RunnerEvent
-	73, // 30: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
-	65, // 31: xagent.v1.RegisterWorkspacesRequest.workspaces:type_name -> xagent.v1.RegisteredWorkspace
-	65, // 32: xagent.v1.ListWorkspacesResponse.workspaces:type_name -> xagent.v1.RegisteredWorkspace
+	75, // 17: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
+	33, // 18: xagent.v1.UploadLogsRequest.entries:type_name -> xagent.v1.LogEntry
+	33, // 19: xagent.v1.ListLogsResponse.entries:type_name -> xagent.v1.LogEntry
+	75, // 20: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
+	38, // 21: xagent.v1.CreateLinkResponse.link:type_name -> xagent.v1.TaskLink
+	38, // 22: xagent.v1.ListLinksResponse.links:type_name -> xagent.v1.TaskLink
+	38, // 23: xagent.v1.FindLinksByURLResponse.links:type_name -> xagent.v1.TaskLink
+	75, // 24: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
+	45, // 25: xagent.v1.ListEventsResponse.events:type_name -> xagent.v1.Event
+	45, // 26: xagent.v1.CreateEventResponse.event:type_name -> xagent.v1.Event
+	45, // 27: xagent.v1.GetEventResponse.event:type_name -> xagent.v1.Event
+	45, // 28: xagent.v1.ListEventsByTaskResponse.events:type_name -> xagent.v1.Event
+	64, // 29: xagent.v1.SubmitRunnerEventsRequest.events:type_name -> xagent.v1.RunnerEvent
+	75, // 30: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
+	67, // 31: xagent.v1.RegisterWorkspacesRequest.workspaces:type_name -> xagent.v1.RegisteredWorkspace
+	67, // 32: xagent.v1.ListWorkspacesResponse.workspaces:type_name -> xagent.v1.RegisteredWorkspace
 	0,  // 33: xagent.v1.XAgentService.Ping:input_type -> xagent.v1.PingRequest
 	7,  // 34: xagent.v1.XAgentService.GetProfile:input_type -> xagent.v1.GetProfileRequest
 	9,  // 35: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
@@ -3888,59 +3992,61 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	21, // 41: xagent.v1.XAgentService.UpdateTask:input_type -> xagent.v1.UpdateTaskRequest
 	23, // 42: xagent.v1.XAgentService.DeleteTask:input_type -> xagent.v1.DeleteTaskRequest
 	25, // 43: xagent.v1.XAgentService.ArchiveTask:input_type -> xagent.v1.ArchiveTaskRequest
-	27, // 44: xagent.v1.XAgentService.CancelTask:input_type -> xagent.v1.CancelTaskRequest
-	29, // 45: xagent.v1.XAgentService.RestartTask:input_type -> xagent.v1.RestartTaskRequest
-	32, // 46: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
-	34, // 47: xagent.v1.XAgentService.ListLogs:input_type -> xagent.v1.ListLogsRequest
-	37, // 48: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
-	39, // 49: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
-	41, // 50: xagent.v1.XAgentService.FindLinksByURL:input_type -> xagent.v1.FindLinksByURLRequest
-	44, // 51: xagent.v1.XAgentService.ListEvents:input_type -> xagent.v1.ListEventsRequest
-	46, // 52: xagent.v1.XAgentService.CreateEvent:input_type -> xagent.v1.CreateEventRequest
-	48, // 53: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
-	50, // 54: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
-	52, // 55: xagent.v1.XAgentService.AddEventTask:input_type -> xagent.v1.AddEventTaskRequest
-	54, // 56: xagent.v1.XAgentService.RemoveEventTask:input_type -> xagent.v1.RemoveEventTaskRequest
-	56, // 57: xagent.v1.XAgentService.ListEventTasks:input_type -> xagent.v1.ListEventTasksRequest
-	58, // 58: xagent.v1.XAgentService.ListEventsByTask:input_type -> xagent.v1.ListEventsByTaskRequest
-	60, // 59: xagent.v1.XAgentService.ProcessEvent:input_type -> xagent.v1.ProcessEventRequest
-	63, // 60: xagent.v1.XAgentService.SubmitRunnerEvents:input_type -> xagent.v1.SubmitRunnerEventsRequest
-	66, // 61: xagent.v1.XAgentService.RegisterWorkspaces:input_type -> xagent.v1.RegisterWorkspacesRequest
-	68, // 62: xagent.v1.XAgentService.ListWorkspaces:input_type -> xagent.v1.ListWorkspacesRequest
-	70, // 63: xagent.v1.XAgentService.ClearWorkspaces:input_type -> xagent.v1.ClearWorkspacesRequest
-	1,  // 64: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
-	8,  // 65: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
-	10, // 66: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
-	12, // 67: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
-	14, // 68: xagent.v1.XAgentService.ListChildTasks:output_type -> xagent.v1.ListChildTasksResponse
-	16, // 69: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
-	18, // 70: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
-	20, // 71: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
-	22, // 72: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
-	24, // 73: xagent.v1.XAgentService.DeleteTask:output_type -> xagent.v1.DeleteTaskResponse
-	26, // 74: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
-	28, // 75: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
-	30, // 76: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
-	33, // 77: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
-	35, // 78: xagent.v1.XAgentService.ListLogs:output_type -> xagent.v1.ListLogsResponse
-	38, // 79: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
-	40, // 80: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
-	42, // 81: xagent.v1.XAgentService.FindLinksByURL:output_type -> xagent.v1.FindLinksByURLResponse
-	45, // 82: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
-	47, // 83: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
-	49, // 84: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
-	51, // 85: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
-	53, // 86: xagent.v1.XAgentService.AddEventTask:output_type -> xagent.v1.AddEventTaskResponse
-	55, // 87: xagent.v1.XAgentService.RemoveEventTask:output_type -> xagent.v1.RemoveEventTaskResponse
-	57, // 88: xagent.v1.XAgentService.ListEventTasks:output_type -> xagent.v1.ListEventTasksResponse
-	59, // 89: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
-	61, // 90: xagent.v1.XAgentService.ProcessEvent:output_type -> xagent.v1.ProcessEventResponse
-	64, // 91: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
-	67, // 92: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
-	69, // 93: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
-	71, // 94: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
-	64, // [64:95] is the sub-list for method output_type
-	33, // [33:64] is the sub-list for method input_type
+	27, // 44: xagent.v1.XAgentService.UnarchiveTask:input_type -> xagent.v1.UnarchiveTaskRequest
+	29, // 45: xagent.v1.XAgentService.CancelTask:input_type -> xagent.v1.CancelTaskRequest
+	31, // 46: xagent.v1.XAgentService.RestartTask:input_type -> xagent.v1.RestartTaskRequest
+	34, // 47: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
+	36, // 48: xagent.v1.XAgentService.ListLogs:input_type -> xagent.v1.ListLogsRequest
+	39, // 49: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
+	41, // 50: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
+	43, // 51: xagent.v1.XAgentService.FindLinksByURL:input_type -> xagent.v1.FindLinksByURLRequest
+	46, // 52: xagent.v1.XAgentService.ListEvents:input_type -> xagent.v1.ListEventsRequest
+	48, // 53: xagent.v1.XAgentService.CreateEvent:input_type -> xagent.v1.CreateEventRequest
+	50, // 54: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
+	52, // 55: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
+	54, // 56: xagent.v1.XAgentService.AddEventTask:input_type -> xagent.v1.AddEventTaskRequest
+	56, // 57: xagent.v1.XAgentService.RemoveEventTask:input_type -> xagent.v1.RemoveEventTaskRequest
+	58, // 58: xagent.v1.XAgentService.ListEventTasks:input_type -> xagent.v1.ListEventTasksRequest
+	60, // 59: xagent.v1.XAgentService.ListEventsByTask:input_type -> xagent.v1.ListEventsByTaskRequest
+	62, // 60: xagent.v1.XAgentService.ProcessEvent:input_type -> xagent.v1.ProcessEventRequest
+	65, // 61: xagent.v1.XAgentService.SubmitRunnerEvents:input_type -> xagent.v1.SubmitRunnerEventsRequest
+	68, // 62: xagent.v1.XAgentService.RegisterWorkspaces:input_type -> xagent.v1.RegisterWorkspacesRequest
+	70, // 63: xagent.v1.XAgentService.ListWorkspaces:input_type -> xagent.v1.ListWorkspacesRequest
+	72, // 64: xagent.v1.XAgentService.ClearWorkspaces:input_type -> xagent.v1.ClearWorkspacesRequest
+	1,  // 65: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
+	8,  // 66: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
+	10, // 67: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
+	12, // 68: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
+	14, // 69: xagent.v1.XAgentService.ListChildTasks:output_type -> xagent.v1.ListChildTasksResponse
+	16, // 70: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
+	18, // 71: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
+	20, // 72: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
+	22, // 73: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
+	24, // 74: xagent.v1.XAgentService.DeleteTask:output_type -> xagent.v1.DeleteTaskResponse
+	26, // 75: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
+	28, // 76: xagent.v1.XAgentService.UnarchiveTask:output_type -> xagent.v1.UnarchiveTaskResponse
+	30, // 77: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
+	32, // 78: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
+	35, // 79: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
+	37, // 80: xagent.v1.XAgentService.ListLogs:output_type -> xagent.v1.ListLogsResponse
+	40, // 81: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
+	42, // 82: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
+	44, // 83: xagent.v1.XAgentService.FindLinksByURL:output_type -> xagent.v1.FindLinksByURLResponse
+	47, // 84: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
+	49, // 85: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
+	51, // 86: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
+	53, // 87: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
+	55, // 88: xagent.v1.XAgentService.AddEventTask:output_type -> xagent.v1.AddEventTaskResponse
+	57, // 89: xagent.v1.XAgentService.RemoveEventTask:output_type -> xagent.v1.RemoveEventTaskResponse
+	59, // 90: xagent.v1.XAgentService.ListEventTasks:output_type -> xagent.v1.ListEventTasksResponse
+	61, // 91: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
+	63, // 92: xagent.v1.XAgentService.ProcessEvent:output_type -> xagent.v1.ProcessEventResponse
+	66, // 93: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
+	69, // 94: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
+	71, // 95: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
+	73, // 96: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
+	65, // [65:97] is the sub-list for method output_type
+	33, // [33:65] is the sub-list for method input_type
 	33, // [33:33] is the sub-list for extension type_name
 	33, // [33:33] is the sub-list for extension extendee
 	0,  // [0:33] is the sub-list for field type_name
@@ -3957,7 +4063,7 @@ func file_xagent_v1_xagent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_xagent_v1_xagent_proto_rawDesc), len(file_xagent_v1_xagent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   73,
+			NumMessages:   75,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

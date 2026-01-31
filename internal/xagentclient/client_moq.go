@@ -106,6 +106,9 @@ var _ Client = &ClientMock{}
 //			SubmitRunnerEventsFunc: func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 //				panic("mock out the SubmitRunnerEvents method")
 //			},
+//			UnarchiveTaskFunc: func(contextMoqParam context.Context, unarchiveTaskRequest *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
+//				panic("mock out the UnarchiveTask method")
+//			},
 //			UpdateTaskFunc: func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 //				panic("mock out the UpdateTask method")
 //			},
@@ -205,6 +208,9 @@ type ClientMock struct {
 
 	// SubmitRunnerEventsFunc mocks the SubmitRunnerEvents method.
 	SubmitRunnerEventsFunc func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error)
+
+	// UnarchiveTaskFunc mocks the UnarchiveTask method.
+	UnarchiveTaskFunc func(contextMoqParam context.Context, unarchiveTaskRequest *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error)
 
 	// UpdateTaskFunc mocks the UpdateTask method.
 	UpdateTaskFunc func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error)
@@ -417,6 +423,13 @@ type ClientMock struct {
 			// SubmitRunnerEventsRequest is the submitRunnerEventsRequest argument value.
 			SubmitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest
 		}
+		// UnarchiveTask holds details about calls to the UnarchiveTask method.
+		UnarchiveTask []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// UnarchiveTaskRequest is the unarchiveTaskRequest argument value.
+			UnarchiveTaskRequest *xagentv1.UnarchiveTaskRequest
+		}
 		// UpdateTask holds details about calls to the UpdateTask method.
 		UpdateTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -461,6 +474,7 @@ type ClientMock struct {
 	lockRemoveEventTask    sync.RWMutex
 	lockRestartTask        sync.RWMutex
 	lockSubmitRunnerEvents sync.RWMutex
+	lockUnarchiveTask      sync.RWMutex
 	lockUpdateTask         sync.RWMutex
 	lockUploadLogs         sync.RWMutex
 }
@@ -1506,6 +1520,42 @@ func (mock *ClientMock) SubmitRunnerEventsCalls() []struct {
 	mock.lockSubmitRunnerEvents.RLock()
 	calls = mock.calls.SubmitRunnerEvents
 	mock.lockSubmitRunnerEvents.RUnlock()
+	return calls
+}
+
+// UnarchiveTask calls UnarchiveTaskFunc.
+func (mock *ClientMock) UnarchiveTask(contextMoqParam context.Context, unarchiveTaskRequest *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
+	if mock.UnarchiveTaskFunc == nil {
+		panic("ClientMock.UnarchiveTaskFunc: method is nil but Client.UnarchiveTask was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam      context.Context
+		UnarchiveTaskRequest *xagentv1.UnarchiveTaskRequest
+	}{
+		ContextMoqParam:      contextMoqParam,
+		UnarchiveTaskRequest: unarchiveTaskRequest,
+	}
+	mock.lockUnarchiveTask.Lock()
+	mock.calls.UnarchiveTask = append(mock.calls.UnarchiveTask, callInfo)
+	mock.lockUnarchiveTask.Unlock()
+	return mock.UnarchiveTaskFunc(contextMoqParam, unarchiveTaskRequest)
+}
+
+// UnarchiveTaskCalls gets all the calls that were made to UnarchiveTask.
+// Check the length with:
+//
+//	len(mockedClient.UnarchiveTaskCalls())
+func (mock *ClientMock) UnarchiveTaskCalls() []struct {
+	ContextMoqParam      context.Context
+	UnarchiveTaskRequest *xagentv1.UnarchiveTaskRequest
+} {
+	var calls []struct {
+		ContextMoqParam      context.Context
+		UnarchiveTaskRequest *xagentv1.UnarchiveTaskRequest
+	}
+	mock.lockUnarchiveTask.RLock()
+	calls = mock.calls.UnarchiveTask
+	mock.lockUnarchiveTask.RUnlock()
 	return calls
 }
 

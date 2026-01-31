@@ -17,5 +17,5 @@ DELETE FROM task_links WHERE id = $1;
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.url = $1 AND t.status != 'archived' AND t.owner = $2
+WHERE l.url = $1 AND t.archived = FALSE AND t.owner = $2
 ORDER BY l.created_at DESC;

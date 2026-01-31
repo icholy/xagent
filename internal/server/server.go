@@ -304,6 +304,31 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 	return &xagentv1.ArchiveTaskResponse{}, nil
 }
 
+func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
+	userID := s.userID(ctx)
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
+		if err != nil {
+			return err
+		}
+		if !task.Unarchive() {
+			return fmt.Errorf("cannot unarchive task: not archived")
+		}
+		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("task unarchived", "id", req.Id)
+	return &xagentv1.UnarchiveTaskResponse{}, nil
+}
+
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 	userID := s.userID(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
@@ -608,7 +633,7 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
 		}
-		if task.Status == model.TaskStatusArchived {
+		if task.Archived {
 			s.log.Info("skipping archived task", "task_id", link.TaskID)
 			continue
 		}

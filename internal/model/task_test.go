@@ -114,14 +114,16 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
-			name: "started: archived -> cancelling with stop",
+			name: "started: archived completed -> cancelling with stop",
 			before: Task{
-				Status: TaskStatusArchived,
+				Status:   TaskStatusCompleted,
+				Archived: true,
 			},
 			after: Task{
-				Status:  TaskStatusCancelling,
-				Command: TaskCommandStop,
-				Version: 1,
+				Status:   TaskStatusCancelling,
+				Command:  TaskCommandStop,
+				Version:  1,
+				Archived: true,
 			},
 			event: RunnerEvent{
 				Event: RunnerEventStarted,
@@ -384,13 +386,13 @@ func TestTask_Archive(t *testing.T) {
 		{
 			name:   "from completed succeeds",
 			before: Task{Status: TaskStatusCompleted},
-			after:  Task{Status: TaskStatusArchived},
+			after:  Task{Status: TaskStatusCompleted, Archived: true},
 			want:   true,
 		},
 		{
 			name:   "from failed succeeds",
 			before: Task{Status: TaskStatusFailed},
-			after:  Task{Status: TaskStatusArchived},
+			after:  Task{Status: TaskStatusFailed, Archived: true},
 			want:   true,
 		},
 		{
@@ -420,13 +422,13 @@ func TestTask_Archive(t *testing.T) {
 		{
 			name:   "from cancelled succeeds",
 			before: Task{Status: TaskStatusCancelled},
-			after:  Task{Status: TaskStatusArchived},
+			after:  Task{Status: TaskStatusCancelled, Archived: true},
 			want:   true,
 		},
 		{
-			name:   "from archived fails",
-			before: Task{Status: TaskStatusArchived},
-			after:  Task{Status: TaskStatusArchived},
+			name:   "already archived fails",
+			before: Task{Status: TaskStatusCompleted, Archived: true},
+			after:  Task{Status: TaskStatusCompleted, Archived: true},
 			want:   false,
 		},
 		{
@@ -504,9 +506,9 @@ func TestTask_Cancel(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "from archived fails",
-			before: Task{Status: TaskStatusArchived},
-			after:  Task{Status: TaskStatusArchived},
+			name:   "archived fails",
+			before: Task{Status: TaskStatusRunning, Archived: true},
+			after:  Task{Status: TaskStatusRunning, Archived: true},
 			want:   false,
 		},
 	}
@@ -572,9 +574,9 @@ func TestTask_Restart(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "from archived fails",
-			before: Task{Status: TaskStatusArchived},
-			after:  Task{Status: TaskStatusArchived},
+			name:   "archived fails",
+			before: Task{Status: TaskStatusCompleted, Archived: true},
+			after:  Task{Status: TaskStatusCompleted, Archived: true},
 			want:   false,
 		},
 	}
@@ -640,9 +642,9 @@ func TestTask_Start(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "from archived fails",
-			before: Task{Status: TaskStatusArchived},
-			after:  Task{Status: TaskStatusArchived},
+			name:   "archived fails",
+			before: Task{Status: TaskStatusCompleted, Archived: true},
+			after:  Task{Status: TaskStatusCompleted, Archived: true},
 			want:   false,
 		},
 	}

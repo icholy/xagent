@@ -10,7 +10,6 @@ const statusStyles: Record<string, string> = {
   completed: 'bg-green-100 text-green-800 border-green-200',
   failed: 'bg-red-100 text-red-800 border-red-200',
   cancelled: 'bg-amber-100 text-amber-800 border-amber-200',
-  archived: 'bg-gray-100 text-gray-600 border-gray-200',
 }
 
 const activeStatuses = new Set(['running', 'restarting', 'cancelling'])

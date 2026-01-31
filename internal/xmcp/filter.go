@@ -132,7 +132,7 @@ func (p *AgentFilter) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRe
 	if resp.Task.Id != claims.TaskID && resp.Task.Parent != claims.TaskID {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
-	if resp.Task.Status == "archived" {
+	if resp.Task.Archived {
 		return nil, errPermissionDenied("cannot update archived task")
 	}
 	return p.client.UpdateTask(ctx, req)

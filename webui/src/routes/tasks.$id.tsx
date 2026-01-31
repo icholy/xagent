@@ -6,13 +6,14 @@ import {
   updateTask,
   removeEventTask,
   archiveTask,
+  unarchiveTask,
   cancelTask,
   restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task, TaskLink, Event, LogEntry } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
-import { canArchiveTask, canCancelTask, canRestartTask, isArchivedTask } from '@/lib/task'
+import { canArchiveTask, canUnarchiveTask, canCancelTask, canRestartTask, isArchivedTask } from '@/lib/task'
 import {
   Table,
   TableBody,
@@ -60,11 +61,16 @@ function TaskDetail() {
   const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
   const removeEventMutation = useMutation(removeEventTask, { onSuccess: () => refetch() })
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => refetch() })
+  const unarchiveMutation = useMutation(unarchiveTask, { onSuccess: () => refetch() })
   const cancelMutation = useMutation(cancelTask, { onSuccess: () => refetch() })
   const restartMutation = useMutation(restartTask, { onSuccess: () => refetch() })
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: taskId })
+  }
+
+  const handleUnarchive = async () => {
+    await unarchiveMutation.mutateAsync({ id: taskId })
   }
 
   const handleCancel = async () => {
@@ -120,7 +126,7 @@ function TaskDetail() {
     )
   }
 
-  const isMutating = archiveMutation.isPending || cancelMutation.isPending || restartMutation.isPending
+  const isMutating = archiveMutation.isPending || unarchiveMutation.isPending || cancelMutation.isPending || restartMutation.isPending
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
@@ -158,6 +164,17 @@ function TaskDetail() {
             >
               {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Archive
+            </Button>
+          )}
+          {canUnarchiveTask(task) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUnarchive}
+              disabled={isMutating}
+            >
+              {unarchiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Unarchive
             </Button>
           )}
         </div>

@@ -18,7 +18,6 @@ const (
 	TaskStatusCompleted  TaskStatus = "completed"
 	TaskStatusFailed     TaskStatus = "failed"
 	TaskStatusCancelled  TaskStatus = "cancelled"
-	TaskStatusArchived   TaskStatus = "archived"
 )
 
 // TaskCommand represents a command to be executed by the runner.
@@ -64,6 +63,7 @@ type Task struct {
 	Command      TaskCommand   `json:"command"`
 	Version      int64         `json:"version"`
 	Owner        string        `json:"owner"`
+	Archived     bool          `json:"archived"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
 }
@@ -84,13 +84,15 @@ func (t *Task) Proto() *xagentv1.Task {
 		Status:       string(t.Status),
 		Command:      string(t.Command),
 		Version:      t.Version,
+		Archived:     t.Archived,
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
 		Actions: &xagentv1.TaskActions{
-			Archive: t.CanArchive(),
-			Cancel:  t.CanCancel(),
-			Restart: t.CanRestart(),
-			Start:   t.CanStart(),
+			Archive:   t.CanArchive(),
+			Unarchive: t.CanUnarchive(),
+			Cancel:    t.CanCancel(),
+			Restart:   t.CanRestart(),
+			Start:     t.CanStart(),
 		},
 	}
 }
@@ -118,6 +120,7 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		Status:       TaskStatus(pb.Status),
 		Command:      TaskCommand(pb.Command),
 		Version:      pb.Version,
+		Archived:     pb.Archived,
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
 	}
@@ -187,6 +190,13 @@ func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
 }
 
 func (t *Task) applyRunnerEventStarted() bool {
+	// If an archived task's container starts, cancel it
+	if t.Archived {
+		t.Status = TaskStatusCancelling
+		t.Command = TaskCommandStop
+		t.Version++
+		return true
+	}
 	switch t.Status {
 	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning:
 		if t.Command == TaskCommandRestart || t.Command == TaskCommandStart {
@@ -195,7 +205,7 @@ func (t *Task) applyRunnerEventStarted() bool {
 			return true
 		}
 		return false
-	case TaskStatusCancelled, TaskStatusArchived:
+	case TaskStatusCancelled:
 		t.Status = TaskStatusCancelling
 		t.Command = TaskCommandStop
 		t.Version++
@@ -250,7 +260,7 @@ func (t *Task) applyRunnerEventFailed() bool {
 
 // CanArchive returns true if the task can be archived.
 func (t *Task) CanArchive() bool {
-	if t.Command != "" {
+	if t.Archived || t.Command != "" {
 		return false
 	}
 	switch t.Status {
@@ -261,19 +271,37 @@ func (t *Task) CanArchive() bool {
 	}
 }
 
-// Archive transitions the task to archived status.
+// Archive marks the task as archived.
 // Returns true if the transition is valid and was applied.
 // Only valid from completed, failed, or cancelled status.
 func (t *Task) Archive() bool {
 	if !t.CanArchive() {
 		return false
 	}
-	t.Status = TaskStatusArchived
+	t.Archived = true
+	return true
+}
+
+// CanUnarchive returns true if the task can be unarchived.
+func (t *Task) CanUnarchive() bool {
+	return t.Archived
+}
+
+// Unarchive marks the task as no longer archived.
+// Returns true if the task was archived and is now unarchived.
+func (t *Task) Unarchive() bool {
+	if !t.CanUnarchive() {
+		return false
+	}
+	t.Archived = false
 	return true
 }
 
 // CanCancel returns true if the task can be cancelled.
 func (t *Task) CanCancel() bool {
+	if t.Archived {
+		return false
+	}
 	switch t.Status {
 	case TaskStatusRunning, TaskStatusRestarting, TaskStatusPending:
 		return true
@@ -304,6 +332,9 @@ func (t *Task) Cancel() bool {
 
 // CanRestart returns true if the task can be restarted.
 func (t *Task) CanRestart() bool {
+	if t.Archived {
+		return false
+	}
 	switch t.Status {
 	case TaskStatusRunning, TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
 		return true
@@ -333,6 +364,9 @@ func (t *Task) Restart() bool {
 
 // CanStart returns true if the task can be started.
 func (t *Task) CanStart() bool {
+	if t.Archived {
+		return false
+	}
 	switch t.Status {
 	case TaskStatusRunning, TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
 		return true

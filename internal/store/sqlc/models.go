@@ -43,6 +43,7 @@ type Task struct {
 	Owner        string    `json:"owner"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	Archived     bool      `json:"archived"`
 }
 
 type TaskLink struct {

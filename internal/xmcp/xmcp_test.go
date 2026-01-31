@@ -95,9 +95,10 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 			assert.Equal(t, req.Id, childTaskID)
 			return &xagentv1.GetTaskResponse{
 				Task: &xagentv1.Task{
-					Id:     childTaskID,
-					Parent: parentTaskID,
-					Status: "archived",
+					Id:       childTaskID,
+					Parent:   parentTaskID,
+					Status:   "completed",
+					Archived: true,
 				},
 			}, nil
 		},

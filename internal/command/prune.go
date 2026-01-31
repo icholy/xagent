@@ -74,7 +74,7 @@ var PruneCommand = &cli.Command{
 			}
 
 			// Remove container if task is archived
-			if task.Task.Status == "archived" {
+			if task.Task.Archived {
 				if err := docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
 					fmt.Printf("Warning: failed to remove container %s: %v\n", c.Names[0], err)
 				} else {

@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { useLocalStorage } from 'usehooks-ts'
-import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { listTasks, archiveTask, unarchiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
-import { canArchiveTask, isChildTask } from '@/lib/task'
+import { canArchiveTask, canUnarchiveTask, isChildTask } from '@/lib/task'
 import {
   Table,
   TableBody,

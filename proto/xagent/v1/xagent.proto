@@ -18,6 +18,7 @@ service XAgentService {
   rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
   rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
   rpc ArchiveTask(ArchiveTaskRequest) returns (ArchiveTaskResponse);
+  rpc UnarchiveTask(UnarchiveTaskRequest) returns (UnarchiveTaskResponse);
   rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
   rpc RestartTask(RestartTaskRequest) returns (RestartTaskResponse);
   rpc UploadLogs(UploadLogsRequest) returns (UploadLogsResponse);
@@ -54,6 +55,7 @@ message TaskActions {
   bool cancel = 2;
   bool restart = 3;
   bool start = 4;
+  bool unarchive = 5;
 }
 
 message Task {
@@ -69,6 +71,7 @@ message Task {
   string command = 10;  // "restart", "stop", or empty
   int64 version = 11;  // Incremented when command changes
   TaskActions actions = 12;
+  bool archived = 13;
 }
 
 message McpServer {
@@ -164,6 +167,12 @@ message ArchiveTaskRequest {
 }
 
 message ArchiveTaskResponse {}
+
+message UnarchiveTaskRequest {
+  int64 id = 1;
+}
+
+message UnarchiveTaskResponse {}
 
 message CancelTaskRequest {
   int64 id = 1;

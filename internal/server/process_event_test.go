@@ -337,7 +337,8 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 
 	getArchivedTask, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: archivedTask.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getArchivedTask.Task.Status, "archived")
+	assert.Equal(t, getArchivedTask.Task.Status, "completed")
+	assert.Equal(t, getArchivedTask.Task.Archived, true)
 }
 
 func TestProcessEvent_Permissions(t *testing.T) {

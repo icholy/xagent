@@ -11,8 +11,8 @@ import (
 )
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO tasks (name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id
 `
 
@@ -28,6 +28,7 @@ type CreateTaskParams struct {
 	Owner        string    `json:"owner"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	Archived     bool      `json:"archived"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, error) {
@@ -43,6 +44,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, 
 		arg.Owner,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.Archived,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -64,7 +66,7 @@ func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
 FROM tasks
 WHERE id = $1 AND owner = $2
 `
@@ -90,6 +92,7 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 		&i.Owner,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Archived,
 	)
 	return i, err
 }
@@ -111,7 +114,7 @@ func (q *Queries) HasTask(ctx context.Context, arg HasTaskParams) (bool, error) 
 }
 
 const listTaskChildren = `-- name: ListTaskChildren :many
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
 FROM tasks
 WHERE parent = $1 AND owner = $2
 ORDER BY created_at DESC
@@ -144,6 +147,7 @@ func (q *Queries) ListTaskChildren(ctx context.Context, arg ListTaskChildrenPara
 			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Archived,
 		); err != nil {
 			return nil, err
 		}
@@ -159,9 +163,9 @@ func (q *Queries) ListTaskChildren(ctx context.Context, arg ListTaskChildrenPara
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
 FROM tasks
-WHERE status != 'archived' AND owner = $1
+WHERE archived = FALSE AND owner = $1
 ORDER BY created_at DESC
 `
 
@@ -187,6 +191,7 @@ func (q *Queries) ListTasks(ctx context.Context, owner string) ([]Task, error) {
 			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Archived,
 		); err != nil {
 			return nil, err
 		}
@@ -202,7 +207,7 @@ func (q *Queries) ListTasks(ctx context.Context, owner string) ([]Task, error) {
 }
 
 const listTasksByEvent = `-- name: ListTasksByEvent :many
-SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.instructions, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at
+SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.instructions, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at, t.archived
 FROM tasks t
 JOIN event_tasks et ON t.id = et.task_id
 WHERE et.event_id = $1
@@ -231,6 +236,7 @@ func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, 
 			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Archived,
 		); err != nil {
 			return nil, err
 		}
@@ -246,9 +252,9 @@ func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, 
 }
 
 const listTasksForRunner = `-- name: ListTasksForRunner :many
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
 FROM tasks
-WHERE runner = $1 AND owner = $2 AND command != '' AND status != 'archived'
+WHERE runner = $1 AND owner = $2 AND command != '' AND archived = FALSE
 ORDER BY created_at DESC
 `
 
@@ -279,6 +285,7 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Archived,
 		); err != nil {
 			return nil, err
 		}
@@ -295,8 +302,8 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 
 const updateTask = `-- name: UpdateTask :exec
 UPDATE tasks
-SET name = $1, parent = $2, runner = $3, workspace = $4, instructions = $5, status = $6, command = $7, version = $8, updated_at = $9
-WHERE id = $10 AND owner = $11
+SET name = $1, parent = $2, runner = $3, workspace = $4, instructions = $5, status = $6, command = $7, version = $8, updated_at = $9, archived = $10
+WHERE id = $11 AND owner = $12
 `
 
 type UpdateTaskParams struct {
@@ -309,6 +316,7 @@ type UpdateTaskParams struct {
 	Command      string    `json:"command"`
 	Version      int64     `json:"version"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	Archived     bool      `json:"archived"`
 	ID           int64     `json:"id"`
 	Owner        string    `json:"owner"`
 }
@@ -324,6 +332,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {
 		arg.Command,
 		arg.Version,
 		arg.UpdatedAt,
+		arg.Archived,
 		arg.ID,
 		arg.Owner,
 	)

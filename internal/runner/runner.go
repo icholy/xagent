@@ -655,7 +655,7 @@ func (r *Runner) Prune(ctx context.Context) error {
 			continue
 		}
 		// Remove container if task is archived or deleted
-		if connect.CodeOf(err) == connect.CodeNotFound || resp.Task.Status == string(model.TaskStatusArchived) {
+		if connect.CodeOf(err) == connect.CodeNotFound || resp.Task.Archived {
 			if err := r.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
 				r.log.Error("failed to remove container", "task", taskID, "error", err)
 			} else {
