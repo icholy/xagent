@@ -9,16 +9,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
-
-// Config holds the configuration for OpenTelemetry.
-type Config struct {
-	ServiceName    string
-	ServiceVersion string
-}
 
 // Provider manages the OpenTelemetry trace provider and exporter.
 type Provider struct {
@@ -36,25 +28,13 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	return errors.Join(p.tp.Shutdown(ctx), p.exporter.Shutdown(ctx))
 }
 
-// Setup initializes OpenTelemetry with the given configuration.
+// NewProvider initializes OpenTelemetry.
 // The OTLP exporter is configured via standard OTel environment variables
 // (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_INSECURE, etc.).
-// If OTEL_EXPORTER_OTLP_ENDPOINT is not set, Setup is a no-op.
-func NewProvider(ctx context.Context, cfg Config) (*Provider, error) {
+// If OTEL_EXPORTER_OTLP_ENDPOINT is not set, NewProvider is a no-op.
+func NewProvider(ctx context.Context) (*Provider, error) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
 		return &Provider{}, nil
-	}
-
-	res, err := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(cfg.ServiceName),
-			semconv.ServiceVersion(cfg.ServiceVersion),
-		),
-	)
-	if err != nil {
-		return nil, err
 	}
 
 	exporter, err := otlptracehttp.New(ctx)
@@ -64,7 +44,6 @@ func NewProvider(ctx context.Context, cfg Config) (*Provider, error) {
 
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
-		sdktrace.WithResource(res),
 	)
 
 	otel.SetTracerProvider(tp)
