@@ -54,6 +54,7 @@ type Options struct {
 	RunnerID    string
 	Log         *slog.Logger
 	Auth        xagentclient.TokenSource
+	SocketPath  string // defaults to /tmp/xagent.sock
 }
 
 func New(opts Options) (*Runner, error) {
@@ -76,7 +77,13 @@ func New(opts Options) (*Runner, error) {
 
 	log := cmp.Or(opts.Log, slog.Default())
 
-	proxy := NewProxy(opts.ServerURL, opts.Auth, privateKey, log)
+	proxy := NewProxy(AgentProxyOptions{
+		ServerURL:  opts.ServerURL,
+		Auth:       opts.Auth,
+		PrivateKey: privateKey,
+		Log:        log,
+		SocketPath: opts.SocketPath,
+	})
 	if err := proxy.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start proxy: %w", err)
 	}

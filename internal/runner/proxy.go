@@ -2,8 +2,6 @@ package runner
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -26,22 +24,27 @@ type AgentProxy struct {
 	socketPath string
 }
 
-// NewProxy creates a new Proxy.
-func NewProxy(serverURL string, auth xagentclient.TokenSource, privateKey ed25519.PrivateKey, log *slog.Logger) *AgentProxy {
-	return &AgentProxy{
-		serverURL:  serverURL,
-		auth:       auth,
-		privateKey: privateKey,
-		log:        log,
-		socketPath: randomSocketPath(),
-	}
+// AgentProxyOptions configures the AgentProxy.
+type AgentProxyOptions struct {
+	ServerURL  string
+	Auth       xagentclient.TokenSource
+	PrivateKey ed25519.PrivateKey
+	Log        *slog.Logger
+	SocketPath string // defaults to /tmp/xagent.sock
 }
 
-// randomSocketPath generates a random socket path in the system temp directory.
-func randomSocketPath() string {
-	var b [8]byte
-	rand.Read(b[:])
-	return filepath.Join(os.TempDir(), "xagent-"+hex.EncodeToString(b[:])+".sock")
+// NewProxy creates a new Proxy.
+func NewProxy(opts AgentProxyOptions) *AgentProxy {
+	if opts.SocketPath == "" {
+		opts.SocketPath = filepath.Join(os.TempDir(), "xagent.sock")
+	}
+	return &AgentProxy{
+		serverURL:  opts.ServerURL,
+		auth:       opts.Auth,
+		privateKey: opts.PrivateKey,
+		log:        opts.Log,
+		socketPath: opts.SocketPath,
+	}
 }
 
 // SocketPath returns the path to the Unix socket.
