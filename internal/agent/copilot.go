@@ -113,5 +113,5 @@ func (a *CopilotAgent) mcpConfigJSON() ([]byte, error) {
 		}
 		servers[name] = server
 	}
-	return json.Marshal(map[string]any{"servers": servers})
+	return json.Marshal(map[string]any{"mcpServers": servers})
 }
