@@ -66,10 +66,10 @@ function TasksPage() {
   const hiddenCount = allTasks.filter(isChildTask).length
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Tasks</h1>
-        <div className="flex items-center gap-4">
+    <div className="container mx-auto py-4 px-3 md:py-8 md:px-4">
+      <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center md:justify-between">
+        <h1 className="text-xl font-bold md:text-2xl">Tasks</h1>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <div className="flex items-center gap-2">
             <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
               Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
@@ -80,31 +80,33 @@ function TasksPage() {
               onCheckedChange={setShowChildTasks}
             />
           </div>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search tasks..."
-              className="pl-8 pr-8 w-48"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 sm:flex-initial">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search tasks..."
+                className="pl-8 pr-8 w-full sm:w-48"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Link to="/tasks/new">
+              <Button>
+                <Plus className="h-4 w-4" />
+                Task
+              </Button>
+            </Link>
           </div>
-          <Link to="/tasks/new">
-            <Button>
-              <Plus className="h-4 w-4" />
-              Task
-            </Button>
-          </Link>
         </div>
       </div>
       {tasks.length === 0 ? (
@@ -112,24 +114,74 @@ function TasksPage() {
           No tasks found
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Runner</TableHead>
-              <TableHead>Workspace</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          {/* Mobile card view */}
+          <div className="flex flex-col gap-3 md:hidden">
             {tasks.map((task) => (
-              <TaskRow key={String(task.id)} task={task} onUpdate={refetch} />
+              <TaskCard key={String(task.id)} task={task} onUpdate={refetch} />
             ))}
-          </TableBody>
-        </Table>
+          </div>
+          {/* Desktop table view */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Runner</TableHead>
+                  <TableHead>Workspace</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tasks.map((task) => (
+                  <TaskRow key={String(task.id)} task={task} onUpdate={refetch} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
+    </div>
+  )
+}
+
+function TaskCard({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
+  const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
+
+  return (
+    <div className={cn('rounded-lg border p-4 space-y-2', isChildTask(task) && 'bg-muted/30')}>
+      <div className="flex items-start justify-between gap-2">
+        <Link
+          to="/tasks/$id"
+          params={{ id: String(task.id) }}
+          className="text-primary hover:underline font-medium break-words min-w-0"
+        >
+          {task.name || `Unnamed - ${task.id}`}
+        </Link>
+        {canArchiveTask(task) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => archiveMutation.mutateAsync({ id: task.id })}
+            disabled={archiveMutation.isPending}
+            className="shrink-0"
+          >
+            {archiveMutation.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+            Archive
+          </Button>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge task={task} />
+        <CommandBadge task={task} />
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+        {task.workspace && <span>{task.workspace}</span>}
+        {task.runner && <span>{task.runner}</span>}
+        {task.createdAt && <RelativeTime date={timestampDate(task.createdAt)} />}
+      </div>
     </div>
   )
 }
@@ -179,4 +231,3 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
     </TableRow>
   )
 }
-

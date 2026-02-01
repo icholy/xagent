@@ -46,9 +46,9 @@ function KeysPage() {
   const keys = data?.keys ?? []
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-4 px-3 md:py-8 md:px-4">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">API Keys</h1>
+        <h1 className="text-xl font-bold md:text-2xl">API Keys</h1>
         <Link to="/keys/new">
           <Button>
             <Plus className="h-4 w-4" />
@@ -61,26 +61,91 @@ function KeysPage() {
           No API keys found
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Expires</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          {/* Mobile card view */}
+          <div className="flex flex-col gap-3 md:hidden">
             {keys.map((key) => (
-              <KeyRow
-                key={key.id}
-                apiKey={key}
-                onDelete={refetch}
-              />
+              <KeyCard key={key.id} apiKey={key} onDelete={refetch} />
             ))}
-          </TableBody>
-        </Table>
+          </div>
+          {/* Desktop table view */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {keys.map((key) => (
+                  <KeyRow
+                    key={key.id}
+                    apiKey={key}
+                    onDelete={refetch}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
+    </div>
+  )
+}
+
+function KeyCard({
+  apiKey,
+  onDelete,
+}: {
+  apiKey: Key
+  onDelete: () => void
+}) {
+  const deleteMutation = useMutation(deleteKey, {
+    onSuccess: () => onDelete(),
+  })
+
+  const isExpired = apiKey.expiresAt && timestampDate(apiKey.expiresAt) < new Date()
+
+  return (
+    <div className="rounded-lg border p-4 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <span className="font-medium">{apiKey.name}</span>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => deleteMutation.mutateAsync({ id: apiKey.id })}
+          disabled={deleteMutation.isPending}
+          className="shrink-0"
+        >
+          {deleteMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
+          Delete
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+        <span>
+          Expires:{' '}
+          {apiKey.expiresAt ? (
+            <span className={isExpired ? 'text-destructive' : ''}>
+              {isExpired ? 'Expired ' : ''}
+              <RelativeTime date={timestampDate(apiKey.expiresAt)} />
+            </span>
+          ) : (
+            'Never'
+          )}
+        </span>
+        {apiKey.createdAt && (
+          <span>
+            Created: <RelativeTime date={timestampDate(apiKey.createdAt)} />
+          </span>
+        )}
+      </div>
     </div>
   )
 }

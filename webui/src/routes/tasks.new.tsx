@@ -67,8 +67,8 @@ function NewTaskPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6">
-      <h1 className="text-2xl font-bold mb-6">Create New Task</h1>
+    <div className="container mx-auto py-4 px-3 md:py-8 md:px-4 space-y-6">
+      <h1 className="text-xl font-bold mb-6 md:text-2xl">Create New Task</h1>
 
       <Card>
         <CardContent className="pt-6">

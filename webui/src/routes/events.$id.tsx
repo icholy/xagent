@@ -53,11 +53,11 @@ function EventDetail() {
   const taskIds = tasksData?.taskIds ?? []
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-6">Event {String(event.id)}</h1>
+    <div className="container mx-auto py-4 px-3 md:py-8 md:px-4">
+      <h1 className="text-xl font-bold mb-6 md:text-2xl">Event {String(event.id)}</h1>
 
       <div className="space-y-6">
-        <div className="rounded-lg border p-6 space-y-4">
+        <div className="rounded-lg border p-4 md:p-6 space-y-4">
           <div>
             <h2 className="text-sm font-medium text-muted-foreground">Description</h2>
             <p className="mt-1">{event.description || '-'}</p>
@@ -98,7 +98,7 @@ function EventDetail() {
           )}
         </div>
 
-        <div className="rounded-lg border p-6">
+        <div className="rounded-lg border p-4 md:p-6">
           <h2 className="text-lg font-semibold mb-4">Associated Tasks</h2>
           {tasksLoading ? (
             <p className="text-muted-foreground">Loading tasks...</p>

@@ -52,10 +52,10 @@ function EventsPage() {
   const events = data?.events ?? []
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Recent Events</h1>
-        <div className="flex items-center gap-4">
+    <div className="container mx-auto py-4 px-3 md:py-8 md:px-4">
+      <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center md:justify-between">
+        <h1 className="text-xl font-bold md:text-2xl">Recent Events</h1>
+        <div className="flex items-center gap-3 md:gap-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Show</span>
             <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
@@ -83,21 +83,73 @@ function EventsPage() {
           No events found
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Data</TableHead>
-              <TableHead>Created</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          {/* Mobile card view */}
+          <div className="flex flex-col gap-3 md:hidden">
             {events.map((event) => (
-              <EventRow key={String(event.id)} event={event} />
+              <EventCard key={String(event.id)} event={event} />
             ))}
-          </TableBody>
-        </Table>
+          </div>
+          {/* Desktop table view */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {events.map((event) => (
+                  <EventRow key={String(event.id)} event={event} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function EventCard({ event }: { event: Event }) {
+  const dataContent = event.data || '-'
+  const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
+
+  return (
+    <div className="rounded-lg border p-4 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <Link
+          to="/events/$id"
+          params={{ id: String(event.id) }}
+          className="text-primary hover:underline font-medium"
+        >
+          {event.description || `Event ${event.id}`}
+        </Link>
+        <span className="text-xs text-muted-foreground shrink-0">
+          #{String(event.id)}
+        </span>
+      </div>
+      <div className="text-sm text-muted-foreground break-words">
+        {event.url ? (
+          <a
+            href={event.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            {truncatedData}
+          </a>
+        ) : (
+          truncatedData
+        )}
+      </div>
+      {event.createdAt && (
+        <div className="text-xs text-muted-foreground">
+          <RelativeTime date={timestampDate(event.createdAt)} />
+        </div>
       )}
     </div>
   )
@@ -139,4 +191,3 @@ function EventRow({ event }: { event: Event }) {
     </TableRow>
   )
 }
-

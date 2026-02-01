@@ -40,8 +40,8 @@ function NewKeyPage() {
 
   if (created) {
     return (
-      <div className="container mx-auto py-8 px-4 space-y-6">
-        <h1 className="text-2xl font-bold mb-6">API Key Created</h1>
+      <div className="container mx-auto py-4 px-3 md:py-8 md:px-4 space-y-6">
+        <h1 className="text-xl font-bold mb-6 md:text-2xl">API Key Created</h1>
 
         <Card>
           <CardContent className="pt-6 space-y-4">
@@ -82,8 +82,8 @@ function NewKeyPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6">
-      <h1 className="text-2xl font-bold mb-6">Create API Key</h1>
+    <div className="container mx-auto py-4 px-3 md:py-8 md:px-4 space-y-6">
+      <h1 className="text-xl font-bold mb-6 md:text-2xl">Create API Key</h1>
 
       <Card>
         <CardContent className="pt-6">

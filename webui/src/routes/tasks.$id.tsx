@@ -130,10 +130,10 @@ function TaskDetail() {
   const isMutating = archiveMutation.isPending || unarchiveMutation.isPending || cancelMutation.isPending || restartMutation.isPending
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6">
-      <div className="flex justify-between items-start mb-6">
-        <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
-        <div className="flex gap-2">
+    <div className="container mx-auto py-4 px-3 md:py-8 md:px-4 space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-start mb-6">
+        <h1 className="text-xl font-bold md:text-2xl break-words min-w-0">{task.name || `Unnamed - ${id}`}</h1>
+        <div className="flex flex-wrap gap-2 shrink-0">
           {canCancelTask(task) && (
             <Button
               variant="destructive"
@@ -183,7 +183,7 @@ function TaskDetail() {
 
       {/* Task Details */}
       <div className="rounded-lg border p-4">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:flex md:flex-wrap md:items-center md:gap-x-6 md:gap-y-2">
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Runner:</span>
             <span>{task.runner}</span>
@@ -204,7 +204,7 @@ function TaskDetail() {
               </Link>
             </div>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 col-span-2 md:col-span-1">
             <span className="text-muted-foreground">Status:</span>
             <StatusBadge task={task} />
             <CommandBadge task={task} />
@@ -225,14 +225,14 @@ function TaskDetail() {
 
       {/* Links */}
       {links.length > 0 && (
-        <div className="rounded-lg border p-6">
+        <div className="rounded-lg border p-4 md:p-6">
           <h2 className="text-lg font-semibold mb-4">Links</h2>
           <LinksSection links={links} />
         </div>
       )}
 
       {/* Instructions */}
-      <div className="rounded-lg border p-6">
+      <div className="rounded-lg border p-4 md:p-6">
         <h2 className="text-lg font-semibold mb-4">Instructions</h2>
         {task.instructions.length === 0 ? (
           <p className="text-muted-foreground">No instructions</p>
@@ -263,17 +263,17 @@ function TaskDetail() {
 
       {/* Child Tasks */}
       {children.length > 0 && (
-        <div className="rounded-lg border p-6">
+        <div className="rounded-lg border p-4 md:p-6">
           <h2 className="text-lg font-semibold mb-4">Child Tasks</h2>
-          <ChildTasksTable tasks={children} onUpdate={refetch} />
+          <ChildTasksSection tasks={children} onUpdate={refetch} />
         </div>
       )}
 
       {/* Events */}
       {events.length > 0 && (
-        <div className="rounded-lg border p-6">
+        <div className="rounded-lg border p-4 md:p-6">
           <h2 className="text-lg font-semibold mb-4">Events</h2>
-          <EventsTable
+          <EventsSection
             events={events}
             onUnlink={handleUnlinkEvent}
             isUnlinking={removeEventMutation.isPending}
@@ -282,9 +282,9 @@ function TaskDetail() {
       )}
 
       {/* Logs */}
-      <div className="rounded-lg border p-6">
+      <div className="rounded-lg border p-4 md:p-6">
         <h2 className="text-lg font-semibold mb-4">Logs</h2>
-        <LogsTable logs={logs} />
+        <LogsSection logs={logs} />
       </div>
     </div>
   )
@@ -315,12 +315,12 @@ function LinksSection({ links }: { links: TaskLink[] }) {
     <ul className="space-y-2">
       {links.map((link) => (
         <li key={String(link.id)} className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <a
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary hover:underline"
+              className="text-primary hover:underline break-all"
             >
               {link.title || link.url}
             </a>
@@ -344,25 +344,74 @@ function LinksSection({ links }: { links: TaskLink[] }) {
   )
 }
 
-function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => void }) {
+function ChildTasksSection({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => void }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Runner</TableHead>
-          <TableHead>Workspace</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Created</TableHead>
-          <TableHead></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <>
+      {/* Mobile card view */}
+      <div className="flex flex-col gap-3 md:hidden">
         {tasks.map((task) => (
-          <ChildTaskRow key={String(task.id)} task={task} onUpdate={onUpdate} />
+          <ChildTaskCard key={String(task.id)} task={task} onUpdate={onUpdate} />
         ))}
-      </TableBody>
-    </Table>
+      </div>
+      {/* Desktop table view */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Runner</TableHead>
+              <TableHead>Workspace</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tasks.map((task) => (
+              <ChildTaskRow key={String(task.id)} task={task} onUpdate={onUpdate} />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  )
+}
+
+function ChildTaskCard({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
+  const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
+
+  return (
+    <div className="rounded-lg border p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <Link
+          to="/tasks/$id"
+          params={{ id: String(task.id) }}
+          className="text-primary hover:underline font-medium break-words min-w-0"
+        >
+          {task.name || `Unnamed - ${task.id}`}
+        </Link>
+        {canArchiveTask(task) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => archiveMutation.mutateAsync({ id: task.id })}
+            disabled={archiveMutation.isPending}
+            className="shrink-0"
+          >
+            {archiveMutation.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+            Archive
+          </Button>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge task={task} />
+        <CommandBadge task={task} />
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+        {task.workspace && <span>{task.workspace}</span>}
+        {task.createdAt && <RelativeTime date={timestampDate(task.createdAt)} />}
+      </div>
+    </div>
   )
 }
 
@@ -412,7 +461,7 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
   )
 }
 
-function EventsTable({
+function EventsSection({
   events,
   onUnlink,
   isUnlinking,
@@ -422,34 +471,34 @@ function EventsTable({
   isUnlinking: boolean
 }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>ID</TableHead>
-          <TableHead>Description</TableHead>
-          <TableHead>Data</TableHead>
-          <TableHead>Created</TableHead>
-          <TableHead></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <>
+      {/* Mobile card view */}
+      <div className="flex flex-col gap-3 md:hidden">
         {events.map((event) => {
           const dataContent = event.data || '-'
           const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
 
           return (
-            <TableRow key={String(event.id)}>
-              <TableCell>{String(event.id)}</TableCell>
-              <TableCell>
+            <div key={String(event.id)} className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
                 <Link
                   to="/events/$id"
                   params={{ id: String(event.id) }}
-                  className="text-primary hover:underline"
+                  className="text-primary hover:underline font-medium"
                 >
-                  {event.description || '-'}
+                  {event.description || `Event ${event.id}`}
                 </Link>
-              </TableCell>
-              <TableCell className="max-w-xs truncate">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onUnlink(event.id)}
+                  disabled={isUnlinking}
+                  className="shrink-0"
+                >
+                  Remove
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground break-words">
                 {event.url ? (
                   <a
                     href={event.url}
@@ -462,46 +511,94 @@ function EventsTable({
                 ) : (
                   truncatedData
                 )}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
-              </TableCell>
-              <TableCell>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => onUnlink(event.id)}
-                  disabled={isUnlinking}
-                >
-                  Remove
-                </Button>
-              </TableCell>
-            </TableRow>
+              </div>
+              {event.createdAt && (
+                <div className="text-xs text-muted-foreground">
+                  <RelativeTime date={timestampDate(event.createdAt)} />
+                </div>
+              )}
+            </div>
           )
         })}
-      </TableBody>
-    </Table>
+      </div>
+      {/* Desktop table view */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Data</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {events.map((event) => {
+              const dataContent = event.data || '-'
+              const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
+
+              return (
+                <TableRow key={String(event.id)}>
+                  <TableCell>{String(event.id)}</TableCell>
+                  <TableCell>
+                    <Link
+                      to="/events/$id"
+                      params={{ id: String(event.id) }}
+                      className="text-primary hover:underline"
+                    >
+                      {event.description || '-'}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="max-w-xs truncate">
+                    {event.url ? (
+                      <a
+                        href={event.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        {truncatedData}
+                      </a>
+                    ) : (
+                      truncatedData
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => onUnlink(event.id)}
+                      disabled={isUnlinking}
+                    >
+                      Remove
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   )
 }
 
-function LogsTable({ logs }: { logs: LogEntry[] }) {
+function LogsSection({ logs }: { logs: LogEntry[] }) {
   if (logs.length === 0) {
     return <div className="text-muted-foreground">No logs yet.</div>
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Type</TableHead>
-          <TableHead>Content</TableHead>
-          <TableHead>Created</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <>
+      {/* Mobile card view */}
+      <div className="flex flex-col gap-3 md:hidden">
         {logs.map((log, index) => (
-          <TableRow key={index}>
-            <TableCell>
+          <div key={index} className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
               <Badge
                 variant="outline"
                 className={
@@ -510,16 +607,52 @@ function LogsTable({ logs }: { logs: LogEntry[] }) {
               >
                 {log.type}
               </Badge>
-            </TableCell>
-            <TableCell className="whitespace-pre-wrap break-words">
+              {log.createdAt && (
+                <span className="text-xs text-muted-foreground">
+                  <RelativeTime date={timestampDate(log.createdAt)} />
+                </span>
+              )}
+            </div>
+            <div className="whitespace-pre-wrap break-words text-sm">
               {log.content}
-            </TableCell>
-            <TableCell className="text-muted-foreground">
-              {log.createdAt ? <RelativeTime date={timestampDate(log.createdAt)} /> : '-'}
-            </TableCell>
-          </TableRow>
+            </div>
+          </div>
         ))}
-      </TableBody>
-    </Table>
+      </div>
+      {/* Desktop table view */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Type</TableHead>
+              <TableHead>Content</TableHead>
+              <TableHead>Created</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {logs.map((log, index) => (
+              <TableRow key={index}>
+                <TableCell>
+                  <Badge
+                    variant="outline"
+                    className={
+                      logTypeStyles[log.type] ?? 'bg-gray-100 text-gray-600'
+                    }
+                  >
+                    {log.type}
+                  </Badge>
+                </TableCell>
+                <TableCell className="whitespace-pre-wrap break-words">
+                  {log.content}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {log.createdAt ? <RelativeTime date={timestampDate(log.createdAt)} /> : '-'}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   )
 }

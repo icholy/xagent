@@ -63,12 +63,12 @@ function WorkspacesPage() {
   const workspaces = allWorkspaces.filter((w) => selectedRunner === ALL_RUNNERS || w.runnerId === selectedRunner)
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Workspaces</h1>
-        <div className="flex items-center gap-4">
+    <div className="container mx-auto py-4 px-3 md:py-8 md:px-4">
+      <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center md:justify-between">
+        <h1 className="text-xl font-bold md:text-2xl">Workspaces</h1>
+        <div className="flex items-center gap-3 md:gap-4">
           <Select value={selectedRunner} onValueChange={setSelectedRunner}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -84,6 +84,7 @@ function WorkspacesPage() {
             variant="outline"
             onClick={handleClear}
             disabled={clearMutation.isPending || allWorkspaces.length === 0}
+            className="shrink-0"
           >
             {clearMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             Clear
@@ -95,32 +96,53 @@ function WorkspacesPage() {
           No workspaces registered
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Runner</TableHead>
-              <TableHead>Last Updated</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          {/* Mobile card view */}
+          <div className="flex flex-col gap-3 md:hidden">
             {workspaces.map((workspace) => (
-              <TableRow key={workspace.name}>
-                <TableCell className="font-medium">{workspace.name}</TableCell>
-                <TableCell className="text-muted-foreground font-mono text-sm">
+              <div key={workspace.name} className="rounded-lg border p-4 space-y-1">
+                <div className="font-medium">{workspace.name}</div>
+                <div className="text-sm text-muted-foreground font-mono">
                   {workspace.runnerId || '-'}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {workspace.updatedAt ? (
+                </div>
+                {workspace.updatedAt && (
+                  <div className="text-xs text-muted-foreground">
                     <RelativeTime date={timestampDate(workspace.updatedAt)} />
-                  ) : (
-                    '-'
-                  )}
-                </TableCell>
-              </TableRow>
+                  </div>
+                )}
+              </div>
             ))}
-          </TableBody>
-        </Table>
+          </div>
+          {/* Desktop table view */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Runner</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {workspaces.map((workspace) => (
+                  <TableRow key={workspace.name}>
+                    <TableCell className="font-medium">{workspace.name}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-sm">
+                      {workspace.runnerId || '-'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {workspace.updatedAt ? (
+                        <RelativeTime date={timestampDate(workspace.updatedAt)} />
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
     </div>
   )
