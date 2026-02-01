@@ -58,6 +58,9 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 	cmd.Dir = a.cwd
 	cmd.Stderr = os.Stderr
 
+	// Prevent claude code from auto-updating & allow skipping permissions as root user
+	cmd.Env = append(os.Environ(), "IS_SANDBOX=1", "DISABLE_AUTOUPDATER=1")
+
 	// Create a new process group so we can kill all child processes.
 	// When npx spawns node, we need to kill the entire process tree.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
