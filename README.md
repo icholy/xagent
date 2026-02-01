@@ -34,7 +34,15 @@ Start the local runner:
 xagent runner --concurrency 10
 ```
 
+View container logs:
+
+```bash
+xagent logs -f <taskid>
+```
+
 Create and monitor tasks via the Web UI.
+
+Open: https://xagent.choly.ca/
 
 ## Claude Code Workspace Example
 
