@@ -1,10 +1,9 @@
 package runner
 
 import (
-	"archive/tar"
-	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,6 +20,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/containerbuild"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -364,52 +364,73 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	wc := &ws.Container
+	taskIDStr := strconv.FormatInt(task.ID, 10)
 
-	name := fmt.Sprintf("xagent-%d", task.ID)
-	r.log.Info("creating container", "task", task.ID, "name", name, "image", wc.Image, "workspace", task.Workspace)
+	r.log.Info("creating container", "task", task.ID, "image", ws.Container.Image, "workspace", task.Workspace)
 
-	resp, err := r.docker.ContainerCreate(ctx,
-		&container.Config{
-			Image: wc.Image,
-			User:  wc.User,
-			Labels: map[string]string{
-				"xagent":      "true",
-				"xagent.task": fmt.Sprint(task.ID),
-			},
-			Cmd: []string{
-				"/usr/local/bin/xagent", "run",
-				"--server", "unix:///var/run/xagent.sock",
-				"--task", fmt.Sprint(task.ID),
-				"--token", token,
-			},
-			Env:        append(wc.Environ(), fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID)),
-			WorkingDir: wc.WorkingDir,
+	b := &containerbuild.Builder{
+		Docker:    r.docker,
+		Name:      fmt.Sprintf("xagent-%d", task.ID),
+		Workspace: ws,
+		Labels: map[string]string{
+			"xagent":      "true",
+			"xagent.task": fmt.Sprint(task.ID),
 		},
-		&container.HostConfig{
-			Binds:    append([]string{r.proxy.SocketPath() + ":/var/run/xagent.sock"}, wc.Volumes...),
-			GroupAdd: wc.GroupAdd,
-			Runtime:  wc.Runtime,
+		Cmd: []string{
+			"/usr/local/bin/xagent", "run",
+			"--server", "unix:///var/run/xagent.sock",
+			"--task", taskIDStr,
+			"--token", token,
 		},
-		wc.NetworkingConfig(),
-		nil,
-		name,
-	)
+		Env: []string{
+			fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID),
+		},
+		Binds: []string{
+			r.proxy.SocketPath() + ":/var/run/xagent.sock",
+		},
+	}
+
+	// Read xagent binary for the container's architecture
+	binData, err := r.readBinary(ctx, ws.Container.Image)
 	if err != nil {
-		return "", fmt.Errorf("failed to create container: %w", err)
+		return "", fmt.Errorf("failed to read binary: %w", err)
 	}
+	b.CopyFile("/usr/local/bin/xagent", binData, 0755)
 
-	// Copy xagent binary into container
-	if err := r.copyBinary(ctx, resp.ID, wc.Image); err != nil {
-		return "", fmt.Errorf("failed to copy binary: %w", err)
+	// Build agent config
+	cfg := ws.AgentConfig()
+	cfg.McpServers["xagent"] = agent.McpServer{
+		Type:    "stdio",
+		Command: "/usr/local/bin/xagent",
+		Args: []string{
+			"mcp",
+			"--server", "unix:///var/run/xagent.sock",
+			"--task", taskIDStr,
+			"--runner", task.Runner,
+			"--workspace", task.Workspace,
+			"--token", token,
+		},
 	}
-
-	// Copy config into container
-	if err := r.copyConfig(ctx, resp.ID, task, ws, token); err != nil {
-		return "", fmt.Errorf("failed to copy config: %w", err)
+	cfgData, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal config: %w", err)
 	}
+	b.CopyFile(agent.ConfigPath(taskIDStr), cfgData, 0666)
 
-	return resp.ID, nil
+	return b.Build(ctx)
+}
+
+func (r *Runner) readBinary(ctx context.Context, image string) ([]byte, error) {
+	info, err := r.docker.ImageInspect(ctx, image)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect image: %w", err)
+	}
+	binPath := filepath.Join(r.prebuiltDir, fmt.Sprintf("xagent-linux-%s", info.Architecture))
+	data, err := os.ReadFile(binPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read binary %s: %w", binPath, err)
+	}
+	return data, nil
 }
 
 func (r *Runner) Start(ctx context.Context, task *model.Task) error {
@@ -433,70 +454,6 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 	return nil
-}
-
-func (r *Runner) copyBinary(ctx context.Context, containerID, image string) error {
-	// Inspect image to get architecture
-	info, err := r.docker.ImageInspect(ctx, image)
-	if err != nil {
-		return fmt.Errorf("failed to inspect image: %w", err)
-	}
-
-	arch := info.Architecture
-	binPath := filepath.Join(r.prebuiltDir, fmt.Sprintf("xagent-linux-%s", arch))
-
-	// Read the binary
-	binData, err := os.ReadFile(binPath)
-	if err != nil {
-		return fmt.Errorf("failed to read binary %s: %w", binPath, err)
-	}
-
-	// Create tar archive
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	if err := tw.WriteHeader(&tar.Header{
-		Name: "xagent",
-		Mode: 0755,
-		Size: int64(len(binData)),
-	}); err != nil {
-		return err
-	}
-	if _, err := tw.Write(binData); err != nil {
-		return err
-	}
-	if err := tw.Close(); err != nil {
-		return err
-	}
-
-	// Copy to container
-	return r.docker.CopyToContainer(ctx, containerID, "/usr/local/bin", &buf, container.CopyToContainerOptions{})
-}
-
-func (r *Runner) copyConfig(ctx context.Context, containerID string, task *model.Task, ws *workspace.Workspace, token string) error {
-	taskIDStr := strconv.FormatInt(task.ID, 10)
-
-	cfg := ws.AgentConfig()
-
-	// Inject xagent MCP server for link creation
-	cfg.McpServers["xagent"] = agent.McpServer{
-		Type:    "stdio",
-		Command: "/usr/local/bin/xagent",
-		Args: []string{
-			"mcp",
-			"--server", "unix:///var/run/xagent.sock",
-			"--task", taskIDStr,
-			"--runner", task.Runner,
-			"--workspace", task.Workspace,
-			"--token", token,
-		},
-	}
-
-	data, err := cfg.Tar(taskIDStr)
-	if err != nil {
-		return err
-	}
-
-	return r.docker.CopyToContainer(ctx, containerID, "/", bytes.NewReader(data), container.CopyToContainerOptions{})
 }
 
 // Monitor watches for container starts and exits and sends runner events accordingly.
