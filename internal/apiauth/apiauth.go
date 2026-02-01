@@ -3,6 +3,7 @@ package apiauth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -51,6 +52,9 @@ type Config struct {
 	PostLogoutURI string
 	EncryptionKey []byte
 	Scopes        []string
+	// SessionMaxAge sets the Max-Age (in seconds) for the session cookie.
+	// If 0, defaults to 30 days (2592000 seconds).
+	SessionMaxAge int
 	// KeyValidator validates xat_ API keys.
 	KeyValidator KeyValidator
 	// Disable authentication (for development only).
@@ -71,6 +75,8 @@ type Auth struct {
 	validator KeyValidator
 	// handler handles /auth/* routes (login, callback, logout)
 	handler http.Handler
+	// sessionMaxAge is the Max-Age (in seconds) for the session cookie
+	sessionMaxAge int
 }
 
 // New creates a new Auth instance with both cookie and bearer token support.
@@ -116,11 +122,16 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	if err != nil {
 		return nil, err
 	}
+	maxAge := cfg.SessionMaxAge
+	if maxAge == 0 {
+		maxAge = 60 * 60 * 24 * 30 // 30 days
+	}
 	return &Auth{
-		cookie:    authentication.Middleware(authN),
-		bearer:    middleware.New(authZ),
-		validator: cfg.KeyValidator,
-		handler:   authN,
+		cookie:        authentication.Middleware(authN),
+		bearer:        middleware.New(authZ),
+		validator:     cfg.KeyValidator,
+		handler:       authN,
+		sessionMaxAge: maxAge,
 	}, nil
 }
 
@@ -220,7 +231,73 @@ func (a *Auth) Handler() http.Handler {
 			http.NotFound(w, r)
 		})
 	}
-	return a.handler
+	return a.sessionCookieMaxAge(a.handler)
+}
+
+// sessionCookieMaxAge wraps a handler to set Max-Age on session cookies.
+// The zitadel-go library hardcodes MaxAge=0 (session cookie) on the
+// "zitadel.session" cookie. This middleware intercepts Set-Cookie headers
+// and adds Max-Age so the cookie persists across mobile browser restarts.
+func (a *Auth) sessionCookieMaxAge(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(&sessionCookieWriter{
+			ResponseWriter: w,
+			maxAge:         a.sessionMaxAge,
+		}, r)
+	})
+}
+
+// sessionCookieWriter intercepts Set-Cookie headers to add Max-Age to
+// the zitadel.session cookie when it's set without one.
+type sessionCookieWriter struct {
+	http.ResponseWriter
+	maxAge      int
+	wroteHeader bool
+}
+
+func (w *sessionCookieWriter) patchCookies() {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	const cookieName = "zitadel.session"
+	var cookies []string
+	for _, v := range w.Header().Values("Set-Cookie") {
+		if isSessionCookie(v, cookieName) {
+			v = setMaxAge(v, w.maxAge)
+		}
+		cookies = append(cookies, v)
+	}
+	w.Header().Del("Set-Cookie")
+	for _, c := range cookies {
+		w.Header().Add("Set-Cookie", c)
+	}
+}
+
+func (w *sessionCookieWriter) WriteHeader(statusCode int) {
+	w.patchCookies()
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *sessionCookieWriter) Write(b []byte) (int, error) {
+	w.patchCookies()
+	return w.ResponseWriter.Write(b)
+}
+
+// isSessionCookie checks if a Set-Cookie header value is for the named cookie.
+func isSessionCookie(headerVal, name string) bool {
+	return strings.HasPrefix(headerVal, name+"=")
+}
+
+// setMaxAge adds Max-Age to a Set-Cookie header value only if it doesn't
+// already have one. If the cookie already has a Max-Age attribute (including
+// Max-Age=0 for deletion), it's left unchanged.
+func setMaxAge(headerVal string, maxAge int) string {
+	lower := strings.ToLower(headerVal)
+	if strings.Contains(lower, "max-age=") {
+		return headerVal
+	}
+	return headerVal + fmt.Sprintf("; Max-Age=%d", maxAge)
 }
 
 // attachDefaultUser returns middleware that attaches a default user to all requests.
