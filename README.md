@@ -59,10 +59,14 @@ Create and monitor tasks via the Web UI.
 docker compose up -d
 
 # Start runner against local server
-xagent runner
+xagent runner --server http://localhost:6464
 
 # Build
 mise run build      # Build main + prebuilt binaries (linux amd64/arm64)
 mise run generate   # Generate protobuf code
 go build            # Build main binary only
+
+# Run the FE
+cd webapp
+pnpm run dev
 ```
