@@ -94,6 +94,15 @@ workspaces:
             Authorization: "Bearer ${env:METAMCP_API_KEY}"
 ```
 
+### Clone Private Repository Workspace Example:
+
+```yaml
+workspaces:
+  pets-workshop:
+    commands:
+      - git clone https://x-access-token:${sh:gh auth token}@github.com/private/repo.git
+```
+
 ## Local Development
 
 ```bash
