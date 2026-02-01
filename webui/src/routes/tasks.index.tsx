@@ -116,11 +116,11 @@ function TasksPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Runner</TableHead>
-              <TableHead>Workspace</TableHead>
+              <TableHead className="hidden md:table-cell">Runner</TableHead>
+              <TableHead className="hidden md:table-cell">Workspace</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead></TableHead>
+              <TableHead className="hidden md:table-cell">Created</TableHead>
+              <TableHead className="hidden md:table-cell"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -152,18 +152,18 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
           {task.name || `Unnamed - ${task.id}`}
         </Link>
       </TableCell>
-      <TableCell>{task.runner}</TableCell>
-      <TableCell>{task.workspace}</TableCell>
+      <TableCell className="hidden md:table-cell">{task.runner}</TableCell>
+      <TableCell className="hidden md:table-cell">{task.workspace}</TableCell>
       <TableCell>
         <span className="flex items-center gap-2">
           <StatusBadge task={task} />
           <CommandBadge task={task} />
         </span>
       </TableCell>
-      <TableCell className="text-muted-foreground">
+      <TableCell className="hidden md:table-cell text-muted-foreground">
         {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         {canArchiveTask(task) && (
           <Button
             variant="outline"
