@@ -22,10 +22,16 @@ Authenticate your local client:
 xagent setup
 ```
 
+Update the `workspaces.yml` file (see examples below):
+
+```bash
+vim ~/.config/xagent/workspaces.yaml
+```
+
 Start the local runner:
 
 ```bash
-xagent runner --concurrency 10 --config workspaces.yaml
+xagent runner --concurrency 10
 ```
 
 Create and monitor tasks via the Web UI.
