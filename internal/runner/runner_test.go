@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http/httptest"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
@@ -13,7 +12,6 @@ import (
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/prebuilt"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/workspace"
@@ -21,13 +19,11 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func init() {
-	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
-		prebuilt.UseSelf = true
-	}
-}
-
 func TestRunnerStart(t *testing.T) {
+	abs, err := filepath.Abs("../../prebuilt")
+	assert.NilError(t, err)
+	t.Setenv("XAGENT_PREBUILT_DIR", abs)
+
 	task := &model.Task{
 		ID:        1,
 		Name:      "test-task",

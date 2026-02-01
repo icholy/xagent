@@ -14,19 +14,18 @@ import (
 
 const DefaultRepo = "icholy/xagent"
 
-// UseSelf makes ReadBinary return the currently running binary
-// instead of a prebuilt binary. This is used in tests.
-var UseSelf bool
-
 var BinaryNames = []string{
 	"xagent-linux-amd64",
 	"xagent-linux-arm64",
 }
 
 // Dir returns the directory where prebuilt binaries are stored.
-// It checks XAGENT_CONFIG_DIR first, then falls back to
-// os.UserConfigDir()/xagent/prebuilt.
+// It checks XAGENT_PREBUILT_DIR first, then XAGENT_CONFIG_DIR/prebuilt,
+// then falls back to os.UserConfigDir()/xagent/prebuilt.
 func Dir() (string, error) {
+	if dir := os.Getenv("XAGENT_PREBUILT_DIR"); dir != "" {
+		return dir, nil
+	}
 	if dir := os.Getenv("XAGENT_CONFIG_DIR"); dir != "" {
 		return filepath.Join(dir, "prebuilt"), nil
 	}
@@ -47,15 +46,7 @@ func BinaryPath(arch string) (string, error) {
 }
 
 // ReadBinary reads the prebuilt binary for the given architecture.
-// If UseSelf is true, it returns the currently running binary instead.
 func ReadBinary(arch string) ([]byte, error) {
-	if UseSelf {
-		exe, err := os.Executable()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get executable path: %w", err)
-		}
-		return os.ReadFile(exe)
-	}
 	binPath, err := BinaryPath(arch)
 	if err != nil {
 		return nil, err
