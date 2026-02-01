@@ -56,11 +56,11 @@ func (m *McpServer) Validate() error {
 	return nil
 }
 
-func ConfigPath(taskID string) string {
-	return filepath.Join(ConfigDir, taskID+".json")
+func ConfigPath(taskID int64) string {
+	return filepath.Join(ConfigDir, fmt.Sprintf("%d.json", taskID))
 }
 
-func LoadConfig(taskID string) (*Config, error) {
+func LoadConfig(taskID int64) (*Config, error) {
 	path := ConfigPath(taskID)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -76,7 +76,7 @@ func LoadConfig(taskID string) (*Config, error) {
 	return &cfg, nil
 }
 
-func SaveConfig(taskID string, cfg *Config) error {
+func SaveConfig(taskID int64, cfg *Config) error {
 	path := ConfigPath(taskID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return err
@@ -99,7 +99,7 @@ func SaveConfig(taskID string, cfg *Config) error {
 }
 
 // Tar returns a tar archive containing the config file for the given task ID.
-func (c *Config) Tar(taskID string) ([]byte, error) {
+func (c *Config) Tar(taskID int64) ([]byte, error) {
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return nil, err

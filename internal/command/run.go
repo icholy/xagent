@@ -26,7 +26,7 @@ var RunCommand = &cli.Command{
 			Usage:   "C2 server URL",
 			Value:   xagentclient.DefaultURL,
 		},
-		&cli.StringFlag{
+		&cli.Int64Flag{
 			Name:     "task",
 			Aliases:  []string{"t"},
 			Usage:    "Task ID to execute",
@@ -58,7 +58,7 @@ var RunCommand = &cli.Command{
 			return fmt.Errorf("failed to ping server: %w", err)
 		}
 
-		taskID := cmd.String("task")
+		taskID := cmd.Int64("task")
 
 		// Load config
 		cfg, err := agent.LoadConfig(taskID)
