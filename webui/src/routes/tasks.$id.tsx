@@ -131,9 +131,9 @@ function TaskDetail() {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canCancelTask(task) && (
             <Button
               variant="destructive"
