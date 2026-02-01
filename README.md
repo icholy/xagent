@@ -34,12 +34,6 @@ Start the local runner:
 xagent runner --concurrency 10
 ```
 
-View container logs:
-
-```bash
-xagent logs -f <taskid>
-```
-
 Create and monitor tasks via the Web UI.
 
 Open: https://xagent.choly.ca/
@@ -110,6 +104,27 @@ workspaces:
     commands:
       - git clone https://x-access-token:${sh:gh auth token}@github.com/private/repo.git
 ```
+
+## Debugging
+
+View container logs:
+
+```bash
+xagent logs -f <taskid>
+```
+
+Get a shell to a task container:
+
+```bash
+xagent shell <taskid>
+```
+
+List task containers
+
+```bash
+xagent containers
+```
+
 
 ## Local Development
 
