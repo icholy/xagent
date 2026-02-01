@@ -44,11 +44,6 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		args = append(args, "--model", a.options.Model)
 	}
 
-	// Add API key if specified in options
-	if a.options != nil && a.options.APIKey != "" {
-		args = append(args, "--api-key", a.options.APIKey)
-	}
-
 	// Resume the last chat session
 	if resume {
 		args = append(args, "--continue")

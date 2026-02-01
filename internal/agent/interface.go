@@ -64,9 +64,8 @@ type CopilotOptions struct {
 
 // CursorOptions contains Cursor-specific agent options.
 type CursorOptions struct {
-	Model  string
-	APIKey string
-	Bin    string
+	Model string
+	Bin   string
 }
 
 // DummyOptions contains Dummy-specific agent options.

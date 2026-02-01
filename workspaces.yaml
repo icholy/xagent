@@ -107,8 +107,6 @@ workspaces:
       - git clone https://github.com/github-samples/pets-workshop
     agent:
       type: cursor
-      cursor:
-        api_key: ${env:CURSOR_API_KEY}
       cwd: /root/pets-workshop
       mcp_servers: {}
       prompt: |
