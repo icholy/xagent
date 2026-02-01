@@ -73,6 +73,9 @@ func Download(ctx context.Context, repo string) error {
 		return fmt.Errorf("invalid github-repo format, expected owner/repo: %s", repo)
 	}
 	client := github.NewClient(nil)
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		client = client.WithAuthToken(token)
+	}
 	release, _, err := client.Repositories.GetLatestRelease(ctx, owner, repoName)
 	if err != nil {
 		return fmt.Errorf("failed to get latest release: %w", err)
