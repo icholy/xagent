@@ -39,7 +39,7 @@ function RootComponent() {
     <>
       <nav className="border-b">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3 md:gap-6">
-          <Link to="/">
+          <Link to="/tasks/new">
             <img src={xagentIcon} alt="XAgent" className="h-8 w-8" />
           </Link>
           <div className="flex gap-2 md:gap-4">
