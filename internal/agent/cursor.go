@@ -56,7 +56,12 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 
 	args = append(args, prompt)
 
-	cmd := exec.CommandContext(ctx, "cursor-agent", args...)
+	bin, err := a.findBin()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = a.cwd
 	cmd.Env = os.Environ()
 	cmd.Stderr = os.Stderr
@@ -139,6 +144,27 @@ func (a *CursorAgent) writeMcpConfig() error {
 
 	mcpConfigPath := filepath.Join(cursorDir, "mcp.json")
 	return os.WriteFile(mcpConfigPath, data, 0644)
+}
+
+// findBin returns the path to the Cursor Agent CLI binary.
+func (a *CursorAgent) findBin() (string, error) {
+	if a.options != nil && a.options.Bin != "" {
+		return a.options.Bin, nil
+	}
+	// Check common names on PATH
+	for _, name := range []string{"cursor-agent", "agent"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p, nil
+		}
+	}
+	// Check default install location
+	if home, err := os.UserHomeDir(); err == nil {
+		p := filepath.Join(home, ".local", "bin", "agent")
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("cursor agent CLI not found (install: curl -fsSL https://cursor.com/install | bash)")
 }
 
 func (a *CursorAgent) handleStreamEvent(data []byte) bool {

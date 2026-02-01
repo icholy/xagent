@@ -96,3 +96,21 @@ workspaces:
           - Specific approaches or constraints
         - Keep instructions concise and focused on what's NOT obvious from the ticket
 
+  pets-workshop:
+    container:
+      image: node:20
+      working_dir: /root
+      environment:
+        CURSOR_API_KEY: ${env:CURSOR_API_KEY}
+    commands:
+      - curl -fsSL https://cursor.com/install | bash
+      - git clone https://github.com/github-samples/pets-workshop
+    agent:
+      type: cursor
+      cursor:
+        api_key: ${env:CURSOR_API_KEY}
+      cwd: /root/pets-workshop
+      mcp_servers: {}
+      prompt: |
+        This is an example github repository.
+        Don't try opening PRs or issues.
