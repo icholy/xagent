@@ -31,7 +31,7 @@ vim ~/.config/xagent/workspaces.yaml
 Start the local runner:
 
 ```bash
-xagent runner --concurrency 10
+xagent runner
 ```
 
 Create and monitor tasks via the Web UI.
