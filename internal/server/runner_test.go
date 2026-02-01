@@ -22,8 +22,8 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	// Verify initial state
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.Status, "pending")
-	assert.Equal(t, getResp.Task.Command, "start")
+	assert.Equal(t, getResp.Task.Status, xagentv1.TaskStatus_PENDING)
+	assert.Equal(t, getResp.Task.Command, xagentv1.TaskCommand_START)
 	assert.Equal(t, getResp.Task.Version, int64(1))
 
 	// Send started event (simulating container start)
@@ -41,8 +41,8 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	// Verify task is running and command is cleared
 	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.Status, "running")
-	assert.Equal(t, getResp.Task.Command, "")
+	assert.Equal(t, getResp.Task.Status, xagentv1.TaskStatus_RUNNING)
+	assert.Equal(t, getResp.Task.Command, xagentv1.TaskCommand_NONE)
 
 	// Send stopped event (simulating container exit with code 0)
 	// Use version 0 to bypass version check (spontaneous event)
@@ -60,7 +60,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	// Verify task status was updated to completed
 	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.Status, "completed")
+	assert.Equal(t, getResp.Task.Status, xagentv1.TaskStatus_COMPLETED)
 }
 
 func TestSubmitRunnerEvents_Permissions(t *testing.T) {

@@ -253,7 +253,7 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			r.log.Error("failed to get task", "task", taskID, "error", err)
 			continue
 		}
-		if task.Task.Status != "running" {
+		if task.Task.Status != xagentv1.TaskStatus_RUNNING {
 			continue
 		}
 

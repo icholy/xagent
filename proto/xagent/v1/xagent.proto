@@ -61,6 +61,24 @@ message TaskActions {
   bool unarchive = 5;
 }
 
+enum TaskStatus {
+  UNSPECIFIED = 0;
+  PENDING = 1;
+  RUNNING = 2;
+  RESTARTING = 3;
+  CANCELLING = 4;
+  COMPLETED = 5;
+  FAILED = 6;
+  CANCELLED = 7;
+}
+
+enum TaskCommand {
+  NONE = 0;
+  RESTART = 1;
+  STOP = 2;
+  START = 3;
+}
+
 message Task {
   int64 id = 1;
   string name = 2;
@@ -68,10 +86,10 @@ message Task {
   string workspace = 4;
   string runner = 5;  // Runner ID that handles this task
   repeated Instruction instructions = 6;
-  string status = 7;
+  TaskStatus status = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
-  string command = 10;  // "restart", "stop", or empty
+  TaskCommand command = 10;
   int64 version = 11;  // Incremented when command changes
   TaskActions actions = 12;
   bool archived = 13;

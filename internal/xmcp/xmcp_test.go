@@ -75,7 +75,7 @@ func TestGetMyTask(t *testing.T) {
 	assertTextResult(t, result, map[string]any{
 		"id":        float64(123),
 		"name":      "test task",
-		"status":    "",
+		"status":    "UNSPECIFIED",
 		"workspace": "",
 		"instructions": []any{
 			map[string]any{"text": "do something", "url": "https://example.com"},
@@ -97,7 +97,7 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 				Task: &xagentv1.Task{
 					Id:       childTaskID,
 					Parent:   parentTaskID,
-					Status:   "completed",
+					Status:   xagentv1.TaskStatus_COMPLETED,
 					Archived: true,
 				},
 			}, nil

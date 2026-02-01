@@ -297,7 +297,7 @@ func taskDetailsToMap(resp *xagentv1.GetTaskDetailsResponse) map[string]any {
 	return map[string]any{
 		"id":           resp.Task.Id,
 		"name":         resp.Task.Name,
-		"status":       resp.Task.Status,
+		"status":       resp.Task.Status.String(),
 		"workspace":    resp.Task.Workspace,
 		"instructions": instructions,
 		"links":        links,

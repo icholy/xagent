@@ -7,26 +7,31 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+//go:generate stringer -type=TaskStatus -trimprefix=TaskStatus
+
 // TaskStatus represents the current state of a task.
-type TaskStatus string
+type TaskStatus int32
 
 const (
-	TaskStatusPending    TaskStatus = "pending"
-	TaskStatusRunning    TaskStatus = "running"
-	TaskStatusRestarting TaskStatus = "restarting"
-	TaskStatusCancelling TaskStatus = "cancelling"
-	TaskStatusCompleted  TaskStatus = "completed"
-	TaskStatusFailed     TaskStatus = "failed"
-	TaskStatusCancelled  TaskStatus = "cancelled"
+	TaskStatusPending    TaskStatus = TaskStatus(xagentv1.TaskStatus_PENDING)
+	TaskStatusRunning    TaskStatus = TaskStatus(xagentv1.TaskStatus_RUNNING)
+	TaskStatusRestarting TaskStatus = TaskStatus(xagentv1.TaskStatus_RESTARTING)
+	TaskStatusCancelling TaskStatus = TaskStatus(xagentv1.TaskStatus_CANCELLING)
+	TaskStatusCompleted  TaskStatus = TaskStatus(xagentv1.TaskStatus_COMPLETED)
+	TaskStatusFailed     TaskStatus = TaskStatus(xagentv1.TaskStatus_FAILED)
+	TaskStatusCancelled  TaskStatus = TaskStatus(xagentv1.TaskStatus_CANCELLED)
 )
 
+//go:generate stringer -type=TaskCommand -trimprefix=TaskCommand
+
 // TaskCommand represents a command to be executed by the runner.
-type TaskCommand string
+type TaskCommand int32
 
 const (
-	TaskCommandRestart TaskCommand = "restart"
-	TaskCommandStop    TaskCommand = "stop"
-	TaskCommandStart   TaskCommand = "start"
+	TaskCommandNone    TaskCommand = TaskCommand(xagentv1.TaskCommand_NONE)
+	TaskCommandRestart TaskCommand = TaskCommand(xagentv1.TaskCommand_RESTART)
+	TaskCommandStop    TaskCommand = TaskCommand(xagentv1.TaskCommand_STOP)
+	TaskCommandStart   TaskCommand = TaskCommand(xagentv1.TaskCommand_START)
 )
 
 // Instruction represents a task instruction with text and optional source URL.
@@ -81,8 +86,8 @@ func (t *Task) Proto() *xagentv1.Task {
 		Runner:       t.Runner,
 		Workspace:    t.Workspace,
 		Instructions: instructions,
-		Status:       string(t.Status),
-		Command:      string(t.Command),
+		Status:       xagentv1.TaskStatus(t.Status),
+		Command:      xagentv1.TaskCommand(t.Command),
 		Version:      t.Version,
 		Archived:     t.Archived,
 		CreatedAt:    timestamppb.New(t.CreatedAt),
@@ -201,7 +206,7 @@ func (t *Task) applyRunnerEventStarted() bool {
 	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning:
 		if t.Command == TaskCommandRestart || t.Command == TaskCommandStart {
 			t.Status = TaskStatusRunning
-			t.Command = ""
+			t.Command = TaskCommandNone
 			return true
 		}
 		return false
@@ -220,7 +225,7 @@ func (t *Task) applyRunnerEventStopped() bool {
 	case TaskStatusRunning:
 		if t.Command == TaskCommandStop {
 			t.Status = TaskStatusCancelled
-			t.Command = ""
+			t.Command = TaskCommandNone
 			return true
 		}
 		if t.Command == TaskCommandStart {
@@ -230,7 +235,7 @@ func (t *Task) applyRunnerEventStopped() bool {
 			// Keep command as "start" so runner will start it
 			return true
 		}
-		if t.Command == "" {
+		if t.Command == TaskCommandNone {
 			t.Status = TaskStatusCompleted
 			return true
 		}
@@ -238,7 +243,7 @@ func (t *Task) applyRunnerEventStopped() bool {
 	case TaskStatusCancelling:
 		if t.Command == TaskCommandStop {
 			t.Status = TaskStatusCancelled
-			t.Command = ""
+			t.Command = TaskCommandNone
 			return true
 		}
 		return false
@@ -251,7 +256,7 @@ func (t *Task) applyRunnerEventFailed() bool {
 	switch t.Status {
 	case TaskStatusPending, TaskStatusRestarting, TaskStatusRunning, TaskStatusCancelling:
 		t.Status = TaskStatusFailed
-		t.Command = ""
+		t.Command = TaskCommandNone
 		return true
 	default:
 		return false
@@ -260,7 +265,7 @@ func (t *Task) applyRunnerEventFailed() bool {
 
 // CanArchive returns true if the task can be archived.
 func (t *Task) CanArchive() bool {
-	if t.Archived || t.Command != "" {
+	if t.Archived || t.Command != TaskCommandNone {
 		return false
 	}
 	switch t.Status {
@@ -325,7 +330,7 @@ func (t *Task) Cancel() bool {
 		t.Version++
 	case TaskStatusPending:
 		t.Status = TaskStatusCancelled
-		t.Command = ""
+		t.Command = TaskCommandNone
 	}
 	return true
 }

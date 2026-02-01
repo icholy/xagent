@@ -47,8 +47,8 @@ type Task struct {
 	Runner       string    `json:"runner"`
 	Workspace    string    `json:"workspace"`
 	Instructions string    `json:"instructions"`
-	Status       string    `json:"status"`
-	Command      string    `json:"command"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
 	Version      int64     `json:"version"`
 	Owner        string    `json:"owner"`
 	CreatedAt    time.Time `json:"created_at"`

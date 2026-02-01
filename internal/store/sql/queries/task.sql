@@ -26,7 +26,7 @@ ORDER BY created_at DESC;
 -- name: ListTasksForRunner :many
 SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
 FROM tasks
-WHERE runner = $1 AND owner = $2 AND command != '' AND archived = FALSE
+WHERE runner = $1 AND owner = $2 AND command != 0 AND archived = FALSE
 ORDER BY created_at DESC;
 
 -- name: ListTasksByEvent :many

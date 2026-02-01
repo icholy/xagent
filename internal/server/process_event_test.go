@@ -86,13 +86,13 @@ func TestProcessEvent(t *testing.T) {
 	// Verify both tasks remain running (Start() doesn't interrupt running tasks)
 	getTask1, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: task1.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getTask1.Task.Status, "running")
-	assert.Equal(t, getTask1.Task.Command, "start")
+	assert.Equal(t, getTask1.Task.Status, xagentv1.TaskStatus_RUNNING)
+	assert.Equal(t, getTask1.Task.Command, xagentv1.TaskCommand_START)
 
 	getTask2, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: task2.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getTask2.Task.Status, "running")
-	assert.Equal(t, getTask2.Task.Command, "start")
+	assert.Equal(t, getTask2.Task.Status, xagentv1.TaskStatus_RUNNING)
+	assert.Equal(t, getTask2.Task.Command, xagentv1.TaskCommand_START)
 }
 
 func TestProcessEventWithoutURL(t *testing.T) {
@@ -325,8 +325,8 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 
 	getActiveTask, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: activeTask.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getActiveTask.Task.Status, "running")
-	assert.Equal(t, getActiveTask.Task.Command, "start")
+	assert.Equal(t, getActiveTask.Task.Status, xagentv1.TaskStatus_RUNNING)
+	assert.Equal(t, getActiveTask.Task.Command, xagentv1.TaskCommand_START)
 
 	// Verify archived task did NOT receive the event and remains archived
 	events2, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
@@ -337,7 +337,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 
 	getArchivedTask, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: archivedTask.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getArchivedTask.Task.Status, "completed")
+	assert.Equal(t, getArchivedTask.Task.Status, xagentv1.TaskStatus_COMPLETED)
 	assert.Equal(t, getArchivedTask.Task.Archived, true)
 }
 

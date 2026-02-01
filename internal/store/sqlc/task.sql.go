@@ -22,8 +22,8 @@ type CreateTaskParams struct {
 	Runner       string    `json:"runner"`
 	Workspace    string    `json:"workspace"`
 	Instructions string    `json:"instructions"`
-	Status       string    `json:"status"`
-	Command      string    `json:"command"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
 	Version      int64     `json:"version"`
 	Owner        string    `json:"owner"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -254,7 +254,7 @@ func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, 
 const listTasksForRunner = `-- name: ListTasksForRunner :many
 SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
 FROM tasks
-WHERE runner = $1 AND owner = $2 AND command != '' AND archived = FALSE
+WHERE runner = $1 AND owner = $2 AND command != 0 AND archived = FALSE
 ORDER BY created_at DESC
 `
 
@@ -312,8 +312,8 @@ type UpdateTaskParams struct {
 	Runner       string    `json:"runner"`
 	Workspace    string    `json:"workspace"`
 	Instructions string    `json:"instructions"`
-	Status       string    `json:"status"`
-	Command      string    `json:"command"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
 	Version      int64     `json:"version"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Archived     bool      `json:"archived"`
