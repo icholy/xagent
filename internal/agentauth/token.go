@@ -3,8 +3,6 @@ package agentauth
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -25,35 +23,6 @@ func CreatePrivateKey() (ed25519.PrivateKey, error) {
 		return nil, fmt.Errorf("generate key: %w", err)
 	}
 	return priv, nil
-}
-
-// DecodePrivateKey decodes a PEM-encoded PKCS#8 Ed25519 private key.
-func DecodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, fmt.Errorf("invalid PEM data")
-	}
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse private key: %w", err)
-	}
-	priv, ok := key.(ed25519.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("not an Ed25519 private key")
-	}
-	return priv, nil
-}
-
-// EncodePrivateKey encodes an Ed25519 private key as PEM.
-func EncodePrivateKey(key ed25519.PrivateKey) []byte {
-	der, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		panic(fmt.Sprintf("marshal private key: %v", err))
-	}
-	return pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: der,
-	})
 }
 
 // SignToken creates a JWT signed with the private key.

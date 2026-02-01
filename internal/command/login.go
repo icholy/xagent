@@ -76,7 +76,7 @@ var SetupCommand = &cli.Command{
 		// Save config file
 		cfg := &configfile.File{
 			Token:      resp.RawToken,
-			PrivateKey: string(agentauth.EncodePrivateKey(privateKey)),
+			PrivateKey: privateKey,
 		}
 		if err := configfile.Save(cfg); err != nil {
 			return fmt.Errorf("save config: %w", err)

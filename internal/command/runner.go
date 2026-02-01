@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/common"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/runner"
@@ -94,12 +93,8 @@ var RunnerCommand = &cli.Command{
 		if cfg.Token == "" {
 			return fmt.Errorf("not authenticated, run setup first")
 		}
-		if cfg.PrivateKey == "" {
+		if cfg.PrivateKey == nil {
 			return fmt.Errorf("no private key configured, run setup first")
-		}
-		privateKey, err := agentauth.DecodePrivateKey([]byte(cfg.PrivateKey))
-		if err != nil {
-			return fmt.Errorf("failed to decode private key: %w", err)
 		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
@@ -110,7 +105,7 @@ var RunnerCommand = &cli.Command{
 		r, err := runner.New(runner.Options{
 			ServerURL:   serverAddr,
 			PrebuiltDir: prebuiltDir,
-			PrivateKey:  privateKey,
+			PrivateKey:  cfg.PrivateKey,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
