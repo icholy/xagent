@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
+	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/deviceauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/tokenfile"
@@ -22,9 +24,9 @@ func defaultKeyName() string {
 	return hostname
 }
 
-var LoginCommand = &cli.Command{
-	Name:  "login",
-	Usage: "Authenticate with the xagent server",
+var SetupCommand = &cli.Command{
+	Name:  "setup",
+	Usage: "Authenticate with the xagent server and generate keys",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:    "server",
@@ -72,7 +74,13 @@ var LoginCommand = &cli.Command{
 			return fmt.Errorf("save token: %w", err)
 		}
 
-		fmt.Println("Authentication successful!")
+		// Generate the private key for agent authentication
+		secretPath := filepath.Join(tokenfile.Dir(), "secret.key")
+		if _, err := agentauth.LoadOrCreatePrivateKey(secretPath); err != nil {
+			return fmt.Errorf("generate private key: %w", err)
+		}
+
+		fmt.Printf("Config written to %s\n", tokenfile.Dir())
 		return nil
 	},
 }
