@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strings"
+	"testing"
 
 	"github.com/google/go-github/v68/github"
 )
@@ -54,6 +57,16 @@ func ReadBinary(arch string) ([]byte, error) {
 	data, err := os.ReadFile(binPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// If we're on the matching platform and statically linked (no CGO),
+			// fall back to the currently running binary. This lets locally
+			// built binaries work without having to run "xagent download" first.
+			if runtime.GOOS == "linux" && arch == runtime.GOARCH && !testing.Testing() && !cgoEnabled() {
+				exe, err := os.Executable()
+				if err != nil {
+					return nil, fmt.Errorf("resolve executable path: %w", err)
+				}
+				return os.ReadFile(exe)
+			}
 			return nil, fmt.Errorf("prebuilt binary not found: %s\n\nRun 'xagent download' to download prebuilt binaries", binPath)
 		}
 		return nil, fmt.Errorf("failed to read binary %s: %w", binPath, err)
@@ -100,6 +113,19 @@ func Download(ctx context.Context, repo string) error {
 		rc.Close()
 	}
 	return nil
+}
+
+func cgoEnabled() bool {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return false
+	}
+	for _, s := range info.Settings {
+		if s.Key == "CGO_ENABLED" {
+			return s.Value == "1"
+		}
+	}
+	return false
 }
 
 func findAsset(assets []*github.ReleaseAsset, name string) *github.ReleaseAsset {
