@@ -28,7 +28,7 @@ workspaces:
 
 Install `xagent` cli:
 
-```
+```bash
 mise run install
 ```
 
