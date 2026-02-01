@@ -1,6 +1,6 @@
 # XAGENT
 
-An async agent orchestrator that runs multiple Claude Code instances in parallel inside containers. Agents are non-interactive and task-driven, executing prompts like "Implement JIRA ticket X and open a draft PR".
+Runs coding agents (Claude Code, Cursor, GitHub Copilot) inside Docker containers.
 
 ## Quick Start
 
