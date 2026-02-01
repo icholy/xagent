@@ -23,7 +23,7 @@ run = [
 description = "Build and install xagent bin"
 run = [
 	"cd webui && pnpm install --frozen-lockfile && pnpm exec vite build",
-	"CGO_ENABLED=0 go install /cmd/xagent",
+	"CGO_ENABLED=0 go install ./cmd/xagent",
 ]
 
 [tasks.generate]
