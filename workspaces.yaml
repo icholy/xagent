@@ -91,36 +91,25 @@ workspaces:
         - Keep instructions concise and focused on what's NOT obvious from the ticket
 
   xagent:
-    commands:
-      - git clone git@github.com:icholy/xagent.git
-      - mise trust -y /home/vscode/xagent/mise.toml
-      - |
-        cat > /home/vscode/xagent/.git/hooks/commit-msg << 'EOF'
-        #!/bin/sh
-        if grep -qE "🤖 Generated with|Co-Authored-By" "$1"; then
-          echo "ERROR: Never add attribution or credit lines to commits or PRs. This means:"
-          echo "- Do NOT add \"Co-Authored-By:\" lines in commit messages"
-          echo "- Do NOT add \"🤖 Generated with Claude Code\" or similar attribution"
-          echo "- Do NOT mention yourself, Claude, or AI in commits/PRs"
-          echo "- Keep commit messages focused on the technical changes only"
-          exit 1
-        fi
-        EOF
-        chmod +x /home/vscode/xagent/.git/hooks/commit-msg
     container:
-      image: containeragent
-      working_dir: /home/vscode
-      user: "${sh:id -u}:${sh:id -g}"
+      image: debian-mise
+      working_dir: /root
       volumes:
-        - credentials:/mnt/credentials
-        - /var/run/docker.sock:/var/run/docker.sock
+        - mise-cache:/mise/cache
       networks:
         - metamcp_metamcp-network
       environment:
         CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
+        IS_SANDBOX: 1
         DISABLE_AUTOUPDATER: 1
+    commands:
+      - mise use --global node@latest
+      - mise use --global npm:@anthropic-ai/claude-code
+      - git config --global user.email "ilia.choly@gmail.com"
+      - git config --global user.name "Ilia Choly"
+      - git clone https://x-access-token:${sh:gh auth token}@github.com/icholy/xagent.git
     agent:
-      cwd: /home/vscode/xagent
+      cwd: /root/xagent
       mcp_servers:
         meta:
           type: "http"
@@ -130,14 +119,6 @@ workspaces:
       prompt: |
         You have the xagent repo cloned locally. When asked to make code changes, you should open a PR.
 
-        IMPORTANT: All git commits must use the following author information:
-        - Name: Ilia Choly
-        - Email: ilia.choly@gmail.com
-
-        Before making any commits, ensure git is configured with:
-        git config user.name "Ilia Choly"
-        git config user.email "ilia.choly@gmail.com"
-
         IMPORTANT: Never add attribution or credit lines to commits or PRs. This means:
         - Do NOT add "Co-Authored-By:" lines in commit messages
         - Do NOT add "🤖 Generated with Claude Code" or similar attribution
@@ -146,7 +127,6 @@ workspaces:
 
         IMPORTANT: When creating GitHub issues, you must ONLY create issues in the icholy/xagent repository.
         Do NOT create issues in any other repository.
-
   containeragent:
     commands:
       - git clone git@github.com:icholy/containeragent.git

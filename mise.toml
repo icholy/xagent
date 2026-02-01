@@ -1,4 +1,6 @@
 [tools]
+node = "latest"
+go = "latest"
 sops = "latest"
 terraform = "latest"
 age = "latest"
