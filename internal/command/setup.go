@@ -41,6 +41,21 @@ var SetupCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		// Load existing config (or empty if first run)
+		cfg, err := configfile.Load()
+		if err != nil {
+			return fmt.Errorf("load config: %w", err)
+		}
+
+		// Generate private key if there isn't one
+		if cfg.PrivateKey == nil {
+			cfg.PrivateKey, err = agentauth.CreatePrivateKey()
+			if err != nil {
+				return fmt.Errorf("generate private key: %w", err)
+			}
+		}
+
+		// Authenticate via device flow
 		serverAddr := cmd.String("server")
 		accessToken, err := deviceauth.DeviceFlow(ctx, deviceauth.DeviceFlowOptions{
 			DiscoveryURL: deviceauth.DiscoveryURL(serverAddr),
@@ -66,18 +81,9 @@ var SetupCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("create API key: %w", err)
 		}
-
-		// Generate the private key for agent authentication
-		privateKey, err := agentauth.CreatePrivateKey()
-		if err != nil {
-			return fmt.Errorf("generate private key: %w", err)
-		}
+		cfg.Token = resp.RawToken
 
 		// Save config file
-		cfg := &configfile.File{
-			Token:      resp.RawToken,
-			PrivateKey: privateKey,
-		}
 		if err := configfile.Save(cfg); err != nil {
 			return fmt.Errorf("save config: %w", err)
 		}
