@@ -24,6 +24,43 @@ func Path() (string, error) {
 	return filepath.Join(dir, "xagent", "config.json"), nil
 }
 
+// Load reads the config file.
+// Returns a non-nil File even if the file doesn't exist.
+func Load() (*File, error) {
+	p, err := Path()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &File{}, nil
+		}
+		return nil, err
+	}
+	var f File
+	if err := json.Unmarshal(data, &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+// Save writes the config file.
+func Save(f *File) error {
+	p, err := Path()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p, data, 0600)
+}
+
 // File stores the xagent configuration.
 type File struct {
 	Token      string             `json:"token"`
@@ -84,41 +121,4 @@ func decodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
 		return nil, fmt.Errorf("not an Ed25519 private key")
 	}
 	return priv, nil
-}
-
-// Load reads the config file.
-// Returns a non-nil File even if the file doesn't exist.
-func Load() (*File, error) {
-	p, err := Path()
-	if err != nil {
-		return nil, err
-	}
-	data, err := os.ReadFile(p)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &File{}, nil
-		}
-		return nil, err
-	}
-	var f File
-	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, err
-	}
-	return &f, nil
-}
-
-// Save writes the config file.
-func Save(f *File) error {
-	p, err := Path()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(p, data, 0600)
 }
