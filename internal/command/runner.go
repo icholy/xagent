@@ -57,7 +57,7 @@ var RunnerCommand = &cli.Command{
 		&cli.IntFlag{
 			Name:  "concurrency",
 			Usage: "Maximum number of concurrent tasks (0 for unlimited)",
-			Value: 0,
+			Value: 5,
 		},
 		&cli.StringFlag{
 			Name:  "id",
