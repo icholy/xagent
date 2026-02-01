@@ -97,13 +97,10 @@ func (a *CopilotAgent) mcpConfigJSON() ([]byte, error) {
 		server := make(map[string]any)
 		switch srv.Type {
 		case "stdio":
+			server["type"] = "local"
 			server["command"] = srv.Command
-			if len(srv.Args) > 0 {
-				server["args"] = srv.Args
-			}
-			if len(srv.Env) > 0 {
-				server["env"] = srv.Env
-			}
+			server["args"] = srv.Args
+			server["env"] = srv.Env
 		case "http", "sse":
 			server["type"] = srv.Type
 			server["url"] = srv.URL
