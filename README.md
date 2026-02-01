@@ -52,6 +52,42 @@ xagent runner --concurrency 10 --config workspaces.yaml
 
 Create and monitor tasks via the Web UI.
 
+## Cursor Agent Example
+
+```yaml
+  pets-workshop:
+    container:
+      image: node:20
+      working_dir: /root
+      environment:
+        CURSOR_API_KEY: ${env:CURSOR_API_KEY}
+    commands:
+      - curl -fsSL https://cursor.com/install | bash
+      - git clone https://github.com/github-samples/pets-workshop
+    agent:
+      type: cursor
+      cwd: /root/pets-workshop
+      mcp_servers: {}
+      prompt: |
+        This is an example github repository.
+        Don't try opening PRs or issues.
+```
+
+### MCP Server Example
+
+```yaml
+workspaces:
+  pets-workshop:
+    # ...
+    agent:
+      mcp_servers:
+        meta:
+          type: "http"
+          url: "http://metamcp:12008/metamcp/Default/mcp"
+          headers:
+            Authorization: "Bearer ${env:METAMCP_API_KEY}"
+```
+
 ## Development
 
 ```bash
