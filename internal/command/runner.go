@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/common"
+	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/runner"
-	"github.com/icholy/xagent/internal/tokenfile"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
@@ -52,11 +52,6 @@ var RunnerCommand = &cli.Command{
 			Usage: "Directory containing prebuilt xagent binaries",
 			Value: "prebuilt",
 		},
-		&cli.StringFlag{
-			Name:    "secret-file",
-			Usage:   "Path to secret key file (auto-generated if missing)",
-			Value: filepath.Join(tokenfile.Dir(), "secret.key"),
-		},
 		&cli.IntFlag{
 			Name:  "concurrency",
 			Usage: "Maximum number of concurrent tasks (0 for unlimited)",
@@ -78,7 +73,6 @@ var RunnerCommand = &cli.Command{
 		configPath := cmd.String("config")
 		pollInterval := cmd.Duration("poll")
 		prebuiltDir := cmd.String("prebuilt")
-		secretFile := cmd.String("secret-file")
 		concurrency := cmd.Int("concurrency")
 		runnerID := cmd.String("id")
 		debug := cmd.Bool("debug")
@@ -93,12 +87,19 @@ var RunnerCommand = &cli.Command{
 			log = slog.New(handler)
 		}
 
-		token, err := tokenfile.Load()
+		cfg, err := configfile.Load()
 		if err != nil {
-			return fmt.Errorf("failed to load token: %w", err)
+			return fmt.Errorf("failed to load config: %w", err)
 		}
-		if !token.Valid() {
-			return fmt.Errorf("no valid token available, run login to authenticate")
+		if cfg.Token == "" {
+			return fmt.Errorf("not authenticated, run setup first")
+		}
+		if cfg.PrivateKey == "" {
+			return fmt.Errorf("no private key configured, run setup first")
+		}
+		privateKey, err := agentauth.DecodePrivateKey([]byte(cfg.PrivateKey))
+		if err != nil {
+			return fmt.Errorf("failed to decode private key: %w", err)
 		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
@@ -109,12 +110,12 @@ var RunnerCommand = &cli.Command{
 		r, err := runner.New(runner.Options{
 			ServerURL:   serverAddr,
 			PrebuiltDir: prebuiltDir,
-			SecretFile:  secretFile,
+			PrivateKey:  privateKey,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
 			Log:         log,
-			Auth:        token.APIKey,
+			Auth:        cfg.Token,
 		})
 		if err != nil {
 			return err

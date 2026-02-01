@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -55,11 +56,14 @@ func TestRunnerStart(t *testing.T) {
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
+	privateKey, err := agentauth.CreatePrivateKey()
+	assert.NilError(t, err)
+
 	// Create runner
 	r, err := New(Options{
 		ServerURL:   ts.URL,
 		PrebuiltDir: prebuiltDir,
-		SecretFile:  filepath.Join(t.TempDir(), "secret.key"),
+		PrivateKey:  privateKey,
 		Workspaces: &workspace.Config{
 			Workspaces: map[string]workspace.Workspace{
 				"test": {

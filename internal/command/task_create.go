@@ -7,7 +7,7 @@ import (
 	"os"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"github.com/icholy/xagent/internal/tokenfile"
+	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
@@ -48,14 +48,14 @@ var TaskCreateCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverURL := cmd.String("server")
-		token, err := tokenfile.Load()
+		cfg, err := configfile.Load()
 		if err != nil {
-			return fmt.Errorf("failed to load token: %w", err)
+			return fmt.Errorf("failed to load config: %w", err)
 		}
-		if !token.Valid() {
-			return fmt.Errorf("no valid token available, run login to authenticate")
+		if cfg.Token == "" {
+			return fmt.Errorf("not authenticated, run setup first")
 		}
-		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Token: token.APIKey})
+		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Token: cfg.Token})
 
 		texts := cmd.StringSlice("instruction")
 		instructions := make([]*xagentv1.Instruction, len(texts))

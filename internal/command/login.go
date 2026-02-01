@@ -5,12 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/deviceauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"github.com/icholy/xagent/internal/tokenfile"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -68,19 +67,23 @@ var SetupCommand = &cli.Command{
 			return fmt.Errorf("create API key: %w", err)
 		}
 
-		// Save the API key to the token file
-		token := &tokenfile.File{APIKey: resp.RawToken}
-		if err := tokenfile.Save(token); err != nil {
-			return fmt.Errorf("save token: %w", err)
-		}
-
 		// Generate the private key for agent authentication
-		secretPath := filepath.Join(tokenfile.Dir(), "secret.key")
-		if _, err := agentauth.LoadOrCreatePrivateKey(secretPath); err != nil {
+		privateKey, err := agentauth.CreatePrivateKey()
+		if err != nil {
 			return fmt.Errorf("generate private key: %w", err)
 		}
 
-		fmt.Printf("Config written to %s\n", tokenfile.Dir())
+		// Save config file
+		cfg := &configfile.File{
+			Token:      resp.RawToken,
+			PrivateKey: string(agentauth.EncodePrivateKey(privateKey)),
+		}
+		if err := configfile.Save(cfg); err != nil {
+			return fmt.Errorf("save config: %w", err)
+		}
+
+		configPath, _ := configfile.Path()
+		fmt.Printf("Config written to %s\n", configPath)
 		return nil
 	},
 }

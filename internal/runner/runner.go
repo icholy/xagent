@@ -3,6 +3,7 @@ package runner
 import (
 	"cmp"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,7 +20,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
-	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/containerbuild"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
@@ -45,7 +45,7 @@ type Runner struct {
 type Options struct {
 	ServerURL   string
 	PrebuiltDir string
-	SecretFile  string
+	PrivateKey  ed25519.PrivateKey
 	Workspaces  *workspace.Config
 	Concurrency int
 	RunnerID    string
@@ -60,12 +60,6 @@ func New(opts Options) (*Runner, error) {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
 
-	// Load or create private key
-	privateKey, err := agentauth.LoadOrCreatePrivateKey(opts.SecretFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
-	}
-
 	// Use math.MaxInt64 if no limit is set (concurrency <= 0)
 	concurrency := int64(opts.Concurrency)
 	if concurrency <= 0 {
@@ -77,7 +71,7 @@ func New(opts Options) (*Runner, error) {
 	proxy := NewProxy(AgentProxyOptions{
 		ServerURL:  opts.ServerURL,
 		Token:      opts.Auth,
-		PrivateKey: privateKey,
+		PrivateKey: opts.PrivateKey,
 		Log:        log,
 		SocketPath: opts.SocketPath,
 	})

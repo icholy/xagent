@@ -6,8 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -46,38 +44,16 @@ func DecodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
 	return priv, nil
 }
 
-// LoadOrCreatePrivateKey loads an Ed25519 private key from a file,
-// or generates and saves one if it doesn't exist.
-func LoadOrCreatePrivateKey(path string) (ed25519.PrivateKey, error) {
-	data, err := os.ReadFile(path)
-	if err == nil {
-		return DecodePrivateKey(data)
-	}
-	if !os.IsNotExist(err) {
-		return nil, fmt.Errorf("read key file: %w", err)
-	}
-	// Generate new key
-	priv, err := CreatePrivateKey()
+// EncodePrivateKey encodes an Ed25519 private key as PEM.
+func EncodePrivateKey(key ed25519.PrivateKey) []byte {
+	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
-		return nil, err
+		panic(fmt.Sprintf("marshal private key: %v", err))
 	}
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return nil, fmt.Errorf("create key directory: %w", err)
-	}
-	// Marshal to PKCS#8 format
-	der, err := x509.MarshalPKCS8PrivateKey(priv)
-	if err != nil {
-		return nil, fmt.Errorf("marshal private key: %w", err)
-	}
-	block := &pem.Block{
+	return pem.EncodeToMemory(&pem.Block{
 		Type:  "PRIVATE KEY",
 		Bytes: der,
-	}
-	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0600); err != nil {
-		return nil, fmt.Errorf("write key file: %w", err)
-	}
-	return priv, nil
+	})
 }
 
 // SignToken creates a JWT signed with the private key.
