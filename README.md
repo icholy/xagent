@@ -81,6 +81,28 @@ workspaces:
         Don't try opening PRs or issues.
 ```
 
+## Copilot Workspace Example
+
+```yaml
+workspaces:
+  pets-workshop:
+    container:
+      image: node:20
+      working_dir: /root
+      environment:
+        COPILOT_GITHUB_TOKEN: ${env:COPILOT_GITHUB_TOKEN}
+    commands:
+      - npm install -g @github/copilot
+      - git clone https://github.com/github-samples/pets-workshop
+    agent:
+      type: copilot
+      cwd: /root/pets-workshop
+      mcp_servers: {}
+      prompt: |
+        This is an example github repository.
+        Don't try opening PRs or issues.
+```
+
 ## MCP Server Workspace Example
 
 ```yaml
