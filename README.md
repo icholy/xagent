@@ -26,6 +26,12 @@ workspaces:
         Don't try opening PRs or issues.
 ```
 
+Install `xagent` cli:
+
+```
+mise run install
+```
+
 Download the pre-built binaries (if needed):
 
 ```bash
