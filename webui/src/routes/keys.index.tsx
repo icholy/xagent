@@ -48,7 +48,7 @@ function KeysPage() {
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">API Keys</h1>
+        <h1 className="text-2xl font-bold">Keys</h1>
         <Link to="/keys/new">
           <Button>
             <Plus className="h-4 w-4" />
