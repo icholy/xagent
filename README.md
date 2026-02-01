@@ -4,28 +4,6 @@ An async agent orchestrator that runs multiple Claude Code instances in parallel
 
 ## Quick Start
 
-Create a `workspace.yaml` file:
-
-```yaml
-workspaces:
-  pets-workshop:
-    container:
-      image: node:20
-      working_dir: /root
-      environment:
-        CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
-    commands:
-      - npm install -g @anthropic-ai/claude-code
-      - git clone https://github.com/github-samples/pets-workshop
-    agent:
-      type: claude
-      cwd: /root/pets-workshop
-      mcp_servers: {}
-      prompt: |
-        This is an example github repository.
-        Don't try opening PRs or issues.
-```
-
 Install `xagent` cli:
 
 ```bash
@@ -52,7 +30,29 @@ xagent runner --concurrency 10 --config workspaces.yaml
 
 Create and monitor tasks via the Web UI.
 
-## Cursor Agent Example
+## Claude Code Workspace Example
+
+```yaml
+workspaces:
+  pets-workshop:
+    container:
+      image: node:20
+      working_dir: /root
+      environment:
+        CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
+    commands:
+      - npm install -g @anthropic-ai/claude-code
+      - git clone https://github.com/github-samples/pets-workshop
+    agent:
+      type: claude
+      cwd: /root/pets-workshop
+      mcp_servers: {}
+      prompt: |
+        This is an example github repository.
+        Don't try opening PRs or issues.
+```
+
+## Cursor Agent Workspace Example
 
 ```yaml
   pets-workshop:
@@ -73,7 +73,7 @@ Create and monitor tasks via the Web UI.
         Don't try opening PRs or issues.
 ```
 
-### MCP Server Example
+## MCP Server Workspace Example
 
 ```yaml
 workspaces:
