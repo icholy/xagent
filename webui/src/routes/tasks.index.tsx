@@ -84,7 +84,7 @@ function TasksPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search tasks..."
+              placeholder="Filter..."
               className="pl-8 pr-8 w-48"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
