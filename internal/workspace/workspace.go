@@ -58,7 +58,8 @@ type CopilotConfig struct {
 
 // CursorConfig contains Cursor-specific agent configuration.
 type CursorConfig struct {
-	Model string `yaml:"model"`
+	Model  string `yaml:"model"`
+	APIKey string `yaml:"api_key"`
 }
 
 // DummyConfig contains Dummy-specific agent configuration.
@@ -239,7 +240,8 @@ func (w *Workspace) AgentConfig() agent.Config {
 	}
 	if w.Agent.Cursor != nil {
 		cfg.Cursor = &agent.CursorOptions{
-			Model: w.Agent.Cursor.Model,
+			Model:  w.Agent.Cursor.Model,
+			APIKey: w.Agent.Cursor.APIKey,
 		}
 	}
 	if w.Agent.Dummy != nil {

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -34,17 +32,11 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		}
 	}
 
-	// Get or create chat ID for session management
-	chatID, err := a.getOrCreateChatID(ctx, resume)
-	if err != nil {
-		return fmt.Errorf("failed to get chat ID: %w", err)
-	}
-
 	args := []string{
 		"--print",
-		"--output-format", "stream-json",
-		"--force",
 		"--approve-mcps",
+		"--force",
+		"--output-format", "stream-json",
 	}
 
 	// Add model if specified in options
@@ -52,14 +44,14 @@ func (a *CursorAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		args = append(args, "--model", a.options.Model)
 	}
 
-	// Set workspace directory
-	if a.cwd != "" && a.cwd != "." {
-		args = append(args, "--workspace", a.cwd)
+	// Add API key if specified in options
+	if a.options != nil && a.options.APIKey != "" {
+		args = append(args, "--api-key", a.options.APIKey)
 	}
 
-	// Resume with chat ID
-	if chatID != "" {
-		args = append(args, "--resume", chatID)
+	// Resume the last chat session
+	if resume {
+		args = append(args, "--continue")
 	}
 
 	args = append(args, prompt)
@@ -102,10 +94,13 @@ func (a *CursorAgent) Close() error {
 	return nil
 }
 
-// writeMcpConfig writes the MCP servers configuration to the workspace .cursor/mcp.json file.
+// writeMcpConfig writes the MCP servers configuration to ~/.cursor/mcp.json.
 func (a *CursorAgent) writeMcpConfig() error {
-	// Cursor expects MCP config in .cursor/mcp.json in the workspace directory
-	cursorDir := filepath.Join(a.cwd, ".cursor")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+	cursorDir := filepath.Join(home, ".cursor")
 	if err := os.MkdirAll(cursorDir, 0755); err != nil {
 		return err
 	}
@@ -146,83 +141,59 @@ func (a *CursorAgent) writeMcpConfig() error {
 	return os.WriteFile(mcpConfigPath, data, 0644)
 }
 
-// chatIDPath returns the path to the chat ID file for session persistence.
-func (a *CursorAgent) chatIDPath() string {
-	return filepath.Join(a.cwd, ".cursor", "chat_id")
-}
-
-// getOrCreateChatID gets an existing chat ID or creates a new one.
-func (a *CursorAgent) getOrCreateChatID(ctx context.Context, resume bool) (string, error) {
-	chatIDPath := a.chatIDPath()
-
-	// If resuming, try to load existing chat ID
-	if resume {
-		data, err := os.ReadFile(chatIDPath)
-		if err == nil {
-			chatID := strings.TrimSpace(string(data))
-			if chatID != "" {
-				a.log.Info("resuming chat", "chatID", chatID)
-				return chatID, nil
-			}
-		}
-	}
-
-	// Create a new chat ID
-	cmd := exec.CommandContext(ctx, "cursor-agent", "create-chat")
-	cmd.Dir = a.cwd
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to create chat: %w", err)
-	}
-
-	chatID := strings.TrimSpace(out.String())
-	if chatID == "" {
-		return "", fmt.Errorf("cursor-agent create-chat returned empty chat ID")
-	}
-
-	a.log.Info("created new chat", "chatID", chatID)
-
-	// Save the chat ID for future resume
-	cursorDir := filepath.Dir(chatIDPath)
-	if err := os.MkdirAll(cursorDir, 0755); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(chatIDPath, []byte(chatID), 0644); err != nil {
-		return "", err
-	}
-
-	return chatID, nil
-}
-
 func (a *CursorAgent) handleStreamEvent(data []byte) bool {
 	var event struct {
-		Type    string `json:"type"`
+		Type      string `json:"type"`
+		Subtype   string `json:"subtype"`
+		SessionID string `json:"session_id"`
+		// assistant message
 		Message struct {
 			Content []struct {
-				Type  string `json:"type"`
-				Text  string `json:"text"`
-				Name  string `json:"name"`
-				Input any    `json:"input"`
+				Type string `json:"type"`
+				Text string `json:"text"`
 			} `json:"content"`
 		} `json:"message"`
+		// tool_call fields
+		CallID   string `json:"call_id"`
+		ToolCall struct {
+			ReadToolCall  *json.RawMessage `json:"readToolCall"`
+			WriteToolCall *json.RawMessage `json:"writeToolCall"`
+			EditToolCall  *json.RawMessage `json:"editToolCall"`
+			BashToolCall  *json.RawMessage `json:"bashToolCall"`
+		} `json:"tool_call"`
+		// result fields
+		IsError bool `json:"is_error"`
 	}
 	if err := json.Unmarshal(data, &event); err != nil {
 		return false
 	}
+
 	switch event.Type {
+	case "system":
+		a.log.Info("system", "subtype", event.Subtype, "session_id", event.SessionID)
 	case "assistant":
 		for _, block := range event.Message.Content {
-			switch block.Type {
-			case "text":
-				if block.Text != "" {
-					a.log.Info("text", "content", block.Text)
-				}
-			case "tool_use":
-				a.log.Info("tool", "name", block.Name)
+			if block.Type == "text" && block.Text != "" {
+				a.log.Info("text", "content", block.Text)
 			}
+		}
+	case "tool_call":
+		// Determine tool name from whichever field is set
+		toolName := "unknown"
+		switch {
+		case event.ToolCall.ReadToolCall != nil:
+			toolName = "read"
+		case event.ToolCall.WriteToolCall != nil:
+			toolName = "write"
+		case event.ToolCall.EditToolCall != nil:
+			toolName = "edit"
+		case event.ToolCall.BashToolCall != nil:
+			toolName = "bash"
+		}
+		a.log.Info("tool", "name", toolName, "subtype", event.Subtype, "call_id", event.CallID)
+	case "result":
+		if event.IsError {
+			a.log.Error("result", "is_error", true)
 		}
 	}
 	return true
