@@ -26,6 +26,12 @@ workspaces:
         Don't try opening PRs or issues.
 ```
 
+Download the pre-built binaries (if needed):
+
+```bash
+GITHUB_TOKEN=$(gh auth token) xagent download
+```
+
 Authenticate your local client:
 
 ```bash
