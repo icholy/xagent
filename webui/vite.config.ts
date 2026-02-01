@@ -18,6 +18,7 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: true,
     proxy: {
       // Proxy Connect RPC requests to the backend server
       "/xagent.v1.XAgentService": {
