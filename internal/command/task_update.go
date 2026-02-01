@@ -24,12 +24,6 @@ var TaskUpdateCommand = &cli.Command{
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
 		&cli.StringFlag{
-			Name:    "token-file",
-			Usage:   "Path to authentication token file",
-			Value:   "data/token.json",
-			Sources: cli.EnvVars("XAGENT_TOKEN_FILE"),
-		},
-		&cli.StringFlag{
 			Name:    "name",
 			Aliases: []string{"n"},
 			Usage:   "Set task name",
@@ -69,7 +63,7 @@ var TaskUpdateCommand = &cli.Command{
 		}
 
 		serverURL := cmd.String("server")
-		token, err := tokenfile.Load(cmd.String("token-file"))
+		token, err := tokenfile.Load()
 		if err != nil {
 			return fmt.Errorf("failed to load token: %w", err)
 		}

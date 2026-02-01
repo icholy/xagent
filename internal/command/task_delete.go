@@ -23,12 +23,6 @@ var TaskDeleteCommand = &cli.Command{
 			Value:   xagentclient.DefaultURL,
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
-		&cli.StringFlag{
-			Name:    "token-file",
-			Usage:   "Path to authentication token file",
-			Value:   "data/token.json",
-			Sources: cli.EnvVars("XAGENT_TOKEN_FILE"),
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		taskIDStr := cmd.Args().First()
@@ -41,7 +35,7 @@ var TaskDeleteCommand = &cli.Command{
 		}
 
 		serverURL := cmd.String("server")
-		token, err := tokenfile.Load(cmd.String("token-file"))
+		token, err := tokenfile.Load()
 		if err != nil {
 			return fmt.Errorf("failed to load token: %w", err)
 		}

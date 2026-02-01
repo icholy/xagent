@@ -34,12 +34,6 @@ var LoginCommand = &cli.Command{
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
 		&cli.StringFlag{
-			Name:    "token-file",
-			Usage:   "Path to store authentication tokens",
-			Value:   "data/token.json",
-			Sources: cli.EnvVars("XAGENT_TOKEN_FILE"),
-		},
-		&cli.StringFlag{
 			Name:  "key-name",
 			Usage: "Name for the API key",
 			Value: defaultKeyName(),
@@ -74,7 +68,7 @@ var LoginCommand = &cli.Command{
 
 		// Save the API key to the token file
 		token := &tokenfile.File{APIKey: resp.RawToken}
-		if err := tokenfile.Save(cmd.String("token-file"), token); err != nil {
+		if err := tokenfile.Save(token); err != nil {
 			return fmt.Errorf("save token: %w", err)
 		}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/icholy/xagent/internal/common"
@@ -36,12 +37,6 @@ var RunnerCommand = &cli.Command{
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
 		&cli.StringFlag{
-			Name:    "token-file",
-			Usage:   "Path to authentication token file",
-			Value:   "data/token.json",
-			Sources: cli.EnvVars("XAGENT_TOKEN_FILE"),
-		},
-		&cli.StringFlag{
 			Name:    "config",
 			Aliases: []string{"c"},
 			Usage:   "Workspace config file",
@@ -60,8 +55,7 @@ var RunnerCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "secret-file",
 			Usage:   "Path to secret key file (auto-generated if missing)",
-			Value:   "data/secret.key",
-			Sources: cli.EnvVars("XAGENT_SECRET_FILE"),
+			Value: filepath.Join(tokenfile.Dir(), "secret.key"),
 		},
 		&cli.IntFlag{
 			Name:  "concurrency",
@@ -99,7 +93,7 @@ var RunnerCommand = &cli.Command{
 			log = slog.New(handler)
 		}
 
-		token, err := tokenfile.Load(cmd.String("token-file"))
+		token, err := tokenfile.Load()
 		if err != nil {
 			return fmt.Errorf("failed to load token: %w", err)
 		}
