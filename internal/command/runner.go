@@ -46,11 +46,6 @@ var RunnerCommand = &cli.Command{
 			Usage: "Poll interval for pending tasks",
 			Value: 5 * time.Second,
 		},
-		&cli.StringFlag{
-			Name:  "prebuilt",
-			Usage: "Directory containing prebuilt xagent binaries",
-			Value: "prebuilt",
-		},
 		&cli.IntFlag{
 			Name:  "concurrency",
 			Usage: "Maximum number of concurrent tasks (0 for unlimited)",
@@ -71,7 +66,6 @@ var RunnerCommand = &cli.Command{
 		serverAddr := cmd.String("server")
 		configPath := cmd.String("config")
 		pollInterval := cmd.Duration("poll")
-		prebuiltDir := cmd.String("prebuilt")
 		concurrency := cmd.Int("concurrency")
 		runnerID := cmd.String("id")
 		debug := cmd.Bool("debug")
@@ -103,9 +97,8 @@ var RunnerCommand = &cli.Command{
 		}
 
 		r, err := runner.New(runner.Options{
-			ServerURL:   serverAddr,
-			PrebuiltDir: prebuiltDir,
-			PrivateKey:  cfg.PrivateKey,
+			ServerURL:  serverAddr,
+			PrivateKey: cfg.PrivateKey,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
@@ -117,7 +110,7 @@ var RunnerCommand = &cli.Command{
 		}
 		defer r.Close()
 
-		log.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "prebuilt", prebuiltDir, "concurrency", concurrency)
+		log.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "concurrency", concurrency)
 
 		// Register workspaces with the server (non-fatal if it fails)
 		if err := r.RegisterWorkspaces(ctx); err != nil {

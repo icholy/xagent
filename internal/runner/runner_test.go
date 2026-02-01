@@ -1,11 +1,10 @@
 package runner
 
 import (
-	"cmp"
 	"context"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
@@ -14,6 +13,7 @@ import (
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/prebuilt"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/workspace"
@@ -21,13 +21,13 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func TestRunnerStart(t *testing.T) {
-	// Skip if no prebuilt binaries
-	prebuiltDir := cmp.Or(os.Getenv("TEST_PREBUILT_DIR"), "../../prebuilt")
-	if _, err := os.Stat(prebuiltDir); os.IsNotExist(err) {
-		t.Skip("prebuilt directory not found")
+func init() {
+	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		prebuilt.UseSelf = true
 	}
+}
 
+func TestRunnerStart(t *testing.T) {
 	task := &model.Task{
 		ID:        1,
 		Name:      "test-task",
@@ -61,9 +61,8 @@ func TestRunnerStart(t *testing.T) {
 
 	// Create runner
 	r, err := New(Options{
-		ServerURL:   ts.URL,
-		PrebuiltDir: prebuiltDir,
-		PrivateKey:  privateKey,
+		ServerURL:  ts.URL,
+		PrivateKey: privateKey,
 		Workspaces: &workspace.Config{
 			Workspaces: map[string]workspace.Workspace{
 				"test": {

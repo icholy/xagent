@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -23,6 +21,7 @@ import (
 	"github.com/icholy/xagent/internal/containerbuild"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/prebuilt"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/safesem"
 	"github.com/icholy/xagent/internal/workspace"
@@ -34,8 +33,7 @@ type Runner struct {
 	docker      *client.Client
 	client      xagentclient.Client
 	proxy       *AgentProxy
-	prebuiltDir string
-	workspaces  *workspace.Config
+	workspaces *workspace.Config
 	runnerID    string
 	concurrency int64
 	sem         *safesem.Semaphore
@@ -43,9 +41,8 @@ type Runner struct {
 }
 
 type Options struct {
-	ServerURL   string
-	PrebuiltDir string
-	PrivateKey  ed25519.PrivateKey
+	ServerURL  string
+	PrivateKey ed25519.PrivateKey
 	Workspaces  *workspace.Config
 	Concurrency int
 	RunnerID    string
@@ -83,8 +80,7 @@ func New(opts Options) (*Runner, error) {
 		docker:      docker,
 		client:      xagentclient.New(xagentclient.Options{BaseURL: opts.ServerURL, Token: opts.Auth}),
 		proxy:       proxy,
-		prebuiltDir: opts.PrebuiltDir,
-		workspaces:  opts.Workspaces,
+		workspaces: opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
 		sem:         safesem.New(concurrency),
@@ -361,9 +357,13 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	r.log.Info("creating container", "task", task.ID, "image", ws.Container.Image, "workspace", task.Workspace)
 
 	// Read xagent binary for the container's architecture
-	binData, err := r.readBinary(ctx, ws.Container.Image)
+	info, err := r.docker.ImageInspect(ctx, ws.Container.Image)
 	if err != nil {
-		return "", fmt.Errorf("failed to read binary: %w", err)
+		return "", fmt.Errorf("failed to inspect image: %w", err)
+	}
+	binData, err := prebuilt.ReadBinary(info.Architecture)
+	if err != nil {
+		return "", err
 	}
 
 	// Build agent config
@@ -412,19 +412,6 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	}
 
 	return b.Build(ctx)
-}
-
-func (r *Runner) readBinary(ctx context.Context, image string) ([]byte, error) {
-	info, err := r.docker.ImageInspect(ctx, image)
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect image: %w", err)
-	}
-	binPath := filepath.Join(r.prebuiltDir, fmt.Sprintf("xagent-linux-%s", info.Architecture))
-	data, err := os.ReadFile(binPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read binary %s: %w", binPath, err)
-	}
-	return data, nil
 }
 
 func (r *Runner) Start(ctx context.Context, task *model.Task) error {
