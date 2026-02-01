@@ -25,8 +25,9 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 
 	args := []string{
 		"--silent",
-		"--allow-all",
-		"--no-ask-user",
+		"--allow-all-tools",
+		"--allow-all-paths",
+		"--allow-all-urls",
 		"--no-auto-update",
 	}
 
@@ -94,13 +95,19 @@ func (a *CopilotAgent) mcpConfigJSON() ([]byte, error) {
 	// Convert our McpServer format to Copilot's expected format
 	servers := make(map[string]any)
 	for name, srv := range a.mcpServers {
-		server := make(map[string]any)
+		server := map[string]any{
+			"tools": []string{"*"},
+		}
 		switch srv.Type {
 		case "stdio":
 			server["type"] = "local"
 			server["command"] = srv.Command
-			server["args"] = srv.Args
-			server["env"] = srv.Env
+			if len(srv.Args) > 0 {
+				server["args"] = srv.Args
+			}
+			if len(srv.Env) > 0 {
+				server["env"] = srv.Env
+			}
 		case "http", "sse":
 			server["type"] = srv.Type
 			server["url"] = srv.URL
