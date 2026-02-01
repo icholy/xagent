@@ -106,7 +106,6 @@ workspaces:
     commands:
       - mise use --global node@latest
       - mise use --global npm:@anthropic-ai/claude-code
-      - npm install -g pnpm
       - git config --global user.email "ilia.choly@gmail.com"
       - git config --global user.name "Ilia Choly"
       - git clone https://x-access-token:${sh:gh auth token}@github.com/icholy/xagent.git
