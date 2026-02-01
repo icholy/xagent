@@ -88,7 +88,7 @@ workspaces:
             Authorization: "Bearer ${env:METAMCP_API_KEY}"
 ```
 
-## Development
+## Local Development
 
 ```bash
 # Start server and postgres locally
