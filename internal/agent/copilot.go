@@ -4,11 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -25,13 +23,6 @@ type CopilotAgent struct {
 func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) error {
 	a.log.Info("sending prompt", "text", prompt)
 
-	// Write MCP config file if we have MCP servers
-	if len(a.mcpServers) > 0 {
-		if err := a.writeMcpConfig(); err != nil {
-			return fmt.Errorf("failed to write MCP config: %w", err)
-		}
-	}
-
 	args := []string{
 		"--silent",
 		"--allow-all",
@@ -42,6 +33,18 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 	// Add model if specified in options
 	if a.options != nil && a.options.Model != "" {
 		args = append(args, "--model", a.options.Model)
+	}
+
+	// Add MCP config if present
+	if len(a.mcpServers) > 0 {
+		mcpJSON, err := a.mcpConfigJSON()
+		if err != nil {
+			return err
+		}
+		a.log.Info("mcp config", "json", string(mcpJSON))
+		args = append(args, "--additional-mcp-config", string(mcpJSON))
+	} else {
+		a.log.Warn("no mcp servers configured")
 	}
 
 	// Resume previous session if requested
@@ -86,17 +89,8 @@ func (a *CopilotAgent) Close() error {
 	return nil
 }
 
-// writeMcpConfig writes the MCP servers configuration to ~/.copilot/mcp-config.json.
-func (a *CopilotAgent) writeMcpConfig() error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-	copilotDir := filepath.Join(home, ".copilot")
-	if err := os.MkdirAll(copilotDir, 0755); err != nil {
-		return err
-	}
-
+// mcpConfigJSON returns the MCP servers configuration as JSON for --additional-mcp-config.
+func (a *CopilotAgent) mcpConfigJSON() ([]byte, error) {
 	// Convert our McpServer format to Copilot's expected format
 	servers := make(map[string]any)
 	for name, srv := range a.mcpServers {
@@ -119,16 +113,5 @@ func (a *CopilotAgent) writeMcpConfig() error {
 		}
 		servers[name] = server
 	}
-
-	config := map[string]any{
-		"servers": servers,
-	}
-
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	mcpConfigPath := filepath.Join(copilotDir, "mcp-config.json")
-	return os.WriteFile(mcpConfigPath, data, 0644)
+	return json.Marshal(map[string]any{"servers": servers})
 }
