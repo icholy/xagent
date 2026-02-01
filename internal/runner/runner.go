@@ -364,9 +364,32 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	taskIDStr := strconv.FormatInt(task.ID, 10)
-
 	r.log.Info("creating container", "task", task.ID, "image", ws.Container.Image, "workspace", task.Workspace)
+
+	// Read xagent binary for the container's architecture
+	binData, err := r.readBinary(ctx, ws.Container.Image)
+	if err != nil {
+		return "", fmt.Errorf("failed to read binary: %w", err)
+	}
+
+	// Build agent config
+	cfg := ws.AgentConfig()
+	cfg.McpServers["xagent"] = agent.McpServer{
+		Type:    "stdio",
+		Command: "/usr/local/bin/xagent",
+		Args: []string{
+			"mcp",
+			"--server", "unix:///var/run/xagent.sock",
+			"--task", fmt.Sprint(task.ID),
+			"--runner", task.Runner,
+			"--workspace", task.Workspace,
+			"--token", token,
+		},
+	}
+	cfgData, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal config: %w", err)
+	}
 
 	b := &containerbuild.Builder{
 		Docker:    r.docker,
@@ -379,7 +402,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		Cmd: []string{
 			"/usr/local/bin/xagent", "run",
 			"--server", "unix:///var/run/xagent.sock",
-			"--task", taskIDStr,
+			"--task", fmt.Sprint(task.ID),
 			"--token", token,
 		},
 		Env: []string{
@@ -388,34 +411,11 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		Binds: []string{
 			r.proxy.SocketPath() + ":/var/run/xagent.sock",
 		},
-	}
-
-	// Read xagent binary for the container's architecture
-	binData, err := r.readBinary(ctx, ws.Container.Image)
-	if err != nil {
-		return "", fmt.Errorf("failed to read binary: %w", err)
-	}
-	b.CopyFile("/usr/local/bin/xagent", binData, 0755)
-
-	// Build agent config
-	cfg := ws.AgentConfig()
-	cfg.McpServers["xagent"] = agent.McpServer{
-		Type:    "stdio",
-		Command: "/usr/local/bin/xagent",
-		Args: []string{
-			"mcp",
-			"--server", "unix:///var/run/xagent.sock",
-			"--task", taskIDStr,
-			"--runner", task.Runner,
-			"--workspace", task.Workspace,
-			"--token", token,
+		Files: []containerbuild.File{
+			{Path: "/usr/local/bin/xagent", Data: binData, Mode: 0755},
+			{Path: agent.ConfigPath(taskIDStr), Data: cfgData, Mode: 0666},
 		},
 	}
-	cfgData, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal config: %w", err)
-	}
-	b.CopyFile(agent.ConfigPath(taskIDStr), cfgData, 0666)
 
 	return b.Build(ctx)
 }

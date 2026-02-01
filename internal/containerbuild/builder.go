@@ -12,10 +12,11 @@ import (
 	"github.com/icholy/xagent/internal/workspace"
 )
 
-type copyEntry struct {
-	path    string
-	content []byte
-	mode    int64
+// File is a file to copy into the container.
+type File struct {
+	Path string // absolute path in the container (e.g. /usr/local/bin/xagent)
+	Data []byte
+	Mode int64
 }
 
 // Builder holds the configuration for building a single container.
@@ -27,18 +28,7 @@ type Builder struct {
 	Labels    map[string]string
 	Env       []string
 	Binds     []string
-
-	files []copyEntry
-}
-
-// CopyFile queues a file to be copied into the container when Build is called.
-// The path should be absolute (e.g. /usr/local/bin/xagent).
-func (b *Builder) CopyFile(path string, content []byte, mode int64) {
-	b.files = append(b.files, copyEntry{
-		path:    path,
-		content: content,
-		mode:    mode,
-	})
+	Files     []File
 }
 
 // Build creates the Docker container and copies all queued files into it.
@@ -76,21 +66,21 @@ func (b *Builder) Build(ctx context.Context) (string, error) {
 }
 
 func (b *Builder) copyFiles(ctx context.Context, containerID string) error {
-	if len(b.files) == 0 {
+	if len(b.Files) == 0 {
 		return nil
 	}
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	for _, f := range b.files {
-		name := strings.TrimPrefix(f.path, "/")
+	for _, f := range b.Files {
+		name := strings.TrimPrefix(f.Path, "/")
 		if err := tw.WriteHeader(&tar.Header{
 			Name: name,
-			Mode: f.mode,
-			Size: int64(len(f.content)),
+			Mode: f.Mode,
+			Size: int64(len(f.Data)),
 		}); err != nil {
 			return err
 		}
-		if _, err := tw.Write(f.content); err != nil {
+		if _, err := tw.Write(f.Data); err != nil {
 			return err
 		}
 	}
