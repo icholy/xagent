@@ -86,10 +86,10 @@ function EventsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
+              <TableHead className="hidden md:table-cell">ID</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Data</TableHead>
-              <TableHead>Created</TableHead>
+              <TableHead className="hidden md:table-cell">Created</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -109,7 +109,7 @@ function EventRow({ event }: { event: Event }) {
 
   return (
     <TableRow>
-      <TableCell>{String(event.id)}</TableCell>
+      <TableCell className="hidden md:table-cell">{String(event.id)}</TableCell>
       <TableCell>
         <Link
           to="/events/$id"
@@ -133,7 +133,7 @@ function EventRow({ event }: { event: Event }) {
           truncatedData
         )}
       </TableCell>
-      <TableCell className="text-muted-foreground">
+      <TableCell className="hidden md:table-cell text-muted-foreground">
         {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
       </TableCell>
     </TableRow>
