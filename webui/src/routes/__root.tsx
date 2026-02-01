@@ -39,31 +39,31 @@ function RootComponent() {
     <>
       <nav className="border-b">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3 md:gap-6">
-          <Link to="/" className="hidden md:block">
+          <Link to="/">
             <img src={xagentIcon} alt="XAgent" className="h-8 w-8" />
           </Link>
           <div className="flex gap-2 md:gap-4">
             <Link
               to="/tasks"
-              className="text-sm md:text-base text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Tasks
             </Link>
             <Link
               to="/events"
-              className="text-sm md:text-base text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Events
             </Link>
             <Link
               to="/workspaces"
-              className="text-sm md:text-base text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Workspaces
             </Link>
             <Link
               to="/keys"
-              className="text-sm md:text-base text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Keys
             </Link>
