@@ -50,6 +50,16 @@ func BinaryPath(arch string) (string, error) {
 
 // ReadBinary reads the prebuilt binary for the given architecture.
 func ReadBinary(arch string) ([]byte, error) {
+	// If we're on the matching platform and statically linked (no CGO),
+	// use the currently running binary. This lets locally built binaries
+	// work without having to run "xagent download" first.
+	if runtime.GOOS == "linux" && arch == runtime.GOARCH && !testing.Testing() && !cgoEnabled() {
+		exe, err := os.Executable()
+		if err != nil {
+			return nil, fmt.Errorf("resolve executable path: %w", err)
+		}
+		return os.ReadFile(exe)
+	}
 	binPath, err := BinaryPath(arch)
 	if err != nil {
 		return nil, err
@@ -57,16 +67,6 @@ func ReadBinary(arch string) ([]byte, error) {
 	data, err := os.ReadFile(binPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// If we're on the matching platform and statically linked (no CGO),
-			// fall back to the currently running binary. This lets locally
-			// built binaries work without having to run "xagent download" first.
-			if runtime.GOOS == "linux" && arch == runtime.GOARCH && !testing.Testing() && !cgoEnabled() {
-				exe, err := os.Executable()
-				if err != nil {
-					return nil, fmt.Errorf("resolve executable path: %w", err)
-				}
-				return os.ReadFile(exe)
-			}
 			return nil, fmt.Errorf("prebuilt binary not found: %s\n\nRun 'xagent download' to download prebuilt binaries", binPath)
 		}
 		return nil, fmt.Errorf("failed to read binary %s: %w", binPath, err)
