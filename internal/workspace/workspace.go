@@ -5,13 +5,62 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/expandvar"
 	"gopkg.in/yaml.v3"
 )
+
+var defaultYAML = `workspaces:
+  pets-workshop:
+    container:
+      image: node:20
+      working_dir: /root
+      environment:
+        CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
+    commands:
+      - npm install -g @anthropic-ai/claude-code
+      - git clone https://github.com/github-samples/pets-workshop
+    agent:
+      type: claude
+      cwd: /root/pets-workshop
+      mcp_servers: {}
+      prompt: |
+        This is an example github repository.
+        Don't try opening PRs or issues.
+`
+
+// DefaultPath returns the default workspaces.yaml path inside the config directory.
+func DefaultPath() (string, error) {
+	dir, err := configfile.Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "workspaces.yaml"), nil
+}
+
+// CreateDefault creates a workspaces.yaml with example config if one doesn't exist.
+// Returns the path to the file and whether it was created.
+func CreateDefault() (string, bool, error) {
+	path, err := DefaultPath()
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return path, false, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return "", false, err
+	}
+	if err := os.WriteFile(path, []byte(defaultYAML), 0644); err != nil {
+		return "", false, err
+	}
+	return path, true, nil
+}
 
 type Config struct {
 	Workspaces map[string]Workspace `yaml:"workspaces"`

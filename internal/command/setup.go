@@ -9,6 +9,7 @@ import (
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/workspace"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
@@ -90,6 +91,13 @@ var SetupCommand = &cli.Command{
 
 		configPath, _ := configfile.Path()
 		fmt.Printf("Config written to %s\n", configPath)
+
+		// Create default workspaces.yaml if it doesn't exist
+		if path, created, err := workspace.CreateDefault(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to create default workspaces.yaml: %v\n", err)
+		} else if created {
+			fmt.Printf("Workspaces written to %s\n", path)
+		}
 
 		return nil
 	},

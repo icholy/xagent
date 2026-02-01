@@ -16,6 +16,14 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+func defaultWorkspacesPath() string {
+	path, err := workspace.DefaultPath()
+	if err != nil {
+		return "workspaces.yaml"
+	}
+	return path
+}
+
 func defaultRunnerID() string {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -36,10 +44,10 @@ var RunnerCommand = &cli.Command{
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
 		&cli.StringFlag{
-			Name:    "config",
-			Aliases: []string{"c"},
+			Name:    "workspaces",
+			Aliases: []string{"w"},
 			Usage:   "Workspace config file",
-			Value:   "workspaces.yaml",
+			Value:   defaultWorkspacesPath(),
 		},
 		&cli.DurationFlag{
 			Name:  "poll",
@@ -64,7 +72,7 @@ var RunnerCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
-		configPath := cmd.String("config")
+		configPath := cmd.String("workspaces")
 		pollInterval := cmd.Duration("poll")
 		concurrency := cmd.Int("concurrency")
 		runnerID := cmd.String("id")

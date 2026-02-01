@@ -10,18 +10,27 @@ import (
 	"path/filepath"
 )
 
-// Path returns the path to the xagent config file.
+// Dir returns the xagent config directory.
 // It checks XAGENT_CONFIG_DIR first, then falls back to
 // os.UserConfigDir()/xagent (e.g. ~/.config/xagent on Linux).
-func Path() (string, error) {
+func Dir() (string, error) {
 	if dir := os.Getenv("XAGENT_CONFIG_DIR"); dir != "" {
-		return filepath.Join(dir, "config.json"), nil
+		return dir, nil
 	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("config directory: %w", err)
 	}
-	return filepath.Join(dir, "xagent", "config.json"), nil
+	return filepath.Join(dir, "xagent"), nil
+}
+
+// Path returns the path to the xagent config file.
+func Path() (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.json"), nil
 }
 
 // Load reads the config file.
