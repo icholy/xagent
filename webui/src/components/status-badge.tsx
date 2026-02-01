@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import { TaskStatus, type Task } from '@/gen/xagent/v1/xagent_pb'
 
 const statusStyles: Record<TaskStatus, string> = {
+  [TaskStatus.UNSPECIFIED]: 'bg-gray-100 text-gray-600 border-gray-200',
   [TaskStatus.PENDING]: 'bg-amber-100 text-amber-800 border-amber-200',
   [TaskStatus.RUNNING]: 'bg-blue-100 text-blue-800 border-blue-200',
   [TaskStatus.RESTARTING]: 'bg-pink-100 text-pink-800 border-pink-200',
@@ -13,6 +14,7 @@ const statusStyles: Record<TaskStatus, string> = {
 }
 
 const statusLabels: Record<TaskStatus, string> = {
+  [TaskStatus.UNSPECIFIED]: 'unknown',
   [TaskStatus.PENDING]: 'pending',
   [TaskStatus.RUNNING]: 'running',
   [TaskStatus.RESTARTING]: 'restarting',
