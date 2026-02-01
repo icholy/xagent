@@ -54,7 +54,7 @@ func ReadBinary(arch string) ([]byte, error) {
 	data, err := os.ReadFile(binPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("prebuilt binary not found: %s\n\nRun 'xagent setup' to download prebuilt binaries", binPath)
+			return nil, fmt.Errorf("prebuilt binary not found: %s\n\nRun 'xagent download' to download prebuilt binaries", binPath)
 		}
 		return nil, fmt.Errorf("failed to read binary %s: %w", binPath, err)
 	}

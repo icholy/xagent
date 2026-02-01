@@ -9,7 +9,6 @@ import (
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/deviceauth"
-	"github.com/icholy/xagent/internal/prebuilt"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
@@ -39,11 +38,6 @@ var SetupCommand = &cli.Command{
 			Name:  "key-name",
 			Usage: "Name for the API key",
 			Value: defaultKeyName(),
-		},
-		&cli.StringFlag{
-			Name:  "github-repo",
-			Usage: "GitHub repository for binary downloads (owner/repo)",
-			Value: prebuilt.DefaultRepo,
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -90,13 +84,6 @@ var SetupCommand = &cli.Command{
 
 		configPath, _ := configfile.Path()
 		fmt.Printf("Config written to %s\n", configPath)
-
-		// Download prebuilt binaries from latest GitHub release
-		fmt.Println("Downloading prebuilt binaries...")
-		if err := prebuilt.Download(ctx, cmd.String("github-repo")); err != nil {
-			return fmt.Errorf("download prebuilt binaries: %w", err)
-		}
-		fmt.Println("Prebuilt binaries downloaded.")
 
 		return nil
 	},

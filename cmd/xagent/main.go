@@ -25,6 +25,7 @@ func main() {
 			command.PruneCommand,
 			command.LogsCommand,
 			command.SetupCommand,
+			command.DownloadCommand,
 		},
 	}
 
