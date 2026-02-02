@@ -14,9 +14,10 @@ import (
 
 // File is a file to copy into the container.
 type File struct {
-	Path string // absolute path in the container (e.g. /usr/local/bin/xagent)
-	Data []byte
-	Mode int64
+	Path    string // absolute path in the container (e.g. /usr/local/bin/xagent)
+	Data    []byte
+	Mode    int64
+	DirMode int64 // if non-zero, create parent directory with this mode
 }
 
 // Builder holds the configuration for building a single container.
@@ -71,7 +72,23 @@ func (b *Builder) copyFiles(ctx context.Context, containerID string) error {
 	}
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
+	dirs := make(map[string]bool)
 	for _, f := range b.Files {
+		// Create parent directory entry if DirMode is specified.
+		if f.DirMode != 0 {
+			dir := strings.TrimPrefix(f.Path, "/")
+			dir = dir[:strings.LastIndex(dir, "/")]
+			if !dirs[dir] {
+				dirs[dir] = true
+				if err := tw.WriteHeader(&tar.Header{
+					Name:     dir + "/",
+					Mode:     f.DirMode,
+					Typeflag: tar.TypeDir,
+				}); err != nil {
+					return err
+				}
+			}
+		}
 		name := strings.TrimPrefix(f.Path, "/")
 		if err := tw.WriteHeader(&tar.Header{
 			Name: name,
