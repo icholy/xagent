@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"path"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
@@ -15,10 +14,10 @@ import (
 
 // File is a file to copy into the container.
 type File struct {
-	Path    string // absolute path in the container (e.g. /usr/local/bin/xagent)
-	Data    []byte
-	Mode    int64
-	DirMode int64 // if non-zero, create parent directory with this mode
+	Path string // absolute path in the container (e.g. /usr/local/bin/xagent)
+	Data []byte
+	Mode int64
+	Dir  bool // if true, create a directory entry (Data is ignored)
 }
 
 // Builder holds the configuration for building a single container.
@@ -73,25 +72,18 @@ func (b *Builder) copyFiles(ctx context.Context, containerID string) error {
 	}
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	dirs := make(map[string]bool)
 	for _, f := range b.Files {
-		// Create parent directory entries if DirMode is specified.
-		if f.DirMode != 0 {
-			for dir := path.Dir(strings.TrimPrefix(f.Path, "/")); dir != "." && dir != ""; dir = path.Dir(dir) {
-				if dirs[dir] {
-					break
-				}
-				dirs[dir] = true
-				if err := tw.WriteHeader(&tar.Header{
-					Name:     dir + "/",
-					Mode:     f.DirMode,
-					Typeflag: tar.TypeDir,
-				}); err != nil {
-					return err
-				}
-			}
-		}
 		name := strings.TrimPrefix(f.Path, "/")
+		if f.Dir {
+			if err := tw.WriteHeader(&tar.Header{
+				Name:     name + "/",
+				Mode:     f.Mode,
+				Typeflag: tar.TypeDir,
+			}); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := tw.WriteHeader(&tar.Header{
 			Name: name,
 			Mode: f.Mode,
