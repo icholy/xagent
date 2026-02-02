@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
@@ -74,11 +75,12 @@ func (b *Builder) copyFiles(ctx context.Context, containerID string) error {
 	tw := tar.NewWriter(&buf)
 	dirs := make(map[string]bool)
 	for _, f := range b.Files {
-		// Create parent directory entry if DirMode is specified.
+		// Create parent directory entries if DirMode is specified.
 		if f.DirMode != 0 {
-			dir := strings.TrimPrefix(f.Path, "/")
-			dir = dir[:strings.LastIndex(dir, "/")]
-			if !dirs[dir] {
+			for dir := path.Dir(strings.TrimPrefix(f.Path, "/")); dir != "." && dir != ""; dir = path.Dir(dir) {
+				if dirs[dir] {
+					break
+				}
 				dirs[dir] = true
 				if err := tw.WriteHeader(&tar.Header{
 					Name:     dir + "/",
