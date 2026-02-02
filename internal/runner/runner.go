@@ -407,7 +407,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		},
 		Files: []containerbuild.File{
 			{Path: "/usr/local/bin/xagent", Data: binData, Mode: 0755},
-			{Path: agent.ConfigPath(task.ID), Data: cfgData, Mode: 0666},
+			{Path: agent.ConfigPath(task.ID), Data: cfgData, Mode: 0666, DirMode: 01777},
 		},
 	}
 
