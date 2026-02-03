@@ -1,7 +1,6 @@
 package xagentclient
 
 import (
-	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -14,8 +13,9 @@ type UnixProxy struct {
 }
 
 func NewUnixProxy(path string, handler http.Handler) (*UnixProxy, error) {
-	// Remove existing socket file
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	// Remove existing socket file or directory (Docker creates a directory
+	// if the socket path doesn't exist when bind mounting).
+	if err := os.RemoveAll(path); err != nil {
 		return nil, err
 	}
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"os"
 	"path"
 	"strconv"
 	"time"
@@ -384,6 +385,12 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	cfgData, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Verify the proxy socket exists before creating the container.
+	// Docker creates a directory if the bind mount source doesn't exist.
+	if _, err := os.Stat(r.proxy.SocketPath()); err != nil {
+		return "", fmt.Errorf("proxy socket not found: %w", err)
 	}
 
 	b := &containerbuild.Builder{
