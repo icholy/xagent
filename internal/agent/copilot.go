@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -24,11 +23,11 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 	a.log.Info("sending prompt", "text", prompt)
 
 	args := []string{
-		"--silent",
 		"--allow-all-tools",
 		"--allow-all-paths",
 		"--allow-all-urls",
 		"--no-auto-update",
+		"--log-level", "debug",
 	}
 
 	// Add model if specified in options
@@ -57,7 +56,6 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 
 	cmd := exec.CommandContext(ctx, "copilot", args...)
 	cmd.Dir = a.cwd
-	cmd.Stderr = os.Stderr
 
 	// Create a new process group so we can kill all child processes
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -71,18 +69,77 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 	if err != nil {
 		return err
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
 
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 
+	// Read stdout and stderr concurrently
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			a.handleOutput(line, true)
+		}
+	}()
+
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
-		a.log.Info("output", "line", line)
+		a.handleOutput(line, false)
 	}
 
 	return cmd.Wait()
+}
+
+// handleOutput processes a line of output from Copilot and logs it with an appropriate type.
+func (a *CopilotAgent) handleOutput(line string, isStderr bool) {
+	// Try to parse as JSON to extract structured information.
+	// Copilot may emit JSON log events or debug info.
+	var data map[string]any
+	if err := json.Unmarshal([]byte(line), &data); err == nil {
+		// It's valid JSON - try to extract useful information
+		if msgType, ok := data["type"].(string); ok {
+			// Handle structured event types if present
+			switch msgType {
+			case "tool_call", "tool":
+				if name, ok := data["name"].(string); ok {
+					a.log.Info("tool", "name", name)
+					return
+				}
+			case "tool_result":
+				a.log.Debug("tool_result")
+				return
+			case "text", "assistant":
+				if content, ok := data["content"].(string); ok {
+					a.log.Info("text", "content", content)
+					return
+				}
+				if text, ok := data["text"].(string); ok {
+					a.log.Info("text", "content", text)
+					return
+				}
+			}
+		}
+		// Log as generic JSON event
+		if isStderr {
+			a.log.Debug("json_event", "data", data)
+		} else {
+			a.log.Info("json_event", "data", data)
+		}
+		return
+	}
+
+	// Not JSON - log as plain output
+	if isStderr {
+		a.log.Debug("stderr", "line", line)
+	} else {
+		a.log.Info("output", "line", line)
+	}
 }
 
 // Close releases any resources held by the agent.
