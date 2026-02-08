@@ -148,6 +148,10 @@ xagent containers
 ```
 
 
+## Architecture
+
+See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+
 ## Local Development
 
 ```bash
