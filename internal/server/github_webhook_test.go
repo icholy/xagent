@@ -10,215 +10,224 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
 )
 
 func TestExtractGitHubWebhookEvent(t *testing.T) {
-	t.Run("IssueComment", func(t *testing.T) {
-		event := &github.IssueCommentEvent{
-			Comment: &github.IssueComment{
-				Body: strPtr("xagent: do something"),
-				User: &github.User{
-					ID:    int64Ptr(123),
-					Login: strPtr("testuser"),
+	tests := []struct {
+		name     string
+		event    any
+		expected *githubWebhookEvent
+	}{
+		{
+			name: "IssueComment",
+			event: &github.IssueCommentEvent{
+				Comment: &github.IssueComment{
+					Body: strPtr("xagent: do something"),
+					User: &github.User{
+						ID:    int64Ptr(123),
+						Login: strPtr("testuser"),
+					},
+				},
+				Issue: &github.Issue{
+					HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
 				},
 			},
-			Issue: &github.Issue{
-				HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+			expected: &githubWebhookEvent{
+				description:    "A comment was made on an issue",
+				data:           "xagent: do something",
+				url:            "https://github.com/owner/repo/issues/1",
+				githubUserID:   123,
+				githubUsername: "testuser",
 			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got != nil)
-		assert.Equal(t, got.description, "A comment was made on an issue")
-		assert.Equal(t, got.data, "xagent: do something")
-		assert.Equal(t, got.url, "https://github.com/owner/repo/issues/1")
-		assert.Equal(t, got.githubUserID, int64(123))
-		assert.Equal(t, got.githubUsername, "testuser")
-	})
-
-	t.Run("IssueComment_PullRequest", func(t *testing.T) {
-		event := &github.IssueCommentEvent{
-			Comment: &github.IssueComment{
-				Body: strPtr("xagent: review this"),
-				User: &github.User{
-					ID:    int64Ptr(456),
-					Login: strPtr("pruser"),
+		},
+		{
+			name: "IssueComment_PullRequest",
+			event: &github.IssueCommentEvent{
+				Comment: &github.IssueComment{
+					Body: strPtr("xagent: review this"),
+					User: &github.User{
+						ID:    int64Ptr(456),
+						Login: strPtr("pruser"),
+					},
+				},
+				Issue: &github.Issue{
+					HTMLURL:          strPtr("https://github.com/owner/repo/pull/2"),
+					PullRequestLinks: &github.PullRequestLinks{},
 				},
 			},
-			Issue: &github.Issue{
-				HTMLURL:         strPtr("https://github.com/owner/repo/pull/2"),
-				PullRequestLinks: &github.PullRequestLinks{},
+			expected: &githubWebhookEvent{
+				description:    "A comment was made on a pull request",
+				data:           "xagent: review this",
+				url:            "https://github.com/owner/repo/pull/2",
+				githubUserID:   456,
+				githubUsername: "pruser",
 			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got != nil)
-		assert.Equal(t, got.description, "A comment was made on a pull request")
-	})
-
-	t.Run("IssueComment_NoXAgentPrefix", func(t *testing.T) {
-		event := &github.IssueCommentEvent{
-			Comment: &github.IssueComment{
-				Body: strPtr("just a regular comment"),
-				User: &github.User{
-					ID:    int64Ptr(123),
-					Login: strPtr("testuser"),
+		},
+		{
+			name: "IssueComment_NoXAgentPrefix",
+			event: &github.IssueCommentEvent{
+				Comment: &github.IssueComment{
+					Body: strPtr("just a regular comment"),
+					User: &github.User{
+						ID:    int64Ptr(123),
+						Login: strPtr("testuser"),
+					},
+				},
+				Issue: &github.Issue{
+					HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
 				},
 			},
-			Issue: &github.Issue{
-				HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
-			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got == nil)
-	})
-
-	t.Run("IssueComment_NilFields", func(t *testing.T) {
-		event := &github.IssueCommentEvent{
-			Comment: nil,
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got == nil)
-	})
-
-	t.Run("PullRequestReviewComment", func(t *testing.T) {
-		event := &github.PullRequestReviewCommentEvent{
-			Comment: &github.PullRequestComment{
-				Body: strPtr("xagent: fix this"),
-				User: &github.User{
-					ID:    int64Ptr(789),
-					Login: strPtr("reviewer"),
+			expected: nil,
+		},
+		{
+			name:     "IssueComment_NilFields",
+			event:    &github.IssueCommentEvent{Comment: nil},
+			expected: nil,
+		},
+		{
+			name: "PullRequestReviewComment",
+			event: &github.PullRequestReviewCommentEvent{
+				Comment: &github.PullRequestComment{
+					Body: strPtr("xagent: fix this"),
+					User: &github.User{
+						ID:    int64Ptr(789),
+						Login: strPtr("reviewer"),
+					},
+				},
+				PullRequest: &github.PullRequest{
+					HTMLURL: strPtr("https://github.com/owner/repo/pull/3"),
 				},
 			},
-			PullRequest: &github.PullRequest{
-				HTMLURL: strPtr("https://github.com/owner/repo/pull/3"),
+			expected: &githubWebhookEvent{
+				description:    "A review comment was made on a pull request",
+				data:           "xagent: fix this",
+				url:            "https://github.com/owner/repo/pull/3",
+				githubUserID:   789,
+				githubUsername: "reviewer",
 			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got != nil)
-		assert.Equal(t, got.description, "A review comment was made on a pull request")
-		assert.Equal(t, got.data, "xagent: fix this")
-		assert.Equal(t, got.url, "https://github.com/owner/repo/pull/3")
-		assert.Equal(t, got.githubUserID, int64(789))
-		assert.Equal(t, got.githubUsername, "reviewer")
-	})
-
-	t.Run("PullRequestReviewComment_NoXAgentPrefix", func(t *testing.T) {
-		event := &github.PullRequestReviewCommentEvent{
-			Comment: &github.PullRequestComment{
-				Body: strPtr("looks good"),
-				User: &github.User{
-					ID:    int64Ptr(789),
-					Login: strPtr("reviewer"),
+		},
+		{
+			name: "PullRequestReviewComment_NoXAgentPrefix",
+			event: &github.PullRequestReviewCommentEvent{
+				Comment: &github.PullRequestComment{
+					Body: strPtr("looks good"),
+					User: &github.User{
+						ID:    int64Ptr(789),
+						Login: strPtr("reviewer"),
+					},
+				},
+				PullRequest: &github.PullRequest{
+					HTMLURL: strPtr("https://github.com/owner/repo/pull/3"),
 				},
 			},
-			PullRequest: &github.PullRequest{
-				HTMLURL: strPtr("https://github.com/owner/repo/pull/3"),
-			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got == nil)
-	})
-
-	t.Run("PullRequestReviewComment_NilFields", func(t *testing.T) {
-		event := &github.PullRequestReviewCommentEvent{
-			Comment: nil,
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got == nil)
-	})
-
-	t.Run("PullRequestReview_Submitted", func(t *testing.T) {
-		event := &github.PullRequestReviewEvent{
-			Action: strPtr("submitted"),
-			Review: &github.PullRequestReview{
-				Body: strPtr("xagent: please address comments"),
-				User: &github.User{
-					ID:    int64Ptr(101),
-					Login: strPtr("lead"),
+			expected: nil,
+		},
+		{
+			name:     "PullRequestReviewComment_NilFields",
+			event:    &github.PullRequestReviewCommentEvent{Comment: nil},
+			expected: nil,
+		},
+		{
+			name: "PullRequestReview_Submitted",
+			event: &github.PullRequestReviewEvent{
+				Action: strPtr("submitted"),
+				Review: &github.PullRequestReview{
+					Body: strPtr("xagent: please address comments"),
+					User: &github.User{
+						ID:    int64Ptr(101),
+						Login: strPtr("lead"),
+					},
+				},
+				PullRequest: &github.PullRequest{
+					HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
 				},
 			},
-			PullRequest: &github.PullRequest{
-				HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
+			expected: &githubWebhookEvent{
+				description:    "A review was submitted on a pull request",
+				data:           "xagent: please address comments",
+				url:            "https://github.com/owner/repo/pull/4",
+				githubUserID:   101,
+				githubUsername: "lead",
 			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got != nil)
-		assert.Equal(t, got.description, "A review was submitted on a pull request")
-		assert.Equal(t, got.data, "xagent: please address comments")
-		assert.Equal(t, got.url, "https://github.com/owner/repo/pull/4")
-		assert.Equal(t, got.githubUserID, int64(101))
-		assert.Equal(t, got.githubUsername, "lead")
-	})
-
-	t.Run("PullRequestReview_NotSubmitted", func(t *testing.T) {
-		event := &github.PullRequestReviewEvent{
-			Action: strPtr("edited"),
-			Review: &github.PullRequestReview{
-				Body: strPtr("xagent: something"),
-				User: &github.User{
-					ID:    int64Ptr(101),
-					Login: strPtr("lead"),
+		},
+		{
+			name: "PullRequestReview_NotSubmitted",
+			event: &github.PullRequestReviewEvent{
+				Action: strPtr("edited"),
+				Review: &github.PullRequestReview{
+					Body: strPtr("xagent: something"),
+					User: &github.User{
+						ID:    int64Ptr(101),
+						Login: strPtr("lead"),
+					},
+				},
+				PullRequest: &github.PullRequest{
+					HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
 				},
 			},
-			PullRequest: &github.PullRequest{
-				HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
-			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got == nil)
-	})
-
-	t.Run("PullRequestReview_NoXAgentPrefix", func(t *testing.T) {
-		event := &github.PullRequestReviewEvent{
-			Action: strPtr("submitted"),
-			Review: &github.PullRequestReview{
-				Body: strPtr("approved"),
-				User: &github.User{
-					ID:    int64Ptr(101),
-					Login: strPtr("lead"),
+			expected: nil,
+		},
+		{
+			name: "PullRequestReview_NoXAgentPrefix",
+			event: &github.PullRequestReviewEvent{
+				Action: strPtr("submitted"),
+				Review: &github.PullRequestReview{
+					Body: strPtr("approved"),
+					User: &github.User{
+						ID:    int64Ptr(101),
+						Login: strPtr("lead"),
+					},
+				},
+				PullRequest: &github.PullRequest{
+					HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
 				},
 			},
-			PullRequest: &github.PullRequest{
-				HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
-			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got == nil)
-	})
-
-	t.Run("PullRequestReview_NilFields", func(t *testing.T) {
-		event := &github.PullRequestReviewEvent{
-			Action: nil,
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got == nil)
-	})
-
-	t.Run("UnknownEventType", func(t *testing.T) {
-		event := &github.PushEvent{}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got == nil)
-	})
-
-	t.Run("WhitespacePrefix", func(t *testing.T) {
-		event := &github.IssueCommentEvent{
-			Comment: &github.IssueComment{
-				Body: strPtr("  xagent: trimmed"),
-				User: &github.User{
-					ID:    int64Ptr(123),
-					Login: strPtr("testuser"),
+			expected: nil,
+		},
+		{
+			name:     "PullRequestReview_NilFields",
+			event:    &github.PullRequestReviewEvent{Action: nil},
+			expected: nil,
+		},
+		{
+			name:     "UnknownEventType",
+			event:    &github.PushEvent{},
+			expected: nil,
+		},
+		{
+			name: "WhitespacePrefix",
+			event: &github.IssueCommentEvent{
+				Comment: &github.IssueComment{
+					Body: strPtr("  xagent: trimmed"),
+					User: &github.User{
+						ID:    int64Ptr(123),
+						Login: strPtr("testuser"),
+					},
+				},
+				Issue: &github.Issue{
+					HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
 				},
 			},
-			Issue: &github.Issue{
-				HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+			expected: &githubWebhookEvent{
+				description:    "A comment was made on an issue",
+				data:           "xagent: trimmed",
+				url:            "https://github.com/owner/repo/issues/1",
+				githubUserID:   123,
+				githubUsername: "testuser",
 			},
-		}
-		got := extractGitHubWebhookEvent(event)
-		assert.Assert(t, got != nil)
-		assert.Equal(t, got.data, "xagent: trimmed")
-	})
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractGitHubWebhookEvent(tt.event)
+			assert.DeepEqual(t, got, tt.expected, cmp.AllowUnexported(githubWebhookEvent{}))
+		})
+	}
 }
 
 // signPayload signs a JSON payload with the given secret using HMAC-SHA256.
