@@ -15,9 +15,11 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
+	"github.com/google/go-github/v68/github"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/ghauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
@@ -89,8 +91,25 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
-		mux.Handle("/github/login", s.auth.RequireAuth()(http.HandlerFunc(s.handleGitHubLogin)))
-		mux.Handle("/github/callback", s.auth.RequireAuth()(http.HandlerFunc(s.handleGitHubCallback)))
+		gh := ghauth.New(s.github.ClientID, s.github.ClientSecret, s.baseURL+"/github/callback")
+		gh.OnSuccess = func(w http.ResponseWriter, r *http.Request, ghUser *github.User) {
+			user := apiauth.User(r.Context())
+			if user == nil {
+				http.Error(w, "not authenticated", http.StatusUnauthorized)
+				return
+			}
+			account := &model.GitHubAccount{
+				Owner:          user.ID,
+				GitHubUserID:   ghUser.GetID(),
+				GitHubUsername: ghUser.GetLogin(),
+			}
+			if err := s.store.CreateGitHubAccount(r.Context(), nil, account); err != nil {
+				http.Error(w, "failed to save GitHub account", http.StatusInternalServerError)
+				return
+			}
+			http.Redirect(w, r, "/ui/settings", http.StatusFound)
+		}
+		mux.Handle("/github/", s.auth.RequireAuth()(http.StripPrefix("/github", gh)))
 		mux.HandleFunc("/webhook/github", s.handleGitHubWebhook)
 	}
 	// React UI (SPA with client-side routing, protected by cookie auth)
