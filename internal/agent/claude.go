@@ -54,7 +54,12 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 
 	args = append(args, "--print", prompt)
 
-	cmd := exec.CommandContext(ctx, "claude", args...)
+	bin := "claude"
+	if a.options != nil && a.options.Bin != "" {
+		bin = a.options.Bin
+	}
+
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = a.cwd
 	cmd.Stderr = os.Stderr
 

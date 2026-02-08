@@ -55,7 +55,12 @@ func (a *CopilotAgent) Prompt(ctx context.Context, prompt string, resume bool) e
 
 	args = append(args, "--prompt", prompt)
 
-	cmd := exec.CommandContext(ctx, "copilot", args...)
+	bin := "copilot"
+	if a.options != nil && a.options.Bin != "" {
+		bin = a.options.Bin
+	}
+
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = a.cwd
 	cmd.Stderr = os.Stderr
 
