@@ -5,21 +5,31 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"time"
 
+	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/model"
+	"golang.org/x/oauth2"
+	oauth2github "golang.org/x/oauth2/github"
 )
 
 const (
 	githubOAuthStateCookie = "xagent_github_state"
 	githubOAuthStateTTL    = 10 * time.Minute
 )
+
+func (s *Server) githubOAuthConfig() *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     s.github.ClientID,
+		ClientSecret: s.github.ClientSecret,
+		RedirectURL:  s.baseURL + "/github/callback",
+		Scopes:       []string{"read:user"},
+		Endpoint:     oauth2github.Endpoint,
+	}
+}
 
 // handleGitHubLogin initiates the GitHub OAuth2 flow.
 func (s *Server) handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
@@ -42,12 +52,8 @@ func (s *Server) handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	redirectURL := fmt.Sprintf(
-		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=read:user&state=%s",
-		url.QueryEscape(s.github.ClientID),
-		url.QueryEscape(s.baseURL+"/github/callback"),
-		url.QueryEscape(state),
-	)
+	conf := s.githubOAuthConfig()
+	redirectURL := conf.AuthCodeURL(state)
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
@@ -74,14 +80,16 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing code parameter", http.StatusBadRequest)
 		return
 	}
-	token, err := s.exchangeGitHubCode(code)
+	conf := s.githubOAuthConfig()
+	token, err := conf.Exchange(r.Context(), code)
 	if err != nil {
 		http.Error(w, "failed to exchange code", http.StatusInternalServerError)
 		return
 	}
 
 	// Fetch GitHub user info
-	ghUser, err := fetchGitHubUser(token)
+	ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
+	ghUser, _, err := ghClient.Users.Get(r.Context(), "")
 	if err != nil {
 		http.Error(w, "failed to fetch GitHub user", http.StatusInternalServerError)
 		return
@@ -95,8 +103,8 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	account := &model.GitHubAccount{
 		Owner:          user.ID,
-		GitHubUserID:   ghUser.ID,
-		GitHubUsername: ghUser.Login,
+		GitHubUserID:   ghUser.GetID(),
+		GitHubUsername: ghUser.GetLogin(),
 	}
 	if err := s.store.CreateGitHubAccount(r.Context(), nil, account); err != nil {
 		http.Error(w, "failed to save GitHub account", http.StatusInternalServerError)
@@ -115,59 +123,6 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/ui/settings", http.StatusFound)
-}
-
-type githubUser struct {
-	ID    int64  `json:"id"`
-	Login string `json:"login"`
-}
-
-func (s *Server) exchangeGitHubCode(code string) (string, error) {
-	data := url.Values{
-		"client_id":     {s.github.ClientID},
-		"client_secret": {s.github.ClientSecret},
-		"code":          {code},
-	}
-	resp, err := http.PostForm("https://github.com/login/oauth/access_token", data)
-	if err != nil {
-		return "", fmt.Errorf("token request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("reading token response: %w", err)
-	}
-	vals, err := url.ParseQuery(string(body))
-	if err != nil {
-		return "", fmt.Errorf("parsing token response: %w", err)
-	}
-	token := vals.Get("access_token")
-	if token == "" {
-		return "", fmt.Errorf("no access_token in response")
-	}
-	return token, nil
-}
-
-func fetchGitHubUser(token string) (*githubUser, error) {
-	req, err := http.NewRequest("GET", "https://api.github.com/user", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("GitHub API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
-	}
-	var user githubUser
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return nil, fmt.Errorf("decoding GitHub user: %w", err)
-	}
-	return &user, nil
 }
 
 func generateRandomState() (string, error) {
