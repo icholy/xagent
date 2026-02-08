@@ -19,7 +19,7 @@ RUN curl https://mise.run | sh
 
 # https://code.claude.com/docs/en/setup
 RUN curl -fsSL https://claude.ai/install.sh | bash
-ENV PATH="/root/.claude/local/bin:$PATH"
+ENV PATH="/root/.local/bin:$PATH"
 
 # https://github.com/features/copilot/cli
 RUN curl -fsSL https://gh.io/copilot-install | bash
