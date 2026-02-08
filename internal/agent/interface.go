@@ -55,11 +55,13 @@ type Options struct {
 // ClaudeOptions contains Claude-specific agent options.
 type ClaudeOptions struct {
 	Model string
+	Bin   string
 }
 
 // CopilotOptions contains Copilot-specific agent options.
 type CopilotOptions struct {
 	Model string
+	Bin   string
 }
 
 // CursorOptions contains Cursor-specific agent options.

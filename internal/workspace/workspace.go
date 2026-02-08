@@ -98,11 +98,13 @@ type Agent struct {
 // ClaudeConfig contains Claude-specific agent configuration.
 type ClaudeConfig struct {
 	Model string `yaml:"model"`
+	Bin   string `yaml:"bin"`
 }
 
 // CopilotConfig contains Copilot-specific agent configuration.
 type CopilotConfig struct {
 	Model string `yaml:"model"`
+	Bin   string `yaml:"bin"`
 }
 
 // CursorConfig contains Cursor-specific agent configuration.
@@ -280,11 +282,13 @@ func (w *Workspace) AgentConfig() agent.Config {
 	if w.Agent.Claude != nil {
 		cfg.Claude = &agent.ClaudeOptions{
 			Model: w.Agent.Claude.Model,
+			Bin:   w.Agent.Claude.Bin,
 		}
 	}
 	if w.Agent.Copilot != nil {
 		cfg.Copilot = &agent.CopilotOptions{
 			Model: w.Agent.Copilot.Model,
+			Bin:   w.Agent.Copilot.Bin,
 		}
 	}
 	if w.Agent.Cursor != nil {
