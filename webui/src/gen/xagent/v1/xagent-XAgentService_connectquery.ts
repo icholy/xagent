@@ -178,3 +178,13 @@ export const listKeys = XAgentService.method.listKeys;
  * @generated from rpc xagent.v1.XAgentService.DeleteKey
  */
 export const deleteKey = XAgentService.method.deleteKey;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.GetGitHubAccount
+ */
+export const getGitHubAccount = XAgentService.method.getGitHubAccount;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.UnlinkGitHubAccount
+ */
+export const unlinkGitHubAccount = XAgentService.method.unlinkGitHubAccount;

@@ -58,6 +58,9 @@ var _ Client = &ClientMock{}
 //			GetEventFunc: func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 //				panic("mock out the GetEvent method")
 //			},
+//			GetGitHubAccountFunc: func(contextMoqParam context.Context, getGitHubAccountRequest *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
+//				panic("mock out the GetGitHubAccount method")
+//			},
 //			GetProfileFunc: func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
 //				panic("mock out the GetProfile method")
 //			},
@@ -118,6 +121,9 @@ var _ Client = &ClientMock{}
 //			UnarchiveTaskFunc: func(contextMoqParam context.Context, unarchiveTaskRequest *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
 //				panic("mock out the UnarchiveTask method")
 //			},
+//			UnlinkGitHubAccountFunc: func(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
+//				panic("mock out the UnlinkGitHubAccount method")
+//			},
 //			UpdateTaskFunc: func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 //				panic("mock out the UpdateTask method")
 //			},
@@ -169,6 +175,9 @@ type ClientMock struct {
 
 	// GetEventFunc mocks the GetEvent method.
 	GetEventFunc func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error)
+
+	// GetGitHubAccountFunc mocks the GetGitHubAccount method.
+	GetGitHubAccountFunc func(contextMoqParam context.Context, getGitHubAccountRequest *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error)
 
 	// GetProfileFunc mocks the GetProfile method.
 	GetProfileFunc func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error)
@@ -229,6 +238,9 @@ type ClientMock struct {
 
 	// UnarchiveTaskFunc mocks the UnarchiveTask method.
 	UnarchiveTaskFunc func(contextMoqParam context.Context, unarchiveTaskRequest *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error)
+
+	// UnlinkGitHubAccountFunc mocks the UnlinkGitHubAccount method.
+	UnlinkGitHubAccountFunc func(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error)
 
 	// UpdateTaskFunc mocks the UpdateTask method.
 	UpdateTaskFunc func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error)
@@ -328,6 +340,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// GetEventRequest is the getEventRequest argument value.
 			GetEventRequest *xagentv1.GetEventRequest
+		}
+		// GetGitHubAccount holds details about calls to the GetGitHubAccount method.
+		GetGitHubAccount []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetGitHubAccountRequest is the getGitHubAccountRequest argument value.
+			GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
 		}
 		// GetProfile holds details about calls to the GetProfile method.
 		GetProfile []struct {
@@ -469,6 +488,13 @@ type ClientMock struct {
 			// UnarchiveTaskRequest is the unarchiveTaskRequest argument value.
 			UnarchiveTaskRequest *xagentv1.UnarchiveTaskRequest
 		}
+		// UnlinkGitHubAccount holds details about calls to the UnlinkGitHubAccount method.
+		UnlinkGitHubAccount []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// UnlinkGitHubAccountRequest is the unlinkGitHubAccountRequest argument value.
+			UnlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest
+		}
 		// UpdateTask holds details about calls to the UpdateTask method.
 		UpdateTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -484,41 +510,43 @@ type ClientMock struct {
 			UploadLogsRequest *xagentv1.UploadLogsRequest
 		}
 	}
-	lockAddEventTask       sync.RWMutex
-	lockArchiveTask        sync.RWMutex
-	lockCancelTask         sync.RWMutex
-	lockClearWorkspaces    sync.RWMutex
-	lockCreateEvent        sync.RWMutex
-	lockCreateKey          sync.RWMutex
-	lockCreateLink         sync.RWMutex
-	lockCreateTask         sync.RWMutex
-	lockDeleteEvent        sync.RWMutex
-	lockDeleteKey          sync.RWMutex
-	lockDeleteTask         sync.RWMutex
-	lockFindLinksByURL     sync.RWMutex
-	lockGetEvent           sync.RWMutex
-	lockGetProfile         sync.RWMutex
-	lockGetTask            sync.RWMutex
-	lockGetTaskDetails     sync.RWMutex
-	lockListChildTasks     sync.RWMutex
-	lockListEventTasks     sync.RWMutex
-	lockListEvents         sync.RWMutex
-	lockListEventsByTask   sync.RWMutex
-	lockListKeys           sync.RWMutex
-	lockListLinks          sync.RWMutex
-	lockListLogs           sync.RWMutex
-	lockListRunnerTasks    sync.RWMutex
-	lockListTasks          sync.RWMutex
-	lockListWorkspaces     sync.RWMutex
-	lockPing               sync.RWMutex
-	lockProcessEvent       sync.RWMutex
-	lockRegisterWorkspaces sync.RWMutex
-	lockRemoveEventTask    sync.RWMutex
-	lockRestartTask        sync.RWMutex
-	lockSubmitRunnerEvents sync.RWMutex
-	lockUnarchiveTask      sync.RWMutex
-	lockUpdateTask         sync.RWMutex
-	lockUploadLogs         sync.RWMutex
+	lockAddEventTask        sync.RWMutex
+	lockArchiveTask         sync.RWMutex
+	lockCancelTask          sync.RWMutex
+	lockClearWorkspaces     sync.RWMutex
+	lockCreateEvent         sync.RWMutex
+	lockCreateKey           sync.RWMutex
+	lockCreateLink          sync.RWMutex
+	lockCreateTask          sync.RWMutex
+	lockDeleteEvent         sync.RWMutex
+	lockDeleteKey           sync.RWMutex
+	lockDeleteTask          sync.RWMutex
+	lockFindLinksByURL      sync.RWMutex
+	lockGetEvent            sync.RWMutex
+	lockGetGitHubAccount    sync.RWMutex
+	lockGetProfile          sync.RWMutex
+	lockGetTask             sync.RWMutex
+	lockGetTaskDetails      sync.RWMutex
+	lockListChildTasks      sync.RWMutex
+	lockListEventTasks      sync.RWMutex
+	lockListEvents          sync.RWMutex
+	lockListEventsByTask    sync.RWMutex
+	lockListKeys            sync.RWMutex
+	lockListLinks           sync.RWMutex
+	lockListLogs            sync.RWMutex
+	lockListRunnerTasks     sync.RWMutex
+	lockListTasks           sync.RWMutex
+	lockListWorkspaces      sync.RWMutex
+	lockPing                sync.RWMutex
+	lockProcessEvent        sync.RWMutex
+	lockRegisterWorkspaces  sync.RWMutex
+	lockRemoveEventTask     sync.RWMutex
+	lockRestartTask         sync.RWMutex
+	lockSubmitRunnerEvents  sync.RWMutex
+	lockUnarchiveTask       sync.RWMutex
+	lockUnlinkGitHubAccount sync.RWMutex
+	lockUpdateTask          sync.RWMutex
+	lockUploadLogs          sync.RWMutex
 }
 
 // AddEventTask calls AddEventTaskFunc.
@@ -986,6 +1014,42 @@ func (mock *ClientMock) GetEventCalls() []struct {
 	mock.lockGetEvent.RLock()
 	calls = mock.calls.GetEvent
 	mock.lockGetEvent.RUnlock()
+	return calls
+}
+
+// GetGitHubAccount calls GetGitHubAccountFunc.
+func (mock *ClientMock) GetGitHubAccount(contextMoqParam context.Context, getGitHubAccountRequest *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
+	if mock.GetGitHubAccountFunc == nil {
+		panic("ClientMock.GetGitHubAccountFunc: method is nil but Client.GetGitHubAccount was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam         context.Context
+		GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
+	}{
+		ContextMoqParam:         contextMoqParam,
+		GetGitHubAccountRequest: getGitHubAccountRequest,
+	}
+	mock.lockGetGitHubAccount.Lock()
+	mock.calls.GetGitHubAccount = append(mock.calls.GetGitHubAccount, callInfo)
+	mock.lockGetGitHubAccount.Unlock()
+	return mock.GetGitHubAccountFunc(contextMoqParam, getGitHubAccountRequest)
+}
+
+// GetGitHubAccountCalls gets all the calls that were made to GetGitHubAccount.
+// Check the length with:
+//
+//	len(mockedClient.GetGitHubAccountCalls())
+func (mock *ClientMock) GetGitHubAccountCalls() []struct {
+	ContextMoqParam         context.Context
+	GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
+} {
+	var calls []struct {
+		ContextMoqParam         context.Context
+		GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
+	}
+	mock.lockGetGitHubAccount.RLock()
+	calls = mock.calls.GetGitHubAccount
+	mock.lockGetGitHubAccount.RUnlock()
 	return calls
 }
 
@@ -1706,6 +1770,42 @@ func (mock *ClientMock) UnarchiveTaskCalls() []struct {
 	mock.lockUnarchiveTask.RLock()
 	calls = mock.calls.UnarchiveTask
 	mock.lockUnarchiveTask.RUnlock()
+	return calls
+}
+
+// UnlinkGitHubAccount calls UnlinkGitHubAccountFunc.
+func (mock *ClientMock) UnlinkGitHubAccount(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
+	if mock.UnlinkGitHubAccountFunc == nil {
+		panic("ClientMock.UnlinkGitHubAccountFunc: method is nil but Client.UnlinkGitHubAccount was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam            context.Context
+		UnlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest
+	}{
+		ContextMoqParam:            contextMoqParam,
+		UnlinkGitHubAccountRequest: unlinkGitHubAccountRequest,
+	}
+	mock.lockUnlinkGitHubAccount.Lock()
+	mock.calls.UnlinkGitHubAccount = append(mock.calls.UnlinkGitHubAccount, callInfo)
+	mock.lockUnlinkGitHubAccount.Unlock()
+	return mock.UnlinkGitHubAccountFunc(contextMoqParam, unlinkGitHubAccountRequest)
+}
+
+// UnlinkGitHubAccountCalls gets all the calls that were made to UnlinkGitHubAccount.
+// Check the length with:
+//
+//	len(mockedClient.UnlinkGitHubAccountCalls())
+func (mock *ClientMock) UnlinkGitHubAccountCalls() []struct {
+	ContextMoqParam            context.Context
+	UnlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest
+} {
+	var calls []struct {
+		ContextMoqParam            context.Context
+		UnlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest
+	}
+	mock.lockUnlinkGitHubAccount.RLock()
+	calls = mock.calls.UnlinkGitHubAccount
+	mock.lockUnlinkGitHubAccount.RUnlock()
 	return calls
 }
 

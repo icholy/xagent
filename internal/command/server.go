@@ -69,6 +69,26 @@ var ServerCommand = &cli.Command{
 			Name:  "no-auth",
 			Usage: "Disable authentication (for development only)",
 		},
+		&cli.StringFlag{
+			Name:    "github-app-id",
+			Usage:   "GitHub App ID",
+			Sources: cli.EnvVars("XAGENT_GITHUB_APP_ID"),
+		},
+		&cli.StringFlag{
+			Name:    "github-client-id",
+			Usage:   "GitHub App OAuth client ID",
+			Sources: cli.EnvVars("XAGENT_GITHUB_CLIENT_ID"),
+		},
+		&cli.StringFlag{
+			Name:    "github-client-secret",
+			Usage:   "GitHub App OAuth client secret",
+			Sources: cli.EnvVars("XAGENT_GITHUB_CLIENT_SECRET"),
+		},
+		&cli.StringFlag{
+			Name:    "github-webhook-secret",
+			Usage:   "GitHub App webhook secret",
+			Sources: cli.EnvVars("XAGENT_GITHUB_WEBHOOK_SECRET"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
@@ -113,15 +133,26 @@ var ServerCommand = &cli.Command{
 			return fmt.Errorf("failed to initialize auth: %w", err)
 		}
 
-		srv := server.New(server.Options{
-			Store: st,
-			Auth:  auth,
+		opts := server.Options{
+			Store:         st,
+			Auth:          auth,
+			BaseURL:       baseURL,
+			EncryptionKey: key,
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",
 				ClientID:                    cmd.String("auth-device-client-id"),
 			},
-		})
+		}
+		if ghClientID := cmd.String("github-client-id"); ghClientID != "" {
+			opts.GitHub = &server.GitHubConfig{
+				AppID:         cmd.String("github-app-id"),
+				ClientID:      ghClientID,
+				ClientSecret:  cmd.String("github-client-secret"),
+				WebhookSecret: cmd.String("github-webhook-secret"),
+			}
+		}
+		srv := server.New(opts)
 
 		httpServer := &http.Server{
 			Addr:    addr,

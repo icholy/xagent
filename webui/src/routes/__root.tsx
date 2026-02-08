@@ -67,6 +67,12 @@ function RootComponent() {
             >
               Keys
             </Link>
+            <Link
+              to="/settings"
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+            >
+              Settings
+            </Link>
           </div>
           <div className="ml-auto flex items-center gap-4">
             {profileData?.profile?.email && (

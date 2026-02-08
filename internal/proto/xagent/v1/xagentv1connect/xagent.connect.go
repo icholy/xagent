@@ -129,6 +129,12 @@ const (
 	XAgentServiceListKeysProcedure = "/xagent.v1.XAgentService/ListKeys"
 	// XAgentServiceDeleteKeyProcedure is the fully-qualified name of the XAgentService's DeleteKey RPC.
 	XAgentServiceDeleteKeyProcedure = "/xagent.v1.XAgentService/DeleteKey"
+	// XAgentServiceGetGitHubAccountProcedure is the fully-qualified name of the XAgentService's
+	// GetGitHubAccount RPC.
+	XAgentServiceGetGitHubAccountProcedure = "/xagent.v1.XAgentService/GetGitHubAccount"
+	// XAgentServiceUnlinkGitHubAccountProcedure is the fully-qualified name of the XAgentService's
+	// UnlinkGitHubAccount RPC.
+	XAgentServiceUnlinkGitHubAccountProcedure = "/xagent.v1.XAgentService/UnlinkGitHubAccount"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -168,6 +174,8 @@ type XAgentServiceClient interface {
 	CreateKey(context.Context, *v1.CreateKeyRequest) (*v1.CreateKeyResponse, error)
 	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
+	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
+	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -391,46 +399,60 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("DeleteKey")),
 			connect.WithClientOptions(opts...),
 		),
+		getGitHubAccount: connect.NewClient[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse](
+			httpClient,
+			baseURL+XAgentServiceGetGitHubAccountProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GetGitHubAccount")),
+			connect.WithClientOptions(opts...),
+		),
+		unlinkGitHubAccount: connect.NewClient[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse](
+			httpClient,
+			baseURL+XAgentServiceUnlinkGitHubAccountProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // xAgentServiceClient implements XAgentServiceClient.
 type xAgentServiceClient struct {
-	ping               *connect.Client[v1.PingRequest, v1.PingResponse]
-	getProfile         *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
-	listTasks          *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
-	listRunnerTasks    *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
-	listChildTasks     *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
-	createTask         *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
-	getTask            *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	getTaskDetails     *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
-	updateTask         *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	deleteTask         *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
-	archiveTask        *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
-	unarchiveTask      *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
-	cancelTask         *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
-	restartTask        *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
-	uploadLogs         *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
-	listLogs           *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
-	createLink         *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
-	listLinks          *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
-	findLinksByURL     *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
-	listEvents         *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
-	createEvent        *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
-	getEvent           *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
-	deleteEvent        *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
-	addEventTask       *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
-	removeEventTask    *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
-	listEventTasks     *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
-	listEventsByTask   *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
-	processEvent       *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
-	submitRunnerEvents *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
-	registerWorkspaces *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
-	listWorkspaces     *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
-	clearWorkspaces    *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
-	createKey          *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
-	listKeys           *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
-	deleteKey          *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
+	ping                *connect.Client[v1.PingRequest, v1.PingResponse]
+	getProfile          *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
+	listTasks           *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	listRunnerTasks     *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
+	listChildTasks      *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
+	createTask          *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	getTask             *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
+	getTaskDetails      *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
+	updateTask          *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
+	deleteTask          *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
+	archiveTask         *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
+	unarchiveTask       *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
+	cancelTask          *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
+	restartTask         *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
+	uploadLogs          *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
+	listLogs            *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
+	createLink          *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
+	listLinks           *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
+	findLinksByURL      *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
+	listEvents          *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
+	createEvent         *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
+	getEvent            *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
+	deleteEvent         *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
+	addEventTask        *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
+	removeEventTask     *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
+	listEventTasks      *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
+	listEventsByTask    *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
+	processEvent        *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
+	submitRunnerEvents  *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
+	registerWorkspaces  *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
+	listWorkspaces      *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
+	clearWorkspaces     *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
+	createKey           *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
+	listKeys            *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
+	deleteKey           *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
+	getGitHubAccount    *connect.Client[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse]
+	unlinkGitHubAccount *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -748,6 +770,24 @@ func (c *xAgentServiceClient) DeleteKey(ctx context.Context, req *v1.DeleteKeyRe
 	return nil, err
 }
 
+// GetGitHubAccount calls xagent.v1.XAgentService.GetGitHubAccount.
+func (c *xAgentServiceClient) GetGitHubAccount(ctx context.Context, req *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error) {
+	response, err := c.getGitHubAccount.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// UnlinkGitHubAccount calls xagent.v1.XAgentService.UnlinkGitHubAccount.
+func (c *xAgentServiceClient) UnlinkGitHubAccount(ctx context.Context, req *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error) {
+	response, err := c.unlinkGitHubAccount.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -785,6 +825,8 @@ type XAgentServiceHandler interface {
 	CreateKey(context.Context, *v1.CreateKeyRequest) (*v1.CreateKeyResponse, error)
 	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
+	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
+	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1004,6 +1046,18 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("DeleteKey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceGetGitHubAccountHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGetGitHubAccountProcedure,
+		svc.GetGitHubAccount,
+		connect.WithSchema(xAgentServiceMethods.ByName("GetGitHubAccount")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceUnlinkGitHubAccountHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceUnlinkGitHubAccountProcedure,
+		svc.UnlinkGitHubAccount,
+		connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1076,6 +1130,10 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListKeysHandler.ServeHTTP(w, r)
 		case XAgentServiceDeleteKeyProcedure:
 			xAgentServiceDeleteKeyHandler.ServeHTTP(w, r)
+		case XAgentServiceGetGitHubAccountProcedure:
+			xAgentServiceGetGitHubAccountHandler.ServeHTTP(w, r)
+		case XAgentServiceUnlinkGitHubAccountProcedure:
+			xAgentServiceUnlinkGitHubAccountHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1223,4 +1281,12 @@ func (UnimplementedXAgentServiceHandler) ListKeys(context.Context, *v1.ListKeysR
 
 func (UnimplementedXAgentServiceHandler) DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteKey is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetGitHubAccount is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UnlinkGitHubAccount is not implemented"))
 }

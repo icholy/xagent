@@ -26,19 +26,32 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+type GitHubConfig struct {
+	AppID         string
+	ClientID      string
+	ClientSecret  string
+	WebhookSecret string
+}
+
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
-	log       *slog.Logger
-	store     *store.Store
-	auth      *apiauth.Auth
-	discovery deviceauth.DiscoveryConfig
+	log           *slog.Logger
+	store         *store.Store
+	auth          *apiauth.Auth
+	discovery     deviceauth.DiscoveryConfig
+	github        *GitHubConfig
+	baseURL       string
+	encryptionKey []byte
 }
 
 type Options struct {
-	Log       *slog.Logger
-	Store     *store.Store
-	Auth      *apiauth.Auth
-	Discovery deviceauth.DiscoveryConfig
+	Log           *slog.Logger
+	Store         *store.Store
+	Auth          *apiauth.Auth
+	Discovery     deviceauth.DiscoveryConfig
+	GitHub        *GitHubConfig
+	BaseURL       string
+	EncryptionKey []byte
 }
 
 func New(opts Options) *Server {
@@ -47,10 +60,13 @@ func New(opts Options) *Server {
 		log = slog.Default()
 	}
 	return &Server{
-		log:       log,
-		store:     opts.Store,
-		auth:      opts.Auth,
-		discovery: opts.Discovery,
+		log:           log,
+		store:         opts.Store,
+		auth:          opts.Auth,
+		discovery:     opts.Discovery,
+		github:        opts.GitHub,
+		baseURL:       opts.BaseURL,
+		encryptionKey: opts.EncryptionKey,
 	}
 }
 
@@ -71,6 +87,12 @@ func (s *Server) Handler() http.Handler {
 		connect.WithInterceptors(otelInterceptor, apiauth.RequireUserInterceptor()),
 	)
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
+	// GitHub App routes (conditionally registered)
+	if s.github != nil {
+		mux.Handle("/github/login", s.auth.RequireAuth()(http.HandlerFunc(s.handleGitHubLogin)))
+		mux.Handle("/github/callback", s.auth.RequireAuth()(http.HandlerFunc(s.handleGitHubCallback)))
+		mux.HandleFunc("/webhook/github", s.handleGitHubWebhook)
+	}
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
@@ -612,21 +634,27 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if event.URL == "" {
-		return &xagentv1.ProcessEventResponse{}, nil
-	}
-	links, err := s.store.FindLinksByURL(ctx, nil, event.URL, userID)
+	ids, err := s.processEventInternal(ctx, event.ID, event.URL, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	// Build set of tasks that want notifications
+	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
+}
+
+func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventURL string, owner string) ([]int64, error) {
+	if eventURL == "" {
+		return nil, nil
+	}
+	links, err := s.store.FindLinksByURL(ctx, nil, eventURL, owner)
+	if err != nil {
+		return nil, err
+	}
 	taskIDs := map[int64]bool{}
 	for _, link := range links {
 		if !link.Notify || taskIDs[link.TaskID] {
 			continue
 		}
-		// Skip archived tasks
-		task, err := s.store.GetTask(ctx, nil, link.TaskID, userID)
+		task, err := s.store.GetTask(ctx, nil, link.TaskID, owner)
 		if err != nil {
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
@@ -636,11 +664,11 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 			continue
 		}
 		taskIDs[link.TaskID] = true
-		if err := s.store.AddEventTask(ctx, nil, req.Id, link.TaskID); err != nil {
-			s.log.Warn("failed to add event task", "event_id", req.Id, "task_id", link.TaskID, "error", err)
+		if err := s.store.AddEventTask(ctx, nil, eventID, link.TaskID); err != nil {
+			s.log.Warn("failed to add event task", "event_id", eventID, "task_id", link.TaskID, "error", err)
 		}
 		err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			task, err := s.store.GetTask(ctx, tx, link.TaskID, userID)
+			task, err := s.store.GetTask(ctx, tx, link.TaskID, owner)
 			if err != nil {
 				return err
 			}
@@ -655,8 +683,8 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 		}
 	}
 	ids := slices.Collect(maps.Keys(taskIDs))
-	s.log.Info("event processed", "id", req.Id, "tasks_routed", len(ids))
-	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
+	s.log.Info("event processed", "id", eventID, "tasks_routed", len(ids))
+	return ids, nil
 }
 
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
@@ -826,5 +854,26 @@ func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) 
 	}
 	s.log.Info("key deleted", "id", req.Id)
 	return &xagentv1.DeleteKeyResponse{}, nil
+}
+
+func (s *Server) GetGitHubAccount(ctx context.Context, req *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
+	userID := s.userID(ctx)
+	account, err := s.store.GetGitHubAccountByOwner(ctx, nil, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return &xagentv1.GetGitHubAccountResponse{}, nil
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return &xagentv1.GetGitHubAccountResponse{Account: account.Proto()}, nil
+}
+
+func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
+	userID := s.userID(ctx)
+	if err := s.store.DeleteGitHubAccount(ctx, nil, userID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("github account unlinked", "owner", userID)
+	return &xagentv1.UnlinkGitHubAccountResponse{}, nil
 }
 

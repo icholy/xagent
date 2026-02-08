@@ -42,6 +42,8 @@ service XAgentService {
   rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse);
   rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
+  rpc GetGitHubAccount(GetGitHubAccountRequest) returns (GetGitHubAccountResponse);
+  rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
 }
 
 message PingRequest {}
@@ -410,3 +412,20 @@ message DeleteKeyRequest {
 }
 
 message DeleteKeyResponse {}
+
+message GitHubAccount {
+  int64 id = 1;
+  int64 github_user_id = 2;
+  string github_username = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message GetGitHubAccountRequest {}
+
+message GetGitHubAccountResponse {
+  GitHubAccount account = 1;
+}
+
+message UnlinkGitHubAccountRequest {}
+
+message UnlinkGitHubAccountResponse {}
