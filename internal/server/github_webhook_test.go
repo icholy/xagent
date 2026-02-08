@@ -26,14 +26,14 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 			name: "IssueComment",
 			event: &github.IssueCommentEvent{
 				Comment: &github.IssueComment{
-					Body: strPtr("xagent: do something"),
+					Body: github.Ptr("xagent: do something"),
 					User: &github.User{
-						ID:    int64Ptr(123),
-						Login: strPtr("testuser"),
+						ID:    github.Ptr[int64](123),
+						Login: github.Ptr("testuser"),
 					},
 				},
 				Issue: &github.Issue{
-					HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
 			expected: &githubWebhookEvent{
@@ -48,14 +48,14 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 			name: "IssueComment_PullRequest",
 			event: &github.IssueCommentEvent{
 				Comment: &github.IssueComment{
-					Body: strPtr("xagent: review this"),
+					Body: github.Ptr("xagent: review this"),
 					User: &github.User{
-						ID:    int64Ptr(456),
-						Login: strPtr("pruser"),
+						ID:    github.Ptr[int64](456),
+						Login: github.Ptr("pruser"),
 					},
 				},
 				Issue: &github.Issue{
-					HTMLURL:          strPtr("https://github.com/owner/repo/pull/2"),
+					HTMLURL:          github.Ptr("https://github.com/owner/repo/pull/2"),
 					PullRequestLinks: &github.PullRequestLinks{},
 				},
 			},
@@ -71,14 +71,14 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 			name: "IssueComment_NoXAgentPrefix",
 			event: &github.IssueCommentEvent{
 				Comment: &github.IssueComment{
-					Body: strPtr("just a regular comment"),
+					Body: github.Ptr("just a regular comment"),
 					User: &github.User{
-						ID:    int64Ptr(123),
-						Login: strPtr("testuser"),
+						ID:    github.Ptr[int64](123),
+						Login: github.Ptr("testuser"),
 					},
 				},
 				Issue: &github.Issue{
-					HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
 			expected: nil,
@@ -92,14 +92,14 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 			name: "PullRequestReviewComment",
 			event: &github.PullRequestReviewCommentEvent{
 				Comment: &github.PullRequestComment{
-					Body: strPtr("xagent: fix this"),
+					Body: github.Ptr("xagent: fix this"),
 					User: &github.User{
-						ID:    int64Ptr(789),
-						Login: strPtr("reviewer"),
+						ID:    github.Ptr[int64](789),
+						Login: github.Ptr("reviewer"),
 					},
 				},
 				PullRequest: &github.PullRequest{
-					HTMLURL: strPtr("https://github.com/owner/repo/pull/3"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
 				},
 			},
 			expected: &githubWebhookEvent{
@@ -114,14 +114,14 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 			name: "PullRequestReviewComment_NoXAgentPrefix",
 			event: &github.PullRequestReviewCommentEvent{
 				Comment: &github.PullRequestComment{
-					Body: strPtr("looks good"),
+					Body: github.Ptr("looks good"),
 					User: &github.User{
-						ID:    int64Ptr(789),
-						Login: strPtr("reviewer"),
+						ID:    github.Ptr[int64](789),
+						Login: github.Ptr("reviewer"),
 					},
 				},
 				PullRequest: &github.PullRequest{
-					HTMLURL: strPtr("https://github.com/owner/repo/pull/3"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
 				},
 			},
 			expected: nil,
@@ -134,16 +134,16 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name: "PullRequestReview_Submitted",
 			event: &github.PullRequestReviewEvent{
-				Action: strPtr("submitted"),
+				Action: github.Ptr("submitted"),
 				Review: &github.PullRequestReview{
-					Body: strPtr("xagent: please address comments"),
+					Body: github.Ptr("xagent: please address comments"),
 					User: &github.User{
-						ID:    int64Ptr(101),
-						Login: strPtr("lead"),
+						ID:    github.Ptr[int64](101),
+						Login: github.Ptr("lead"),
 					},
 				},
 				PullRequest: &github.PullRequest{
-					HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4"),
 				},
 			},
 			expected: &githubWebhookEvent{
@@ -157,16 +157,16 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name: "PullRequestReview_NotSubmitted",
 			event: &github.PullRequestReviewEvent{
-				Action: strPtr("edited"),
+				Action: github.Ptr("edited"),
 				Review: &github.PullRequestReview{
-					Body: strPtr("xagent: something"),
+					Body: github.Ptr("xagent: something"),
 					User: &github.User{
-						ID:    int64Ptr(101),
-						Login: strPtr("lead"),
+						ID:    github.Ptr[int64](101),
+						Login: github.Ptr("lead"),
 					},
 				},
 				PullRequest: &github.PullRequest{
-					HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4"),
 				},
 			},
 			expected: nil,
@@ -174,16 +174,16 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name: "PullRequestReview_NoXAgentPrefix",
 			event: &github.PullRequestReviewEvent{
-				Action: strPtr("submitted"),
+				Action: github.Ptr("submitted"),
 				Review: &github.PullRequestReview{
-					Body: strPtr("approved"),
+					Body: github.Ptr("approved"),
 					User: &github.User{
-						ID:    int64Ptr(101),
-						Login: strPtr("lead"),
+						ID:    github.Ptr[int64](101),
+						Login: github.Ptr("lead"),
 					},
 				},
 				PullRequest: &github.PullRequest{
-					HTMLURL: strPtr("https://github.com/owner/repo/pull/4"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4"),
 				},
 			},
 			expected: nil,
@@ -202,14 +202,14 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 			name: "WhitespacePrefix",
 			event: &github.IssueCommentEvent{
 				Comment: &github.IssueComment{
-					Body: strPtr("  xagent: trimmed"),
+					Body: github.Ptr("  xagent: trimmed"),
 					User: &github.User{
-						ID:    int64Ptr(123),
-						Login: strPtr("testuser"),
+						ID:    github.Ptr[int64](123),
+						Login: github.Ptr("testuser"),
 					},
 				},
 				Issue: &github.Issue{
-					HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
 			expected: &githubWebhookEvent{
@@ -295,16 +295,16 @@ func TestHandleGitHubWebhook(t *testing.T) {
 
 	t.Run("IssueComment_RoutesToTask", func(t *testing.T) {
 		payload := github.IssueCommentEvent{
-			Action: strPtr("created"),
+			Action: github.Ptr("created"),
 			Comment: &github.IssueComment{
-				Body: strPtr("xagent: please fix the tests"),
+				Body: github.Ptr("xagent: please fix the tests"),
 				User: &github.User{
-					ID:    int64Ptr(943597),
-					Login: strPtr("icholy"),
+					ID:    github.Ptr[int64](943597),
+					Login: github.Ptr("icholy"),
 				},
 			},
 			Issue: &github.Issue{
-				HTMLURL:         strPtr("https://github.com/owner/repo/pull/10"),
+				HTMLURL:         github.Ptr("https://github.com/owner/repo/pull/10"),
 				PullRequestLinks: &github.PullRequestLinks{},
 			},
 		}
@@ -324,14 +324,14 @@ func TestHandleGitHubWebhook(t *testing.T) {
 	t.Run("InvalidSignature", func(t *testing.T) {
 		payload := github.IssueCommentEvent{
 			Comment: &github.IssueComment{
-				Body: strPtr("xagent: test"),
+				Body: github.Ptr("xagent: test"),
 				User: &github.User{
-					ID:    int64Ptr(943597),
-					Login: strPtr("icholy"),
+					ID:    github.Ptr[int64](943597),
+					Login: github.Ptr("icholy"),
 				},
 			},
 			Issue: &github.Issue{
-				HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+				HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 			},
 		}
 		req := makeWebhookRequest(t, "issue_comment", payload, "wrong-secret")
@@ -353,16 +353,16 @@ func TestHandleGitHubWebhook(t *testing.T) {
 
 	t.Run("NoLinkedAccount", func(t *testing.T) {
 		payload := github.IssueCommentEvent{
-			Action: strPtr("created"),
+			Action: github.Ptr("created"),
 			Comment: &github.IssueComment{
-				Body: strPtr("xagent: test"),
+				Body: github.Ptr("xagent: test"),
 				User: &github.User{
-					ID:    int64Ptr(999999),
-					Login: strPtr("unknown"),
+					ID:    github.Ptr[int64](999999),
+					Login: github.Ptr("unknown"),
 				},
 			},
 			Issue: &github.Issue{
-				HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+				HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 			},
 		}
 		req := makeWebhookRequest(t, "issue_comment", payload, webhookSecret)
@@ -375,16 +375,16 @@ func TestHandleGitHubWebhook(t *testing.T) {
 
 	t.Run("NoXAgentPrefix_Ignored", func(t *testing.T) {
 		payload := github.IssueCommentEvent{
-			Action: strPtr("created"),
+			Action: github.Ptr("created"),
 			Comment: &github.IssueComment{
-				Body: strPtr("just a regular comment"),
+				Body: github.Ptr("just a regular comment"),
 				User: &github.User{
-					ID:    int64Ptr(943597),
-					Login: strPtr("icholy"),
+					ID:    github.Ptr[int64](943597),
+					Login: github.Ptr("icholy"),
 				},
 			},
 			Issue: &github.Issue{
-				HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+				HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 			},
 		}
 		req := makeWebhookRequest(t, "issue_comment", payload, webhookSecret)
@@ -398,14 +398,14 @@ func TestHandleGitHubWebhook(t *testing.T) {
 	t.Run("MissingSignature", func(t *testing.T) {
 		payload := github.IssueCommentEvent{
 			Comment: &github.IssueComment{
-				Body: strPtr("xagent: test"),
+				Body: github.Ptr("xagent: test"),
 				User: &github.User{
-					ID:    int64Ptr(943597),
-					Login: strPtr("icholy"),
+					ID:    github.Ptr[int64](943597),
+					Login: github.Ptr("icholy"),
 				},
 			},
 			Issue: &github.Issue{
-				HTMLURL: strPtr("https://github.com/owner/repo/issues/1"),
+				HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 			},
 		}
 		body, err := json.Marshal(payload)
@@ -423,16 +423,16 @@ func TestHandleGitHubWebhook(t *testing.T) {
 
 	t.Run("UsernameUpdate", func(t *testing.T) {
 		payload := github.IssueCommentEvent{
-			Action: strPtr("created"),
+			Action: github.Ptr("created"),
 			Comment: &github.IssueComment{
-				Body: strPtr("xagent: test username update"),
+				Body: github.Ptr("xagent: test username update"),
 				User: &github.User{
-					ID:    int64Ptr(943597),
-					Login: strPtr("icholy-renamed"),
+					ID:    github.Ptr[int64](943597),
+					Login: github.Ptr("icholy-renamed"),
 				},
 			},
 			Issue: &github.Issue{
-				HTMLURL: strPtr("https://github.com/owner/repo/issues/99"),
+				HTMLURL: github.Ptr("https://github.com/owner/repo/issues/99"),
 			},
 		}
 		req := makeWebhookRequest(t, "issue_comment", payload, webhookSecret)
@@ -448,6 +448,3 @@ func TestHandleGitHubWebhook(t *testing.T) {
 		assert.Equal(t, updatedAccount.GitHubUsername, "icholy-renamed")
 	})
 }
-
-func strPtr(s string) *string  { return &s }
-func int64Ptr(i int64) *int64  { return &i }
