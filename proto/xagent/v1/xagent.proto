@@ -424,6 +424,7 @@ message GetGitHubAccountRequest {}
 
 message GetGitHubAccountResponse {
   GitHubAccount account = 1;
+  string github_app_slug = 2;
 }
 
 message UnlinkGitHubAccountRequest {}

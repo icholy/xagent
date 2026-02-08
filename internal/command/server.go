@@ -75,6 +75,11 @@ var ServerCommand = &cli.Command{
 			Sources: cli.EnvVars("XAGENT_GITHUB_APP_ID"),
 		},
 		&cli.StringFlag{
+			Name:    "github-app-slug",
+			Usage:   "GitHub App slug (for install URL)",
+			Sources: cli.EnvVars("XAGENT_GITHUB_APP_SLUG"),
+		},
+		&cli.StringFlag{
 			Name:    "github-client-id",
 			Usage:   "GitHub App OAuth client ID",
 			Sources: cli.EnvVars("XAGENT_GITHUB_CLIENT_ID"),
@@ -147,6 +152,7 @@ var ServerCommand = &cli.Command{
 		if ghClientID := cmd.String("github-client-id"); ghClientID != "" {
 			opts.GitHub = &server.GitHubConfig{
 				AppID:         cmd.String("github-app-id"),
+				AppSlug:       cmd.String("github-app-slug"),
 				ClientID:      ghClientID,
 				ClientSecret:  cmd.String("github-client-secret"),
 				WebhookSecret: cmd.String("github-webhook-secret"),

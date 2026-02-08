@@ -6,7 +6,7 @@ import {
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Github, Loader2, Unlink } from 'lucide-react'
+import { ExternalLink, Github, Loader2, Unlink } from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -19,6 +19,7 @@ function SettingsPage() {
   })
 
   const account = data?.account
+  const appSlug = data?.githubAppSlug
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -30,7 +31,7 @@ function SettingsPage() {
             Link your GitHub account to receive webhook notifications for your tasks.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {isLoading ? (
             <div className="text-muted-foreground">Loading...</div>
           ) : account ? (
@@ -58,6 +59,18 @@ function SettingsPage() {
               <Button>
                 <Github className="h-4 w-4" />
                 Link GitHub Account
+              </Button>
+            </a>
+          )}
+          {appSlug && (
+            <a
+              href={`https://github.com/apps/${appSlug}/installations/new`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="outline">
+                <ExternalLink className="h-4 w-4" />
+                Install GitHub App
               </Button>
             </a>
           )}

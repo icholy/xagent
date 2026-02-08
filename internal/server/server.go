@@ -30,6 +30,7 @@ import (
 
 type GitHubConfig struct {
 	AppID         string
+	AppSlug       string
 	ClientID      string
 	ClientSecret  string
 	WebhookSecret string
@@ -882,14 +883,19 @@ func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) 
 
 func (s *Server) GetGitHubAccount(ctx context.Context, req *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
 	userID := s.userID(ctx)
+	resp := &xagentv1.GetGitHubAccountResponse{}
+	if s.github != nil {
+		resp.GithubAppSlug = s.github.AppSlug
+	}
 	account, err := s.store.GetGitHubAccountByOwner(ctx, nil, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return &xagentv1.GetGitHubAccountResponse{}, nil
+			return resp, nil
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return &xagentv1.GetGitHubAccountResponse{Account: account.Proto()}, nil
+	resp.Account = account.Proto()
+	return resp, nil
 }
 
 func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {

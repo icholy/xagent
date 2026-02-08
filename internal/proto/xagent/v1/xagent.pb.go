@@ -4161,6 +4161,7 @@ func (*GetGitHubAccountRequest) Descriptor() ([]byte, []int) {
 type GetGitHubAccountResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Account       *GitHubAccount         `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	GithubAppSlug string                 `protobuf:"bytes,2,opt,name=github_app_slug,json=githubAppSlug,proto3" json:"github_app_slug,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4200,6 +4201,13 @@ func (x *GetGitHubAccountResponse) GetAccount() *GitHubAccount {
 		return x.Account
 	}
 	return nil
+}
+
+func (x *GetGitHubAccountResponse) GetGithubAppSlug() string {
+	if x != nil {
+		return x.GithubAppSlug
+	}
+	return ""
 }
 
 type UnlinkGitHubAccountRequest struct {
@@ -4508,9 +4516,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x0fgithub_username\x18\x03 \x01(\tR\x0egithubUsername\x129\n" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x19\n" +
-	"\x17GetGitHubAccountRequest\"N\n" +
+	"\x17GetGitHubAccountRequest\"v\n" +
 	"\x18GetGitHubAccountResponse\x122\n" +
-	"\aaccount\x18\x01 \x01(\v2\x18.xagent.v1.GitHubAccountR\aaccount\"\x1c\n" +
+	"\aaccount\x18\x01 \x01(\v2\x18.xagent.v1.GitHubAccountR\aaccount\x12&\n" +
+	"\x0fgithub_app_slug\x18\x02 \x01(\tR\rgithubAppSlug\"\x1c\n" +
 	"\x1aUnlinkGitHubAccountRequest\"\x1d\n" +
 	"\x1bUnlinkGitHubAccountResponse*\x81\x01\n" +
 	"\n" +
