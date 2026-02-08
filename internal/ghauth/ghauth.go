@@ -3,6 +3,7 @@ package ghauth
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -16,25 +17,41 @@ const (
 	stateTTL    = 10 * time.Minute
 )
 
+// Config configures the GitHub OAuth handler.
+type Config struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	Log          *slog.Logger
+	OnSuccess    func(w http.ResponseWriter, r *http.Request, user *github.User)
+}
+
 // Handler implements http.Handler for GitHub OAuth2 login/callback.
 // Mount it with http.StripPrefix so that "/login" and "/callback" are
 // routed correctly.
 type Handler struct {
 	oauth     *oauth2.Config
-	OnSuccess func(w http.ResponseWriter, r *http.Request, user *github.User)
+	log       *slog.Logger
+	onSuccess func(w http.ResponseWriter, r *http.Request, user *github.User)
 	mux       *http.ServeMux
 }
 
-func New(clientID, clientSecret, redirectURL string) *Handler {
+func New(cfg Config) *Handler {
+	log := cfg.Log
+	if log == nil {
+		log = slog.Default()
+	}
 	h := &Handler{
 		oauth: &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			RedirectURL:  redirectURL,
+			ClientID:     cfg.ClientID,
+			ClientSecret: cfg.ClientSecret,
+			RedirectURL:  cfg.RedirectURL,
 			Scopes:       []string{"read:user"},
 			Endpoint:     oauth2github.Endpoint,
 		},
-		mux: http.NewServeMux(),
+		log:       log,
+		onSuccess: cfg.OnSuccess,
+		mux:       http.NewServeMux(),
 	}
 	h.mux.HandleFunc("/login", h.handleLogin)
 	h.mux.HandleFunc("/callback", h.handleCallback)
@@ -48,6 +65,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := generateRandomState()
 	if err != nil {
+		h.log.Error("failed to generate state", "error", err)
 		http.Error(w, "failed to generate state", http.StatusInternalServerError)
 		return
 	}
@@ -81,6 +99,7 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	token, err := h.oauth.Exchange(r.Context(), code)
 	if err != nil {
+		h.log.Error("failed to exchange code", "error", err)
 		http.Error(w, "failed to exchange code", http.StatusInternalServerError)
 		return
 	}
@@ -88,6 +107,7 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
 	ghUser, _, err := ghClient.Users.Get(r.Context(), "")
 	if err != nil {
+		h.log.Error("failed to fetch GitHub user", "error", err)
 		http.Error(w, "failed to fetch GitHub user", http.StatusInternalServerError)
 		return
 	}
@@ -103,8 +123,8 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	if h.OnSuccess != nil {
-		h.OnSuccess(w, r, ghUser)
+	if h.onSuccess != nil {
+		h.onSuccess(w, r, ghUser)
 	} else {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}

@@ -91,24 +91,29 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
-		gh := ghauth.New(s.github.ClientID, s.github.ClientSecret, s.baseURL+"/github/callback")
-		gh.OnSuccess = func(w http.ResponseWriter, r *http.Request, ghUser *github.User) {
-			user := apiauth.User(r.Context())
-			if user == nil {
-				http.Error(w, "not authenticated", http.StatusUnauthorized)
-				return
-			}
-			account := &model.GitHubAccount{
-				Owner:          user.ID,
-				GitHubUserID:   ghUser.GetID(),
-				GitHubUsername: ghUser.GetLogin(),
-			}
-			if err := s.store.CreateGitHubAccount(r.Context(), nil, account); err != nil {
-				http.Error(w, "failed to save GitHub account", http.StatusInternalServerError)
-				return
-			}
-			http.Redirect(w, r, "/ui/settings", http.StatusFound)
-		}
+		gh := ghauth.New(ghauth.Config{
+			ClientID:     s.github.ClientID,
+			ClientSecret: s.github.ClientSecret,
+			RedirectURL:  s.baseURL + "/github/callback",
+			Log:          s.log,
+			OnSuccess: func(w http.ResponseWriter, r *http.Request, ghUser *github.User) {
+				user := apiauth.User(r.Context())
+				if user == nil {
+					http.Error(w, "not authenticated", http.StatusUnauthorized)
+					return
+				}
+				account := &model.GitHubAccount{
+					Owner:          user.ID,
+					GitHubUserID:   ghUser.GetID(),
+					GitHubUsername: ghUser.GetLogin(),
+				}
+				if err := s.store.CreateGitHubAccount(r.Context(), nil, account); err != nil {
+					http.Error(w, "failed to save GitHub account", http.StatusInternalServerError)
+					return
+				}
+				http.Redirect(w, r, "/ui/settings", http.StatusFound)
+			},
+		})
 		mux.Handle("/github/", s.auth.RequireAuth()(http.StripPrefix("/github", gh)))
 		mux.HandleFunc("/webhook/github", s.handleGitHubWebhook)
 	}
