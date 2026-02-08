@@ -114,7 +114,7 @@ func (s *Server) Handler() http.Handler {
 				http.Redirect(w, r, "/ui/settings", http.StatusFound)
 			},
 		})
-		mux.Handle("/github/", s.auth.RequireAuth()(http.StripPrefix("/github", gh)))
+		mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", gh)))
 		mux.HandleFunc("/webhook/github", s.handleGitHubWebhook)
 	}
 	// React UI (SPA with client-side routing, protected by cookie auth)
