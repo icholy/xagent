@@ -1,6 +1,5 @@
 /xagent
 /prebuilt/
-/webhook
 /internal/server/webui/
 /webui/node_modules/
 .pnpm-store/
