@@ -100,16 +100,14 @@ func TestSemaphore_Concurrent(t *testing.T) {
 	acquired := make(chan struct{}, 100)
 
 	// Start 20 goroutines trying to acquire
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 20 {
+		wg.Go(func() {
 			if sem.TryAcquire(1) {
 				acquired <- struct{}{}
 				// Hold for a moment then release
 				sem.Release(1)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
