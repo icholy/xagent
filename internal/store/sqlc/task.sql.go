@@ -97,6 +97,39 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 	return i, err
 }
 
+const getTaskForUpdate = `-- name: GetTaskForUpdate :one
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
+FROM tasks
+WHERE id = $1 AND owner = $2
+FOR UPDATE
+`
+
+type GetTaskForUpdateParams struct {
+	ID    int64  `json:"id"`
+	Owner string `json:"owner"`
+}
+
+func (q *Queries) GetTaskForUpdate(ctx context.Context, arg GetTaskForUpdateParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, getTaskForUpdate, arg.ID, arg.Owner)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Parent,
+		&i.Runner,
+		&i.Workspace,
+		&i.Instructions,
+		&i.Status,
+		&i.Command,
+		&i.Version,
+		&i.Owner,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Archived,
+	)
+	return i, err
+}
+
 const hasTask = `-- name: HasTask :one
 SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1 AND owner = $2)
 `

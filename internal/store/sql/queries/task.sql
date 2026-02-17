@@ -8,6 +8,12 @@ SELECT id, name, parent, runner, workspace, instructions, status, command, versi
 FROM tasks
 WHERE id = $1 AND owner = $2;
 
+-- name: GetTaskForUpdate :one
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
+FROM tasks
+WHERE id = $1 AND owner = $2
+FOR UPDATE;
+
 -- name: HasTask :one
 SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1 AND owner = $2);
 

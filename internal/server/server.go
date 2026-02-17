@@ -287,7 +287,7 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	userID := s.userID(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
@@ -327,7 +327,7 @@ func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
 	userID := s.userID(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
@@ -352,7 +352,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
 	userID := s.userID(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
@@ -377,7 +377,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 	userID := s.userID(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
@@ -402,7 +402,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 	userID := s.userID(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTask(ctx, tx, req.Id, userID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, userID)
 		if err != nil {
 			return err
 		}
@@ -693,7 +693,7 @@ func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventU
 			s.log.Warn("failed to add event task", "event_id", eventID, "task_id", link.TaskID, "error", err)
 		}
 		err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			task, err := s.store.GetTask(ctx, tx, link.TaskID, owner)
+			task, err := s.store.GetTaskForUpdate(ctx, tx, link.TaskID, owner)
 			if err != nil {
 				return err
 			}
@@ -720,7 +720,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 		var applied bool
 		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 			var err error
-			task, err = s.store.GetTask(ctx, tx, event.TaskID, userID)
+			task, err = s.store.GetTaskForUpdate(ctx, tx, event.TaskID, userID)
 			if err != nil {
 				return err
 			}

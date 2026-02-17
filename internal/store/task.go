@@ -50,6 +50,17 @@ func (s *Store) GetTask(ctx context.Context, tx *sql.Tx, id int64, owner string)
 	return toModelTask(row)
 }
 
+func (s *Store) GetTaskForUpdate(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Task, error) {
+	row, err := s.q(tx).GetTaskForUpdate(ctx, sqlc.GetTaskForUpdateParams{
+		ID:    id,
+		Owner: owner,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toModelTask(row)
+}
+
 func (s *Store) HasTask(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
 	return s.q(tx).HasTask(ctx, sqlc.HasTaskParams{
 		ID:    id,
