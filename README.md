@@ -1,6 +1,6 @@
 # XAGENT
 
-Runs coding agents (Claude Code, Cursor, GitHub Copilot) inside Docker containers.
+Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside Docker containers.
 
 ## Quick Start
 
@@ -53,6 +53,28 @@ workspaces:
       - git clone https://github.com/github-samples/pets-workshop
     agent:
       type: claude
+      cwd: /root/pets-workshop
+      mcp_servers: {}
+      prompt: |
+        This is an example github repository.
+        Don't try opening PRs or issues.
+```
+
+## Codex Workspace Example
+
+```yaml
+workspaces:
+  pets-workshop:
+    container:
+      image: node:20
+      working_dir: /root
+      environment:
+        CODEX_API_KEY: ${env:CODEX_API_KEY}
+    commands:
+      - npm install -g @openai/codex
+      - git clone https://github.com/github-samples/pets-workshop
+    agent:
+      type: codex
       cwd: /root/pets-workshop
       mcp_servers: {}
       prompt: |
