@@ -21,6 +21,7 @@ var ErrStop = errors.New("stop")
 // Agent type constants.
 const (
 	TypeClaude  = "claude"
+	TypeCodex   = "codex"
 	TypeCopilot = "copilot"
 	TypeCursor  = "cursor"
 	TypeDummy   = "dummy"
@@ -47,6 +48,7 @@ type Options struct {
 	Log        *slog.Logger
 	McpServers map[string]McpServer
 	Claude     *ClaudeOptions
+	Codex      *CodexOptions
 	Copilot    *CopilotOptions
 	Cursor     *CursorOptions
 	Dummy      *DummyOptions
@@ -54,6 +56,12 @@ type Options struct {
 
 // ClaudeOptions contains Claude-specific agent options.
 type ClaudeOptions struct {
+	Model string
+	Bin   string
+}
+
+// CodexOptions contains Codex-specific agent options.
+type CodexOptions struct {
 	Model string
 	Bin   string
 }
@@ -97,6 +105,13 @@ func NewAgent(opts Options) (Agent, error) {
 			cwd:        cmp.Or(opts.Cwd, "."),
 			mcpServers: opts.McpServers,
 			options:    opts.Claude,
+		}, nil
+	case TypeCodex:
+		return &CodexAgent{
+			log:        log,
+			cwd:        cmp.Or(opts.Cwd, "."),
+			mcpServers: opts.McpServers,
+			options:    opts.Codex,
 		}, nil
 	case TypeCopilot:
 		return &CopilotAgent{

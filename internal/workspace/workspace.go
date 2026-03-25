@@ -90,6 +90,7 @@ type Agent struct {
 	Prompt     string                     `yaml:"prompt"`
 	McpServers map[string]agent.McpServer `yaml:"mcp_servers"`
 	Claude     *ClaudeConfig              `yaml:"claude,omitempty"`
+	Codex      *CodexConfig               `yaml:"codex,omitempty"`
 	Copilot    *CopilotConfig             `yaml:"copilot,omitempty"`
 	Cursor     *CursorConfig              `yaml:"cursor,omitempty"`
 	Dummy      *DummyConfig               `yaml:"dummy,omitempty"`
@@ -97,6 +98,12 @@ type Agent struct {
 
 // ClaudeConfig contains Claude-specific agent configuration.
 type ClaudeConfig struct {
+	Model string `yaml:"model"`
+	Bin   string `yaml:"bin"`
+}
+
+// CodexConfig contains Codex-specific agent configuration.
+type CodexConfig struct {
 	Model string `yaml:"model"`
 	Bin   string `yaml:"bin"`
 }
@@ -283,6 +290,12 @@ func (w *Workspace) AgentConfig() agent.Config {
 		cfg.Claude = &agent.ClaudeOptions{
 			Model: w.Agent.Claude.Model,
 			Bin:   w.Agent.Claude.Bin,
+		}
+	}
+	if w.Agent.Codex != nil {
+		cfg.Codex = &agent.CodexOptions{
+			Model: w.Agent.Codex.Model,
+			Bin:   w.Agent.Codex.Bin,
 		}
 	}
 	if w.Agent.Copilot != nil {
