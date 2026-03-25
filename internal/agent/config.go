@@ -19,6 +19,7 @@ type Config struct {
 	McpServers map[string]McpServer `json:"mcp_servers,omitempty"`
 	Commands   []string             `json:"commands,omitempty"`
 	Claude     *ClaudeOptions       `json:"claude,omitempty"`
+	Codex      *CodexOptions        `json:"codex,omitempty"`
 	Copilot    *CopilotOptions      `json:"copilot,omitempty"`
 	Cursor     *CursorOptions       `json:"cursor,omitempty"`
 	Dummy      *DummyOptions        `json:"dummy,omitempty"`

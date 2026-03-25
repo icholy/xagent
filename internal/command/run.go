@@ -97,6 +97,7 @@ var RunCommand = &cli.Command{
 			Cwd:        os.ExpandEnv(cfg.Cwd),
 			McpServers: cfg.McpServers,
 			Claude:     cfg.Claude,
+			Codex:      cfg.Codex,
 			Copilot:    cfg.Copilot,
 			Cursor:     cfg.Cursor,
 			Dummy:      cfg.Dummy,
