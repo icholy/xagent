@@ -14,7 +14,7 @@ func (s *Store) CreateEvent(ctx context.Context, tx *sql.Tx, event *model.Event)
 		Description: event.Description,
 		Data:        event.Data,
 		Url:         event.URL,
-		Owner:       event.Owner,
+		OrgID:       event.OrgID,
 		CreatedAt:   time.Now(),
 	})
 	if err != nil {
@@ -24,10 +24,10 @@ func (s *Store) CreateEvent(ctx context.Context, tx *sql.Tx, event *model.Event)
 	return nil
 }
 
-func (s *Store) GetEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) (*model.Event, error) {
+func (s *Store) GetEvent(ctx context.Context, tx *sql.Tx, id int64, orgID int64) (*model.Event, error) {
 	row, err := s.q(tx).GetEvent(ctx, sqlc.GetEventParams{
 		ID:    id,
-		Owner: owner,
+		OrgID: orgID,
 	})
 	if err != nil {
 		return nil, err
@@ -35,16 +35,16 @@ func (s *Store) GetEvent(ctx context.Context, tx *sql.Tx, id int64, owner string
 	return toModelEvent(row), nil
 }
 
-func (s *Store) HasEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) (bool, error) {
+func (s *Store) HasEvent(ctx context.Context, tx *sql.Tx, id int64, orgID int64) (bool, error) {
 	return s.q(tx).HasEvent(ctx, sqlc.HasEventParams{
 		ID:    id,
-		Owner: owner,
+		OrgID: orgID,
 	})
 }
 
-func (s *Store) ListEvents(ctx context.Context, tx *sql.Tx, limit int, owner string) ([]*model.Event, error) {
+func (s *Store) ListEvents(ctx context.Context, tx *sql.Tx, limit int, orgID int64) ([]*model.Event, error) {
 	rows, err := s.q(tx).ListEvents(ctx, sqlc.ListEventsParams{
-		Owner: owner,
+		OrgID: orgID,
 		Limit: int32(limit),
 	})
 	if err != nil {
@@ -61,13 +61,13 @@ func (s *Store) FindEventsByURL(ctx context.Context, tx *sql.Tx, url string) ([]
 	return toModelEvents(rows), nil
 }
 
-func (s *Store) DeleteEvent(ctx context.Context, tx *sql.Tx, id int64, owner string) error {
+func (s *Store) DeleteEvent(ctx context.Context, tx *sql.Tx, id int64, orgID int64) error {
 	return s.WithTx(ctx, tx, func(tx *sql.Tx) error {
 		q := sqlc.New(tx)
 		if err := q.DeleteEventTasks(ctx, id); err != nil {
 			return err
 		}
-		if err := q.DeleteEvent(ctx, sqlc.DeleteEventParams{ID: id, Owner: owner}); err != nil {
+		if err := q.DeleteEvent(ctx, sqlc.DeleteEventParams{ID: id, OrgID: orgID}); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -88,17 +88,17 @@ func (s *Store) RemoveEventTask(ctx context.Context, tx *sql.Tx, eventID int64, 
 	})
 }
 
-func (s *Store) ListEventTasks(ctx context.Context, tx *sql.Tx, eventID int64, owner string) ([]int64, error) {
+func (s *Store) ListEventTasks(ctx context.Context, tx *sql.Tx, eventID int64, orgID int64) ([]int64, error) {
 	return s.q(tx).ListEventTasks(ctx, sqlc.ListEventTasksParams{
 		EventID: eventID,
-		Owner:   owner,
+		OrgID:   orgID,
 	})
 }
 
-func (s *Store) ListEventsByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Event, error) {
+func (s *Store) ListEventsByTask(ctx context.Context, tx *sql.Tx, taskID int64, orgID int64) ([]*model.Event, error) {
 	rows, err := s.q(tx).ListEventsByTask(ctx, sqlc.ListEventsByTaskParams{
 		TaskID: taskID,
-		Owner:  owner,
+		OrgID:  orgID,
 	})
 	if err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func toModelEvent(row sqlc.Event) *model.Event {
 		Description: row.Description,
 		Data:        row.Data,
 		URL:         row.Url,
-		Owner:       row.Owner,
+		OrgID:       row.OrgID,
 		CreatedAt:   row.CreatedAt,
 	}
 }

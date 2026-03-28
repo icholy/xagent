@@ -13,7 +13,7 @@ type Event struct {
 	Description string    `json:"description"`
 	Data        string    `json:"data"`
 	URL         string    `json:"url,omitempty"`
-	Owner       string    `json:"owner"`
+	OrgID       int64     `json:"org_id"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

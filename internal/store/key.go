@@ -19,7 +19,7 @@ func (s *Store) CreateKey(ctx context.Context, tx *sql.Tx, key *model.Key) error
 		ID:        key.ID,
 		Name:      key.Name,
 		TokenHash: key.TokenHash,
-		Owner:     key.Owner,
+		OrgID:     key.OrgID,
 		ExpiresAt: expiresAt,
 		CreatedAt: now,
 	})
@@ -30,10 +30,10 @@ func (s *Store) CreateKey(ctx context.Context, tx *sql.Tx, key *model.Key) error
 	return nil
 }
 
-func (s *Store) GetKey(ctx context.Context, tx *sql.Tx, id string, owner string) (*model.Key, error) {
+func (s *Store) GetKey(ctx context.Context, tx *sql.Tx, id string, orgID int64) (*model.Key, error) {
 	row, err := s.q(tx).GetKey(ctx, sqlc.GetKeyParams{
 		ID:    id,
-		Owner: owner,
+		OrgID: orgID,
 	})
 	if err != nil {
 		return nil, err
@@ -49,18 +49,18 @@ func (s *Store) GetKeyByHash(ctx context.Context, tx *sql.Tx, hash string) (*mod
 	return toModelKey(row), nil
 }
 
-func (s *Store) ListKeys(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Key, error) {
-	rows, err := s.q(tx).ListKeys(ctx, owner)
+func (s *Store) ListKeys(ctx context.Context, tx *sql.Tx, orgID int64) ([]*model.Key, error) {
+	rows, err := s.q(tx).ListKeys(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
 	return toModelKeys(rows), nil
 }
 
-func (s *Store) DeleteKey(ctx context.Context, tx *sql.Tx, id string, owner string) error {
+func (s *Store) DeleteKey(ctx context.Context, tx *sql.Tx, id string, orgID int64) error {
 	return s.q(tx).DeleteKey(ctx, sqlc.DeleteKeyParams{
 		ID:    id,
-		Owner: owner,
+		OrgID: orgID,
 	})
 }
 
@@ -69,7 +69,7 @@ func toModelKey(row sqlc.Key) *model.Key {
 		ID:        row.ID,
 		Name:      row.Name,
 		TokenHash: row.TokenHash,
-		Owner:     row.Owner,
+		OrgID:     row.OrgID,
 		CreatedAt: row.CreatedAt,
 	}
 	if row.ExpiresAt.Valid {

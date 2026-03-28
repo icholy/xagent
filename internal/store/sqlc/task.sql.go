@@ -11,7 +11,7 @@ import (
 )
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived)
+INSERT INTO tasks (name, parent, runner, workspace, instructions, status, command, version, created_at, updated_at, archived, org_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id
 `
@@ -25,10 +25,10 @@ type CreateTaskParams struct {
 	Status       int32     `json:"status"`
 	Command      int32     `json:"command"`
 	Version      int64     `json:"version"`
-	Owner        string    `json:"owner"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Archived     bool      `json:"archived"`
+	OrgID        int64     `json:"org_id"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, error) {
@@ -41,10 +41,10 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, 
 		arg.Status,
 		arg.Command,
 		arg.Version,
-		arg.Owner,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.Archived,
+		arg.OrgID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -52,32 +52,32 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, 
 }
 
 const deleteTask = `-- name: DeleteTask :exec
-DELETE FROM tasks WHERE id = $1 AND owner = $2
+DELETE FROM tasks WHERE id = $1 AND org_id = $2
 `
 
 type DeleteTaskParams struct {
-	ID    int64  `json:"id"`
-	Owner string `json:"owner"`
+	ID    int64 `json:"id"`
+	OrgID int64 `json:"org_id"`
 }
 
 func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) error {
-	_, err := q.db.ExecContext(ctx, deleteTask, arg.ID, arg.Owner)
+	_, err := q.db.ExecContext(ctx, deleteTask, arg.ID, arg.OrgID)
 	return err
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, created_at, updated_at, archived, org_id
 FROM tasks
-WHERE id = $1 AND owner = $2
+WHERE id = $1 AND org_id = $2
 `
 
 type GetTaskParams struct {
-	ID    int64  `json:"id"`
-	Owner string `json:"owner"`
+	ID    int64 `json:"id"`
+	OrgID int64 `json:"org_id"`
 }
 
 func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) {
-	row := q.db.QueryRowContext(ctx, getTask, arg.ID, arg.Owner)
+	row := q.db.QueryRowContext(ctx, getTask, arg.ID, arg.OrgID)
 	var i Task
 	err := row.Scan(
 		&i.ID,
@@ -89,28 +89,28 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 		&i.Status,
 		&i.Command,
 		&i.Version,
-		&i.Owner,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Archived,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const getTaskForUpdate = `-- name: GetTaskForUpdate :one
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, created_at, updated_at, archived, org_id
 FROM tasks
-WHERE id = $1 AND owner = $2
+WHERE id = $1 AND org_id = $2
 FOR UPDATE
 `
 
 type GetTaskForUpdateParams struct {
-	ID    int64  `json:"id"`
-	Owner string `json:"owner"`
+	ID    int64 `json:"id"`
+	OrgID int64 `json:"org_id"`
 }
 
 func (q *Queries) GetTaskForUpdate(ctx context.Context, arg GetTaskForUpdateParams) (Task, error) {
-	row := q.db.QueryRowContext(ctx, getTaskForUpdate, arg.ID, arg.Owner)
+	row := q.db.QueryRowContext(ctx, getTaskForUpdate, arg.ID, arg.OrgID)
 	var i Task
 	err := row.Scan(
 		&i.ID,
@@ -122,44 +122,44 @@ func (q *Queries) GetTaskForUpdate(ctx context.Context, arg GetTaskForUpdatePara
 		&i.Status,
 		&i.Command,
 		&i.Version,
-		&i.Owner,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Archived,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const hasTask = `-- name: HasTask :one
-SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1 AND owner = $2)
+SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1 AND org_id = $2)
 `
 
 type HasTaskParams struct {
-	ID    int64  `json:"id"`
-	Owner string `json:"owner"`
+	ID    int64 `json:"id"`
+	OrgID int64 `json:"org_id"`
 }
 
 func (q *Queries) HasTask(ctx context.Context, arg HasTaskParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasTask, arg.ID, arg.Owner)
+	row := q.db.QueryRowContext(ctx, hasTask, arg.ID, arg.OrgID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
 }
 
 const listTaskChildren = `-- name: ListTaskChildren :many
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, created_at, updated_at, archived, org_id
 FROM tasks
-WHERE parent = $1 AND owner = $2
+WHERE parent = $1 AND org_id = $2
 ORDER BY created_at DESC
 `
 
 type ListTaskChildrenParams struct {
-	Parent int64  `json:"parent"`
-	Owner  string `json:"owner"`
+	Parent int64 `json:"parent"`
+	OrgID  int64 `json:"org_id"`
 }
 
 func (q *Queries) ListTaskChildren(ctx context.Context, arg ListTaskChildrenParams) ([]Task, error) {
-	rows, err := q.db.QueryContext(ctx, listTaskChildren, arg.Parent, arg.Owner)
+	rows, err := q.db.QueryContext(ctx, listTaskChildren, arg.Parent, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -177,10 +177,10 @@ func (q *Queries) ListTaskChildren(ctx context.Context, arg ListTaskChildrenPara
 			&i.Status,
 			&i.Command,
 			&i.Version,
-			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Archived,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -196,14 +196,14 @@ func (q *Queries) ListTaskChildren(ctx context.Context, arg ListTaskChildrenPara
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, created_at, updated_at, archived, org_id
 FROM tasks
-WHERE archived = FALSE AND owner = $1
+WHERE archived = FALSE AND org_id = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListTasks(ctx context.Context, owner string) ([]Task, error) {
-	rows, err := q.db.QueryContext(ctx, listTasks, owner)
+func (q *Queries) ListTasks(ctx context.Context, orgID int64) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, listTasks, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -221,10 +221,10 @@ func (q *Queries) ListTasks(ctx context.Context, owner string) ([]Task, error) {
 			&i.Status,
 			&i.Command,
 			&i.Version,
-			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Archived,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -240,7 +240,7 @@ func (q *Queries) ListTasks(ctx context.Context, owner string) ([]Task, error) {
 }
 
 const listTasksByEvent = `-- name: ListTasksByEvent :many
-SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.instructions, t.status, t.command, t.version, t.owner, t.created_at, t.updated_at, t.archived
+SELECT t.id, t.name, t.parent, t.runner, t.workspace, t.instructions, t.status, t.command, t.version, t.created_at, t.updated_at, t.archived, t.org_id
 FROM tasks t
 JOIN event_tasks et ON t.id = et.task_id
 WHERE et.event_id = $1
@@ -266,10 +266,10 @@ func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, 
 			&i.Status,
 			&i.Command,
 			&i.Version,
-			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Archived,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -285,19 +285,19 @@ func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, 
 }
 
 const listTasksForRunner = `-- name: ListTasksForRunner :many
-SELECT id, name, parent, runner, workspace, instructions, status, command, version, owner, created_at, updated_at, archived
+SELECT id, name, parent, runner, workspace, instructions, status, command, version, created_at, updated_at, archived, org_id
 FROM tasks
-WHERE runner = $1 AND owner = $2 AND command != 0 AND archived = FALSE
+WHERE runner = $1 AND org_id = $2 AND command != 0 AND archived = FALSE
 ORDER BY created_at DESC
 `
 
 type ListTasksForRunnerParams struct {
 	Runner string `json:"runner"`
-	Owner  string `json:"owner"`
+	OrgID  int64  `json:"org_id"`
 }
 
 func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunnerParams) ([]Task, error) {
-	rows, err := q.db.QueryContext(ctx, listTasksForRunner, arg.Runner, arg.Owner)
+	rows, err := q.db.QueryContext(ctx, listTasksForRunner, arg.Runner, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -315,10 +315,10 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 			&i.Status,
 			&i.Command,
 			&i.Version,
-			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Archived,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -336,7 +336,7 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 const updateTask = `-- name: UpdateTask :exec
 UPDATE tasks
 SET name = $1, parent = $2, runner = $3, workspace = $4, instructions = $5, status = $6, command = $7, version = $8, updated_at = $9, archived = $10
-WHERE id = $11 AND owner = $12
+WHERE id = $11 AND org_id = $12
 `
 
 type UpdateTaskParams struct {
@@ -351,7 +351,7 @@ type UpdateTaskParams struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	Archived     bool      `json:"archived"`
 	ID           int64     `json:"id"`
-	Owner        string    `json:"owner"`
+	OrgID        int64     `json:"org_id"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {
@@ -367,7 +367,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {
 		arg.UpdatedAt,
 		arg.Archived,
 		arg.ID,
-		arg.Owner,
+		arg.OrgID,
 	)
 	return err
 }

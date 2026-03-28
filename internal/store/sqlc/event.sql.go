@@ -26,7 +26,7 @@ func (q *Queries) AddEventTask(ctx context.Context, arg AddEventTaskParams) erro
 }
 
 const createEvent = `-- name: CreateEvent :one
-INSERT INTO events (description, data, url, owner, created_at)
+INSERT INTO events (description, data, url, created_at, org_id)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id
 `
@@ -35,8 +35,8 @@ type CreateEventParams struct {
 	Description string    `json:"description"`
 	Data        string    `json:"data"`
 	Url         string    `json:"url"`
-	Owner       string    `json:"owner"`
 	CreatedAt   time.Time `json:"created_at"`
+	OrgID       int64     `json:"org_id"`
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (int64, error) {
@@ -44,8 +44,8 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (int64
 		arg.Description,
 		arg.Data,
 		arg.Url,
-		arg.Owner,
 		arg.CreatedAt,
+		arg.OrgID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -53,16 +53,16 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (int64
 }
 
 const deleteEvent = `-- name: DeleteEvent :exec
-DELETE FROM events WHERE id = $1 AND owner = $2
+DELETE FROM events WHERE id = $1 AND org_id = $2
 `
 
 type DeleteEventParams struct {
-	ID    int64  `json:"id"`
-	Owner string `json:"owner"`
+	ID    int64 `json:"id"`
+	OrgID int64 `json:"org_id"`
 }
 
 func (q *Queries) DeleteEvent(ctx context.Context, arg DeleteEventParams) error {
-	_, err := q.db.ExecContext(ctx, deleteEvent, arg.ID, arg.Owner)
+	_, err := q.db.ExecContext(ctx, deleteEvent, arg.ID, arg.OrgID)
 	return err
 }
 
@@ -76,7 +76,7 @@ func (q *Queries) DeleteEventTasks(ctx context.Context, eventID int64) error {
 }
 
 const findEventsByURL = `-- name: FindEventsByURL :many
-SELECT id, description, data, url, owner, created_at
+SELECT id, description, data, url, created_at, org_id
 FROM events
 WHERE url = $1
 ORDER BY created_at DESC
@@ -96,8 +96,8 @@ func (q *Queries) FindEventsByURL(ctx context.Context, url string) ([]Event, err
 			&i.Description,
 			&i.Data,
 			&i.Url,
-			&i.Owner,
 			&i.CreatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -113,41 +113,41 @@ func (q *Queries) FindEventsByURL(ctx context.Context, url string) ([]Event, err
 }
 
 const getEvent = `-- name: GetEvent :one
-SELECT id, description, data, url, owner, created_at
+SELECT id, description, data, url, created_at, org_id
 FROM events
-WHERE id = $1 AND owner = $2
+WHERE id = $1 AND org_id = $2
 `
 
 type GetEventParams struct {
-	ID    int64  `json:"id"`
-	Owner string `json:"owner"`
+	ID    int64 `json:"id"`
+	OrgID int64 `json:"org_id"`
 }
 
 func (q *Queries) GetEvent(ctx context.Context, arg GetEventParams) (Event, error) {
-	row := q.db.QueryRowContext(ctx, getEvent, arg.ID, arg.Owner)
+	row := q.db.QueryRowContext(ctx, getEvent, arg.ID, arg.OrgID)
 	var i Event
 	err := row.Scan(
 		&i.ID,
 		&i.Description,
 		&i.Data,
 		&i.Url,
-		&i.Owner,
 		&i.CreatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const hasEvent = `-- name: HasEvent :one
-SELECT EXISTS(SELECT 1 FROM events WHERE id = $1 AND owner = $2)
+SELECT EXISTS(SELECT 1 FROM events WHERE id = $1 AND org_id = $2)
 `
 
 type HasEventParams struct {
-	ID    int64  `json:"id"`
-	Owner string `json:"owner"`
+	ID    int64 `json:"id"`
+	OrgID int64 `json:"org_id"`
 }
 
 func (q *Queries) HasEvent(ctx context.Context, arg HasEventParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasEvent, arg.ID, arg.Owner)
+	row := q.db.QueryRowContext(ctx, hasEvent, arg.ID, arg.OrgID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -157,16 +157,16 @@ const listEventTasks = `-- name: ListEventTasks :many
 SELECT et.task_id
 FROM event_tasks et
 JOIN tasks t ON et.task_id = t.id
-WHERE et.event_id = $1 AND t.owner = $2
+WHERE et.event_id = $1 AND t.org_id = $2
 `
 
 type ListEventTasksParams struct {
-	EventID int64  `json:"event_id"`
-	Owner   string `json:"owner"`
+	EventID int64 `json:"event_id"`
+	OrgID   int64 `json:"org_id"`
 }
 
 func (q *Queries) ListEventTasks(ctx context.Context, arg ListEventTasksParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listEventTasks, arg.EventID, arg.Owner)
+	rows, err := q.db.QueryContext(ctx, listEventTasks, arg.EventID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -189,20 +189,20 @@ func (q *Queries) ListEventTasks(ctx context.Context, arg ListEventTasksParams) 
 }
 
 const listEvents = `-- name: ListEvents :many
-SELECT id, description, data, url, owner, created_at
+SELECT id, description, data, url, created_at, org_id
 FROM events
-WHERE owner = $1
+WHERE org_id = $1
 ORDER BY created_at DESC
 LIMIT $2
 `
 
 type ListEventsParams struct {
-	Owner string `json:"owner"`
-	Limit int32  `json:"limit"`
+	OrgID int64 `json:"org_id"`
+	Limit int32 `json:"limit"`
 }
 
 func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event, error) {
-	rows, err := q.db.QueryContext(ctx, listEvents, arg.Owner, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, listEvents, arg.OrgID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -215,8 +215,8 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 			&i.Description,
 			&i.Data,
 			&i.Url,
-			&i.Owner,
 			&i.CreatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -232,21 +232,21 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 }
 
 const listEventsByTask = `-- name: ListEventsByTask :many
-SELECT e.id, e.description, e.data, e.url, e.owner, e.created_at
+SELECT e.id, e.description, e.data, e.url, e.created_at, e.org_id
 FROM events e
 JOIN event_tasks et ON e.id = et.event_id
 JOIN tasks t ON et.task_id = t.id
-WHERE et.task_id = $1 AND t.owner = $2
+WHERE et.task_id = $1 AND t.org_id = $2
 ORDER BY e.created_at DESC
 `
 
 type ListEventsByTaskParams struct {
-	TaskID int64  `json:"task_id"`
-	Owner  string `json:"owner"`
+	TaskID int64 `json:"task_id"`
+	OrgID  int64 `json:"org_id"`
 }
 
 func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskParams) ([]Event, error) {
-	rows, err := q.db.QueryContext(ctx, listEventsByTask, arg.TaskID, arg.Owner)
+	rows, err := q.db.QueryContext(ctx, listEventsByTask, arg.TaskID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -259,8 +259,8 @@ func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskPara
 			&i.Description,
 			&i.Data,
 			&i.Url,
-			&i.Owner,
 			&i.CreatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}

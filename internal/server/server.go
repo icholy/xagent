@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"maps"
 	"net/http"
 	"slices"
@@ -136,14 +135,14 @@ func (s *Server) userID(ctx context.Context) string {
 	return u.ID
 }
 
-// orgID returns the org-scoped owner string for resource queries.
+// orgID returns the org ID for resource queries.
 // The org_id is embedded in the JWT at token issuance time.
-func (s *Server) orgID(ctx context.Context) string {
+func (s *Server) orgID(ctx context.Context) int64 {
 	u := apiauth.User(ctx)
 	if u == nil {
 		panic("no UserInfo in request context")
 	}
-	return strconv.FormatInt(u.OrgID, 10)
+	return u.OrgID
 }
 
 func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
@@ -237,12 +236,12 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Status:       model.TaskStatusPending,
 		Command:      model.TaskCommandStart,
 		Version:      1,
-		Owner:        orgID,
+		OrgID:        orgID,
 	}
 	if err := s.store.CreateTask(ctx, nil, task); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "owner", task.Owner)
+	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(),
 	}, nil
@@ -550,7 +549,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 		Description: req.Description,
 		Data:        req.Data,
 		URL:         req.Url,
-		Owner:       orgID,
+		OrgID:       orgID,
 	}
 	if err := s.store.CreateEvent(ctx, nil, event); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -674,11 +673,11 @@ func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventReq
 	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
 }
 
-func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventURL string, owner string) ([]int64, error) {
+func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventURL string, orgID int64) ([]int64, error) {
 	if eventURL == "" {
 		return nil, nil
 	}
-	links, err := s.store.FindLinksByURL(ctx, nil, eventURL, owner)
+	links, err := s.store.FindLinksByURL(ctx, nil, eventURL, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -687,7 +686,7 @@ func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventU
 		if !link.Notify || taskIDs[link.TaskID] {
 			continue
 		}
-		task, err := s.store.GetTask(ctx, nil, link.TaskID, owner)
+		task, err := s.store.GetTask(ctx, nil, link.TaskID, orgID)
 		if err != nil {
 			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
 			continue
@@ -701,7 +700,7 @@ func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventU
 			s.log.Warn("failed to add event task", "event_id", eventID, "task_id", link.TaskID, "error", err)
 		}
 		err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			task, err := s.store.GetTaskForUpdate(ctx, tx, link.TaskID, owner)
+			task, err := s.store.GetTaskForUpdate(ctx, tx, link.TaskID, orgID)
 			if err != nil {
 				return err
 			}
@@ -804,7 +803,7 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "owner", orgID, "count", len(req.Workspaces))
+	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "org_id", orgID, "count", len(req.Workspaces))
 	return &xagentv1.RegisterWorkspacesResponse{}, nil
 }
 
@@ -827,12 +826,12 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 		if err := s.store.DeleteWorkspacesByRunner(ctx, nil, req.RunnerId, orgID); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		s.log.Info("workspaces cleared", "owner", orgID, "runner", req.RunnerId)
+		s.log.Info("workspaces cleared", "org_id", orgID, "runner", req.RunnerId)
 	} else {
 		if err := s.store.ClearWorkspaces(ctx, nil, orgID); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		s.log.Info("workspaces cleared", "owner", orgID)
+		s.log.Info("workspaces cleared", "org_id", orgID)
 	}
 	return &xagentv1.ClearWorkspacesResponse{}, nil
 }
@@ -852,13 +851,13 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 		ID:        uuid.NewString(),
 		Name:      req.Name,
 		TokenHash: apiauth.HashKey(rawKey),
-		Owner:     orgID,
+		OrgID:     orgID,
 		ExpiresAt: expiresAt,
 	}
 	if err := s.store.CreateKey(ctx, nil, key); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("key created", "id", key.ID, "owner", orgID)
+	s.log.Info("key created", "id", key.ID, "org_id", orgID)
 	return &xagentv1.CreateKeyResponse{
 		Key:      key.Proto(),
 		RawToken: rawKey,

@@ -24,10 +24,10 @@ func (s *Store) CreateLink(ctx context.Context, tx *sql.Tx, link *model.Link) er
 	return nil
 }
 
-func (s *Store) ListLinksByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Link, error) {
+func (s *Store) ListLinksByTask(ctx context.Context, tx *sql.Tx, taskID int64, orgID int64) ([]*model.Link, error) {
 	rows, err := s.q(tx).ListLinksByTask(ctx, sqlc.ListLinksByTaskParams{
 		TaskID: taskID,
-		Owner:  owner,
+		OrgID:  orgID,
 	})
 	if err != nil {
 		return nil, err
@@ -39,10 +39,10 @@ func (s *Store) DeleteLink(ctx context.Context, tx *sql.Tx, id int64) error {
 	return s.q(tx).DeleteLink(ctx, id)
 }
 
-func (s *Store) FindLinksByURL(ctx context.Context, tx *sql.Tx, url string, owner string) ([]*model.Link, error) {
+func (s *Store) FindLinksByURL(ctx context.Context, tx *sql.Tx, url string, orgID int64) ([]*model.Link, error) {
 	rows, err := s.q(tx).FindLinksByURL(ctx, sqlc.FindLinksByURLParams{
 		Url:   url,
-		Owner: owner,
+		OrgID: orgID,
 	})
 	if err != nil {
 		return nil, err

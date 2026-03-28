@@ -14,8 +14,8 @@ type Event struct {
 	Description string    `json:"description"`
 	Data        string    `json:"data"`
 	Url         string    `json:"url"`
-	Owner       string    `json:"owner"`
 	CreatedAt   time.Time `json:"created_at"`
+	OrgID       int64     `json:"org_id"`
 }
 
 type EventTask struct {
@@ -27,9 +27,9 @@ type Key struct {
 	ID        string       `json:"id"`
 	Name      string       `json:"name"`
 	TokenHash string       `json:"token_hash"`
-	Owner     string       `json:"owner"`
 	ExpiresAt sql.NullTime `json:"expires_at"`
 	CreatedAt time.Time    `json:"created_at"`
+	OrgID     int64        `json:"org_id"`
 }
 
 type Log struct {
@@ -65,10 +65,10 @@ type Task struct {
 	Status       int32     `json:"status"`
 	Command      int32     `json:"command"`
 	Version      int64     `json:"version"`
-	Owner        string    `json:"owner"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Archived     bool      `json:"archived"`
+	OrgID        int64     `json:"org_id"`
 }
 
 type TaskLink struct {
@@ -96,6 +96,6 @@ type Workspace struct {
 	ID        int64     `json:"id"`
 	RunnerID  string    `json:"runner_id"`
 	Name      string    `json:"name"`
-	Owner     string    `json:"owner"`
 	UpdatedAt time.Time `json:"updated_at"`
+	OrgID     int64     `json:"org_id"`
 }

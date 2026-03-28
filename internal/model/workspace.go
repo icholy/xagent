@@ -12,7 +12,7 @@ type Workspace struct {
 	ID        int64     `json:"id"`
 	RunnerID  string    `json:"runner_id"`
 	Name      string    `json:"name"`
-	Owner     string    `json:"owner"`
+	OrgID     int64     `json:"org_id"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 

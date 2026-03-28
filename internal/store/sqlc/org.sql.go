@@ -214,20 +214,6 @@ func (q *Queries) RemoveOrgMember(ctx context.Context, arg RemoveOrgMemberParams
 	return err
 }
 
-const setOrgOwner = `-- name: SetOrgOwner :exec
-UPDATE orgs SET owner = $2 WHERE id = $1
-`
-
-type SetOrgOwnerParams struct {
-	ID    int64  `json:"id"`
-	Owner string `json:"owner"`
-}
-
-func (q *Queries) SetOrgOwner(ctx context.Context, arg SetOrgOwnerParams) error {
-	_, err := q.db.ExecContext(ctx, setOrgOwner, arg.ID, arg.Owner)
-	return err
-}
-
 const updateOrg = `-- name: UpdateOrg :exec
 UPDATE orgs SET
     name = $2,

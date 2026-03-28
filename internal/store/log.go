@@ -23,10 +23,10 @@ func (s *Store) CreateLog(ctx context.Context, tx *sql.Tx, log *model.Log) error
 	return nil
 }
 
-func (s *Store) ListLogsByTask(ctx context.Context, tx *sql.Tx, taskID int64, owner string) ([]*model.Log, error) {
+func (s *Store) ListLogsByTask(ctx context.Context, tx *sql.Tx, taskID int64, orgID int64) ([]*model.Log, error) {
 	rows, err := s.q(tx).ListLogsByTask(ctx, sqlc.ListLogsByTaskParams{
 		TaskID: taskID,
-		Owner:  owner,
+		OrgID:  orgID,
 	})
 	if err != nil {
 		return nil, err

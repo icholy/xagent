@@ -265,7 +265,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		Status:    model.TaskStatusCompleted,
 		Command:   model.TaskCommandNone,
 		Version:   1,
-		Owner:     orgID,
+		OrgID:     orgID,
 	}
 	err = s.store.CreateTask(ctx, nil, task)
 	assert.NilError(t, err)

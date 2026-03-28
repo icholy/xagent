@@ -8,23 +8,23 @@ import (
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
-func (s *Store) DeleteWorkspacesByRunner(ctx context.Context, tx *sql.Tx, runnerID, owner string) error {
+func (s *Store) DeleteWorkspacesByRunner(ctx context.Context, tx *sql.Tx, runnerID string, orgID int64) error {
 	return s.q(tx).DeleteWorkspacesByRunner(ctx, sqlc.DeleteWorkspacesByRunnerParams{
 		RunnerID: runnerID,
-		Owner:    owner,
+		OrgID:    orgID,
 	})
 }
 
-func (s *Store) CreateWorkspace(ctx context.Context, tx *sql.Tx, runnerID, name, owner string) error {
+func (s *Store) CreateWorkspace(ctx context.Context, tx *sql.Tx, runnerID, name string, orgID int64) error {
 	return s.q(tx).CreateWorkspace(ctx, sqlc.CreateWorkspaceParams{
 		RunnerID: runnerID,
 		Name:     name,
-		Owner:    owner,
+		OrgID:    orgID,
 	})
 }
 
-func (s *Store) ListWorkspaces(ctx context.Context, tx *sql.Tx, owner string) ([]*model.Workspace, error) {
-	rows, err := s.q(tx).ListWorkspacesByOwner(ctx, owner)
+func (s *Store) ListWorkspaces(ctx context.Context, tx *sql.Tx, orgID int64) ([]*model.Workspace, error) {
+	rows, err := s.q(tx).ListWorkspacesByOrgID(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -34,13 +34,13 @@ func (s *Store) ListWorkspaces(ctx context.Context, tx *sql.Tx, owner string) ([
 			ID:        row.ID,
 			RunnerID:  row.RunnerID,
 			Name:      row.Name,
-			Owner:     row.Owner,
+			OrgID:     row.OrgID,
 			UpdatedAt: row.UpdatedAt,
 		}
 	}
 	return workspaces, nil
 }
 
-func (s *Store) ClearWorkspaces(ctx context.Context, tx *sql.Tx, owner string) error {
-	return s.q(tx).ClearWorkspacesByOwner(ctx, owner)
+func (s *Store) ClearWorkspaces(ctx context.Context, tx *sql.Tx, orgID int64) error {
+	return s.q(tx).ClearWorkspacesByOrgID(ctx, orgID)
 }

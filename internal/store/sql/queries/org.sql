@@ -3,9 +3,6 @@ INSERT INTO orgs (name, owner, created_at, updated_at)
 VALUES ($1, $2, $3, $4)
 RETURNING id;
 
--- name: SetOrgOwner :exec
-UPDATE orgs SET owner = $2 WHERE id = $1;
-
 -- name: GetOrg :one
 SELECT id, name, owner, created_at, updated_at
 FROM orgs

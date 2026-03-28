@@ -12,7 +12,7 @@ type Key struct {
 	ID        string     `json:"id"`
 	Name      string     `json:"name"`
 	TokenHash string     `json:"token_hash"`
-	Owner     string     `json:"owner"`
+	OrgID     int64      `json:"org_id"`
 	ExpiresAt *time.Time `json:"expires_at"`
 	CreatedAt time.Time  `json:"created_at"`
 }

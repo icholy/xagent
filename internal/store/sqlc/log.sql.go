@@ -39,17 +39,17 @@ const listLogsByTask = `-- name: ListLogsByTask :many
 SELECT l.id, l.task_id, l.type, l.content, l.created_at
 FROM logs l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.task_id = $1 AND t.owner = $2
+WHERE l.task_id = $1 AND t.org_id = $2
 ORDER BY l.created_at ASC
 `
 
 type ListLogsByTaskParams struct {
-	TaskID int64  `json:"task_id"`
-	Owner  string `json:"owner"`
+	TaskID int64 `json:"task_id"`
+	OrgID  int64 `json:"org_id"`
 }
 
 func (q *Queries) ListLogsByTask(ctx context.Context, arg ListLogsByTaskParams) ([]Log, error) {
-	rows, err := q.db.QueryContext(ctx, listLogsByTask, arg.TaskID, arg.Owner)
+	rows, err := q.db.QueryContext(ctx, listLogsByTask, arg.TaskID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}

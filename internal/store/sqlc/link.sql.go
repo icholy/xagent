@@ -52,17 +52,17 @@ const findLinksByURL = `-- name: FindLinksByURL :many
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.url = $1 AND t.archived = FALSE AND t.owner = $2
+WHERE l.url = $1 AND t.archived = FALSE AND t.org_id = $2
 ORDER BY l.created_at DESC
 `
 
 type FindLinksByURLParams struct {
 	Url   string `json:"url"`
-	Owner string `json:"owner"`
+	OrgID int64  `json:"org_id"`
 }
 
 func (q *Queries) FindLinksByURL(ctx context.Context, arg FindLinksByURLParams) ([]TaskLink, error) {
-	rows, err := q.db.QueryContext(ctx, findLinksByURL, arg.Url, arg.Owner)
+	rows, err := q.db.QueryContext(ctx, findLinksByURL, arg.Url, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -96,17 +96,17 @@ const listLinksByTask = `-- name: ListLinksByTask :many
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.task_id = $1 AND t.owner = $2
+WHERE l.task_id = $1 AND t.org_id = $2
 ORDER BY l.created_at ASC
 `
 
 type ListLinksByTaskParams struct {
-	TaskID int64  `json:"task_id"`
-	Owner  string `json:"owner"`
+	TaskID int64 `json:"task_id"`
+	OrgID  int64 `json:"org_id"`
 }
 
 func (q *Queries) ListLinksByTask(ctx context.Context, arg ListLinksByTaskParams) ([]TaskLink, error) {
-	rows, err := q.db.QueryContext(ctx, listLinksByTask, arg.TaskID, arg.Owner)
+	rows, err := q.db.QueryContext(ctx, listLinksByTask, arg.TaskID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}

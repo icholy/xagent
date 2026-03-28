@@ -12,7 +12,7 @@ import (
 )
 
 const createKey = `-- name: CreateKey :exec
-INSERT INTO keys (id, name, token_hash, owner, expires_at, created_at)
+INSERT INTO keys (id, name, token_hash, expires_at, created_at, org_id)
 VALUES ($1, $2, $3, $4, $5, $6)
 `
 
@@ -20,9 +20,9 @@ type CreateKeyParams struct {
 	ID        string       `json:"id"`
 	Name      string       `json:"name"`
 	TokenHash string       `json:"token_hash"`
-	Owner     string       `json:"owner"`
 	ExpiresAt sql.NullTime `json:"expires_at"`
 	CreatedAt time.Time    `json:"created_at"`
+	OrgID     int64        `json:"org_id"`
 }
 
 func (q *Queries) CreateKey(ctx context.Context, arg CreateKeyParams) error {
@@ -30,54 +30,54 @@ func (q *Queries) CreateKey(ctx context.Context, arg CreateKeyParams) error {
 		arg.ID,
 		arg.Name,
 		arg.TokenHash,
-		arg.Owner,
 		arg.ExpiresAt,
 		arg.CreatedAt,
+		arg.OrgID,
 	)
 	return err
 }
 
 const deleteKey = `-- name: DeleteKey :exec
-DELETE FROM keys WHERE id = $1 AND owner = $2
+DELETE FROM keys WHERE id = $1 AND org_id = $2
 `
 
 type DeleteKeyParams struct {
 	ID    string `json:"id"`
-	Owner string `json:"owner"`
+	OrgID int64  `json:"org_id"`
 }
 
 func (q *Queries) DeleteKey(ctx context.Context, arg DeleteKeyParams) error {
-	_, err := q.db.ExecContext(ctx, deleteKey, arg.ID, arg.Owner)
+	_, err := q.db.ExecContext(ctx, deleteKey, arg.ID, arg.OrgID)
 	return err
 }
 
 const getKey = `-- name: GetKey :one
-SELECT id, name, token_hash, owner, expires_at, created_at
+SELECT id, name, token_hash, expires_at, created_at, org_id
 FROM keys
-WHERE id = $1 AND owner = $2
+WHERE id = $1 AND org_id = $2
 `
 
 type GetKeyParams struct {
 	ID    string `json:"id"`
-	Owner string `json:"owner"`
+	OrgID int64  `json:"org_id"`
 }
 
 func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (Key, error) {
-	row := q.db.QueryRowContext(ctx, getKey, arg.ID, arg.Owner)
+	row := q.db.QueryRowContext(ctx, getKey, arg.ID, arg.OrgID)
 	var i Key
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.TokenHash,
-		&i.Owner,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const getKeyByHash = `-- name: GetKeyByHash :one
-SELECT id, name, token_hash, owner, expires_at, created_at
+SELECT id, name, token_hash, expires_at, created_at, org_id
 FROM keys
 WHERE token_hash = $1
 `
@@ -89,22 +89,22 @@ func (q *Queries) GetKeyByHash(ctx context.Context, tokenHash string) (Key, erro
 		&i.ID,
 		&i.Name,
 		&i.TokenHash,
-		&i.Owner,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const listKeys = `-- name: ListKeys :many
-SELECT id, name, token_hash, owner, expires_at, created_at
+SELECT id, name, token_hash, expires_at, created_at, org_id
 FROM keys
-WHERE owner = $1
+WHERE org_id = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListKeys(ctx context.Context, owner string) ([]Key, error) {
-	rows, err := q.db.QueryContext(ctx, listKeys, owner)
+func (q *Queries) ListKeys(ctx context.Context, orgID int64) ([]Key, error) {
+	rows, err := q.db.QueryContext(ctx, listKeys, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -116,9 +116,9 @@ func (q *Queries) ListKeys(ctx context.Context, owner string) ([]Key, error) {
 			&i.ID,
 			&i.Name,
 			&i.TokenHash,
-			&i.Owner,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}

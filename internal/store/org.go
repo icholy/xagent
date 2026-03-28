@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
@@ -15,19 +14,14 @@ func (s *Store) CreateOrg(ctx context.Context, tx *sql.Tx, org *model.Org) error
 	now := time.Now()
 	id, err := s.q(tx).CreateOrg(ctx, sqlc.CreateOrgParams{
 		Name:      org.Name,
-		Owner:     "",
+		Owner:     org.Owner,
 		CreatedAt: now,
 		UpdatedAt: now,
 	})
 	if err != nil {
 		return err
 	}
-	owner := strconv.FormatInt(id, 10)
-	if err := s.q(tx).SetOrgOwner(ctx, sqlc.SetOrgOwnerParams{ID: id, Owner: owner}); err != nil {
-		return err
-	}
 	org.ID = id
-	org.Owner = owner
 	org.CreatedAt = now
 	org.UpdatedAt = now
 	return nil
@@ -119,17 +113,16 @@ func (s *Store) IsOrgMember(ctx context.Context, tx *sql.Tx, orgID int64, userID
 }
 
 // ResolveOrgOwner verifies that the user is a member of the given org and
-// returns the org's owner string (the stringified org ID used in resource
-// owner columns). Returns an error if the user is not a member.
-func (s *Store) ResolveOrgOwner(ctx context.Context, tx *sql.Tx, orgID int64, userID string) (string, error) {
+// returns the org ID. Returns an error if the user is not a member.
+func (s *Store) ResolveOrgOwner(ctx context.Context, tx *sql.Tx, orgID int64, userID string) (int64, error) {
 	ok, err := s.IsOrgMember(ctx, tx, orgID, userID)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	if !ok {
-		return "", fmt.Errorf("user %s is not a member of org %d", userID, orgID)
+		return 0, fmt.Errorf("user %s is not a member of org %d", userID, orgID)
 	}
-	return strconv.FormatInt(orgID, 10), nil
+	return orgID, nil
 }
 
 func toModelOrg(row sqlc.Org) *model.Org {

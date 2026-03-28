@@ -67,7 +67,7 @@ type Task struct {
 	Status       TaskStatus    `json:"status"`
 	Command      TaskCommand   `json:"command"`
 	Version      int64         `json:"version"`
-	Owner        string        `json:"owner"`
+	OrgID        int64         `json:"org_id"`
 	Archived     bool          `json:"archived"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`

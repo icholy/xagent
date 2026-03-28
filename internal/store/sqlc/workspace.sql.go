@@ -9,56 +9,56 @@ import (
 	"context"
 )
 
-const clearWorkspacesByOwner = `-- name: ClearWorkspacesByOwner :exec
+const clearWorkspacesByOrgID = `-- name: ClearWorkspacesByOrgID :exec
 DELETE FROM workspaces
-WHERE owner = $1
+WHERE org_id = $1
 `
 
-func (q *Queries) ClearWorkspacesByOwner(ctx context.Context, owner string) error {
-	_, err := q.db.ExecContext(ctx, clearWorkspacesByOwner, owner)
+func (q *Queries) ClearWorkspacesByOrgID(ctx context.Context, orgID int64) error {
+	_, err := q.db.ExecContext(ctx, clearWorkspacesByOrgID, orgID)
 	return err
 }
 
 const createWorkspace = `-- name: CreateWorkspace :exec
-INSERT INTO workspaces (runner_id, name, owner)
+INSERT INTO workspaces (runner_id, name, org_id)
 VALUES ($1, $2, $3)
 `
 
 type CreateWorkspaceParams struct {
 	RunnerID string `json:"runner_id"`
 	Name     string `json:"name"`
-	Owner    string `json:"owner"`
+	OrgID    int64  `json:"org_id"`
 }
 
 func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error {
-	_, err := q.db.ExecContext(ctx, createWorkspace, arg.RunnerID, arg.Name, arg.Owner)
+	_, err := q.db.ExecContext(ctx, createWorkspace, arg.RunnerID, arg.Name, arg.OrgID)
 	return err
 }
 
 const deleteWorkspacesByRunner = `-- name: DeleteWorkspacesByRunner :exec
 DELETE FROM workspaces
-WHERE runner_id = $1 AND owner = $2
+WHERE runner_id = $1 AND org_id = $2
 `
 
 type DeleteWorkspacesByRunnerParams struct {
 	RunnerID string `json:"runner_id"`
-	Owner    string `json:"owner"`
+	OrgID    int64  `json:"org_id"`
 }
 
 func (q *Queries) DeleteWorkspacesByRunner(ctx context.Context, arg DeleteWorkspacesByRunnerParams) error {
-	_, err := q.db.ExecContext(ctx, deleteWorkspacesByRunner, arg.RunnerID, arg.Owner)
+	_, err := q.db.ExecContext(ctx, deleteWorkspacesByRunner, arg.RunnerID, arg.OrgID)
 	return err
 }
 
-const listWorkspacesByOwner = `-- name: ListWorkspacesByOwner :many
-SELECT id, runner_id, name, owner, updated_at
+const listWorkspacesByOrgID = `-- name: ListWorkspacesByOrgID :many
+SELECT id, runner_id, name, updated_at, org_id
 FROM workspaces
-WHERE owner = $1
+WHERE org_id = $1
 ORDER BY name ASC
 `
 
-func (q *Queries) ListWorkspacesByOwner(ctx context.Context, owner string) ([]Workspace, error) {
-	rows, err := q.db.QueryContext(ctx, listWorkspacesByOwner, owner)
+func (q *Queries) ListWorkspacesByOrgID(ctx context.Context, orgID int64) ([]Workspace, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkspacesByOrgID, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,8 +70,8 @@ func (q *Queries) ListWorkspacesByOwner(ctx context.Context, owner string) ([]Wo
 			&i.ID,
 			&i.RunnerID,
 			&i.Name,
-			&i.Owner,
 			&i.UpdatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}

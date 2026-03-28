@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v68/github"
@@ -57,14 +56,12 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	owner := strconv.FormatInt(user.DefaultOrgID, 10)
-
 	// Create event in store
 	event := &model.Event{
 		Description: extracted.description,
 		Data:        extracted.data,
 		URL:         extracted.url,
-		Owner:       owner,
+		OrgID:       user.DefaultOrgID,
 	}
 	if err := s.store.CreateEvent(r.Context(), nil, event); err != nil {
 		slog.Error("failed to create event", "error", err)
@@ -73,7 +70,7 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Route to matching tasks
-	ids, err := s.processEventInternal(r.Context(), event.ID, event.URL, owner)
+	ids, err := s.processEventInternal(r.Context(), event.ID, event.URL, user.DefaultOrgID)
 	if err != nil {
 		slog.Error("failed to process event", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
