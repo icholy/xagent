@@ -8,23 +8,36 @@ package sqlc
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, github_user_id, github_username, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 FROM users
 WHERE id = $1
 `
 
-func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
+type GetUserRow struct {
+	ID             string        `json:"id"`
+	Email          string        `json:"email"`
+	Name           string        `json:"name"`
+	GithubUserID   sql.NullInt64 `json:"github_user_id"`
+	GithubUsername string        `json:"github_username"`
+	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+}
+
+func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
 	row := q.db.QueryRowContext(ctx, getUser, id)
-	var i User
+	var i GetUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
 		&i.GithubUserID,
 		&i.GithubUsername,
+		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -32,20 +45,32 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, github_user_id, github_username, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 FROM users
 WHERE email = $1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+type GetUserByEmailRow struct {
+	ID             string        `json:"id"`
+	Email          string        `json:"email"`
+	Name           string        `json:"name"`
+	GithubUserID   sql.NullInt64 `json:"github_user_id"`
+	GithubUsername string        `json:"github_username"`
+	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
 		&i.GithubUserID,
 		&i.GithubUsername,
+		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -53,20 +78,32 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByGitHubUserID = `-- name: GetUserByGitHubUserID :one
-SELECT id, email, name, github_user_id, github_username, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 FROM users
 WHERE github_user_id = $1
 `
 
-func (q *Queries) GetUserByGitHubUserID(ctx context.Context, githubUserID sql.NullInt64) (User, error) {
+type GetUserByGitHubUserIDRow struct {
+	ID             string        `json:"id"`
+	Email          string        `json:"email"`
+	Name           string        `json:"name"`
+	GithubUserID   sql.NullInt64 `json:"github_user_id"`
+	GithubUsername string        `json:"github_username"`
+	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByGitHubUserID(ctx context.Context, githubUserID sql.NullInt64) (GetUserByGitHubUserIDRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserByGitHubUserID, githubUserID)
-	var i User
+	var i GetUserByGitHubUserIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
 		&i.GithubUserID,
 		&i.GithubUsername,
+		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -105,6 +142,23 @@ func (q *Queries) UnlinkGitHubAccount(ctx context.Context, id string) error {
 	return err
 }
 
+const updateDefaultOrgID = `-- name: UpdateDefaultOrgID :exec
+UPDATE users SET
+    default_org_id = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type UpdateDefaultOrgIDParams struct {
+	ID           string        `json:"id"`
+	DefaultOrgID sql.NullInt64 `json:"default_org_id"`
+}
+
+func (q *Queries) UpdateDefaultOrgID(ctx context.Context, arg UpdateDefaultOrgIDParams) error {
+	_, err := q.db.ExecContext(ctx, updateDefaultOrgID, arg.ID, arg.DefaultOrgID)
+	return err
+}
+
 const updateGitHubUsername = `-- name: UpdateGitHubUsername :exec
 UPDATE users SET
     github_username = $1,
@@ -129,7 +183,7 @@ ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = EXCLUDED.name,
     updated_at = CURRENT_TIMESTAMP
-RETURNING id, email, name, github_user_id, github_username, created_at, updated_at
+RETURNING id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 `
 
 type UpsertUserParams struct {
@@ -138,15 +192,27 @@ type UpsertUserParams struct {
 	Name  string `json:"name"`
 }
 
-func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
+type UpsertUserRow struct {
+	ID             string        `json:"id"`
+	Email          string        `json:"email"`
+	Name           string        `json:"name"`
+	GithubUserID   sql.NullInt64 `json:"github_user_id"`
+	GithubUsername string        `json:"github_username"`
+	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+}
+
+func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (UpsertUserRow, error) {
 	row := q.db.QueryRowContext(ctx, upsertUser, arg.ID, arg.Email, arg.Name)
-	var i User
+	var i UpsertUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
 		&i.GithubUserID,
 		&i.GithubUsername,
+		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

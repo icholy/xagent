@@ -14,6 +14,7 @@ type User struct {
 	Name           string    `json:"name"`
 	GitHubUserID   int64     `json:"github_user_id"`
 	GitHubUsername string    `json:"github_username"`
+	DefaultOrgID   int64     `json:"default_org_id"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }

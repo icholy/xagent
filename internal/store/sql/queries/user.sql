@@ -5,20 +5,20 @@ ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = EXCLUDED.name,
     updated_at = CURRENT_TIMESTAMP
-RETURNING id, email, name, github_user_id, github_username, created_at, updated_at;
+RETURNING id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at;
 
 -- name: GetUser :one
-SELECT id, email, name, github_user_id, github_username, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 FROM users
 WHERE id = $1;
 
 -- name: GetUserByEmail :one
-SELECT id, email, name, github_user_id, github_username, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 FROM users
 WHERE email = $1;
 
 -- name: GetUserByGitHubUserID :one
-SELECT id, email, name, github_user_id, github_username, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 FROM users
 WHERE github_user_id = $1;
 
@@ -41,3 +41,9 @@ UPDATE users SET
     github_username = $1,
     updated_at = CURRENT_TIMESTAMP
 WHERE github_user_id = $2;
+
+-- name: UpdateDefaultOrgID :exec
+UPDATE users SET
+    default_org_id = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
