@@ -42,8 +42,9 @@ func (a *CodexAgent) Prompt(ctx context.Context, prompt string, resume bool) err
 		// Resume the last exec session with a follow-up prompt
 		args := []string{
 			"exec",
-			"--json",
 			"resume",
+			"--dangerously-bypass-approvals-and-sandbox",
+			"--json",
 			"--last",
 			prompt,
 		}
