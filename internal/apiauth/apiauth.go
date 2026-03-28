@@ -57,6 +57,9 @@ type Config struct {
 	Scopes        []string
 	// KeyValidator validates xat_ API keys.
 	KeyValidator KeyValidator
+	// AppKey is the Ed25519 private key for signing/verifying app JWTs.
+	// If nil, a new key is generated on startup.
+	AppKey ed25519.PrivateKey
 	// Disable authentication (for development only).
 	// When true, all requests are authenticated as a default "dev" user.
 	Disable bool
@@ -82,9 +85,13 @@ type Auth struct {
 // New creates a new Auth instance with both cookie and bearer token support.
 // If cfg.Disable is true, authentication is bypassed and all requests get a default user.
 func New(ctx context.Context, cfg Config) (*Auth, error) {
-	appKey, err := CreateAppPrivateKey()
-	if err != nil {
-		return nil, err
+	appKey := cfg.AppKey
+	if appKey == nil {
+		var err error
+		appKey, err = CreateAppPrivateKey()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if cfg.Disable {
 		return &Auth{disabled: true, appKey: appKey}, nil
@@ -270,16 +277,14 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 			return
 		}
 		// Parse org_id from query parameter (defaults to 0)
-		var orgID int64
 		if raw := r.URL.Query().Get("org_id"); raw != "" {
-			var err error
-			orgID, err = strconv.ParseInt(raw, 10, 64)
+			orgID, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil {
 				http.Error(w, "invalid org_id", http.StatusBadRequest)
 				return
 			}
+			user.OrgID = orgID
 		}
-		user.OrgID = orgID
 		claims := NewAppClaims(user)
 		token, err := SignAppToken(a.appKey, claims)
 		if err != nil {
@@ -288,8 +293,9 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"token":  token,
-			"org_id": orgID,
+			"token":     token,
+			"org_id":    user.OrgID,
+			"expires_at": claims.ExpiresAt.Time.Unix(),
 		})
 	}
 }
