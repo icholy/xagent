@@ -57,7 +57,7 @@ func (s *Store) LinkGitHubAccount(ctx context.Context, tx *sql.Tx, userID string
 	return s.q(tx).LinkGitHubAccount(ctx, sqlc.LinkGitHubAccountParams{
 		ID:             userID,
 		GithubUserID:   sql.NullInt64{Int64: githubUserID, Valid: true},
-		GithubUsername: githubUsername,
+		GithubUsername: sql.NullString{String: githubUsername, Valid: true},
 	})
 }
 
@@ -67,7 +67,7 @@ func (s *Store) UnlinkGitHubAccount(ctx context.Context, tx *sql.Tx, userID stri
 
 func (s *Store) UpdateGitHubUsername(ctx context.Context, tx *sql.Tx, githubUserID int64, username string) error {
 	return s.q(tx).UpdateGitHubUsername(ctx, sqlc.UpdateGitHubUsernameParams{
-		GithubUsername: username,
+		GithubUsername: sql.NullString{String: username, Valid: true},
 		GithubUserID:   sql.NullInt64{Int64: githubUserID, Valid: true},
 	})
 }
@@ -79,12 +79,12 @@ func (s *Store) UpdateDefaultOrgID(ctx context.Context, tx *sql.Tx, userID strin
 	})
 }
 
-func toModelUserRow(id, email, name string, githubUserID sql.NullInt64, githubUsername string, defaultOrgID sql.NullInt64, createdAt, updatedAt time.Time) *model.User {
+func toModelUserRow(id, email, name string, githubUserID sql.NullInt64, githubUsername sql.NullString, defaultOrgID sql.NullInt64, createdAt, updatedAt time.Time) *model.User {
 	u := &model.User{
 		ID:             id,
 		Email:          email,
 		Name:           name,
-		GitHubUsername: githubUsername,
+		GitHubUsername: githubUsername.String,
 		CreatedAt:      createdAt,
 		UpdatedAt:      updatedAt,
 	}

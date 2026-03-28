@@ -18,14 +18,14 @@ WHERE id = $1
 `
 
 type GetUserRow struct {
-	ID             string        `json:"id"`
-	Email          string        `json:"email"`
-	Name           string        `json:"name"`
-	GithubUserID   sql.NullInt64 `json:"github_user_id"`
-	GithubUsername string        `json:"github_username"`
-	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID             string         `json:"id"`
+	Email          string         `json:"email"`
+	Name           string         `json:"name"`
+	GithubUserID   sql.NullInt64  `json:"github_user_id"`
+	GithubUsername sql.NullString `json:"github_username"`
+	DefaultOrgID   sql.NullInt64  `json:"default_org_id"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
@@ -51,14 +51,14 @@ WHERE email = $1
 `
 
 type GetUserByEmailRow struct {
-	ID             string        `json:"id"`
-	Email          string        `json:"email"`
-	Name           string        `json:"name"`
-	GithubUserID   sql.NullInt64 `json:"github_user_id"`
-	GithubUsername string        `json:"github_username"`
-	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID             string         `json:"id"`
+	Email          string         `json:"email"`
+	Name           string         `json:"name"`
+	GithubUserID   sql.NullInt64  `json:"github_user_id"`
+	GithubUsername sql.NullString `json:"github_username"`
+	DefaultOrgID   sql.NullInt64  `json:"default_org_id"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -84,14 +84,14 @@ WHERE github_user_id = $1
 `
 
 type GetUserByGitHubUserIDRow struct {
-	ID             string        `json:"id"`
-	Email          string        `json:"email"`
-	Name           string        `json:"name"`
-	GithubUserID   sql.NullInt64 `json:"github_user_id"`
-	GithubUsername string        `json:"github_username"`
-	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID             string         `json:"id"`
+	Email          string         `json:"email"`
+	Name           string         `json:"name"`
+	GithubUserID   sql.NullInt64  `json:"github_user_id"`
+	GithubUsername sql.NullString `json:"github_username"`
+	DefaultOrgID   sql.NullInt64  `json:"default_org_id"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) GetUserByGitHubUserID(ctx context.Context, githubUserID sql.NullInt64) (GetUserByGitHubUserIDRow, error) {
@@ -119,9 +119,9 @@ WHERE id = $1
 `
 
 type LinkGitHubAccountParams struct {
-	ID             string        `json:"id"`
-	GithubUserID   sql.NullInt64 `json:"github_user_id"`
-	GithubUsername string        `json:"github_username"`
+	ID             string         `json:"id"`
+	GithubUserID   sql.NullInt64  `json:"github_user_id"`
+	GithubUsername sql.NullString `json:"github_username"`
 }
 
 func (q *Queries) LinkGitHubAccount(ctx context.Context, arg LinkGitHubAccountParams) error {
@@ -167,8 +167,8 @@ WHERE github_user_id = $2
 `
 
 type UpdateGitHubUsernameParams struct {
-	GithubUsername string        `json:"github_username"`
-	GithubUserID   sql.NullInt64 `json:"github_user_id"`
+	GithubUsername sql.NullString `json:"github_username"`
+	GithubUserID   sql.NullInt64  `json:"github_user_id"`
 }
 
 func (q *Queries) UpdateGitHubUsername(ctx context.Context, arg UpdateGitHubUsernameParams) error {
@@ -199,14 +199,14 @@ type UpsertUserParams struct {
 }
 
 type UpsertUserRow struct {
-	ID             string        `json:"id"`
-	Email          string        `json:"email"`
-	Name           string        `json:"name"`
-	GithubUserID   sql.NullInt64 `json:"github_user_id"`
-	GithubUsername string        `json:"github_username"`
-	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID             string         `json:"id"`
+	Email          string         `json:"email"`
+	Name           string         `json:"name"`
+	GithubUserID   sql.NullInt64  `json:"github_user_id"`
+	GithubUsername sql.NullString `json:"github_username"`
+	DefaultOrgID   sql.NullInt64  `json:"default_org_id"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (UpsertUserRow, error) {
