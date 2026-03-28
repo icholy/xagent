@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,6 +47,11 @@ type KeyValidator interface {
 	ValidateKey(ctx context.Context, keyHash string) (*UserInfo, error)
 }
 
+// UserProvisioner is called to provision or update a user record on login.
+type UserProvisioner interface {
+	ProvisionUser(ctx context.Context, user *UserInfo) error
+}
+
 // Config holds the configuration for ZITADEL authentication.
 type Config struct {
 	Domain        string
@@ -57,6 +63,8 @@ type Config struct {
 	Scopes        []string
 	// KeyValidator validates xat_ API keys.
 	KeyValidator KeyValidator
+	// UserProvisioner is called on login to ensure the user exists in the database.
+	UserProvisioner UserProvisioner
 	// AppKey is the Ed25519 private key for signing/verifying app JWTs.
 	// If nil, a new key is generated on startup.
 	AppKey ed25519.PrivateKey
@@ -76,6 +84,8 @@ type Auth struct {
 	bearer *middleware.Interceptor[*oauth.IntrospectionContext]
 	// validator validates xat_ API keys
 	validator KeyValidator
+	// provisioner provisions users on login
+	provisioner UserProvisioner
 	// handler handles /auth/* routes (login, callback, logout)
 	handler http.Handler
 	// appKey is the Ed25519 private key for signing/verifying app JWTs
@@ -134,11 +144,12 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		return nil, err
 	}
 	return &Auth{
-		cookie:    authentication.Middleware(authN),
-		bearer:    middleware.New(authZ),
-		validator: cfg.KeyValidator,
-		handler:   authN,
-		appKey:    appKey,
+		cookie:      authentication.Middleware(authN),
+		bearer:      middleware.New(authZ),
+		validator:   cfg.KeyValidator,
+		provisioner: cfg.UserProvisioner,
+		handler:     authN,
+		appKey:      appKey,
 	}, nil
 }
 
@@ -275,6 +286,12 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 		if user == nil {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
+		}
+		// Provision user on login
+		if a.provisioner != nil {
+			if err := a.provisioner.ProvisionUser(r.Context(), user); err != nil {
+				slog.Error("failed to provision user", "error", err, "user_id", user.ID)
+			}
 		}
 		// Parse org_id from query parameter (defaults to 0)
 		if raw := r.URL.Query().Get("org_id"); raw != "" {

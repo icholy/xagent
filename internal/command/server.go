@@ -13,6 +13,7 @@ import (
 
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/server"
 	"github.com/icholy/xagent/internal/store"
@@ -134,15 +135,16 @@ var ServerCommand = &cli.Command{
 			slog.Warn("authentication disabled")
 		}
 		auth, err := apiauth.New(ctx, apiauth.Config{
-			Domain:        domain,
-			ClientID:      cmd.String("auth-client-id"),
-			ClientSecret:  cmd.String("auth-client-secret"),
-			RedirectURI:   baseURL + "/auth/callback",
-			PostLogoutURI: baseURL,
-			EncryptionKey: key,
-			KeyValidator:  &storeKeyValidator{store: st},
-			AppKey:        appKey,
-			Disable:       noAuth,
+			Domain:          domain,
+			ClientID:        cmd.String("auth-client-id"),
+			ClientSecret:    cmd.String("auth-client-secret"),
+			RedirectURI:     baseURL + "/auth/callback",
+			PostLogoutURI:   baseURL,
+			EncryptionKey:   key,
+			KeyValidator:    &storeKeyValidator{store: st},
+			UserProvisioner: &storeUserProvisioner{store: st},
+			AppKey:          appKey,
+			Disable:         noAuth,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
@@ -216,4 +218,17 @@ func (v *storeKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*a
 		return nil, fmt.Errorf("key expired")
 	}
 	return &apiauth.UserInfo{ID: key.Owner}, nil
+}
+
+// storeUserProvisioner implements apiauth.UserProvisioner using the store.
+type storeUserProvisioner struct {
+	store *store.Store
+}
+
+func (p *storeUserProvisioner) ProvisionUser(ctx context.Context, user *apiauth.UserInfo) error {
+	return p.store.UpsertUser(ctx, nil, &model.User{
+		ID:    user.ID,
+		Email: user.Email,
+		Name:  user.Name,
+	})
 }
