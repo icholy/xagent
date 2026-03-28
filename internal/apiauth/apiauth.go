@@ -2,8 +2,11 @@ package apiauth
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -22,6 +25,7 @@ type UserInfo struct {
 	ID    string
 	Email string
 	Name  string
+	OrgID int64
 }
 
 type userInfoKey struct{}
@@ -71,13 +75,19 @@ type Auth struct {
 	validator KeyValidator
 	// handler handles /auth/* routes (login, callback, logout)
 	handler http.Handler
+	// appKey is the Ed25519 private key for signing/verifying app JWTs
+	appKey ed25519.PrivateKey
 }
 
 // New creates a new Auth instance with both cookie and bearer token support.
 // If cfg.Disable is true, authentication is bypassed and all requests get a default user.
 func New(ctx context.Context, cfg Config) (*Auth, error) {
+	appKey, err := CreateAppPrivateKey()
+	if err != nil {
+		return nil, err
+	}
 	if cfg.Disable {
-		return &Auth{disabled: true}, nil
+		return &Auth{disabled: true, appKey: appKey}, nil
 	}
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail}
@@ -121,6 +131,7 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		bearer:    middleware.New(authZ),
 		validator: cfg.KeyValidator,
 		handler:   authN,
+		appKey:    appKey,
 	}, nil
 }
 
@@ -136,6 +147,24 @@ func (a *Auth) validateKey(r *http.Request) (*UserInfo, error) {
 	return a.validator.ValidateKey(r.Context(), HashKey(raw))
 }
 
+// validateAppToken extracts and validates an app JWT from the Authorization header.
+func (a *Auth) validateAppToken(r *http.Request) (*UserInfo, error) {
+	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok {
+		return nil, errors.New("missing Bearer token")
+	}
+	claims, err := VerifyAppToken(a.appKey, raw)
+	if err != nil {
+		return nil, err
+	}
+	return &UserInfo{
+		ID:    claims.Subject,
+		Email: claims.Email,
+		Name:  claims.Name,
+		OrgID: claims.OrgID,
+	}, nil
+}
+
 // RequireAuth returns middleware that requires either a valid Bearer token
 // or an authenticated cookie session.
 func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
@@ -149,6 +178,14 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 				user, err := a.validateKey(r)
 				if err != nil || user == nil {
 					http.Error(w, "invalid API key", http.StatusUnauthorized)
+					return
+				}
+				r = r.WithContext(WithUser(r.Context(), user))
+				next.ServeHTTP(w, r)
+			case "app":
+				user, err := a.validateAppToken(r)
+				if err != nil || user == nil {
+					http.Error(w, "invalid app token", http.StatusUnauthorized)
 					return
 				}
 				r = r.WithContext(WithUser(r.Context(), user))
@@ -173,6 +210,12 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 			switch r.Header.Get(AuthTypeHeader) {
 			case "key":
 				user, err := a.validateKey(r)
+				if err == nil && user != nil {
+					r = r.WithContext(WithUser(r.Context(), user))
+				}
+				next.ServeHTTP(w, r)
+			case "app":
+				user, err := a.validateAppToken(r)
 				if err == nil && user != nil {
 					r = r.WithContext(WithUser(r.Context(), user))
 				}
@@ -213,6 +256,63 @@ func (a *Auth) AttachUserInfo() func(http.Handler) http.Handler {
 	}
 }
 
+// HandleToken returns an HTTP handler for GET /auth/token that issues app JWTs.
+// The endpoint is authenticated via cookie session.
+func (a *Auth) HandleToken() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		user := a.cookieUser(r)
+		if user == nil {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		// Parse org_id from query parameter (defaults to 0)
+		var orgID int64
+		if raw := r.URL.Query().Get("org_id"); raw != "" {
+			var err error
+			orgID, err = strconv.ParseInt(raw, 10, 64)
+			if err != nil {
+				http.Error(w, "invalid org_id", http.StatusBadRequest)
+				return
+			}
+		}
+		user.OrgID = orgID
+		claims := NewAppClaims(user)
+		token, err := SignAppToken(a.appKey, claims)
+		if err != nil {
+			http.Error(w, "failed to sign token", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"token":  token,
+			"org_id": orgID,
+		})
+	}
+}
+
+// cookieUser returns user info from the cookie session only.
+func (a *Auth) cookieUser(r *http.Request) *UserInfo {
+	if a.disabled {
+		return &UserInfo{
+			ID:    "dev",
+			Email: "dev@localhost",
+			Name:  "Developer",
+		}
+	}
+	if ctx := a.cookie.Context(r.Context()); ctx != nil {
+		return &UserInfo{
+			ID:    ctx.UserInfo.Subject,
+			Email: ctx.UserInfo.Email,
+			Name:  ctx.UserInfo.Name,
+		}
+	}
+	return nil
+}
+
 // Handler returns the HTTP handler for auth routes (login, callback, logout).
 func (a *Auth) Handler() http.Handler {
 	if a.disabled {
@@ -241,11 +341,12 @@ func (a *Auth) attachDefaultUser() func(http.Handler) http.Handler {
 // User returns the authenticated user's information.
 // Works with API keys, Bearer tokens, and cookie authentication.
 func (a *Auth) User(r *http.Request) *UserInfo {
-	// If UserInfo already set (e.g., by API key in CheckAuth), return it
+	// If UserInfo already set (e.g., by API key or app token in CheckAuth), return it
 	if user := User(r.Context()); user != nil {
 		return user
 	}
-	if r.Header.Get(AuthTypeHeader) == "bearer" {
+	switch r.Header.Get(AuthTypeHeader) {
+	case "bearer":
 		if ctx := a.bearer.Context(r.Context()); ctx != nil {
 			return &UserInfo{
 				ID:    ctx.Subject,
@@ -253,6 +354,9 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 				Name:  ctx.Name,
 			}
 		}
+		return nil
+	case "app":
+		// App tokens are validated and set in CheckAuth/RequireAuth
 		return nil
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
