@@ -3,6 +3,7 @@ package apiauth
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -43,6 +44,21 @@ func CreateAppPrivateKey() (ed25519.PrivateKey, error) {
 		return nil, fmt.Errorf("generate key: %w", err)
 	}
 	return priv, nil
+}
+
+// DecodeAppKey decodes a hex-encoded Ed25519 seed (32 bytes) into a private key.
+func DecodeAppKey(hexSeed string) (ed25519.PrivateKey, error) {
+	if hexSeed == "" {
+		return nil, nil
+	}
+	seed, err := hex.DecodeString(hexSeed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode hex seed: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("seed must be %d bytes, got %d", ed25519.SeedSize, len(seed))
+	}
+	return ed25519.NewKeyFromSeed(seed), nil
 }
 
 // SignAppToken creates a JWT signed with the Ed25519 private key.

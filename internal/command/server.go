@@ -65,6 +65,11 @@ var ServerCommand = &cli.Command{
 			Usage:   "Hex-encoded 32-byte key for session encryption (generated if not set)",
 			Sources: cli.EnvVars("XAGENT_AUTH_ENCRYPTION_KEY"),
 		},
+		&cli.StringFlag{
+			Name:    "auth-app-key",
+			Usage:   "Hex-encoded 32-byte Ed25519 seed for signing app JWTs (generated if not set)",
+			Sources: cli.EnvVars("XAGENT_AUTH_APP_KEY"),
+		},
 		&cli.BoolFlag{
 			Name:  "no-auth",
 			Usage: "Disable authentication (for development only)",
@@ -121,6 +126,10 @@ var ServerCommand = &cli.Command{
 		if err != nil && !noAuth {
 			return fmt.Errorf("invalid encryption key: %w", err)
 		}
+		appKey, err := apiauth.DecodeAppKey(cmd.String("auth-app-key"))
+		if err != nil {
+			return fmt.Errorf("invalid app key: %w", err)
+		}
 		if noAuth {
 			slog.Warn("authentication disabled")
 		}
@@ -132,6 +141,7 @@ var ServerCommand = &cli.Command{
 			PostLogoutURI: baseURL,
 			EncryptionKey: key,
 			KeyValidator:  &storeKeyValidator{store: st},
+			AppKey:        appKey,
 			Disable:       noAuth,
 		})
 		if err != nil {
