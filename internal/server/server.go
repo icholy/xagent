@@ -77,6 +77,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	// Device flow discovery endpoint (public)
 	mux.HandleFunc(deviceauth.DiscoveryPath, s.handleDeviceConfig)
+	// App JWT token endpoint (cookie-authenticated)
+	mux.Handle("/auth/token", alice.New(s.auth.CheckAuth()).Then(s.auth.HandleToken()))
 	// Auth routes (login, callback, logout)
 	mux.Handle("/auth/", s.auth.Handler())
 	// Connect RPC API (protected)
@@ -136,6 +138,16 @@ func (s *Server) userID(ctx context.Context) string {
 		panic("no UserInfo in request context")
 	}
 	return u.ID
+}
+
+// orgID returns the org ID from the authenticated user's context.
+// Returns 0 when no org is selected (personal context).
+func (s *Server) orgID(ctx context.Context) int64 {
+	u := apiauth.User(ctx)
+	if u == nil {
+		panic("no UserInfo in request context")
+	}
+	return u.OrgID
 }
 
 func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
