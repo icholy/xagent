@@ -23,14 +23,6 @@ type EventTask struct {
 	TaskID  int64 `json:"task_id"`
 }
 
-type GithubAccount struct {
-	ID             int64     `json:"id"`
-	Owner          string    `json:"owner"`
-	GithubUserID   int64     `json:"github_user_id"`
-	GithubUsername string    `json:"github_username"`
-	CreatedAt      time.Time `json:"created_at"`
-}
-
 type Key struct {
 	ID        string       `json:"id"`
 	Name      string       `json:"name"`
@@ -75,11 +67,13 @@ type TaskLink struct {
 }
 
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID             string        `json:"id"`
+	Email          string        `json:"email"`
+	Name           string        `json:"name"`
+	GithubUserID   sql.NullInt64 `json:"github_user_id"`
+	GithubUsername string        `json:"github_username"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
 }
 
 type Workspace struct {

@@ -37,7 +37,7 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Look up xagent owner by GitHub user ID
-	account, err := s.store.GetGitHubAccountByGitHubUserID(r.Context(), nil, extracted.githubUserID)
+	user, err := s.store.GetUserByGitHubUserID(r.Context(), nil, extracted.githubUserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			slog.Info("no linked GitHub account", "github_user_id", extracted.githubUserID)
@@ -50,13 +50,13 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update cached username if it changed
-	if extracted.githubUsername != "" && extracted.githubUsername != account.GitHubUsername {
-		if err := s.store.UpdateGitHubUsername(r.Context(), nil, account.GitHubUserID, extracted.githubUsername); err != nil {
+	if extracted.githubUsername != "" && extracted.githubUsername != user.GitHubUsername {
+		if err := s.store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, extracted.githubUsername); err != nil {
 			slog.Warn("failed to update GitHub username", "error", err)
 		}
 	}
 
-	owner := account.Owner
+	owner := user.ID
 
 	// Create event in store
 	event := &model.Event{

@@ -105,13 +105,8 @@ func (s *Server) Handler() http.Handler {
 					http.Error(w, "not authenticated", http.StatusUnauthorized)
 					return
 				}
-				account := &model.GitHubAccount{
-					Owner:          user.ID,
-					GitHubUserID:   ghUser.GetID(),
-					GitHubUsername: ghUser.GetLogin(),
-				}
-				if err := s.store.CreateGitHubAccount(r.Context(), nil, account); err != nil {
-					http.Error(w, "failed to save GitHub account", http.StatusInternalServerError)
+				if err := s.store.LinkGitHubAccount(r.Context(), nil, user.ID, ghUser.GetID(), ghUser.GetLogin()); err != nil {
+					http.Error(w, "failed to link GitHub account", http.StatusInternalServerError)
 					return
 				}
 				http.Redirect(w, r, "/ui/settings", http.StatusFound)
@@ -899,23 +894,22 @@ func (s *Server) GetGitHubAccount(ctx context.Context, req *xagentv1.GetGitHubAc
 	if s.github != nil {
 		resp.GithubAppSlug = s.github.AppSlug
 	}
-	account, err := s.store.GetGitHubAccountByOwner(ctx, nil, userID)
+	user, err := s.store.GetUser(ctx, nil, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return resp, nil
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp.Account = account.Proto()
+	resp.Account = user.GitHubAccountProto()
 	return resp, nil
 }
 
 func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
 	userID := s.userID(ctx)
-	if err := s.store.DeleteGitHubAccount(ctx, nil, userID); err != nil {
+	if err := s.store.UnlinkGitHubAccount(ctx, nil, userID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("github account unlinked", "owner", userID)
 	return &xagentv1.UnlinkGitHubAccountResponse{}, nil
 }
-

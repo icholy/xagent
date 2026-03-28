@@ -246,12 +246,12 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	ctx := randomUserID(t)
 	userID := s.userID(ctx)
 
-	account := &model.GitHubAccount{
-		Owner:          userID,
-		GitHubUserID:   943597,
-		GitHubUsername: "icholy",
-	}
-	err := s.store.CreateGitHubAccount(ctx, nil, account)
+	err := s.store.UpsertUser(ctx, nil, &model.User{
+		ID:    userID,
+		Email: userID + "@test.com",
+	})
+	assert.NilError(t, err)
+	err = s.store.LinkGitHubAccount(ctx, nil, userID, 943597, "icholy")
 	assert.NilError(t, err)
 
 	task := &model.Task{

@@ -7,10 +7,11 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
 )
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, created_at, updated_at
 FROM users
 WHERE id = $1
 `
@@ -22,6 +23,8 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 		&i.ID,
 		&i.Email,
 		&i.Name,
+		&i.GithubUserID,
+		&i.GithubUsername,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -29,7 +32,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, created_at, updated_at
 FROM users
 WHERE email = $1
 `
@@ -41,10 +44,82 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.ID,
 		&i.Email,
 		&i.Name,
+		&i.GithubUserID,
+		&i.GithubUsername,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUserByGitHubUserID = `-- name: GetUserByGitHubUserID :one
+SELECT id, email, name, github_user_id, github_username, created_at, updated_at
+FROM users
+WHERE github_user_id = $1
+`
+
+func (q *Queries) GetUserByGitHubUserID(ctx context.Context, githubUserID sql.NullInt64) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByGitHubUserID, githubUserID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.GithubUserID,
+		&i.GithubUsername,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const linkGitHubAccount = `-- name: LinkGitHubAccount :exec
+UPDATE users SET
+    github_user_id = $2,
+    github_username = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type LinkGitHubAccountParams struct {
+	ID             string        `json:"id"`
+	GithubUserID   sql.NullInt64 `json:"github_user_id"`
+	GithubUsername string        `json:"github_username"`
+}
+
+func (q *Queries) LinkGitHubAccount(ctx context.Context, arg LinkGitHubAccountParams) error {
+	_, err := q.db.ExecContext(ctx, linkGitHubAccount, arg.ID, arg.GithubUserID, arg.GithubUsername)
+	return err
+}
+
+const unlinkGitHubAccount = `-- name: UnlinkGitHubAccount :exec
+UPDATE users SET
+    github_user_id = NULL,
+    github_username = '',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+func (q *Queries) UnlinkGitHubAccount(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, unlinkGitHubAccount, id)
+	return err
+}
+
+const updateGitHubUsername = `-- name: UpdateGitHubUsername :exec
+UPDATE users SET
+    github_username = $1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE github_user_id = $2
+`
+
+type UpdateGitHubUsernameParams struct {
+	GithubUsername string        `json:"github_username"`
+	GithubUserID   sql.NullInt64 `json:"github_user_id"`
+}
+
+func (q *Queries) UpdateGitHubUsername(ctx context.Context, arg UpdateGitHubUsernameParams) error {
+	_, err := q.db.ExecContext(ctx, updateGitHubUsername, arg.GithubUsername, arg.GithubUserID)
+	return err
 }
 
 const upsertUser = `-- name: UpsertUser :one
@@ -54,7 +129,7 @@ ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = EXCLUDED.name,
     updated_at = CURRENT_TIMESTAMP
-RETURNING id, email, name, created_at, updated_at
+RETURNING id, email, name, github_user_id, github_username, created_at, updated_at
 `
 
 type UpsertUserParams struct {
@@ -70,6 +145,8 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.ID,
 		&i.Email,
 		&i.Name,
+		&i.GithubUserID,
+		&i.GithubUsername,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
