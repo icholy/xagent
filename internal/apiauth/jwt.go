@@ -19,7 +19,7 @@ type AppClaims struct {
 }
 
 // AppTokenTTL is the default time-to-live for app JWTs.
-const AppTokenTTL = 15 * time.Minute
+const AppTokenTTL = 5 * time.Minute
 
 // NewAppClaims creates AppClaims from a UserInfo.
 func NewAppClaims(user *UserInfo) *AppClaims {
