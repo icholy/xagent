@@ -39,5 +39,10 @@ description = "Run tests"
 env = { TEST_DATABASE_URL = "postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable" }
 run = "go test ./..."
 
+[tasks.deploy]
+description = "Build and deploy to Fly.io"
+depends = ["build"]
+run = "fly deploy"
+
 [tasks.update_secrets]
 run = "sops -d --output-type dotenv sops.env.yml | fly secrets import"
