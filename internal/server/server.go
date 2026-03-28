@@ -941,11 +941,14 @@ func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) 
 		if err := s.store.CreateOrg(ctx, tx, org); err != nil {
 			return err
 		}
-		return s.store.AddOrgMember(ctx, tx, &model.OrgMember{
+		if err := s.store.AddOrgMember(ctx, tx, &model.OrgMember{
 			OrgID:  org.ID,
 			UserID: userID,
 			Role:   "owner",
-		})
+		}); err != nil {
+			return err
+		}
+		return tx.Commit()
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
