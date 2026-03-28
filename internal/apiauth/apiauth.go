@@ -109,6 +109,8 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail}
 	}
+	// TODO: provision users on OIDC callback instead of in HandleToken.
+	// Waiting on https://github.com/zitadel/zitadel-go/pull/592
 	authN, err := authentication.New(ctx,
 		// my zitadel instance domain
 		zitadel.New(cfg.Domain),
