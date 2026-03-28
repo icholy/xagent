@@ -46,3 +46,7 @@ run = "fly deploy"
 
 [tasks.update_secrets]
 run = "sops -d --output-type dotenv sops.env.yml | fly secrets import"
+
+[tasks.logs]
+description = "View production logs"
+run = "flyctl logs -a xagent"
