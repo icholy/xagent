@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v68/github"
-	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
 )
@@ -245,18 +244,12 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	s := setupTestServer(t)
 	s.github = &GitHubConfig{}
 
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, s)
 	userID := s.userID(ctx)
 	orgID := s.orgID(ctx)
 
 	ghUserID := rand.Int64N(1<<53) + 1
-	err := s.store.CreateUser(ctx, nil, &model.User{
-		ID:             userID,
-		Email:          userID + "@test.com",
-		GitHubUserID:   ghUserID,
-		GitHubUsername: "testuser",
-		DefaultOrgID:   apiauth.User(ctx).OrgID,
-	})
+	err := s.store.LinkGitHubAccount(ctx, nil, userID, ghUserID, "testuser")
 	assert.NilError(t, err)
 
 	task := &model.Task{

@@ -10,7 +10,7 @@ import (
 func TestProcessEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	// Create two tasks with links to the same URL with notify=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -98,7 +98,7 @@ func TestProcessEvent(t *testing.T) {
 func TestProcessEventWithoutURL(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	// Create an event without URL
 	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -120,7 +120,7 @@ func TestProcessEventWithoutURL(t *testing.T) {
 func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -158,7 +158,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 func TestProcessEventWithNotifyFalse(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -196,7 +196,7 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 func TestProcessEventDeduplicatesTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -243,7 +243,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	// Create two tasks with links to the same URL with notify=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -344,8 +344,8 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 func TestProcessEvent_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Url:         "https://github.com/example/repo/pull/123",

@@ -2,22 +2,41 @@ package server
 
 import (
 	"context"
-	"math/rand/v2"
 	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 	"gotest.tools/v3/assert"
 )
 
-// randomUserID creates a context with an authenticated user for testing.
-func randomUserID(t *testing.T) context.Context {
+// createTestUser creates a context with an authenticated user backed by a real org.
+func createTestUser(t *testing.T, srv *Server) context.Context {
 	t.Helper()
-	id := uuid.NewString()
-	orgID := rand.Int64N(1<<53) + 1
-	return apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: id, OrgID: orgID})
+	userID := uuid.NewString()
+	err := srv.store.CreateUser(t.Context(), nil, &model.User{
+		ID:    userID,
+		Email: userID + "@test.com",
+		Name:  "Test User",
+	})
+	assert.NilError(t, err)
+	org := &model.Org{
+		Name:  "test-org-" + userID,
+		Owner: userID,
+	}
+	err = srv.store.CreateOrg(t.Context(), nil, org)
+	assert.NilError(t, err)
+	err = srv.store.AddOrgMember(t.Context(), nil, &model.OrgMember{
+		OrgID:  org.ID,
+		UserID: userID,
+		Role:   "owner",
+	})
+	assert.NilError(t, err)
+	err = srv.store.UpdateDefaultOrgID(t.Context(), nil, userID, org.ID)
+	assert.NilError(t, err)
+	return apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: org.ID})
 }
 
 // setupTestServer creates a test server with a clean database.

@@ -10,7 +10,7 @@ import (
 
 func TestGetTask(t *testing.T) {
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	// Create a task using the API
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -65,8 +65,8 @@ func TestGetTask(t *testing.T) {
 func TestGetTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -85,8 +85,8 @@ func TestGetTask_Permissions(t *testing.T) {
 func TestGetTaskDetails_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -105,7 +105,7 @@ func TestGetTaskDetails_Permissions(t *testing.T) {
 func TestCreateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	// Act
 	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -145,8 +145,8 @@ func TestCreateTask(t *testing.T) {
 func TestCreateTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Parent Task",
 		Workspace: "test-workspace",
@@ -167,7 +167,7 @@ func TestCreateTask_Permissions(t *testing.T) {
 func TestListTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
 		Workspace: "workspace-1",
@@ -190,8 +190,8 @@ func TestListTasks(t *testing.T) {
 func TestListTasks_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	_, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task 1",
 		Workspace: "test-workspace",
@@ -222,8 +222,8 @@ func TestListTasks_Permissions(t *testing.T) {
 func TestListChildTasks_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Parent Task",
 		Workspace: "test-workspace",
@@ -254,7 +254,7 @@ func TestListChildTasks_Permissions(t *testing.T) {
 func TestUpdateTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Original Name",
 		Workspace: "test-workspace",
@@ -277,8 +277,8 @@ func TestUpdateTask(t *testing.T) {
 func TestUpdateTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -298,7 +298,7 @@ func TestUpdateTask_Permissions(t *testing.T) {
 func TestDeleteTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task to Delete",
 		Workspace: "test-workspace",
@@ -319,8 +319,8 @@ func TestDeleteTask(t *testing.T) {
 func TestDeleteTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -341,8 +341,8 @@ func TestDeleteTask_Permissions(t *testing.T) {
 func TestArchiveTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -361,8 +361,8 @@ func TestArchiveTask_Permissions(t *testing.T) {
 func TestCancelTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
@@ -381,8 +381,8 @@ func TestCancelTask_Permissions(t *testing.T) {
 func TestRestartTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",

@@ -11,7 +11,7 @@ import (
 func TestCreateKey(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	// Act
 	resp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
@@ -29,7 +29,7 @@ func TestCreateKey(t *testing.T) {
 func TestCreateAndListKeys(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 	_, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: "key-1",
 	})
@@ -50,7 +50,7 @@ func TestCreateAndListKeys(t *testing.T) {
 func TestDeleteKey(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 	createResp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: "to-delete",
 	})
@@ -71,8 +71,8 @@ func TestDeleteKey(t *testing.T) {
 func TestListKeys_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	_, err := srv.CreateKey(userA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})
@@ -98,8 +98,8 @@ func TestListKeys_Permissions(t *testing.T) {
 func TestDeleteKey_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateKey(userA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})

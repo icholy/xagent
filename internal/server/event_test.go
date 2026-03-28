@@ -12,7 +12,7 @@ import (
 func TestCreateEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	// Act
 	resp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -36,7 +36,7 @@ func TestCreateEvent(t *testing.T) {
 func TestGetEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Issue updated",
 		Data:        `{"status": "closed"}`,
@@ -64,8 +64,8 @@ func TestGetEvent(t *testing.T) {
 func TestGetEvent_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
@@ -84,7 +84,7 @@ func TestGetEvent_Permissions(t *testing.T) {
 func TestListEvents(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event 1",
 		Data:        `{"test": "data1"}`,
@@ -110,7 +110,7 @@ func TestListEvents(t *testing.T) {
 func TestListEventsWithLimit(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	// Create 5 events
 	for i := range 5 {
@@ -137,8 +137,8 @@ func TestListEventsWithLimit(t *testing.T) {
 func TestListEvents_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	_, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event 1",
 		Data:        `{}`,
@@ -169,7 +169,7 @@ func TestListEvents_Permissions(t *testing.T) {
 func TestDeleteEvent(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event to Delete",
 		Data:        `{}`,
@@ -190,8 +190,8 @@ func TestDeleteEvent(t *testing.T) {
 func TestDeleteEvent_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
@@ -213,7 +213,7 @@ func TestDeleteEvent_Permissions(t *testing.T) {
 func TestAddEventTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -248,8 +248,8 @@ func TestAddEventTask(t *testing.T) {
 func TestAddEventTask_Permissions_Task(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
@@ -276,8 +276,8 @@ func TestAddEventTask_Permissions_Task(t *testing.T) {
 func TestAddEventTask_Permissions_Event(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
@@ -304,7 +304,7 @@ func TestAddEventTask_Permissions_Event(t *testing.T) {
 func TestRemoveEventTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -344,8 +344,8 @@ func TestRemoveEventTask(t *testing.T) {
 func TestRemoveEventTask_Permissions_Task(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
@@ -378,8 +378,8 @@ func TestRemoveEventTask_Permissions_Task(t *testing.T) {
 func TestRemoveEventTask_Permissions_Event(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
@@ -420,7 +420,7 @@ func TestRemoveEventTask_Permissions_Event(t *testing.T) {
 func TestListEventTasks(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
@@ -465,8 +465,8 @@ func TestListEventTasks(t *testing.T) {
 func TestListEventTasks_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
@@ -504,7 +504,7 @@ func TestListEventTasks_Permissions(t *testing.T) {
 func TestListEventsByTask(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := randomUserID(t)
+	ctx := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -552,8 +552,8 @@ func TestListEventsByTask(t *testing.T) {
 func TestListEventsByTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
-	userA := randomUserID(t)
-	userB := randomUserID(t)
+	userA := createTestUser(t, srv)
+	userB := createTestUser(t, srv)
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
