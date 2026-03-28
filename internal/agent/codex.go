@@ -53,7 +53,7 @@ func (a *CodexAgent) Prompt(ctx context.Context, prompt string, resume bool) err
 
 	args := []string{
 		"exec",
-		"--full-auto",
+		"--dangerously-bypass-approvals-and-sandbox",
 		"--json",
 	}
 
