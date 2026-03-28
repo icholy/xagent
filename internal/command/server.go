@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -217,7 +218,11 @@ func (v *storeKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*a
 	if key.IsExpired() {
 		return nil, fmt.Errorf("key expired")
 	}
-	return &apiauth.UserInfo{ID: key.Owner}, nil
+	orgID, err := strconv.ParseInt(key.Owner, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid key owner: %w", err)
+	}
+	return &apiauth.UserInfo{OrgID: orgID}, nil
 }
 
 // storeUserResolver implements apiauth.UserResolver using the store.
