@@ -44,6 +44,12 @@ service XAgentService {
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
   rpc GetGitHubAccount(GetGitHubAccountRequest) returns (GetGitHubAccountResponse);
   rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
+  rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
+  rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
+  rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
+  rpc AddOrgMember(AddOrgMemberRequest) returns (AddOrgMemberResponse);
+  rpc RemoveOrgMember(RemoveOrgMemberRequest) returns (RemoveOrgMemberResponse);
+  rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
 }
 
 message PingRequest {}
@@ -114,6 +120,8 @@ message GetProfileRequest {}
 
 message GetProfileResponse {
   Profile profile = 1;
+  repeated Org orgs = 2;
+  int64 default_org_id = 3;
 }
 
 message ListTasksRequest {}
@@ -430,3 +438,60 @@ message GetGitHubAccountResponse {
 message UnlinkGitHubAccountRequest {}
 
 message UnlinkGitHubAccountResponse {}
+
+message Org {
+  int64 id = 1;
+  string name = 2;
+  string owner = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message OrgMember {
+  int64 org_id = 1;
+  string user_id = 2;
+  string email = 3;
+  string name = 4;
+  string role = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message CreateOrgRequest {
+  string name = 1;
+}
+
+message CreateOrgResponse {
+  Org org = 1;
+}
+
+message ListOrgsRequest {}
+
+message ListOrgsResponse {
+  repeated Org orgs = 1;
+}
+
+message DeleteOrgRequest {
+  int64 id = 1;
+}
+
+message DeleteOrgResponse {}
+
+message AddOrgMemberRequest {
+  string email = 1;
+}
+
+message AddOrgMemberResponse {
+  OrgMember member = 1;
+}
+
+message RemoveOrgMemberRequest {
+  string user_id = 1;
+}
+
+message RemoveOrgMemberResponse {}
+
+message ListOrgMembersRequest {}
+
+message ListOrgMembersResponse {
+  repeated OrgMember members = 1;
+}

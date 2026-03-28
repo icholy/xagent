@@ -154,13 +154,27 @@ func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest
 	if u == nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
 	}
-	return &xagentv1.GetProfileResponse{
+	orgs, err := s.store.ListOrgsByMember(ctx, nil, u.ID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	user, err := s.store.GetUser(ctx, nil, u.ID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp := &xagentv1.GetProfileResponse{
 		Profile: &xagentv1.Profile{
 			Id:    u.ID,
 			Email: u.Email,
 			Name:  u.Name,
 		},
-	}, nil
+		DefaultOrgId: user.DefaultOrgID,
+	}
+	resp.Orgs = make([]*xagentv1.Org, len(orgs))
+	for i, o := range orgs {
+		resp.Orgs[i] = o.Proto()
+	}
+	return resp, nil
 }
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
@@ -912,4 +926,135 @@ func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGi
 	}
 	s.log.Info("github account unlinked", "owner", userID)
 	return &xagentv1.UnlinkGitHubAccountResponse{}, nil
+}
+
+func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {
+	userID := s.userID(ctx)
+	if req.Name == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name is required"))
+	}
+	org := &model.Org{
+		Name:  req.Name,
+		Owner: userID,
+	}
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := s.store.CreateOrg(ctx, tx, org); err != nil {
+			return err
+		}
+		return s.store.AddOrgMember(ctx, tx, &model.OrgMember{
+			OrgID:  org.ID,
+			UserID: userID,
+			Role:   "owner",
+		})
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("org created", "id", org.ID, "name", org.Name, "owner", userID)
+	return &xagentv1.CreateOrgResponse{Org: org.Proto()}, nil
+}
+
+func (s *Server) ListOrgs(ctx context.Context, req *xagentv1.ListOrgsRequest) (*xagentv1.ListOrgsResponse, error) {
+	userID := s.userID(ctx)
+	orgs, err := s.store.ListOrgsByMember(ctx, nil, userID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	pbOrgs := make([]*xagentv1.Org, len(orgs))
+	for i, o := range orgs {
+		pbOrgs[i] = o.Proto()
+	}
+	return &xagentv1.ListOrgsResponse{Orgs: pbOrgs}, nil
+}
+
+func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error) {
+	userID := s.userID(ctx)
+	org, err := s.store.GetOrg(ctx, nil, req.Id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, errors.New("org not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if org.Owner != userID {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the org owner can delete it"))
+	}
+	if err := s.store.DeleteOrg(ctx, nil, req.Id); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("org deleted", "id", req.Id, "owner", userID)
+	return &xagentv1.DeleteOrgResponse{}, nil
+}
+
+func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberRequest) (*xagentv1.AddOrgMemberResponse, error) {
+	userID := s.userID(ctx)
+	orgID := s.orgID(ctx)
+	org, err := s.store.GetOrg(ctx, nil, orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if org.Owner != userID {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the org owner can add members"))
+	}
+	if req.Email == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("email is required"))
+	}
+	user, err := s.store.GetUserByEmail(ctx, nil, req.Email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no user found with email %q", req.Email))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	member := &model.OrgMember{
+		OrgID:  orgID,
+		UserID: user.ID,
+		Role:   "member",
+	}
+	if err := s.store.AddOrgMember(ctx, nil, member); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("org member added", "org_id", orgID, "user_id", user.ID, "email", req.Email)
+	return &xagentv1.AddOrgMemberResponse{
+		Member: &xagentv1.OrgMember{
+			OrgId:  member.OrgID,
+			UserId: member.UserID,
+			Email:  user.Email,
+			Name:   user.Name,
+			Role:   member.Role,
+		},
+	}, nil
+}
+
+func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMemberRequest) (*xagentv1.RemoveOrgMemberResponse, error) {
+	userID := s.userID(ctx)
+	orgID := s.orgID(ctx)
+	org, err := s.store.GetOrg(ctx, nil, orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if org.Owner != userID {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the org owner can remove members"))
+	}
+	if req.UserId == org.Owner {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("cannot remove the org owner"))
+	}
+	if err := s.store.RemoveOrgMember(ctx, nil, orgID, req.UserId); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("org member removed", "org_id", orgID, "user_id", req.UserId)
+	return &xagentv1.RemoveOrgMemberResponse{}, nil
+}
+
+func (s *Server) ListOrgMembers(ctx context.Context, req *xagentv1.ListOrgMembersRequest) (*xagentv1.ListOrgMembersResponse, error) {
+	orgID := s.orgID(ctx)
+	members, err := s.store.ListOrgMembersWithUsers(ctx, nil, orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	pbMembers := make([]*xagentv1.OrgMember, len(members))
+	for i, m := range members {
+		pbMembers[i] = m.Proto()
+	}
+	return &xagentv1.ListOrgMembersResponse{Members: pbMembers}, nil
 }

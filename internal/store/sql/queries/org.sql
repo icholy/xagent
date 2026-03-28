@@ -39,6 +39,13 @@ FROM org_members om
 WHERE om.org_id = $1
 ORDER BY om.created_at;
 
+-- name: ListOrgMembersWithUsers :many
+SELECT om.org_id, om.user_id, om.role, om.created_at, u.email, u.name
+FROM org_members om
+JOIN users u ON om.user_id = u.id
+WHERE om.org_id = $1
+ORDER BY om.created_at;
+
 -- name: GetOrgMember :one
 SELECT org_id, user_id, role, created_at
 FROM org_members

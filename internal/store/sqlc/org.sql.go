@@ -162,6 +162,53 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID int64) ([]OrgMember,
 	return items, nil
 }
 
+const listOrgMembersWithUsers = `-- name: ListOrgMembersWithUsers :many
+SELECT om.org_id, om.user_id, om.role, om.created_at, u.email, u.name
+FROM org_members om
+JOIN users u ON om.user_id = u.id
+WHERE om.org_id = $1
+ORDER BY om.created_at
+`
+
+type ListOrgMembersWithUsersRow struct {
+	OrgID     int64     `json:"org_id"`
+	UserID    string    `json:"user_id"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+}
+
+func (q *Queries) ListOrgMembersWithUsers(ctx context.Context, orgID int64) ([]ListOrgMembersWithUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOrgMembersWithUsers, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrgMembersWithUsersRow{}
+	for rows.Next() {
+		var i ListOrgMembersWithUsersRow
+		if err := rows.Scan(
+			&i.OrgID,
+			&i.UserID,
+			&i.Role,
+			&i.CreatedAt,
+			&i.Email,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgsByMember = `-- name: ListOrgsByMember :many
 SELECT o.id, o.name, o.owner, o.created_at, o.updated_at
 FROM orgs o

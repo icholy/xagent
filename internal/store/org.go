@@ -94,6 +94,27 @@ func (s *Store) ListOrgMembers(ctx context.Context, tx *sql.Tx, orgID int64) ([]
 	return members, nil
 }
 
+func (s *Store) ListOrgMembersWithUsers(ctx context.Context, tx *sql.Tx, orgID int64) ([]*model.OrgMemberWithUser, error) {
+	rows, err := s.q(tx).ListOrgMembersWithUsers(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	members := make([]*model.OrgMemberWithUser, len(rows))
+	for i, row := range rows {
+		members[i] = &model.OrgMemberWithUser{
+			OrgMember: model.OrgMember{
+				OrgID:     row.OrgID,
+				UserID:    row.UserID,
+				Role:      row.Role,
+				CreatedAt: row.CreatedAt,
+			},
+			Email: row.Email,
+			Name:  row.Name,
+		}
+	}
+	return members, nil
+}
+
 func (s *Store) GetOrgMember(ctx context.Context, tx *sql.Tx, orgID int64, userID string) (*model.OrgMember, error) {
 	row, err := s.q(tx).GetOrgMember(ctx, sqlc.GetOrgMemberParams{
 		OrgID:  orgID,
