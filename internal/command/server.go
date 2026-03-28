@@ -1,18 +1,22 @@
 package command
 
 import (
+	"cmp"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/server"
 	"github.com/icholy/xagent/internal/store"
@@ -143,6 +147,7 @@ var ServerCommand = &cli.Command{
 			KeyValidator:  &storeKeyValidator{store: st},
 			AppKey:        appKey,
 			Disable:       noAuth,
+			OnLogin:       ensureUserAndOrg(st),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
@@ -215,5 +220,54 @@ func (v *storeKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*a
 	if key.IsExpired() {
 		return nil, fmt.Errorf("key expired")
 	}
-	return &apiauth.UserInfo{ID: key.Owner}, nil
+	// Key owner is a stringified org ID (post-migration).
+	// Parse it to set OrgID on the returned UserInfo.
+	var orgID int64
+	if key.Owner != "" {
+		orgID, _ = strconv.ParseInt(key.Owner, 10, 64)
+	}
+	return &apiauth.UserInfo{ID: key.Owner, OrgID: orgID}, nil
+}
+
+// ensureUserAndOrg returns an OnLoginFunc that upserts the user record and
+// auto-creates a personal org on first login.
+func ensureUserAndOrg(st *store.Store) apiauth.OnLoginFunc {
+	return func(ctx context.Context, user *apiauth.UserInfo) (int64, error) {
+		if err := st.UpsertUser(ctx, nil, &model.User{
+			ID:    user.ID,
+			Email: user.Email,
+			Name:  user.Name,
+		}); err != nil {
+			return 0, err
+		}
+		u, err := st.GetUser(ctx, nil, user.ID)
+		if err != nil {
+			return 0, err
+		}
+		if u.DefaultOrgID != 0 {
+			return u.DefaultOrgID, nil
+		}
+		// First login: create personal org
+		org := &model.Org{
+			Name:    cmp.Or(user.Name, user.Email),
+			OwnerID: user.ID,
+		}
+		err = st.WithTx(ctx, nil, func(tx *sql.Tx) error {
+			if err := st.CreateOrg(ctx, tx, org); err != nil {
+				return err
+			}
+			if err := st.CreateOrgMember(ctx, tx, org.ID, user.ID); err != nil {
+				return err
+			}
+			if err := st.UpdateUserDefaultOrg(ctx, tx, user.ID, org.ID); err != nil {
+				return err
+			}
+			return tx.Commit()
+		})
+		if err != nil {
+			return 0, err
+		}
+		slog.Info("personal org created", "user_id", user.ID, "org_id", org.ID, "name", org.Name)
+		return org.ID, nil
+	}
 }

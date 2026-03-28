@@ -1,9 +1,10 @@
 import { Outlet, createRootRouteWithContext, Link } from '@tanstack/react-router'
-import { LogOut } from 'lucide-react'
+import { LogOut, ChevronsUpDown } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { QueryClient } from '@tanstack/react-query'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { useOrgId, useSwitchOrg } from '@/lib/use-org'
 import xagentIcon from '@/assets/icon.png'
 
 // TanStack devtools check NODE_ENV and render nothing in production, but the
@@ -34,6 +35,11 @@ export const Route = createRootRouteWithContext<{
 
 function RootComponent() {
   const { data: profileData } = useQuery(getProfile, {})
+  const orgId = useOrgId()
+  const switchOrg = useSwitchOrg()
+
+  const orgs = profileData?.orgs ?? []
+  const currentOrg = orgs.find((o) => o.id === orgId) ?? orgs[0]
 
   return (
     <>
@@ -75,6 +81,26 @@ function RootComponent() {
             </Link>
           </div>
           <div className="ml-auto flex items-center gap-4">
+            {orgs.length > 1 ? (
+              <div className="relative">
+                <select
+                  className="appearance-none bg-transparent text-sm text-muted-foreground hover:text-foreground cursor-pointer pr-6 border rounded px-2 py-1"
+                  value={String(currentOrg?.id ?? 0n)}
+                  onChange={(e) => switchOrg(BigInt(e.target.value))}
+                >
+                  {orgs.map((org) => (
+                    <option key={String(org.id)} value={String(org.id)}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronsUpDown className="absolute right-1 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              </div>
+            ) : currentOrg ? (
+              <span className="hidden md:inline text-sm text-muted-foreground">
+                {currentOrg.name}
+              </span>
+            ) : null}
             {profileData?.profile?.email && (
               <span className="hidden md:inline text-sm text-muted-foreground">
                 {profileData.profile.email}

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { useOrgId } from '@/lib/use-org'
 
 export const Route = createFileRoute('/events/new')({
   component: CreateEventPage,
@@ -14,6 +15,7 @@ export const Route = createFileRoute('/events/new')({
 
 function CreateEventPage() {
   const navigate = useNavigate()
+  const orgId = useOrgId()
   const [description, setDescription] = useState('')
   const [url, setUrl] = useState('')
   const [data, setData] = useState('')
@@ -30,6 +32,7 @@ function CreateEventPage() {
         description,
         url,
         data,
+        orgId,
       })
       if (response.event) {
         navigate({ to: '/events/$id', params: { id: String(response.event.id) } })

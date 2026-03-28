@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { RelativeTime } from '@/components/relative-time'
 import { Trash2, Loader2 } from 'lucide-react'
+import { useOrgId } from '@/lib/use-org'
 
 export const Route = createFileRoute('/workspaces/')({
   component: WorkspacesPage,
@@ -30,7 +31,8 @@ const ALL_RUNNERS = '\x00'
 
 function WorkspacesPage() {
   const [selectedRunner, setSelectedRunner] = useState(ALL_RUNNERS)
-  const { data, isLoading, error, refetch } = useQuery(listWorkspaces, {}, {
+  const orgId = useOrgId()
+  const { data, isLoading, error, refetch } = useQuery(listWorkspaces, { orgId }, {
     refetchInterval: 6000,
   })
   const clearMutation = useMutation(clearWorkspaces, { onSuccess: () => refetch() })

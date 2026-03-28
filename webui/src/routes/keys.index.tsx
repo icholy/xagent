@@ -17,13 +17,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { RelativeTime } from '@/components/relative-time'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
+import { useOrgId } from '@/lib/use-org'
 
 export const Route = createFileRoute('/keys/')({
   component: KeysPage,
 })
 
 function KeysPage() {
-  const { data, isLoading, error, refetch } = useQuery(listKeys, {}, {
+  const orgId = useOrgId()
+  const { data, isLoading, error, refetch } = useQuery(listKeys, { orgId }, {
     refetchInterval: 6000,
   })
 

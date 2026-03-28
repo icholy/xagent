@@ -6,6 +6,7 @@ import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_con
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { canArchiveTask, isChildTask } from '@/lib/task'
+import { useOrgId } from '@/lib/use-org'
 import {
   Table,
   TableBody,
@@ -31,8 +32,9 @@ export const Route = createFileRoute('/tasks/')({
 function TasksPage() {
   const [showChildTasks, setShowChildTasks] = useLocalStorage('showChildTasks', false)
   const [searchQuery, setSearchQuery] = useState('')
+  const orgId = useOrgId()
 
-  const { data, isLoading, error, refetch } = useQuery(listTasks, {}, {
+  const { data, isLoading, error, refetch } = useQuery(listTasks, { orgId }, {
     refetchInterval: 6000,
   })
 

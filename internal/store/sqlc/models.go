@@ -48,6 +48,20 @@ type Log struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Org struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	OwnerID   string    `json:"owner_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type OrgMember struct {
+	ID        int64     `json:"id"`
+	OrgID     int64     `json:"org_id"`
+	UserID    string    `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Task struct {
 	ID           int64     `json:"id"`
 	Name         string    `json:"name"`
@@ -72,6 +86,15 @@ type TaskLink struct {
 	Title     string    `json:"title"`
 	Notify    bool      `json:"notify"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type User struct {
+	ID           string        `json:"id"`
+	Email        string        `json:"email"`
+	Name         string        `json:"name"`
+	DefaultOrgID sql.NullInt64 `json:"default_org_id"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
 }
 
 type Workspace struct {

@@ -46,6 +46,10 @@ type KeyValidator interface {
 	ValidateKey(ctx context.Context, keyHash string) (*UserInfo, error)
 }
 
+// OnLoginFunc is called when a user authenticates via cookie session to the
+// token endpoint. It upserts the user record and returns the default org ID.
+type OnLoginFunc func(ctx context.Context, user *UserInfo) (defaultOrgID int64, err error)
+
 // Config holds the configuration for ZITADEL authentication.
 type Config struct {
 	Domain        string
@@ -63,6 +67,9 @@ type Config struct {
 	// Disable authentication (for development only).
 	// When true, all requests are authenticated as a default "dev" user.
 	Disable bool
+	// OnLogin is called when a user authenticates to the token endpoint.
+	// It should upsert the user record and return the default org ID.
+	OnLogin OnLoginFunc
 }
 
 // Auth provides hybrid authentication supporting both cookie-based sessions
@@ -80,6 +87,8 @@ type Auth struct {
 	handler http.Handler
 	// appKey is the Ed25519 private key for signing/verifying app JWTs
 	appKey ed25519.PrivateKey
+	// onLogin is called when a user authenticates to the token endpoint
+	onLogin OnLoginFunc
 }
 
 // New creates a new Auth instance with both cookie and bearer token support.
@@ -139,6 +148,7 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		validator: cfg.KeyValidator,
 		handler:   authN,
 		appKey:    appKey,
+		onLogin:   cfg.OnLogin,
 	}, nil
 }
 
@@ -276,7 +286,17 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
-		// Parse org_id from query parameter (defaults to 0)
+		// Call OnLogin to upsert user and get default org ID
+		var defaultOrgID int64
+		if a.onLogin != nil {
+			var err error
+			defaultOrgID, err = a.onLogin(r.Context(), user)
+			if err != nil {
+				http.Error(w, "login callback failed", http.StatusInternalServerError)
+				return
+			}
+		}
+		// Parse org_id from query parameter, fall back to default org
 		if raw := r.URL.Query().Get("org_id"); raw != "" {
 			orgID, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil {
@@ -284,6 +304,8 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 				return
 			}
 			user.OrgID = orgID
+		} else {
+			user.OrgID = defaultOrgID
 		}
 		claims := NewAppClaims(user)
 		token, err := SignAppToken(a.appKey, claims)
@@ -293,8 +315,8 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"token":     token,
-			"org_id":    user.OrgID,
+			"token":      token,
+			"org_id":     user.OrgID,
 			"expires_at": claims.ExpiresAt.Time.Unix(),
 		})
 	}

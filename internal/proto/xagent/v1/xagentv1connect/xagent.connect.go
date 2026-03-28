@@ -135,6 +135,21 @@ const (
 	// XAgentServiceUnlinkGitHubAccountProcedure is the fully-qualified name of the XAgentService's
 	// UnlinkGitHubAccount RPC.
 	XAgentServiceUnlinkGitHubAccountProcedure = "/xagent.v1.XAgentService/UnlinkGitHubAccount"
+	// XAgentServiceCreateOrgProcedure is the fully-qualified name of the XAgentService's CreateOrg RPC.
+	XAgentServiceCreateOrgProcedure = "/xagent.v1.XAgentService/CreateOrg"
+	// XAgentServiceListOrgsProcedure is the fully-qualified name of the XAgentService's ListOrgs RPC.
+	XAgentServiceListOrgsProcedure = "/xagent.v1.XAgentService/ListOrgs"
+	// XAgentServiceDeleteOrgProcedure is the fully-qualified name of the XAgentService's DeleteOrg RPC.
+	XAgentServiceDeleteOrgProcedure = "/xagent.v1.XAgentService/DeleteOrg"
+	// XAgentServiceAddOrgMemberProcedure is the fully-qualified name of the XAgentService's
+	// AddOrgMember RPC.
+	XAgentServiceAddOrgMemberProcedure = "/xagent.v1.XAgentService/AddOrgMember"
+	// XAgentServiceRemoveOrgMemberProcedure is the fully-qualified name of the XAgentService's
+	// RemoveOrgMember RPC.
+	XAgentServiceRemoveOrgMemberProcedure = "/xagent.v1.XAgentService/RemoveOrgMember"
+	// XAgentServiceListOrgMembersProcedure is the fully-qualified name of the XAgentService's
+	// ListOrgMembers RPC.
+	XAgentServiceListOrgMembersProcedure = "/xagent.v1.XAgentService/ListOrgMembers"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -176,6 +191,12 @@ type XAgentServiceClient interface {
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
+	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
+	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
+	DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error)
+	AddOrgMember(context.Context, *v1.AddOrgMemberRequest) (*v1.AddOrgMemberResponse, error)
+	RemoveOrgMember(context.Context, *v1.RemoveOrgMemberRequest) (*v1.RemoveOrgMemberResponse, error)
+	ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -411,6 +432,42 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
 			connect.WithClientOptions(opts...),
 		),
+		createOrg: connect.NewClient[v1.CreateOrgRequest, v1.CreateOrgResponse](
+			httpClient,
+			baseURL+XAgentServiceCreateOrgProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("CreateOrg")),
+			connect.WithClientOptions(opts...),
+		),
+		listOrgs: connect.NewClient[v1.ListOrgsRequest, v1.ListOrgsResponse](
+			httpClient,
+			baseURL+XAgentServiceListOrgsProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ListOrgs")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteOrg: connect.NewClient[v1.DeleteOrgRequest, v1.DeleteOrgResponse](
+			httpClient,
+			baseURL+XAgentServiceDeleteOrgProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("DeleteOrg")),
+			connect.WithClientOptions(opts...),
+		),
+		addOrgMember: connect.NewClient[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse](
+			httpClient,
+			baseURL+XAgentServiceAddOrgMemberProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("AddOrgMember")),
+			connect.WithClientOptions(opts...),
+		),
+		removeOrgMember: connect.NewClient[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse](
+			httpClient,
+			baseURL+XAgentServiceRemoveOrgMemberProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("RemoveOrgMember")),
+			connect.WithClientOptions(opts...),
+		),
+		listOrgMembers: connect.NewClient[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse](
+			httpClient,
+			baseURL+XAgentServiceListOrgMembersProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ListOrgMembers")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -453,6 +510,12 @@ type xAgentServiceClient struct {
 	deleteKey           *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
 	getGitHubAccount    *connect.Client[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse]
 	unlinkGitHubAccount *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
+	createOrg           *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
+	listOrgs            *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
+	deleteOrg           *connect.Client[v1.DeleteOrgRequest, v1.DeleteOrgResponse]
+	addOrgMember        *connect.Client[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse]
+	removeOrgMember     *connect.Client[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse]
+	listOrgMembers      *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -788,6 +851,60 @@ func (c *xAgentServiceClient) UnlinkGitHubAccount(ctx context.Context, req *v1.U
 	return nil, err
 }
 
+// CreateOrg calls xagent.v1.XAgentService.CreateOrg.
+func (c *xAgentServiceClient) CreateOrg(ctx context.Context, req *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error) {
+	response, err := c.createOrg.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// ListOrgs calls xagent.v1.XAgentService.ListOrgs.
+func (c *xAgentServiceClient) ListOrgs(ctx context.Context, req *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error) {
+	response, err := c.listOrgs.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// DeleteOrg calls xagent.v1.XAgentService.DeleteOrg.
+func (c *xAgentServiceClient) DeleteOrg(ctx context.Context, req *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error) {
+	response, err := c.deleteOrg.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// AddOrgMember calls xagent.v1.XAgentService.AddOrgMember.
+func (c *xAgentServiceClient) AddOrgMember(ctx context.Context, req *v1.AddOrgMemberRequest) (*v1.AddOrgMemberResponse, error) {
+	response, err := c.addOrgMember.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// RemoveOrgMember calls xagent.v1.XAgentService.RemoveOrgMember.
+func (c *xAgentServiceClient) RemoveOrgMember(ctx context.Context, req *v1.RemoveOrgMemberRequest) (*v1.RemoveOrgMemberResponse, error) {
+	response, err := c.removeOrgMember.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// ListOrgMembers calls xagent.v1.XAgentService.ListOrgMembers.
+func (c *xAgentServiceClient) ListOrgMembers(ctx context.Context, req *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error) {
+	response, err := c.listOrgMembers.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -827,6 +944,12 @@ type XAgentServiceHandler interface {
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
+	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
+	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
+	DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error)
+	AddOrgMember(context.Context, *v1.AddOrgMemberRequest) (*v1.AddOrgMemberResponse, error)
+	RemoveOrgMember(context.Context, *v1.RemoveOrgMemberRequest) (*v1.RemoveOrgMemberResponse, error)
+	ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1058,6 +1181,42 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceCreateOrgHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceCreateOrgProcedure,
+		svc.CreateOrg,
+		connect.WithSchema(xAgentServiceMethods.ByName("CreateOrg")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceListOrgsHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceListOrgsProcedure,
+		svc.ListOrgs,
+		connect.WithSchema(xAgentServiceMethods.ByName("ListOrgs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceDeleteOrgHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceDeleteOrgProcedure,
+		svc.DeleteOrg,
+		connect.WithSchema(xAgentServiceMethods.ByName("DeleteOrg")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceAddOrgMemberHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceAddOrgMemberProcedure,
+		svc.AddOrgMember,
+		connect.WithSchema(xAgentServiceMethods.ByName("AddOrgMember")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceRemoveOrgMemberHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceRemoveOrgMemberProcedure,
+		svc.RemoveOrgMember,
+		connect.WithSchema(xAgentServiceMethods.ByName("RemoveOrgMember")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceListOrgMembersHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceListOrgMembersProcedure,
+		svc.ListOrgMembers,
+		connect.WithSchema(xAgentServiceMethods.ByName("ListOrgMembers")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1134,6 +1293,18 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetGitHubAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceUnlinkGitHubAccountProcedure:
 			xAgentServiceUnlinkGitHubAccountHandler.ServeHTTP(w, r)
+		case XAgentServiceCreateOrgProcedure:
+			xAgentServiceCreateOrgHandler.ServeHTTP(w, r)
+		case XAgentServiceListOrgsProcedure:
+			xAgentServiceListOrgsHandler.ServeHTTP(w, r)
+		case XAgentServiceDeleteOrgProcedure:
+			xAgentServiceDeleteOrgHandler.ServeHTTP(w, r)
+		case XAgentServiceAddOrgMemberProcedure:
+			xAgentServiceAddOrgMemberHandler.ServeHTTP(w, r)
+		case XAgentServiceRemoveOrgMemberProcedure:
+			xAgentServiceRemoveOrgMemberHandler.ServeHTTP(w, r)
+		case XAgentServiceListOrgMembersProcedure:
+			xAgentServiceListOrgMembersHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1289,4 +1460,28 @@ func (UnimplementedXAgentServiceHandler) GetGitHubAccount(context.Context, *v1.G
 
 func (UnimplementedXAgentServiceHandler) UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UnlinkGitHubAccount is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateOrg is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListOrgs is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteOrg is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) AddOrgMember(context.Context, *v1.AddOrgMemberRequest) (*v1.AddOrgMemberResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.AddOrgMember is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) RemoveOrgMember(context.Context, *v1.RemoveOrgMemberRequest) (*v1.RemoveOrgMemberResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.RemoveOrgMember is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListOrgMembers is not implemented"))
 }

@@ -5,6 +5,7 @@ const ORG_ID_KEY = "xagent_org_id";
 
 class AuthTransport {
   private refreshPromise: Promise<string> | null = null;
+  private listeners: Set<() => void> = new Set();
 
   getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY);
@@ -22,6 +23,27 @@ class AuthTransport {
   clearToken(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ORG_ID_KEY);
+  }
+
+  /** Switch to a different org. Clears the token so it gets re-fetched with the new org context. */
+  async switchOrg(orgId: string): Promise<void> {
+    localStorage.setItem(ORG_ID_KEY, orgId);
+    localStorage.removeItem(TOKEN_KEY);
+    this.refreshPromise = null;
+    await this.fetchToken(orgId);
+    this.notifyListeners();
+  }
+
+  /** Subscribe to org changes. Returns an unsubscribe function. */
+  onOrgChange(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      listener();
+    }
   }
 
   async fetchToken(orgId?: string): Promise<string> {

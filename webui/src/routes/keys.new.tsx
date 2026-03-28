@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Copy, Check } from 'lucide-react'
+import { useOrgId } from '@/lib/use-org'
 
 export const Route = createFileRoute('/keys/new')({
   component: NewKeyPage,
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/keys/new')({
 
 function NewKeyPage() {
   const navigate = useNavigate()
+  const orgId = useOrgId()
   const [name, setName] = useState('')
   const [created, setCreated] = useState<CreateKeyResponse | null>(null)
   const [copied, setCopied] = useState(false)
@@ -28,7 +30,7 @@ function NewKeyPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-    await mutation.mutateAsync({ name: name.trim() })
+    await mutation.mutateAsync({ name: name.trim(), orgId })
   }
 
   const handleCopy = async () => {

@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Plus } from 'lucide-react'
+import { useOrgId } from '@/lib/use-org'
 
 export const Route = createFileRoute('/events/')({
   component: EventsPage,
@@ -29,7 +30,8 @@ export const Route = createFileRoute('/events/')({
 
 function EventsPage() {
   const [limit, setLimit] = useState(25)
-  const { data, isLoading, error } = useQuery(listEvents, { limit }, {
+  const orgId = useOrgId()
+  const { data, isLoading, error } = useQuery(listEvents, { limit, orgId }, {
     refetchInterval: 6000,
   })
 

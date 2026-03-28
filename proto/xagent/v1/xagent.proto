@@ -44,6 +44,12 @@ service XAgentService {
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
   rpc GetGitHubAccount(GetGitHubAccountRequest) returns (GetGitHubAccountResponse);
   rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
+  rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
+  rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
+  rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
+  rpc AddOrgMember(AddOrgMemberRequest) returns (AddOrgMemberResponse);
+  rpc RemoveOrgMember(RemoveOrgMemberRequest) returns (RemoveOrgMemberResponse);
+  rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
 }
 
 message PingRequest {}
@@ -114,9 +120,13 @@ message GetProfileRequest {}
 
 message GetProfileResponse {
   Profile profile = 1;
+  repeated Org orgs = 2;
+  int64 default_org_id = 3;
 }
 
-message ListTasksRequest {}
+message ListTasksRequest {
+  int64 org_id = 1;
+}
 
 message ListTasksResponse {
   repeated Task tasks = 1;
@@ -144,6 +154,7 @@ message CreateTaskRequest {
   string workspace = 3;
   repeated Instruction instructions = 4;
   string runner = 5;  // Runner ID that should handle this task
+  int64 org_id = 6;
 }
 
 message CreateTaskResponse {
@@ -278,6 +289,7 @@ message Event {
 
 message ListEventsRequest {
   int32 limit = 1;  // Max events to return (default: 100, max: 100)
+  int64 org_id = 2;
 }
 
 message ListEventsResponse {
@@ -288,6 +300,7 @@ message CreateEventRequest {
   string description = 1;
   string data = 2;
   string url = 3;
+  int64 org_id = 4;
 }
 
 message CreateEventResponse {
@@ -372,7 +385,9 @@ message RegisterWorkspacesRequest {
 
 message RegisterWorkspacesResponse {}
 
-message ListWorkspacesRequest {}
+message ListWorkspacesRequest {
+  int64 org_id = 1;
+}
 
 message ListWorkspacesResponse {
   repeated RegisteredWorkspace workspaces = 1;
@@ -394,6 +409,7 @@ message Key {
 message CreateKeyRequest {
   string name = 1;
   google.protobuf.Timestamp expires_at = 2;
+  int64 org_id = 3;
 }
 
 message CreateKeyResponse {
@@ -401,7 +417,9 @@ message CreateKeyResponse {
   string raw_token = 2;
 }
 
-message ListKeysRequest {}
+message ListKeysRequest {
+  int64 org_id = 1;
+}
 
 message ListKeysResponse {
   repeated Key keys = 1;
@@ -430,3 +448,59 @@ message GetGitHubAccountResponse {
 message UnlinkGitHubAccountRequest {}
 
 message UnlinkGitHubAccountResponse {}
+
+message Org {
+  int64 id = 1;
+  string name = 2;
+  string owner_id = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message OrgMember {
+  string user_id = 1;
+  string email = 2;
+  string name = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message CreateOrgRequest {
+  string name = 1;
+}
+
+message CreateOrgResponse {
+  Org org = 1;
+}
+
+message ListOrgsRequest {}
+
+message ListOrgsResponse {
+  repeated Org orgs = 1;
+}
+
+message DeleteOrgRequest {
+  int64 id = 1;
+}
+
+message DeleteOrgResponse {}
+
+message AddOrgMemberRequest {
+  int64 org_id = 1;
+  string email = 2;
+}
+
+message AddOrgMemberResponse {}
+
+message RemoveOrgMemberRequest {
+  int64 org_id = 1;
+  string user_id = 2;
+}
+
+message RemoveOrgMemberResponse {}
+
+message ListOrgMembersRequest {
+  int64 org_id = 1;
+}
+
+message ListOrgMembersResponse {
+  repeated OrgMember members = 1;
+}

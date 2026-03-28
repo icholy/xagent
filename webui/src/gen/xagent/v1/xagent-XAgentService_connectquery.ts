@@ -188,3 +188,33 @@ export const getGitHubAccount = XAgentService.method.getGitHubAccount;
  * @generated from rpc xagent.v1.XAgentService.UnlinkGitHubAccount
  */
 export const unlinkGitHubAccount = XAgentService.method.unlinkGitHubAccount;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.CreateOrg
+ */
+export const createOrg = XAgentService.method.createOrg;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.ListOrgs
+ */
+export const listOrgs = XAgentService.method.listOrgs;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.DeleteOrg
+ */
+export const deleteOrg = XAgentService.method.deleteOrg;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.AddOrgMember
+ */
+export const addOrgMember = XAgentService.method.addOrgMember;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.RemoveOrgMember
+ */
+export const removeOrgMember = XAgentService.method.removeOrgMember;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.ListOrgMembers
+ */
+export const listOrgMembers = XAgentService.method.listOrgMembers;

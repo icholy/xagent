@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useOrgId } from '@/lib/use-org'
 
 export const Route = createFileRoute('/tasks/new')({
   component: NewTaskPage,
@@ -27,8 +28,9 @@ function NewTaskPage() {
   const [runner, setRunner] = useLocalStorage('xagent-last-runner', '')
   const [workspace, setWorkspace] = useLocalStorage('xagent-last-workspace', '')
   const [instruction, setInstruction] = useState('')
+  const orgId = useOrgId()
 
-  const { data: workspacesData } = useQuery(listWorkspaces, {})
+  const { data: workspacesData } = useQuery(listWorkspaces, { orgId })
 
   // Derive unique runners from workspaces
   const runners = [...new Set(workspacesData?.workspaces.map((ws) => ws.runnerId) ?? [])]
@@ -63,6 +65,7 @@ function NewTaskPage() {
       workspace: workspace.trim(),
       parent: 0n,
       instructions: [{ text: instruction.trim(), url: '' }],
+      orgId,
     })
   }
 
