@@ -225,7 +225,7 @@ type storeUserProvisioner struct {
 	store *store.Store
 }
 
-func (p *storeUserProvisioner) ProvisionUser(ctx context.Context, user *apiauth.UserInfo) error {
+func (p *storeUserProvisioner) Provision(ctx context.Context, user *apiauth.UserInfo) error {
 	return p.store.UpsertUser(ctx, nil, &model.User{
 		ID:    user.ID,
 		Email: user.Email,

@@ -49,7 +49,7 @@ type KeyValidator interface {
 
 // UserProvisioner is called to provision or update a user record on login.
 type UserProvisioner interface {
-	ProvisionUser(ctx context.Context, user *UserInfo) error
+	Provision(ctx context.Context, user *UserInfo) error
 }
 
 // Config holds the configuration for ZITADEL authentication.
@@ -289,7 +289,7 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 		}
 		// Provision user on login
 		if a.provisioner != nil {
-			if err := a.provisioner.ProvisionUser(r.Context(), user); err != nil {
+			if err := a.provisioner.Provision(r.Context(), user); err != nil {
 				slog.Error("failed to provision user", "error", err, "user_id", user.ID)
 			}
 		}
