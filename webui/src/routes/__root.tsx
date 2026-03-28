@@ -5,6 +5,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import xagentIcon from '@/assets/icon.png'
+import { authTransport } from '@/lib/transport'
 
 // TanStack devtools check NODE_ENV and render nothing in production, but the
 // devtools code is still bundled. Use lazy loading with import.meta.env.DEV to
@@ -84,6 +85,7 @@ function RootComponent() {
               href="/auth/logout"
               className="text-muted-foreground hover:text-foreground transition-colors text-sm flex items-center gap-1.5"
               title="Logout"
+              onClick={() => authTransport.clearToken()}
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden md:inline">Logout</span>
