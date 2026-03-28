@@ -47,9 +47,11 @@ type KeyValidator interface {
 	ValidateKey(ctx context.Context, keyHash string) (*UserInfo, error)
 }
 
-// UserProvisioner is called to provision or update a user record on login.
-type UserProvisioner interface {
-	Provision(ctx context.Context, user *UserInfo) error
+// UserResolver provisions the user record and resolves the org for token issuance.
+// orgID is the requested org from the query param, or 0 to use the user's default.
+// Returns an error if the user is not a member of the requested org.
+type UserResolver interface {
+	Resolve(ctx context.Context, user *UserInfo, orgID int64) error
 }
 
 // Config holds the configuration for ZITADEL authentication.
@@ -63,8 +65,8 @@ type Config struct {
 	Scopes        []string
 	// KeyValidator validates xat_ API keys.
 	KeyValidator KeyValidator
-	// UserProvisioner is called on login to ensure the user exists in the database.
-	UserProvisioner UserProvisioner
+	// UserResolver provisions the user and resolves the org for token issuance.
+	UserResolver UserResolver
 	// AppKey is the Ed25519 private key for signing/verifying app JWTs.
 	// If nil, a new key is generated on startup.
 	AppKey ed25519.PrivateKey
@@ -84,8 +86,8 @@ type Auth struct {
 	bearer *middleware.Interceptor[*oauth.IntrospectionContext]
 	// validator validates xat_ API keys
 	validator KeyValidator
-	// provisioner provisions users on login
-	provisioner UserProvisioner
+	// resolver provisions users and resolves orgs on token issuance
+	resolver UserResolver
 	// handler handles /auth/* routes (login, callback, logout)
 	handler http.Handler
 	// appKey is the Ed25519 private key for signing/verifying app JWTs
@@ -149,7 +151,7 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		cookie:      authentication.Middleware(authN),
 		bearer:      middleware.New(authZ),
 		validator:   cfg.KeyValidator,
-		provisioner: cfg.UserProvisioner,
+		resolver: cfg.UserResolver,
 		handler:     authN,
 		appKey:      appKey,
 	}, nil
@@ -289,20 +291,23 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
-		// Provision user on login
-		if a.provisioner != nil {
-			if err := a.provisioner.Provision(r.Context(), user); err != nil {
-				slog.Error("failed to provision user", "error", err, "user_id", user.ID)
-			}
-		}
-		// Parse org_id from query parameter (defaults to 0)
+		// Parse org_id from query parameter
+		var orgID int64
 		if raw := r.URL.Query().Get("org_id"); raw != "" {
-			orgID, err := strconv.ParseInt(raw, 10, 64)
+			var err error
+			orgID, err = strconv.ParseInt(raw, 10, 64)
 			if err != nil {
 				http.Error(w, "invalid org_id", http.StatusBadRequest)
 				return
 			}
-			user.OrgID = orgID
+		}
+		// Provision user and resolve org membership
+		if a.resolver != nil {
+			if err := a.resolver.Resolve(r.Context(), user, orgID); err != nil {
+				slog.Error("failed to resolve user", "error", err, "user_id", user.ID)
+				http.Error(w, "failed to resolve org", http.StatusForbidden)
+				return
+			}
 		}
 		claims := NewAppClaims(user)
 		token, err := SignAppToken(a.appKey, claims)

@@ -142,7 +142,7 @@ var ServerCommand = &cli.Command{
 			PostLogoutURI:   baseURL,
 			EncryptionKey:   key,
 			KeyValidator:    &storeKeyValidator{store: st},
-			UserProvisioner: &storeUserProvisioner{store: st},
+			UserResolver: &storeUserResolver{store: st},
 			AppKey:          appKey,
 			Disable:         noAuth,
 		})
@@ -220,22 +220,32 @@ func (v *storeKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*a
 	return &apiauth.UserInfo{ID: key.Owner}, nil
 }
 
-// storeUserProvisioner implements apiauth.UserProvisioner using the store.
-type storeUserProvisioner struct {
+// storeUserResolver implements apiauth.UserResolver using the store.
+type storeUserResolver struct {
 	store *store.Store
 }
 
-func (p *storeUserProvisioner) Provision(ctx context.Context, user *apiauth.UserInfo) error {
+func (r *storeUserResolver) Resolve(ctx context.Context, user *apiauth.UserInfo, orgID int64) error {
 	u := &model.User{
 		ID:    user.ID,
 		Email: user.Email,
 		Name:  user.Name,
 	}
-	if err := p.store.UpsertUser(ctx, nil, u); err != nil {
+	if err := r.store.UpsertUser(ctx, nil, u); err != nil {
 		return err
 	}
-	if user.OrgID == 0 && u.DefaultOrgID != 0 {
-		user.OrgID = u.DefaultOrgID
+	// Fall back to the user's default org if none requested
+	if orgID == 0 {
+		orgID = u.DefaultOrgID
 	}
+	// Validate membership
+	ok, err := r.store.IsOrgMember(ctx, nil, orgID, user.ID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("user %s is not a member of org %d", user.ID, orgID)
+	}
+	user.OrgID = orgID
 	return nil
 }
