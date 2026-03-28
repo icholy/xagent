@@ -226,9 +226,16 @@ type storeUserProvisioner struct {
 }
 
 func (p *storeUserProvisioner) Provision(ctx context.Context, user *apiauth.UserInfo) error {
-	return p.store.UpsertUser(ctx, nil, &model.User{
+	u := &model.User{
 		ID:    user.ID,
 		Email: user.Email,
 		Name:  user.Name,
-	})
+	}
+	if err := p.store.UpsertUser(ctx, nil, u); err != nil {
+		return err
+	}
+	if user.OrgID == 0 && u.DefaultOrgID != 0 {
+		user.OrgID = u.DefaultOrgID
+	}
+	return nil
 }

@@ -3,12 +3,14 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v68/github"
+	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
 )
@@ -245,13 +247,16 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 
 	ctx := randomUserID(t)
 	userID := s.userID(ctx)
+	orgID := s.orgID(ctx)
 
+	ghUserID := rand.Int64N(1<<53) + 1
 	err := s.store.UpsertUser(ctx, nil, &model.User{
-		ID:    userID,
-		Email: userID + "@test.com",
+		ID:             userID,
+		Email:          userID + "@test.com",
+		GitHubUserID:   ghUserID,
+		GitHubUsername: "testuser",
+		DefaultOrgID:   apiauth.User(ctx).OrgID,
 	})
-	assert.NilError(t, err)
-	err = s.store.LinkGitHubAccount(ctx, nil, userID, 943597, "icholy")
 	assert.NilError(t, err)
 
 	task := &model.Task{
@@ -260,7 +265,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		Status:    model.TaskStatusCompleted,
 		Command:   model.TaskCommandNone,
 		Version:   1,
-		Owner:     userID,
+		Owner:     orgID,
 	}
 	err = s.store.CreateTask(ctx, nil, task)
 	assert.NilError(t, err)
@@ -279,8 +284,8 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		Comment: &github.IssueComment{
 			Body: github.Ptr("xagent: please fix the tests"),
 			User: &github.User{
-				ID:    github.Ptr[int64](943597),
-				Login: github.Ptr("icholy"),
+				ID:    github.Ptr(ghUserID),
+				Login: github.Ptr("testuser"),
 			},
 		},
 		Issue: &github.Issue{
@@ -295,7 +300,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	updatedTask, err := s.store.GetTask(ctx, nil, task.ID, userID)
+	updatedTask, err := s.store.GetTask(ctx, nil, task.ID, orgID)
 	assert.NilError(t, err)
 	assert.Equal(t, updatedTask.Status, model.TaskStatusPending)
 }

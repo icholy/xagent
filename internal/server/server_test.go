@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"math/rand/v2"
 	"os"
 	"testing"
 
@@ -12,11 +13,11 @@ import (
 )
 
 // randomUserID creates a context with an authenticated user for testing.
-// If id is empty, a random UUID is generated.
 func randomUserID(t *testing.T) context.Context {
 	t.Helper()
 	id := uuid.NewString()
-	return apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: id})
+	orgID := rand.Int64N(1<<53) + 1
+	return apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: id, OrgID: orgID})
 }
 
 // setupTestServer creates a test server with a clean database.

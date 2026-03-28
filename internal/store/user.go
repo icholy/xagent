@@ -11,9 +11,12 @@ import (
 
 func (s *Store) UpsertUser(ctx context.Context, tx *sql.Tx, user *model.User) error {
 	row, err := s.q(tx).UpsertUser(ctx, sqlc.UpsertUserParams{
-		ID:    user.ID,
-		Email: user.Email,
-		Name:  user.Name,
+		ID:             user.ID,
+		Email:          user.Email,
+		Name:           user.Name,
+		GithubUserID:   sql.NullInt64{Int64: user.GitHubUserID, Valid: user.GitHubUserID != 0},
+		GithubUsername: sql.NullString{String: user.GitHubUsername, Valid: user.GitHubUsername != ""},
+		DefaultOrgID:   sql.NullInt64{Int64: user.DefaultOrgID, Valid: user.DefaultOrgID != 0},
 	})
 	if err != nil {
 		return err

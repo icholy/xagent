@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v68/github"
@@ -56,7 +57,7 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	owner := user.ID
+	owner := strconv.FormatInt(user.DefaultOrgID, 10)
 
 	// Create event in store
 	event := &model.Event{

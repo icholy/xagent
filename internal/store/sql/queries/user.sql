@@ -1,9 +1,12 @@
 -- name: UpsertUser :one
-INSERT INTO users (id, email, name)
-VALUES ($1, $2, $3)
+INSERT INTO users (id, email, name, github_user_id, github_username, default_org_id)
+VALUES ($1, $2, $3, sqlc.narg('github_user_id'), sqlc.narg('github_username'), sqlc.narg('default_org_id'))
 ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = EXCLUDED.name,
+    github_user_id = COALESCE(EXCLUDED.github_user_id, users.github_user_id),
+    github_username = COALESCE(EXCLUDED.github_username, users.github_username),
+    default_org_id = COALESCE(EXCLUDED.default_org_id, users.default_org_id),
     updated_at = CURRENT_TIMESTAMP
 RETURNING id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at;
 
