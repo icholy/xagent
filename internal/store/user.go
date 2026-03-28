@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store/sqlc"
@@ -19,6 +20,9 @@ func (s *Store) UpsertUser(ctx context.Context, tx *sql.Tx, user *model.User) er
 	}
 	user.CreatedAt = row.CreatedAt
 	user.UpdatedAt = row.UpdatedAt
+	if row.DefaultOrgID.Valid {
+		user.DefaultOrgID = row.DefaultOrgID.Int64
+	}
 	return nil
 }
 
@@ -27,7 +31,7 @@ func (s *Store) GetUser(ctx context.Context, tx *sql.Tx, id string) (*model.User
 	if err != nil {
 		return nil, err
 	}
-	return toModelUser(row), nil
+	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (s *Store) GetUserByEmail(ctx context.Context, tx *sql.Tx, email string) (*model.User, error) {
@@ -35,7 +39,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, tx *sql.Tx, email string) (*
 	if err != nil {
 		return nil, err
 	}
-	return toModelUser(row), nil
+	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (s *Store) GetUserByGitHubUserID(ctx context.Context, tx *sql.Tx, githubUserID int64) (*model.User, error) {
@@ -43,7 +47,7 @@ func (s *Store) GetUserByGitHubUserID(ctx context.Context, tx *sql.Tx, githubUse
 	if err != nil {
 		return nil, err
 	}
-	return toModelUser(row), nil
+	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (s *Store) LinkGitHubAccount(ctx context.Context, tx *sql.Tx, userID string, githubUserID int64, githubUsername string) error {
@@ -65,17 +69,27 @@ func (s *Store) UpdateGitHubUsername(ctx context.Context, tx *sql.Tx, githubUser
 	})
 }
 
-func toModelUser(row sqlc.User) *model.User {
+func (s *Store) UpdateDefaultOrgID(ctx context.Context, tx *sql.Tx, userID string, orgID int64) error {
+	return s.q(tx).UpdateDefaultOrgID(ctx, sqlc.UpdateDefaultOrgIDParams{
+		ID:           userID,
+		DefaultOrgID: sql.NullInt64{Int64: orgID, Valid: orgID != 0},
+	})
+}
+
+func toModelUserRow(id, email, name string, githubUserID sql.NullInt64, githubUsername string, defaultOrgID sql.NullInt64, createdAt, updatedAt time.Time) *model.User {
 	u := &model.User{
-		ID:             row.ID,
-		Email:          row.Email,
-		Name:           row.Name,
-		GitHubUsername: row.GithubUsername,
-		CreatedAt:      row.CreatedAt,
-		UpdatedAt:      row.UpdatedAt,
+		ID:             id,
+		Email:          email,
+		Name:           name,
+		GitHubUsername: githubUsername,
+		CreatedAt:      createdAt,
+		UpdatedAt:      updatedAt,
 	}
-	if row.GithubUserID.Valid {
-		u.GitHubUserID = row.GithubUserID.Int64
+	if githubUserID.Valid {
+		u.GitHubUserID = githubUserID.Int64
+	}
+	if defaultOrgID.Valid {
+		u.DefaultOrgID = defaultOrgID.Int64
 	}
 	return u
 }

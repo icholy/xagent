@@ -40,6 +40,21 @@ type Log struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Org struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Owner     string    `json:"owner"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type OrgMember struct {
+	OrgID     int64     `json:"org_id"`
+	UserID    string    `json:"user_id"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Task struct {
 	ID           int64     `json:"id"`
 	Name         string    `json:"name"`
@@ -74,6 +89,7 @@ type User struct {
 	GithubUsername string        `json:"github_username"`
 	CreatedAt      time.Time     `json:"created_at"`
 	UpdatedAt      time.Time     `json:"updated_at"`
+	DefaultOrgID   sql.NullInt64 `json:"default_org_id"`
 }
 
 type Workspace struct {
