@@ -11,6 +11,23 @@ import (
 
 func (s *Store) UpsertUser(ctx context.Context, tx *sql.Tx, user *model.User) error {
 	row, err := s.q(tx).UpsertUser(ctx, sqlc.UpsertUserParams{
+		ID:    user.ID,
+		Email: user.Email,
+		Name:  user.Name,
+	})
+	if err != nil {
+		return err
+	}
+	user.CreatedAt = row.CreatedAt
+	user.UpdatedAt = row.UpdatedAt
+	if row.DefaultOrgID.Valid {
+		user.DefaultOrgID = row.DefaultOrgID.Int64
+	}
+	return nil
+}
+
+func (s *Store) CreateUser(ctx context.Context, tx *sql.Tx, user *model.User) error {
+	row, err := s.q(tx).CreateUser(ctx, sqlc.CreateUserParams{
 		ID:             user.ID,
 		Email:          user.Email,
 		Name:           user.Name,

@@ -11,6 +11,55 @@ import (
 	"time"
 )
 
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (id, email, name, github_user_id, github_username, default_org_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
+`
+
+type CreateUserParams struct {
+	ID             string         `json:"id"`
+	Email          string         `json:"email"`
+	Name           string         `json:"name"`
+	GithubUserID   sql.NullInt64  `json:"github_user_id"`
+	GithubUsername sql.NullString `json:"github_username"`
+	DefaultOrgID   sql.NullInt64  `json:"default_org_id"`
+}
+
+type CreateUserRow struct {
+	ID             string         `json:"id"`
+	Email          string         `json:"email"`
+	Name           string         `json:"name"`
+	GithubUserID   sql.NullInt64  `json:"github_user_id"`
+	GithubUsername sql.NullString `json:"github_username"`
+	DefaultOrgID   sql.NullInt64  `json:"default_org_id"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
+	row := q.db.QueryRowContext(ctx, createUser,
+		arg.ID,
+		arg.Email,
+		arg.Name,
+		arg.GithubUserID,
+		arg.GithubUsername,
+		arg.DefaultOrgID,
+	)
+	var i CreateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.GithubUserID,
+		&i.GithubUsername,
+		&i.DefaultOrgID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 FROM users
@@ -177,25 +226,19 @@ func (q *Queries) UpdateGitHubUsername(ctx context.Context, arg UpdateGitHubUser
 }
 
 const upsertUser = `-- name: UpsertUser :one
-INSERT INTO users (id, email, name, github_user_id, github_username, default_org_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO users (id, email, name)
+VALUES ($1, $2, $3)
 ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = EXCLUDED.name,
-    github_user_id = COALESCE(EXCLUDED.github_user_id, users.github_user_id),
-    github_username = COALESCE(EXCLUDED.github_username, users.github_username),
-    default_org_id = COALESCE(EXCLUDED.default_org_id, users.default_org_id),
     updated_at = CURRENT_TIMESTAMP
 RETURNING id, email, name, github_user_id, github_username, default_org_id, created_at, updated_at
 `
 
 type UpsertUserParams struct {
-	ID             string         `json:"id"`
-	Email          string         `json:"email"`
-	Name           string         `json:"name"`
-	GithubUserID   sql.NullInt64  `json:"github_user_id"`
-	GithubUsername sql.NullString `json:"github_username"`
-	DefaultOrgID   sql.NullInt64  `json:"default_org_id"`
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
 }
 
 type UpsertUserRow struct {
@@ -210,14 +253,7 @@ type UpsertUserRow struct {
 }
 
 func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (UpsertUserRow, error) {
-	row := q.db.QueryRowContext(ctx, upsertUser,
-		arg.ID,
-		arg.Email,
-		arg.Name,
-		arg.GithubUserID,
-		arg.GithubUsername,
-		arg.DefaultOrgID,
-	)
+	row := q.db.QueryRowContext(ctx, upsertUser, arg.ID, arg.Email, arg.Name)
 	var i UpsertUserRow
 	err := row.Scan(
 		&i.ID,

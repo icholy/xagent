@@ -250,7 +250,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	orgID := s.orgID(ctx)
 
 	ghUserID := rand.Int64N(1<<53) + 1
-	err := s.store.UpsertUser(ctx, nil, &model.User{
+	err := s.store.CreateUser(ctx, nil, &model.User{
 		ID:             userID,
 		Email:          userID + "@test.com",
 		GitHubUserID:   ghUserID,
