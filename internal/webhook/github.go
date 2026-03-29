@@ -160,16 +160,18 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		if !strings.HasPrefix(body, "xagent:") {
 			return nil
 		}
-		description := "A comment was made on an issue"
+		login := event.Comment.User.GetLogin()
+		number := event.Issue.GetNumber()
+		description := fmt.Sprintf("%s commented on issue #%d", login, number)
 		if event.Issue.IsPullRequest() {
-			description = "A comment was made on a pull request"
+			description = fmt.Sprintf("%s commented on PR #%d", login, number)
 		}
 		return &githubWebhookEvent{
 			description:    description,
 			data:           body,
 			url:            *event.Issue.HTMLURL,
 			githubUserID:   *event.Comment.User.ID,
-			githubUsername: event.Comment.User.GetLogin(),
+			githubUsername: login,
 		}
 
 	case *github.PullRequestReviewCommentEvent:
@@ -182,12 +184,14 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		if !strings.HasPrefix(body, "xagent:") {
 			return nil
 		}
+		login := event.Comment.User.GetLogin()
+		number := event.PullRequest.GetNumber()
 		return &githubWebhookEvent{
-			description:    "A review comment was made on a pull request",
+			description:    fmt.Sprintf("%s commented on PR #%d review", login, number),
 			data:           body,
 			url:            *event.PullRequest.HTMLURL,
 			githubUserID:   *event.Comment.User.ID,
-			githubUsername: event.Comment.User.GetLogin(),
+			githubUsername: login,
 		}
 
 	case *github.PullRequestReviewEvent:
@@ -201,12 +205,14 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		if !strings.HasPrefix(body, "xagent:") {
 			return nil
 		}
+		login := event.Review.User.GetLogin()
+		number := event.PullRequest.GetNumber()
 		return &githubWebhookEvent{
-			description:    "A review was submitted on a pull request",
+			description:    fmt.Sprintf("%s reviewed PR #%d", login, number),
 			data:           body,
 			url:            *event.PullRequest.HTMLURL,
 			githubUserID:   *event.Review.User.ID,
-			githubUsername: event.Review.User.GetLogin(),
+			githubUsername: login,
 		}
 	}
 

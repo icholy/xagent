@@ -77,11 +77,12 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					},
 				},
 				Issue: &github.Issue{
+					Number:  github.Ptr(1),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
 			expected: &githubWebhookEvent{
-				description:    "A comment was made on an issue",
+				description:    "testuser commented on issue #1",
 				data:           "xagent: do something",
 				url:            "https://github.com/owner/repo/issues/1",
 				githubUserID:   123,
@@ -99,12 +100,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					},
 				},
 				Issue: &github.Issue{
+					Number:           github.Ptr(2),
 					HTMLURL:          github.Ptr("https://github.com/owner/repo/pull/2"),
 					PullRequestLinks: &github.PullRequestLinks{},
 				},
 			},
 			expected: &githubWebhookEvent{
-				description:    "A comment was made on a pull request",
+				description:    "pruser commented on PR #2",
 				data:           "xagent: review this",
 				url:            "https://github.com/owner/repo/pull/2",
 				githubUserID:   456,
@@ -143,11 +145,12 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					},
 				},
 				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(3),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
 				},
 			},
 			expected: &githubWebhookEvent{
-				description:    "A review comment was made on a pull request",
+				description:    "reviewer commented on PR #3 review",
 				data:           "xagent: fix this",
 				url:            "https://github.com/owner/repo/pull/3",
 				githubUserID:   789,
@@ -187,11 +190,12 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					},
 				},
 				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(4),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4"),
 				},
 			},
 			expected: &githubWebhookEvent{
-				description:    "A review was submitted on a pull request",
+				description:    "lead reviewed PR #4",
 				data:           "xagent: please address comments",
 				url:            "https://github.com/owner/repo/pull/4",
 				githubUserID:   101,
@@ -253,11 +257,12 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					},
 				},
 				Issue: &github.Issue{
+					Number:  github.Ptr(1),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
 			expected: &githubWebhookEvent{
-				description:    "A comment was made on an issue",
+				description:    "testuser commented on issue #1",
 				data:           "xagent: trimmed",
 				url:            "https://github.com/owner/repo/issues/1",
 				githubUserID:   123,
@@ -336,6 +341,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 			},
 		},
 		Issue: &github.Issue{
+			Number:           github.Ptr(10),
 			HTMLURL:          github.Ptr("https://github.com/owner/repo/pull/10"),
 			PullRequestLinks: &github.PullRequestLinks{},
 		},
@@ -427,6 +433,7 @@ func TestHandleGitHubWebhookRoutesToMultipleOrgs(t *testing.T) {
 			},
 		},
 		Issue: &github.Issue{
+			Number:           github.Ptr(42),
 			HTMLURL:          github.Ptr(prURL),
 			PullRequestLinks: &github.PullRequestLinks{},
 		},
