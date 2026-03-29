@@ -105,8 +105,8 @@ var RunnerCommand = &cli.Command{
 		}
 
 		r, err := runner.New(runner.Options{
-			ServerURL:  serverAddr,
-			PrivateKey: cfg.PrivateKey,
+			ServerURL:   serverAddr,
+			PrivateKey:  cfg.PrivateKey,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,

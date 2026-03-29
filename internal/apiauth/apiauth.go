@@ -166,12 +166,12 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		return nil, err
 	}
 	return &Auth{
-		cookie:      authentication.Middleware(authN),
-		bearer:      middleware.New(authZ),
-		validator:   cfg.KeyValidator,
-		resolver: cfg.UserResolver,
-		handler:     authN,
-		appKey:      appKey,
+		cookie:    authentication.Middleware(authN),
+		bearer:    middleware.New(authZ),
+		validator: cfg.KeyValidator,
+		resolver:  cfg.UserResolver,
+		handler:   authN,
+		appKey:    appKey,
 	}, nil
 }
 
@@ -347,8 +347,8 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"token":     token,
-			"org_id":    user.OrgID,
+			"token":      token,
+			"org_id":     user.OrgID,
 			"expires_at": claims.ExpiresAt.Time.Unix(),
 		})
 	}

@@ -35,7 +35,7 @@ type Runner struct {
 	docker      *client.Client
 	client      xagentclient.Client
 	proxy       *AgentProxy
-	workspaces *workspace.Config
+	workspaces  *workspace.Config
 	runnerID    string
 	concurrency int64
 	sem         *safesem.Semaphore
@@ -43,8 +43,8 @@ type Runner struct {
 }
 
 type Options struct {
-	ServerURL  string
-	PrivateKey ed25519.PrivateKey
+	ServerURL   string
+	PrivateKey  ed25519.PrivateKey
 	Workspaces  *workspace.Config
 	Concurrency int
 	RunnerID    string
@@ -82,7 +82,7 @@ func New(opts Options) (*Runner, error) {
 		docker:      docker,
 		client:      xagentclient.New(xagentclient.Options{BaseURL: opts.ServerURL, Token: opts.Auth}),
 		proxy:       proxy,
-		workspaces: opts.Workspaces,
+		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
 		sem:         safesem.New(concurrency),

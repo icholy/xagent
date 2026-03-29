@@ -50,4 +50,3 @@ func Middleware(key ed25519.PrivateKey) func(http.Handler) http.Handler {
 		})
 	}
 }
-

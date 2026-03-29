@@ -72,4 +72,3 @@ func DeviceFlow(ctx context.Context, opts DeviceFlowOptions) (string, error) {
 
 	return tokens.AccessToken, nil
 }
-
