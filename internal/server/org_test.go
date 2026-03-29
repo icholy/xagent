@@ -65,7 +65,7 @@ func TestDeleteOrg_Permissions(t *testing.T) {
 func TestDeleteOrg_DefaultOrg(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
-	user := apiauth.User(ctx)
+	user := apiauth.Caller(ctx)
 
 	_, err := srv.DeleteOrg(ctx, &xagentv1.DeleteOrgRequest{Id: user.OrgID})
 
@@ -76,7 +76,7 @@ func TestAddAndListOrgMembers(t *testing.T) {
 	srv := setupTestServer(t)
 	owner := createTestUser(t, srv)
 	member := createTestUser(t, srv)
-	memberEmail := apiauth.User(member).ID + "@test.com"
+	memberEmail := apiauth.Caller(member).ID + "@test.com"
 
 	resp, err := srv.AddOrgMember(owner, &xagentv1.AddOrgMemberRequest{
 		Email: memberEmail,
@@ -97,7 +97,7 @@ func TestDeleteOrg_WithTasks(t *testing.T) {
 	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "has-tasks"})
 	assert.NilError(t, err)
 	orgCtx := apiauth.WithUser(ctx, &apiauth.UserInfo{
-		ID:    apiauth.User(ctx).ID,
+		ID:    apiauth.Caller(ctx).ID,
 		OrgID: createResp.Org.Id,
 	})
 
@@ -123,7 +123,7 @@ func TestRemoveOrgMember(t *testing.T) {
 	srv := setupTestServer(t)
 	owner := createTestUser(t, srv)
 	member := createTestUser(t, srv)
-	memberUser := apiauth.User(member)
+	memberUser := apiauth.Caller(member)
 	memberEmail := memberUser.ID + "@test.com"
 
 	_, err := srv.AddOrgMember(owner, &xagentv1.AddOrgMemberRequest{

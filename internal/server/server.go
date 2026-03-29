@@ -37,7 +37,6 @@ type GitHubConfig struct {
 	WebhookSecret string
 }
 
-
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
 	log           *slog.Logger
@@ -102,7 +101,7 @@ func (s *Server) Handler() http.Handler {
 			RedirectURL:  s.baseURL + "/github/callback",
 			Log:          s.log,
 			OnSuccess: func(w http.ResponseWriter, r *http.Request, ghUser *github.User) {
-				user := apiauth.User(r.Context())
+				user := apiauth.Caller(r.Context())
 				if user == nil {
 					http.Error(w, "not authenticated", http.StatusUnauthorized)
 					return
@@ -132,40 +131,12 @@ func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(s.discovery)
 }
 
-// userID returns the authenticated user's ID from context.
-func (s *Server) userID(ctx context.Context) string {
-	u := apiauth.User(ctx)
-	if u == nil {
-		panic("no UserInfo in request context")
-	}
-	return u.ID
-}
-
-// name returns the authenticated user's display name from context.
-func (s *Server) name(ctx context.Context) string {
-	u := apiauth.User(ctx)
-	if u == nil {
-		panic("no UserInfo in request context")
-	}
-	return cmp.Or(u.Name, u.Email, u.ID)
-}
-
-// orgID returns the org ID for resource queries.
-// The org_id is embedded in the JWT at token issuance time.
-func (s *Server) orgID(ctx context.Context) int64 {
-	u := apiauth.User(ctx)
-	if u == nil {
-		panic("no UserInfo in request context")
-	}
-	return u.OrgID
-}
-
 func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
 	return &xagentv1.PingResponse{}, nil
 }
 
 func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
-	u := apiauth.User(ctx)
+	u := apiauth.Caller(ctx)
 	if u == nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
 	}
@@ -193,8 +164,8 @@ func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest
 }
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
-	orgID := s.orgID(ctx)
-	tasks, err := s.store.ListTasks(ctx, nil, orgID)
+	caller := apiauth.MustCaller(ctx)
+	tasks, err := s.store.ListTasks(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -208,8 +179,8 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 }
 
 func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTasksRequest) (*xagentv1.ListRunnerTasksResponse, error) {
-	orgID := s.orgID(ctx)
-	tasks, err := s.store.ListTasksForRunner(ctx, nil, req.Runner, orgID)
+	caller := apiauth.MustCaller(ctx)
+	tasks, err := s.store.ListTasksForRunner(ctx, nil, req.Runner, caller.OrgID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &xagentv1.ListRunnerTasksResponse{}, nil
@@ -226,8 +197,8 @@ func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTa
 }
 
 func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
-	orgID := s.orgID(ctx)
-	tasks, err := s.store.ListTaskChildren(ctx, nil, req.ParentId, orgID)
+	caller := apiauth.MustCaller(ctx)
+	tasks, err := s.store.ListTaskChildren(ctx, nil, req.ParentId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -241,10 +212,10 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 }
 
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	// Verify parent task ownership if specified
 	if req.Parent != 0 {
-		ok, err := s.store.HasTask(ctx, nil, req.Parent, orgID)
+		ok, err := s.store.HasTask(ctx, nil, req.Parent, caller.OrgID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
@@ -265,7 +236,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Status:       model.TaskStatusPending,
 		Command:      model.TaskCommandStart,
 		Version:      1,
-		OrgID:        orgID,
+		OrgID:        caller.OrgID,
 	}
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := s.store.CreateTask(ctx, tx, task); err != nil {
@@ -274,7 +245,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  task.ID,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s created task", s.name(ctx)),
+			Content: fmt.Sprintf("%s created task", caller.DisplayName()),
 		}); err != nil {
 			return err
 		}
@@ -290,8 +261,8 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 }
 
 func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
-	orgID := s.orgID(ctx)
-	task, err := s.store.GetTask(ctx, nil, req.Id, orgID)
+	caller := apiauth.MustCaller(ctx)
+	task, err := s.store.GetTask(ctx, nil, req.Id, caller.OrgID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
@@ -304,17 +275,17 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 }
 
 func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-	orgID := s.orgID(ctx)
-	task, err := s.store.GetTask(ctx, nil, req.Id, orgID)
+	caller := apiauth.MustCaller(ctx)
+	task, err := s.store.GetTask(ctx, nil, req.Id, caller.OrgID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	children, _ := s.store.ListTaskChildren(ctx, nil, req.Id, orgID)
-	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, orgID)
-	links, _ := s.store.ListLinksByTask(ctx, nil, req.Id, orgID)
+	children, _ := s.store.ListTaskChildren(ctx, nil, req.Id, caller.OrgID)
+	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, caller.OrgID)
+	links, _ := s.store.ListLinksByTask(ctx, nil, req.Id, caller.OrgID)
 	resp := &xagentv1.GetTaskDetailsResponse{
 		Task:     task.Proto(),
 		Children: make([]*xagentv1.Task, len(children)),
@@ -334,9 +305,9 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 }
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, orgID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
 		}
@@ -355,7 +326,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s updated task", s.name(ctx)),
+			Content: fmt.Sprintf("%s updated task", caller.DisplayName()),
 		}); err != nil {
 			return err
 		}
@@ -372,9 +343,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 }
 
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, orgID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
 		}
@@ -387,7 +358,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s archived task", s.name(ctx)),
+			Content: fmt.Sprintf("%s archived task", caller.DisplayName()),
 		}); err != nil {
 			return err
 		}
@@ -404,9 +375,9 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 }
 
 func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, orgID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
 		}
@@ -419,7 +390,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s unarchived task", s.name(ctx)),
+			Content: fmt.Sprintf("%s unarchived task", caller.DisplayName()),
 		}); err != nil {
 			return err
 		}
@@ -436,9 +407,9 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 }
 
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, orgID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
 		}
@@ -451,7 +422,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s cancelled task", s.name(ctx)),
+			Content: fmt.Sprintf("%s cancelled task", caller.DisplayName()),
 		}); err != nil {
 			return err
 		}
@@ -468,9 +439,9 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 }
 
 func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, orgID)
+		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
 		}
@@ -483,7 +454,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s restarted task", s.name(ctx)),
+			Content: fmt.Sprintf("%s restarted task", caller.DisplayName()),
 		}); err != nil {
 			return err
 		}
@@ -500,9 +471,9 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 }
 
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	// Verify task ownership
-	ok, err := s.store.HasTask(ctx, nil, req.TaskId, orgID)
+	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -520,8 +491,8 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 }
 
 func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
-	orgID := s.orgID(ctx)
-	logs, err := s.store.ListLogsByTask(ctx, nil, req.TaskId, orgID)
+	caller := apiauth.MustCaller(ctx)
+	logs, err := s.store.ListLogsByTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -535,9 +506,9 @@ func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*
 }
 
 func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	// Verify task ownership
-	ok, err := s.store.HasTask(ctx, nil, req.TaskId, orgID)
+	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -562,8 +533,8 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 }
 
 func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
-	orgID := s.orgID(ctx)
-	links, err := s.store.ListLinksByTask(ctx, nil, req.TaskId, orgID)
+	caller := apiauth.MustCaller(ctx)
+	links, err := s.store.ListLinksByTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -577,8 +548,8 @@ func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) 
 }
 
 func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
-	orgID := s.orgID(ctx)
-	links, err := s.store.FindLinksByURL(ctx, nil, req.Url, orgID)
+	caller := apiauth.MustCaller(ctx)
+	links, err := s.store.FindLinksByURL(ctx, nil, req.Url, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -597,8 +568,8 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 	if limit < 0 || limit > maxLimit {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be at most %d", maxLimit))
 	}
-	orgID := s.orgID(ctx)
-	events, err := s.store.ListEvents(ctx, nil, limit, orgID)
+	caller := apiauth.MustCaller(ctx)
+	events, err := s.store.ListEvents(ctx, nil, limit, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -612,12 +583,12 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 }
 
 func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	event := &model.Event{
 		Description: req.Description,
 		Data:        req.Data,
 		URL:         req.Url,
-		OrgID:       orgID,
+		OrgID:       caller.OrgID,
 	}
 	if err := s.store.CreateEvent(ctx, nil, event); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -629,8 +600,8 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 }
 
 func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
-	orgID := s.orgID(ctx)
-	event, err := s.store.GetEvent(ctx, nil, req.Id, orgID)
+	caller := apiauth.MustCaller(ctx)
+	event, err := s.store.GetEvent(ctx, nil, req.Id, caller.OrgID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
@@ -643,8 +614,8 @@ func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*
 }
 
 func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
-	orgID := s.orgID(ctx)
-	if err := s.store.DeleteEvent(ctx, nil, req.Id, orgID); err != nil {
+	caller := apiauth.MustCaller(ctx)
+	if err := s.store.DeleteEvent(ctx, nil, req.Id, caller.OrgID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event deleted", "id", req.Id)
@@ -652,9 +623,9 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 }
 
 func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	// Verify task ownership
-	ok, err := s.store.HasTask(ctx, nil, req.TaskId, orgID)
+	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -662,7 +633,7 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
 	}
 	// Verify event ownership
-	ok, err = s.store.HasEvent(ctx, nil, req.EventId, orgID)
+	ok, err = s.store.HasEvent(ctx, nil, req.EventId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -677,9 +648,9 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 }
 
 func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	// Verify task ownership
-	ok, err := s.store.HasTask(ctx, nil, req.TaskId, orgID)
+	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -687,7 +658,7 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
 	}
 	// Verify event ownership
-	ok, err = s.store.HasEvent(ctx, nil, req.EventId, orgID)
+	ok, err = s.store.HasEvent(ctx, nil, req.EventId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -702,8 +673,8 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 }
 
 func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
-	orgID := s.orgID(ctx)
-	taskIDs, err := s.store.ListEventTasks(ctx, nil, req.EventId, orgID)
+	caller := apiauth.MustCaller(ctx)
+	taskIDs, err := s.store.ListEventTasks(ctx, nil, req.EventId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -711,8 +682,8 @@ func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTask
 }
 
 func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
-	orgID := s.orgID(ctx)
-	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, orgID)
+	caller := apiauth.MustCaller(ctx)
+	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -726,15 +697,15 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 }
 
 func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
-	orgID := s.orgID(ctx)
-	event, err := s.store.GetEvent(ctx, nil, req.Id, orgID)
+	caller := apiauth.MustCaller(ctx)
+	event, err := s.store.GetEvent(ctx, nil, req.Id, caller.OrgID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	ids, err := s.processEventInternal(ctx, event.ID, event.URL, orgID)
+	ids, err := s.processEventInternal(ctx, event.ID, event.URL, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -788,14 +759,14 @@ func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventU
 }
 
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)
 		var task *model.Task
 		var applied bool
 		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 			var err error
-			task, err = s.store.GetTaskForUpdate(ctx, tx, event.TaskID, orgID)
+			task, err = s.store.GetTaskForUpdate(ctx, tx, event.TaskID, caller.OrgID)
 			if err != nil {
 				return err
 			}
@@ -856,13 +827,13 @@ func (s *Server) toRunnerEventLog(e model.RunnerEvent) (model.Log, bool) {
 }
 
 func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		if err := s.store.DeleteWorkspacesByRunner(ctx, tx, req.RunnerId, orgID); err != nil {
+		if err := s.store.DeleteWorkspacesByRunner(ctx, tx, req.RunnerId, caller.OrgID); err != nil {
 			return err
 		}
 		for _, ws := range req.Workspaces {
-			if err := s.store.CreateWorkspace(ctx, tx, req.RunnerId, ws.Name, orgID); err != nil {
+			if err := s.store.CreateWorkspace(ctx, tx, req.RunnerId, ws.Name, caller.OrgID); err != nil {
 				return err
 			}
 		}
@@ -871,13 +842,13 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "org_id", orgID, "count", len(req.Workspaces))
+	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "org_id", caller.OrgID, "count", len(req.Workspaces))
 	return &xagentv1.RegisterWorkspacesResponse{}, nil
 }
 
 func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
-	orgID := s.orgID(ctx)
-	workspaces, err := s.store.ListWorkspaces(ctx, nil, orgID)
+	caller := apiauth.MustCaller(ctx)
+	workspaces, err := s.store.ListWorkspaces(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -889,23 +860,23 @@ func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspace
 }
 
 func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	if req.RunnerId != "" {
-		if err := s.store.DeleteWorkspacesByRunner(ctx, nil, req.RunnerId, orgID); err != nil {
+		if err := s.store.DeleteWorkspacesByRunner(ctx, nil, req.RunnerId, caller.OrgID); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		s.log.Info("workspaces cleared", "org_id", orgID, "runner", req.RunnerId)
+		s.log.Info("workspaces cleared", "org_id", caller.OrgID, "runner", req.RunnerId)
 	} else {
-		if err := s.store.ClearWorkspaces(ctx, nil, orgID); err != nil {
+		if err := s.store.ClearWorkspaces(ctx, nil, caller.OrgID); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		s.log.Info("workspaces cleared", "org_id", orgID)
+		s.log.Info("workspaces cleared", "org_id", caller.OrgID)
 	}
 	return &xagentv1.ClearWorkspacesResponse{}, nil
 }
 
 func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) (*xagentv1.CreateKeyResponse, error) {
-	orgID := s.orgID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	rawKey, err := apiauth.GenerateKey()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -919,13 +890,13 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 		ID:        uuid.NewString(),
 		Name:      req.Name,
 		TokenHash: apiauth.HashKey(rawKey),
-		OrgID:     orgID,
+		OrgID:     caller.OrgID,
 		ExpiresAt: expiresAt,
 	}
 	if err := s.store.CreateKey(ctx, nil, key); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("key created", "id", key.ID, "org_id", orgID)
+	s.log.Info("key created", "id", key.ID, "org_id", caller.OrgID)
 	return &xagentv1.CreateKeyResponse{
 		Key:      key.Proto(),
 		RawToken: rawKey,
@@ -933,8 +904,8 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 }
 
 func (s *Server) ListKeys(ctx context.Context, req *xagentv1.ListKeysRequest) (*xagentv1.ListKeysResponse, error) {
-	orgID := s.orgID(ctx)
-	keys, err := s.store.ListKeys(ctx, nil, orgID)
+	caller := apiauth.MustCaller(ctx)
+	keys, err := s.store.ListKeys(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -948,8 +919,8 @@ func (s *Server) ListKeys(ctx context.Context, req *xagentv1.ListKeysRequest) (*
 }
 
 func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) (*xagentv1.DeleteKeyResponse, error) {
-	orgID := s.orgID(ctx)
-	if err := s.store.DeleteKey(ctx, nil, req.Id, orgID); err != nil {
+	caller := apiauth.MustCaller(ctx)
+	if err := s.store.DeleteKey(ctx, nil, req.Id, caller.OrgID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("key deleted", "id", req.Id)
@@ -957,12 +928,12 @@ func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) 
 }
 
 func (s *Server) GetGitHubAccount(ctx context.Context, req *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
-	userID := s.userID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	resp := &xagentv1.GetGitHubAccountResponse{}
 	if s.github != nil {
 		resp.GithubAppSlug = s.github.AppSlug
 	}
-	user, err := s.store.GetUser(ctx, nil, userID)
+	user, err := s.store.GetUser(ctx, nil, caller.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return resp, nil
@@ -974,22 +945,22 @@ func (s *Server) GetGitHubAccount(ctx context.Context, req *xagentv1.GetGitHubAc
 }
 
 func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
-	userID := s.userID(ctx)
-	if err := s.store.UnlinkGitHubAccount(ctx, nil, userID); err != nil {
+	caller := apiauth.MustCaller(ctx)
+	if err := s.store.UnlinkGitHubAccount(ctx, nil, caller.ID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("github account unlinked", "owner", userID)
+	s.log.Info("github account unlinked", "owner", caller.ID)
 	return &xagentv1.UnlinkGitHubAccountResponse{}, nil
 }
 
 func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {
-	userID := s.userID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	if req.Name == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name is required"))
 	}
 	org := &model.Org{
 		Name:  req.Name,
-		Owner: userID,
+		Owner: caller.ID,
 	}
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := s.store.CreateOrg(ctx, tx, org); err != nil {
@@ -997,7 +968,7 @@ func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) 
 		}
 		if err := s.store.AddOrgMember(ctx, tx, &model.OrgMember{
 			OrgID:  org.ID,
-			UserID: userID,
+			UserID: caller.ID,
 			Role:   "owner",
 		}); err != nil {
 			return err
@@ -1007,13 +978,13 @@ func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) 
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org created", "id", org.ID, "name", org.Name, "owner", userID)
+	s.log.Info("org created", "id", org.ID, "name", org.Name, "owner", caller.ID)
 	return &xagentv1.CreateOrgResponse{Org: org.Proto()}, nil
 }
 
 func (s *Server) ListOrgs(ctx context.Context, req *xagentv1.ListOrgsRequest) (*xagentv1.ListOrgsResponse, error) {
-	userID := s.userID(ctx)
-	orgs, err := s.store.ListOrgsByMember(ctx, nil, userID)
+	caller := apiauth.MustCaller(ctx)
+	orgs, err := s.store.ListOrgsByMember(ctx, nil, caller.ID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -1025,7 +996,7 @@ func (s *Server) ListOrgs(ctx context.Context, req *xagentv1.ListOrgsRequest) (*
 }
 
 func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error) {
-	userID := s.userID(ctx)
+	caller := apiauth.MustCaller(ctx)
 	org, err := s.store.GetOrg(ctx, nil, req.Id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1033,10 +1004,10 @@ func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) 
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if org.Owner != userID {
+	if org.Owner != caller.ID {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the org owner can delete it"))
 	}
-	user, err := s.store.GetUser(ctx, nil, userID)
+	user, err := s.store.GetUser(ctx, nil, caller.ID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -1046,18 +1017,17 @@ func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) 
 	if err := s.store.ArchiveOrg(ctx, nil, req.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org archived", "id", req.Id, "owner", userID)
+	s.log.Info("org archived", "id", req.Id, "owner", caller.ID)
 	return &xagentv1.DeleteOrgResponse{}, nil
 }
 
 func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberRequest) (*xagentv1.AddOrgMemberResponse, error) {
-	userID := s.userID(ctx)
-	orgID := s.orgID(ctx)
-	org, err := s.store.GetOrg(ctx, nil, orgID)
+	caller := apiauth.MustCaller(ctx)
+	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if org.Owner != userID {
+	if org.Owner != caller.ID {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the org owner can add members"))
 	}
 	if req.Email == "" {
@@ -1071,14 +1041,14 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	member := &model.OrgMember{
-		OrgID:  orgID,
+		OrgID:  caller.OrgID,
 		UserID: user.ID,
 		Role:   "member",
 	}
 	if err := s.store.AddOrgMember(ctx, nil, member); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org member added", "org_id", orgID, "user_id", user.ID, "email", req.Email)
+	s.log.Info("org member added", "org_id", caller.OrgID, "user_id", user.ID, "email", req.Email)
 	return &xagentv1.AddOrgMemberResponse{
 		Member: &xagentv1.OrgMember{
 			OrgId:  member.OrgID,
@@ -1091,28 +1061,27 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 }
 
 func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMemberRequest) (*xagentv1.RemoveOrgMemberResponse, error) {
-	userID := s.userID(ctx)
-	orgID := s.orgID(ctx)
-	org, err := s.store.GetOrg(ctx, nil, orgID)
+	caller := apiauth.MustCaller(ctx)
+	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if org.Owner != userID {
+	if org.Owner != caller.ID {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the org owner can remove members"))
 	}
 	if req.UserId == org.Owner {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("cannot remove the org owner"))
 	}
-	if err := s.store.RemoveOrgMember(ctx, nil, orgID, req.UserId); err != nil {
+	if err := s.store.RemoveOrgMember(ctx, nil, caller.OrgID, req.UserId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org member removed", "org_id", orgID, "user_id", req.UserId)
+	s.log.Info("org member removed", "org_id", caller.OrgID, "user_id", req.UserId)
 	return &xagentv1.RemoveOrgMemberResponse{}, nil
 }
 
 func (s *Server) ListOrgMembers(ctx context.Context, req *xagentv1.ListOrgMembersRequest) (*xagentv1.ListOrgMembersResponse, error) {
-	orgID := s.orgID(ctx)
-	members, err := s.store.ListOrgMembersWithUsers(ctx, nil, orgID)
+	caller := apiauth.MustCaller(ctx)
+	members, err := s.store.ListOrgMembersWithUsers(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

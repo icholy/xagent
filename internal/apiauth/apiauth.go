@@ -29,11 +29,31 @@ type UserInfo struct {
 	OrgID int64
 }
 
+// DisplayName returns the best available display name for the user.
+func (u *UserInfo) DisplayName() string {
+	if u.Name != "" {
+		return u.Name
+	}
+	if u.Email != "" {
+		return u.Email
+	}
+	return u.ID
+}
+
 type userInfoKey struct{}
 
-// User returns the authenticated user from context.
-func User(ctx context.Context) *UserInfo {
+// Caller returns the authenticated user from context.
+func Caller(ctx context.Context) *UserInfo {
 	u, _ := ctx.Value(userInfoKey{}).(*UserInfo)
+	return u
+}
+
+// MustCaller returns the authenticated user from context, panicking if not present.
+func MustCaller(ctx context.Context) *UserInfo {
+	u := Caller(ctx)
+	if u == nil {
+		panic("no UserInfo in request context")
+	}
 	return u
 }
 
@@ -286,7 +306,7 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 func RequireUserInterceptor() connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			if User(ctx) == nil {
+			if Caller(ctx) == nil {
 				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 			}
 			return next(ctx, req)
@@ -378,7 +398,7 @@ func (a *Auth) Handler() http.Handler {
 // Works with API keys, Bearer tokens, and cookie authentication.
 func (a *Auth) User(r *http.Request) *UserInfo {
 	// If UserInfo already set (e.g., by API key or app token in CheckAuth), return it
-	if user := User(r.Context()); user != nil {
+	if user := Caller(r.Context()); user != nil {
 		return user
 	}
 	switch r.Header.Get(AuthTypeHeader) {
