@@ -16,7 +16,6 @@ service XAgentService {
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
   rpc GetTaskDetails(GetTaskDetailsRequest) returns (GetTaskDetailsResponse);
   rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
-  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
   rpc ArchiveTask(ArchiveTaskRequest) returns (ArchiveTaskResponse);
   rpc UnarchiveTask(UnarchiveTaskRequest) returns (UnarchiveTaskResponse);
   rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
@@ -186,12 +185,6 @@ message UpdateTaskRequest {
 }
 
 message UpdateTaskResponse {}
-
-message DeleteTaskRequest {
-  int64 id = 1;
-}
-
-message DeleteTaskResponse {}
 
 message ArchiveTaskRequest {
   int64 id = 1;
