@@ -87,29 +87,6 @@ func (q *Queries) GetOrg(ctx context.Context, id int64) (Org, error) {
 	return i, err
 }
 
-const getOrgMember = `-- name: GetOrgMember :one
-SELECT org_id, user_id, role, created_at
-FROM org_members
-WHERE org_id = $1 AND user_id = $2
-`
-
-type GetOrgMemberParams struct {
-	OrgID  int64  `json:"org_id"`
-	UserID string `json:"user_id"`
-}
-
-func (q *Queries) GetOrgMember(ctx context.Context, arg GetOrgMemberParams) (OrgMember, error) {
-	row := q.db.QueryRowContext(ctx, getOrgMember, arg.OrgID, arg.UserID)
-	var i OrgMember
-	err := row.Scan(
-		&i.OrgID,
-		&i.UserID,
-		&i.Role,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const isOrgMember = `-- name: IsOrgMember :one
 SELECT EXISTS(
     SELECT 1 FROM org_members om

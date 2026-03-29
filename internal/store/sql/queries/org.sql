@@ -46,11 +46,6 @@ JOIN users u ON om.user_id = u.id
 WHERE om.org_id = $1
 ORDER BY om.created_at;
 
--- name: GetOrgMember :one
-SELECT org_id, user_id, role, created_at
-FROM org_members
-WHERE org_id = $1 AND user_id = $2;
-
 -- name: IsOrgMember :one
 SELECT EXISTS(
     SELECT 1 FROM org_members om
