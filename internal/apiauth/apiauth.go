@@ -52,10 +52,10 @@ type UserResolver interface {
 	// Provision creates the user and their default org on first login.
 	// Called from the OIDC callback via WithOnAuthenticated.
 	Provision(ctx context.Context, user *UserInfo) error
-	// Resolve resolves the org for token issuance.
+	// ResolveOrg resolves the org for token issuance.
 	// orgID is the requested org from the query param, or 0 to use the user's default.
-	// Returns an error if the user is not a member of the requested org.
-	Resolve(ctx context.Context, user *UserInfo, orgID int64) error
+	// Returns the resolved org ID or an error if the user is not a member.
+	ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error)
 }
 
 // Config holds the configuration for ZITADEL authentication.
@@ -311,13 +311,15 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 				return
 			}
 		}
-		// Provision user and resolve org membership
+		// Resolve org membership
 		if a.resolver != nil {
-			if err := a.resolver.Resolve(r.Context(), user, orgID); err != nil {
-				slog.Error("failed to resolve user", "error", err, "user_id", user.ID)
+			resolved, err := a.resolver.ResolveOrg(r.Context(), user.ID, orgID)
+			if err != nil {
+				slog.Error("failed to resolve org", "error", err, "user_id", user.ID)
 				http.Error(w, "failed to resolve org", http.StatusForbidden)
 				return
 			}
+			user.OrgID = resolved
 		}
 		claims := NewAppClaims(user)
 		token, err := SignAppToken(a.appKey, claims)

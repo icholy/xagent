@@ -260,23 +260,22 @@ func (r *storeUserResolver) Provision(ctx context.Context, user *apiauth.UserInf
 	})
 }
 
-func (r *storeUserResolver) Resolve(ctx context.Context, user *apiauth.UserInfo, orgID int64) error {
-	u, err := r.store.GetUser(ctx, nil, user.ID)
-	if err != nil {
-		return err
-	}
+func (r *storeUserResolver) ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error) {
 	// Fall back to the user's default org if none requested
 	if orgID == 0 {
+		u, err := r.store.GetUser(ctx, nil, userID)
+		if err != nil {
+			return 0, err
+		}
 		orgID = u.DefaultOrgID
 	}
 	// Validate membership
-	ok, err := r.store.IsOrgMember(ctx, nil, orgID, user.ID)
+	ok, err := r.store.IsOrgMember(ctx, nil, orgID, userID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !ok {
-		return fmt.Errorf("user %s is not a member of org %d", user.ID, orgID)
+		return 0, fmt.Errorf("user %s is not a member of org %d", userID, orgID)
 	}
-	user.OrgID = orgID
-	return nil
+	return orgID, nil
 }
