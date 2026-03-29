@@ -117,6 +117,7 @@ function OrgsCard() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead></TableHead>
@@ -182,6 +183,7 @@ function OrgRow({ org, onDelete }: { org: Org; onDelete: () => void }) {
 
   return (
     <TableRow>
+      <TableCell className="text-muted-foreground">{String(org.id)}</TableCell>
       <TableCell className="font-medium">{org.name}</TableCell>
       <TableCell className="text-muted-foreground">
         {org.createdAt ? <RelativeTime date={timestampDate(org.createdAt)} /> : '-'}
