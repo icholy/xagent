@@ -37,8 +37,14 @@ run = [
 description = "Decrypt secrets.yml to .env"
 run = "sops -d --output-type dotenv sops.env.yml > .env"
 
+[tasks.migrate]
+description = "Run database migrations"
+env = { DATABASE_URL = "postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable" }
+run = "go run ./cmd/migrate"
+
 [tasks.test]
 description = "Run tests"
+depends = ["migrate"]
 env = { TEST_DATABASE_URL = "postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable" }
 run = "go test ./..."
 
