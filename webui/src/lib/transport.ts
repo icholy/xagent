@@ -5,6 +5,12 @@ const ORG_ID_KEY = "xagent_org_id";
 
 class AuthTransport {
   private refreshPromise: Promise<string> | null = null;
+  private events = new EventTarget();
+
+  subscribe(listener: () => void): () => void {
+    this.events.addEventListener("change", listener);
+    return () => this.events.removeEventListener("change", listener);
+  }
 
   getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY);
@@ -17,11 +23,13 @@ class AuthTransport {
   private storeToken(token: string, orgId: string): void {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(ORG_ID_KEY, orgId);
+    this.events.dispatchEvent(new Event("change"));
   }
 
   clearToken(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ORG_ID_KEY);
+    this.events.dispatchEvent(new Event("change"));
   }
 
   async fetchToken(orgId?: string): Promise<string> {

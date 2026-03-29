@@ -1,6 +1,6 @@
 import { Outlet, createRootRouteWithContext, Link } from '@tanstack/react-router'
 import { LogOut, Settings } from 'lucide-react'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useSyncExternalStore } from 'react'
 import { QueryClient, useQueryClient } from '@tanstack/react-query'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
@@ -45,11 +45,13 @@ function RootComponent() {
   const queryClient = useQueryClient()
 
   const orgs = profileData?.orgs ?? []
-  const [currentOrgId, setCurrentOrgId] = useState(() => authTransport.getOrgId())
+  const currentOrgId = useSyncExternalStore(
+    (cb) => authTransport.subscribe(cb),
+    () => authTransport.getOrgId(),
+  )
 
   const handleOrgSwitch = async (orgId: string) => {
     await authTransport.fetchToken(orgId)
-    setCurrentOrgId(authTransport.getOrgId())
     await queryClient.invalidateQueries()
   }
 
