@@ -122,7 +122,8 @@ function ProfileCard() {
 
 function OrgsCard() {
   const { data: profileData, refetch } = useQuery(getProfile, {})
-  const orgs = profileData?.orgs ?? []
+  const userId = profileData?.profile?.id
+  const orgs = (profileData?.orgs ?? []).filter((org) => org.owner === userId)
 
   return (
     <Card>
