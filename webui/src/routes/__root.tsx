@@ -114,7 +114,7 @@ function RootComponent() {
             )}
             <Link
               to="/settings"
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
               title="Settings"
             >
               <Settings className="h-4 w-4" />
