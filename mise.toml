@@ -57,3 +57,7 @@ run = "psql postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable"
 [tasks.logs]
 description = "View production logs"
 run = "flyctl logs -a xagent"
+
+[tasks.diagrams]
+description = "Render d2 diagrams to images/"
+run = "d2 schema.d2 images/schema.svg"

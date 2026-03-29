@@ -1,0 +1,119 @@
+direction: right
+
+tasks: {
+  shape: sql_table
+  id: BIGSERIAL {constraint: primary_key}
+  org_id: BIGINT {constraint: foreign_key}
+  name: TEXT
+  parent: BIGINT
+  runner: TEXT
+  workspace: TEXT
+  instructions: TEXT
+  status: INTEGER
+  command: INTEGER
+  version: BIGINT
+  archived: BOOLEAN
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+}
+
+logs: {
+  shape: sql_table
+  id: BIGSERIAL {constraint: primary_key}
+  task_id: BIGINT {constraint: foreign_key}
+  type: TEXT
+  content: TEXT
+  created_at: TIMESTAMP
+}
+
+task_links: {
+  shape: sql_table
+  id: BIGSERIAL {constraint: primary_key}
+  task_id: BIGINT {constraint: foreign_key}
+  relevance: TEXT
+  url: TEXT
+  title: TEXT
+  notify: BOOLEAN
+  created_at: TIMESTAMP
+}
+
+events: {
+  shape: sql_table
+  id: BIGSERIAL {constraint: primary_key}
+  org_id: BIGINT {constraint: foreign_key}
+  description: TEXT
+  data: TEXT
+  url: TEXT
+  created_at: TIMESTAMP
+}
+
+event_tasks: {
+  shape: sql_table
+  event_id: BIGINT {constraint: foreign_key}
+  task_id: BIGINT {constraint: foreign_key}
+}
+
+workspaces: {
+  shape: sql_table
+  id: BIGSERIAL {constraint: primary_key}
+  org_id: BIGINT {constraint: foreign_key}
+  runner_id: TEXT
+  name: TEXT
+  updated_at: TIMESTAMP
+}
+
+keys: {
+  shape: sql_table
+  id: UUID {constraint: primary_key}
+  org_id: BIGINT {constraint: foreign_key}
+  name: TEXT
+  token_hash: TEXT {constraint: unique}
+  expires_at: TIMESTAMP
+  created_at: TIMESTAMP
+}
+
+users: {
+  shape: sql_table
+  id: TEXT {constraint: primary_key}
+  email: TEXT
+  name: TEXT
+  github_user_id: BIGINT
+  github_username: TEXT
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+  default_org_id: BIGINT {constraint: foreign_key}
+}
+
+orgs: {
+  shape: sql_table
+  id: BIGSERIAL {constraint: primary_key}
+  name: TEXT {constraint: unique}
+  owner: TEXT
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+  archived: BOOLEAN
+}
+
+org_members: {
+  shape: sql_table
+  org_id: BIGINT {constraint: foreign_key}
+  user_id: TEXT
+  role: TEXT
+  created_at: TIMESTAMP
+}
+
+# Relationships
+org_members.org_id -> orgs.id
+logs.task_id -> tasks.id
+task_links.task_id -> tasks.id
+event_tasks.event_id -> events.id
+event_tasks.task_id -> tasks.id
+tasks.parent -> tasks.id: parent
+tasks.org_id -> orgs.id
+events.org_id -> orgs.id
+workspaces.org_id -> orgs.id
+keys.org_id -> orgs.id
+org_members.user_id -> users.id
+orgs.owner -> users.id
+users.default_org_id -> orgs.id
+
