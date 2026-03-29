@@ -1,10 +1,13 @@
 package command
 
 import (
+	"bufio"
 	"cmp"
 	"context"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/configfile"
@@ -40,6 +43,10 @@ var SetupCommand = &cli.Command{
 			Usage: "Name for the API key",
 			Value: defaultKeyName(),
 		},
+		&cli.StringFlag{
+			Name:  "org",
+			Usage: "Organization name to use (prompted if not specified and user has multiple orgs)",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		// Load existing config (or empty if first run)
@@ -70,12 +77,39 @@ var SetupCommand = &cli.Command{
 			return fmt.Errorf("authentication failed: %w", err)
 		}
 
-		// Use the short-lived OIDC token to create an API key
+		// Create a client with the short-lived OIDC token
 		client := xagentclient.New(xagentclient.Options{
 			BaseURL:  serverAddr,
 			Token:    accessToken,
 			AuthType: "bearer",
 		})
+
+		// Fetch user profile to get available orgs
+		profile, err := client.GetProfile(ctx, &xagentv1.GetProfileRequest{})
+		if err != nil {
+			return fmt.Errorf("get profile: %w", err)
+		}
+
+		// Select org
+		orgID, err := selectOrg(profile, cmd.String("org"))
+		if err != nil {
+			return err
+		}
+
+		// Exchange the OIDC bearer token for an org-scoped app JWT
+		tokenResp, err := xagentclient.GetToken(serverAddr, accessToken, orgID)
+		if err != nil {
+			return fmt.Errorf("token exchange: %w", err)
+		}
+
+		// Create a new client using the org-scoped app JWT
+		client = xagentclient.New(xagentclient.Options{
+			BaseURL:  serverAddr,
+			Token:    tokenResp.Token,
+			AuthType: "app",
+		})
+
+		// Create an API key scoped to the selected org
 		resp, err := client.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 			Name: cmp.Or(cmd.String("key-name"), defaultKeyName()),
 		})
@@ -101,4 +135,63 @@ var SetupCommand = &cli.Command{
 
 		return nil
 	},
+}
+
+// selectOrg picks an org from the user's profile.
+// If orgName is specified, it finds the matching org.
+// If the user has one org, it's used automatically.
+// Otherwise, the user is prompted to choose.
+func selectOrg(profile *xagentv1.GetProfileResponse, orgName string) (int64, error) {
+	orgs := profile.Orgs
+	if len(orgs) == 0 {
+		return 0, fmt.Errorf("no organizations found for user")
+	}
+
+	// If --org flag was provided, find the matching org
+	if orgName != "" {
+		for _, org := range orgs {
+			if strings.EqualFold(org.Name, orgName) {
+				fmt.Printf("Using org: %s\n", org.Name)
+				return org.Id, nil
+			}
+		}
+		return 0, fmt.Errorf("org %q not found (available: %s)", orgName, orgNames(orgs))
+	}
+
+	// Single org: use it automatically
+	if len(orgs) == 1 {
+		fmt.Printf("Using org: %s\n", orgs[0].Name)
+		return orgs[0].Id, nil
+	}
+
+	// Multiple orgs: prompt user to select
+	fmt.Println("\nAvailable organizations:")
+	for i, org := range orgs {
+		marker := ""
+		if org.Id == profile.DefaultOrgId {
+			marker = " (default)"
+		}
+		fmt.Printf("  %d. %s%s\n", i+1, org.Name, marker)
+	}
+	fmt.Printf("\nSelect org [1-%d]: ", len(orgs))
+
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return 0, fmt.Errorf("no input")
+	}
+	choice, err := strconv.Atoi(strings.TrimSpace(scanner.Text()))
+	if err != nil || choice < 1 || choice > len(orgs) {
+		return 0, fmt.Errorf("invalid selection")
+	}
+	selected := orgs[choice-1]
+	fmt.Printf("Using org: %s\n", selected.Name)
+	return selected.Id, nil
+}
+
+func orgNames(orgs []*xagentv1.Org) string {
+	names := make([]string, len(orgs))
+	for i, org := range orgs {
+		names[i] = org.Name
+	}
+	return strings.Join(names, ", ")
 }
