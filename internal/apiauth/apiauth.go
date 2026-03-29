@@ -307,14 +307,14 @@ func (a *Auth) AttachUserInfo() func(http.Handler) http.Handler {
 }
 
 // HandleToken returns an HTTP handler for GET /auth/token that issues app JWTs.
-// The endpoint is authenticated via cookie session.
+// The endpoint is authenticated via cookie session or bearer token.
 func (a *Auth) HandleToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		user := a.cookieUser(r)
+		user := a.User(r)
 		if user == nil {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
