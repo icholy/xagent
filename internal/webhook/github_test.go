@@ -150,7 +150,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
-				description:    "reviewer commented on PR #3 review",
+				description:    "reviewer reviewed PR #3",
 				data:           "xagent: fix this",
 				url:            "https://github.com/owner/repo/pull/3",
 				githubUserID:   789,

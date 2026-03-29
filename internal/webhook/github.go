@@ -194,7 +194,7 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		login := event.Comment.User.GetLogin()
 		number := event.PullRequest.GetNumber()
 		return &githubWebhookEvent{
-			description:    fmt.Sprintf("%s commented on PR #%d review", login, number),
+			description:    fmt.Sprintf("%s reviewed PR #%d", login, number),
 			data:           body,
 			url:            *event.PullRequest.HTMLURL,
 			githubUserID:   *event.Comment.User.ID,
