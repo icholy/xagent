@@ -1,0 +1,172 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { useQuery, useMutation } from '@connectrpc/connect-query'
+import {
+  listOrgMembers,
+  addOrgMember,
+  removeOrgMember,
+} from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import type { OrgMember } from '@/gen/xagent/v1/xagent_pb'
+import { timestampDate } from '@bufbuild/protobuf/wkt'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { RelativeTime } from '@/components/relative-time'
+import { Trash2, Loader2, UserPlus } from 'lucide-react'
+import { useState } from 'react'
+
+export const Route = createFileRoute('/members/')({
+  component: MembersPage,
+})
+
+function MembersPage() {
+  const { data, isLoading, error, refetch } = useQuery(listOrgMembers, {}, {
+    refetchInterval: 6000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading members...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-destructive">Error: {error.message}</div>
+      </div>
+    )
+  }
+
+  const members = data?.members ?? []
+
+  return (
+    <div className="container mx-auto py-8 px-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold">Members</h1>
+      </div>
+      <AddMemberForm onAdd={refetch} />
+      {members.length === 0 ? (
+        <div className="text-muted-foreground text-center py-8">
+          No members found
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Added</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {members.map((member) => (
+              <MemberRow
+                key={member.userId}
+                member={member}
+                onRemove={refetch}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  )
+}
+
+function AddMemberForm({ onAdd }: { onAdd: () => void }) {
+  const [email, setEmail] = useState('')
+  const mutation = useMutation(addOrgMember, {
+    onSuccess: () => {
+      setEmail('')
+      onAdd()
+    },
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) return
+    await mutation.mutateAsync({ email: email.trim() })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex gap-2 mb-6">
+      <Input
+        type="email"
+        placeholder="Email address"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="max-w-sm"
+      />
+      <Button type="submit" disabled={mutation.isPending || !email.trim()}>
+        {mutation.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <UserPlus className="h-4 w-4" />
+        )}
+        Add Member
+      </Button>
+      {mutation.error && (
+        <span className="text-destructive text-sm self-center">
+          {mutation.error.message}
+        </span>
+      )}
+    </form>
+  )
+}
+
+function MemberRow({
+  member,
+  onRemove,
+}: {
+  member: OrgMember
+  onRemove: () => void
+}) {
+  const removeMutation = useMutation(removeOrgMember, {
+    onSuccess: () => onRemove(),
+  })
+
+  const handleRemove = async () => {
+    await removeMutation.mutateAsync({ userId: member.userId })
+  }
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">{member.name || '-'}</TableCell>
+      <TableCell className="text-muted-foreground">{member.email}</TableCell>
+      <TableCell className="text-muted-foreground">{member.role}</TableCell>
+      <TableCell className="text-muted-foreground">
+        {member.createdAt ? (
+          <RelativeTime date={timestampDate(member.createdAt)} />
+        ) : (
+          '-'
+        )}
+      </TableCell>
+      <TableCell>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={handleRemove}
+          disabled={removeMutation.isPending}
+        >
+          {removeMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
+          Remove
+        </Button>
+      </TableCell>
+    </TableRow>
+  )
+}

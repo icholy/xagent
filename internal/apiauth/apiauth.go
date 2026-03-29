@@ -106,7 +106,7 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		}
 	}
 	if cfg.Disable {
-		return &Auth{disabled: true, appKey: appKey}, nil
+		return &Auth{disabled: true, appKey: appKey, resolver: cfg.UserResolver}, nil
 	}
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail}

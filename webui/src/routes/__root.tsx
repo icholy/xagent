@@ -63,6 +63,12 @@ function RootComponent() {
               Workspaces
             </Link>
             <Link
+              to="/members"
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+            >
+              Members
+            </Link>
+            <Link
               to="/keys"
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >

@@ -13,6 +13,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspacesIndexRouteImport } from './routes/workspaces.index'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
+import { Route as MembersIndexRouteImport } from './routes/members.index'
 import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
@@ -39,6 +40,11 @@ const WorkspacesIndexRoute = WorkspacesIndexRouteImport.update({
 const TasksIndexRoute = TasksIndexRouteImport.update({
   id: '/tasks/',
   path: '/tasks/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MembersIndexRoute = MembersIndexRouteImport.update({
+  id: '/members/',
+  path: '/members/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KeysIndexRoute = KeysIndexRouteImport.update({
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
   '/keys': typeof KeysIndexRoute
+  '/members': typeof MembersIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
 }
@@ -100,6 +107,7 @@ export interface FileRoutesByTo {
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
   '/keys': typeof KeysIndexRoute
+  '/members': typeof MembersIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
 }
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
   '/keys/': typeof KeysIndexRoute
+  '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
 }
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
     | '/tasks/new'
     | '/events'
     | '/keys'
+    | '/members'
     | '/tasks'
     | '/workspaces'
   fileRoutesByTo: FileRoutesByTo
@@ -142,6 +152,7 @@ export interface FileRouteTypes {
     | '/tasks/new'
     | '/events'
     | '/keys'
+    | '/members'
     | '/tasks'
     | '/workspaces'
   id:
@@ -155,6 +166,7 @@ export interface FileRouteTypes {
     | '/tasks/new'
     | '/events/'
     | '/keys/'
+    | '/members/'
     | '/tasks/'
     | '/workspaces/'
   fileRoutesById: FileRoutesById
@@ -169,6 +181,7 @@ export interface RootRouteChildren {
   TasksNewRoute: typeof TasksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
   KeysIndexRoute: typeof KeysIndexRoute
+  MembersIndexRoute: typeof MembersIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
 }
@@ -201,6 +214,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof TasksIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/members/': {
+      id: '/members/'
+      path: '/members'
+      fullPath: '/members'
+      preLoaderRoute: typeof MembersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/keys/': {
@@ -265,6 +285,7 @@ const rootRouteChildren: RootRouteChildren = {
   TasksNewRoute: TasksNewRoute,
   EventsIndexRoute: EventsIndexRoute,
   KeysIndexRoute: KeysIndexRoute,
+  MembersIndexRoute: MembersIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
 }
