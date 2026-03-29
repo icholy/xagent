@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -75,16 +74,17 @@ type Config struct {
 	// AppKey is the Ed25519 private key for signing/verifying app JWTs.
 	// If nil, a new key is generated on startup.
 	AppKey ed25519.PrivateKey
-	// Disable authentication (for development only).
-	// When true, all requests are authenticated as a default "dev" user.
-	Disable bool
+	// DevUser, when set, bypasses SSO authentication.
+	// All cookie-based requests are treated as this user.
+	// API key and app JWT authentication are unaffected.
+	DevUser *UserInfo
 }
 
 // Auth provides hybrid authentication supporting both cookie-based sessions
 // (for web UI) and Bearer tokens (for API calls).
 type Auth struct {
-	// disabled indicates auth is disabled (all requests get a default user)
-	disabled bool
+	// devUser, when set, bypasses SSO for cookie-based requests
+	devUser *UserInfo
 	// cookie middleware
 	cookie *authentication.Interceptor[*openid.DefaultContext]
 	// bearer token middleware
@@ -100,7 +100,8 @@ type Auth struct {
 }
 
 // New creates a new Auth instance with both cookie and bearer token support.
-// If cfg.Disable is true, authentication is bypassed and all requests get a default user.
+// If cfg.DevUser is set, SSO is bypassed and cookie-based requests use that user.
+// API key and app JWT authentication are always available.
 func New(ctx context.Context, cfg Config) (*Auth, error) {
 	appKey := cfg.AppKey
 	if appKey == nil {
@@ -110,20 +111,14 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 			return nil, err
 		}
 	}
-	if cfg.Disable {
-		// Provision the dev user so GetProfile and other user-dependent
-		// endpoints work without real authentication.
-		if cfg.UserResolver != nil {
-			devUser := &UserInfo{
-				ID:    "dev",
-				Email: "dev@localhost",
-				Name:  "Developer",
-			}
-			if err := cfg.UserResolver.Provision(ctx, devUser); err != nil {
-				return nil, fmt.Errorf("provision dev user: %w", err)
-			}
-		}
-		return &Auth{disabled: true, appKey: appKey, resolver: cfg.UserResolver}, nil
+	if cfg.DevUser != nil {
+		return &Auth{
+			devUser:   cfg.DevUser,
+			validator: cfg.KeyValidator,
+			resolver:  cfg.UserResolver,
+			handler:   http.NotFoundHandler(),
+			appKey:    appKey,
+		}, nil
 	}
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail}
@@ -210,12 +205,20 @@ func (a *Auth) validateAppToken(r *http.Request) (*UserInfo, error) {
 	}, nil
 }
 
+// useDevUser serves the request as the dev user if one is configured.
+// Returns true if the request was handled.
+func (a *Auth) useDevUser(w http.ResponseWriter, r *http.Request, next http.Handler) bool {
+	if a.devUser == nil {
+		return false
+	}
+	r = r.WithContext(WithUser(r.Context(), a.devUser))
+	next.ServeHTTP(w, r)
+	return true
+}
+
 // RequireAuth returns middleware that requires either a valid Bearer token
 // or an authenticated cookie session.
 func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
-	if a.disabled {
-		return a.attachDefaultUser()
-	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Header.Get(AuthTypeHeader) {
@@ -236,9 +239,13 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 				r = r.WithContext(WithUser(r.Context(), user))
 				next.ServeHTTP(w, r)
 			case "bearer":
-				a.bearer.RequireAuthorization()(next).ServeHTTP(w, r)
+				if !a.useDevUser(w, r, next) {
+					a.bearer.RequireAuthorization()(next).ServeHTTP(w, r)
+				}
 			default:
-				a.cookie.RequireAuthentication()(next).ServeHTTP(w, r)
+				if !a.useDevUser(w, r, next) {
+					a.cookie.RequireAuthentication()(next).ServeHTTP(w, r)
+				}
 			}
 		})
 	}
@@ -247,9 +254,6 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 // CheckAuth returns middleware that checks for valid authentication and
 // populates context, but does not reject unauthenticated requests.
 func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
-	if a.disabled {
-		return a.attachDefaultUser()
-	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Header.Get(AuthTypeHeader) {
@@ -266,9 +270,13 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 				}
 				next.ServeHTTP(w, r)
 			case "bearer":
-				a.bearer.CheckAuthorization()(next).ServeHTTP(w, r)
+				if !a.useDevUser(w, r, next) {
+					a.bearer.CheckAuthorization()(next).ServeHTTP(w, r)
+				}
 			default:
-				a.cookie.CheckAuthentication()(next).ServeHTTP(w, r)
+				if !a.useDevUser(w, r, next) {
+					a.cookie.CheckAuthentication()(next).ServeHTTP(w, r)
+				}
 			}
 		})
 	}
@@ -288,9 +296,6 @@ func RequireUserInterceptor() connect.UnaryInterceptorFunc {
 
 // AttachUserInfo extracts user info from auth context and attaches it to the request context.
 func (a *Auth) AttachUserInfo() func(http.Handler) http.Handler {
-	if a.disabled {
-		return a.attachDefaultUser()
-	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if user := a.User(r); user != nil {
@@ -351,12 +356,8 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 
 // cookieUser returns user info from the cookie session only.
 func (a *Auth) cookieUser(r *http.Request) *UserInfo {
-	if a.disabled {
-		return &UserInfo{
-			ID:    "dev",
-			Email: "dev@localhost",
-			Name:  "Developer",
-		}
+	if a.devUser != nil {
+		return a.devUser
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{
@@ -370,27 +371,7 @@ func (a *Auth) cookieUser(r *http.Request) *UserInfo {
 
 // Handler returns the HTTP handler for auth routes (login, callback, logout).
 func (a *Auth) Handler() http.Handler {
-	if a.disabled {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.NotFound(w, r)
-		})
-	}
 	return a.handler
-}
-
-// attachDefaultUser returns middleware that attaches a default user to all requests.
-func (a *Auth) attachDefaultUser() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user := &UserInfo{
-				ID:    "dev",
-				Email: "dev@localhost",
-				Name:  "Developer",
-			}
-			r = r.WithContext(WithUser(r.Context(), user))
-			next.ServeHTTP(w, r)
-		})
-	}
 }
 
 // User returns the authenticated user's information.

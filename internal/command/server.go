@@ -132,8 +132,18 @@ var ServerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("invalid app key: %w", err)
 		}
+		resolver := &storeUserResolver{store: st}
+		var devUser *apiauth.UserInfo
 		if noAuth {
-			slog.Warn("authentication disabled")
+			slog.Warn("SSO authentication disabled, using dev user")
+			devUser = &apiauth.UserInfo{
+				ID:    "dev",
+				Email: "dev@localhost",
+				Name:  "Developer",
+			}
+			if err := resolver.Provision(ctx, devUser); err != nil {
+				return fmt.Errorf("failed to provision dev user: %w", err)
+			}
 		}
 		auth, err := apiauth.New(ctx, apiauth.Config{
 			Domain:        domain,
@@ -143,9 +153,9 @@ var ServerCommand = &cli.Command{
 			PostLogoutURI: baseURL,
 			EncryptionKey: key,
 			KeyValidator:  &storeKeyValidator{store: st},
-			UserResolver:  &storeUserResolver{store: st},
+			UserResolver:  resolver,
 			AppKey:        appKey,
-			Disable:       noAuth,
+			DevUser:       devUser,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
