@@ -45,6 +45,11 @@ jobs:
       - name: Pull Docker images for runner tests
         run: docker pull alpine:latest
 
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
+        run: go run ./cmd/migrate
+
       - name: Run tests
         env:
           TEST_DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
