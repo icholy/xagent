@@ -267,6 +267,9 @@ func (r *storeUserResolver) ResolveOrg(ctx context.Context, userID string, orgID
 		if err != nil {
 			return 0, err
 		}
+		if u.DefaultOrgID == 0 {
+			return 0, fmt.Errorf("user %s has no default org", userID)
+		}
 		orgID = u.DefaultOrgID
 	}
 	// Validate membership
