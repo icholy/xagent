@@ -4,8 +4,10 @@ import {
   listOrgMembers,
   addOrgMember,
   removeOrgMember,
+  getProfile,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { OrgMember } from '@/gen/xagent/v1/xagent_pb'
+import { authTransport } from '@/lib/transport'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import {
   Table,
@@ -26,9 +28,13 @@ export const Route = createFileRoute('/members/')({
 })
 
 function MembersPage() {
+  const { data: profileData } = useQuery(getProfile, {})
   const { data, isLoading, error, refetch } = useQuery(listOrgMembers, {}, {
     refetchInterval: 6000,
   })
+
+  const orgId = authTransport.getOrgId()
+  const isOwner = profileData?.orgs.some((org) => String(org.id) === orgId && org.owner === profileData.profile?.id) ?? false
 
   if (isLoading) {
     return (
@@ -53,7 +59,7 @@ function MembersPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Members</h1>
       </div>
-      <AddMemberForm onAdd={refetch} />
+      {isOwner && <AddMemberForm onAdd={refetch} />}
       {members.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">
           No members found
@@ -75,6 +81,7 @@ function MembersPage() {
                 key={member.userId}
                 member={member}
                 onRemove={refetch}
+                isOwner={isOwner}
               />
             ))}
           </TableBody>
@@ -128,9 +135,11 @@ function AddMemberForm({ onAdd }: { onAdd: () => void }) {
 function MemberRow({
   member,
   onRemove,
+  isOwner,
 }: {
   member: OrgMember
   onRemove: () => void
+  isOwner: boolean
 }) {
   const removeMutation = useMutation(removeOrgMember, {
     onSuccess: () => onRemove(),
@@ -153,19 +162,21 @@ function MemberRow({
         )}
       </TableCell>
       <TableCell>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={handleRemove}
-          disabled={removeMutation.isPending}
-        >
-          {removeMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Trash2 className="h-4 w-4" />
-          )}
-          Remove
-        </Button>
+        {isOwner && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleRemove}
+            disabled={removeMutation.isPending || member.role === 'owner'}
+          >
+            {removeMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            Remove
+          </Button>
+        )}
       </TableCell>
     </TableRow>
   )
