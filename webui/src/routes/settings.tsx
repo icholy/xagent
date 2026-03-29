@@ -146,7 +146,7 @@ function OrgsCard() {
             </TableHeader>
             <TableBody>
               {orgs.map((org) => (
-                <OrgRow key={String(org.id)} org={org} onDelete={refetch} />
+                <OrgRow key={String(org.id)} org={org} onDelete={refetch} isDefault={org.id === profileData?.defaultOrgId} />
               ))}
             </TableBody>
           </Table>
@@ -197,7 +197,7 @@ function CreateOrgForm({ onCreate }: { onCreate: () => void }) {
   )
 }
 
-function OrgRow({ org, onDelete }: { org: Org; onDelete: () => void }) {
+function OrgRow({ org, onDelete, isDefault }: { org: Org; onDelete: () => void; isDefault: boolean }) {
   const deleteMutation = useMutation(deleteOrg, {
     onSuccess: () => onDelete(),
   })
@@ -214,7 +214,7 @@ function OrgRow({ org, onDelete }: { org: Org; onDelete: () => void }) {
           variant="destructive"
           size="sm"
           onClick={() => deleteMutation.mutateAsync({ id: org.id })}
-          disabled={deleteMutation.isPending}
+          disabled={deleteMutation.isPending || isDefault}
         >
           {deleteMutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
