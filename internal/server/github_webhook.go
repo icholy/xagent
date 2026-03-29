@@ -112,10 +112,10 @@ func (s *Server) routeEventToLinks(ctx context.Context, eventID int64, links []*
 			continue
 		}
 		taskIDs[link.TaskID] = true
-		if err := s.store.AddEventTask(ctx, nil, eventID, link.TaskID); err != nil {
-			s.log.Warn("failed to add event task", "event_id", eventID, "task_id", link.TaskID, "error", err)
-		}
 		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+			if err := s.store.AddEventTask(ctx, tx, eventID, link.TaskID); err != nil {
+				return err
+			}
 			task, err := s.store.GetTaskForUpdate(ctx, tx, link.TaskID, orgID)
 			if err != nil {
 				return err
@@ -127,7 +127,7 @@ func (s *Server) routeEventToLinks(ctx context.Context, eventID int64, links []*
 			return tx.Commit()
 		})
 		if err != nil {
-			s.log.Warn("failed to start task", "task_id", link.TaskID, "error", err)
+			s.log.Warn("failed to route event to task", "event_id", eventID, "task_id", link.TaskID, "error", err)
 		}
 	}
 	return len(taskIDs)
