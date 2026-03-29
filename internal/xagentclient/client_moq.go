@@ -58,9 +58,6 @@ var _ Client = &ClientMock{}
 //			DeleteOrgFunc: func(contextMoqParam context.Context, deleteOrgRequest *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error) {
 //				panic("mock out the DeleteOrg method")
 //			},
-//			DeleteTaskFunc: func(contextMoqParam context.Context, deleteTaskRequest *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error) {
-//				panic("mock out the DeleteTask method")
-//			},
 //			FindLinksByURLFunc: func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
 //				panic("mock out the FindLinksByURL method")
 //			},
@@ -193,9 +190,6 @@ type ClientMock struct {
 
 	// DeleteOrgFunc mocks the DeleteOrg method.
 	DeleteOrgFunc func(contextMoqParam context.Context, deleteOrgRequest *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error)
-
-	// DeleteTaskFunc mocks the DeleteTask method.
-	DeleteTaskFunc func(contextMoqParam context.Context, deleteTaskRequest *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error)
 
 	// FindLinksByURLFunc mocks the FindLinksByURL method.
 	FindLinksByURLFunc func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error)
@@ -376,13 +370,6 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// DeleteOrgRequest is the deleteOrgRequest argument value.
 			DeleteOrgRequest *xagentv1.DeleteOrgRequest
-		}
-		// DeleteTask holds details about calls to the DeleteTask method.
-		DeleteTask []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// DeleteTaskRequest is the deleteTaskRequest argument value.
-			DeleteTaskRequest *xagentv1.DeleteTaskRequest
 		}
 		// FindLinksByURL holds details about calls to the FindLinksByURL method.
 		FindLinksByURL []struct {
@@ -601,7 +588,6 @@ type ClientMock struct {
 	lockDeleteEvent         sync.RWMutex
 	lockDeleteKey           sync.RWMutex
 	lockDeleteOrg           sync.RWMutex
-	lockDeleteTask          sync.RWMutex
 	lockFindLinksByURL      sync.RWMutex
 	lockGetEvent            sync.RWMutex
 	lockGetGitHubAccount    sync.RWMutex
@@ -1098,42 +1084,6 @@ func (mock *ClientMock) DeleteOrgCalls() []struct {
 	mock.lockDeleteOrg.RLock()
 	calls = mock.calls.DeleteOrg
 	mock.lockDeleteOrg.RUnlock()
-	return calls
-}
-
-// DeleteTask calls DeleteTaskFunc.
-func (mock *ClientMock) DeleteTask(contextMoqParam context.Context, deleteTaskRequest *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error) {
-	if mock.DeleteTaskFunc == nil {
-		panic("ClientMock.DeleteTaskFunc: method is nil but Client.DeleteTask was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam   context.Context
-		DeleteTaskRequest *xagentv1.DeleteTaskRequest
-	}{
-		ContextMoqParam:   contextMoqParam,
-		DeleteTaskRequest: deleteTaskRequest,
-	}
-	mock.lockDeleteTask.Lock()
-	mock.calls.DeleteTask = append(mock.calls.DeleteTask, callInfo)
-	mock.lockDeleteTask.Unlock()
-	return mock.DeleteTaskFunc(contextMoqParam, deleteTaskRequest)
-}
-
-// DeleteTaskCalls gets all the calls that were made to DeleteTask.
-// Check the length with:
-//
-//	len(mockedClient.DeleteTaskCalls())
-func (mock *ClientMock) DeleteTaskCalls() []struct {
-	ContextMoqParam   context.Context
-	DeleteTaskRequest *xagentv1.DeleteTaskRequest
-} {
-	var calls []struct {
-		ContextMoqParam   context.Context
-		DeleteTaskRequest *xagentv1.DeleteTaskRequest
-	}
-	mock.lockDeleteTask.RLock()
-	calls = mock.calls.DeleteTask
-	mock.lockDeleteTask.RUnlock()
 	return calls
 }
 

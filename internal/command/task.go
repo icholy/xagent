@@ -9,6 +9,5 @@ var TaskCommand = &cli.Command{
 		TaskListCommand,
 		TaskCreateCommand,
 		TaskUpdateCommand,
-		TaskDeleteCommand,
 	},
 }

@@ -57,9 +57,6 @@ const (
 	// XAgentServiceUpdateTaskProcedure is the fully-qualified name of the XAgentService's UpdateTask
 	// RPC.
 	XAgentServiceUpdateTaskProcedure = "/xagent.v1.XAgentService/UpdateTask"
-	// XAgentServiceDeleteTaskProcedure is the fully-qualified name of the XAgentService's DeleteTask
-	// RPC.
-	XAgentServiceDeleteTaskProcedure = "/xagent.v1.XAgentService/DeleteTask"
 	// XAgentServiceArchiveTaskProcedure is the fully-qualified name of the XAgentService's ArchiveTask
 	// RPC.
 	XAgentServiceArchiveTaskProcedure = "/xagent.v1.XAgentService/ArchiveTask"
@@ -163,7 +160,6 @@ type XAgentServiceClient interface {
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
 	GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error)
 	UpdateTask(context.Context, *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error)
-	DeleteTask(context.Context, *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error)
 	ArchiveTask(context.Context, *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error)
 	UnarchiveTask(context.Context, *v1.UnarchiveTaskRequest) (*v1.UnarchiveTaskResponse, error)
 	CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error)
@@ -262,12 +258,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceUpdateTaskProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("UpdateTask")),
-			connect.WithClientOptions(opts...),
-		),
-		deleteTask: connect.NewClient[v1.DeleteTaskRequest, v1.DeleteTaskResponse](
-			httpClient,
-			baseURL+XAgentServiceDeleteTaskProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("DeleteTask")),
 			connect.WithClientOptions(opts...),
 		),
 		archiveTask: connect.NewClient[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse](
@@ -482,7 +472,6 @@ type xAgentServiceClient struct {
 	getTask             *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
 	getTaskDetails      *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
 	updateTask          *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	deleteTask          *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
 	archiveTask         *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
 	unarchiveTask       *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
 	cancelTask          *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
@@ -593,15 +582,6 @@ func (c *xAgentServiceClient) GetTaskDetails(ctx context.Context, req *v1.GetTas
 // UpdateTask calls xagent.v1.XAgentService.UpdateTask.
 func (c *xAgentServiceClient) UpdateTask(ctx context.Context, req *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error) {
 	response, err := c.updateTask.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// DeleteTask calls xagent.v1.XAgentService.DeleteTask.
-func (c *xAgentServiceClient) DeleteTask(ctx context.Context, req *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error) {
-	response, err := c.deleteTask.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -916,7 +896,6 @@ type XAgentServiceHandler interface {
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
 	GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error)
 	UpdateTask(context.Context, *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error)
-	DeleteTask(context.Context, *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error)
 	ArchiveTask(context.Context, *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error)
 	UnarchiveTask(context.Context, *v1.UnarchiveTaskRequest) (*v1.UnarchiveTaskResponse, error)
 	CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error)
@@ -1011,12 +990,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceUpdateTaskProcedure,
 		svc.UpdateTask,
 		connect.WithSchema(xAgentServiceMethods.ByName("UpdateTask")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceDeleteTaskHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceDeleteTaskProcedure,
-		svc.DeleteTask,
-		connect.WithSchema(xAgentServiceMethods.ByName("DeleteTask")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceArchiveTaskHandler := connect.NewUnaryHandlerSimple(
@@ -1237,8 +1210,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetTaskDetailsHandler.ServeHTTP(w, r)
 		case XAgentServiceUpdateTaskProcedure:
 			xAgentServiceUpdateTaskHandler.ServeHTTP(w, r)
-		case XAgentServiceDeleteTaskProcedure:
-			xAgentServiceDeleteTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceArchiveTaskProcedure:
 			xAgentServiceArchiveTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceUnarchiveTaskProcedure:
@@ -1348,10 +1319,6 @@ func (UnimplementedXAgentServiceHandler) GetTaskDetails(context.Context, *v1.Get
 
 func (UnimplementedXAgentServiceHandler) UpdateTask(context.Context, *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UpdateTask is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) DeleteTask(context.Context, *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteTask is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) ArchiveTask(context.Context, *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error) {

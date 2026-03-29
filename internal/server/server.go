@@ -371,15 +371,6 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 
-func (s *Server) DeleteTask(ctx context.Context, req *xagentv1.DeleteTaskRequest) (*xagentv1.DeleteTaskResponse, error) {
-	orgID := s.orgID(ctx)
-	if err := s.store.DeleteTask(ctx, nil, req.Id, orgID); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	s.log.Info("task deleted", "id", req.Id)
-	return &xagentv1.DeleteTaskResponse{}, nil
-}
-
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
 	orgID := s.orgID(ctx)
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {

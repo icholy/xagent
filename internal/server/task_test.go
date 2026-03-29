@@ -295,49 +295,6 @@ func TestUpdateTask_Permissions(t *testing.T) {
 	assert.ErrorContains(t, err, "not found")
 }
 
-func TestDeleteTask(t *testing.T) {
-	// Arrange
-	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
-	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Task to Delete",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, err = srv.DeleteTask(ctx, &xagentv1.DeleteTaskRequest{
-		Id: createResp.Task.Id,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	_, getErr := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
-	assert.ErrorContains(t, getErr, "")
-}
-
-func TestDeleteTask_Permissions(t *testing.T) {
-	// Arrange
-	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
-	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Task",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Act - delete is a no-op for tasks you don't own
-	_, err = srv.DeleteTask(userB, &xagentv1.DeleteTaskRequest{
-		Id: createResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	// Assert - task still exists for user A
-	_, err = srv.GetTask(userA, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
-	assert.NilError(t, err)
-}
-
 func TestArchiveTask_Permissions(t *testing.T) {
 	// Arrange
 	srv := setupTestServer(t)
