@@ -8,6 +8,7 @@ import (
 )
 
 func TestUploadLogs(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -31,6 +32,7 @@ func TestUploadLogs(t *testing.T) {
 }
 
 func TestUploadLogs_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -54,6 +56,7 @@ func TestUploadLogs_Permissions(t *testing.T) {
 }
 
 func TestListLogs(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -85,6 +88,7 @@ func TestListLogs(t *testing.T) {
 }
 
 func TestListLogs_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)

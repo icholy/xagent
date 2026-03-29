@@ -8,6 +8,7 @@ import (
 )
 
 func TestProcessEvent(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -96,6 +97,7 @@ func TestProcessEvent(t *testing.T) {
 }
 
 func TestProcessEventWithoutURL(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -118,6 +120,7 @@ func TestProcessEventWithoutURL(t *testing.T) {
 }
 
 func TestProcessEventWithNoMatchingLinks(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -156,6 +159,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 }
 
 func TestProcessEventWithNotifyFalse(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -194,6 +198,7 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 }
 
 func TestProcessEventDeduplicatesTasks(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -241,6 +246,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 }
 
 func TestProcessEventSkipsArchivedTasks(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -342,6 +348,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 }
 
 func TestProcessEvent_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)

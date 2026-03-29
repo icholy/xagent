@@ -8,6 +8,7 @@ import (
 )
 
 func TestSubmitRunnerEvents(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
@@ -64,6 +65,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 }
 
 func TestSubmitRunnerEvents_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -86,6 +88,7 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 }
 
 func TestListRunnerTasks(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -114,6 +117,7 @@ func TestListRunnerTasks(t *testing.T) {
 }
 
 func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -141,6 +145,7 @@ func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 }
 
 func TestListRunnerTasks_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)

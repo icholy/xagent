@@ -9,6 +9,7 @@ import (
 )
 
 func TestCreateKey(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -27,6 +28,7 @@ func TestCreateKey(t *testing.T) {
 }
 
 func TestCreateAndListKeys(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -48,6 +50,7 @@ func TestCreateAndListKeys(t *testing.T) {
 }
 
 func TestDeleteKey(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -69,6 +72,7 @@ func TestDeleteKey(t *testing.T) {
 }
 
 func TestListKeys_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -96,6 +100,7 @@ func TestListKeys_Permissions(t *testing.T) {
 }
 
 func TestDeleteKey_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)

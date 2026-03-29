@@ -8,6 +8,7 @@ import (
 )
 
 func TestCreateLink(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -34,6 +35,7 @@ func TestCreateLink(t *testing.T) {
 }
 
 func TestCreateLink_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -56,6 +58,7 @@ func TestCreateLink_Permissions(t *testing.T) {
 }
 
 func TestListLinks(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -88,6 +91,7 @@ func TestListLinks(t *testing.T) {
 }
 
 func TestListLinks_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -115,6 +119,7 @@ func TestListLinks_Permissions(t *testing.T) {
 }
 
 func TestFindLinksByURL(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -152,6 +157,7 @@ func TestFindLinksByURL(t *testing.T) {
 }
 
 func TestFindLinksByURL_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)

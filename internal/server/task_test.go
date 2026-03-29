@@ -9,6 +9,7 @@ import (
 )
 
 func TestGetTask(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
@@ -63,6 +64,7 @@ func TestGetTask(t *testing.T) {
 }
 
 func TestGetTask_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -83,6 +85,7 @@ func TestGetTask_Permissions(t *testing.T) {
 }
 
 func TestGetTaskDetails_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -103,6 +106,7 @@ func TestGetTaskDetails_Permissions(t *testing.T) {
 }
 
 func TestCreateTask(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -143,6 +147,7 @@ func TestCreateTask(t *testing.T) {
 }
 
 func TestCreateTask_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -165,6 +170,7 @@ func TestCreateTask_Permissions(t *testing.T) {
 }
 
 func TestListTasks(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -188,6 +194,7 @@ func TestListTasks(t *testing.T) {
 }
 
 func TestListTasks_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -220,6 +227,7 @@ func TestListTasks_Permissions(t *testing.T) {
 }
 
 func TestListChildTasks_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -252,6 +260,7 @@ func TestListChildTasks_Permissions(t *testing.T) {
 }
 
 func TestUpdateTask(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -275,6 +284,7 @@ func TestUpdateTask(t *testing.T) {
 }
 
 func TestUpdateTask_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -296,6 +306,7 @@ func TestUpdateTask_Permissions(t *testing.T) {
 }
 
 func TestArchiveTask_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -316,6 +327,7 @@ func TestArchiveTask_Permissions(t *testing.T) {
 }
 
 func TestCancelTask_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -336,6 +348,7 @@ func TestCancelTask_Permissions(t *testing.T) {
 }
 
 func TestRestartTask_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)

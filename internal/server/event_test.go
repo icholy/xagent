@@ -10,6 +10,7 @@ import (
 )
 
 func TestCreateEvent(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -34,6 +35,7 @@ func TestCreateEvent(t *testing.T) {
 }
 
 func TestGetEvent(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -62,6 +64,7 @@ func TestGetEvent(t *testing.T) {
 }
 
 func TestGetEvent_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -82,6 +85,7 @@ func TestGetEvent_Permissions(t *testing.T) {
 }
 
 func TestListEvents(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -108,6 +112,7 @@ func TestListEvents(t *testing.T) {
 }
 
 func TestListEventsWithLimit(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -135,6 +140,7 @@ func TestListEventsWithLimit(t *testing.T) {
 }
 
 func TestListEvents_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -167,6 +173,7 @@ func TestListEvents_Permissions(t *testing.T) {
 }
 
 func TestDeleteEvent(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -188,6 +195,7 @@ func TestDeleteEvent(t *testing.T) {
 }
 
 func TestDeleteEvent_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -211,6 +219,7 @@ func TestDeleteEvent_Permissions(t *testing.T) {
 }
 
 func TestAddEventTask(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -246,6 +255,7 @@ func TestAddEventTask(t *testing.T) {
 }
 
 func TestAddEventTask_Permissions_Task(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -274,6 +284,7 @@ func TestAddEventTask_Permissions_Task(t *testing.T) {
 }
 
 func TestAddEventTask_Permissions_Event(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -302,6 +313,7 @@ func TestAddEventTask_Permissions_Event(t *testing.T) {
 }
 
 func TestRemoveEventTask(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -342,6 +354,7 @@ func TestRemoveEventTask(t *testing.T) {
 }
 
 func TestRemoveEventTask_Permissions_Task(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -376,6 +389,7 @@ func TestRemoveEventTask_Permissions_Task(t *testing.T) {
 }
 
 func TestRemoveEventTask_Permissions_Event(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -418,6 +432,7 @@ func TestRemoveEventTask_Permissions_Event(t *testing.T) {
 }
 
 func TestListEventTasks(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -463,6 +478,7 @@ func TestListEventTasks(t *testing.T) {
 }
 
 func TestListEventTasks_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
@@ -502,6 +518,7 @@ func TestListEventTasks_Permissions(t *testing.T) {
 }
 
 func TestListEventsByTask(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
@@ -550,6 +567,7 @@ func TestListEventsByTask(t *testing.T) {
 }
 
 func TestListEventsByTask_Permissions(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)

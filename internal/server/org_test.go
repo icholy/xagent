@@ -9,6 +9,7 @@ import (
 )
 
 func TestCreateOrg(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
@@ -22,6 +23,7 @@ func TestCreateOrg(t *testing.T) {
 }
 
 func TestListOrgs(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 	_, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "org-1"})
@@ -37,6 +39,7 @@ func TestListOrgs(t *testing.T) {
 }
 
 func TestDeleteOrg(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "to-delete"})
@@ -51,6 +54,7 @@ func TestDeleteOrg(t *testing.T) {
 }
 
 func TestDeleteOrg_Permissions(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	userA := createTestUser(t, srv)
 	userB := createTestUser(t, srv)
@@ -63,6 +67,7 @@ func TestDeleteOrg_Permissions(t *testing.T) {
 }
 
 func TestDeleteOrg_DefaultOrg(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 	user := apiauth.Caller(ctx)
@@ -73,6 +78,7 @@ func TestDeleteOrg_DefaultOrg(t *testing.T) {
 }
 
 func TestAddAndListOrgMembers(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	owner := createTestUser(t, srv)
 	member := createTestUser(t, srv)
@@ -90,6 +96,7 @@ func TestAddAndListOrgMembers(t *testing.T) {
 }
 
 func TestDeleteOrg_WithTasks(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
@@ -120,6 +127,7 @@ func TestDeleteOrg_WithTasks(t *testing.T) {
 }
 
 func TestRemoveOrgMember(t *testing.T) {
+	t.Parallel()
 	srv := setupTestServer(t)
 	owner := createTestUser(t, srv)
 	member := createTestUser(t, srv)
