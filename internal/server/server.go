@@ -101,12 +101,16 @@ func (s *Server) Handler() http.Handler {
 			RedirectURL:  s.baseURL + "/github/callback",
 			Log:          s.log,
 			OnSuccess: func(w http.ResponseWriter, r *http.Request, ghUser *github.User) {
-				user := apiauth.Caller(r.Context())
-				if user == nil {
+				caller := apiauth.Caller(r.Context())
+				if caller == nil {
 					http.Error(w, "not authenticated", http.StatusUnauthorized)
 					return
 				}
-				if err := s.store.LinkGitHubAccount(r.Context(), nil, user.ID, ghUser.GetID(), ghUser.GetLogin()); err != nil {
+				if caller.ID == "" {
+					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
+					return
+				}
+				if err := s.store.LinkGitHubAccount(r.Context(), nil, caller.ID, ghUser.GetID(), ghUser.GetLogin()); err != nil {
 					http.Error(w, "failed to link GitHub account", http.StatusInternalServerError)
 					return
 				}
