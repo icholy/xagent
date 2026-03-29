@@ -141,6 +141,15 @@ func (s *Server) userID(ctx context.Context) string {
 	return u.ID
 }
 
+// name returns the authenticated user's display name from context.
+func (s *Server) name(ctx context.Context) string {
+	u := apiauth.User(ctx)
+	if u == nil {
+		panic("no UserInfo in request context")
+	}
+	return cmp.Or(u.Name, u.Email, u.ID)
+}
+
 // orgID returns the org ID for resource queries.
 // The org_id is embedded in the JWT at token issuance time.
 func (s *Server) orgID(ctx context.Context) int64 {
@@ -258,7 +267,20 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Version:      1,
 		OrgID:        orgID,
 	}
-	if err := s.store.CreateTask(ctx, nil, task); err != nil {
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := s.store.CreateTask(ctx, tx, task); err != nil {
+			return err
+		}
+		if err := s.store.CreateLog(ctx, tx, &model.Log{
+			TaskID:  task.ID,
+			Type:    "audit",
+			Content: fmt.Sprintf("%s created task", s.name(ctx)),
+		}); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
@@ -330,6 +352,13 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
+		if err := s.store.CreateLog(ctx, tx, &model.Log{
+			TaskID:  req.Id,
+			Type:    "audit",
+			Content: fmt.Sprintf("%s updated task", s.name(ctx)),
+		}); err != nil {
+			return err
+		}
 		return tx.Commit()
 	})
 	if err != nil {
@@ -364,6 +393,13 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
+		if err := s.store.CreateLog(ctx, tx, &model.Log{
+			TaskID:  req.Id,
+			Type:    "audit",
+			Content: fmt.Sprintf("%s archived task", s.name(ctx)),
+		}); err != nil {
+			return err
+		}
 		return tx.Commit()
 	})
 	if err != nil {
@@ -387,6 +423,13 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 			return fmt.Errorf("cannot unarchive task: not archived")
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
+			return err
+		}
+		if err := s.store.CreateLog(ctx, tx, &model.Log{
+			TaskID:  req.Id,
+			Type:    "audit",
+			Content: fmt.Sprintf("%s unarchived task", s.name(ctx)),
+		}); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -414,6 +457,13 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
+		if err := s.store.CreateLog(ctx, tx, &model.Log{
+			TaskID:  req.Id,
+			Type:    "audit",
+			Content: fmt.Sprintf("%s cancelled task", s.name(ctx)),
+		}); err != nil {
+			return err
+		}
 		return tx.Commit()
 	})
 	if err != nil {
@@ -437,6 +487,13 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 			return fmt.Errorf("cannot restart task with status %s", task.Status)
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
+			return err
+		}
+		if err := s.store.CreateLog(ctx, tx, &model.Log{
+			TaskID:  req.Id,
+			Type:    "audit",
+			Content: fmt.Sprintf("%s restarted task", s.name(ctx)),
+		}); err != nil {
 			return err
 		}
 		return tx.Commit()
