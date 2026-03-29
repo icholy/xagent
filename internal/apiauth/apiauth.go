@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -110,6 +111,18 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		}
 	}
 	if cfg.Disable {
+		// Provision the dev user so GetProfile and other user-dependent
+		// endpoints work without real authentication.
+		if cfg.UserResolver != nil {
+			devUser := &UserInfo{
+				ID:    "dev",
+				Email: "dev@localhost",
+				Name:  "Developer",
+			}
+			if err := cfg.UserResolver.Provision(ctx, devUser); err != nil {
+				return nil, fmt.Errorf("provision dev user: %w", err)
+			}
+		}
 		return &Auth{disabled: true, appKey: appKey, resolver: cfg.UserResolver}, nil
 	}
 	if len(cfg.Scopes) == 0 {

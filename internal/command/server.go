@@ -136,16 +136,16 @@ var ServerCommand = &cli.Command{
 			slog.Warn("authentication disabled")
 		}
 		auth, err := apiauth.New(ctx, apiauth.Config{
-			Domain:          domain,
-			ClientID:        cmd.String("auth-client-id"),
-			ClientSecret:    cmd.String("auth-client-secret"),
-			RedirectURI:     baseURL + "/auth/callback",
-			PostLogoutURI:   baseURL,
-			EncryptionKey:   key,
-			KeyValidator:    &storeKeyValidator{store: st},
-			UserResolver: &storeUserResolver{store: st},
-			AppKey:          appKey,
-			Disable:         noAuth,
+			Domain:        domain,
+			ClientID:      cmd.String("auth-client-id"),
+			ClientSecret:  cmd.String("auth-client-secret"),
+			RedirectURI:   baseURL + "/auth/callback",
+			PostLogoutURI: baseURL,
+			EncryptionKey: key,
+			KeyValidator:  &storeKeyValidator{store: st},
+			UserResolver:  &storeUserResolver{store: st},
+			AppKey:        appKey,
+			Disable:       noAuth,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize auth: %w", err)
