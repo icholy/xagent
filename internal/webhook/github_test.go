@@ -27,7 +27,7 @@ func setupTestStore(t *testing.T) *store.Store {
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL not set")
 	}
-	db, err := store.Open(dsn, true)
+	db, err := store.Open(dsn, false)
 	assert.NilError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return store.New(db)

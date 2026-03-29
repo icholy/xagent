@@ -49,8 +49,8 @@ func setupTestServer(t *testing.T) *Server {
 		t.Skip("TEST_DATABASE_URL not set")
 	}
 
-	// Open the database (this will create and migrate it)
-	db, err := store.Open(dsn, true)
+	// Open the database (migrations are run by 'mise run migrate' before tests)
+	db, err := store.Open(dsn, false)
 	assert.NilError(t, err)
 
 	// Clean up the database when the test completes
