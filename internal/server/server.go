@@ -989,10 +989,10 @@ func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) 
 	if user.DefaultOrgID == req.Id {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("cannot delete your default org"))
 	}
-	if err := s.store.DeleteOrg(ctx, nil, req.Id); err != nil {
+	if err := s.store.ArchiveOrg(ctx, nil, req.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org deleted", "id", req.Id, "owner", userID)
+	s.log.Info("org archived", "id", req.Id, "owner", userID)
 	return &xagentv1.DeleteOrgResponse{}, nil
 }
 

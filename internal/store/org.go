@@ -56,8 +56,8 @@ func (s *Store) UpdateOrg(ctx context.Context, tx *sql.Tx, org *model.Org) error
 	})
 }
 
-func (s *Store) DeleteOrg(ctx context.Context, tx *sql.Tx, id int64) error {
-	return s.q(tx).DeleteOrg(ctx, id)
+func (s *Store) ArchiveOrg(ctx context.Context, tx *sql.Tx, id int64) error {
+	return s.q(tx).ArchiveOrg(ctx, id)
 }
 
 func (s *Store) AddOrgMember(ctx context.Context, tx *sql.Tx, member *model.OrgMember) error {
@@ -151,6 +151,7 @@ func toModelOrg(row sqlc.Org) *model.Org {
 		ID:        row.ID,
 		Name:      row.Name,
 		Owner:     row.Owner,
+		Archived:  row.Archived,
 		CreatedAt: row.CreatedAt,
 		UpdatedAt: row.UpdatedAt,
 	}

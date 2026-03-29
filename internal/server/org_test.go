@@ -89,6 +89,36 @@ func TestAddAndListOrgMembers(t *testing.T) {
 	assert.Equal(t, len(listResp.Members), 2)
 }
 
+func TestDeleteOrg_WithTasks(t *testing.T) {
+	srv := setupTestServer(t)
+	ctx := createTestUser(t, srv)
+
+	// Create a second org and switch to it.
+	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "has-tasks"})
+	assert.NilError(t, err)
+	orgCtx := apiauth.WithUser(ctx, &apiauth.UserInfo{
+		ID:    apiauth.User(ctx).ID,
+		OrgID: createResp.Org.Id,
+	})
+
+	// Create a task in that org.
+	_, err = srv.CreateTask(orgCtx, &xagentv1.CreateTaskRequest{
+		Workspace: "default",
+	})
+	assert.NilError(t, err)
+
+	// Deleting the org should succeed (soft delete).
+	_, err = srv.DeleteOrg(ctx, &xagentv1.DeleteOrgRequest{Id: createResp.Org.Id})
+	assert.NilError(t, err)
+
+	// The org should no longer appear in the list.
+	listResp, err := srv.ListOrgs(ctx, &xagentv1.ListOrgsRequest{})
+	assert.NilError(t, err)
+	for _, org := range listResp.Orgs {
+		assert.Assert(t, org.Id != createResp.Org.Id)
+	}
+}
+
 func TestRemoveOrgMember(t *testing.T) {
 	srv := setupTestServer(t)
 	owner := createTestUser(t, srv)

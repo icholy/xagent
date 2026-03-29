@@ -33,6 +33,15 @@ func (q *Queries) AddOrgMember(ctx context.Context, arg AddOrgMemberParams) erro
 	return err
 }
 
+const archiveOrg = `-- name: ArchiveOrg :exec
+UPDATE orgs SET archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1
+`
+
+func (q *Queries) ArchiveOrg(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, archiveOrg, id)
+	return err
+}
+
 const createOrg = `-- name: CreateOrg :one
 INSERT INTO orgs (name, owner, created_at, updated_at)
 VALUES ($1, $2, $3, $4)
@@ -58,17 +67,8 @@ func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (int64, er
 	return id, err
 }
 
-const deleteOrg = `-- name: DeleteOrg :exec
-DELETE FROM orgs WHERE id = $1
-`
-
-func (q *Queries) DeleteOrg(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteOrg, id)
-	return err
-}
-
 const getOrg = `-- name: GetOrg :one
-SELECT id, name, owner, created_at, updated_at
+SELECT id, name, owner, created_at, updated_at, archived
 FROM orgs
 WHERE id = $1
 `
@@ -82,6 +82,7 @@ func (q *Queries) GetOrg(ctx context.Context, id int64) (Org, error) {
 		&i.Owner,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Archived,
 	)
 	return i, err
 }
@@ -111,7 +112,9 @@ func (q *Queries) GetOrgMember(ctx context.Context, arg GetOrgMemberParams) (Org
 
 const isOrgMember = `-- name: IsOrgMember :one
 SELECT EXISTS(
-    SELECT 1 FROM org_members WHERE org_id = $1 AND user_id = $2
+    SELECT 1 FROM org_members om
+    JOIN orgs o ON o.id = om.org_id
+    WHERE om.org_id = $1 AND om.user_id = $2 AND o.archived = FALSE
 ) AS is_member
 `
 
@@ -210,10 +213,10 @@ func (q *Queries) ListOrgMembersWithUsers(ctx context.Context, orgID int64) ([]L
 }
 
 const listOrgsByMember = `-- name: ListOrgsByMember :many
-SELECT o.id, o.name, o.owner, o.created_at, o.updated_at
+SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived
 FROM orgs o
 JOIN org_members om ON o.id = om.org_id
-WHERE om.user_id = $1
+WHERE om.user_id = $1 AND o.archived = FALSE
 ORDER BY o.name
 `
 
@@ -232,6 +235,7 @@ func (q *Queries) ListOrgsByMember(ctx context.Context, userID string) ([]Org, e
 			&i.Owner,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Archived,
 		); err != nil {
 			return nil, err
 		}
