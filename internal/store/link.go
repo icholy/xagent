@@ -50,6 +50,38 @@ func (s *Store) FindLinksByURL(ctx context.Context, tx *sql.Tx, url string, orgI
 	return toModelLinks(rows), nil
 }
 
+// LinkWithOrg pairs a Link with its task's org ID.
+type LinkWithOrg struct {
+	Link  *model.Link
+	OrgID int64
+}
+
+func (s *Store) FindNotifyLinksByURLForUser(ctx context.Context, tx *sql.Tx, url string, userID string) ([]LinkWithOrg, error) {
+	rows, err := s.q(tx).FindNotifyLinksByURLForUser(ctx, sqlc.FindNotifyLinksByURLForUserParams{
+		Url:    url,
+		UserID: userID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]LinkWithOrg, len(rows))
+	for i, row := range rows {
+		result[i] = LinkWithOrg{
+			Link: &model.Link{
+				ID:        row.ID,
+				TaskID:    row.TaskID,
+				Relevance: row.Relevance,
+				URL:       row.Url,
+				Title:     row.Title,
+				Notify:    row.Notify,
+				CreatedAt: row.CreatedAt,
+			},
+			OrgID: row.OrgID,
+		}
+	}
+	return result, nil
+}
+
 func toModelLinks(rows []sqlc.TaskLink) []*model.Link {
 	links := make([]*model.Link, len(rows))
 	for i, row := range rows {

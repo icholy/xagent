@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -56,29 +57,80 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create event in store
-	event := &model.Event{
-		Description: extracted.description,
-		Data:        extracted.data,
-		URL:         extracted.url,
-		OrgID:       user.DefaultOrgID,
-	}
-	if err := s.store.CreateEvent(r.Context(), nil, event); err != nil {
-		slog.Error("failed to create event", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
-	// Route to matching tasks
-	ids, err := s.processEventInternal(r.Context(), event.ID, event.URL, user.DefaultOrgID)
+	// Find matching notify links across all the user's orgs
+	linksByOrg, err := s.findWebhookLinksByOrg(r.Context(), extracted.url, user.ID)
 	if err != nil {
-		slog.Error("failed to process event", "error", err)
+		slog.Error("failed to find matching links", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	slog.Info("GitHub webhook processed", "event_id", event.ID, "url", event.URL, "tasks_routed", len(ids))
+	// Create events and route to tasks per org
+	var totalRouted int
+	for orgID, links := range linksByOrg {
+		event := &model.Event{
+			Description: extracted.description,
+			Data:        extracted.data,
+			URL:         extracted.url,
+			OrgID:       orgID,
+		}
+		if err := s.store.CreateEvent(r.Context(), nil, event); err != nil {
+			slog.Error("failed to create event", "org_id", orgID, "error", err)
+			continue
+		}
+		routed := s.routeEventToLinks(r.Context(), event.ID, links, orgID)
+		totalRouted += routed
+	}
+
+	slog.Info("GitHub webhook processed", "url", extracted.url, "orgs", len(linksByOrg), "tasks_routed", totalRouted)
 	fmt.Fprintf(w, "processed")
+}
+
+// findWebhookLinksByOrg queries all matching notify links for a URL across all
+// the user's orgs and groups them by org ID.
+func (s *Server) findWebhookLinksByOrg(ctx context.Context, url string, userID string) (map[int64][]*model.Link, error) {
+	if url == "" {
+		return nil, nil
+	}
+	matches, err := s.store.FindNotifyLinksByURLForUser(ctx, nil, url, userID)
+	if err != nil {
+		return nil, err
+	}
+	result := map[int64][]*model.Link{}
+	for _, m := range matches {
+		result[m.OrgID] = append(result[m.OrgID], m.Link)
+	}
+	return result, nil
+}
+
+// routeEventToLinks routes an event to the tasks referenced by the given links.
+// It returns the number of tasks successfully routed.
+func (s *Server) routeEventToLinks(ctx context.Context, eventID int64, links []*model.Link, orgID int64) int {
+	taskIDs := map[int64]bool{}
+	for _, link := range links {
+		if taskIDs[link.TaskID] {
+			continue
+		}
+		taskIDs[link.TaskID] = true
+		if err := s.store.AddEventTask(ctx, nil, eventID, link.TaskID); err != nil {
+			s.log.Warn("failed to add event task", "event_id", eventID, "task_id", link.TaskID, "error", err)
+		}
+		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+			task, err := s.store.GetTaskForUpdate(ctx, tx, link.TaskID, orgID)
+			if err != nil {
+				return err
+			}
+			task.Start()
+			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
+				return err
+			}
+			return tx.Commit()
+		})
+		if err != nil {
+			s.log.Warn("failed to start task", "task_id", link.TaskID, "error", err)
+		}
+	}
+	return len(taskIDs)
 }
 
 type githubWebhookEvent struct {
