@@ -167,8 +167,6 @@ func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, inp
 	if err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
-
-	s.log(ctx, "updated task name: %s", input.Name)
 	return textResult("Task updated"), nil, nil
 }
 
