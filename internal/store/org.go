@@ -115,17 +115,6 @@ func (s *Store) ListOrgMembersWithUsers(ctx context.Context, tx *sql.Tx, orgID i
 	return members, nil
 }
 
-func (s *Store) GetOrgMember(ctx context.Context, tx *sql.Tx, orgID int64, userID string) (*model.OrgMember, error) {
-	row, err := s.q(tx).GetOrgMember(ctx, sqlc.GetOrgMemberParams{
-		OrgID:  orgID,
-		UserID: userID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return toModelOrgMember(row), nil
-}
-
 func (s *Store) IsOrgMember(ctx context.Context, tx *sql.Tx, orgID int64, userID string) (bool, error) {
 	return s.q(tx).IsOrgMember(ctx, sqlc.IsOrgMemberParams{
 		OrgID:  orgID,
