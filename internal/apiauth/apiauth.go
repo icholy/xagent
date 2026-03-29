@@ -11,14 +11,14 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
-	httphelper "github.com/zitadel/oidc/v3/pkg/http"
-	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/icholy/zitadel-go/v3/pkg/authentication"
 	openid "github.com/icholy/zitadel-go/v3/pkg/authentication/oidc"
 	"github.com/icholy/zitadel-go/v3/pkg/authorization"
 	"github.com/icholy/zitadel-go/v3/pkg/authorization/oauth"
 	"github.com/icholy/zitadel-go/v3/pkg/http/middleware"
 	"github.com/icholy/zitadel-go/v3/pkg/zitadel"
+	httphelper "github.com/zitadel/oidc/v3/pkg/http"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
 // UserInfo contains authenticated user information.
@@ -47,10 +47,14 @@ type KeyValidator interface {
 	ValidateKey(ctx context.Context, keyHash string) (*UserInfo, error)
 }
 
-// UserResolver provisions the user record and resolves the org for token issuance.
-// orgID is the requested org from the query param, or 0 to use the user's default.
-// Returns an error if the user is not a member of the requested org.
+// UserResolver provisions users on login and resolves orgs for token issuance.
 type UserResolver interface {
+	// Provision creates the user and their default org on first login.
+	// Called from the OIDC callback via WithOnAuthenticated.
+	Provision(ctx context.Context, user *UserInfo) error
+	// Resolve resolves the org for token issuance.
+	// orgID is the requested org from the query param, or 0 to use the user's default.
+	// Returns an error if the user is not a member of the requested org.
 	Resolve(ctx context.Context, user *UserInfo, orgID int64) error
 }
 
@@ -65,7 +69,7 @@ type Config struct {
 	Scopes        []string
 	// KeyValidator validates xat_ API keys.
 	KeyValidator KeyValidator
-	// UserResolver provisions the user and resolves the org for token issuance.
+	// UserResolver provisions users on login and resolves orgs for token issuance.
 	UserResolver UserResolver
 	// AppKey is the Ed25519 private key for signing/verifying app JWTs.
 	// If nil, a new key is generated on startup.
@@ -111,8 +115,6 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail}
 	}
-	// TODO: provision users on OIDC callback instead of in HandleToken.
-	// Waiting on https://github.com/zitadel/zitadel-go/pull/592
 	authN, err := authentication.New(ctx,
 		// my zitadel instance domain
 		zitadel.New(cfg.Domain),
@@ -134,6 +136,14 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		authentication.WithPostLogoutRedirectURI[*openid.DefaultContext](cfg.PostLogoutURI),
 		// store session in cookie instead of in-memory (survives server restarts)
 		authentication.WithCookieSession[*openid.DefaultContext](),
+		// provision user and default org on first login
+		authentication.WithOnAuthenticated(func(ctx context.Context, authCtx *openid.DefaultContext) error {
+			return cfg.UserResolver.Provision(ctx, &UserInfo{
+				ID:    authCtx.UserInfo.Subject,
+				Email: authCtx.UserInfo.Email,
+				Name:  authCtx.UserInfo.Name,
+			})
+		}),
 	)
 	if err != nil {
 		return nil, err

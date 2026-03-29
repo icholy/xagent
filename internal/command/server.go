@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -225,13 +226,43 @@ type storeUserResolver struct {
 	store *store.Store
 }
 
+func (r *storeUserResolver) Provision(ctx context.Context, user *apiauth.UserInfo) error {
+	return r.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		u := &model.User{
+			ID:    user.ID,
+			Email: user.Email,
+			Name:  user.Name,
+		}
+		if err := r.store.UpsertUser(ctx, tx, u); err != nil {
+			return err
+		}
+		// If the user has no default org, create one
+		if u.DefaultOrgID == 0 {
+			org := &model.Org{
+				Name:  user.Name + "'s Org",
+				Owner: user.ID,
+			}
+			if err := r.store.CreateOrg(ctx, tx, org); err != nil {
+				return err
+			}
+			if err := r.store.AddOrgMember(ctx, tx, &model.OrgMember{
+				OrgID:  org.ID,
+				UserID: user.ID,
+				Role:   "owner",
+			}); err != nil {
+				return err
+			}
+			if err := r.store.UpdateDefaultOrgID(ctx, tx, user.ID, org.ID); err != nil {
+				return err
+			}
+		}
+		return tx.Commit()
+	})
+}
+
 func (r *storeUserResolver) Resolve(ctx context.Context, user *apiauth.UserInfo, orgID int64) error {
-	u := &model.User{
-		ID:    user.ID,
-		Email: user.Email,
-		Name:  user.Name,
-	}
-	if err := r.store.UpsertUser(ctx, nil, u); err != nil {
+	u, err := r.store.GetUser(ctx, nil, user.ID)
+	if err != nil {
 		return err
 	}
 	// Fall back to the user's default org if none requested
