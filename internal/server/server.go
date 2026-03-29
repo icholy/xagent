@@ -24,6 +24,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
+	"github.com/icholy/xagent/internal/webhook"
 	"github.com/justinas/alice"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -35,6 +36,7 @@ type GitHubConfig struct {
 	ClientSecret  string
 	WebhookSecret string
 }
+
 
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
@@ -113,7 +115,11 @@ func (s *Server) Handler() http.Handler {
 			},
 		})
 		mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", gh)))
-		mux.HandleFunc("/webhook/github", s.handleGitHubWebhook)
+		mux.Handle("/webhook/github", &webhook.GitHubHandler{
+			Log:           s.log,
+			Store:         s.store,
+			WebhookSecret: s.github.WebhookSecret,
+		})
 	}
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))

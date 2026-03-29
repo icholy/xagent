@@ -1,4 +1,4 @@
-package server
+package webhook
 
 import (
 	"context"
@@ -13,17 +13,24 @@ import (
 	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/githubx"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/store"
 )
 
-// handleGitHubWebhook handles incoming GitHub App webhook events.
-func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
+// GitHubHandler handles incoming GitHub App webhook events.
+type GitHubHandler struct {
+	Log           *slog.Logger
+	Store         *store.Store
+	WebhookSecret string
+}
+
+func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		slog.Error("failed to read webhook body", "error", err)
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
-	webhookEvent, err := githubx.ParseWebHook(body, r.Header, []byte(s.github.WebhookSecret))
+	webhookEvent, err := githubx.ParseWebHook(body, r.Header, []byte(h.WebhookSecret))
 	if err != nil {
 		slog.Error("failed to parse GitHub webhook", "error", err)
 		http.Error(w, "invalid webhook", http.StatusBadRequest)
@@ -38,7 +45,7 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Look up xagent owner by GitHub user ID
-	user, err := s.store.GetUserByGitHubUserID(r.Context(), nil, extracted.githubUserID)
+	user, err := h.Store.GetUserByGitHubUserID(r.Context(), nil, extracted.githubUserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			slog.Info("no linked GitHub account", "github_user_id", extracted.githubUserID)
@@ -52,13 +59,13 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Update cached username if it changed
 	if extracted.githubUsername != "" && extracted.githubUsername != user.GitHubUsername {
-		if err := s.store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, extracted.githubUsername); err != nil {
+		if err := h.Store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, extracted.githubUsername); err != nil {
 			slog.Warn("failed to update GitHub username", "error", err)
 		}
 	}
 
 	// Find matching notify links across all the user's orgs
-	linksByOrg, err := s.findWebhookLinksByOrg(r.Context(), extracted.url, user.ID)
+	linksByOrg, err := h.findLinksByOrg(r.Context(), extracted.url, user.ID)
 	if err != nil {
 		slog.Error("failed to find matching links", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -74,11 +81,11 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 			URL:         extracted.url,
 			OrgID:       orgID,
 		}
-		if err := s.store.CreateEvent(r.Context(), nil, event); err != nil {
+		if err := h.Store.CreateEvent(r.Context(), nil, event); err != nil {
 			slog.Error("failed to create event", "org_id", orgID, "error", err)
 			continue
 		}
-		routed := s.routeEventToLinks(r.Context(), event.ID, links, orgID)
+		routed := h.routeEventToLinks(r.Context(), event.ID, links, orgID)
 		totalRouted += routed
 	}
 
@@ -86,13 +93,13 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "processed")
 }
 
-// findWebhookLinksByOrg queries all matching notify links for a URL across all
+// findLinksByOrg queries all matching notify links for a URL across all
 // the user's orgs and groups them by org ID.
-func (s *Server) findWebhookLinksByOrg(ctx context.Context, url string, userID string) (map[int64][]*model.Link, error) {
+func (h *GitHubHandler) findLinksByOrg(ctx context.Context, url string, userID string) (map[int64][]*model.Link, error) {
 	if url == "" {
 		return nil, nil
 	}
-	matches, err := s.store.FindNotifyLinksByURLForUser(ctx, nil, url, userID)
+	matches, err := h.Store.FindNotifyLinksByURLForUser(ctx, nil, url, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -105,29 +112,29 @@ func (s *Server) findWebhookLinksByOrg(ctx context.Context, url string, userID s
 
 // routeEventToLinks routes an event to the tasks referenced by the given links.
 // It returns the number of tasks successfully routed.
-func (s *Server) routeEventToLinks(ctx context.Context, eventID int64, links []*model.Link, orgID int64) int {
+func (h *GitHubHandler) routeEventToLinks(ctx context.Context, eventID int64, links []*model.Link, orgID int64) int {
 	taskIDs := map[int64]bool{}
 	for _, link := range links {
 		if taskIDs[link.TaskID] {
 			continue
 		}
 		taskIDs[link.TaskID] = true
-		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			if err := s.store.AddEventTask(ctx, tx, eventID, link.TaskID); err != nil {
+		err := h.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+			if err := h.Store.AddEventTask(ctx, tx, eventID, link.TaskID); err != nil {
 				return err
 			}
-			task, err := s.store.GetTaskForUpdate(ctx, tx, link.TaskID, orgID)
+			task, err := h.Store.GetTaskForUpdate(ctx, tx, link.TaskID, orgID)
 			if err != nil {
 				return err
 			}
 			task.Start()
-			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
+			if err := h.Store.UpdateTask(ctx, tx, task); err != nil {
 				return err
 			}
 			return tx.Commit()
 		})
 		if err != nil {
-			s.log.Warn("failed to route event to task", "event_id", eventID, "task_id", link.TaskID, "error", err)
+			h.Log.Warn("failed to route event to task", "event_id", eventID, "task_id", link.TaskID, "error", err)
 		}
 	}
 	return len(taskIDs)
