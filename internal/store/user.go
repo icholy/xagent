@@ -20,9 +20,7 @@ func (s *Store) UpsertUser(ctx context.Context, tx *sql.Tx, user *model.User) er
 	}
 	user.CreatedAt = row.CreatedAt
 	user.UpdatedAt = row.UpdatedAt
-	if row.DefaultOrgID.Valid {
-		user.DefaultOrgID = row.DefaultOrgID.Int64
-	}
+	user.DefaultOrgID = row.DefaultOrgID.Int64
 	return nil
 }
 
