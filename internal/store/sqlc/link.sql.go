@@ -92,6 +92,63 @@ func (q *Queries) FindLinksByURL(ctx context.Context, arg FindLinksByURLParams) 
 	return items, nil
 }
 
+const findNotifyLinksByURLForUser = `-- name: FindNotifyLinksByURLForUser :many
+SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at, t.org_id
+FROM task_links l
+JOIN tasks t ON l.task_id = t.id
+JOIN org_members om ON t.org_id = om.org_id
+WHERE l.url = $1 AND l.notify = TRUE AND t.archived = FALSE AND om.user_id = $2
+ORDER BY t.org_id, l.created_at DESC
+`
+
+type FindNotifyLinksByURLForUserParams struct {
+	Url    string `json:"url"`
+	UserID string `json:"user_id"`
+}
+
+type FindNotifyLinksByURLForUserRow struct {
+	ID        int64     `json:"id"`
+	TaskID    int64     `json:"task_id"`
+	Relevance string    `json:"relevance"`
+	Url       string    `json:"url"`
+	Title     string    `json:"title"`
+	Notify    bool      `json:"notify"`
+	CreatedAt time.Time `json:"created_at"`
+	OrgID     int64     `json:"org_id"`
+}
+
+func (q *Queries) FindNotifyLinksByURLForUser(ctx context.Context, arg FindNotifyLinksByURLForUserParams) ([]FindNotifyLinksByURLForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, findNotifyLinksByURLForUser, arg.Url, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindNotifyLinksByURLForUserRow{}
+	for rows.Next() {
+		var i FindNotifyLinksByURLForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskID,
+			&i.Relevance,
+			&i.Url,
+			&i.Title,
+			&i.Notify,
+			&i.CreatedAt,
+			&i.OrgID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLinksByTask = `-- name: ListLinksByTask :many
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.notify, l.created_at
 FROM task_links l

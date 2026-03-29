@@ -298,6 +298,106 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, updatedTask.Status, model.TaskStatusPending)
 }
 
+func TestHandleGitHubWebhookRoutesToMultipleOrgs(t *testing.T) {
+	s := setupTestServer(t)
+	s.github = &GitHubConfig{}
+
+	// Create a user with a GitHub account linked
+	ctx := createTestUser(t, s)
+	userID := s.userID(ctx)
+	orgID1 := s.orgID(ctx)
+
+	ghUserID := rand.Int64N(1<<53) + 1
+	err := s.store.LinkGitHubAccount(ctx, nil, userID, ghUserID, "testuser")
+	assert.NilError(t, err)
+
+	// Create a second org and add the user as a member
+	org2 := &model.Org{
+		Name:  "second-org",
+		Owner: userID,
+	}
+	err = s.store.CreateOrg(ctx, nil, org2)
+	assert.NilError(t, err)
+	err = s.store.AddOrgMember(ctx, nil, &model.OrgMember{
+		OrgID:  org2.ID,
+		UserID: userID,
+		Role:   "owner",
+	})
+	assert.NilError(t, err)
+
+	prURL := "https://github.com/owner/repo/pull/42"
+
+	// Create a task in org1 with a notify link
+	task1 := &model.Task{
+		Name:      "org1-task",
+		Workspace: "test",
+		Status:    model.TaskStatusCompleted,
+		Command:   model.TaskCommandNone,
+		Version:   1,
+		OrgID:     orgID1,
+	}
+	err = s.store.CreateTask(ctx, nil, task1)
+	assert.NilError(t, err)
+	err = s.store.CreateLink(ctx, nil, &model.Link{
+		TaskID:    task1.ID,
+		Relevance: "test",
+		URL:       prURL,
+		Notify:    true,
+	})
+	assert.NilError(t, err)
+
+	// Create a task in org2 with a notify link to the same URL
+	task2 := &model.Task{
+		Name:      "org2-task",
+		Workspace: "test",
+		Status:    model.TaskStatusCompleted,
+		Command:   model.TaskCommandNone,
+		Version:   1,
+		OrgID:     org2.ID,
+	}
+	err = s.store.CreateTask(ctx, nil, task2)
+	assert.NilError(t, err)
+	err = s.store.CreateLink(ctx, nil, &model.Link{
+		TaskID:    task2.ID,
+		Relevance: "test",
+		URL:       prURL,
+		Notify:    true,
+	})
+	assert.NilError(t, err)
+
+	// Fire webhook
+	payload := github.IssueCommentEvent{
+		Action: github.Ptr("created"),
+		Comment: &github.IssueComment{
+			Body: github.Ptr("xagent: deploy please"),
+			User: &github.User{
+				ID:    github.Ptr(ghUserID),
+				Login: github.Ptr("testuser"),
+			},
+		},
+		Issue: &github.Issue{
+			HTMLURL:          github.Ptr(prURL),
+			PullRequestLinks: &github.PullRequestLinks{},
+		},
+	}
+	req := makeWebhookRequest(t, "issue_comment", payload)
+	rec := httptest.NewRecorder()
+	s.handleGitHubWebhook(rec, req)
+
+	assert.Equal(t, rec.Code, http.StatusOK)
+	assert.Equal(t, rec.Body.String(), "processed")
+
+	// Verify task in org1 was started
+	updatedTask1, err := s.store.GetTask(ctx, nil, task1.ID, orgID1)
+	assert.NilError(t, err)
+	assert.Equal(t, updatedTask1.Status, model.TaskStatusPending)
+
+	// Verify task in org2 was started
+	updatedTask2, err := s.store.GetTask(ctx, nil, task2.ID, org2.ID)
+	assert.NilError(t, err)
+	assert.Equal(t, updatedTask2.Status, model.TaskStatusPending)
+}
+
 func TestHandleGitHubWebhookIgnoredEventType(t *testing.T) {
 	s := setupTestServer(t)
 	s.github = &GitHubConfig{}
