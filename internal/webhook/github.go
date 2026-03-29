@@ -131,6 +131,13 @@ func (h *GitHubHandler) routeEventToLinks(ctx context.Context, eventID int64, li
 			if err := h.Store.UpdateTask(ctx, tx, task); err != nil {
 				return err
 			}
+			if err := h.Store.CreateLog(ctx, tx, &model.Log{
+				TaskID:  link.TaskID,
+				Type:    "audit",
+				Content: "github webhook started task",
+			}); err != nil {
+				return err
+			}
 			return tx.Commit()
 		})
 		if err != nil {
