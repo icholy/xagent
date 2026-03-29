@@ -982,6 +982,13 @@ func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) 
 	if org.Owner != userID {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the org owner can delete it"))
 	}
+	user, err := s.store.GetUser(ctx, nil, userID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if user.DefaultOrgID == req.Id {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("cannot delete your default org"))
+	}
 	if err := s.store.DeleteOrg(ctx, nil, req.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

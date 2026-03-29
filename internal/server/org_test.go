@@ -62,6 +62,16 @@ func TestDeleteOrg_Permissions(t *testing.T) {
 	assert.ErrorContains(t, err, "only the org owner can delete it")
 }
 
+func TestDeleteOrg_DefaultOrg(t *testing.T) {
+	srv := setupTestServer(t)
+	ctx := createTestUser(t, srv)
+	user := apiauth.User(ctx)
+
+	_, err := srv.DeleteOrg(ctx, &xagentv1.DeleteOrgRequest{Id: user.OrgID})
+
+	assert.ErrorContains(t, err, "cannot delete your default org")
+}
+
 func TestAddAndListOrgMembers(t *testing.T) {
 	srv := setupTestServer(t)
 	owner := createTestUser(t, srv)
