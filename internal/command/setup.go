@@ -43,9 +43,9 @@ var SetupCommand = &cli.Command{
 			Usage: "Name for the API key",
 			Value: defaultKeyName(),
 		},
-		&cli.StringFlag{
+		&cli.IntFlag{
 			Name:  "org",
-			Usage: "Organization name to use (prompted if not specified and user has multiple orgs)",
+			Usage: "Organization ID to use (prompted if not specified and user has multiple orgs)",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -91,7 +91,7 @@ var SetupCommand = &cli.Command{
 		}
 
 		// Select org
-		orgID, err := selectOrg(profile, cmd.String("org"))
+		orgID, err := selectOrg(profile, int64(cmd.Int("org")))
 		if err != nil {
 			return err
 		}
@@ -138,29 +138,29 @@ var SetupCommand = &cli.Command{
 }
 
 // selectOrg picks an org from the user's profile.
-// If orgName is specified, it finds the matching org.
+// If orgID is specified, it validates the user is a member.
 // If the user has one org, it's used automatically.
 // Otherwise, the user is prompted to choose.
-func selectOrg(profile *xagentv1.GetProfileResponse, orgName string) (int64, error) {
+func selectOrg(profile *xagentv1.GetProfileResponse, orgID int64) (int64, error) {
 	orgs := profile.Orgs
 	if len(orgs) == 0 {
 		return 0, fmt.Errorf("no organizations found for user")
 	}
 
-	// If --org flag was provided, find the matching org
-	if orgName != "" {
+	// If --org flag was provided, validate membership
+	if orgID != 0 {
 		for _, org := range orgs {
-			if strings.EqualFold(org.Name, orgName) {
-				fmt.Printf("Using org: %s\n", org.Name)
+			if org.Id == orgID {
+				fmt.Printf("Using org: %s (id: %d)\n", org.Name, org.Id)
 				return org.Id, nil
 			}
 		}
-		return 0, fmt.Errorf("org %q not found (available: %s)", orgName, orgNames(orgs))
+		return 0, fmt.Errorf("org %d not found in your organizations", orgID)
 	}
 
 	// Single org: use it automatically
 	if len(orgs) == 1 {
-		fmt.Printf("Using org: %s\n", orgs[0].Name)
+		fmt.Printf("Using org: %s (id: %d)\n", orgs[0].Name, orgs[0].Id)
 		return orgs[0].Id, nil
 	}
 
@@ -171,7 +171,7 @@ func selectOrg(profile *xagentv1.GetProfileResponse, orgName string) (int64, err
 		if org.Id == profile.DefaultOrgId {
 			marker = " (default)"
 		}
-		fmt.Printf("  %d. %s%s\n", i+1, org.Name, marker)
+		fmt.Printf("  %d. %s (id: %d)%s\n", i+1, org.Name, org.Id, marker)
 	}
 	fmt.Printf("\nSelect org [1-%d]: ", len(orgs))
 
@@ -184,14 +184,6 @@ func selectOrg(profile *xagentv1.GetProfileResponse, orgName string) (int64, err
 		return 0, fmt.Errorf("invalid selection")
 	}
 	selected := orgs[choice-1]
-	fmt.Printf("Using org: %s\n", selected.Name)
+	fmt.Printf("Using org: %s (id: %d)\n", selected.Name, selected.Id)
 	return selected.Id, nil
-}
-
-func orgNames(orgs []*xagentv1.Org) string {
-	names := make([]string, len(orgs))
-	for i, org := range orgs {
-		names[i] = org.Name
-	}
-	return strings.Join(names, ", ")
 }
