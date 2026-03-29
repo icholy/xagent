@@ -26,21 +26,28 @@ func (s *Store) UpsertUser(ctx context.Context, tx *sql.Tx, user *model.User) er
 
 func (s *Store) CreateUser(ctx context.Context, tx *sql.Tx, user *model.User) error {
 	row, err := s.q(tx).CreateUser(ctx, sqlc.CreateUserParams{
-		ID:             user.ID,
-		Email:          user.Email,
-		Name:           user.Name,
-		GithubUserID:   sql.NullInt64{Int64: user.GitHubUserID, Valid: user.GitHubUserID != 0},
-		GithubUsername: sql.NullString{String: user.GitHubUsername, Valid: user.GitHubUsername != ""},
-		DefaultOrgID:   sql.NullInt64{Int64: user.DefaultOrgID, Valid: user.DefaultOrgID != 0},
+		ID:    user.ID,
+		Email: user.Email,
+		Name:  user.Name,
+		GithubUserID: sql.NullInt64{
+			Int64: user.GitHubUserID,
+			Valid: user.GitHubUserID != 0,
+		},
+		GithubUsername: sql.NullString{
+			String: user.GitHubUsername,
+			Valid:  user.GitHubUsername != "",
+		},
+		DefaultOrgID: sql.NullInt64{
+			Int64: user.DefaultOrgID,
+			Valid: user.DefaultOrgID != 0,
+		},
 	})
 	if err != nil {
 		return err
 	}
 	user.CreatedAt = row.CreatedAt
 	user.UpdatedAt = row.UpdatedAt
-	if row.DefaultOrgID.Valid {
-		user.DefaultOrgID = row.DefaultOrgID.Int64
-	}
+	user.DefaultOrgID = row.DefaultOrgID.Int64
 	return nil
 }
 
