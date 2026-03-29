@@ -78,9 +78,10 @@ func TestListLogs(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	assert.Equal(t, len(resp.Entries), 2)
-	assert.Equal(t, resp.Entries[0].Content, "First log entry")
-	assert.Equal(t, resp.Entries[1].Content, "Second log entry")
+	assert.Equal(t, len(resp.Entries), 3)
+	assert.Equal(t, resp.Entries[0].Type, "audit")
+	assert.Equal(t, resp.Entries[1].Content, "First log entry")
+	assert.Equal(t, resp.Entries[2].Content, "Second log entry")
 }
 
 func TestListLogs_Permissions(t *testing.T) {
