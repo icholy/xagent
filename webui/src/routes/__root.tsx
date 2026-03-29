@@ -107,11 +107,6 @@ function RootComponent() {
                 </SelectContent>
               </Select>
             )}
-            {profileData?.profile?.email && (
-              <span className="hidden md:inline text-sm text-muted-foreground">
-                {profileData.profile.email}
-              </span>
-            )}
             <Link
               to="/settings"
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"

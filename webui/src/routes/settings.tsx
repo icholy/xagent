@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { RelativeTime } from '@/components/relative-time'
-import { ExternalLink, Github, Loader2, Plus, Trash2, Unlink } from 'lucide-react'
+import { ExternalLink, Github, Loader2, Mail, Plus, Trash2, Unlink, User } from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -41,6 +41,7 @@ function SettingsPage() {
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
       <div className="space-y-6">
+        <ProfileCard />
         <OrgsCard />
         <Card>
           <CardHeader>
@@ -94,6 +95,26 @@ function SettingsPage() {
             )}
           </CardContent>
         </Card>
+      </div>
+    </div>
+  )
+}
+
+function ProfileCard() {
+  const { data: profileData } = useQuery(getProfile, {})
+  const profile = profileData?.profile
+
+  if (!profile) return null
+
+  return (
+    <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-1.5">
+        <User className="h-4 w-4 text-muted-foreground" />
+        <span className="font-medium">{profile.name}</span>
+      </div>
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Mail className="h-4 w-4" />
+        <span>{profile.email}</span>
       </div>
     </div>
   )
