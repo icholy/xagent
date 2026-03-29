@@ -169,7 +169,6 @@ List task containers
 xagent containers
 ```
 
-
 ## Local Development
 
 ```bash
@@ -188,3 +187,7 @@ go build            # Build main binary only
 cd webapp
 pnpm run dev
 ```
+
+## Schema
+
+![Schema](images/schema.svg)
