@@ -77,7 +77,7 @@ var DriverCommand = &cli.Command{
 		// Run setup commands if not already done
 		if !cfg.Setup {
 			for _, command := range cfg.Commands {
-				fmt.Printf("Running setup command: %s\n", command)
+				slog.Info("Running setup command", "command", command)
 				c := exec.CommandContext(ctx, "sh", "-c", command)
 				c.Stdout = os.Stdout
 				c.Stderr = os.Stderr
@@ -151,7 +151,7 @@ var DriverCommand = &cli.Command{
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Println("Task completed successfully.")
+		slog.Info("Task completed successfully.")
 		return nil
 	},
 }

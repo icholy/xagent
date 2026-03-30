@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"time"
 
@@ -28,8 +29,28 @@ func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) err
 	if err := a.doToolCalls(ctx); err != nil {
 		return err
 	}
+	if err := a.doCommands(ctx); err != nil {
+		return err
+	}
 	if err := a.doSleep(ctx); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (a *DummyAgent) doCommands(ctx context.Context) error {
+	if a.options == nil {
+		return nil
+	}
+	for _, command := range a.options.Commands {
+		a.log.Info("Running dummy command", "command", command)
+		c := exec.CommandContext(ctx, "sh", "-c", command)
+		c.Dir = a.cwd
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		if err := c.Run(); err != nil {
+			return fmt.Errorf("dummy command failed: %w", err)
+		}
 	}
 	return nil
 }

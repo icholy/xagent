@@ -128,6 +128,8 @@ type DummyConfig struct {
 	Sleep int `yaml:"sleep"`
 	// ToolCalls specifies MCP tool calls to make.
 	ToolCalls []agent.DummyToolCall `yaml:"tool_calls"`
+	// Commands to run
+	Commands []string
 }
 
 func (w *Workspace) Validate() error {
@@ -317,6 +319,7 @@ func (w *Workspace) AgentConfig() agent.Config {
 		cfg.Dummy = &agent.DummyOptions{
 			Sleep:     w.Agent.Dummy.Sleep,
 			ToolCalls: w.Agent.Dummy.ToolCalls,
+			Commands:  w.Agent.Dummy.Commands,
 		}
 	}
 	maps.Copy(cfg.McpServers, w.Agent.McpServers)

@@ -84,6 +84,8 @@ type DummyOptions struct {
 	Sleep int
 	// ToolCalls specifies MCP tool calls to make.
 	ToolCalls []DummyToolCall
+	// Commands to run
+	Commands []string
 }
 
 // DummyToolCall specifies an MCP tool call to make.
