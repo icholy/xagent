@@ -7,9 +7,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 mise run build          # Build main binary + prebuilt binaries for linux amd64/arm64
 mise run generate       # Generate protobuf code (go tool buf generate)
-mise run test           # Run tests (sets TEST_DATABASE_URL, required for integration tests)
-mise run wipe           # Delete the database
 go build -o xagent ./cmd/xagent  # Build main binary only
+```
+
+## Running Tests
+
+Tests require a running PostgreSQL instance. Start it with:
+
+```bash
+mise run up:postgres  # Start postgres via docker compose
+mise run test         # Run all tests
 ```
 
 Pass extra flags to `go test` with `--`: `mise run test -- -run=TestFoo -v`
