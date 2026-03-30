@@ -124,6 +124,8 @@ func (s *Server) Handler() http.Handler {
 			WebhookSecret: s.github.WebhookSecret,
 		})
 	}
+	// MCP endpoint (protected by API key auth)
+	mux.Handle("/mcp", alice.New(apiauth.InferAuthType(), s.auth.RequireAuth()).Then(s.mcpHandler()))
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
