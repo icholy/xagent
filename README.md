@@ -186,7 +186,7 @@ pnpm run dev
 ```
 
 The local server runs with `--no-auth`, but the runner still requires an API key.
-Create one in the local Web UI at http://localhost:5173/keys/new, then start the runner:
+Create one in the local Web UI at http://localhost:5173/ui/keys/new, then start the runner:
 
 ```bash
 xagent runner --server http://localhost:6464 -key <api-key>
