@@ -38,7 +38,6 @@ description = "Decrypt secrets.yml to .env"
 run = "sops -d --output-type dotenv sops.env.yml > .env"
 
 [tasks."up:test"]
-depends_post = ["migrate"]
 description = "Start postgres via docker compose"
 run = [
 	"docker compose up -d --wait postgres",
