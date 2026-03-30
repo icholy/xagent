@@ -21,6 +21,7 @@ import (
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/ghauth"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/servermcp"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/store"
@@ -124,8 +125,8 @@ func (s *Server) Handler() http.Handler {
 			WebhookSecret: s.github.WebhookSecret,
 		})
 	}
-	// MCP endpoint (protected by API key auth)
-	mux.Handle("/mcp", alice.New(apiauth.InferAuthType(), s.auth.RequireAuth()).Then(s.mcpHandler()))
+	// MCP endpoint (protected by auth middleware)
+	mux.Handle("/mcp", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(servermcp.New(s).Handler()))
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
