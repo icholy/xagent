@@ -67,3 +67,7 @@ run = "flyctl logs -a xagent"
 [tasks.diagrams]
 description = "Render d2 diagrams to images/"
 run = "d2 schema.d2 images/schema.svg"
+
+[tasks.localhost_run]
+description = "Use localhost.run to expose the vite proxy to the web"
+run = "ssh -R 80:localhost:5173 nokey@localhost.run"
