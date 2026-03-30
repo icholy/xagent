@@ -179,17 +179,28 @@ xagent containers
 # Start server and postgres locally
 docker compose up -d
 
-# Start runner against local server
-xagent runner --server http://localhost:6464
+# Run the FE
+cd webui
+pnpm install
+pnpm run dev
+```
 
-# Build
+The local server runs with `--no-auth`, but the runner still requires an API key.
+Create one in the local Web UI at http://localhost:5173/keys/new, then start the runner:
+
+```bash
+xagent runner --server http://localhost:6464 -key <api-key>
+```
+
+> **Note:** The runner also requires a private key in `~/.config/xagent/config.json`.
+> Run `xagent setup` once against the production server to generate it.
+
+### Build
+
+```bash
 mise run build      # Build main + prebuilt binaries (linux amd64/arm64)
 mise run generate   # Generate protobuf code
 go build            # Build main binary only
-
-# Run the FE
-cd webapp
-pnpm run dev
 ```
 
 ## Architecture
