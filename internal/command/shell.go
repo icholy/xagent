@@ -41,25 +41,30 @@ var ShellCommand = &cli.Command{
 
 		c := containers[0]
 
-		var dockerCmd *exec.Cmd
-		if c.State == "running" {
-			dockerCmd = exec.CommandContext(ctx, "docker", "exec", "-it", c.ID[:12], "/bin/sh")
-		} else {
-			inspect, err := docker.ContainerInspect(ctx, c.ID)
-			if err != nil {
-				return fmt.Errorf("failed to inspect container: %w", err)
+		// If the container is stopped, start it so we can exec into it
+		// with its filesystem intact (including setup command artifacts
+		// like cloned repos).
+		stopOnExit := false
+		if c.State != "running" {
+			if err := docker.ContainerStart(ctx, c.ID, container.StartOptions{}); err != nil {
+				return fmt.Errorf("failed to start container: %w", err)
 			}
-			args := []string{"run", "-it", "--rm"}
-			for _, b := range inspect.HostConfig.Binds {
-				args = append(args, "-v", b)
-			}
-			args = append(args, inspect.Config.Image, "/bin/sh")
-			dockerCmd = exec.CommandContext(ctx, "docker", args...)
+			stopOnExit = true
 		}
 
+		dockerCmd := exec.CommandContext(ctx, "docker", "exec", "-it", c.ID[:12], "/bin/sh")
 		dockerCmd.Stdin = os.Stdin
 		dockerCmd.Stdout = os.Stdout
 		dockerCmd.Stderr = os.Stderr
-		return dockerCmd.Run()
+		err = dockerCmd.Run()
+
+		if stopOnExit {
+			timeout := 0
+			if stopErr := docker.ContainerStop(ctx, c.ID, container.StopOptions{Timeout: &timeout}); stopErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to stop container: %v\n", stopErr)
+			}
+		}
+
+		return err
 	},
 }
