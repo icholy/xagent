@@ -228,7 +228,7 @@ func (v *storeKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*a
 	if key.IsExpired() {
 		return nil, fmt.Errorf("key expired")
 	}
-	return &apiauth.UserInfo{OrgID: key.OrgID, Name: key.Name}, nil
+	return &apiauth.UserInfo{OrgID: key.OrgID, Name: key.Name, Type: apiauth.AuthTypeKey}, nil
 }
 
 // storeUserResolver implements apiauth.UserResolver using the store.

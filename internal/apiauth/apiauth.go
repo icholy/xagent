@@ -21,12 +21,21 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
+// Auth type constants matching X-Auth-Type header values.
+const (
+	AuthTypeKey    = "key"
+	AuthTypeApp    = "app"
+	AuthTypeBearer = "bearer"
+	AuthTypeCookie = "cookie"
+)
+
 // UserInfo contains authenticated user information.
 type UserInfo struct {
 	ID    string
 	Email string
 	Name  string
 	OrgID int64
+	Type  string // Auth type: one of AuthType* constants
 }
 
 // DisplayName returns the best available display name for the user.
@@ -38,6 +47,15 @@ func (u *UserInfo) DisplayName() string {
 		return u.Email
 	}
 	return u.ID
+}
+
+// AuditName returns the display name annotated with the auth type for audit logs.
+func (u *UserInfo) AuditName() string {
+	name := u.DisplayName()
+	if u.Type == AuthTypeKey {
+		return name + " (API key)"
+	}
+	return name
 }
 
 type userInfoKey struct{}
@@ -222,6 +240,7 @@ func (a *Auth) validateAppToken(r *http.Request) (*UserInfo, error) {
 		Email: claims.Email,
 		Name:  claims.Name,
 		OrgID: claims.OrgID,
+		Type:  AuthTypeApp,
 	}, nil
 }
 
@@ -242,7 +261,7 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Header.Get(AuthTypeHeader) {
-			case "key":
+			case AuthTypeKey:
 				user, err := a.validateKey(r)
 				if err != nil || user == nil {
 					http.Error(w, "invalid API key", http.StatusUnauthorized)
@@ -250,7 +269,7 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 				}
 				r = r.WithContext(WithUser(r.Context(), user))
 				next.ServeHTTP(w, r)
-			case "app":
+			case AuthTypeApp:
 				user, err := a.validateAppToken(r)
 				if err != nil || user == nil {
 					http.Error(w, "invalid app token", http.StatusUnauthorized)
@@ -258,7 +277,7 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 				}
 				r = r.WithContext(WithUser(r.Context(), user))
 				next.ServeHTTP(w, r)
-			case "bearer":
+			case AuthTypeBearer:
 				if !a.useDevUser(w, r, next) {
 					a.bearer.RequireAuthorization()(next).ServeHTTP(w, r)
 				}
@@ -277,19 +296,19 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Header.Get(AuthTypeHeader) {
-			case "key":
+			case AuthTypeKey:
 				user, err := a.validateKey(r)
 				if err == nil && user != nil {
 					r = r.WithContext(WithUser(r.Context(), user))
 				}
 				next.ServeHTTP(w, r)
-			case "app":
+			case AuthTypeApp:
 				user, err := a.validateAppToken(r)
 				if err == nil && user != nil {
 					r = r.WithContext(WithUser(r.Context(), user))
 				}
 				next.ServeHTTP(w, r)
-			case "bearer":
+			case AuthTypeBearer:
 				if !a.useDevUser(w, r, next) {
 					a.bearer.CheckAuthorization()(next).ServeHTTP(w, r)
 				}
@@ -381,9 +400,10 @@ func (a *Auth) cookieUser(r *http.Request) *UserInfo {
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{
-			ID:    ctx.UserInfo.Subject,
+			ID:   ctx.UserInfo.Subject,
 			Email: ctx.UserInfo.Email,
-			Name:  ctx.UserInfo.Name,
+			Name: ctx.UserInfo.Name,
+			Type: AuthTypeCookie,
 		}
 	}
 	return nil
@@ -402,16 +422,17 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 		return user
 	}
 	switch r.Header.Get(AuthTypeHeader) {
-	case "bearer":
+	case AuthTypeBearer:
 		if ctx := a.bearer.Context(r.Context()); ctx != nil {
 			return &UserInfo{
-				ID:    ctx.Subject,
+				ID:   ctx.Subject,
 				Email: ctx.Email,
-				Name:  ctx.Name,
+				Name: ctx.Name,
+				Type: AuthTypeBearer,
 			}
 		}
 		return nil
-	case "app":
+	case AuthTypeApp:
 		// App tokens are validated and set in CheckAuth/RequireAuth
 		return nil
 	}
@@ -420,6 +441,7 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 			ID:    ctx.UserInfo.Subject,
 			Email: ctx.UserInfo.Email,
 			Name:  ctx.UserInfo.Name,
+			Type:  AuthTypeCookie,
 		}
 	}
 	return nil
