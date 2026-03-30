@@ -126,7 +126,7 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 	// MCP endpoint (protected by auth middleware)
-	mux.Handle("/mcp", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(servermcp.New(s).Handler()))
+	mux.Handle("/mcp", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(servermcp.New(s, s.baseURL).Handler()))
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))

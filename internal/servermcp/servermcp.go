@@ -16,11 +16,12 @@ import (
 // Connect RPC service. It exposes list_workspaces and create_task tools.
 type Server struct {
 	service xagentv1connect.XAgentServiceHandler
+	baseURL string
 }
 
 // New creates a new MCP server backed by the given service handler.
-func New(service xagentv1connect.XAgentServiceHandler) *Server {
-	return &Server{service: service}
+func New(service xagentv1connect.XAgentServiceHandler, baseURL string) *Server {
+	return &Server{service: service, baseURL: baseURL}
 }
 
 // Handler returns an http.Handler that serves the MCP Streamable HTTP
@@ -97,13 +98,18 @@ func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input
 		Name      string `json:"name"`
 		Workspace string `json:"workspace"`
 		Status    string `json:"status"`
+		URL       string `json:"url,omitempty"`
 	}
-	return jsonResult(taskResult{
+	result := taskResult{
 		ID:        resp.Task.Id,
 		Name:      resp.Task.Name,
 		Workspace: resp.Task.Workspace,
 		Status:    resp.Task.Status.String(),
-	}), nil, nil
+	}
+	if s.baseURL != "" {
+		result.URL = fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, resp.Task.Id)
+	}
+	return jsonResult(result), nil, nil
 }
 
 func errorResult(format string, args ...any) *mcp.CallToolResult {
