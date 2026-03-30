@@ -52,7 +52,7 @@ function RootComponent() {
 
   const handleOrgSwitch = async (orgId: string) => {
     await authTransport.fetchToken(orgId)
-    await queryClient.invalidateQueries()
+    await queryClient.resetQueries()
   }
 
   return (
