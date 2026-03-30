@@ -14,7 +14,7 @@ func main() {
 		Name:  "xagent",
 		Usage: "Async agent orchestrator for Claude Code",
 		Commands: []*cli.Command{
-			command.RunCommand,
+			command.DriverCommand,
 			command.ServerCommand,
 			command.RunnerCommand,
 			command.TaskCommand,

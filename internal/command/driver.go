@@ -16,8 +16,8 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-var RunCommand = &cli.Command{
-	Name:  "run",
+var DriverCommand = &cli.Command{
+	Name:  "driver",
 	Usage: "Run an agent for a task",
 	Flags: []cli.Flag{
 		&cli.StringFlag{

@@ -420,7 +420,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 			"xagent.task": fmt.Sprint(task.ID),
 		},
 		Cmd: []string{
-			"/usr/local/bin/xagent", "run",
+			"/usr/local/bin/xagent", "driver",
 			"--server", "unix:///var/run/xagent.sock",
 			"--task", fmt.Sprint(task.ID),
 			"--token", token,
