@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
-import { useLocalStorage } from 'usehooks-ts'
 import { createTask, listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { useOrgLocalStorage } from '@/hooks/use-org-local-storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,8 +24,8 @@ function NewTaskPage() {
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
-  const [runner, setRunner] = useLocalStorage('xagent-last-runner', '')
-  const [workspace, setWorkspace] = useLocalStorage('xagent-last-workspace', '')
+  const [runner, setRunner] = useOrgLocalStorage('xagent-last-runner', '')
+  const [workspace, setWorkspace] = useOrgLocalStorage('xagent-last-workspace', '')
   const [instruction, setInstruction] = useState('')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {})
