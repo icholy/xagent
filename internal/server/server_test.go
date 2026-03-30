@@ -66,13 +66,6 @@ func createTestOrg(t *testing.T, srv *Server, opts testOrgOptions) (context.Cont
 	return ctx, &testOrg{UserID: userID, OrgID: org.ID}
 }
 
-// createTestUser creates a test org with default workspaces and returns the context.
-func createTestUser(t *testing.T, srv *Server) context.Context {
-	t.Helper()
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	return ctx
-}
-
 // setupTestServer creates a test server with a clean database.
 // Requires TEST_DATABASE_URL environment variable to be set.
 func setupTestServer(t *testing.T) *Server {

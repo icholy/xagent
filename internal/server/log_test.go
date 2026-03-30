@@ -11,7 +11,7 @@ func TestUploadLogs(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
 		Runner:    "test-runner",
@@ -36,8 +36,8 @@ func TestUploadLogs_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -61,7 +61,7 @@ func TestListLogs(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
 		Runner:    "test-runner",
@@ -94,8 +94,8 @@ func TestListLogs_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",

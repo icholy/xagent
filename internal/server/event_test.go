@@ -13,7 +13,7 @@ func TestCreateEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	// Act
 	resp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -38,7 +38,7 @@ func TestGetEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Issue updated",
 		Data:        `{"status": "closed"}`,
@@ -67,8 +67,8 @@ func TestGetEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
@@ -88,7 +88,7 @@ func TestListEvents(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event 1",
 		Data:        `{"test": "data1"}`,
@@ -115,7 +115,7 @@ func TestListEventsWithLimit(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	// Create 5 events
 	for i := range 5 {
@@ -143,8 +143,8 @@ func TestListEvents_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	_, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event 1",
 		Data:        `{}`,
@@ -176,7 +176,7 @@ func TestDeleteEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event to Delete",
 		Data:        `{}`,
@@ -198,8 +198,8 @@ func TestDeleteEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
@@ -222,7 +222,7 @@ func TestAddEventTask(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -259,8 +259,8 @@ func TestAddEventTask_Permissions_Task(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
@@ -289,8 +289,8 @@ func TestAddEventTask_Permissions_Event(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
@@ -319,7 +319,7 @@ func TestRemoveEventTask(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -361,8 +361,8 @@ func TestRemoveEventTask_Permissions_Task(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
@@ -397,8 +397,8 @@ func TestRemoveEventTask_Permissions_Event(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
@@ -441,7 +441,7 @@ func TestListEventTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
@@ -489,8 +489,8 @@ func TestListEventTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
@@ -530,7 +530,7 @@ func TestListEventsByTask(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
@@ -580,8 +580,8 @@ func TestListEventsByTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",

@@ -11,7 +11,7 @@ import (
 func TestGetTask(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	// Create a task using the API
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -69,8 +69,8 @@ func TestGetTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -91,8 +91,8 @@ func TestGetTaskDetails_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -113,7 +113,7 @@ func TestCreateTask(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	// Act
 	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -156,8 +156,8 @@ func TestCreateTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Parent Task",
 		Runner:    "test-runner",
@@ -181,7 +181,7 @@ func TestListTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
 		Runner:    "test-runner",
@@ -207,8 +207,8 @@ func TestListTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	_, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task 1",
 		Runner:    "test-runner",
@@ -243,8 +243,8 @@ func TestListChildTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Parent Task",
 		Runner:    "test-runner",
@@ -277,7 +277,7 @@ func TestListChildTasks_Permissions(t *testing.T) {
 func TestCreateTask_BadRunner(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Bad Task",
@@ -290,7 +290,7 @@ func TestCreateTask_BadRunner(t *testing.T) {
 func TestCreateTask_BadWorkspace(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Bad Task",
@@ -304,7 +304,7 @@ func TestUpdateTask(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Original Name",
 		Runner:    "test-runner",
@@ -329,8 +329,8 @@ func TestUpdateTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -352,8 +352,8 @@ func TestArchiveTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -374,8 +374,8 @@ func TestCancelTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -396,8 +396,8 @@ func TestRestartTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
