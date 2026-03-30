@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/icholy/xagent/internal/common"
@@ -112,6 +113,7 @@ var RunnerCommand = &cli.Command{
 			RunnerID:    runnerID,
 			Log:         log,
 			Auth:        cfg.Token,
+			SocketPath:  filepath.Join(os.TempDir(), fmt.Sprintf("xagent.%s.sock", runnerID)),
 		})
 		if err != nil {
 			return err

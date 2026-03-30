@@ -11,7 +11,6 @@ import (
 	"math"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -51,7 +50,7 @@ type Options struct {
 	RunnerID    string
 	Log         *slog.Logger
 	Auth        string
-	SocketPath  string // defaults to /tmp/xagent.{RunnerID}.sock
+	SocketPath  string // defaults to /tmp/xagent.sock
 }
 
 func New(opts Options) (*Runner, error) {
@@ -68,18 +67,12 @@ func New(opts Options) (*Runner, error) {
 
 	log := cmp.Or(opts.Log, slog.Default())
 
-	// Default socket path includes runner ID to avoid conflicts between runners
-	socketPath := opts.SocketPath
-	if socketPath == "" {
-		socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("xagent.%s.sock", opts.RunnerID))
-	}
-
 	proxy := NewProxy(AgentProxyOptions{
 		ServerURL:  opts.ServerURL,
 		Token:      opts.Auth,
 		PrivateKey: opts.PrivateKey,
 		Log:        log,
-		SocketPath: socketPath,
+		SocketPath: opts.SocketPath,
 	})
 	if err := proxy.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start proxy: %w", err)
