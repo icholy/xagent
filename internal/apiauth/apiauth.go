@@ -198,24 +198,6 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 // AuthTypeHeader is the header CLI/device clients send to indicate bearer auth.
 const AuthTypeHeader = "X-Auth-Type"
 
-// InferAuthType returns middleware that auto-detects the auth type from
-// the Bearer token prefix when X-Auth-Type is not explicitly set. This
-// allows clients to authenticate with just an Authorization header.
-func InferAuthType() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get(AuthTypeHeader) == "" {
-				if raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
-					if IsKey(raw) {
-						r.Header.Set(AuthTypeHeader, "key")
-					}
-				}
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // validateKey extracts and validates an API key from the Authorization header.
 func (a *Auth) validateKey(r *http.Request) (*UserInfo, error) {
 	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
