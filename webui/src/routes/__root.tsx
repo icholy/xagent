@@ -64,8 +64,8 @@ function RootComponent() {
   return (
     <>
       <nav className="border-b">
-        <div className="container mx-auto px-4 py-3 flex items-center gap-3 md:gap-6">
-          <Link to="/tasks/new">
+        <div className="container mx-auto px-4 py-3 flex flex-wrap items-center gap-3 md:gap-6">
+          <Link to="/tasks/new" className="hidden md:block">
             <img src={xagentIcon} alt="XAgent" className="h-8 w-8" />
           </Link>
           <div className="flex gap-2 md:gap-4">
@@ -102,18 +102,20 @@ function RootComponent() {
           </div>
           <div className="ml-auto flex items-center gap-4">
             {orgs.length > 0 && (
-              <Select value={currentOrgId} onValueChange={handleOrgSwitch}>
-                <SelectTrigger className="w-40 h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {orgs.map((org) => (
-                    <SelectItem key={String(org.id)} value={String(org.id)}>
-                      {org.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="hidden md:block">
+                <Select value={currentOrgId} onValueChange={handleOrgSwitch}>
+                  <SelectTrigger className="w-40 h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orgs.map((org) => (
+                      <SelectItem key={String(org.id)} value={String(org.id)}>
+                        {org.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
             <Link
               to="/settings"
@@ -132,6 +134,22 @@ function RootComponent() {
               <span className="hidden md:inline">Logout</span>
             </a>
           </div>
+          {orgs.length > 0 && (
+            <div className="basis-full md:hidden">
+              <Select value={currentOrgId} onValueChange={handleOrgSwitch}>
+                <SelectTrigger className="w-full h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {orgs.map((org) => (
+                    <SelectItem key={String(org.id)} value={String(org.id)}>
+                      {org.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       </nav>
       <Outlet />
