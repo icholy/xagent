@@ -115,8 +115,11 @@ func (r *Runner) Close() error {
 // RegisterWorkspaces sends the available workspace names to the server.
 func (r *Runner) RegisterWorkspaces(ctx context.Context) error {
 	workspaces := make([]*xagentv1.RegisteredWorkspace, 0, len(r.workspaces.Workspaces))
-	for name := range r.workspaces.Workspaces {
-		workspaces = append(workspaces, &xagentv1.RegisteredWorkspace{Name: name})
+	for name, ws := range r.workspaces.Workspaces {
+		workspaces = append(workspaces, &xagentv1.RegisteredWorkspace{
+			Name:        name,
+			Description: ws.Description,
+		})
 	}
 	_, err := r.client.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId:   r.runnerID,

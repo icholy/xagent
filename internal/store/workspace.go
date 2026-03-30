@@ -15,11 +15,12 @@ func (s *Store) DeleteWorkspacesByRunner(ctx context.Context, tx *sql.Tx, runner
 	})
 }
 
-func (s *Store) CreateWorkspace(ctx context.Context, tx *sql.Tx, runnerID, name string, orgID int64) error {
+func (s *Store) CreateWorkspace(ctx context.Context, tx *sql.Tx, runnerID, name, description string, orgID int64) error {
 	return s.q(tx).CreateWorkspace(ctx, sqlc.CreateWorkspaceParams{
-		RunnerID: runnerID,
-		Name:     name,
-		OrgID:    orgID,
+		RunnerID:    runnerID,
+		Name:        name,
+		Description: description,
+		OrgID:       orgID,
 	})
 }
 
@@ -31,11 +32,12 @@ func (s *Store) ListWorkspaces(ctx context.Context, tx *sql.Tx, orgID int64) ([]
 	workspaces := make([]*model.Workspace, len(rows))
 	for i, row := range rows {
 		workspaces[i] = &model.Workspace{
-			ID:        row.ID,
-			RunnerID:  row.RunnerID,
-			Name:      row.Name,
-			OrgID:     row.OrgID,
-			UpdatedAt: row.UpdatedAt,
+			ID:          row.ID,
+			RunnerID:    row.RunnerID,
+			Name:        row.Name,
+			Description: row.Description,
+			OrgID:       row.OrgID,
+			UpdatedAt:   row.UpdatedAt,
 		}
 	}
 	return workspaces, nil

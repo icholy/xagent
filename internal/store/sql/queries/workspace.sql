@@ -1,9 +1,9 @@
 -- name: CreateWorkspace :exec
-INSERT INTO workspaces (runner_id, name, org_id)
-VALUES ($1, $2, $3);
+INSERT INTO workspaces (runner_id, name, description, org_id)
+VALUES ($1, $2, $3, $4);
 
 -- name: ListWorkspacesByOrgID :many
-SELECT id, runner_id, name, updated_at, org_id
+SELECT id, runner_id, name, description, updated_at, org_id
 FROM workspaces
 WHERE org_id = $1
 ORDER BY name ASC;

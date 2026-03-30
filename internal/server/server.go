@@ -837,7 +837,7 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 			return err
 		}
 		for _, ws := range req.Workspaces {
-			if err := s.store.CreateWorkspace(ctx, tx, req.RunnerId, ws.Name, caller.OrgID); err != nil {
+			if err := s.store.CreateWorkspace(ctx, tx, req.RunnerId, ws.Name, ws.Description, caller.OrgID); err != nil {
 				return err
 			}
 		}

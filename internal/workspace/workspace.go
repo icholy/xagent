@@ -79,9 +79,10 @@ func (c *Config) Validate() error {
 }
 
 type Workspace struct {
-	Container Container `yaml:"container"`
-	Agent     Agent     `yaml:"agent"`
-	Commands  []string  `yaml:"commands"`
+	Description string    `yaml:"description"`
+	Container   Container `yaml:"container"`
+	Agent       Agent     `yaml:"agent"`
+	Commands    []string  `yaml:"commands"`
 }
 
 type Agent struct {

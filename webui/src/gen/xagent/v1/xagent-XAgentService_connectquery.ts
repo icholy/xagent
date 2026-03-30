@@ -50,11 +50,6 @@ export const getTaskDetails = XAgentService.method.getTaskDetails;
 export const updateTask = XAgentService.method.updateTask;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.DeleteTask
- */
-export const deleteTask = XAgentService.method.deleteTask;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.ArchiveTask
  */
 export const archiveTask = XAgentService.method.archiveTask;
