@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -88,7 +89,7 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if !a.handleStreamEvent(line) {
-			a.log.Info("output", "line", string(line))
+			a.log.Info("output", "line", truncate(string(line), 200))
 		}
 	}
 
@@ -105,13 +106,13 @@ func (a *ClaudeAgent) handleStreamEvent(data []byte) bool {
 		Type    string `json:"type"`
 		Message struct {
 			Content []struct {
-				Type      string `json:"type"`
-				Text      string `json:"text"`
-				Name      string `json:"name"`
-				Input     any    `json:"input"`
-				ToolUseID string `json:"tool_use_id"`
-				Content   string `json:"content"`
-				IsError   bool   `json:"is_error"`
+				Type      string          `json:"type"`
+				Text      string          `json:"text"`
+				Name      string          `json:"name"`
+				Input     any             `json:"input"`
+				ToolUseID string          `json:"tool_use_id"`
+				Content   json.RawMessage `json:"content"`
+				IsError   bool            `json:"is_error"`
 			} `json:"content"`
 		} `json:"message"`
 	}
@@ -134,12 +135,49 @@ func (a *ClaudeAgent) handleStreamEvent(data []byte) bool {
 		for _, block := range event.Message.Content {
 			if block.Type == "tool_result" {
 				if block.IsError {
-					a.log.Error("tool_result", "tool_use_id", block.ToolUseID, "error", block.Content)
+					a.log.Error("tool_result", "tool_use_id", block.ToolUseID, "error", toolResultContent(block.Content))
 				} else {
 					a.log.Debug("tool_result", "tool_use_id", block.ToolUseID)
 				}
 			}
 		}
+	default:
+		a.log.Debug("event", "type", event.Type)
 	}
 	return true
+}
+
+// toolResultContent extracts a readable string from a tool_result content field,
+// which can be either a JSON string or an array of content blocks.
+func toolResultContent(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	// Try as a plain string first
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	// Try as an array of content blocks
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err == nil {
+		var parts []string
+		for _, b := range blocks {
+			if b.Text != "" {
+				parts = append(parts, b.Text)
+			}
+		}
+		return strings.Join(parts, "\n")
+	}
+	return string(raw)
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
