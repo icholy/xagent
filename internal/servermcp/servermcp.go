@@ -13,7 +13,7 @@ import (
 )
 
 // Server is an MCP server that proxies tool calls to the xagent
-// Connect RPC service. It exposes list_workspaces and create_task tools.
+// Connect RPC service.
 type Server struct {
 	service xagentv1connect.XAgentServiceHandler
 	baseURL string
@@ -42,6 +42,16 @@ func (s *Server) Handler() http.Handler {
 		Name:        "create_task",
 		Description: "Create a new task",
 	}, s.createTask)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_task",
+		Description: "Get full details of a task including instructions, logs, links, and children",
+	}, s.getTask)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_tasks",
+		Description: "List tasks with optional filtering by status and/or workspace",
+	}, s.listTasks)
 
 	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		if apiauth.Caller(r.Context()) == nil {
@@ -110,6 +120,134 @@ func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input
 	}
 	if s.baseURL != "" {
 		result.URL = fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, resp.Task.Id)
+	}
+	return jsonResult(result), nil, nil
+}
+
+type getTaskInput struct {
+	ID int64 `json:"id" jsonschema:"The task ID"`
+}
+
+func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input getTaskInput) (*mcp.CallToolResult, any, error) {
+	resp, err := s.service.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{
+		Id: input.ID,
+	})
+	if err != nil {
+		return errorResult("failed to get task: %v", err), nil, nil
+	}
+	type instruction struct {
+		Text string `json:"text"`
+		URL  string `json:"url,omitempty"`
+	}
+	type logEntry struct {
+		Type    string `json:"type"`
+		Content string `json:"content"`
+	}
+	type link struct {
+		ID        int64  `json:"id"`
+		Relevance string `json:"relevance"`
+		URL       string `json:"url"`
+		Title     string `json:"title,omitempty"`
+		Notify    bool   `json:"notify"`
+	}
+	type childTask struct {
+		ID        int64  `json:"id"`
+		Name      string `json:"name"`
+		Workspace string `json:"workspace"`
+		Status    string `json:"status"`
+	}
+	type taskDetails struct {
+		ID           int64         `json:"id"`
+		Name         string        `json:"name"`
+		Parent       int64         `json:"parent,omitempty"`
+		Workspace    string        `json:"workspace"`
+		Runner       string        `json:"runner,omitempty"`
+		Status       string        `json:"status"`
+		Archived     bool          `json:"archived,omitempty"`
+		Instructions []instruction `json:"instructions"`
+		Logs         []logEntry    `json:"logs"`
+		Links        []link        `json:"links"`
+		Children     []childTask   `json:"children"`
+	}
+	task := resp.Task
+	result := taskDetails{
+		ID:        task.Id,
+		Name:      task.Name,
+		Parent:    task.Parent,
+		Workspace: task.Workspace,
+		Runner:    task.Runner,
+		Status:    task.Status.String(),
+		Archived:  task.Archived,
+	}
+	for _, inst := range task.Instructions {
+		result.Instructions = append(result.Instructions, instruction{
+			Text: inst.Text,
+			URL:  inst.Url,
+		})
+	}
+	// Fetch logs for the task
+	logsResp, err := s.service.ListLogs(ctx, &xagentv1.ListLogsRequest{
+		TaskId: input.ID,
+	})
+	if err == nil {
+		for _, l := range logsResp.Entries {
+			result.Logs = append(result.Logs, logEntry{
+				Type:    l.Type,
+				Content: l.Content,
+			})
+		}
+	}
+	for _, l := range resp.Links {
+		result.Links = append(result.Links, link{
+			ID:        l.Id,
+			Relevance: l.Relevance,
+			URL:       l.Url,
+			Title:     l.Title,
+			Notify:    l.Notify,
+		})
+	}
+	for _, c := range resp.Children {
+		result.Children = append(result.Children, childTask{
+			ID:        c.Id,
+			Name:      c.Name,
+			Workspace: c.Workspace,
+			Status:    c.Status.String(),
+		})
+	}
+	return jsonResult(result), nil, nil
+}
+
+type listTasksInput struct {
+	Status    string `json:"status,omitempty" jsonschema:"Filter by status (e.g. PENDING, RUNNING, COMPLETED, FAILED, CANCELLED)"`
+	Workspace string `json:"workspace,omitempty" jsonschema:"Filter by workspace name"`
+}
+
+func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input listTasksInput) (*mcp.CallToolResult, any, error) {
+	resp, err := s.service.ListTasks(ctx, &xagentv1.ListTasksRequest{})
+	if err != nil {
+		return errorResult("failed to list tasks: %v", err), nil, nil
+	}
+	type taskSummary struct {
+		ID        int64  `json:"id"`
+		Name      string `json:"name"`
+		Workspace string `json:"workspace"`
+		Status    string `json:"status"`
+	}
+	var result []taskSummary
+	for _, t := range resp.Tasks {
+		status := t.Status.String()
+		if input.Status != "" && status != input.Status {
+			continue
+		}
+		if input.Workspace != "" && t.Workspace != input.Workspace {
+			continue
+		}
+		result = append(result, taskSummary{
+			ID:        t.Id,
+			Name:      t.Name,
+			Workspace: t.Workspace,
+			Status:    status,
+		})
 	}
 	return jsonResult(result), nil, nil
 }
