@@ -164,6 +164,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Runner       string        `json:"runner,omitempty"`
 		Status       string        `json:"status"`
 		Archived     bool          `json:"archived,omitempty"`
+		URL          string        `json:"url,omitempty"`
 		Instructions []instruction `json:"instructions"`
 		Logs         []logEntry    `json:"logs"`
 		Links        []link        `json:"links"`
@@ -178,6 +179,9 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Runner:    task.Runner,
 		Status:    task.Status.String(),
 		Archived:  task.Archived,
+	}
+	if s.baseURL != "" {
+		result.URL = fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, task.Id)
 	}
 	for _, inst := range task.Instructions {
 		result.Instructions = append(result.Instructions, instruction{
@@ -229,6 +233,7 @@ func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input 
 		Name      string `json:"name"`
 		Workspace string `json:"workspace"`
 		Status    string `json:"status"`
+		URL       string `json:"url,omitempty"`
 	}
 	result := make([]taskSummary, len(resp.Tasks))
 	for i, t := range resp.Tasks {
@@ -237,6 +242,9 @@ func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input 
 			Name:      t.Name,
 			Workspace: t.Workspace,
 			Status:    t.Status.String(),
+		}
+		if s.baseURL != "" {
+			result[i].URL = fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, t.Id)
 		}
 	}
 	return jsonResult(result), nil, nil
