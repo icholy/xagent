@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Clean up stale pid file from previous container run
+rm -f /var/run/docker.pid
+
 # Start Docker daemon in the background
 dockerd &
 
