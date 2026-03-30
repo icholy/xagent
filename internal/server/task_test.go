@@ -259,6 +259,106 @@ func TestListChildTasks_Permissions(t *testing.T) {
 	assert.Equal(t, len(respB.Tasks), 0)
 }
 
+func TestCreateTask_ValidRunnerAndWorkspace(t *testing.T) {
+	t.Parallel()
+	srv := setupTestServer(t)
+	ctx := createTestUser(t, srv)
+
+	// Register workspaces for runner
+	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId: "runner-1",
+		Workspaces: []*xagentv1.RegisteredWorkspace{
+			{Name: "my-workspace"},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Create task with valid runner and workspace
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Valid Task",
+		Runner:    "runner-1",
+		Workspace: "my-workspace",
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, resp.Task.Runner, "runner-1")
+	assert.Equal(t, resp.Task.Workspace, "my-workspace")
+}
+
+func TestCreateTask_NonExistentRunner(t *testing.T) {
+	t.Parallel()
+	srv := setupTestServer(t)
+	ctx := createTestUser(t, srv)
+
+	// Create task with non-existent runner
+	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Bad Task",
+		Runner:    "nonexistent-runner",
+		Workspace: "my-workspace",
+	})
+	assert.ErrorContains(t, err, "runner \"nonexistent-runner\" not found")
+}
+
+func TestCreateTask_NonExistentWorkspace(t *testing.T) {
+	t.Parallel()
+	srv := setupTestServer(t)
+	ctx := createTestUser(t, srv)
+
+	// Register workspaces for runner
+	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId: "runner-1",
+		Workspaces: []*xagentv1.RegisteredWorkspace{
+			{Name: "real-workspace"},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Create task with valid runner but non-existent workspace
+	_, err = srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Bad Task",
+		Runner:    "runner-1",
+		Workspace: "fake-workspace",
+	})
+	assert.ErrorContains(t, err, "workspace \"fake-workspace\" not found on runner \"runner-1\"")
+}
+
+func TestCreateTask_NoRunner(t *testing.T) {
+	t.Parallel()
+	srv := setupTestServer(t)
+	ctx := createTestUser(t, srv)
+
+	// Create task without runner (should still work for backwards compatibility)
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "No Runner Task",
+		Workspace: "any-workspace",
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, resp.Task.Runner, "")
+	assert.Equal(t, resp.Task.Workspace, "any-workspace")
+}
+
+func TestCreateTask_RunnerOnlyNoWorkspace(t *testing.T) {
+	t.Parallel()
+	srv := setupTestServer(t)
+	ctx := createTestUser(t, srv)
+
+	// Register workspaces for runner
+	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId: "runner-1",
+		Workspaces: []*xagentv1.RegisteredWorkspace{
+			{Name: "my-workspace"},
+		},
+	})
+	assert.NilError(t, err)
+
+	// Create task with valid runner but no workspace specified
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:   "Runner Only Task",
+		Runner: "runner-1",
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, resp.Task.Runner, "runner-1")
+}
+
 func TestUpdateTask(t *testing.T) {
 	t.Parallel()
 	// Arrange

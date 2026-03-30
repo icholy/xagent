@@ -12,6 +12,18 @@ ORDER BY name ASC;
 DELETE FROM workspaces
 WHERE runner_id = $1 AND org_id = $2;
 
+-- name: HasWorkspace :one
+SELECT EXISTS(
+    SELECT 1 FROM workspaces
+    WHERE runner_id = $1 AND name = $2 AND org_id = $3
+);
+
+-- name: HasRunnerWorkspaces :one
+SELECT EXISTS(
+    SELECT 1 FROM workspaces
+    WHERE runner_id = $1 AND org_id = $2
+);
+
 -- name: ClearWorkspacesByOrgID :exec
 DELETE FROM workspaces
 WHERE org_id = $1;
