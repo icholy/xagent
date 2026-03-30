@@ -1,16 +1,17 @@
-package server
+package server_test
 
 import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/server/testserver"
 	"gotest.tools/v3/assert"
 )
 
 func TestRegisterWorkspaces(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{})
 
 	// Register workspaces
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
@@ -35,9 +36,9 @@ func TestRegisterWorkspaces(t *testing.T) {
 func TestRegisterWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{})
 
 	// User A registers workspaces
 	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
@@ -73,9 +74,9 @@ func TestRegisterWorkspaces_Permissions(t *testing.T) {
 func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	t.Parallel()
 	// Arrange - both users register workspaces for the same runner ID
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{})
 
 	// User A registers workspaces for runner-1
 	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
@@ -118,8 +119,8 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 
 func TestClearWorkspaces(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{})
 
 	// Register workspaces
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
@@ -148,9 +149,9 @@ func TestClearWorkspaces(t *testing.T) {
 
 func TestClearWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{})
 
 	// User A registers workspaces
 	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{

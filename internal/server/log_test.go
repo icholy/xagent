@@ -1,17 +1,18 @@
-package server
+package server_test
 
 import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/server/testserver"
 	"gotest.tools/v3/assert"
 )
 
 func TestUploadLogs(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
 		Runner:    "test-runner",
@@ -35,9 +36,9 @@ func TestUploadLogs(t *testing.T) {
 func TestUploadLogs_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -60,8 +61,8 @@ func TestUploadLogs_Permissions(t *testing.T) {
 func TestListLogs(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
 		Runner:    "test-runner",
@@ -93,9 +94,9 @@ func TestListLogs(t *testing.T) {
 func TestListLogs_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",

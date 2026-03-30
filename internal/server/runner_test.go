@@ -1,16 +1,17 @@
-package server
+package server_test
 
 import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/server/testserver"
 	"gotest.tools/v3/assert"
 )
 
 func TestSubmitRunnerEvents(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	// Create a task (starts as pending with start command)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -68,9 +69,9 @@ func TestSubmitRunnerEvents(t *testing.T) {
 func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -92,8 +93,8 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 func TestListRunnerTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task for runner-1",
 		Workspace: "test-workspace",
@@ -121,8 +122,8 @@ func TestListRunnerTasks(t *testing.T) {
 func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with command",
 		Workspace: "test-workspace",
@@ -149,9 +150,9 @@ func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 func TestListRunnerTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	_, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",

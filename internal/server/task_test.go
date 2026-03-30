@@ -1,17 +1,18 @@
-package server
+package server_test
 
 import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/server/testserver"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 )
 
 func TestGetTask(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	// Create a task using the API
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -68,9 +69,9 @@ func TestGetTask(t *testing.T) {
 func TestGetTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -90,9 +91,9 @@ func TestGetTask_Permissions(t *testing.T) {
 func TestGetTaskDetails_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -112,8 +113,8 @@ func TestGetTaskDetails_Permissions(t *testing.T) {
 func TestCreateTask(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	// Act
 	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -155,9 +156,9 @@ func TestCreateTask(t *testing.T) {
 func TestCreateTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	parentResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Parent Task",
 		Runner:    "test-runner",
@@ -180,8 +181,8 @@ func TestCreateTask_Permissions(t *testing.T) {
 func TestListTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
 		Runner:    "test-runner",
@@ -206,9 +207,9 @@ func TestListTasks(t *testing.T) {
 func TestListTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	_, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task 1",
 		Runner:    "test-runner",
@@ -242,9 +243,9 @@ func TestListTasks_Permissions(t *testing.T) {
 func TestListChildTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	parentResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Parent Task",
 		Runner:    "test-runner",
@@ -276,8 +277,8 @@ func TestListChildTasks_Permissions(t *testing.T) {
 
 func TestCreateTask_BadRunner(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Bad Task",
@@ -289,8 +290,8 @@ func TestCreateTask_BadRunner(t *testing.T) {
 
 func TestCreateTask_BadWorkspace(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Bad Task",
@@ -303,8 +304,8 @@ func TestCreateTask_BadWorkspace(t *testing.T) {
 func TestUpdateTask(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Original Name",
 		Runner:    "test-runner",
@@ -328,9 +329,9 @@ func TestUpdateTask(t *testing.T) {
 func TestUpdateTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -351,9 +352,9 @@ func TestUpdateTask_Permissions(t *testing.T) {
 func TestArchiveTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -373,9 +374,9 @@ func TestArchiveTask_Permissions(t *testing.T) {
 func TestCancelTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -395,9 +396,9 @@ func TestCancelTask_Permissions(t *testing.T) {
 func TestRestartTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",

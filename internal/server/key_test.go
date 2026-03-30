@@ -1,18 +1,19 @@
-package server
+package server_test
 
 import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/server/testserver"
 	"gotest.tools/v3/assert"
 )
 
 func TestCreateKey(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	// Act
 	resp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
@@ -30,8 +31,8 @@ func TestCreateKey(t *testing.T) {
 func TestCreateAndListKeys(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	_, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: "key-1",
 	})
@@ -52,8 +53,8 @@ func TestCreateAndListKeys(t *testing.T) {
 func TestDeleteKey(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: "to-delete",
 	})
@@ -74,9 +75,9 @@ func TestDeleteKey(t *testing.T) {
 func TestListKeys_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	_, err := srv.CreateKey(ctxA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})
@@ -102,9 +103,9 @@ func TestListKeys_Permissions(t *testing.T) {
 func TestDeleteKey_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateKey(ctxA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})

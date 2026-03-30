@@ -59,6 +59,10 @@ type Options struct {
 	EncryptionKey []byte
 }
 
+func (s *Server) Store() *store.Store {
+	return s.store
+}
+
 func New(opts Options) *Server {
 	log := opts.Log
 	if log == nil {

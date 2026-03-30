@@ -1,17 +1,18 @@
-package server
+package server_test
 
 import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/server/testserver"
 	"gotest.tools/v3/assert"
 )
 
 func TestProcessEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	// Create two tasks with links to the same URL with notify=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -101,8 +102,8 @@ func TestProcessEvent(t *testing.T) {
 func TestProcessEventWithoutURL(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	// Create an event without URL
 	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -124,8 +125,8 @@ func TestProcessEventWithoutURL(t *testing.T) {
 func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -164,8 +165,8 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 func TestProcessEventWithNotifyFalse(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -204,8 +205,8 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 func TestProcessEventDeduplicatesTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -253,8 +254,8 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	// Create two tasks with links to the same URL with notify=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -357,9 +358,9 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 func TestProcessEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Url:         "https://github.com/example/repo/pull/123",

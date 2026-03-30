@@ -1,17 +1,18 @@
-package server
+package server_test
 
 import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/server/testserver"
 	"gotest.tools/v3/assert"
 )
 
 func TestCreateOrg(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	resp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{
 		Name: "my-org",
@@ -24,8 +25,8 @@ func TestCreateOrg(t *testing.T) {
 
 func TestListOrgs(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	_, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "org-1"})
 	assert.NilError(t, err)
 	_, err = srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "org-2"})
@@ -40,8 +41,8 @@ func TestListOrgs(t *testing.T) {
 
 func TestDeleteOrg(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "to-delete"})
 	assert.NilError(t, err)
 
@@ -55,9 +56,9 @@ func TestDeleteOrg(t *testing.T) {
 
 func TestDeleteOrg_Permissions(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctxA, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	ctxB, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	createResp, err := srv.CreateOrg(ctxA, &xagentv1.CreateOrgRequest{Name: "user-a-org"})
 	assert.NilError(t, err)
 
@@ -68,8 +69,8 @@ func TestDeleteOrg_Permissions(t *testing.T) {
 
 func TestDeleteOrg_DefaultOrg(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	user := apiauth.Caller(ctx)
 
 	_, err := srv.DeleteOrg(ctx, &xagentv1.DeleteOrgRequest{Id: user.OrgID})
@@ -79,9 +80,9 @@ func TestDeleteOrg_DefaultOrg(t *testing.T) {
 
 func TestAddAndListOrgMembers(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	owner, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	member, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	owner, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	member, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	memberEmail := apiauth.Caller(member).ID + "@test.com"
 
 	resp, err := srv.AddOrgMember(owner, &xagentv1.AddOrgMemberRequest{
@@ -97,8 +98,8 @@ func TestAddAndListOrgMembers(t *testing.T) {
 
 func TestDeleteOrg_WithTasks(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	ctx, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 
 	// Create a second org and switch to it.
 	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "has-tasks"})
@@ -138,9 +139,9 @@ func TestDeleteOrg_WithTasks(t *testing.T) {
 
 func TestRemoveOrgMember(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
-	owner, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	member, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	srv := testserver.Create(t)
+	owner, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
+	member, _ := testserver.CreateOrg(t, srv, testserver.Options{Workspaces: true})
 	memberUser := apiauth.Caller(member)
 	memberEmail := memberUser.ID + "@test.com"
 
