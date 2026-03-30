@@ -51,7 +51,7 @@ type Options struct {
 	RunnerID    string
 	Log         *slog.Logger
 	Auth        string
-	SocketPath  string // defaults to /tmp/xagent.sock
+	SocketPath  string
 }
 
 var reRunnerID = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)

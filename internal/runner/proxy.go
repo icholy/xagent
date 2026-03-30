@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/model"
@@ -31,14 +29,11 @@ type AgentProxyOptions struct {
 	Token      string
 	PrivateKey ed25519.PrivateKey
 	Log        *slog.Logger
-	SocketPath string // defaults to /tmp/xagent.sock
+	SocketPath string
 }
 
 // NewProxy creates a new Proxy.
 func NewProxy(opts AgentProxyOptions) *AgentProxy {
-	if opts.SocketPath == "" {
-		opts.SocketPath = filepath.Join(os.TempDir(), "xagent.sock")
-	}
 	return &AgentProxy{
 		serverURL:  opts.ServerURL,
 		token:      opts.Token,
