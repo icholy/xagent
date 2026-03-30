@@ -36,16 +36,17 @@ func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) err
 
 func (a *DummyAgent) doSleep(ctx context.Context) error {
 	if a.options == nil || a.options.Sleep == 0 {
-		if a.options.Sleep == -1 {
-			a.log.Info("dummy agent sleeping forever")
-			<-ctx.Done()
-			return ctx.Err()
-		}
-		duration := time.Duration(a.options.Sleep) * time.Second
-		a.log.Info("dummy agent sleeping", "duration", duration)
-		if !common.SleepContext(ctx, duration) {
-			return ctx.Err()
-		}
+		return nil
+	}
+	if a.options.Sleep < 0 {
+		a.log.Info("dummy agent sleeping forever")
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	duration := time.Duration(a.options.Sleep) * time.Second
+	a.log.Info("dummy agent sleeping", "duration", duration)
+	if !common.SleepContext(ctx, duration) {
+		return ctx.Err()
 	}
 	return nil
 }
