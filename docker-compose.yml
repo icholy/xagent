@@ -5,11 +5,12 @@ services:
       POSTGRES_USER: xagent
       POSTGRES_PASSWORD: xagent
       POSTGRES_DB: xagent
+      PGPORT: "5433"
     network_mode: host
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U xagent"]
+      test: ["CMD-SHELL", "pg_isready -U xagent -p 5433"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,7 +21,7 @@ services:
     network_mode: host
     env_file: .env
     environment:
-      XAGENT_DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
+      XAGENT_DATABASE_URL: postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
