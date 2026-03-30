@@ -163,7 +163,6 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Workspace    string        `json:"workspace"`
 		Runner       string        `json:"runner,omitempty"`
 		Status       string        `json:"status"`
-		Archived     bool          `json:"archived,omitempty"`
 		URL          string        `json:"url,omitempty"`
 		Instructions []instruction `json:"instructions"`
 		Logs         []logEntry    `json:"logs"`
@@ -178,7 +177,6 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
 		Status:    task.Status.String(),
-		Archived:  task.Archived,
 	}
 	if s.baseURL != "" {
 		result.URL = fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, task.Id)
