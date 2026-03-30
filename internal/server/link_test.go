@@ -39,9 +39,9 @@ func TestCreateLink_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
@@ -49,7 +49,7 @@ func TestCreateLink_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.CreateLink(userB, &xagentv1.CreateLinkRequest{
+	_, err = srv.CreateLink(ctxB, &xagentv1.CreateLinkRequest{
 		TaskId:    taskResp.Task.Id,
 		Relevance: "Sneaky link",
 		Url:       "https://github.com/example/repo/pull/123",
@@ -97,15 +97,15 @@ func TestListLinks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	_, err = srv.CreateLink(userA, &xagentv1.CreateLinkRequest{
+	_, err = srv.CreateLink(ctxA, &xagentv1.CreateLinkRequest{
 		TaskId:    taskResp.Task.Id,
 		Relevance: "User A's Link",
 		Url:       "https://github.com/example/repo/pull/1",
@@ -113,7 +113,7 @@ func TestListLinks_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	resp, err := srv.ListLinks(userB, &xagentv1.ListLinksRequest{
+	resp, err := srv.ListLinks(ctxB, &xagentv1.ListLinksRequest{
 		TaskId: taskResp.Task.Id,
 	})
 
@@ -166,27 +166,27 @@ func TestFindLinksByURL_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	taskA, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	taskA, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	taskB, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
+	taskB, err := srv.CreateTask(ctxB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	_, err = srv.CreateLink(userA, &xagentv1.CreateLinkRequest{
+	_, err = srv.CreateLink(ctxA, &xagentv1.CreateLinkRequest{
 		TaskId:    taskA.Task.Id,
 		Relevance: "User A's Link",
 		Url:       "https://github.com/example/repo/pull/123",
 	})
 	assert.NilError(t, err)
-	_, err = srv.CreateLink(userB, &xagentv1.CreateLinkRequest{
+	_, err = srv.CreateLink(ctxB, &xagentv1.CreateLinkRequest{
 		TaskId:    taskB.Task.Id,
 		Relevance: "User B's Link",
 		Url:       "https://github.com/example/repo/pull/123",
@@ -194,11 +194,11 @@ func TestFindLinksByURL_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	respA, err := srv.FindLinksByURL(userA, &xagentv1.FindLinksByURLRequest{
+	respA, err := srv.FindLinksByURL(ctxA, &xagentv1.FindLinksByURLRequest{
 		Url: "https://github.com/example/repo/pull/123",
 	})
 	assert.NilError(t, err)
-	respB, err := srv.FindLinksByURL(userB, &xagentv1.FindLinksByURLRequest{
+	respB, err := srv.FindLinksByURL(ctxB, &xagentv1.FindLinksByURLRequest{
 		Url: "https://github.com/example/repo/pull/123",
 	})
 	assert.NilError(t, err)

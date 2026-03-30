@@ -36,11 +36,11 @@ func TestRegisterWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{})
 
 	// User A registers workspaces
-	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
+	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "runner-1",
 		Workspaces: []*xagentv1.RegisteredWorkspace{
 			{Name: "workspace-a"},
@@ -49,7 +49,7 @@ func TestRegisterWorkspaces_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// User B registers different workspaces
-	_, err = srv.RegisterWorkspaces(userB, &xagentv1.RegisterWorkspacesRequest{
+	_, err = srv.RegisterWorkspaces(ctxB, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "runner-1",
 		Workspaces: []*xagentv1.RegisteredWorkspace{
 			{Name: "workspace-b"},
@@ -58,8 +58,8 @@ func TestRegisterWorkspaces_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	listRespA, errA := srv.ListWorkspaces(userA, &xagentv1.ListWorkspacesRequest{})
-	listRespB, errB := srv.ListWorkspaces(userB, &xagentv1.ListWorkspacesRequest{})
+	listRespA, errA := srv.ListWorkspaces(ctxA, &xagentv1.ListWorkspacesRequest{})
+	listRespB, errB := srv.ListWorkspaces(ctxB, &xagentv1.ListWorkspacesRequest{})
 
 	// Assert - each user should only see their own workspaces
 	assert.NilError(t, errA)
@@ -74,11 +74,11 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	t.Parallel()
 	// Arrange - both users register workspaces for the same runner ID
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{})
 
 	// User A registers workspaces for runner-1
-	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
+	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "runner-1",
 		Workspaces: []*xagentv1.RegisteredWorkspace{
 			{Name: "workspace-a"},
@@ -87,7 +87,7 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	assert.NilError(t, err)
 
 	// User B registers workspaces for the same runner-1
-	_, err = srv.RegisterWorkspaces(userB, &xagentv1.RegisterWorkspacesRequest{
+	_, err = srv.RegisterWorkspaces(ctxB, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "runner-1",
 		Workspaces: []*xagentv1.RegisteredWorkspace{
 			{Name: "workspace-b"},
@@ -96,7 +96,7 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act - User A re-registers (should only delete their own workspaces)
-	_, err = srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
+	_, err = srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "runner-1",
 		Workspaces: []*xagentv1.RegisteredWorkspace{
 			{Name: "workspace-c"},
@@ -105,12 +105,12 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Assert - User A should see workspace-c, User B should still see workspace-b
-	listRespA, err := srv.ListWorkspaces(userA, &xagentv1.ListWorkspacesRequest{})
+	listRespA, err := srv.ListWorkspaces(ctxA, &xagentv1.ListWorkspacesRequest{})
 	assert.NilError(t, err)
 	assert.Equal(t, len(listRespA.Workspaces), 1)
 	assert.Equal(t, listRespA.Workspaces[0].Name, "workspace-c")
 
-	listRespB, err := srv.ListWorkspaces(userB, &xagentv1.ListWorkspacesRequest{})
+	listRespB, err := srv.ListWorkspaces(ctxB, &xagentv1.ListWorkspacesRequest{})
 	assert.NilError(t, err)
 	assert.Equal(t, len(listRespB.Workspaces), 1)
 	assert.Equal(t, listRespB.Workspaces[0].Name, "workspace-b")
@@ -149,11 +149,11 @@ func TestClearWorkspaces(t *testing.T) {
 func TestClearWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{})
 
 	// User A registers workspaces
-	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
+	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "runner-1",
 		Workspaces: []*xagentv1.RegisteredWorkspace{
 			{Name: "workspace-a"},
@@ -162,7 +162,7 @@ func TestClearWorkspaces_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// User B registers workspaces
-	_, err = srv.RegisterWorkspaces(userB, &xagentv1.RegisterWorkspacesRequest{
+	_, err = srv.RegisterWorkspaces(ctxB, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "runner-1",
 		Workspaces: []*xagentv1.RegisteredWorkspace{
 			{Name: "workspace-b"},
@@ -171,16 +171,16 @@ func TestClearWorkspaces_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// User A clears workspaces - should only clear their own
-	_, err = srv.ClearWorkspaces(userA, &xagentv1.ClearWorkspacesRequest{})
+	_, err = srv.ClearWorkspaces(ctxA, &xagentv1.ClearWorkspacesRequest{})
 	assert.NilError(t, err)
 
 	// Verify User A has no workspaces
-	listRespA, err := srv.ListWorkspaces(userA, &xagentv1.ListWorkspacesRequest{})
+	listRespA, err := srv.ListWorkspaces(ctxA, &xagentv1.ListWorkspacesRequest{})
 	assert.NilError(t, err)
 	assert.Equal(t, len(listRespA.Workspaces), 0)
 
 	// Verify User B still has their workspaces
-	listRespB, err := srv.ListWorkspaces(userB, &xagentv1.ListWorkspacesRequest{})
+	listRespB, err := srv.ListWorkspaces(ctxB, &xagentv1.ListWorkspacesRequest{})
 	assert.NilError(t, err)
 	assert.Equal(t, len(listRespB.Workspaces), 1)
 	assert.Equal(t, listRespB.Workspaces[0].Name, "workspace-b")

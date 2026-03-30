@@ -36,9 +36,9 @@ func TestUploadLogs_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
@@ -46,7 +46,7 @@ func TestUploadLogs_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.UploadLogs(userB, &xagentv1.UploadLogsRequest{
+	_, err = srv.UploadLogs(ctxB, &xagentv1.UploadLogsRequest{
 		TaskId: taskResp.Task.Id,
 		Entries: []*xagentv1.LogEntry{
 			{Type: "info", Content: "Sneaky log"},
@@ -94,15 +94,15 @@ func TestListLogs_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	_, err = srv.UploadLogs(userA, &xagentv1.UploadLogsRequest{
+	_, err = srv.UploadLogs(ctxA, &xagentv1.UploadLogsRequest{
 		TaskId: taskResp.Task.Id,
 		Entries: []*xagentv1.LogEntry{
 			{Type: "info", Content: "User A's log"},
@@ -111,7 +111,7 @@ func TestListLogs_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	resp, err := srv.ListLogs(userB, &xagentv1.ListLogsRequest{
+	resp, err := srv.ListLogs(ctxB, &xagentv1.ListLogsRequest{
 		TaskId: taskResp.Task.Id,
 	})
 
