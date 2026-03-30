@@ -30,6 +30,7 @@ ENV MISE_CACHE_DIR="/mise/cache"
 ENV MISE_INSTALL_PATH="/usr/local/bin/mise"
 ENV PATH="/mise/shims:$PATH"
 ENV MISE_TRUSTED_CONFIG_PATHS="/"
+ENV MISE_ALWAYS_KEEP_DOWNLOAD=1
 RUN curl https://mise.run | sh
 
 # https://code.claude.com/docs/en/setup
