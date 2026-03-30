@@ -16,7 +16,7 @@ func TestRegisterWorkspaces(t *testing.T) {
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "runner-1",
 		Workspaces: []*xagentv1.RegisteredWorkspace{
-			{Name: "workspace-a"},
+			{Name: "workspace-a", Description: "First workspace"},
 			{Name: "workspace-b"},
 		},
 	})
@@ -27,7 +27,9 @@ func TestRegisterWorkspaces(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(listResp.Workspaces), 2)
 	assert.Equal(t, listResp.Workspaces[0].Name, "workspace-a")
+	assert.Equal(t, listResp.Workspaces[0].Description, "First workspace")
 	assert.Equal(t, listResp.Workspaces[1].Name, "workspace-b")
+	assert.Equal(t, listResp.Workspaces[1].Description, "")
 }
 
 func TestRegisterWorkspaces_Permissions(t *testing.T) {

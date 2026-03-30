@@ -7,6 +7,7 @@ package sqlc
 
 import (
 	"context"
+	"time"
 )
 
 const clearWorkspacesByOrgID = `-- name: ClearWorkspacesByOrgID :exec
@@ -20,18 +21,24 @@ func (q *Queries) ClearWorkspacesByOrgID(ctx context.Context, orgID int64) error
 }
 
 const createWorkspace = `-- name: CreateWorkspace :exec
-INSERT INTO workspaces (runner_id, name, org_id)
-VALUES ($1, $2, $3)
+INSERT INTO workspaces (runner_id, name, description, org_id)
+VALUES ($1, $2, $3, $4)
 `
 
 type CreateWorkspaceParams struct {
-	RunnerID string `json:"runner_id"`
-	Name     string `json:"name"`
-	OrgID    int64  `json:"org_id"`
+	RunnerID    string `json:"runner_id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	OrgID       int64  `json:"org_id"`
 }
 
 func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error {
-	_, err := q.db.ExecContext(ctx, createWorkspace, arg.RunnerID, arg.Name, arg.OrgID)
+	_, err := q.db.ExecContext(ctx, createWorkspace,
+		arg.RunnerID,
+		arg.Name,
+		arg.Description,
+		arg.OrgID,
+	)
 	return err
 }
 
@@ -51,25 +58,35 @@ func (q *Queries) DeleteWorkspacesByRunner(ctx context.Context, arg DeleteWorksp
 }
 
 const listWorkspacesByOrgID = `-- name: ListWorkspacesByOrgID :many
-SELECT id, runner_id, name, updated_at, org_id
+SELECT id, runner_id, name, description, updated_at, org_id
 FROM workspaces
 WHERE org_id = $1
 ORDER BY name ASC
 `
 
-func (q *Queries) ListWorkspacesByOrgID(ctx context.Context, orgID int64) ([]Workspace, error) {
+type ListWorkspacesByOrgIDRow struct {
+	ID          int64     `json:"id"`
+	RunnerID    string    `json:"runner_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	OrgID       int64     `json:"org_id"`
+}
+
+func (q *Queries) ListWorkspacesByOrgID(ctx context.Context, orgID int64) ([]ListWorkspacesByOrgIDRow, error) {
 	rows, err := q.db.QueryContext(ctx, listWorkspacesByOrgID, orgID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Workspace{}
+	items := []ListWorkspacesByOrgIDRow{}
 	for rows.Next() {
-		var i Workspace
+		var i ListWorkspacesByOrgIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.RunnerID,
 			&i.Name,
+			&i.Description,
 			&i.UpdatedAt,
 			&i.OrgID,
 		); err != nil {

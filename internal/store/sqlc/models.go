@@ -94,9 +94,10 @@ type User struct {
 }
 
 type Workspace struct {
-	ID        int64     `json:"id"`
-	RunnerID  string    `json:"runner_id"`
-	Name      string    `json:"name"`
-	UpdatedAt time.Time `json:"updated_at"`
-	OrgID     int64     `json:"org_id"`
+	ID          int64     `json:"id"`
+	RunnerID    string    `json:"runner_id"`
+	Name        string    `json:"name"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	OrgID       int64     `json:"org_id"`
+	Description string    `json:"description"`
 }

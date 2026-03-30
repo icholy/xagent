@@ -3355,6 +3355,7 @@ type RegisteredWorkspace struct {
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	RunnerId      string                 `protobuf:"bytes,2,opt,name=runner_id,json=runnerId,proto3" json:"runner_id,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3408,6 +3409,13 @@ func (x *RegisteredWorkspace) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *RegisteredWorkspace) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
 }
 
 type RegisterWorkspacesRequest struct {
@@ -5061,12 +5069,13 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\treconcile\x18\x04 \x01(\bR\treconcile\"K\n" +
 	"\x19SubmitRunnerEventsRequest\x12.\n" +
 	"\x06events\x18\x01 \x03(\v2\x16.xagent.v1.RunnerEventR\x06events\"\x1c\n" +
-	"\x1aSubmitRunnerEventsResponse\"\x81\x01\n" +
+	"\x1aSubmitRunnerEventsResponse\"\xa3\x01\n" +
 	"\x13RegisteredWorkspace\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
 	"\trunner_id\x18\x02 \x01(\tR\brunnerId\x129\n" +
 	"\n" +
-	"updated_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"x\n" +
+	"updated_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\"x\n" +
 	"\x19RegisterWorkspacesRequest\x12\x1b\n" +
 	"\trunner_id\x18\x01 \x01(\tR\brunnerId\x12>\n" +
 	"\n" +

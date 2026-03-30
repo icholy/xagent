@@ -364,6 +364,7 @@ message RegisteredWorkspace {
   string name = 1;
   string runner_id = 2;
   google.protobuf.Timestamp updated_at = 3;
+  string description = 4;
 }
 
 message RegisterWorkspacesRequest {

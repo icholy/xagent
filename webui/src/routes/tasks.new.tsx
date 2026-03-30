@@ -113,7 +113,10 @@ function NewTaskPage() {
                 <SelectContent>
                   {workspaces.map((ws) => (
                     <SelectItem key={ws.name} value={ws.name}>
-                      {ws.name}
+                      <span>{ws.name}</span>
+                      {ws.description && (
+                        <span className="text-muted-foreground text-xs ml-2">{ws.description}</span>
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>

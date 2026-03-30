@@ -99,6 +99,7 @@ function WorkspacesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Description</TableHead>
               <TableHead>Runner</TableHead>
               <TableHead>Last Updated</TableHead>
             </TableRow>
@@ -107,6 +108,9 @@ function WorkspacesPage() {
             {workspaces.map((workspace) => (
               <TableRow key={workspace.name}>
                 <TableCell className="font-medium">{workspace.name}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {workspace.description || '-'}
+                </TableCell>
                 <TableCell className="text-muted-foreground font-mono text-sm">
                   {workspace.runnerId || '-'}
                 </TableCell>
