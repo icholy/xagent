@@ -1,10 +1,10 @@
 # XAGENT
 
-Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside Docker containers.
+Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside remote self-hosted Docker containers.
 
-## Architecture
+## Web UI
 
-![Architecture](images/architecture.svg)
+![Web UI](images/webui.png)
 
 ## Quick Start
 
@@ -191,6 +191,11 @@ go build            # Build main binary only
 cd webapp
 pnpm run dev
 ```
+
+## Architecture
+
+![Architecture](images/architecture.svg)
+
 
 ## Schema
 
