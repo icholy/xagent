@@ -11,7 +11,7 @@ func TestProcessEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	// Create two tasks with links to the same URL with notify=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -102,7 +102,7 @@ func TestProcessEventWithoutURL(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	// Create an event without URL
 	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -125,7 +125,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -165,7 +165,7 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -205,7 +205,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -254,7 +254,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	// Create two tasks with links to the same URL with notify=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -358,8 +358,8 @@ func TestProcessEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Url:         "https://github.com/example/repo/pull/123",

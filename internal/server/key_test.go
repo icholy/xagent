@@ -12,7 +12,7 @@ func TestCreateKey(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
 	// Act
 	resp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
@@ -31,7 +31,7 @@ func TestCreateAndListKeys(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	_, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: "key-1",
 	})
@@ -53,7 +53,7 @@ func TestDeleteKey(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: "to-delete",
 	})
@@ -75,8 +75,8 @@ func TestListKeys_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	_, err := srv.CreateKey(userA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})
@@ -103,8 +103,8 @@ func TestDeleteKey_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	createResp, err := srv.CreateKey(userA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})
