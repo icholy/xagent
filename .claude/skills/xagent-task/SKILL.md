@@ -22,3 +22,7 @@ Use the `mcp__xagent__create_task` and `mcp__xagent__list_workspaces` MCP tools 
   - Relevant file paths or package names if known
   - Specific implementation hints if the user provided them
   - Details from the current conversation (code you've read, architecture discussed) so the agent doesn't have to rediscover it
+
+## Container Environment
+
+The agent runs inside a Docker container with a limited toolset. The available tools are defined in `mise.toml` at the repo root. Do **not** assume any CLI tools are available beyond what mise installs and standard Linux utilities. Do **not** assume any CLI tools are available beyond what mise installs and standard Linux utilities.
