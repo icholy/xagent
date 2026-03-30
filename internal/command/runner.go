@@ -69,6 +69,12 @@ var RunnerCommand = &cli.Command{
 			Usage: "Enable debug logging",
 			Value: false,
 		},
+		&cli.StringFlag{
+			Name:    "key",
+			Aliases: []string{"k"},
+			Usage:   "API key (takes priority over config file)",
+			Sources: cli.EnvVars("XAGENT_API_KEY"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -77,6 +83,7 @@ var RunnerCommand = &cli.Command{
 		concurrency := cmd.Int("concurrency")
 		runnerID := cmd.String("id")
 		debug := cmd.Bool("debug")
+		apiKey := cmd.String("key")
 
 		// Create logger if debug is enabled
 		log := slog.Default()
@@ -92,8 +99,11 @@ var RunnerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
+		if apiKey != "" {
+			cfg.Token = apiKey
+		}
 		if cfg.Token == "" {
-			return fmt.Errorf("not authenticated, run setup first")
+			return fmt.Errorf("not authenticated, run setup first or provide -key flag")
 		}
 		if cfg.PrivateKey == nil {
 			return fmt.Errorf("no private key configured, run setup first")
