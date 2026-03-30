@@ -23,7 +23,7 @@ type Server struct {
 
 // New creates a new MCP server backed by the given service handler.
 func New(service xagentv1connect.XAgentServiceHandler, baseURL string) *Server {
-	return &Server{service: service, baseURL: baseURL}
+	return &Server{service: service, baseURL: cmp.Or(baseURL, xagentclient.DefaultURL)}
 }
 
 // Handler returns an http.Handler that serves the MCP Streamable HTTP
@@ -119,7 +119,7 @@ func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input
 		Name:      resp.Task.Name,
 		Workspace: resp.Task.Workspace,
 		Status:    resp.Task.Status.String(),
-		URL:       fmt.Sprintf("%s/ui/tasks/%d", cmp.Or(s.baseURL, xagentclient.DefaultURL), resp.Task.Id),
+		URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, resp.Task.Id),
 	}
 	return jsonResult(result), nil, nil
 }
@@ -177,7 +177,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
 		Status:    task.Status.String(),
-		URL:       fmt.Sprintf("%s/ui/tasks/%d", cmp.Or(s.baseURL, xagentclient.DefaultURL), task.Id),
+		URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, task.Id),
 	}
 	for _, inst := range task.Instructions {
 		result.Instructions = append(result.Instructions, instruction{
@@ -238,7 +238,7 @@ func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input 
 			Name:      t.Name,
 			Workspace: t.Workspace,
 			Status:    t.Status.String(),
-			URL:       fmt.Sprintf("%s/ui/tasks/%d", cmp.Or(s.baseURL, xagentclient.DefaultURL), t.Id),
+			URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, t.Id),
 		}
 	}
 	return jsonResult(result), nil, nil
