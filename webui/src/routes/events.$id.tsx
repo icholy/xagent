@@ -5,6 +5,7 @@ import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { RelativeTime } from '@/components/relative-time'
 
 export const Route = createFileRoute('/events/$id')({
+  staticData: { orgSwitchRedirect: '/events' },
   component: EventDetail,
 })
 

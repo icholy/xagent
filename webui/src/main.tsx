@@ -21,6 +21,9 @@ declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router
   }
+  interface StaticDataRouteOption {
+    orgSwitchRedirect?: string
+  }
 }
 
 const rootElement = document.getElementById('root')!

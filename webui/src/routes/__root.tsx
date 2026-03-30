@@ -1,4 +1,4 @@
-import { Outlet, createRootRouteWithContext, Link } from '@tanstack/react-router'
+import { Outlet, createRootRouteWithContext, Link, useNavigate, useMatches } from '@tanstack/react-router'
 import { LogOut, Settings } from 'lucide-react'
 import { lazy, Suspense, useSyncExternalStore } from 'react'
 import { QueryClient, useQueryClient } from '@tanstack/react-query'
@@ -50,9 +50,17 @@ function RootComponent() {
     () => authTransport.getOrgId(),
   )
 
+  const navigate = useNavigate()
+  const route = useMatches().at(-1)
   const handleOrgSwitch = async (orgId: string) => {
     await authTransport.fetchToken(orgId)
-    await queryClient.resetQueries()
+    const redirect = route?.staticData.orgSwitchRedirect
+    if (redirect) {
+      queryClient.removeQueries()
+      await navigate({ to: redirect })
+    } else {
+      await queryClient.invalidateQueries()
+    }
   }
 
   return (

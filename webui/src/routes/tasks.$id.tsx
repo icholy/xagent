@@ -32,6 +32,7 @@ import { CommandBadge } from '@/components/command-badge'
 import { Plus, Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
+  staticData: { orgSwitchRedirect: '/tasks' },
   component: TaskDetail,
 })
 
