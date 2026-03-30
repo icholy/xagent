@@ -10,7 +10,7 @@ import (
 func TestRegisterWorkspaces(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{})
 
 	// Register workspaces
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
@@ -36,8 +36,8 @@ func TestRegisterWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{})
 
 	// User A registers workspaces
 	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
@@ -74,8 +74,8 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	t.Parallel()
 	// Arrange - both users register workspaces for the same runner ID
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{})
 
 	// User A registers workspaces for runner-1
 	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{
@@ -119,7 +119,7 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 func TestClearWorkspaces(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{})
 
 	// Register workspaces
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
@@ -149,8 +149,8 @@ func TestClearWorkspaces(t *testing.T) {
 func TestClearWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	userA := createTestUser(t, srv)
-	userB := createTestUser(t, srv)
+	userA, _ := createTestOrg(t, srv, testOrgOptions{})
+	userB, _ := createTestOrg(t, srv, testOrgOptions{})
 
 	// User A registers workspaces
 	_, err := srv.RegisterWorkspaces(userA, &xagentv1.RegisterWorkspacesRequest{

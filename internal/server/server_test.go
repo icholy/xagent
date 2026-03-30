@@ -13,8 +13,19 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// createTestUser creates a context with an authenticated user backed by a real org.
-func createTestUser(t *testing.T, srv *Server) context.Context {
+// testOrg holds the resources created for a test org.
+type testOrg struct {
+	UserID string
+	OrgID  int64
+}
+
+// testOrgOptions configures createTestOrg behavior.
+type testOrgOptions struct {
+	Workspaces bool
+}
+
+// createTestOrg creates a user, org, and authenticated context.
+func createTestOrg(t *testing.T, srv *Server, opts testOrgOptions) (context.Context, *testOrg) {
 	t.Helper()
 	userID := uuid.NewString()
 	err := srv.store.CreateUser(t.Context(), nil, &model.User{
@@ -38,19 +49,27 @@ func createTestUser(t *testing.T, srv *Server) context.Context {
 	err = srv.store.UpdateDefaultOrgID(t.Context(), nil, userID, org.ID)
 	assert.NilError(t, err)
 	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: org.ID})
-	// Register default test workspaces
-	for _, runner := range []string{"test-runner", "runner-1", "runner-2"} {
-		_, err = srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
-			RunnerId: runner,
-			Workspaces: []*xagentv1.RegisteredWorkspace{
-				{Name: "test-workspace"},
-				{Name: "workspace-1"},
-				{Name: "workspace-2"},
-				{Name: "default"},
-			},
-		})
-		assert.NilError(t, err)
+	if opts.Workspaces {
+		for _, runner := range []string{"test-runner", "runner-1", "runner-2"} {
+			_, err = srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
+				RunnerId: runner,
+				Workspaces: []*xagentv1.RegisteredWorkspace{
+					{Name: "test-workspace"},
+					{Name: "workspace-1"},
+					{Name: "workspace-2"},
+					{Name: "default"},
+				},
+			})
+			assert.NilError(t, err)
+		}
 	}
+	return ctx, &testOrg{UserID: userID, OrgID: org.ID}
+}
+
+// createTestUser creates a test org with default workspaces and returns the context.
+func createTestUser(t *testing.T, srv *Server) context.Context {
+	t.Helper()
+	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 	return ctx
 }
 
