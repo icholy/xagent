@@ -5,8 +5,7 @@ services:
       POSTGRES_USER: xagent
       POSTGRES_PASSWORD: xagent
       POSTGRES_DB: xagent
-    ports:
-      - "5433:5432"
+    network_mode: host
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,11 +17,10 @@ services:
   server:
     build: .
     command: ["./xagent", "server", "--no-auth"]
-    ports:
-      - "6464:6464"
+    network_mode: host
     env_file: .env
     environment:
-      XAGENT_DATABASE_URL: postgres://xagent:xagent@postgres:5432/xagent?sslmode=disable
+      XAGENT_DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
