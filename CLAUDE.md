@@ -73,7 +73,7 @@ Use `create_link` with `notify=true` for resources that may need follow-up (PRs 
 ```
 xagent server     # Start C2 server
 xagent runner     # Start container orchestrator
-xagent run        # Run agent (inside container, started by runner)
+xagent driver     # Run agent (inside container, started by runner)
 xagent mcp        # MCP server for tool integration
 xagent task       # Task CRUD (list, create, update, delete)
 xagent containers # List xagent containers
