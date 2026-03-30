@@ -17,6 +17,7 @@ import (
 
 var defaultYAML = `workspaces:
   pets-workshop:
+    description: Example Node.js pets workshop
     container:
       image: node:20
       working_dir: /root
