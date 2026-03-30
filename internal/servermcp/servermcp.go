@@ -60,14 +60,16 @@ func (s *Server) listWorkspaces(ctx context.Context, req *mcp.CallToolRequest, i
 		return errorResult("failed to list workspaces: %v", err), nil, nil
 	}
 	type workspace struct {
-		Name     string `json:"name"`
-		RunnerID string `json:"runner_id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		RunnerID    string `json:"runner_id"`
 	}
 	result := make([]workspace, len(resp.Workspaces))
 	for i, ws := range resp.Workspaces {
 		result[i] = workspace{
-			Name:     ws.Name,
-			RunnerID: ws.RunnerId,
+			Name:        ws.Name,
+			Description: ws.Description,
+			RunnerID:    ws.RunnerId,
 		}
 	}
 	return jsonResult(result), nil, nil
