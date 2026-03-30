@@ -62,7 +62,7 @@ var RunnerCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  "id",
-			Usage: "Unique identifier for this runner",
+			Usage: "Unique identifier for this runner (no spaces or special characters)",
 			Value: defaultRunnerID(),
 		},
 		&cli.BoolFlag{

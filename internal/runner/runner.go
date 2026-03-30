@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -53,7 +54,21 @@ type Options struct {
 	SocketPath  string // defaults to /tmp/xagent.sock
 }
 
+var reRunnerID = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
+// ValidateRunnerID checks that id is a valid runner identifier.
+func ValidateRunnerID(id string) error {
+	if !reRunnerID.MatchString(id) {
+		return fmt.Errorf("invalid runner id: %q", id)
+	}
+	return nil
+}
+
 func New(opts Options) (*Runner, error) {
+	if err := ValidateRunnerID(opts.RunnerID); err != nil {
+		return nil, err
+	}
+
 	docker, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
