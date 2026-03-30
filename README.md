@@ -2,6 +2,10 @@
 
 Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside Docker containers.
 
+## Architecture
+
+![Architecture](images/architecture.svg)
+
 ## Quick Start
 
 Install `xagent` cli:

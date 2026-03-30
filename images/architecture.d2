@@ -1,0 +1,25 @@
+direction: down
+
+ui: Web UI
+
+backend: Backend {
+  server: XAgent Server
+  db: PostgreSQL
+  server -> db
+}
+
+runner: XAgent Runner
+
+container: Docker Container {
+  style.multiple: true
+  driver: XAgent Driver
+  agent: Agent (Claude Code)
+  mcp: XAgent MCP
+  driver -> agent: runs
+  agent -> mcp: tool calls
+}
+
+ui -> backend.server
+runner -> backend.server: fetch/update tasks
+runner -> container: manages lifecycle
+container.mcp -> runner: proxied to server
