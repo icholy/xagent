@@ -56,12 +56,12 @@ func TestDeleteOrg(t *testing.T) {
 func TestDeleteOrg_Permissions(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	createResp, err := srv.CreateOrg(userA, &xagentv1.CreateOrgRequest{Name: "user-a-org"})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	createResp, err := srv.CreateOrg(ctxA, &xagentv1.CreateOrgRequest{Name: "user-a-org"})
 	assert.NilError(t, err)
 
-	_, err = srv.DeleteOrg(userB, &xagentv1.DeleteOrgRequest{Id: createResp.Org.Id})
+	_, err = srv.DeleteOrg(ctxB, &xagentv1.DeleteOrgRequest{Id: createResp.Org.Id})
 
 	assert.ErrorContains(t, err, "only the org owner can delete it")
 }

@@ -69,9 +69,9 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
@@ -79,7 +79,7 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.SubmitRunnerEvents(userB, &xagentv1.SubmitRunnerEventsRequest{
+	_, err = srv.SubmitRunnerEvents(ctxB, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{TaskId: taskResp.Task.Id, Event: "started", Version: 1},
 		},
@@ -150,15 +150,15 @@ func TestListRunnerTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	_, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	_, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",
 		Runner:    "runner-1",
 	})
 	assert.NilError(t, err)
-	_, err = srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
+	_, err = srv.CreateTask(ctxB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
 		Workspace: "test-workspace",
 		Runner:    "runner-1",
@@ -166,11 +166,11 @@ func TestListRunnerTasks_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	respA, err := srv.ListRunnerTasks(userA, &xagentv1.ListRunnerTasksRequest{
+	respA, err := srv.ListRunnerTasks(ctxA, &xagentv1.ListRunnerTasksRequest{
 		Runner: "runner-1",
 	})
 	assert.NilError(t, err)
-	respB, err := srv.ListRunnerTasks(userB, &xagentv1.ListRunnerTasksRequest{
+	respB, err := srv.ListRunnerTasks(ctxB, &xagentv1.ListRunnerTasksRequest{
 		Runner: "runner-1",
 	})
 	assert.NilError(t, err)

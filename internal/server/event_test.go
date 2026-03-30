@@ -67,16 +67,16 @@ func TestGetEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	createResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	createResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.GetEvent(userB, &xagentv1.GetEventRequest{
+	_, err = srv.GetEvent(ctxB, &xagentv1.GetEventRequest{
 		Id: createResp.Event.Id,
 	})
 
@@ -143,28 +143,28 @@ func TestListEvents_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	_, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	_, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event 1",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
-	_, err = srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	_, err = srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event 2",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
-	_, err = srv.CreateEvent(userB, &xagentv1.CreateEventRequest{
+	_, err = srv.CreateEvent(ctxB, &xagentv1.CreateEventRequest{
 		Description: "User B's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
 	// Act
-	respA, err := srv.ListEvents(userA, &xagentv1.ListEventsRequest{})
+	respA, err := srv.ListEvents(ctxA, &xagentv1.ListEventsRequest{})
 	assert.NilError(t, err)
-	respB, err := srv.ListEvents(userB, &xagentv1.ListEventsRequest{})
+	respB, err := srv.ListEvents(ctxB, &xagentv1.ListEventsRequest{})
 	assert.NilError(t, err)
 
 	// Assert
@@ -198,23 +198,23 @@ func TestDeleteEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	createResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	createResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.DeleteEvent(userB, &xagentv1.DeleteEventRequest{
+	_, err = srv.DeleteEvent(ctxB, &xagentv1.DeleteEventRequest{
 		Id: createResp.Event.Id,
 	})
 
 	// Assert - delete should silently fail (no error, but event still exists)
 	assert.NilError(t, err)
 	// Verify event still exists for user A
-	_, err = srv.GetEvent(userA, &xagentv1.GetEventRequest{Id: createResp.Event.Id})
+	_, err = srv.GetEvent(ctxA, &xagentv1.GetEventRequest{Id: createResp.Event.Id})
 	assert.NilError(t, err)
 }
 
@@ -259,24 +259,24 @@ func TestAddEventTask_Permissions_Task(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
-	eventResp, err := srv.CreateEvent(userB, &xagentv1.CreateEventRequest{
+	eventResp, err := srv.CreateEvent(ctxB, &xagentv1.CreateEventRequest{
 		Description: "User B's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.AddEventTask(userB, &xagentv1.AddEventTaskRequest{
+	_, err = srv.AddEventTask(ctxB, &xagentv1.AddEventTaskRequest{
 		EventId: eventResp.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
@@ -289,24 +289,24 @@ func TestAddEventTask_Permissions_Event(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
-	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
+	taskResp, err := srv.CreateTask(ctxB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
-	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.AddEventTask(userB, &xagentv1.AddEventTaskRequest{
+	_, err = srv.AddEventTask(ctxB, &xagentv1.AddEventTaskRequest{
 		EventId: eventResp.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
@@ -361,30 +361,30 @@ func TestRemoveEventTask_Permissions_Task(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
-	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
-	_, err = srv.AddEventTask(userA, &xagentv1.AddEventTaskRequest{
+	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{
 		EventId: eventResp.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.RemoveEventTask(userB, &xagentv1.RemoveEventTaskRequest{
+	_, err = srv.RemoveEventTask(ctxB, &xagentv1.RemoveEventTaskRequest{
 		EventId: eventResp.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
@@ -397,17 +397,17 @@ func TestRemoveEventTask_Permissions_Event(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
-	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
+	taskResp, err := srv.CreateTask(ctxB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
-	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
 	})
@@ -415,20 +415,20 @@ func TestRemoveEventTask_Permissions_Event(t *testing.T) {
 
 	// User A links event to user B's task (user A owns event, user B owns task - neither can do this alone now)
 	// Instead: both users create their own, then user B tries to remove user A's event from their task
-	eventRespB, err := srv.CreateEvent(userB, &xagentv1.CreateEventRequest{
+	eventRespB, err := srv.CreateEvent(ctxB, &xagentv1.CreateEventRequest{
 		Description: "User B's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
-	_, err = srv.AddEventTask(userB, &xagentv1.AddEventTaskRequest{
+	_, err = srv.AddEventTask(ctxB, &xagentv1.AddEventTaskRequest{
 		EventId: eventRespB.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
 	assert.NilError(t, err)
 
 	// Act - User B tries to remove User A's event (which isn't linked, but tests ownership check)
-	_, err = srv.RemoveEventTask(userB, &xagentv1.RemoveEventTaskRequest{
+	_, err = srv.RemoveEventTask(ctxB, &xagentv1.RemoveEventTaskRequest{
 		EventId: eventResp.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
@@ -489,34 +489,34 @@ func TestListEventTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
-	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
-	_, err = srv.AddEventTask(userA, &xagentv1.AddEventTaskRequest{
+	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{
 		EventId: eventResp.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
 	assert.NilError(t, err)
 
 	// Act
-	respA, err := srv.ListEventTasks(userA, &xagentv1.ListEventTasksRequest{
+	respA, err := srv.ListEventTasks(ctxA, &xagentv1.ListEventTasksRequest{
 		EventId: eventResp.Event.Id,
 	})
 	assert.NilError(t, err)
-	respB, err := srv.ListEventTasks(userB, &xagentv1.ListEventTasksRequest{
+	respB, err := srv.ListEventTasks(ctxB, &xagentv1.ListEventTasksRequest{
 		EventId: eventResp.Event.Id,
 	})
 	assert.NilError(t, err)
@@ -580,34 +580,34 @@ func TestListEventsByTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
-	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
+	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
-	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
 	})
 	assert.NilError(t, err)
 
-	_, err = srv.AddEventTask(userA, &xagentv1.AddEventTaskRequest{
+	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{
 		EventId: eventResp.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
 	assert.NilError(t, err)
 
 	// Act
-	respA, err := srv.ListEventsByTask(userA, &xagentv1.ListEventsByTaskRequest{
+	respA, err := srv.ListEventsByTask(ctxA, &xagentv1.ListEventsByTaskRequest{
 		TaskId: taskResp.Task.Id,
 	})
 	assert.NilError(t, err)
-	respB, err := srv.ListEventsByTask(userB, &xagentv1.ListEventsByTaskRequest{
+	respB, err := srv.ListEventsByTask(ctxB, &xagentv1.ListEventsByTaskRequest{
 		TaskId: taskResp.Task.Id,
 	})
 	assert.NilError(t, err)

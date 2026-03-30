@@ -358,16 +358,16 @@ func TestProcessEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	eventResp, err := srv.CreateEvent(userA, &xagentv1.CreateEventRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Url:         "https://github.com/example/repo/pull/123",
 	})
 	assert.NilError(t, err)
 
 	// Act
-	_, err = srv.ProcessEvent(userB, &xagentv1.ProcessEventRequest{
+	_, err = srv.ProcessEvent(ctxB, &xagentv1.ProcessEventRequest{
 		Id: eventResp.Event.Id,
 	})
 

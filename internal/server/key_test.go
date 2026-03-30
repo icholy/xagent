@@ -75,21 +75,21 @@ func TestListKeys_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	_, err := srv.CreateKey(userA, &xagentv1.CreateKeyRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	_, err := srv.CreateKey(ctxA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})
 	assert.NilError(t, err)
-	_, err = srv.CreateKey(userB, &xagentv1.CreateKeyRequest{
+	_, err = srv.CreateKey(ctxB, &xagentv1.CreateKeyRequest{
 		Name: "user-b-key",
 	})
 	assert.NilError(t, err)
 
 	// Act
-	respA, err := srv.ListKeys(userA, &xagentv1.ListKeysRequest{})
+	respA, err := srv.ListKeys(ctxA, &xagentv1.ListKeysRequest{})
 	assert.NilError(t, err)
-	respB, err := srv.ListKeys(userB, &xagentv1.ListKeysRequest{})
+	respB, err := srv.ListKeys(ctxB, &xagentv1.ListKeysRequest{})
 	assert.NilError(t, err)
 
 	// Assert - each user only sees their own keys
@@ -103,22 +103,22 @@ func TestDeleteKey_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	userA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	userB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	createResp, err := srv.CreateKey(userA, &xagentv1.CreateKeyRequest{
+	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	createResp, err := srv.CreateKey(ctxA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})
 	assert.NilError(t, err)
 
 	// Act - User B tries to delete User A's key
-	_, err = srv.DeleteKey(userB, &xagentv1.DeleteKeyRequest{
+	_, err = srv.DeleteKey(ctxB, &xagentv1.DeleteKeyRequest{
 		Id: createResp.Key.Id,
 	})
 
 	// Assert - delete doesn't error (SQL DELETE with no rows is not an error)
 	// but the key should still exist for User A
 	assert.NilError(t, err)
-	listResp, err := srv.ListKeys(userA, &xagentv1.ListKeysRequest{})
+	listResp, err := srv.ListKeys(ctxA, &xagentv1.ListKeysRequest{})
 	assert.NilError(t, err)
 	assert.Equal(t, len(listResp.Keys), 1)
 }
