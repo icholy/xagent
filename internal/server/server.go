@@ -252,7 +252,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  task.ID,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s created task", caller.DisplayName()),
+			Content: fmt.Sprintf("%s created task", caller.AuditName()),
 		}); err != nil {
 			return err
 		}
@@ -333,7 +333,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s updated task", caller.DisplayName()),
+			Content: fmt.Sprintf("%s updated task", caller.AuditName()),
 		}); err != nil {
 			return err
 		}
@@ -365,7 +365,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s archived task", caller.DisplayName()),
+			Content: fmt.Sprintf("%s archived task", caller.AuditName()),
 		}); err != nil {
 			return err
 		}
@@ -397,7 +397,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s unarchived task", caller.DisplayName()),
+			Content: fmt.Sprintf("%s unarchived task", caller.AuditName()),
 		}); err != nil {
 			return err
 		}
@@ -429,7 +429,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s cancelled task", caller.DisplayName()),
+			Content: fmt.Sprintf("%s cancelled task", caller.AuditName()),
 		}); err != nil {
 			return err
 		}
@@ -461,7 +461,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s restarted task", caller.DisplayName()),
+			Content: fmt.Sprintf("%s restarted task", caller.AuditName()),
 		}); err != nil {
 			return err
 		}
