@@ -87,6 +87,7 @@ assert.DeepEqual(t, got, want, protocmp.Transform())
 ## Running Tests
 
 ```bash
+mise run build        # Create bins & webui (required)
 mise run up:postgres  # Start postgres (required)
 mise run test         # Run all tests
 mise run test -- -run=TestFoo -v  # Run specific tests

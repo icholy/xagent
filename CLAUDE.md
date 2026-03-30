@@ -15,6 +15,7 @@ go build -o xagent ./cmd/xagent  # Build main binary only
 Tests require a running PostgreSQL instance. Start it with:
 
 ```bash
+mise run build        # The prebuild binaries & webui must exist for the tests to pass
 mise run up:postgres  # Start postgres via docker compose
 mise run test         # Run all tests
 ```
