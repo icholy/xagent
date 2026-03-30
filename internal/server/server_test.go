@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/model"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store"
 	"gotest.tools/v3/assert"
 )
@@ -36,7 +37,21 @@ func createTestUser(t *testing.T, srv *Server) context.Context {
 	assert.NilError(t, err)
 	err = srv.store.UpdateDefaultOrgID(t.Context(), nil, userID, org.ID)
 	assert.NilError(t, err)
-	return apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: org.ID})
+	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: org.ID})
+	// Register default test workspaces
+	for _, runner := range []string{"test-runner", "runner-1", "runner-2"} {
+		_, err = srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
+			RunnerId: runner,
+			Workspaces: []*xagentv1.RegisteredWorkspace{
+				{Name: "test-workspace"},
+				{Name: "workspace-1"},
+				{Name: "workspace-2"},
+				{Name: "default"},
+			},
+		})
+		assert.NilError(t, err)
+	}
+	return ctx
 }
 
 // setupTestServer creates a test server with a clean database.

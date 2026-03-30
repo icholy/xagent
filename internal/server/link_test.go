@@ -14,6 +14,7 @@ func TestCreateLink(t *testing.T) {
 	ctx := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Link",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -42,6 +43,7 @@ func TestCreateLink_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -64,6 +66,7 @@ func TestListLinks(t *testing.T) {
 	ctx := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Links",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -98,6 +101,7 @@ func TestListLinks_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -125,11 +129,13 @@ func TestFindLinksByURL(t *testing.T) {
 	ctx := createTestUser(t, srv)
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 	task2, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 2",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -164,11 +170,13 @@ func TestFindLinksByURL_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	taskA, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 	taskB, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)

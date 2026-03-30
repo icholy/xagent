@@ -15,6 +15,7 @@ func TestSubmitRunnerEvents(t *testing.T) {
 	// Create a task (starts as pending with start command)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -72,6 +73,7 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)

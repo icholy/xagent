@@ -16,6 +16,7 @@ func TestGetTask(t *testing.T) {
 	// Create a task using the API
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 		Instructions: []*xagentv1.Instruction{
 			{
@@ -41,6 +42,7 @@ func TestGetTask(t *testing.T) {
 		Id:        createResp.Task.Id,
 		Name:      "Test Task",
 		Parent:    0,
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 		Instructions: []*xagentv1.Instruction{
 			{
@@ -71,6 +73,7 @@ func TestGetTask_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -92,6 +95,7 @@ func TestGetTaskDetails_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -114,6 +118,7 @@ func TestCreateTask(t *testing.T) {
 	// Act
 	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "New Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 		Instructions: []*xagentv1.Instruction{
 			{
@@ -129,6 +134,7 @@ func TestCreateTask(t *testing.T) {
 		Id:        resp.Task.Id,
 		Name:      "New Task",
 		Parent:    0,
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 		Instructions: []*xagentv1.Instruction{
 			{
@@ -154,6 +160,7 @@ func TestCreateTask_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Parent Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -161,6 +168,7 @@ func TestCreateTask_Permissions(t *testing.T) {
 	// Act
 	_, err = srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Child Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 		Parent:    parentResp.Task.Id,
 	})
@@ -176,11 +184,13 @@ func TestListTasks(t *testing.T) {
 	ctx := createTestUser(t, srv)
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
+		Runner:    "test-runner",
 		Workspace: "workspace-1",
 	})
 	assert.NilError(t, err)
 	_, err = srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 2",
+		Runner:    "test-runner",
 		Workspace: "workspace-2",
 	})
 	assert.NilError(t, err)
@@ -201,16 +211,19 @@ func TestListTasks_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	_, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task 1",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 	_, err = srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task 2",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 	_, err = srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -234,11 +247,13 @@ func TestListChildTasks_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	parentResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Parent Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 	_, err = srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Child Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 		Parent:    parentResp.Task.Id,
 	})
@@ -293,9 +308,9 @@ func TestCreateTask_NonExistentRunner(t *testing.T) {
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Bad Task",
 		Runner:    "nonexistent-runner",
-		Workspace: "my-workspace",
+		Workspace: "test-workspace",
 	})
-	assert.ErrorContains(t, err, "runner \"nonexistent-runner\" not found")
+	assert.ErrorContains(t, err, "not found")
 }
 
 func TestCreateTask_NonExistentWorkspace(t *testing.T) {
@@ -303,60 +318,39 @@ func TestCreateTask_NonExistentWorkspace(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
-	// Register workspaces for runner
-	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
-		RunnerId: "runner-1",
-		Workspaces: []*xagentv1.RegisteredWorkspace{
-			{Name: "real-workspace"},
-		},
-	})
-	assert.NilError(t, err)
-
 	// Create task with valid runner but non-existent workspace
-	_, err = srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Bad Task",
-		Runner:    "runner-1",
+		Runner:    "test-runner",
 		Workspace: "fake-workspace",
 	})
-	assert.ErrorContains(t, err, "workspace \"fake-workspace\" not found on runner \"runner-1\"")
+	assert.ErrorContains(t, err, "not found")
 }
 
-func TestCreateTask_NoRunner(t *testing.T) {
+func TestCreateTask_MissingRunner(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
-	// Create task without runner (should still work for backwards compatibility)
-	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	// Create task without runner
+	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "No Runner Task",
-		Workspace: "any-workspace",
+		Workspace: "test-workspace",
 	})
-	assert.NilError(t, err)
-	assert.Equal(t, resp.Task.Runner, "")
-	assert.Equal(t, resp.Task.Workspace, "any-workspace")
+	assert.ErrorContains(t, err, "not found")
 }
 
-func TestCreateTask_RunnerOnlyNoWorkspace(t *testing.T) {
+func TestCreateTask_MissingWorkspace(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
-	// Register workspaces for runner
-	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
-		RunnerId: "runner-1",
-		Workspaces: []*xagentv1.RegisteredWorkspace{
-			{Name: "my-workspace"},
-		},
+	// Create task without workspace
+	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:   "No Workspace Task",
+		Runner: "test-runner",
 	})
-	assert.NilError(t, err)
-
-	// Create task with valid runner but no workspace specified
-	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:   "Runner Only Task",
-		Runner: "runner-1",
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, resp.Task.Runner, "runner-1")
+	assert.ErrorContains(t, err, "not found")
 }
 
 func TestUpdateTask(t *testing.T) {
@@ -366,6 +360,7 @@ func TestUpdateTask(t *testing.T) {
 	ctx := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Original Name",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -391,6 +386,7 @@ func TestUpdateTask_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -413,6 +409,7 @@ func TestArchiveTask_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -434,6 +431,7 @@ func TestCancelTask_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -455,6 +453,7 @@ func TestRestartTask_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	createResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
