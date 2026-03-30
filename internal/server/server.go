@@ -230,6 +230,25 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("parent task %d not found", req.Parent))
 		}
 	}
+	// Verify runner and workspace exist
+	if req.Runner != "" {
+		ok, err := s.store.HasRunnerWorkspaces(ctx, nil, req.Runner, caller.OrgID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if !ok {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("runner %q not found", req.Runner))
+		}
+		if req.Workspace != "" {
+			ok, err := s.store.HasWorkspace(ctx, nil, req.Runner, req.Workspace, caller.OrgID)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, err)
+			}
+			if !ok {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("workspace %q not found on runner %q", req.Workspace, req.Runner))
+			}
+		}
+	}
 	instructions := make([]model.Instruction, len(req.Instructions))
 	for i, inst := range req.Instructions {
 		instructions[i] = model.InstructionFromProto(inst)

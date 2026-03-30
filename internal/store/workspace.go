@@ -43,6 +43,21 @@ func (s *Store) ListWorkspaces(ctx context.Context, tx *sql.Tx, orgID int64) ([]
 	return workspaces, nil
 }
 
+func (s *Store) HasWorkspace(ctx context.Context, tx *sql.Tx, runnerID, name string, orgID int64) (bool, error) {
+	return s.q(tx).HasWorkspace(ctx, sqlc.HasWorkspaceParams{
+		RunnerID: runnerID,
+		Name:     name,
+		OrgID:    orgID,
+	})
+}
+
+func (s *Store) HasRunnerWorkspaces(ctx context.Context, tx *sql.Tx, runnerID string, orgID int64) (bool, error) {
+	return s.q(tx).HasRunnerWorkspaces(ctx, sqlc.HasRunnerWorkspacesParams{
+		RunnerID: runnerID,
+		OrgID:    orgID,
+	})
+}
+
 func (s *Store) ClearWorkspaces(ctx context.Context, tx *sql.Tx, orgID int64) error {
 	return s.q(tx).ClearWorkspacesByOrgID(ctx, orgID)
 }
