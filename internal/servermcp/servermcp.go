@@ -1,6 +1,7 @@
 package servermcp
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
+	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -117,9 +119,7 @@ func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input
 		Name:      resp.Task.Name,
 		Workspace: resp.Task.Workspace,
 		Status:    resp.Task.Status.String(),
-	}
-	if s.baseURL != "" {
-		result.URL = fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, resp.Task.Id)
+		URL:       fmt.Sprintf("%s/ui/tasks/%d", cmp.Or(s.baseURL, xagentclient.DefaultURL), resp.Task.Id),
 	}
 	return jsonResult(result), nil, nil
 }
@@ -177,9 +177,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
 		Status:    task.Status.String(),
-	}
-	if s.baseURL != "" {
-		result.URL = fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, task.Id)
+		URL:       fmt.Sprintf("%s/ui/tasks/%d", cmp.Or(s.baseURL, xagentclient.DefaultURL), task.Id),
 	}
 	for _, inst := range task.Instructions {
 		result.Instructions = append(result.Instructions, instruction{
@@ -240,9 +238,7 @@ func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input 
 			Name:      t.Name,
 			Workspace: t.Workspace,
 			Status:    t.Status.String(),
-		}
-		if s.baseURL != "" {
-			result[i].URL = fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, t.Id)
+			URL:       fmt.Sprintf("%s/ui/tasks/%d", cmp.Or(s.baseURL, xagentclient.DefaultURL), t.Id),
 		}
 	}
 	return jsonResult(result), nil, nil
