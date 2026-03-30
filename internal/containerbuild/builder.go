@@ -47,9 +47,10 @@ func (b *Builder) Build(ctx context.Context) (string, error) {
 			WorkingDir: wc.WorkingDir,
 		},
 		&container.HostConfig{
-			Binds:    append(b.Binds, wc.Volumes...),
-			GroupAdd: wc.GroupAdd,
-			Runtime:  wc.Runtime,
+			Binds:      append(b.Binds, wc.Volumes...),
+			GroupAdd:   wc.GroupAdd,
+			Runtime:    wc.Runtime,
+			Privileged: wc.Privileged,
 		},
 		wc.NetworkingConfig(),
 		nil,
