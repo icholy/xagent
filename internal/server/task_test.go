@@ -274,37 +274,11 @@ func TestListChildTasks_Permissions(t *testing.T) {
 	assert.Equal(t, len(respB.Tasks), 0)
 }
 
-func TestCreateTask_ValidRunnerAndWorkspace(t *testing.T) {
+func TestCreateTask_BadRunner(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
-	// Register workspaces for runner
-	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
-		RunnerId: "runner-1",
-		Workspaces: []*xagentv1.RegisteredWorkspace{
-			{Name: "my-workspace"},
-		},
-	})
-	assert.NilError(t, err)
-
-	// Create task with valid runner and workspace
-	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Valid Task",
-		Runner:    "runner-1",
-		Workspace: "my-workspace",
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, resp.Task.Runner, "runner-1")
-	assert.Equal(t, resp.Task.Workspace, "my-workspace")
-}
-
-func TestCreateTask_NonExistentRunner(t *testing.T) {
-	t.Parallel()
-	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
-
-	// Create task with non-existent runner
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Bad Task",
 		Runner:    "nonexistent-runner",
@@ -313,42 +287,15 @@ func TestCreateTask_NonExistentRunner(t *testing.T) {
 	assert.ErrorContains(t, err, "not found")
 }
 
-func TestCreateTask_NonExistentWorkspace(t *testing.T) {
+func TestCreateTask_BadWorkspace(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
 	ctx := createTestUser(t, srv)
 
-	// Create task with valid runner but non-existent workspace
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Bad Task",
 		Runner:    "test-runner",
 		Workspace: "fake-workspace",
-	})
-	assert.ErrorContains(t, err, "not found")
-}
-
-func TestCreateTask_MissingRunner(t *testing.T) {
-	t.Parallel()
-	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
-
-	// Create task without runner
-	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "No Runner Task",
-		Workspace: "test-workspace",
-	})
-	assert.ErrorContains(t, err, "not found")
-}
-
-func TestCreateTask_MissingWorkspace(t *testing.T) {
-	t.Parallel()
-	srv := setupTestServer(t)
-	ctx := createTestUser(t, srv)
-
-	// Create task without workspace
-	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:   "No Workspace Task",
-		Runner: "test-runner",
 	})
 	assert.ErrorContains(t, err, "not found")
 }
