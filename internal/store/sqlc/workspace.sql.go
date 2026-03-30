@@ -57,25 +57,6 @@ func (q *Queries) DeleteWorkspacesByRunner(ctx context.Context, arg DeleteWorksp
 	return err
 }
 
-const hasRunnerWorkspaces = `-- name: HasRunnerWorkspaces :one
-SELECT EXISTS(
-    SELECT 1 FROM workspaces
-    WHERE runner_id = $1 AND org_id = $2
-)
-`
-
-type HasRunnerWorkspacesParams struct {
-	RunnerID string `json:"runner_id"`
-	OrgID    int64  `json:"org_id"`
-}
-
-func (q *Queries) HasRunnerWorkspaces(ctx context.Context, arg HasRunnerWorkspacesParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasRunnerWorkspaces, arg.RunnerID, arg.OrgID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const hasWorkspace = `-- name: HasWorkspace :one
 SELECT EXISTS(
     SELECT 1 FROM workspaces

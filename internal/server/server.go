@@ -231,23 +231,12 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		}
 	}
 	// Verify runner and workspace exist
-	if req.Runner != "" {
-		ok, err := s.store.HasRunnerWorkspaces(ctx, nil, req.Runner, caller.OrgID)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		if !ok {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("runner %q not found", req.Runner))
-		}
-		if req.Workspace != "" {
-			ok, err := s.store.HasWorkspace(ctx, nil, req.Runner, req.Workspace, caller.OrgID)
-			if err != nil {
-				return nil, connect.NewError(connect.CodeInternal, err)
-			}
-			if !ok {
-				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("workspace %q not found on runner %q", req.Workspace, req.Runner))
-			}
-		}
+	ok, err := s.store.HasWorkspace(ctx, nil, req.Runner, req.Workspace, caller.OrgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if !ok {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("workspace %q not found on runner %q", req.Workspace, req.Runner))
 	}
 	instructions := make([]model.Instruction, len(req.Instructions))
 	for i, inst := range req.Instructions {
@@ -264,7 +253,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Version:      1,
 		OrgID:        caller.OrgID,
 	}
-	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+	err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := s.store.CreateTask(ctx, tx, task); err != nil {
 			return err
 		}

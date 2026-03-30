@@ -16,12 +16,14 @@ func TestProcessEvent(t *testing.T) {
 	// Create two tasks with links to the same URL with notify=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
 	task2, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 2",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -127,6 +129,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -166,6 +169,7 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -205,6 +209,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -254,12 +259,14 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	// Create two tasks with links to the same URL with notify=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Active Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
 	archivedTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Archived Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)

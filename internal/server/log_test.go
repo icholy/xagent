@@ -14,6 +14,7 @@ func TestUploadLogs(t *testing.T) {
 	ctx := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -39,6 +40,7 @@ func TestUploadLogs_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -62,6 +64,7 @@ func TestListLogs(t *testing.T) {
 	ctx := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -95,6 +98,7 @@ func TestListLogs_Permissions(t *testing.T) {
 	userB := createTestUser(t, srv)
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)

@@ -51,13 +51,6 @@ func (s *Store) HasWorkspace(ctx context.Context, tx *sql.Tx, runnerID, name str
 	})
 }
 
-func (s *Store) HasRunnerWorkspaces(ctx context.Context, tx *sql.Tx, runnerID string, orgID int64) (bool, error) {
-	return s.q(tx).HasRunnerWorkspaces(ctx, sqlc.HasRunnerWorkspacesParams{
-		RunnerID: runnerID,
-		OrgID:    orgID,
-	})
-}
-
 func (s *Store) ClearWorkspaces(ctx context.Context, tx *sql.Tx, orgID int64) error {
 	return s.q(tx).ClearWorkspacesByOrgID(ctx, orgID)
 }

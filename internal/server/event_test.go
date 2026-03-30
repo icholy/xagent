@@ -226,6 +226,7 @@ func TestAddEventTask(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -263,6 +264,7 @@ func TestAddEventTask_Permissions_Task(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -292,6 +294,7 @@ func TestAddEventTask_Permissions_Event(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -320,6 +323,7 @@ func TestRemoveEventTask(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -362,6 +366,7 @@ func TestRemoveEventTask_Permissions_Task(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -397,6 +402,7 @@ func TestRemoveEventTask_Permissions_Event(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(userB, &xagentv1.CreateTaskRequest{
 		Name:      "User B's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -439,12 +445,14 @@ func TestListEventTasks(t *testing.T) {
 
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 
 	task2, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 2",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -486,6 +494,7 @@ func TestListEventTasks_Permissions(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -525,6 +534,7 @@ func TestListEventsByTask(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Test Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
@@ -575,6 +585,7 @@ func TestListEventsByTask_Permissions(t *testing.T) {
 
 	taskResp, err := srv.CreateTask(userA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
+		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)

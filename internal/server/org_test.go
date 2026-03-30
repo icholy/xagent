@@ -108,8 +108,18 @@ func TestDeleteOrg_WithTasks(t *testing.T) {
 		OrgID: createResp.Org.Id,
 	})
 
+	// Register workspaces for the new org.
+	_, err = srv.RegisterWorkspaces(orgCtx, &xagentv1.RegisterWorkspacesRequest{
+		RunnerId: "test-runner",
+		Workspaces: []*xagentv1.RegisteredWorkspace{
+			{Name: "default"},
+		},
+	})
+	assert.NilError(t, err)
+
 	// Create a task in that org.
 	_, err = srv.CreateTask(orgCtx, &xagentv1.CreateTaskRequest{
+		Runner:    "test-runner",
 		Workspace: "default",
 	})
 	assert.NilError(t, err)
