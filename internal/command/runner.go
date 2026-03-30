@@ -83,7 +83,6 @@ var RunnerCommand = &cli.Command{
 		concurrency := cmd.Int("concurrency")
 		runnerID := cmd.String("id")
 		debug := cmd.Bool("debug")
-		apiKey := cmd.String("key")
 
 		// Create logger if debug is enabled
 		log := slog.Default()
@@ -99,8 +98,8 @@ var RunnerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
-		if apiKey != "" {
-			cfg.Token = apiKey
+		if cmd.IsSet("key") {
+			cfg.Token = cmd.String("key")
 		}
 		if cfg.Token == "" {
 			return fmt.Errorf("not authenticated, run setup first or provide -key flag")
