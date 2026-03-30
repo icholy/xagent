@@ -50,7 +50,7 @@ func (s *Server) Handler() http.Handler {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_tasks",
-		Description: "List tasks with optional filtering by status and/or workspace",
+		Description: "List all tasks",
 	}, s.listTasks)
 
 	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
@@ -217,10 +217,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 	return jsonResult(result), nil, nil
 }
 
-type listTasksInput struct {
-	Status    string `json:"status,omitempty" jsonschema:"Filter by status (e.g. PENDING, RUNNING, COMPLETED, FAILED, CANCELLED)"`
-	Workspace string `json:"workspace,omitempty" jsonschema:"Filter by workspace name"`
-}
+type listTasksInput struct{}
 
 func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input listTasksInput) (*mcp.CallToolResult, any, error) {
 	resp, err := s.service.ListTasks(ctx, &xagentv1.ListTasksRequest{})
@@ -233,21 +230,14 @@ func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input 
 		Workspace string `json:"workspace"`
 		Status    string `json:"status"`
 	}
-	var result []taskSummary
-	for _, t := range resp.Tasks {
-		status := t.Status.String()
-		if input.Status != "" && status != input.Status {
-			continue
-		}
-		if input.Workspace != "" && t.Workspace != input.Workspace {
-			continue
-		}
-		result = append(result, taskSummary{
+	result := make([]taskSummary, len(resp.Tasks))
+	for i, t := range resp.Tasks {
+		result[i] = taskSummary{
 			ID:        t.Id,
 			Name:      t.Name,
 			Workspace: t.Workspace,
-			Status:    status,
-		})
+			Status:    t.Status.String(),
+		}
 	}
 	return jsonResult(result), nil, nil
 }
