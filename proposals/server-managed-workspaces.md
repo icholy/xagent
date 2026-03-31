@@ -9,9 +9,9 @@ Deploying a runner requires a `workspaces.yaml` file on the host. The runner loa
 
 ## Design
 
-### Store raw YAML on the server
+### Store individual workspace YAML configs in the existing workspaces table
 
-Add a `workspace_configs` table that stores the complete `workspaces.yaml` content as a single text blob per org. The runner pulls this on startup instead of reading a local file.
+Add a `config` column to the existing `workspaces` table that stores the raw YAML configuration for each workspace. When a runner registers workspaces, it includes the individual workspace YAML. Other runners (or the same runner after restart) can pull these configs from the server instead of needing a local `workspaces.yaml` file.
 
 Raw YAML (not structured proto) because:
 - The workspace config schema changes frequently (new agent types, container options, MCP configs)
@@ -20,66 +20,71 @@ Raw YAML (not structured proto) because:
 
 ### Database Schema
 
-New migration `015_workspace_configs.sql`:
+New migration `015_workspace_config.sql`:
 
 ```sql
-CREATE TABLE workspace_configs (
-    id         BIGSERIAL PRIMARY KEY,
-    org_id     BIGINT NOT NULL UNIQUE REFERENCES orgs(id),
-    content    TEXT NOT NULL,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+ALTER TABLE workspaces ADD COLUMN config TEXT NOT NULL DEFAULT '';
 ```
 
-One row per org. The `content` column holds the full YAML.
+The `config` column holds the raw YAML for an individual workspace entry (the value portion of the workspace's key in `workspaces.yaml`, before variable expansion).
 
 ### API Changes
 
 Two new RPCs in `xagent.proto`:
 
 ```proto
-rpc PushWorkspaceConfig(PushWorkspaceConfigRequest) returns (PushWorkspaceConfigResponse);
-rpc PullWorkspaceConfig(PullWorkspaceConfigRequest) returns (PullWorkspaceConfigResponse);
+rpc PushWorkspaceConfigs(PushWorkspaceConfigsRequest) returns (PushWorkspaceConfigsResponse);
+rpc PullWorkspaceConfigs(PullWorkspaceConfigsRequest) returns (PullWorkspaceConfigsResponse);
 
-message PushWorkspaceConfigRequest {
-  string content = 1;
+message WorkspaceConfig {
+  string name = 1;
+  string config = 2;
 }
 
-message PushWorkspaceConfigResponse {}
+message PushWorkspaceConfigsRequest {
+  repeated WorkspaceConfig configs = 1;
+}
 
-message PullWorkspaceConfigRequest {}
+message PushWorkspaceConfigsResponse {}
 
-message PullWorkspaceConfigResponse {
-  string content = 1;
+message PullWorkspaceConfigsRequest {}
+
+message PullWorkspaceConfigsResponse {
+  repeated WorkspaceConfig configs = 1;
 }
 ```
 
 Org context comes from auth, same as all other endpoints.
 
+`PushWorkspaceConfigs` upserts workspace rows with their configs. `PullWorkspaceConfigs` returns distinct workspace configs for the org (deduplicated by name, since multiple runners may register the same workspace).
+
 ### Store Methods
 
-Add to `internal/store/`:
+Update existing methods and add new ones in `internal/store/`:
 
 ```go
-func (s *Store) UpsertWorkspaceConfig(ctx context.Context, tx *sql.Tx, orgID int64, content string) error
-func (s *Store) GetWorkspaceConfig(ctx context.Context, tx *sql.Tx, orgID int64) (string, error)
+func (s *Store) UpsertWorkspaceConfig(ctx context.Context, tx *sql.Tx, name string, config string, orgID int64) error
+func (s *Store) GetWorkspaceConfigs(ctx context.Context, tx *sql.Tx, orgID int64) ([]WorkspaceConfig, error)
 ```
 
 SQL queries:
 
 ```sql
 -- name: UpsertWorkspaceConfig :exec
-INSERT INTO workspace_configs (org_id, content, updated_at)
-VALUES ($1, $2, CURRENT_TIMESTAMP)
-ON CONFLICT (org_id) DO UPDATE SET content = $2, updated_at = CURRENT_TIMESTAMP;
+UPDATE workspaces SET config = $1, updated_at = CURRENT_TIMESTAMP
+WHERE name = $2 AND org_id = $3;
 
--- name: GetWorkspaceConfig :one
-SELECT content FROM workspace_configs WHERE org_id = $1;
+-- name: GetWorkspaceConfigs :many
+SELECT DISTINCT ON (name) name, config FROM workspaces
+WHERE org_id = $1 AND config != ''
+ORDER BY name, updated_at DESC;
 ```
+
+The `RegisterWorkspaces` flow should also be updated to accept and store the config alongside the name and description.
 
 ### Server Handlers
 
-`PushWorkspaceConfig` validates the YAML parses correctly using `workspace.ParseConfig()` (new function, like `LoadConfig` but takes `[]byte` and skips variable expansion), then stores it. `PullWorkspaceConfig` returns the raw content.
+`PushWorkspaceConfigs` validates each workspace YAML parses correctly using `workspace.ParseConfig()` (new function, like `LoadConfig` but takes `[]byte` and skips variable expansion), then stores each config in the matching workspace row. `PullWorkspaceConfigs` returns the configs for all workspaces in the org.
 
 ### CLI Commands
 
@@ -90,17 +95,19 @@ xagent workspaces push [--config path]   # Upload local YAML to server
 xagent workspaces pull [--output path]   # Download server YAML to local file or stdout
 ```
 
-- `push` reads a local file (default `~/.config/xagent/workspaces.yaml`), validates it parses, then uploads via `PushWorkspaceConfig`
-- `pull` downloads via `PullWorkspaceConfig` and writes to file or stdout
+- `push` reads a local file (default `~/.config/xagent/workspaces.yaml`), validates it parses, splits it into individual workspace entries, then uploads each via `PushWorkspaceConfigs`
+- `pull` downloads via `PullWorkspaceConfigs`, reassembles into a `workspaces.yaml` format, and writes to file or stdout
 
 ### Runner Behavior Changes
 
 Update the startup flow in `internal/command/runner.go`:
 
 1. If `--workspaces` flag is explicitly set, load from local file (current behavior, acts as override)
-2. Otherwise, call `PullWorkspaceConfig` to fetch from server
+2. Otherwise, call `PullWorkspaceConfigs` to fetch individual workspace configs from the server
 3. If server returns empty/not found, fall back to local default path (existing `DefaultPath()` behavior)
-4. Parse YAML with `workspace.LoadConfig`, expand variables, proceed with `RegisterWorkspaces` as today
+4. Parse each workspace YAML with variable expansion, proceed with `RegisterWorkspaces` as today
+
+Update `RegisterWorkspaces` to include the raw workspace config alongside name and description, so the config is stored whenever a runner registers.
 
 This means a runner deployed via Docker Compose only needs `XAGENT_SERVER` and `XAGENT_API_KEY` environment variables. The workspace config is pulled from the server automatically.
 
@@ -110,28 +117,29 @@ Variable expansion continues to happen runner-side after pulling the config. The
 
 ### Interaction with Existing Registration
 
-The `RegisterWorkspaces` RPC and `workspaces` table remain unchanged. They track which workspaces are currently available on which runners. The new `workspace_configs` table stores the canonical configuration for an org. The flow becomes:
+The `RegisterWorkspaces` RPC and `workspaces` table are extended rather than replaced. The table continues to track which workspaces are available on which runners, and now also stores the raw config for each workspace. The flow becomes:
 
-1. Config is pushed to server via CLI (or future UI)
-2. Runner pulls config from server on startup
-3. Runner parses YAML and expands variables locally
-4. Runner registers workspace names + descriptions via `RegisterWorkspaces` (existing flow)
-5. Runner uses the parsed config for container creation (existing flow)
+1. Config is pushed to server via CLI (or future UI), which stores each workspace's config in the `workspaces` table
+2. Alternatively, `RegisterWorkspaces` stores the config when a runner registers (so runners with local configs automatically push them)
+3. New runners pull workspace configs from the server on startup
+4. Runner parses YAML and expands variables locally
+5. Runner registers workspace names + descriptions + configs via `RegisterWorkspaces`
+6. Runner uses the parsed config for container creation (existing flow)
 
 ## Trade-offs
 
 | Approach | Pros | Cons |
 |----------|------|------|
-| **Raw YAML blob** (proposed) | Simple, schema-agnostic, preserves existing format, no proto drift | No server-side structured validation, no granular queries |
+| **Per-workspace YAML in workspaces table** (proposed) | No new tables, configs live alongside workspace metadata, simple schema extension | Config duplicated across runner rows for the same workspace (mitigated by DISTINCT ON queries) |
 | **Structured proto fields** | Server can validate fields, UI can render forms | Proto must mirror YAML schema, constant drift as config evolves |
-| **Per-workspace storage** | Granular updates, selective pull | More complex schema, harder to manage as a unit |
+| **Separate workspace_configs table** | Clean separation of config from registration | Extra table to manage, separate lifecycle from workspace registration |
 
-The raw YAML approach is chosen because the runner is already the authority on parsing and validating workspace config. The server just needs to store and serve it.
+Storing configs directly in the workspaces table is chosen because configs are a property of workspaces, not a separate concept. This keeps the data model simple and avoids a separate table with its own lifecycle.
 
 ## Open Questions
 
 1. **Hot reload**: Should the runner periodically re-pull config from the server, or only load at startup? Periodic refresh would let you update workspaces without restarting runners, but adds complexity around when to apply changes (only to new tasks, not running ones).
 
-2. **Server-side validation**: Should `PushWorkspaceConfig` just check that the YAML parses, or also validate the config (e.g. image is set)? Full validation couples the server to the config schema. Parse-only validation catches syntax errors without that coupling.
+2. **Server-side validation**: Should `PushWorkspaceConfigs` just check that each YAML entry parses, or also validate the config (e.g. image is set)? Full validation couples the server to the config schema. Parse-only validation catches syntax errors without that coupling.
 
-3. **Migration path**: Should the runner auto-push its local config to the server on first startup if no server config exists? This would bootstrap the system without requiring a manual `xagent workspaces push`.
+3. **Config deduplication**: Multiple runners registering the same workspace will create multiple rows with the same config. The `DISTINCT ON` query handles reads, but should we normalize by storing config only on the first registration and skipping updates if unchanged?
