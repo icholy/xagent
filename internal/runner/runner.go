@@ -380,7 +380,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	info, err := dockerx.ImageEnsure(ctx, r.docker, dockerx.ImageEnsureOptions{
 		Ref: ws.Container.Image,
 		PullProgress: func(p dockerx.PullProgress) {
-			if p.Status != "" {
+			if p.Status != "" && p.Progress == "" {
 				r.log.Info("pull", "status", p.Status, "id", p.ID)
 			}
 		},
