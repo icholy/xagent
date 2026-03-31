@@ -42,9 +42,6 @@ jobs:
           mkdir -p prebuilt
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 ./cmd/xagent
 
-      - name: Pull Docker images for runner tests
-        run: docker pull alpine:latest
-
       - name: Run migrations
         env:
           DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
