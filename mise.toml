@@ -54,7 +54,6 @@ run = "go test ./..."
 
 [tasks.deploy]
 description = "Build and deploy to Fly.io"
-depends = ["build"]
 run = "fly deploy"
 
 [tasks.update_secrets]
