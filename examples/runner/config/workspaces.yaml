@@ -10,3 +10,6 @@ workspaces:
         REGISTRY_MIRROR: http://registry:5000
     agent:
       type: dummy
+      dummy:
+        commands:
+          - docker info
