@@ -54,10 +54,9 @@ func New(opts Options) Client {
 			AuthType:  opts.AuthType,
 		}
 	}
-	timeout := opts.Timeout
-	if timeout == 0 {
-		timeout = DefaultTimeout
+	httpClient := &http.Client{Transport: transport, Timeout: DefaultTimeout}
+	if opts.Timeout != 0 {
+		httpClient.Timeout = opts.Timeout
 	}
-	httpClient := &http.Client{Transport: transport, Timeout: timeout}
 	return xagentv1connect.NewXAgentServiceClient(httpClient, baseURL)
 }
