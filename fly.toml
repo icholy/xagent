@@ -2,6 +2,7 @@ app = "xagent"
 primary_region = "yyz"
 
 [build]
+  build-target = "server"
 
 [env]
   # Set these secrets via `fly secrets set`:
