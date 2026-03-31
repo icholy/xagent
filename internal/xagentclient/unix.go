@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
 type UnixProxy struct {
@@ -13,6 +14,11 @@ type UnixProxy struct {
 }
 
 func NewUnixProxy(path string, handler http.Handler) (*UnixProxy, error) {
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return nil, err
+	}
+
 	// Remove existing socket file or directory (Docker creates a directory
 	// if the socket path doesn't exist when bind mounting).
 	if err := os.RemoveAll(path); err != nil {

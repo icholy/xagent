@@ -17,6 +17,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./config:/etc/xagent
+      - /tmp/xagent:/tmp/xagent
     depends_on:
       - registry
 

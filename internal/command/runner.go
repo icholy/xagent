@@ -130,7 +130,7 @@ var RunnerCommand = &cli.Command{
 			RunnerID:    runnerID,
 			Log:         log,
 			Auth:        cfg.Token,
-			SocketPath:  filepath.Join(os.TempDir(), fmt.Sprintf("xagent.%s.sock", runnerID)),
+			SocketPath:  filepath.Join(os.TempDir(), "xagent", runnerID+".sock"),
 		})
 		if err != nil {
 			return err
