@@ -2,7 +2,7 @@ app = "xagent"
 primary_region = "yyz"
 
 [build]
-  build-target = "server"
+  image = "ghcr.io/icholy/xagent-server:latest"
 
 [env]
   # Set these secrets via `fly secrets set`:
