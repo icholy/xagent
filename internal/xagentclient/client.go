@@ -30,9 +30,6 @@ type Options struct {
 	// AuthType is the value of the X-Auth-Type header.
 	// Defaults to "key" if empty.
 	AuthType string
-	// Timeout is the timeout for RPC calls.
-	// Defaults to DefaultTimeout if zero.
-	Timeout time.Duration
 }
 
 // New returns a Connect client.
@@ -55,8 +52,5 @@ func New(opts Options) Client {
 		}
 	}
 	httpClient := &http.Client{Transport: transport, Timeout: DefaultTimeout}
-	if opts.Timeout != 0 {
-		httpClient.Timeout = opts.Timeout
-	}
 	return xagentv1connect.NewXAgentServiceClient(httpClient, baseURL)
 }
