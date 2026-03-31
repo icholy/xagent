@@ -20,7 +20,7 @@ GitHub issues describe problems. Proposals describe solutions. This skill turns 
 # Title
 
 - Status: accepted|rejected|pending
-- Issue: #NNN
+- Issue: https://github.com/icholy/xagent/issues/NNN
 
 ## Problem
 
