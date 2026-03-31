@@ -8,8 +8,8 @@ import (
 	"errors"
 	"strings"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/errdefs"
 )
 
 // ErrNotRunning is returned when attempting to kill a container that is not running.
@@ -44,7 +44,7 @@ func ContainerWait(ctx context.Context, client ContainerWaiter, containerID stri
 // It returns ErrNotRunning if the container was not running.
 func ContainerKill(ctx context.Context, client ContainerKiller, containerID string, signal string) error {
 	if err := client.ContainerKill(ctx, containerID, signal); err != nil {
-		if errdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
+		if cerrdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
 			return ErrNotRunning
 		}
 		return err
