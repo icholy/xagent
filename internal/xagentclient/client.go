@@ -7,9 +7,13 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 )
+
+// DefaultTimeout is the default timeout for RPC calls.
+const DefaultTimeout = 30 * time.Second
 
 // DefaultURL is the default xagent server URL.
 const DefaultURL = "https://xagent.choly.ca"
@@ -26,6 +30,9 @@ type Options struct {
 	// AuthType is the value of the X-Auth-Type header.
 	// Defaults to "key" if empty.
 	AuthType string
+	// Timeout is the timeout for RPC calls.
+	// Defaults to DefaultTimeout if zero.
+	Timeout time.Duration
 }
 
 // New returns a Connect client.
@@ -47,6 +54,10 @@ func New(opts Options) Client {
 			AuthType:  opts.AuthType,
 		}
 	}
-	httpClient := &http.Client{Transport: transport}
+	timeout := opts.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+	httpClient := &http.Client{Transport: transport, Timeout: timeout}
 	return xagentv1connect.NewXAgentServiceClient(httpClient, baseURL)
 }
