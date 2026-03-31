@@ -100,16 +100,22 @@ xagent workspaces pull [--output path]   # Download server YAML to local file or
 
 ### Runner Behavior Changes
 
-Update the startup flow in `internal/command/runner.go`:
+The key change is per-workspace resolution: local config takes priority, with the server as a fallback for workspaces not defined locally.
 
-1. If `--workspaces` flag is explicitly set, load from local file (current behavior, acts as override)
-2. Otherwise, call `PullWorkspaceConfigs` to fetch individual workspace configs from the server
-3. If server returns empty/not found, fall back to local default path (existing `DefaultPath()` behavior)
-4. Parse each workspace YAML with variable expansion, proceed with `RegisterWorkspaces` as today
+When creating a container for a task, the runner resolves the workspace config as follows:
 
-Update `RegisterWorkspaces` to include the raw workspace config alongside name and description, so the config is stored whenever a runner registers.
+1. If the workspace name exists in the local `workspaces.yaml`, use that definition
+2. Otherwise, fetch the workspace config from the server via `PullWorkspaceConfigs`
+3. If neither source has the workspace, fail the task with an error
 
-This means a runner deployed via Docker Compose only needs `XAGENT_SERVER` and `XAGENT_API_KEY` environment variables. The workspace config is pulled from the server automatically.
+This is a per-workspace decision, not all-or-nothing. A runner can have some workspaces defined locally and pull others from the server. This lets runners:
+- Override specific workspaces locally (e.g. for development or testing)
+- Pull shared workspace definitions from the server without maintaining a full local config
+- Run with no local config at all, relying entirely on the server
+
+Update `RegisterWorkspaces` to include the raw workspace config alongside name and description, so the config is stored whenever a runner registers. This ensures that runners with local configs automatically push them to the server for other runners to use.
+
+A runner deployed via Docker Compose only needs `XAGENT_SERVER` and `XAGENT_API_KEY` environment variables. Workspace configs are pulled from the server on demand.
 
 ### Variable Expansion
 
@@ -121,10 +127,10 @@ The `RegisterWorkspaces` RPC and `workspaces` table are extended rather than rep
 
 1. Config is pushed to server via CLI (or future UI), which stores each workspace's config in the `workspaces` table
 2. Alternatively, `RegisterWorkspaces` stores the config when a runner registers (so runners with local configs automatically push them)
-3. New runners pull workspace configs from the server on startup
-4. Runner parses YAML and expands variables locally
-5. Runner registers workspace names + descriptions + configs via `RegisterWorkspaces`
-6. Runner uses the parsed config for container creation (existing flow)
+3. When a task arrives, the runner checks the local `workspaces.yaml` for a matching workspace definition
+4. If not found locally, the runner pulls the workspace config from the server
+5. Runner parses YAML and expands variables locally
+6. Runner creates the container using the resolved config
 
 ## Trade-offs
 
