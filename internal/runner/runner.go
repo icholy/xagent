@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"os"
@@ -17,6 +18,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
@@ -376,10 +378,21 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 
 	r.log.Info("creating container", "task", task.ID, "image", ws.Container.Image, "workspace", task.Workspace)
 
-	// Read xagent binary for the container's architecture
+	// Read xagent binary for the container's architecture.
+	// Pull the image first if it's not available locally.
 	info, err := r.docker.ImageInspect(ctx, ws.Container.Image)
 	if err != nil {
-		return "", fmt.Errorf("failed to inspect image: %w", err)
+		r.log.Info("pulling image", "image", ws.Container.Image)
+		reader, pullErr := r.docker.ImagePull(ctx, ws.Container.Image, image.PullOptions{})
+		if pullErr != nil {
+			return "", fmt.Errorf("failed to pull image: %w", pullErr)
+		}
+		_, _ = io.Copy(io.Discard, reader)
+		reader.Close()
+		info, err = r.docker.ImageInspect(ctx, ws.Container.Image)
+		if err != nil {
+			return "", fmt.Errorf("failed to inspect image: %w", err)
+		}
 	}
 	binData, err := prebuilt.ReadBinary(info.Architecture)
 	if err != nil {
