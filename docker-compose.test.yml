@@ -6,6 +6,7 @@ services:
       POSTGRES_PASSWORD: xagent
       POSTGRES_DB: xagent
       PGPORT: "5433"
+    network_mode: host
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -13,18 +14,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  server:
-    image: ghcr.io/icholy/xagent-server:latest
-    command: ["./xagent", "server", "--no-auth"]
-    ports:
-      - "6464:6464"
-    env_file: .env
-    environment:
-      XAGENT_DATABASE_URL: postgres://xagent:xagent@postgres:5433/xagent?sslmode=disable
-    depends_on:
-      postgres:
-        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -1,0 +1,17 @@
+workspaces:
+  pets-workshop:
+    container:
+      image: node:20
+      working_dir: /root
+      environment:
+        CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
+    commands:
+      - npm install -g @anthropic-ai/claude-code
+      - git clone https://github.com/github-samples/pets-workshop
+    agent:
+      type: claude
+      cwd: /root/pets-workshop
+      mcp_servers: {}
+      prompt: |
+        This is an example github repository.
+        Don't try opening PRs or issues.

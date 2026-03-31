@@ -1,0 +1,4 @@
+workspaces:
+  pets-workshop:
+    commands:
+      - git clone https://x-access-token:${sh:gh auth token}@github.com/private/repo.git

@@ -42,116 +42,17 @@ Create and monitor tasks via the Web UI.
 
 Open: https://xagent.choly.ca/
 
-## Claude Code Workspace Example
+## Workspace Examples
 
-```yaml
-workspaces:
-  pets-workshop:
-    container:
-      image: node:20
-      working_dir: /root
-      environment:
-        CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
-    commands:
-      - npm install -g @anthropic-ai/claude-code
-      - git clone https://github.com/github-samples/pets-workshop
-    agent:
-      type: claude
-      cwd: /root/pets-workshop
-      mcp_servers: {}
-      prompt: |
-        This is an example github repository.
-        Don't try opening PRs or issues.
-```
+See [examples/workspaces/](examples/workspaces/) for workspace configuration examples:
 
-## Codex Workspace Example
-
-```yaml
-workspaces:
-  pets-workshop:
-    container:
-      image: node:20
-      working_dir: /root
-      environment:
-        CODEX_API_KEY: ${env:CODEX_API_KEY}
-    commands:
-      - npm install -g @openai/codex
-      - git clone https://github.com/github-samples/pets-workshop
-    agent:
-      type: codex
-      cwd: /root/pets-workshop
-      mcp_servers: {}
-      prompt: |
-        This is an example github repository.
-        Don't try opening PRs or issues.
-```
-
-## Cursor Agent Workspace Example
-
-```yaml
-  pets-workshop:
-    container:
-      image: node:20
-      working_dir: /root
-      environment:
-        CURSOR_API_KEY: ${env:CURSOR_API_KEY}
-    commands:
-      - curl -fsSL https://cursor.com/install | bash
-      - git clone https://github.com/github-samples/pets-workshop
-    agent:
-      type: cursor
-      cwd: /root/pets-workshop
-      mcp_servers: {}
-      prompt: |
-        This is an example github repository.
-        Don't try opening PRs or issues.
-```
-
-## Copilot Workspace Example
-
-```yaml
-workspaces:
-  pets-workshop:
-    container:
-      image: node:20
-      working_dir: /root
-      environment:
-        COPILOT_GITHUB_TOKEN: ${env:COPILOT_GITHUB_TOKEN}
-    commands:
-      - npm install -g @github/copilot
-      - git clone https://github.com/github-samples/pets-workshop
-    agent:
-      type: copilot
-      cwd: /root/pets-workshop
-      mcp_servers: {}
-      prompt: |
-        This is an example github repository.
-        Don't try opening PRs or issues.
-```
-
-## MCP Server Workspace Example
-
-```yaml
-workspaces:
-  pets-workshop:
-    # ...
-    agent:
-      mcp_servers:
-        meta:
-          type: "http"
-          url: "http://metamcp:12008/metamcp/Default/mcp"
-          headers:
-            Authorization: "Bearer ${env:METAMCP_API_KEY}"
-```
-
-### Clone Private Repository Workspace Example:
-
-```yaml
-workspaces:
-  pets-workshop:
-    commands:
-      - git clone https://x-access-token:${sh:gh auth token}@github.com/private/repo.git
-```
+- [claude.yml](examples/workspaces/claude.yml) - Claude Code
+- [codex.yml](examples/workspaces/codex.yml) - OpenAI Codex
+- [cursor.yml](examples/workspaces/cursor.yml) - Cursor Agent
+- [copilot.yml](examples/workspaces/copilot.yml) - GitHub Copilot
+- [mcp-server.yml](examples/workspaces/mcp-server.yml) - MCP server configuration
+- [private-repo.yml](examples/workspaces/private-repo.yml) - Cloning private repositories
+- [dummy.yml](examples/workspaces/dummy.yml) - Dummy agent for testing
 
 ## Debugging
 
