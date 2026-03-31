@@ -19,8 +19,8 @@ GitHub issues describe problems. Proposals describe solutions. This skill turns 
 ```markdown
 # Title
 
-Status: accepted|rejected|pending
-Issue: #NNN
+- Status: accepted|rejected|pending
+- Issue: #NNN
 
 ## Problem
 
