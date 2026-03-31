@@ -345,14 +345,10 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		msg := fmt.Sprintf("%s updated task", caller.AuditName())
-		if len(changed) > 0 {
-			msg = fmt.Sprintf("%s updated task: %s", caller.AuditName(), strings.Join(changed, ", "))
-		}
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: msg,
+			Content: fmt.Sprintf("%s updated task: %s", caller.AuditName(), strings.Join(changed, ", ")),
 		}); err != nil {
 			return err
 		}
