@@ -23,10 +23,18 @@ Raw YAML (not structured proto) because:
 New migration `015_workspace_config.sql`:
 
 ```sql
+-- Remove runner_id since workspaces are now managed via CRUD, not runner registration
+ALTER TABLE workspaces DROP COLUMN runner_id;
+DROP INDEX IF EXISTS idx_workspaces_runner_id;
+
+-- Add unique constraint: one workspace per name per org
+ALTER TABLE workspaces ADD CONSTRAINT uq_workspaces_org_name UNIQUE (org_id, name);
+
+-- Add config column for the raw YAML
 ALTER TABLE workspaces ADD COLUMN config TEXT NOT NULL DEFAULT '';
 ```
 
-The `config` column holds the raw YAML for an individual workspace entry (the value portion of the workspace's key in `workspaces.yaml`, before variable expansion).
+The `config` column holds the raw YAML for an individual workspace entry (the value portion of the workspace's key in `workspaces.yaml`, before variable expansion). Each workspace is now uniquely identified by `(org_id, name)` — the `runner_id` column is removed since `RegisterWorkspaces` is replaced by the CRUD RPCs.
 
 ### API Changes
 
@@ -96,25 +104,22 @@ SQL queries:
 
 ```sql
 -- name: SetWorkspaceConfig :exec
-UPDATE workspaces SET config = $1, updated_at = CURRENT_TIMESTAMP
-WHERE name = $2 AND org_id = $3;
+INSERT INTO workspaces (org_id, name, config, updated_at)
+VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+ON CONFLICT (org_id, name) DO UPDATE SET config = $3, updated_at = CURRENT_TIMESTAMP;
 
 -- name: GetWorkspaceConfig :one
-SELECT DISTINCT ON (name) name, config FROM workspaces
-WHERE name = $1 AND org_id = $2 AND config != ''
-ORDER BY name, updated_at DESC;
+SELECT name, config FROM workspaces
+WHERE org_id = $1 AND name = $2;
 
 -- name: ListWorkspaceConfigs :many
-SELECT DISTINCT ON (name) name, config FROM workspaces
-WHERE org_id = $1 AND config != ''
-ORDER BY name, updated_at DESC;
+SELECT name, config FROM workspaces
+WHERE org_id = $1
+ORDER BY name;
 
 -- name: DeleteWorkspaceConfig :exec
-UPDATE workspaces SET config = '', updated_at = CURRENT_TIMESTAMP
-WHERE name = $1 AND org_id = $2;
+DELETE FROM workspaces WHERE org_id = $1 AND name = $2;
 ```
-
-The `RegisterWorkspaces` flow should also be updated to accept and store the config alongside the name and description.
 
 ### Server Handlers
 
@@ -161,30 +166,29 @@ This is a per-workspace decision, not all-or-nothing. A runner can have some wor
 - Pull shared workspace definitions from the server without maintaining a full local config
 - Run with no local config at all, relying entirely on the server
 
-Update `RegisterWorkspaces` to include the raw workspace config alongside name and description, so the config is stored whenever a runner registers. This ensures that runners with local configs automatically push them to the server for other runners to use.
-
 A runner deployed via Docker Compose only needs `XAGENT_SERVER` and `XAGENT_API_KEY` environment variables. Workspace configs are pulled from the server on demand.
 
 ### Variable Expansion
 
 Variable expansion continues to happen runner-side after pulling the config. The server stores the template with `${env:VAR}` references intact. Different runners can resolve different values from their local environment. No secrets are stored on the server.
 
-### Interaction with Existing Registration
+### Replacing RegisterWorkspaces
 
-The `RegisterWorkspaces` RPC and `workspaces` table are extended rather than replaced. The table continues to track which workspaces are available on which runners, and now also stores the raw config for each workspace. The flow becomes:
+The existing `RegisterWorkspaces` RPC is removed. Workspace lifecycle is now fully managed through the CRUD RPCs (`SetWorkspaceConfig`, `DeleteWorkspaceConfig`, etc.) via the CLI or Web UI. The `workspaces` table no longer tracks which runner has which workspace — it's a simple config store keyed by `(org_id, name)`.
 
-1. Configs are managed on the server via CLI or the Web UI editor, stored per-workspace in the `workspaces` table
-2. Alternatively, `RegisterWorkspaces` stores the config when a runner registers (so runners with local configs automatically push them)
-3. When a task arrives, the runner checks the local `workspaces.yaml` for a matching workspace definition
-4. If not found locally, the runner pulls the workspace config from the server
-5. Runner parses YAML and expands variables locally
-6. Runner creates the container using the resolved config
+The flow becomes:
+
+1. Configs are managed on the server via CLI (`xagent workspaces push`) or the Web UI editor
+2. When a task arrives, the runner checks the local `workspaces.yaml` for a matching workspace definition
+3. If not found locally, the runner fetches the workspace config from the server via `GetWorkspaceConfig`
+4. Runner parses YAML and expands variables locally
+5. Runner creates the container using the resolved config
 
 ## Trade-offs
 
 | Approach | Pros | Cons |
 |----------|------|------|
-| **Per-workspace YAML in workspaces table** (proposed) | No new tables, configs live alongside workspace metadata, simple schema extension | Config duplicated across runner rows for the same workspace (mitigated by DISTINCT ON queries) |
+| **Per-workspace YAML in workspaces table** (proposed) | No new tables, one row per workspace, simple CRUD, supports frontend editor | Removes runner_id tracking (runners no longer register workspaces) |
 | **Structured proto fields** | Server can validate fields, UI can render forms | Proto must mirror YAML schema, constant drift as config evolves |
 | **Separate workspace_configs table** | Clean separation of config from registration | Extra table to manage, separate lifecycle from workspace registration |
 
@@ -196,6 +200,6 @@ Storing configs directly in the workspaces table is chosen because configs are a
 
 2. **Server-side validation**: Should `SetWorkspaceConfig` just check that the YAML parses, or also validate the config (e.g. image is set)? Full validation couples the server to the config schema. Parse-only validation catches syntax errors without that coupling.
 
-3. **Config deduplication**: Multiple runners registering the same workspace will create multiple rows with the same config. The `DISTINCT ON` query handles reads, but should we normalize by storing config only on the first registration and skipping updates if unchanged?
+3. **YAML schema for monaco-yaml**: Should we ship a JSON Schema for the workspace config format to enable autocompletion and validation in the frontend editor? This would improve the editing experience but requires maintaining the schema alongside the Go structs.
 
-4. **YAML schema for monaco-yaml**: Should we ship a JSON Schema for the workspace config format to enable autocompletion and validation in the frontend editor? This would improve the editing experience but requires maintaining the schema alongside the Go structs.
+4. **Runner availability tracking**: With `RegisterWorkspaces` removed, the server no longer knows which runners are online or which workspaces they can serve. If this is needed (e.g. for task routing), it could be handled by a separate heartbeat/status RPC.
