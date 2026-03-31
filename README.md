@@ -54,6 +54,10 @@ See [examples/workspaces/](examples/workspaces/) for workspace configuration exa
 - [private-repo.yml](examples/workspaces/private-repo.yml) - Cloning private repositories
 - [dummy.yml](examples/workspaces/dummy.yml) - Dummy agent for testing
 
+## Docker Compose Runner
+
+See [examples/runner/](examples/runner/) for running the runner as a Docker Compose service with a pull-through registry cache.
+
 ## Debugging
 
 View container logs:
