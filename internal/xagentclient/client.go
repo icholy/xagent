@@ -3,6 +3,7 @@
 package xagentclient
 
 import (
+	"cmp"
 	"context"
 	"net"
 	"net/http"
@@ -30,6 +31,9 @@ type Options struct {
 	// AuthType is the value of the X-Auth-Type header.
 	// Defaults to "key" if empty.
 	AuthType string
+	// Timeout is the timeout for RPC calls.
+	// Defaults to DefaultTimeout if zero.
+	Timeout time.Duration
 }
 
 // New returns a Connect client.
@@ -51,6 +55,6 @@ func New(opts Options) Client {
 			AuthType:  opts.AuthType,
 		}
 	}
-	httpClient := &http.Client{Transport: transport, Timeout: DefaultTimeout}
+	httpClient := &http.Client{Transport: transport, Timeout: cmp.Or(opts.Timeout, DefaultTimeout)}
 	return xagentv1connect.NewXAgentServiceClient(httpClient, baseURL)
 }
