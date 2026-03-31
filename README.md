@@ -17,7 +17,7 @@ mise run install
 Download the pre-built binaries (if needed):
 
 ```bash
-GITHUB_TOKEN=$(gh auth token) xagent download
+xagent download
 ```
 
 Authenticate your local client:
