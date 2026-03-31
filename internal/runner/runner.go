@@ -377,7 +377,16 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	r.log.Info("creating container", "task", task.ID, "image", ws.Container.Image, "workspace", task.Workspace)
 
 	// Ensure the image is available locally (pulls if needed).
-	info, err := dockerx.ImageEnsure(ctx, r.docker, ws.Container.Image, r.log)
+	info, err := dockerx.ImageEnsure(ctx, r.docker, dockerx.ImageEnsureOptions{
+		Ref: ws.Container.Image,
+		PullProgress: func(p dockerx.PullProgress) {
+			if p.ID != "" {
+				r.log.Info("pull", "status", p.Status, "id", p.ID, "progress", p.Progress)
+			} else if p.Status != "" {
+				r.log.Info("pull", "status", p.Status)
+			}
+		},
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to ensure image: %w", err)
 	}
