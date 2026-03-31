@@ -30,61 +30,105 @@ The `config` column holds the raw YAML for an individual workspace entry (the va
 
 ### API Changes
 
-Two new RPCs in `xagent.proto`:
+CRUD RPCs for individual workspace configs in `xagent.proto`. These support both CLI usage and a frontend editor (using [monaco-yaml](https://github.com/remcohaszing/monaco-yaml) for in-browser YAML editing).
 
 ```proto
-rpc PushWorkspaceConfigs(PushWorkspaceConfigsRequest) returns (PushWorkspaceConfigsResponse);
-rpc PullWorkspaceConfigs(PullWorkspaceConfigsRequest) returns (PullWorkspaceConfigsResponse);
+// Create or update a workspace config
+rpc SetWorkspaceConfig(SetWorkspaceConfigRequest) returns (SetWorkspaceConfigResponse);
+
+// Get a single workspace config by name
+rpc GetWorkspaceConfig(GetWorkspaceConfigRequest) returns (GetWorkspaceConfigResponse);
+
+// List all workspace configs for the org
+rpc ListWorkspaceConfigs(ListWorkspaceConfigsRequest) returns (ListWorkspaceConfigsResponse);
+
+// Delete a workspace config
+rpc DeleteWorkspaceConfig(DeleteWorkspaceConfigRequest) returns (DeleteWorkspaceConfigResponse);
+
+message SetWorkspaceConfigRequest {
+  string name = 1;
+  string config = 2;  // raw YAML for this workspace
+}
+
+message SetWorkspaceConfigResponse {}
+
+message GetWorkspaceConfigRequest {
+  string name = 1;
+}
+
+message GetWorkspaceConfigResponse {
+  string name = 1;
+  string config = 2;
+}
+
+message ListWorkspaceConfigsRequest {}
+
+message ListWorkspaceConfigsResponse {
+  repeated WorkspaceConfig configs = 1;
+}
 
 message WorkspaceConfig {
   string name = 1;
   string config = 2;
 }
 
-message PushWorkspaceConfigsRequest {
-  repeated WorkspaceConfig configs = 1;
+message DeleteWorkspaceConfigRequest {
+  string name = 1;
 }
 
-message PushWorkspaceConfigsResponse {}
-
-message PullWorkspaceConfigsRequest {}
-
-message PullWorkspaceConfigsResponse {
-  repeated WorkspaceConfig configs = 1;
-}
+message DeleteWorkspaceConfigResponse {}
 ```
 
 Org context comes from auth, same as all other endpoints.
-
-`PushWorkspaceConfigs` upserts workspace rows with their configs. `PullWorkspaceConfigs` returns distinct workspace configs for the org (deduplicated by name, since multiple runners may register the same workspace).
 
 ### Store Methods
 
 Update existing methods and add new ones in `internal/store/`:
 
 ```go
-func (s *Store) UpsertWorkspaceConfig(ctx context.Context, tx *sql.Tx, name string, config string, orgID int64) error
-func (s *Store) GetWorkspaceConfigs(ctx context.Context, tx *sql.Tx, orgID int64) ([]WorkspaceConfig, error)
+func (s *Store) SetWorkspaceConfig(ctx context.Context, tx *sql.Tx, orgID int64, name string, config string) error
+func (s *Store) GetWorkspaceConfig(ctx context.Context, tx *sql.Tx, orgID int64, name string) (string, error)
+func (s *Store) ListWorkspaceConfigs(ctx context.Context, tx *sql.Tx, orgID int64) ([]WorkspaceConfig, error)
+func (s *Store) DeleteWorkspaceConfig(ctx context.Context, tx *sql.Tx, orgID int64, name string) error
 ```
 
 SQL queries:
 
 ```sql
--- name: UpsertWorkspaceConfig :exec
+-- name: SetWorkspaceConfig :exec
 UPDATE workspaces SET config = $1, updated_at = CURRENT_TIMESTAMP
 WHERE name = $2 AND org_id = $3;
 
--- name: GetWorkspaceConfigs :many
+-- name: GetWorkspaceConfig :one
+SELECT DISTINCT ON (name) name, config FROM workspaces
+WHERE name = $1 AND org_id = $2 AND config != ''
+ORDER BY name, updated_at DESC;
+
+-- name: ListWorkspaceConfigs :many
 SELECT DISTINCT ON (name) name, config FROM workspaces
 WHERE org_id = $1 AND config != ''
 ORDER BY name, updated_at DESC;
+
+-- name: DeleteWorkspaceConfig :exec
+UPDATE workspaces SET config = '', updated_at = CURRENT_TIMESTAMP
+WHERE name = $1 AND org_id = $2;
 ```
 
 The `RegisterWorkspaces` flow should also be updated to accept and store the config alongside the name and description.
 
 ### Server Handlers
 
-`PushWorkspaceConfigs` validates each workspace YAML parses correctly using `workspace.ParseConfig()` (new function, like `LoadConfig` but takes `[]byte` and skips variable expansion), then stores each config in the matching workspace row. `PullWorkspaceConfigs` returns the configs for all workspaces in the org.
+`SetWorkspaceConfig` validates the YAML parses correctly using `workspace.ParseConfig()` (new function, like `LoadConfig` but takes `[]byte` and skips variable expansion), then stores the config. `GetWorkspaceConfig` and `ListWorkspaceConfigs` return raw YAML. `DeleteWorkspaceConfig` clears the config for a workspace.
+
+### Frontend
+
+The Web UI gets a workspace config editor page using [monaco-yaml](https://github.com/remcohaszing/monaco-yaml):
+
+- List view showing all workspace configs for the org
+- Click a workspace to open the YAML editor (monaco with YAML language support)
+- Create new workspace configs
+- Delete existing workspace configs
+- Validation feedback from the server on save
 
 ### CLI Commands
 
@@ -93,10 +137,14 @@ Add subcommands to the existing `xagent workspaces` command group (or create it 
 ```
 xagent workspaces push [--config path]   # Upload local YAML to server
 xagent workspaces pull [--output path]   # Download server YAML to local file or stdout
+xagent workspaces list                   # List workspace configs on the server
+xagent workspaces get <name>             # Get a single workspace config
+xagent workspaces delete <name>          # Delete a workspace config
 ```
 
-- `push` reads a local file (default `~/.config/xagent/workspaces.yaml`), validates it parses, splits it into individual workspace entries, then uploads each via `PushWorkspaceConfigs`
-- `pull` downloads via `PullWorkspaceConfigs`, reassembles into a `workspaces.yaml` format, and writes to file or stdout
+- `push` reads a local file (default `~/.config/xagent/workspaces.yaml`), validates it parses, splits it into individual workspace entries, then uploads each via `SetWorkspaceConfig`
+- `pull` downloads via `ListWorkspaceConfigs`, reassembles into a `workspaces.yaml` format, and writes to file or stdout
+- `list`, `get`, `delete` map directly to the corresponding RPCs
 
 ### Runner Behavior Changes
 
@@ -105,7 +153,7 @@ The key change is per-workspace resolution: local config takes priority, with th
 When creating a container for a task, the runner resolves the workspace config as follows:
 
 1. If the workspace name exists in the local `workspaces.yaml`, use that definition
-2. Otherwise, fetch the workspace config from the server via `PullWorkspaceConfigs`
+2. Otherwise, fetch the workspace config from the server via `GetWorkspaceConfig`
 3. If neither source has the workspace, fail the task with an error
 
 This is a per-workspace decision, not all-or-nothing. A runner can have some workspaces defined locally and pull others from the server. This lets runners:
@@ -125,7 +173,7 @@ Variable expansion continues to happen runner-side after pulling the config. The
 
 The `RegisterWorkspaces` RPC and `workspaces` table are extended rather than replaced. The table continues to track which workspaces are available on which runners, and now also stores the raw config for each workspace. The flow becomes:
 
-1. Config is pushed to server via CLI (or future UI), which stores each workspace's config in the `workspaces` table
+1. Configs are managed on the server via CLI or the Web UI editor, stored per-workspace in the `workspaces` table
 2. Alternatively, `RegisterWorkspaces` stores the config when a runner registers (so runners with local configs automatically push them)
 3. When a task arrives, the runner checks the local `workspaces.yaml` for a matching workspace definition
 4. If not found locally, the runner pulls the workspace config from the server
@@ -146,6 +194,8 @@ Storing configs directly in the workspaces table is chosen because configs are a
 
 1. **Hot reload**: Should the runner periodically re-pull config from the server, or only load at startup? Periodic refresh would let you update workspaces without restarting runners, but adds complexity around when to apply changes (only to new tasks, not running ones).
 
-2. **Server-side validation**: Should `PushWorkspaceConfigs` just check that each YAML entry parses, or also validate the config (e.g. image is set)? Full validation couples the server to the config schema. Parse-only validation catches syntax errors without that coupling.
+2. **Server-side validation**: Should `SetWorkspaceConfig` just check that the YAML parses, or also validate the config (e.g. image is set)? Full validation couples the server to the config schema. Parse-only validation catches syntax errors without that coupling.
 
 3. **Config deduplication**: Multiple runners registering the same workspace will create multiple rows with the same config. The `DISTINCT ON` query handles reads, but should we normalize by storing config only on the first registration and skipping updates if unchanged?
+
+4. **YAML schema for monaco-yaml**: Should we ship a JSON Schema for the workspace config format to enable autocompletion and validation in the frontend editor? This would improve the editing experience but requires maintaining the schema alongside the Go structs.
