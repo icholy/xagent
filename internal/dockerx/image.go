@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 
 	"github.com/docker/docker/api/types"
@@ -29,9 +28,6 @@ func ImageEnsure(ctx context.Context, docker *client.Client, ref string, log *sl
 	for {
 		var msg pullProgress
 		if err := dec.Decode(&msg); err != nil {
-			if err == io.EOF {
-				break
-			}
 			break
 		}
 		if msg.Status != "" {
