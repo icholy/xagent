@@ -39,10 +39,7 @@ run = "sops -d --output-type dotenv sops.env.yml > .env"
 
 [tasks."up:test"]
 description = "Start postgres via docker compose"
-run = [
-	"docker compose up -d --wait postgres",
-	"docker pull alpine:latest",
-]
+run = "docker compose up -d --wait postgres"
 
 [tasks.migrate]
 description = "Run database migrations"
