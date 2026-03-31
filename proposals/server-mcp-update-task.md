@@ -5,7 +5,7 @@
 
 ## Problem
 
-The server MCP (`internal/servermcp/servermcp.go`) exposes tools for creating and reading tasks (`create_task`, `get_task`, `list_tasks`, `list_workspaces`), but there is no way to update a task. External clients using the server MCP (e.g. Claude Code running locally) cannot modify tasks after creation — they can't rename them, add instructions, or restart them.
+The server MCP (`internal/servermcp/servermcp.go`) exposes tools for creating and reading tasks (`create_task`, `get_task`, `list_tasks`, `list_workspaces`), but there is no way to update a task. External clients using the server MCP (e.g. Claude Code running locally) cannot modify tasks after creation — they can't add instructions or restart them.
 
 The agent MCP (`internal/xmcp/xmcp.go`) has `update_my_task` and `update_child_task`, but these are scoped to the agent's own task and its direct children via the `AgentFilter`. The server MCP needs a general-purpose `update_task` tool that can update any task by ID.
 
@@ -20,7 +20,6 @@ type updateTaskInput struct {
 	ID          int64  `json:"id" jsonschema:"The task ID to update"`
 	Instruction string `json:"instruction" jsonschema:"Instruction text to add to the task"`
 	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue, Jira ticket)"`
-	Name        string `json:"name,omitempty" jsonschema:"Set the task name"`
 	Start       bool   `json:"start,omitempty" jsonschema:"Start the task (non-interrupting if already running)"`
 }
 ```
@@ -30,7 +29,6 @@ Fields:
 - **`id`** (required): The task ID to update.
 - **`instruction`** (required): Text of an instruction to append. Instructions are additive — they are appended to the existing list, never replaced. This is the primary purpose of the tool: giving a task new instructions.
 - **`url`** (optional): URL associated with the instruction (e.g. a GitHub issue or Jira ticket).
-- **`name`** (optional): Set the task's name. Empty string is ignored (matches existing `UpdateTask` RPC behavior).
 - **`start`** (optional): Start the task. For running tasks, this queues a restart after the current run finishes. For completed/failed/cancelled tasks, this sets the task to pending.
 
 ### Handler Implementation
@@ -39,7 +37,6 @@ Fields:
 func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
 	_, err := s.service.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:    input.ID,
-		Name:  input.Name,
 		Start: input.Start,
 		AddInstructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
@@ -78,7 +75,7 @@ In the `Handler()` method, add alongside the existing tools:
 ```go
 mcp.AddTool(server, &mcp.Tool{
 	Name:        "update_task",
-	Description: "Add an instruction to a task, optionally rename it or start it",
+	Description: "Add an instruction to a task, optionally start it",
 }, s.updateTask)
 ```
 
@@ -91,7 +88,6 @@ This tool requires **no changes** to the proto definitions, server RPC handlers,
 | `id`           | `UpdateTaskRequest.id`               | Required, identifies task   |
 | `instruction`  | `UpdateTaskRequest.add_instructions` | Required, appended to list  |
 | `url`          | `Instruction.url`                    | Paired with instruction     |
-| `name`         | `UpdateTaskRequest.name`             | Ignored if empty string     |
 | `start`        | `UpdateTaskRequest.start`            | Non-interrupting start      |
 
 ### Authorization
@@ -106,7 +102,7 @@ The tool returns the updated task state (id, name, workspace, status, url) by fe
 
 ### Required instruction
 
-The `instruction` field is required, making the tool's purpose clear: add an instruction to a task. This matches the `create_task` pattern where `instruction` is also required. Renaming a task without adding an instruction is a rare operation that doesn't justify a separate tool — the CLI `xagent task update` can handle that case.
+The `instruction` field is required, making the tool's purpose clear: add an instruction to a task. This matches the `create_task` pattern where `instruction` is also required. The `name` field is intentionally omitted — task names are set at creation time via `create_task`, or by the agent itself via `update_my_task`. External callers don't have a use case for renaming tasks after creation.
 
 ### Single instruction per call vs. multiple instructions
 
