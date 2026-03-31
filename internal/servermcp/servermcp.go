@@ -55,6 +55,11 @@ func (s *Server) Handler() http.Handler {
 		Description: "List all tasks",
 	}, s.listTasks)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "update_task",
+		Description: "Add an instruction to a task, optionally start it",
+	}, s.updateTask)
+
 	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		if apiauth.Caller(r.Context()) == nil {
 			return nil
@@ -240,6 +245,45 @@ func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input 
 			Status:    t.Status.String(),
 			URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, t.Id),
 		}
+	}
+	return jsonResult(result), nil, nil
+}
+
+type updateTaskInput struct {
+	ID          int64  `json:"id" jsonschema:"The task ID to update"`
+	Instruction string `json:"instruction" jsonschema:"Instruction text to add to the task"`
+	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue, Jira ticket)"`
+	Start       bool   `json:"start,omitempty" jsonschema:"Start the task (non-interrupting if already running)"`
+}
+
+func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
+	_, err := s.service.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:    input.ID,
+		Start: input.Start,
+		AddInstructions: []*xagentv1.Instruction{
+			{Text: input.Instruction, Url: input.URL},
+		},
+	})
+	if err != nil {
+		return errorResult("failed to update task: %v", err), nil, nil
+	}
+	resp, err := s.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
+	if err != nil {
+		return errorResult("failed to get updated task: %v", err), nil, nil
+	}
+	type taskResult struct {
+		ID        int64  `json:"id"`
+		Name      string `json:"name"`
+		Workspace string `json:"workspace"`
+		Status    string `json:"status"`
+		URL       string `json:"url,omitempty"`
+	}
+	result := taskResult{
+		ID:        resp.Task.Id,
+		Name:      resp.Task.Name,
+		Workspace: resp.Task.Workspace,
+		Status:    resp.Task.Status.String(),
+		URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, resp.Task.Id),
 	}
 	return jsonResult(result), nil, nil
 }
