@@ -18,9 +18,9 @@ Add an `update_task` tool to the server MCP in `internal/servermcp/servermcp.go`
 ```go
 type updateTaskInput struct {
 	ID          int64  `json:"id" jsonschema:"The task ID to update"`
+	Instruction string `json:"instruction" jsonschema:"Instruction text to add to the task"`
+	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue, Jira ticket)"`
 	Name        string `json:"name,omitempty" jsonschema:"Set the task name"`
-	Instruction string `json:"instruction,omitempty" jsonschema:"Add an instruction to the task"`
-	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction"`
 	Start       bool   `json:"start,omitempty" jsonschema:"Start the task (non-interrupting if already running)"`
 }
 ```
@@ -28,26 +28,23 @@ type updateTaskInput struct {
 Fields:
 
 - **`id`** (required): The task ID to update.
+- **`instruction`** (required): Text of an instruction to append. Instructions are additive — they are appended to the existing list, never replaced. This is the primary purpose of the tool: giving a task new instructions.
+- **`url`** (optional): URL associated with the instruction (e.g. a GitHub issue or Jira ticket).
 - **`name`** (optional): Set the task's name. Empty string is ignored (matches existing `UpdateTask` RPC behavior).
-- **`instruction`** (optional): Text of an instruction to append. Instructions are additive — they are appended to the existing list, never replaced.
-- **`url`** (optional): URL associated with the instruction (e.g. a GitHub issue or Jira ticket). Only meaningful when `instruction` is also provided.
 - **`start`** (optional): Start the task. For running tasks, this queues a restart after the current run finishes. For completed/failed/cancelled tasks, this sets the task to pending.
 
 ### Handler Implementation
 
 ```go
 func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
-	updateReq := &xagentv1.UpdateTaskRequest{
+	_, err := s.service.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:    input.ID,
 		Name:  input.Name,
 		Start: input.Start,
-	}
-	if input.Instruction != "" {
-		updateReq.AddInstructions = []*xagentv1.Instruction{
+		AddInstructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
-		}
-	}
-	_, err := s.service.UpdateTask(ctx, updateReq)
+		},
+	})
 	if err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
@@ -81,7 +78,7 @@ In the `Handler()` method, add alongside the existing tools:
 ```go
 mcp.AddTool(server, &mcp.Tool{
 	Name:        "update_task",
-	Description: "Update a task's name, add instructions, or start it",
+	Description: "Add an instruction to a task, optionally rename it or start it",
 }, s.updateTask)
 ```
 
@@ -92,9 +89,9 @@ This tool requires **no changes** to the proto definitions, server RPC handlers,
 | Tool field     | Proto field                          | Behavior                    |
 |----------------|--------------------------------------|-----------------------------|
 | `id`           | `UpdateTaskRequest.id`               | Required, identifies task   |
-| `name`         | `UpdateTaskRequest.name`             | Ignored if empty string     |
-| `instruction`  | `UpdateTaskRequest.add_instructions` | Appended to existing list   |
+| `instruction`  | `UpdateTaskRequest.add_instructions` | Required, appended to list  |
 | `url`          | `Instruction.url`                    | Paired with instruction     |
+| `name`         | `UpdateTaskRequest.name`             | Ignored if empty string     |
 | `start`        | `UpdateTaskRequest.start`            | Non-interrupting start      |
 
 ### Authorization
@@ -106,6 +103,10 @@ The server MCP uses `apiauth.Caller(r.Context())` for auth (set by middleware be
 The tool returns the updated task state (id, name, workspace, status, url) by fetching the task after the update. This follows the same pattern as `create_task` which returns the created task's details. This gives the caller confirmation of what changed.
 
 ## Trade-offs
+
+### Required instruction
+
+The `instruction` field is required, making the tool's purpose clear: add an instruction to a task. This matches the `create_task` pattern where `instruction` is also required. Renaming a task without adding an instruction is a rare operation that doesn't justify a separate tool — the CLI `xagent task update` can handle that case.
 
 ### Single instruction per call vs. multiple instructions
 
