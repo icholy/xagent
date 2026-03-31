@@ -14,6 +14,7 @@ services:
       # Create an API key at https://xagent.choly.ca/ui/keys
       XAGENT_API_KEY: ${XAGENT_API_KEY}
       XAGENT_CONFIG_DIR: /etc/xagent
+      XAGENT_RUNNER_ID: example-runner
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./config:/etc/xagent

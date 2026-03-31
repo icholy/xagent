@@ -62,9 +62,10 @@ var RunnerCommand = &cli.Command{
 			Value: 5,
 		},
 		&cli.StringFlag{
-			Name:  "id",
-			Usage: "Unique identifier for this runner (no spaces or special characters)",
-			Value: defaultRunnerID(),
+			Name:    "id",
+			Usage:   "Unique identifier for this runner (no spaces or special characters)",
+			Value:   defaultRunnerID(),
+			Sources: cli.EnvVars("XAGENT_RUNNER_ID"),
 		},
 		&cli.BoolFlag{
 			Name:  "debug",
