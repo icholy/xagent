@@ -1,7 +1,7 @@
 # Server Bootstrap for Docker Compose
 
 - Status: pending
-- Issue: TBD
+- Issue: https://github.com/icholy/xagent/issues/411
 
 ## Problem
 
