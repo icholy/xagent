@@ -97,8 +97,6 @@ Create one in the local Web UI at http://localhost:5173/ui/keys/new, then start 
 xagent runner --server http://localhost:6464 -key <api-key>
 ```
 
-> **Note:** The runner also requires a private key in `~/.config/xagent/config.json`.
-> Run `xagent setup` once against the production server to generate it.
 
 ### Build
 
