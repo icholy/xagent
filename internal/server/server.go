@@ -11,6 +11,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -326,22 +327,32 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err != nil {
 			return err
 		}
+		var changed []string
 		if req.Name != "" {
 			task.Name = req.Name
+			changed = append(changed, "name")
 		}
-		for _, inst := range req.AddInstructions {
-			task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
+		if len(req.AddInstructions) > 0 {
+			for _, inst := range req.AddInstructions {
+				task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
+			}
+			changed = append(changed, "instructions")
 		}
 		if req.Start {
 			task.Start()
+			changed = append(changed, "status")
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
+		msg := fmt.Sprintf("%s updated task", caller.AuditName())
+		if len(changed) > 0 {
+			msg = fmt.Sprintf("%s updated task: %s", caller.AuditName(), strings.Join(changed, ", "))
+		}
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  req.Id,
 			Type:    "audit",
-			Content: fmt.Sprintf("%s updated task", caller.AuditName()),
+			Content: msg,
 		}); err != nil {
 			return err
 		}
