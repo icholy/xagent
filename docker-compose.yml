@@ -16,7 +16,9 @@ services:
       retries: 5
 
   server:
-    build: .
+    build:
+      context: .
+      target: server
     command: ["./xagent", "server", "--no-auth"]
     network_mode: host
     env_file: .env
