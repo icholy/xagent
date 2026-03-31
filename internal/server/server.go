@@ -332,10 +332,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			task.Name = req.Name
 			changed = append(changed, "name")
 		}
-		if len(req.AddInstructions) > 0 {
-			for _, inst := range req.AddInstructions {
-				task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
-			}
+		for _, inst := range req.AddInstructions {
+			task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
 			changed = append(changed, "instructions")
 		}
 		if req.Start {
