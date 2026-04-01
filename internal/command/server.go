@@ -77,6 +77,11 @@ var ServerCommand = &cli.Command{
 			Name:  "no-auth",
 			Usage: "Disable authentication (for development only)",
 		},
+		&cli.BoolFlag{
+			Name:    "cors",
+			Usage:   "Enable permissive CORS headers (for development only)",
+			Sources: cli.EnvVars("XAGENT_CORS"),
+		},
 		&cli.StringFlag{
 			Name:    "github-app-id",
 			Usage:   "GitHub App ID",
@@ -181,6 +186,7 @@ var ServerCommand = &cli.Command{
 			BaseURL:       baseURL,
 			EncryptionKey: key,
 			OAuth:         oauth,
+			CORS:          cmd.Bool("cors"),
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",

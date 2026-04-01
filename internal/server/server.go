@@ -50,6 +50,7 @@ type Server struct {
 	baseURL       string
 	encryptionKey []byte
 	oauth         *oauthflow.Auth
+	cors          bool
 }
 
 type Options struct {
@@ -61,6 +62,7 @@ type Options struct {
 	BaseURL       string
 	EncryptionKey []byte
 	OAuth         *oauthflow.Auth
+	CORS          bool
 }
 
 func New(opts Options) *Server {
@@ -77,6 +79,7 @@ func New(opts Options) *Server {
 		baseURL:       opts.BaseURL,
 		encryptionKey: opts.EncryptionKey,
 		oauth:         opts.OAuth,
+		cors:          opts.CORS,
 	}
 }
 
@@ -143,7 +146,23 @@ func (s *Server) Handler() http.Handler {
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
-	return otelhttp.NewHandler(mux, "xagent")
+	return otelhttp.NewHandler(s.handleCORS(mux), "xagent")
+}
+
+// handleCORS adds permissive CORS headers to all responses when CORS is enabled.
+func (s *Server) handleCORS(next http.Handler) http.Handler {
+	if !s.cors {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, MCP-Protocol-Version")
+		if r.Method == http.MethodOptions {
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
