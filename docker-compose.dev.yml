@@ -24,6 +24,7 @@ services:
     env_file: .env
     environment:
       XAGENT_BASE_URL: http://localhost:6464
+      XAGENT_CORS: "true"
       XAGENT_DATABASE_URL: postgres://xagent:xagent@postgres:5433/xagent?sslmode=disable
     depends_on:
       postgres:
