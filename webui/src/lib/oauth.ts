@@ -1,10 +1,10 @@
 export class OAuthAuthorization {
-  readonly clientId: string
-  readonly redirectUri: string
-  readonly state: string
-  readonly codeChallenge: string
-  readonly codeChallengeMethod: string
-  readonly responseType: string
+  private readonly clientId: string
+  private readonly redirectUri: string
+  private readonly state: string
+  private readonly codeChallenge: string
+  private readonly codeChallengeMethod: string
+  private readonly responseType: string
 
   constructor(params: URLSearchParams) {
     this.clientId = params.get('client_id') ?? ''
