@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"container/list"
 	"context"
 	"log/slog"
 	"sync"
@@ -21,7 +22,7 @@ type queuedEvent struct {
 // fails, all subsequent events are blocked until it succeeds.
 type EventQueue struct {
 	mu     sync.Mutex
-	events []queuedEvent
+	events *list.List
 	client xagentclient.Client
 	log    *slog.Logger
 }
@@ -29,6 +30,7 @@ type EventQueue struct {
 // NewEventQueue creates a new in-memory event queue.
 func NewEventQueue(client xagentclient.Client, log *slog.Logger) *EventQueue {
 	return &EventQueue{
+		events: list.New(),
 		client: client,
 		log:    log,
 	}
@@ -38,7 +40,7 @@ func NewEventQueue(client xagentclient.Client, log *slog.Logger) *EventQueue {
 func (q *EventQueue) Enqueue(taskID int64, event string, version int64) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.events = append(q.events, queuedEvent{
+	q.events.PushBack(queuedEvent{
 		TaskID:  taskID,
 		Event:   event,
 		Version: version,
@@ -49,7 +51,7 @@ func (q *EventQueue) Enqueue(taskID int64, event string, version int64) {
 func (q *EventQueue) Len() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	return len(q.events)
+	return q.events.Len()
 }
 
 // Drain sends queued events in FIFO order. On failure, all remaining
@@ -57,8 +59,9 @@ func (q *EventQueue) Len() int {
 func (q *EventQueue) Drain(ctx context.Context) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	for len(q.events) > 0 {
-		ev := q.events[0]
+	for q.events.Len() > 0 {
+		el := q.events.Front()
+		ev := el.Value.(queuedEvent)
 		_, err := q.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 			Events: []*xagentv1.RunnerEvent{
 				{TaskId: ev.TaskID, Event: ev.Event, Version: ev.Version},
@@ -69,6 +72,6 @@ func (q *EventQueue) Drain(ctx context.Context) {
 			return
 		}
 		q.log.Info("event delivered", "task", ev.TaskID, "event", ev.Event)
-		q.events = q.events[1:]
+		q.events.Remove(el)
 	}
 }
