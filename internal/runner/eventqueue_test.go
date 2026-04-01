@@ -15,10 +15,8 @@ import (
 )
 
 func TestEventQueue_DrainSuccess(t *testing.T) {
-	var submitted []*xagentv1.SubmitRunnerEventsRequest
 	mock := &xagentclient.ClientMock{
 		SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
-			submitted = append(submitted, req)
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
 	}
@@ -32,11 +30,12 @@ func TestEventQueue_DrainSuccess(t *testing.T) {
 	assert.NilError(t, q.Drain(t.Context()))
 
 	assert.Equal(t, q.Len(), 0)
-	assert.Equal(t, len(submitted), 2)
-	assert.Equal(t, submitted[0].Events[0].TaskId, int64(1))
-	assert.Equal(t, submitted[0].Events[0].Event, "stopped")
-	assert.Equal(t, submitted[1].Events[0].TaskId, int64(2))
-	assert.Equal(t, submitted[1].Events[0].Event, "failed")
+	calls := mock.SubmitRunnerEventsCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.Equal(t, calls[0].SubmitRunnerEventsRequest.Events[0].TaskId, int64(1))
+	assert.Equal(t, calls[0].SubmitRunnerEventsRequest.Events[0].Event, "stopped")
+	assert.Equal(t, calls[1].SubmitRunnerEventsRequest.Events[0].TaskId, int64(2))
+	assert.Equal(t, calls[1].SubmitRunnerEventsRequest.Events[0].Event, "failed")
 }
 
 func TestEventQueue_DrainBlocksOnFailure(t *testing.T) {
@@ -83,10 +82,8 @@ func TestEventQueue_DrainEmpty(t *testing.T) {
 
 func TestEventQueue_RunDrainsImmediately(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		var submitted []*xagentv1.SubmitRunnerEventsRequest
 		mock := &xagentclient.ClientMock{
 			SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
-				submitted = append(submitted, req)
 				return &xagentv1.SubmitRunnerEventsResponse{}, nil
 			},
 		}
@@ -105,8 +102,9 @@ func TestEventQueue_RunDrainsImmediately(t *testing.T) {
 		synctest.Wait()
 
 		assert.Equal(t, q.Len(), 0)
-		assert.Equal(t, len(submitted), 1)
-		assert.Equal(t, submitted[0].Events[0].TaskId, int64(1))
+		calls := mock.SubmitRunnerEventsCalls()
+		assert.Equal(t, len(calls), 1)
+		assert.Equal(t, calls[0].SubmitRunnerEventsRequest.Events[0].TaskId, int64(1))
 	})
 }
 
