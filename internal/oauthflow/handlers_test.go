@@ -1,8 +1,7 @@
 package oauthflow_test
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/oauthflow"
+	"golang.org/x/oauth2"
 )
 
 func TestAuthorizationCodeFlow(t *testing.T) {
@@ -34,7 +34,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	// Step 1: Register a client
+	// Register a client
 	regBody := `{"client_name":"test-client","redirect_uris":["http://localhost/callback"]}`
 	resp, err := http.Post(ts.URL+"/oauth/register", "application/json", strings.NewReader(regBody))
 	if err != nil {
@@ -48,12 +48,21 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&regResp)
 	clientID := regResp["client_id"].(string)
 
-	// Step 2: Generate PKCE
-	codeVerifier := "test-verifier-string-that-is-at-least-43-characters-long"
-	h := sha256.Sum256([]byte(codeVerifier))
-	codeChallenge := base64.RawURLEncoding.EncodeToString(h[:])
+	// Configure oauth2 client
+	redirectURI := "http://localhost/callback"
+	oauthCfg := &oauth2.Config{
+		ClientID: clientID,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  ts.URL + "/oauth/authorize",
+			TokenURL: ts.URL + "/oauth/token",
+		},
+		RedirectURL: redirectURI,
+	}
 
-	// Step 3: Create app JWT
+	// Generate PKCE verifier
+	verifier := oauth2.GenerateVerifier()
+
+	// Create app JWT for authorization
 	user := &apiauth.UserInfo{
 		ID:    "test-user",
 		Email: "test@example.com",
@@ -67,17 +76,13 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Step 4: Authorize - get auth code
-	redirectURI := "http://localhost/callback"
-	authForm := url.Values{
-		"token":                 {appToken},
-		"client_id":            {clientID},
-		"redirect_uri":         {redirectURI},
-		"response_type":        {"code"},
-		"code_challenge":       {codeChallenge},
-		"code_challenge_method": {"S256"},
-		"state":                {"test-state"},
-	}
+	// Build authorize URL with PKCE challenge
+	authURL := oauthCfg.AuthCodeURL("test-state", oauth2.S256ChallengeOption(verifier))
+
+	// POST to authorize endpoint with app JWT (non-standard: our authorize is a POST with a token field)
+	authParsed, _ := url.Parse(authURL)
+	authForm := authParsed.Query()
+	authForm.Set("token", appToken)
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
@@ -89,10 +94,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("authorize: expected 302, got %d", resp.StatusCode)
 	}
-	location, err := url.Parse(resp.Header.Get("Location"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	location, _ := url.Parse(resp.Header.Get("Location"))
 	code := location.Query().Get("code")
 	if code == "" {
 		t.Fatal("authorize: no code in redirect")
@@ -101,52 +103,27 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		t.Fatal("authorize: state mismatch")
 	}
 
-	// Step 5: Exchange code for tokens
-	tokenForm := url.Values{
-		"grant_type":    {"authorization_code"},
-		"code":          {code},
-		"client_id":     {clientID},
-		"redirect_uri":  {redirectURI},
-		"code_verifier": {codeVerifier},
-	}
-	resp, err = http.PostForm(ts.URL+"/oauth/token", tokenForm)
+	// Exchange authorization code for tokens using oauth2 client
+	ctx := context.Background()
+	token, err := oauthCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("token exchange: %v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("token: expected 200, got %d", resp.StatusCode)
+	if token.AccessToken == "" {
+		t.Fatal("token exchange: empty access_token")
 	}
-	var tokenResp map[string]any
-	json.NewDecoder(resp.Body).Decode(&tokenResp)
-	accessToken, ok := tokenResp["access_token"].(string)
-	if !ok || accessToken == "" {
-		t.Fatal("token: missing access_token")
-	}
-	refreshToken, ok := tokenResp["refresh_token"].(string)
-	if !ok || refreshToken == "" {
-		t.Fatal("token: missing refresh_token")
+	refreshToken := token.RefreshToken
+	if refreshToken == "" {
+		t.Fatal("token exchange: empty refresh_token")
 	}
 
-	// Step 6: Refresh token
-	refreshForm := url.Values{
-		"grant_type":    {"refresh_token"},
-		"refresh_token": {refreshToken},
-	}
-	resp, err = http.PostForm(ts.URL+"/oauth/token", refreshForm)
+	// Use oauth2 TokenSource to refresh the token
+	expiredToken := &oauth2.Token{RefreshToken: refreshToken}
+	newToken, err := oauthCfg.TokenSource(ctx, expiredToken).Token()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("token refresh: %v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("refresh: expected 200, got %d", resp.StatusCode)
-	}
-	var refreshResp map[string]any
-	json.NewDecoder(resp.Body).Decode(&refreshResp)
-	if _, ok := refreshResp["access_token"].(string); !ok {
-		t.Fatal("refresh: missing access_token")
-	}
-	if _, ok := refreshResp["refresh_token"].(string); !ok {
-		t.Fatal("refresh: missing refresh_token")
+	if newToken.AccessToken == "" {
+		t.Fatal("token refresh: empty access_token")
 	}
 }
