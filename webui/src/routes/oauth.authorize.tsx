@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { authTransport } from '@/lib/transport'
+import { OAuthAuthorization } from '@/lib/oauth'
 import { useOrgId } from '@/hooks/use-org-id'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,13 +13,7 @@ export const Route = createFileRoute('/oauth/authorize')({
 })
 
 function OAuthAuthorizePage() {
-  const params = new URLSearchParams(window.location.search)
-  const clientId = params.get('client_id') ?? ''
-  const redirectUri = params.get('redirect_uri') ?? ''
-  const state = params.get('state') ?? ''
-  const codeChallenge = params.get('code_challenge') ?? ''
-  const codeChallengeMethod = params.get('code_challenge_method') ?? ''
-  const responseType = params.get('response_type') ?? ''
+  const authz = new OAuthAuthorization(new URLSearchParams(window.location.search))
 
   const { data: profileData, isLoading } = useQuery(getProfile, {})
   const [error, setError] = useState<string | null>(null)
@@ -34,26 +29,8 @@ function OAuthAuthorizePage() {
     setSubmitting(true)
     try {
       const token = await authTransport.fetchToken()
-      const body = new URLSearchParams({
-        token: token,
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: codeChallengeMethod,
-        response_type: responseType,
-      })
-      const resp = await fetch('/oauth/authorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
-      })
-      if (!resp.ok) {
-        const text = await resp.text()
-        throw new Error(text || `Authorization failed (${resp.status})`)
-      }
-      const data = await resp.json()
-      window.location.href = data.redirect_uri
+      const redirectUri = await authz.approve(token)
+      window.location.href = redirectUri
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')
       setSubmitting(false)
@@ -68,7 +45,7 @@ function OAuthAuthorizePage() {
     )
   }
 
-  if (!clientId || !redirectUri || !codeChallenge) {
+  if (!authz.isValid) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Card>
@@ -120,12 +97,7 @@ function OAuthAuthorizePage() {
             <Button
               variant="outline"
               onClick={() => {
-                const redirectUrl = new URL(redirectUri)
-                redirectUrl.searchParams.set('error', 'access_denied')
-                if (state) {
-                  redirectUrl.searchParams.set('state', state)
-                }
-                window.location.href = redirectUrl.toString()
+                window.location.href = authz.denyRedirectUri
               }}
               disabled={submitting}
             >
