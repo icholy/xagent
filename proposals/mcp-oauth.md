@@ -191,9 +191,9 @@ default:
 
 ### New Package
 
-`internal/mcpauth/` containing:
+`internal/oauthflow/` containing:
 
-- `mcpauth.go` -- `Server` struct, `Options`, `New()` constructor
+- `oauthflow.go` -- `Server` struct, `Options`, `New()` constructor
 - `code.go` -- auth code JWT claims, sign/verify helpers
 - `handlers.go` -- HTTP handlers for all 4 endpoints
 
@@ -211,15 +211,15 @@ All dependencies are existing types. No new store queries or proto changes. `Key
 ### Route Registration in `server.go`
 
 ```go
-mcpOAuth := mcpauth.New(mcpauth.Options{
+oauthFlow := oauthflow.New(mcpauth.Options{
     AppKey:  appKey,
     BaseURL: s.baseURL,
 })
-mux.HandleFunc("/.well-known/oauth-authorization-server", mcpOAuth.HandleMetadata)
-mux.HandleFunc("/.well-known/oauth-protected-resource", mcpOAuth.HandleResourceMetadata)
-mux.HandleFunc("/oauth/register", mcpOAuth.HandleRegister)
-mux.HandleFunc("/oauth/authorize", mcpOAuth.HandleAuthorize)
-mux.HandleFunc("/oauth/token", mcpOAuth.HandleToken)
+mux.HandleFunc("/.well-known/oauth-authorization-server", oauthFlow.HandleMetadata)
+mux.HandleFunc("/.well-known/oauth-protected-resource", oauthFlow.HandleResourceMetadata)
+mux.HandleFunc("/oauth/register", oauthFlow.HandleRegister)
+mux.HandleFunc("/oauth/authorize", oauthFlow.HandleAuthorize)
+mux.HandleFunc("/oauth/token", oauthFlow.HandleToken)
 ```
 
 All routes are public -- no auth middleware needed. The `/oauth/authorize` POST authenticates via the app JWT in the request body.
