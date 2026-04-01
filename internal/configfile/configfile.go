@@ -52,7 +52,7 @@ func (o *Overrides) apply(f *File) error {
 		f.Token = o.Token
 	}
 	if o.PrivateKey != "" {
-		key, err := DecodePrivateKey([]byte(o.PrivateKey))
+		key, err := decodePrivateKey([]byte(o.PrivateKey))
 		if err != nil {
 			return fmt.Errorf("decode override private key: %w", err)
 		}
@@ -134,7 +134,7 @@ func (f *File) UnmarshalJSON(data []byte) error {
 	}
 	f.Token = jf.Token
 	if jf.PrivateKey != "" {
-		key, err := DecodePrivateKey([]byte(jf.PrivateKey))
+		key, err := decodePrivateKey([]byte(jf.PrivateKey))
 		if err != nil {
 			return err
 		}
@@ -154,8 +154,8 @@ func encodePrivateKey(key ed25519.PrivateKey) []byte {
 	})
 }
 
-// DecodePrivateKey parses a PEM-encoded PKCS8 Ed25519 private key.
-func DecodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
+// decodePrivateKey parses a PEM-encoded PKCS8 Ed25519 private key.
+func decodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
 	block, _ := pem.Decode(data)
 	if block == nil {
 		return nil, fmt.Errorf("invalid PEM data")
