@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/icholy/xagent/internal/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -33,7 +34,15 @@ func (s *Server) Handler() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "xagent",
 		Version: "1.0.0",
-	}, nil)
+	}, &mcp.ServerOptions{
+		Instructions: strings.Join([]string{
+			"xagent is an async agent orchestrator that runs AI coding agents in parallel inside Docker containers.",
+			"Use it to create and manage tasks that execute in isolated workspaces.",
+			"Workspaces define the container image, volumes, environment variables, and MCP servers available to agents.",
+			"Each task runs an AI coding agent with access to the codebase and configured tools.",
+			"Agents attach links to their tasks for external resources they create, such as GitHub PRs or Jira issues.",
+		}, "\n"),
+	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_workspaces",
