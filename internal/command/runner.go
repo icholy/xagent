@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/common"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/runner"
@@ -113,14 +112,7 @@ var RunnerCommand = &cli.Command{
 			return fmt.Errorf("not authenticated, run setup first or provide -key flag")
 		}
 		if cfg.PrivateKey == nil {
-			key, err := agentauth.CreatePrivateKey()
-			if err != nil {
-				return fmt.Errorf("failed to generate private key: %w", err)
-			}
-			cfg.PrivateKey = key
-			if err := configfile.Save(cfg); err != nil {
-				return fmt.Errorf("failed to save config: %w", err)
-			}
+			return fmt.Errorf("private key not set, provide --private-key flag or XAGENT_PRIVATE_KEY env var")
 		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
