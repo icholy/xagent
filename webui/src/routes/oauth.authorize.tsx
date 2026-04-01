@@ -46,29 +46,18 @@ function OAuthAuthorizePage() {
         code_challenge_method: codeChallengeMethod,
         response_type: responseType,
       })
-      // POST directly (not via authTransport.fetch) since this endpoint
-      // does its own auth via the token in the body and returns a redirect.
       const resp = await fetch('/oauth/authorize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
-        redirect: 'manual',
       })
-      if (resp.type === 'opaqueredirect' || (resp.status >= 300 && resp.status < 400)) {
-        // Follow the redirect manually
-        const location = resp.headers.get('Location')
-        if (location) {
-          window.location.href = location
-          return
-        }
-      }
       if (!resp.ok) {
         const text = await resp.text()
         setError(text || `Authorization failed (${resp.status})`)
         return
       }
-      // If we get here the server returned 200, which shouldn't happen normally
-      setError('Unexpected response from server')
+      const data = await resp.json()
+      window.location.href = data.redirect_uri
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')
     } finally {

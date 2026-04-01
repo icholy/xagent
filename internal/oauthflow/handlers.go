@@ -131,7 +131,7 @@ func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Redirect back to the client
+	// Build the redirect URL with the auth code
 	redirectURL, err := url.Parse(redirectURI)
 	if err != nil {
 		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
@@ -143,7 +143,11 @@ func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		q.Set("state", state)
 	}
 	redirectURL.RawQuery = q.Encode()
-	http.Redirect(w, r, redirectURL.String(), http.StatusFound)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"redirect_uri": redirectURL.String(),
+	})
 }
 
 // HandleToken handles the token endpoint.
