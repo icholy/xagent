@@ -1,6 +1,6 @@
 # Server-Managed Workspace Configurations
 
-Issue: #397
+Issue: https://github.com/icholy/xagent/issues/397
 
 ## Problem
 
