@@ -63,7 +63,7 @@ var TaskUpdateCommand = &cli.Command{
 		}
 
 		serverURL := cmd.String("server")
-		cfg, err := configfile.Load()
+		cfg, err := configfile.Load(nil)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

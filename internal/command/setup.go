@@ -47,7 +47,7 @@ var SetupCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		// Load existing config (or empty if first run)
-		cfg, err := configfile.Load()
+		cfg, err := configfile.Load(nil)
 		if err != nil {
 			return fmt.Errorf("load config: %w", err)
 		}

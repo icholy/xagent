@@ -33,9 +33,44 @@ func Path() (string, error) {
 	return filepath.Join(dir, "config.json"), nil
 }
 
-// Load reads the config file.
+// Overrides contains values that take priority over the config file.
+// If all fields are set, the config file is not read.
+type Overrides struct {
+	Token      string
+	PrivateKey string
+}
+
+func (o *Overrides) complete() bool {
+	return o != nil && o.Token != "" && o.PrivateKey != ""
+}
+
+func (o *Overrides) apply(f *File) error {
+	if o == nil {
+		return nil
+	}
+	if o.Token != "" {
+		f.Token = o.Token
+	}
+	if o.PrivateKey != "" {
+		key, err := decodePrivateKey([]byte(o.PrivateKey))
+		if err != nil {
+			return fmt.Errorf("decode override private key: %w", err)
+		}
+		f.PrivateKey = key
+	}
+	return nil
+}
+
+// Load reads the config file and applies any overrides.
 // Returns a non-nil File even if the file doesn't exist.
-func Load() (*File, error) {
+func Load(overrides *Overrides) (*File, error) {
+	if overrides.complete() {
+		var f File
+		if err := overrides.apply(&f); err != nil {
+			return nil, err
+		}
+		return &f, nil
+	}
 	p, err := Path()
 	if err != nil {
 		return nil, err
@@ -49,6 +84,9 @@ func Load() (*File, error) {
 	}
 	var f File
 	if err := json.Unmarshal(data, &f); err != nil {
+		return nil, err
+	}
+	if err := overrides.apply(&f); err != nil {
 		return nil, err
 	}
 	return &f, nil
@@ -116,6 +154,7 @@ func encodePrivateKey(key ed25519.PrivateKey) []byte {
 	})
 }
 
+// decodePrivateKey parses a PEM-encoded PKCS8 Ed25519 private key.
 func decodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
 	block, _ := pem.Decode(data)
 	if block == nil {
