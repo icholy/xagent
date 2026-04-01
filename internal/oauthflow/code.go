@@ -7,9 +7,10 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
+// Default TTL values.
 const (
-	authCodeTTL     = 60 * time.Second
-	refreshTokenTTL = 30 * 24 * time.Hour
+	DefaultAuthCodeTTL     = 60 * time.Second
+	DefaultRefreshTokenTTL = 30 * 24 * time.Hour
 )
 
 // authCodeClaims are the JWT claims for an OAuth authorization code.
@@ -21,11 +22,6 @@ type authCodeClaims struct {
 	ClientID      string `json:"client_id"`
 	RedirectURI   string `json:"redirect_uri"`
 	CodeChallenge string `json:"code_challenge"`
-}
-
-func (a *Auth) signAuthCode(claims *authCodeClaims) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
-	return token.SignedString(a.appKey)
 }
 
 func (a *Auth) verifyAuthCode(tokenStr string) (*authCodeClaims, error) {

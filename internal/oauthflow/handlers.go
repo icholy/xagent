@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -114,7 +115,7 @@ func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   appClaims.Subject,
 			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(authCodeTTL)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(a.authCodeTTL)),
 		},
 		Email:         appClaims.Email,
 		Name:          appClaims.Name,
@@ -123,18 +124,26 @@ func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		RedirectURI:   redirectURI,
 		CodeChallenge: codeChallenge,
 	}
-	code, err := a.signAuthCode(codeClaims)
+	codeToken := jwt.NewWithClaims(jwt.SigningMethodEdDSA, codeClaims)
+	code, err := codeToken.SignedString(a.appKey)
 	if err != nil {
 		http.Error(w, "failed to sign auth code", http.StatusInternalServerError)
 		return
 	}
 
 	// Redirect back to the client
-	redirect := redirectURI + "?code=" + code
-	if state != "" {
-		redirect += "&state=" + state
+	redirectURL, err := url.Parse(redirectURI)
+	if err != nil {
+		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
+		return
 	}
-	http.Redirect(w, r, redirect, http.StatusFound)
+	q := redirectURL.Query()
+	q.Set("code", code)
+	if state != "" {
+		q.Set("state", state)
+	}
+	redirectURL.RawQuery = q.Encode()
+	http.Redirect(w, r, redirectURL.String(), http.StatusFound)
 }
 
 // HandleToken handles the token endpoint.
@@ -241,7 +250,7 @@ func (a *Auth) issueTokens(w http.ResponseWriter, subject, email, name string, o
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   subject,
 			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(refreshTokenTTL)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(a.refreshTokenTTL)),
 		},
 		Email: email,
 		Name:  name,
