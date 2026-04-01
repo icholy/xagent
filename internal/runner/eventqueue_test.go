@@ -88,15 +88,12 @@ func TestEventQueue_RunDrainsImmediately(t *testing.T) {
 			},
 		}
 
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-
 		q := NewEventQueue(EventQueueOptions{
 			Client:        mock,
 			Log:           slog.Default(),
 			RetryInterval: time.Minute,
 		})
-		go q.Run(ctx)
+		go q.Run(t.Context())
 
 		q.Enqueue(1, model.RunnerEventStarted, 0)
 		synctest.Wait()
@@ -121,15 +118,12 @@ func TestEventQueue_RunRetriesAfterInterval(t *testing.T) {
 			},
 		}
 
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-
 		q := NewEventQueue(EventQueueOptions{
 			Client:        mock,
 			Log:           slog.Default(),
 			RetryInterval: 5 * time.Second,
 		})
-		go q.Run(ctx)
+		go q.Run(t.Context())
 
 		q.Enqueue(1, model.RunnerEventStarted, 0)
 		synctest.Wait()
