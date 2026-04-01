@@ -1,7 +1,6 @@
 package oauthflow_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -89,7 +88,7 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 	assert.Equal(t, location.Query().Get("state"), "test-state")
 
 	// Exchange authorization code for tokens using oauth2 client
-	ctx := context.Background()
+	ctx := t.Context()
 	token, err := oauthCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	assert.NilError(t, err)
 	assert.Assert(t, token.AccessToken != "")
