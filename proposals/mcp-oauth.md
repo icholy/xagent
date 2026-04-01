@@ -13,6 +13,33 @@ The `/mcp` endpoint cannot be used as a Claude.ai custom connector because Claud
 
 Implement a minimal OAuth 2.1 authorization server within xagent. The user is already logged into the xagent web UI and has an app JWT (from `/auth/token`) scoped to their selected org. The authorize page sends this JWT to the backend, which verifies it and issues an auth code. No API keys or cookie auth involved in the OAuth flow.
 
+### Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant U as User Browser
+    participant C as Claude.ai
+    participant X as xagent Server
+
+    C->>X: GET /.well-known/oauth-authorization-server
+    X->>C: authorization_endpoint, token_endpoint
+
+    C->>U: Open /ui/oauth/authorize?client_id&redirect_uri&code_challenge&state
+    U->>X: GET /ui/oauth/authorize (SPA served, cookie auth)
+    Note over U: User sees consent screen<br/>(identity + org from app JWT)
+    U->>X: POST /oauth/authorize (app JWT + OAuth params)
+    Note over X: Verify app JWT<br/>Sign auth code JWT (60s TTL)
+    X->>U: Redirect to claude.ai/api/mcp/auth_callback?code&state
+    U->>C: Auth code delivered
+
+    C->>X: POST /oauth/token (code, client_id, code_verifier)
+    Note over X: Verify auth code JWT<br/>Verify PKCE<br/>Sign new app JWT
+    X->>C: access_token (app JWT), expires_in
+
+    C->>X: MCP request (Authorization: Bearer <jwt>)
+    X->>C: MCP response
+```
+
 ### New Routes
 
 | Method | Path | Auth | Description |
