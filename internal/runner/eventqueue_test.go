@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -76,4 +78,72 @@ func TestEventQueue_DrainEmpty(t *testing.T) {
 
 	assert.NilError(t, q.Drain(t.Context()))
 	assert.Equal(t, q.Len(), 0)
+}
+
+func TestEventQueue_RunDrainsImmediately(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var submitted []*xagentv1.SubmitRunnerEventsRequest
+		mock := &xagentclient.ClientMock{
+			SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+				submitted = append(submitted, req)
+				return &xagentv1.SubmitRunnerEventsResponse{}, nil
+			},
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		q := NewEventQueue(EventQueueOptions{
+			Client:        mock,
+			Log:           slog.Default(),
+			RetryInterval: time.Minute,
+		})
+		go q.Run(ctx)
+
+		q.Enqueue(1, "started", 0)
+		synctest.Wait()
+
+		assert.Equal(t, q.Len(), 0)
+		assert.Equal(t, len(submitted), 1)
+		assert.Equal(t, submitted[0].Events[0].TaskId, int64(1))
+	})
+}
+
+func TestEventQueue_RunRetriesAfterInterval(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		calls := 0
+		mock := &xagentclient.ClientMock{
+			SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+				calls++
+				if calls <= 1 {
+					return nil, fmt.Errorf("server unavailable")
+				}
+				return &xagentv1.SubmitRunnerEventsResponse{}, nil
+			},
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		q := NewEventQueue(EventQueueOptions{
+			Client:        mock,
+			Log:           slog.Default(),
+			RetryInterval: 5 * time.Second,
+		})
+		go q.Run(ctx)
+
+		q.Enqueue(1, "started", 0)
+		synctest.Wait()
+
+		// First attempt failed, event still queued
+		assert.Equal(t, q.Len(), 1)
+		assert.Equal(t, calls, 1)
+
+		// After retry interval, it retries and succeeds
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+
+		assert.Equal(t, q.Len(), 0)
+		assert.Equal(t, calls, 2)
+	})
 }
