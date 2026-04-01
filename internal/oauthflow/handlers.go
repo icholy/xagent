@@ -14,40 +14,40 @@ import (
 
 // HandleMetadata serves the OAuth 2.1 authorization server metadata.
 // GET /.well-known/oauth-authorization-server
-func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
+func (a *Auth) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"issuer":                             s.baseURL,
-		"authorization_endpoint":             s.baseURL + "/ui/oauth/authorize",
-		"token_endpoint":                     s.baseURL + "/oauth/token",
-		"registration_endpoint":              s.baseURL + "/oauth/register",
-		"response_types_supported":           []string{"code"},
-		"grant_types_supported":              []string{"authorization_code", "refresh_token"},
-		"code_challenge_methods_supported":   []string{"S256"},
+		"issuer":                           a.baseURL,
+		"authorization_endpoint":           a.baseURL + "/ui/oauth/authorize",
+		"token_endpoint":                   a.baseURL + "/oauth/token",
+		"registration_endpoint":            a.baseURL + "/oauth/register",
+		"response_types_supported":         []string{"code"},
+		"grant_types_supported":            []string{"authorization_code", "refresh_token"},
+		"code_challenge_methods_supported": []string{"S256"},
 	})
 }
 
 // HandleResourceMetadata serves the OAuth 2.1 protected resource metadata.
 // GET /.well-known/oauth-protected-resource
-func (s *Server) HandleResourceMetadata(w http.ResponseWriter, r *http.Request) {
+func (a *Auth) HandleResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"resource":              s.baseURL,
-		"authorization_servers": []string{s.baseURL},
+		"resource":              a.baseURL,
+		"authorization_servers": []string{a.baseURL},
 	})
 }
 
 // HandleRegister is a stub DCR endpoint per RFC 7591.
 // POST /oauth/register
-func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
+func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -71,7 +71,7 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 // HandleAuthorize handles the authorization endpoint.
 // POST /oauth/authorize
-func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
+func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -102,7 +102,7 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the app JWT
-	appClaims, err := apiauth.VerifyAppToken(s.appKey, token)
+	appClaims, err := apiauth.VerifyAppToken(a.appKey, token)
 	if err != nil {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
@@ -123,7 +123,7 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		RedirectURI:   redirectURI,
 		CodeChallenge: codeChallenge,
 	}
-	code, err := signAuthCode(s.appKey, codeClaims)
+	code, err := a.signAuthCode(codeClaims)
 	if err != nil {
 		http.Error(w, "failed to sign auth code", http.StatusInternalServerError)
 		return
@@ -139,7 +139,7 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 // HandleToken handles the token endpoint.
 // POST /oauth/token
-func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
+func (a *Auth) HandleToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -152,15 +152,15 @@ func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
 	grantType := r.FormValue("grant_type")
 	switch grantType {
 	case "authorization_code":
-		s.handleAuthCodeGrant(w, r)
+		a.handleAuthCodeGrant(w, r)
 	case "refresh_token":
-		s.handleRefreshTokenGrant(w, r)
+		a.handleRefreshTokenGrant(w, r)
 	default:
 		http.Error(w, "unsupported grant_type", http.StatusBadRequest)
 	}
 }
 
-func (s *Server) handleAuthCodeGrant(w http.ResponseWriter, r *http.Request) {
+func (a *Auth) handleAuthCodeGrant(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	clientID := r.FormValue("client_id")
 	redirectURI := r.FormValue("redirect_uri")
@@ -172,7 +172,7 @@ func (s *Server) handleAuthCodeGrant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the auth code JWT
-	codeClaims, err := verifyAuthCode(s.appKey, code)
+	codeClaims, err := a.verifyAuthCode(code)
 	if err != nil {
 		http.Error(w, "invalid authorization code", http.StatusBadRequest)
 		return
@@ -197,10 +197,10 @@ func (s *Server) handleAuthCodeGrant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Issue tokens
-	s.issueTokens(w, codeClaims.Subject, codeClaims.Email, codeClaims.Name, codeClaims.OrgID)
+	a.issueTokens(w, codeClaims.Subject, codeClaims.Email, codeClaims.Name, codeClaims.OrgID)
 }
 
-func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request) {
+func (a *Auth) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request) {
 	refreshToken := r.FormValue("refresh_token")
 	if refreshToken == "" {
 		http.Error(w, "missing refresh_token", http.StatusBadRequest)
@@ -208,17 +208,17 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Verify the refresh token JWT
-	claims, err := verifyRefreshToken(s.appKey, refreshToken)
+	claims, err := a.verifyRefreshToken(refreshToken)
 	if err != nil {
 		http.Error(w, "invalid refresh_token", http.StatusBadRequest)
 		return
 	}
 
 	// Issue new tokens (rotation)
-	s.issueTokens(w, claims.Subject, claims.Email, claims.Name, claims.OrgID)
+	a.issueTokens(w, claims.Subject, claims.Email, claims.Name, claims.OrgID)
 }
 
-func (s *Server) issueTokens(w http.ResponseWriter, subject, email, name string, orgID int64) {
+func (a *Auth) issueTokens(w http.ResponseWriter, subject, email, name string, orgID int64) {
 	user := &apiauth.UserInfo{
 		ID:    subject,
 		Email: email,
@@ -229,7 +229,7 @@ func (s *Server) issueTokens(w http.ResponseWriter, subject, email, name string,
 
 	// Sign access token (app JWT, 5min TTL)
 	appClaims := apiauth.NewAppClaims(user)
-	accessToken, err := apiauth.SignAppToken(s.appKey, appClaims)
+	accessToken, err := apiauth.SignAppToken(a.appKey, appClaims)
 	if err != nil {
 		http.Error(w, "failed to sign access token", http.StatusInternalServerError)
 		return
@@ -247,7 +247,7 @@ func (s *Server) issueTokens(w http.ResponseWriter, subject, email, name string,
 		Name:  name,
 		OrgID: orgID,
 	}
-	refreshToken, err := signRefreshToken(s.appKey, rtClaims)
+	refreshToken, err := a.signRefreshToken(rtClaims)
 	if err != nil {
 		http.Error(w, "failed to sign refresh token", http.StatusInternalServerError)
 		return

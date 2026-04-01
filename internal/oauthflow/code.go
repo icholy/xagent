@@ -1,7 +1,6 @@
 package oauthflow
 
 import (
-	"crypto/ed25519"
 	"fmt"
 	"time"
 
@@ -9,8 +8,8 @@ import (
 )
 
 const (
-	authCodeTTL      = 60 * time.Second
-	refreshTokenTTL  = 30 * 24 * time.Hour
+	authCodeTTL     = 60 * time.Second
+	refreshTokenTTL = 30 * 24 * time.Hour
 )
 
 // authCodeClaims are the JWT claims for an OAuth authorization code.
@@ -24,23 +23,13 @@ type authCodeClaims struct {
 	CodeChallenge string `json:"code_challenge"`
 }
 
-// refreshTokenClaims are the JWT claims for a refresh token.
-type refreshTokenClaims struct {
-	jwt.RegisteredClaims
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	OrgID int64  `json:"org_id"`
-}
-
-// signAuthCode signs an authorization code JWT.
-func signAuthCode(key ed25519.PrivateKey, claims *authCodeClaims) (string, error) {
+func (a *Auth) signAuthCode(claims *authCodeClaims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
-	return token.SignedString(key)
+	return token.SignedString(a.appKey)
 }
 
-// verifyAuthCode verifies and parses an authorization code JWT.
-func verifyAuthCode(key ed25519.PrivateKey, tokenStr string) (*authCodeClaims, error) {
-	pubKey := key.Public()
+func (a *Auth) verifyAuthCode(tokenStr string) (*authCodeClaims, error) {
+	pubKey := a.appKey.Public()
 	token, err := jwt.ParseWithClaims(tokenStr, &authCodeClaims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -57,15 +46,21 @@ func verifyAuthCode(key ed25519.PrivateKey, tokenStr string) (*authCodeClaims, e
 	return claims, nil
 }
 
-// signRefreshToken signs a refresh token JWT.
-func signRefreshToken(key ed25519.PrivateKey, claims *refreshTokenClaims) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
-	return token.SignedString(key)
+// refreshTokenClaims are the JWT claims for a refresh token.
+type refreshTokenClaims struct {
+	jwt.RegisteredClaims
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	OrgID int64  `json:"org_id"`
 }
 
-// verifyRefreshToken verifies and parses a refresh token JWT.
-func verifyRefreshToken(key ed25519.PrivateKey, tokenStr string) (*refreshTokenClaims, error) {
-	pubKey := key.Public()
+func (a *Auth) signRefreshToken(claims *refreshTokenClaims) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	return token.SignedString(a.appKey)
+}
+
+func (a *Auth) verifyRefreshToken(tokenStr string) (*refreshTokenClaims, error) {
+	pubKey := a.appKey.Public()
 	token, err := jwt.ParseWithClaims(tokenStr, &refreshTokenClaims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
