@@ -8,6 +8,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"gotest.tools/v3/assert"
@@ -24,8 +25,8 @@ func TestEventQueue_DrainSuccess(t *testing.T) {
 
 	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 
-	q.Enqueue(1, "stopped", 0)
-	q.Enqueue(2, "failed", 5)
+	q.Enqueue(1, model.RunnerEventStopped, 0)
+	q.Enqueue(2, model.RunnerEventFailed, 5)
 	assert.Equal(t, q.Len(), 2)
 
 	assert.NilError(t, q.Drain(t.Context()))
@@ -52,8 +53,8 @@ func TestEventQueue_DrainBlocksOnFailure(t *testing.T) {
 
 	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 
-	q.Enqueue(1, "started", 0)
-	q.Enqueue(2, "stopped", 0)
+	q.Enqueue(1, model.RunnerEventStarted, 0)
+	q.Enqueue(2, model.RunnerEventStopped, 0)
 	assert.Equal(t, q.Len(), 2)
 
 	// First drain: first event fails, second is blocked
@@ -100,7 +101,7 @@ func TestEventQueue_RunDrainsImmediately(t *testing.T) {
 		})
 		go q.Run(ctx)
 
-		q.Enqueue(1, "started", 0)
+		q.Enqueue(1, model.RunnerEventStarted, 0)
 		synctest.Wait()
 
 		assert.Equal(t, q.Len(), 0)
@@ -132,7 +133,7 @@ func TestEventQueue_RunRetriesAfterInterval(t *testing.T) {
 		})
 		go q.Run(ctx)
 
-		q.Enqueue(1, "started", 0)
+		q.Enqueue(1, model.RunnerEventStarted, 0)
 		synctest.Wait()
 
 		// First attempt failed, event still queued
