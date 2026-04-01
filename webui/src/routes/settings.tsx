@@ -4,7 +4,6 @@ import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getGitHubAccount,
   getProfile,
-  getServerInfo,
   unlinkGitHubAccount,
   createOrg,
   deleteOrg,
@@ -44,7 +43,20 @@ function SettingsPage() {
       <div className="space-y-6">
         <ProfileCard />
         <OrgsCard />
-        <McpCard />
+        <Card>
+          <CardHeader>
+            <CardTitle>MCP Server</CardTitle>
+            <CardDescription>
+              xagent provides an MCP server that you can connect to from any MCP-compatible client.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Cable className="h-5 w-5 text-muted-foreground" />
+              <code className="text-sm bg-muted px-2 py-1 rounded">https://xagent.choly.ca/mcp</code>
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>GitHub Account</CardTitle>
@@ -99,30 +111,6 @@ function SettingsPage() {
         </Card>
       </div>
     </div>
-  )
-}
-
-function McpCard() {
-  const { data } = useQuery(getServerInfo, {})
-  const mcpUrl = data?.mcpUrl
-
-  if (!mcpUrl) return null
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>MCP Server</CardTitle>
-        <CardDescription>
-          xagent provides an MCP server that you can connect to from any MCP-compatible client.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center gap-2">
-          <Cable className="h-5 w-5 text-muted-foreground" />
-          <code className="text-sm bg-muted px-2 py-1 rounded">{mcpUrl}</code>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
 

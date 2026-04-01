@@ -132,9 +132,6 @@ const (
 	// XAgentServiceUnlinkGitHubAccountProcedure is the fully-qualified name of the XAgentService's
 	// UnlinkGitHubAccount RPC.
 	XAgentServiceUnlinkGitHubAccountProcedure = "/xagent.v1.XAgentService/UnlinkGitHubAccount"
-	// XAgentServiceGetServerInfoProcedure is the fully-qualified name of the XAgentService's
-	// GetServerInfo RPC.
-	XAgentServiceGetServerInfoProcedure = "/xagent.v1.XAgentService/GetServerInfo"
 	// XAgentServiceCreateOrgProcedure is the fully-qualified name of the XAgentService's CreateOrg RPC.
 	XAgentServiceCreateOrgProcedure = "/xagent.v1.XAgentService/CreateOrg"
 	// XAgentServiceListOrgsProcedure is the fully-qualified name of the XAgentService's ListOrgs RPC.
@@ -190,7 +187,6 @@ type XAgentServiceClient interface {
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
-	GetServerInfo(context.Context, *v1.GetServerInfoRequest) (*v1.GetServerInfoResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
 	DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error)
@@ -426,12 +422,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
 			connect.WithClientOptions(opts...),
 		),
-		getServerInfo: connect.NewClient[v1.GetServerInfoRequest, v1.GetServerInfoResponse](
-			httpClient,
-			baseURL+XAgentServiceGetServerInfoProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("GetServerInfo")),
-			connect.WithClientOptions(opts...),
-		),
 		createOrg: connect.NewClient[v1.CreateOrgRequest, v1.CreateOrgResponse](
 			httpClient,
 			baseURL+XAgentServiceCreateOrgProcedure,
@@ -509,7 +499,6 @@ type xAgentServiceClient struct {
 	deleteKey           *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
 	getGitHubAccount    *connect.Client[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse]
 	unlinkGitHubAccount *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
-	getServerInfo       *connect.Client[v1.GetServerInfoRequest, v1.GetServerInfoResponse]
 	createOrg           *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
 	listOrgs            *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
 	deleteOrg           *connect.Client[v1.DeleteOrgRequest, v1.DeleteOrgResponse]
@@ -842,15 +831,6 @@ func (c *xAgentServiceClient) UnlinkGitHubAccount(ctx context.Context, req *v1.U
 	return nil, err
 }
 
-// GetServerInfo calls xagent.v1.XAgentService.GetServerInfo.
-func (c *xAgentServiceClient) GetServerInfo(ctx context.Context, req *v1.GetServerInfoRequest) (*v1.GetServerInfoResponse, error) {
-	response, err := c.getServerInfo.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
 // CreateOrg calls xagent.v1.XAgentService.CreateOrg.
 func (c *xAgentServiceClient) CreateOrg(ctx context.Context, req *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error) {
 	response, err := c.createOrg.CallUnary(ctx, connect.NewRequest(req))
@@ -943,7 +923,6 @@ type XAgentServiceHandler interface {
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
-	GetServerInfo(context.Context, *v1.GetServerInfoRequest) (*v1.GetServerInfoResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
 	DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error)
@@ -1175,12 +1154,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
 		connect.WithHandlerOptions(opts...),
 	)
-	xAgentServiceGetServerInfoHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceGetServerInfoProcedure,
-		svc.GetServerInfo,
-		connect.WithSchema(xAgentServiceMethods.ByName("GetServerInfo")),
-		connect.WithHandlerOptions(opts...),
-	)
 	xAgentServiceCreateOrgHandler := connect.NewUnaryHandlerSimple(
 		XAgentServiceCreateOrgProcedure,
 		svc.CreateOrg,
@@ -1291,8 +1264,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetGitHubAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceUnlinkGitHubAccountProcedure:
 			xAgentServiceUnlinkGitHubAccountHandler.ServeHTTP(w, r)
-		case XAgentServiceGetServerInfoProcedure:
-			xAgentServiceGetServerInfoHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateOrgProcedure:
 			xAgentServiceCreateOrgHandler.ServeHTTP(w, r)
 		case XAgentServiceListOrgsProcedure:
@@ -1456,10 +1427,6 @@ func (UnimplementedXAgentServiceHandler) GetGitHubAccount(context.Context, *v1.G
 
 func (UnimplementedXAgentServiceHandler) UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UnlinkGitHubAccount is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) GetServerInfo(context.Context, *v1.GetServerInfoRequest) (*v1.GetServerInfoResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetServerInfo is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error) {

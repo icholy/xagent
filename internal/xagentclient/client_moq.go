@@ -70,9 +70,6 @@ var _ Client = &ClientMock{}
 //			GetProfileFunc: func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
 //				panic("mock out the GetProfile method")
 //			},
-//			GetServerInfoFunc: func(contextMoqParam context.Context, getServerInfoRequest *xagentv1.GetServerInfoRequest) (*xagentv1.GetServerInfoResponse, error) {
-//				panic("mock out the GetServerInfo method")
-//			},
 //			GetTaskFunc: func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 //				panic("mock out the GetTask method")
 //			},
@@ -205,9 +202,6 @@ type ClientMock struct {
 
 	// GetProfileFunc mocks the GetProfile method.
 	GetProfileFunc func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error)
-
-	// GetServerInfoFunc mocks the GetServerInfo method.
-	GetServerInfoFunc func(contextMoqParam context.Context, getServerInfoRequest *xagentv1.GetServerInfoRequest) (*xagentv1.GetServerInfoResponse, error)
 
 	// GetTaskFunc mocks the GetTask method.
 	GetTaskFunc func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error)
@@ -405,13 +399,6 @@ type ClientMock struct {
 			// GetProfileRequest is the getProfileRequest argument value.
 			GetProfileRequest *xagentv1.GetProfileRequest
 		}
-		// GetServerInfo holds details about calls to the GetServerInfo method.
-		GetServerInfo []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// GetServerInfoRequest is the getServerInfoRequest argument value.
-			GetServerInfoRequest *xagentv1.GetServerInfoRequest
-		}
 		// GetTask holds details about calls to the GetTask method.
 		GetTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -605,7 +592,6 @@ type ClientMock struct {
 	lockGetEvent            sync.RWMutex
 	lockGetGitHubAccount    sync.RWMutex
 	lockGetProfile          sync.RWMutex
-	lockGetServerInfo       sync.RWMutex
 	lockGetTask             sync.RWMutex
 	lockGetTaskDetails      sync.RWMutex
 	lockListChildTasks      sync.RWMutex
@@ -1242,42 +1228,6 @@ func (mock *ClientMock) GetProfileCalls() []struct {
 	mock.lockGetProfile.RLock()
 	calls = mock.calls.GetProfile
 	mock.lockGetProfile.RUnlock()
-	return calls
-}
-
-// GetServerInfo calls GetServerInfoFunc.
-func (mock *ClientMock) GetServerInfo(contextMoqParam context.Context, getServerInfoRequest *xagentv1.GetServerInfoRequest) (*xagentv1.GetServerInfoResponse, error) {
-	if mock.GetServerInfoFunc == nil {
-		panic("ClientMock.GetServerInfoFunc: method is nil but Client.GetServerInfo was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam      context.Context
-		GetServerInfoRequest *xagentv1.GetServerInfoRequest
-	}{
-		ContextMoqParam:      contextMoqParam,
-		GetServerInfoRequest: getServerInfoRequest,
-	}
-	mock.lockGetServerInfo.Lock()
-	mock.calls.GetServerInfo = append(mock.calls.GetServerInfo, callInfo)
-	mock.lockGetServerInfo.Unlock()
-	return mock.GetServerInfoFunc(contextMoqParam, getServerInfoRequest)
-}
-
-// GetServerInfoCalls gets all the calls that were made to GetServerInfo.
-// Check the length with:
-//
-//	len(mockedClient.GetServerInfoCalls())
-func (mock *ClientMock) GetServerInfoCalls() []struct {
-	ContextMoqParam      context.Context
-	GetServerInfoRequest *xagentv1.GetServerInfoRequest
-} {
-	var calls []struct {
-		ContextMoqParam      context.Context
-		GetServerInfoRequest *xagentv1.GetServerInfoRequest
-	}
-	mock.lockGetServerInfo.RLock()
-	calls = mock.calls.GetServerInfo
-	mock.lockGetServerInfo.RUnlock()
 	return calls
 }
 

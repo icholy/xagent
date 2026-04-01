@@ -174,12 +174,6 @@ func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1
 	return &xagentv1.PingResponse{}, nil
 }
 
-func (s *Server) GetServerInfo(ctx context.Context, req *xagentv1.GetServerInfoRequest) (*xagentv1.GetServerInfoResponse, error) {
-	return &xagentv1.GetServerInfoResponse{
-		McpUrl: s.baseURL + "/mcp",
-	}, nil
-}
-
 func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
 	u := apiauth.Caller(ctx)
 	if u == nil {
