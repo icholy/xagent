@@ -16,6 +16,7 @@ const (
 // authCodeClaims are the JWT claims for an OAuth authorization code.
 type authCodeClaims struct {
 	jwt.RegisteredClaims
+	TokenType     string `json:"token_type"`
 	Email         string `json:"email"`
 	Name          string `json:"name"`
 	OrgID         int64  `json:"org_id"`
@@ -39,15 +40,19 @@ func (a *Auth) verifyAuthCode(tokenStr string) (*authCodeClaims, error) {
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid auth code claims")
 	}
+	if claims.TokenType != "auth_code" {
+		return nil, fmt.Errorf("wrong token type: %q", claims.TokenType)
+	}
 	return claims, nil
 }
 
 // refreshTokenClaims are the JWT claims for a refresh token.
 type refreshTokenClaims struct {
 	jwt.RegisteredClaims
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	OrgID int64  `json:"org_id"`
+	TokenType string `json:"token_type"`
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	OrgID     int64  `json:"org_id"`
 }
 
 func (a *Auth) signRefreshToken(claims *refreshTokenClaims) (string, error) {
@@ -69,6 +74,9 @@ func (a *Auth) verifyRefreshToken(tokenStr string) (*refreshTokenClaims, error) 
 	claims, ok := token.Claims.(*refreshTokenClaims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid refresh token claims")
+	}
+	if claims.TokenType != "refresh_token" {
+		return nil, fmt.Errorf("wrong token type: %q", claims.TokenType)
 	}
 	return claims, nil
 }

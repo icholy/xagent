@@ -409,10 +409,10 @@ func (a *Auth) cookieUser(r *http.Request) *UserInfo {
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{
-			ID:   ctx.UserInfo.Subject,
+			ID:    ctx.UserInfo.Subject,
 			Email: ctx.UserInfo.Email,
-			Name: ctx.UserInfo.Name,
-			Type: AuthTypeCookie,
+			Name:  ctx.UserInfo.Name,
+			Type:  AuthTypeCookie,
 		}
 	}
 	return nil
@@ -434,10 +434,10 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 	case AuthTypeBearer:
 		if ctx := a.bearer.Context(r.Context()); ctx != nil {
 			return &UserInfo{
-				ID:   ctx.Subject,
+				ID:    ctx.Subject,
 				Email: ctx.Email,
-				Name: ctx.Name,
-				Type: AuthTypeBearer,
+				Name:  ctx.Name,
+				Type:  AuthTypeBearer,
 			}
 		}
 		return nil

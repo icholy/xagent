@@ -117,6 +117,7 @@ func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(a.authCodeTTL)),
 		},
+		TokenType:     "auth_code",
 		Email:         appClaims.Email,
 		Name:          appClaims.Name,
 		OrgID:         appClaims.OrgID,
@@ -256,9 +257,10 @@ func (a *Auth) issueTokens(w http.ResponseWriter, subject, email, name string, o
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(a.refreshTokenTTL)),
 		},
-		Email: email,
-		Name:  name,
-		OrgID: orgID,
+		TokenType: "refresh_token",
+		Email:     email,
+		Name:      name,
+		OrgID:     orgID,
 	}
 	refreshToken, err := a.signRefreshToken(rtClaims)
 	if err != nil {
