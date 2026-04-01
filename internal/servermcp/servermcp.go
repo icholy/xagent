@@ -106,7 +106,7 @@ type createTaskInput struct {
 	Name        string `json:"name,omitempty" jsonschema:"A short name for the task"`
 	Workspace   string `json:"workspace" jsonschema:"The workspace to run the task in"`
 	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
-	Runner      string `json:"runner,omitempty" jsonschema:"Optional runner ID to target"`
+	Runner      string `json:"runner" jsonschema:"Runner ID to target"`
 }
 
 func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
