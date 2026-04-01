@@ -134,7 +134,14 @@ function OAuthAuthorizePage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => window.close()}
+              onClick={() => {
+                const redirectUrl = new URL(redirectUri)
+                redirectUrl.searchParams.set('error', 'access_denied')
+                if (state) {
+                  redirectUrl.searchParams.set('state', state)
+                }
+                window.location.href = redirectUrl.toString()
+              }}
               disabled={submitting}
             >
               Deny
