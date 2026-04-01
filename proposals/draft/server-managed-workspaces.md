@@ -1,6 +1,5 @@
 # Server-Managed Workspace Configurations
 
-Status: pending
 Issue: #397
 
 ## Problem

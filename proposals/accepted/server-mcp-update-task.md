@@ -1,7 +1,6 @@
 # Add `update_task` tool to server MCP
 
-- Status: pending
-- Issue: https://github.com/icholy/xagent/issues/405
+Issue: https://github.com/icholy/xagent/issues/405
 
 ## Problem
 

@@ -11,7 +11,7 @@ GitHub issues describe problems. Proposals describe solutions. This skill turns 
 
 1. **Issue**: If a GitHub issue was provided in the prompt, read it. If no issue was provided, create one that describes only the problem, not the solution.
 2. **Understand the codebase**: Research the relevant parts of the codebase to inform the design. Read existing code, schemas, types, and patterns that the proposal will build on.
-3. **Write the proposal**: Create a markdown file in `proposals/` named after the feature (e.g., `proposals/server-managed-workspaces.md`).
+3. **Write the proposal**: Create a markdown file in `proposals/draft/` named after the feature (e.g., `proposals/draft/server-managed-workspaces.md`).
 4. **Create a PR**: Open a PR containing only the proposal markdown file, linking back to the issue.
 
 ## Proposal Format
@@ -19,8 +19,7 @@ GitHub issues describe problems. Proposals describe solutions. This skill turns 
 ```markdown
 # Title
 
-- Status: accepted|rejected|pending
-- Issue: https://github.com/icholy/xagent/issues/NNN
+Issue: https://github.com/icholy/xagent/issues/NNN
 
 ## Problem
 
@@ -48,8 +47,10 @@ Unresolved decisions that need input.
 
 ## Guidelines
 
-- The proposal file goes in the `proposals/` directory at the repo root.
-- Use kebab-case for filenames: `proposals/my-feature.md`.
+- Proposals use a directory structure to track status: `proposals/draft/`, `proposals/accepted/`, `proposals/rejected/`.
+- New proposals always go in `proposals/draft/`.
+- To change a proposal's status, move the file to the appropriate directory.
+- Use kebab-case for filenames: `proposals/draft/my-feature.md`.
 - Link to the issue in the proposal body.
 - The PR title should be: `proposal: <short description>`.
 - The PR body should reference the issue with `Closes #NNN` or `Related to #NNN` as appropriate.

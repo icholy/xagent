@@ -1,7 +1,6 @@
 # OAuth 2.1 for MCP endpoint
 
-- Status: pending
-- Issue: https://github.com/icholy/xagent/issues/417
+Issue: https://github.com/icholy/xagent/issues/417
 
 ## Problem
 

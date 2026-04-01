@@ -1,6 +1,5 @@
 # Publish Docker Images for Server and Runner
 
-Status: pending
 Issue: #399
 
 ## Problem
