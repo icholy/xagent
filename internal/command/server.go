@@ -15,6 +15,7 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/server"
 	"github.com/icholy/xagent/internal/store"
@@ -132,6 +133,12 @@ var ServerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("invalid app key: %w", err)
 		}
+		if appKey == nil {
+			appKey, err = apiauth.CreateAppPrivateKey()
+			if err != nil {
+				return fmt.Errorf("failed to generate app key: %w", err)
+			}
+		}
 		resolver := &storeUserResolver{store: st}
 		var devUser *apiauth.UserInfo
 		if noAuth {
@@ -161,11 +168,19 @@ var ServerCommand = &cli.Command{
 			return fmt.Errorf("failed to initialize auth: %w", err)
 		}
 
+		oauth, err := oauthflow.New(oauthflow.Options{
+			AppKey:  appKey,
+			BaseURL: baseURL,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize oauth: %w", err)
+		}
 		opts := server.Options{
 			Store:         st,
 			Auth:          auth,
 			BaseURL:       baseURL,
 			EncryptionKey: key,
+			OAuth:         oauth,
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",

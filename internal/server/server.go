@@ -22,6 +22,7 @@ import (
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/ghauth"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/servermcp"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
@@ -48,6 +49,7 @@ type Server struct {
 	github        *GitHubConfig
 	baseURL       string
 	encryptionKey []byte
+	oauth         *oauthflow.Auth
 }
 
 type Options struct {
@@ -58,6 +60,7 @@ type Options struct {
 	GitHub        *GitHubConfig
 	BaseURL       string
 	EncryptionKey []byte
+	OAuth         *oauthflow.Auth
 }
 
 func New(opts Options) *Server {
@@ -73,6 +76,7 @@ func New(opts Options) *Server {
 		github:        opts.GitHub,
 		baseURL:       opts.BaseURL,
 		encryptionKey: opts.EncryptionKey,
+		oauth:         opts.OAuth,
 	}
 }
 
@@ -125,6 +129,14 @@ func (s *Server) Handler() http.Handler {
 			Store:         s.store,
 			WebhookSecret: s.github.WebhookSecret,
 		})
+	}
+	// OAuth 2.1 endpoints (public, conditionally registered)
+	if s.oauth != nil {
+		mux.HandleFunc("/.well-known/oauth-authorization-server", s.oauth.HandleMetadata)
+		mux.HandleFunc("/.well-known/oauth-protected-resource", s.oauth.HandleResourceMetadata)
+		mux.HandleFunc("/oauth/register", s.oauth.HandleRegister)
+		mux.HandleFunc("/oauth/authorize", s.oauth.HandleAuthorize)
+		mux.HandleFunc("/oauth/token", s.oauth.HandleToken)
 	}
 	// MCP endpoint (protected by auth middleware)
 	mux.Handle("/mcp", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(servermcp.New(s, s.baseURL).Handler()))
