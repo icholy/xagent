@@ -33,11 +33,16 @@ sequenceDiagram
     U->>C: Auth code delivered
 
     C->>X: POST /oauth/token (code, client_id, code_verifier)
-    Note over X: Verify auth code JWT<br/>Verify PKCE<br/>Sign new app JWT
-    X->>C: access_token (app JWT), expires_in
+    Note over X: Verify auth code JWT<br/>Verify PKCE<br/>Sign new app JWT + refresh token
+    X->>C: access_token, refresh_token, expires_in
 
     C->>X: MCP request (Authorization: Bearer <jwt>)
     X->>C: MCP response
+
+    Note over C: Access token expires (5 min)
+    C->>X: POST /oauth/token (grant_type=refresh_token, refresh_token)
+    Note over X: Verify refresh token JWT<br/>Sign new app JWT + refresh token
+    X->>C: access_token, refresh_token, expires_in
 ```
 
 ### New Routes
@@ -61,7 +66,7 @@ The `GET /ui/oauth/authorize` page is handled by the React frontend. The backend
   "authorization_endpoint": "https://xagent.example.com/ui/oauth/authorize",
   "token_endpoint": "https://xagent.example.com/oauth/token",
   "response_types_supported": ["code"],
-  "grant_types_supported": ["authorization_code"],
+  "grant_types_supported": ["authorization_code", "refresh_token"],
   "code_challenge_methods_supported": ["S256"]
 }
 ```
@@ -95,20 +100,26 @@ The `GET /ui/oauth/authorize` page is handled by the React frontend. The backend
 
 `client_secret` is accepted but ignored -- PKCE is the sole proof of authorization.
 
-Validation steps:
+**`grant_type=authorization_code`** validation:
 1. Verify the auth code JWT signature and expiry
 2. Verify `client_id` and `redirect_uri` match the JWT claims
 3. Verify `code_verifier` against the JWT's `code_challenge` (SHA256)
 
-On success, sign a new app JWT using `SignAppToken()` with the `UserInfo` from the auth code and return:
+**`grant_type=refresh_token`** validation:
+1. Verify the refresh token JWT signature and expiry
+
+Both grant types return the same response shape. On success, sign a new app JWT and a new refresh token using `SignAppToken()` with the `UserInfo` from the auth code or refresh token:
 
 ```json
 {
   "access_token": "<jwt>",
   "token_type": "Bearer",
-  "expires_in": 300
+  "expires_in": 300,
+  "refresh_token": "<jwt>"
 }
 ```
+
+The refresh token is a signed JWT with the same user/org claims as the access token but with a longer TTL (30 days). Each refresh rotates the refresh token -- a new one is issued every time. Refresh tokens cannot be revoked before expiry since there is no server-side state.
 
 ### Auth Code as Signed JWT
 
@@ -221,12 +232,10 @@ Auth codes are self-contained signed JWTs rather than random tokens looked up in
 
 The `client_id` is not looked up in any database. It's only checked for consistency between the authorize and token steps. There's no client registry -- the user identity comes from the app JWT, and PKCE secures the exchange.
 
-### No refresh tokens
+### Refresh tokens are not revocable
 
-The initial implementation does not issue refresh tokens. App JWTs have a 5-minute TTL (`apiauth.AppTokenTTL`). When the token expires, Claude.ai will need to re-initiate the OAuth flow. Refresh tokens could be added later if the re-auth frequency is a problem.
+Refresh tokens are signed JWTs with a 30-day TTL and no server-side state. They cannot be revoked before expiry. This is acceptable because the tokens are scoped to a single user/org and the threat model is low -- a leaked refresh token grants the same access as a leaked API key. If revocation becomes necessary, a database-backed revocation list can be added later.
 
 ## Open Questions
 
-1. **Should refresh tokens be supported?** The MCP spec says servers "should support token expiry and refresh" for the best experience. The current `AppTokenTTL` is 5 minutes. Without refresh tokens, Claude.ai will re-trigger the full OAuth flow every 5 minutes, which may be disruptive. Refresh tokens could also be signed JWTs with a longer TTL (e.g. 30 days), and the token endpoint would accept `grant_type=refresh_token`.
-
-2. **OAuth query param preservation across login redirect**: When an unauthenticated user hits `/ui/oauth/authorize`, the cookie auth middleware redirects to Zitadel login. After login, the user needs to land back at `/ui/oauth/authorize` with the original OAuth query params intact. Need to verify that the existing Zitadel redirect flow preserves the full original URL including query params.
+1. **OAuth query param preservation across login redirect**: When an unauthenticated user hits `/ui/oauth/authorize`, the cookie auth middleware redirects to Zitadel login. After login, the user needs to land back at `/ui/oauth/authorize` with the original OAuth query params intact. Need to verify that the existing Zitadel redirect flow preserves the full original URL including query params.
