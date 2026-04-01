@@ -33,7 +33,7 @@ The `GET /oauth/authorize` page is handled entirely by the React frontend (a new
 ```json
 {
   "issuer": "https://xagent.example.com",
-  "authorization_endpoint": "https://xagent.example.com/oauth/authorize",
+  "authorization_endpoint": "https://xagent.example.com/ui/oauth/authorize",
   "token_endpoint": "https://xagent.example.com/oauth/token",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code"],
@@ -52,9 +52,9 @@ The `GET /oauth/authorize` page is handled entirely by the React frontend (a new
 
 ### Authorization Endpoint
 
-**Frontend (`/ui/authorize`)**: React page that renders a form. Receives standard OAuth query params (`client_id`, `redirect_uri`, `state`, `code_challenge`, `code_challenge_method`, `response_type`). The form has a single input field for the user's API key and a submit button. On submit, POSTs to `/oauth/authorize`.
+**Frontend (`/ui/oauth/authorize`)**: React page that renders a form. Receives standard OAuth query params (`client_id`, `redirect_uri`, `state`, `code_challenge`, `code_challenge_method`, `response_type`). The form has a single input field for the user's API key and a submit button. On submit, POSTs to `/oauth/authorize`.
 
-Note: the `authorization_endpoint` in the metadata points to `/oauth/authorize`, but that path serves the SPA which handles the `/authorize` route client-side. The SPA form POSTs to `/oauth/authorize` on the backend.
+The `authorization_endpoint` in the metadata points to `/ui/oauth/authorize`, which is served by the SPA. The SPA form POSTs to `/oauth/authorize` on the backend.
 
 **Backend (`POST /oauth/authorize`)**: Accepts form data with the API key and the OAuth params from the frontend. Validates the API key via `HashKey()` + `KeyValidator`. On success, generates a random auth code, stores it in memory with the associated `UserInfo`, `code_challenge`, `client_id`, and `redirect_uri`, then redirects to `redirect_uri?code=<code>&state=<state>`.
 
@@ -168,7 +168,7 @@ The `/oauth/authorize` GET request serves the SPA (needs a route addition so the
 
 ### Frontend Route
 
-New React route at `webui/src/routes/oauth.authorize.tsx`. Minimal page:
+New React route at `webui/src/routes/oauth.authorize.tsx` (maps to `/ui/oauth/authorize`). Minimal page:
 
 - Reads OAuth query params from the URL
 - Renders a form with an API key input field
@@ -184,7 +184,7 @@ This page is **not** behind auth middleware -- it must be publicly accessible si
    - **URL**: `https://xagent.example.com/mcp`
    - **Client ID**: any string (e.g. `claude`)
    - **Client Secret**: their `xat_` API key
-3. Claude.ai fetches discovery metadata, opens browser to `/oauth/authorize`
+3. Claude.ai fetches discovery metadata, opens browser to `/ui/oauth/authorize`
 4. User enters their API key on the xagent authorize page
 5. xagent validates the key, redirects back to Claude.ai with an auth code
 6. Claude.ai exchanges the code + client secret at `/oauth/token` for an app JWT
@@ -214,4 +214,4 @@ The initial implementation does not issue refresh tokens. App JWTs have a 5-minu
 
 2. **Should refresh tokens be supported?** The MCP spec says servers "should support token expiry and refresh" for the best experience. The current `AppTokenTTL` is 5 minutes. Without refresh tokens, Claude.ai will re-trigger the full OAuth flow every 5 minutes, which may be disruptive.
 
-3. **SPA routing for `/oauth/authorize`**: The authorize page needs to be served outside the `/ui/` prefix and without auth middleware. This may require adjusting how the SPA is served, or serving it at `/ui/oauth/authorize` and pointing the metadata `authorization_endpoint` there instead.
+3. **Auth middleware on `/ui/oauth/authorize`**: The authorize page lives under `/ui/` which is behind `RequireAuth()` cookie middleware. This page must be publicly accessible since the user arrives via a browser redirect from Claude.ai. The `/ui/oauth/authorize` path may need to be excluded from the auth middleware, or the SPA served at that path without it.
