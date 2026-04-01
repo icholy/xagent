@@ -5,8 +5,10 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/common"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
 
@@ -54,9 +56,9 @@ func (q *EventQueue) Len() int {
 	return q.events.Len()
 }
 
-// Drain sends queued events in FIFO order. On failure, all remaining
-// events are blocked until the next Drain call.
-func (q *EventQueue) Drain(ctx context.Context) {
+// Drain sends queued events in FIFO order. On failure it returns the
+// error and leaves remaining events in the queue for the next call.
+func (q *EventQueue) Drain(ctx context.Context) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	for q.events.Len() > 0 {
@@ -68,10 +70,19 @@ func (q *EventQueue) Drain(ctx context.Context) {
 			},
 		})
 		if err != nil {
-			q.log.Warn("event delivery failed, will retry", "task", ev.TaskID, "event", ev.Event, "error", err)
-			return
+			return err
 		}
 		q.log.Info("event delivered", "task", ev.TaskID, "event", ev.Event)
 		q.events.Remove(el)
+	}
+	return nil
+}
+
+// Run periodically drains the queue until the context is cancelled.
+func (q *EventQueue) Run(ctx context.Context, interval time.Duration) {
+	for common.SleepContext(ctx, interval) {
+		if err := q.Drain(ctx); err != nil {
+			q.log.Warn("event delivery failed, will retry", "error", err)
+		}
 	}
 }

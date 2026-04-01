@@ -123,15 +123,18 @@ var RunnerCommand = &cli.Command{
 			return fmt.Errorf("failed to load workspace config: %w", err)
 		}
 
+		client := xagentclient.New(xagentclient.Options{BaseURL: serverAddr, Token: cfg.Token})
+		queue := runner.NewEventQueue(client, log)
+
 		r, err := runner.New(runner.Options{
-			ServerURL:   serverAddr,
+			Client:      client,
 			PrivateKey:  cfg.PrivateKey,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
 			Log:         log,
-			Auth:        cfg.Token,
 			SocketPath:  filepath.Join(os.TempDir(), "xagent", runnerID+".sock"),
+			Queue:       queue,
 		})
 		if err != nil {
 			return err
@@ -165,7 +168,7 @@ var RunnerCommand = &cli.Command{
 		}
 
 		// Start event queue drain goroutine
-		go r.DrainEvents(ctx, pollInterval)
+		go queue.Run(ctx, pollInterval)
 
 		// Start autoprune goroutine
 		go func() {

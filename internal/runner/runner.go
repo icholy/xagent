@@ -21,7 +21,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
-	"github.com/icholy/xagent/internal/common"
 	"github.com/icholy/xagent/internal/containerbuild"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
@@ -46,14 +45,14 @@ type Runner struct {
 }
 
 type Options struct {
-	ServerURL   string
+	Client      xagentclient.Client
 	PrivateKey  ed25519.PrivateKey
 	Workspaces  *workspace.Config
 	Concurrency int
 	RunnerID    string
 	Log         *slog.Logger
-	Auth        string
 	SocketPath  string
+	Queue       *EventQueue
 }
 
 var reRunnerID = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
@@ -85,8 +84,7 @@ func New(opts Options) (*Runner, error) {
 	log := cmp.Or(opts.Log, slog.Default())
 
 	proxy := NewProxy(AgentProxyOptions{
-		ServerURL:  opts.ServerURL,
-		Token:      opts.Auth,
+		Client:     opts.Client,
 		PrivateKey: opts.PrivateKey,
 		Log:        log,
 		SocketPath: opts.SocketPath,
@@ -95,17 +93,16 @@ func New(opts Options) (*Runner, error) {
 		return nil, fmt.Errorf("failed to start proxy: %w", err)
 	}
 
-	client := xagentclient.New(xagentclient.Options{BaseURL: opts.ServerURL, Token: opts.Auth})
 	return &Runner{
 		docker:      docker,
-		client:      client,
+		client:      opts.Client,
 		proxy:       proxy,
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
 		sem:         safesem.New(concurrency),
 		log:         log,
-		queue:       NewEventQueue(client, log),
+		queue:       opts.Queue,
 	}, nil
 }
 
@@ -134,13 +131,6 @@ func (r *Runner) RegisterWorkspaces(ctx context.Context) error {
 	}
 	r.log.Info("registered workspaces", "runner_id", r.runnerID, "count", len(workspaces))
 	return nil
-}
-
-// DrainEvents periodically retries queued events until the context is cancelled.
-func (r *Runner) DrainEvents(ctx context.Context, interval time.Duration) {
-	for common.SleepContext(ctx, interval) {
-		r.queue.Drain(ctx)
-	}
 }
 
 func (r *Runner) Poll(ctx context.Context) error {

@@ -26,7 +26,7 @@ func TestEventQueue_DrainSuccess(t *testing.T) {
 	q.Enqueue(2, "failed", 5)
 	assert.Equal(t, q.Len(), 2)
 
-	q.Drain(t.Context())
+	assert.NilError(t, q.Drain(t.Context()))
 
 	assert.Equal(t, q.Len(), 0)
 	assert.Equal(t, len(submitted), 2)
@@ -55,17 +55,17 @@ func TestEventQueue_DrainBlocksOnFailure(t *testing.T) {
 	assert.Equal(t, q.Len(), 2)
 
 	// First drain: first event fails, second is blocked
-	q.Drain(t.Context())
+	assert.ErrorContains(t, q.Drain(t.Context()), "server unavailable")
 	assert.Equal(t, q.Len(), 2)
 	assert.Equal(t, calls, 1)
 
 	// Second drain: first event fails again, still blocked
-	q.Drain(t.Context())
+	assert.ErrorContains(t, q.Drain(t.Context()), "server unavailable")
 	assert.Equal(t, q.Len(), 2)
 	assert.Equal(t, calls, 2)
 
 	// Third drain: first event succeeds, then second succeeds too
-	q.Drain(t.Context())
+	assert.NilError(t, q.Drain(t.Context()))
 	assert.Equal(t, q.Len(), 0)
 	assert.Equal(t, calls, 4) // 2 failures + 2 successes
 }
@@ -74,6 +74,6 @@ func TestEventQueue_DrainEmpty(t *testing.T) {
 	mock := &xagentclient.ClientMock{}
 	q := NewEventQueue(mock, slog.Default())
 
-	q.Drain(t.Context())
+	assert.NilError(t, q.Drain(t.Context()))
 	assert.Equal(t, q.Len(), 0)
 }
