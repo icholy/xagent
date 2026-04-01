@@ -43,6 +43,7 @@ service XAgentService {
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
   rpc GetGitHubAccount(GetGitHubAccountRequest) returns (GetGitHubAccountResponse);
   rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse);
   rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
   rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
   rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
@@ -448,6 +449,12 @@ message OrgMember {
   string name = 4;
   string role = 5;
   google.protobuf.Timestamp created_at = 6;
+}
+
+message GetServerInfoRequest {}
+
+message GetServerInfoResponse {
+  string mcp_url = 1;
 }
 
 message CreateOrgRequest {

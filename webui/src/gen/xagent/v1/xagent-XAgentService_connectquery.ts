@@ -185,6 +185,11 @@ export const getGitHubAccount = XAgentService.method.getGitHubAccount;
 export const unlinkGitHubAccount = XAgentService.method.unlinkGitHubAccount;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.GetServerInfo
+ */
+export const getServerInfo = XAgentService.method.getServerInfo;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.CreateOrg
  */
 export const createOrg = XAgentService.method.createOrg;
