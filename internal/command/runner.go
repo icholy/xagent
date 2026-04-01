@@ -164,6 +164,9 @@ var RunnerCommand = &cli.Command{
 			return fmt.Errorf("failed to reconcile: %w", err)
 		}
 
+		// Start event queue drain goroutine
+		go r.DrainEvents(ctx, pollInterval)
+
 		// Start autoprune goroutine
 		go func() {
 			for common.SleepContext(ctx, pollInterval) {

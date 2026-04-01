@@ -21,6 +21,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/common"
 	"github.com/icholy/xagent/internal/containerbuild"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
@@ -41,6 +42,7 @@ type Runner struct {
 	concurrency int64
 	sem         *safesem.Semaphore
 	log         *slog.Logger
+	queue       *EventQueue
 }
 
 type Options struct {
@@ -93,15 +95,17 @@ func New(opts Options) (*Runner, error) {
 		return nil, fmt.Errorf("failed to start proxy: %w", err)
 	}
 
+	client := xagentclient.New(xagentclient.Options{BaseURL: opts.ServerURL, Token: opts.Auth})
 	return &Runner{
 		docker:      docker,
-		client:      xagentclient.New(xagentclient.Options{BaseURL: opts.ServerURL, Token: opts.Auth}),
+		client:      client,
 		proxy:       proxy,
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
 		sem:         safesem.New(concurrency),
 		log:         log,
+		queue:       NewEventQueue(client, log),
 	}, nil
 }
 
@@ -132,13 +136,11 @@ func (r *Runner) RegisterWorkspaces(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) submit(ctx context.Context, taskID int64, event string, version int64) error {
-	_, err := r.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{
-			{TaskId: taskID, Event: event, Version: version},
-		},
-	})
-	return err
+// DrainEvents periodically retries queued events until the context is cancelled.
+func (r *Runner) DrainEvents(ctx context.Context, interval time.Duration) {
+	for common.SleepContext(ctx, interval) {
+		r.queue.Drain(ctx)
+	}
 }
 
 func (r *Runner) Poll(ctx context.Context) error {
@@ -158,9 +160,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Kill(ctx, task); err != nil {
 					r.log.Error("failed to stop task", "task", task.ID, "error", err)
 				}
-				if err := r.submit(ctx, task.ID, "stopped", task.Version); err != nil {
-					r.log.Error("failed to send stopped event", "task", task.ID, "error", err)
-				}
+				r.queue.Enqueue(task.ID, "stopped", task.Version)
 				return nil
 			})
 		case model.TaskCommandRestart:
@@ -177,9 +177,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "error", err)
-					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
-						r.log.Error("failed to send failed event", "task", task.ID, "error", err)
-					}
+					r.queue.Enqueue(task.ID, "failed", task.Version)
 					return nil
 				}
 				// The "started" event is sent by Monitor when the container starts
@@ -213,9 +211,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "error", err)
-					if err := r.submit(ctx, task.ID, "failed", task.Version); err != nil {
-						r.log.Error("failed to send failed event", "task", task.ID, "error", err)
-					}
+					r.queue.Enqueue(task.ID, "failed", task.Version)
 					return nil
 				}
 				// The "started" event is sent by Monitor when the container starts
@@ -284,14 +280,10 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		exitCode := info.State.ExitCode
 		if exitCode == 0 {
 			r.log.Info("reconcile: container exited successfully", "task", taskID)
-			if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
-				r.log.Error("failed to send stopped event", "task", taskID, "error", err)
-			}
+			r.queue.Enqueue(taskID, "stopped", 0)
 		} else {
 			r.log.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
-			if err := r.submit(ctx, taskID, "failed", 0); err != nil {
-				r.log.Error("failed to send failed event", "task", taskID, "error", err)
-			}
+			r.queue.Enqueue(taskID, "failed", 0)
 		}
 	}
 
@@ -497,23 +489,17 @@ func (r *Runner) Monitor(ctx context.Context) error {
 			case events.ActionStart:
 				r.log.Info("container started", "task", taskID)
 				// Use version 0 to bypass version check (spontaneous events)
-				if err := r.submit(ctx, taskID, "started", 0); err != nil {
-					r.log.Error("failed to send started event", "task", taskID, "error", err)
-				}
+				r.queue.Enqueue(taskID, "started", 0)
 			case events.ActionDie:
 				r.sem.Release(1)
 				// Use version 0 to bypass version check (spontaneous events)
 				exitCode := event.Actor.Attributes["exitCode"]
 				if exitCode == "0" {
 					r.log.Info("container exited successfully", "task", taskID)
-					if err := r.submit(ctx, taskID, "stopped", 0); err != nil {
-						r.log.Error("failed to send stopped event", "task", taskID, "error", err)
-					}
+					r.queue.Enqueue(taskID, "stopped", 0)
 				} else {
 					r.log.Error("container exited with error", "task", taskID, "exitCode", exitCode)
-					if err := r.submit(ctx, taskID, "failed", 0); err != nil {
-						r.log.Error("failed to send failed event", "task", taskID, "error", err)
-					}
+					r.queue.Enqueue(taskID, "failed", 0)
 				}
 			}
 
