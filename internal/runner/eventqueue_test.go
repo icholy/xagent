@@ -20,7 +20,7 @@ func TestEventQueue_DrainSuccess(t *testing.T) {
 		},
 	}
 
-	q := NewEventQueue(mock, slog.Default())
+	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 
 	q.Enqueue(1, "stopped", 0)
 	q.Enqueue(2, "failed", 5)
@@ -48,7 +48,7 @@ func TestEventQueue_DrainBlocksOnFailure(t *testing.T) {
 		},
 	}
 
-	q := NewEventQueue(mock, slog.Default())
+	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 
 	q.Enqueue(1, "started", 0)
 	q.Enqueue(2, "stopped", 0)
@@ -72,7 +72,7 @@ func TestEventQueue_DrainBlocksOnFailure(t *testing.T) {
 
 func TestEventQueue_DrainEmpty(t *testing.T) {
 	mock := &xagentclient.ClientMock{}
-	q := NewEventQueue(mock, slog.Default())
+	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 
 	assert.NilError(t, q.Drain(t.Context()))
 	assert.Equal(t, q.Len(), 0)

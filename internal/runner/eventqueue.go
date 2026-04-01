@@ -23,18 +23,29 @@ type queuedEvent struct {
 // on the next Drain call. Events are sent in FIFO order; if any event
 // fails, all subsequent events are blocked until it succeeds.
 type EventQueue struct {
-	mu     sync.Mutex
-	events *list.List
-	client xagentclient.Client
-	log    *slog.Logger
+	mu            sync.Mutex
+	events        *list.List
+	notify        chan struct{}
+	client        xagentclient.Client
+	log           *slog.Logger
+	retryInterval time.Duration
+}
+
+// EventQueueOptions configures the EventQueue.
+type EventQueueOptions struct {
+	Client        xagentclient.Client
+	Log           *slog.Logger
+	RetryInterval time.Duration
 }
 
 // NewEventQueue creates a new in-memory event queue.
-func NewEventQueue(client xagentclient.Client, log *slog.Logger) *EventQueue {
+func NewEventQueue(opts EventQueueOptions) *EventQueue {
 	return &EventQueue{
-		events: list.New(),
-		client: client,
-		log:    log,
+		events:        list.New(),
+		notify:        make(chan struct{}, 1),
+		client:        opts.Client,
+		log:           opts.Log,
+		retryInterval: opts.RetryInterval,
 	}
 }
 
@@ -47,6 +58,10 @@ func (q *EventQueue) Enqueue(taskID int64, event string, version int64) {
 		Event:   event,
 		Version: version,
 	})
+	select {
+	case q.notify <- struct{}{}:
+	default:
+	}
 }
 
 // Len returns the number of events in the queue.
@@ -78,11 +93,20 @@ func (q *EventQueue) Drain(ctx context.Context) error {
 	return nil
 }
 
-// Run periodically drains the queue until the context is cancelled.
-func (q *EventQueue) Run(ctx context.Context, interval time.Duration) {
-	for common.SleepContext(ctx, interval) {
+// Run drains the queue whenever events are enqueued. On error it waits
+// for the configured retry interval before trying again.
+func (q *EventQueue) Run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-q.notify:
+		}
 		if err := q.Drain(ctx); err != nil {
 			q.log.Warn("event delivery failed, will retry", "error", err)
+			if !common.SleepContext(ctx, q.retryInterval) {
+				return
+			}
 		}
 	}
 }

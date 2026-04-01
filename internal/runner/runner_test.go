@@ -61,7 +61,7 @@ func TestRunnerStart(t *testing.T) {
 	r, err := New(Options{
 		Client:     client,
 		PrivateKey: privateKey,
-		Queue:      NewEventQueue(client, slog.Default()),
+		Queue:      NewEventQueue(EventQueueOptions{Client: client, Log: slog.Default()}),
 		Workspaces: &workspace.Config{
 			Workspaces: map[string]workspace.Workspace{
 				"test": {

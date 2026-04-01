@@ -124,7 +124,11 @@ var RunnerCommand = &cli.Command{
 		}
 
 		client := xagentclient.New(xagentclient.Options{BaseURL: serverAddr, Token: cfg.Token})
-		queue := runner.NewEventQueue(client, log)
+		queue := runner.NewEventQueue(runner.EventQueueOptions{
+			Client:        client,
+			Log:           log,
+			RetryInterval: pollInterval,
+		})
 
 		r, err := runner.New(runner.Options{
 			Client:      client,
@@ -168,7 +172,7 @@ var RunnerCommand = &cli.Command{
 		}
 
 		// Start event queue drain goroutine
-		go queue.Run(ctx, pollInterval)
+		go queue.Run(ctx)
 
 		// Start autoprune goroutine
 		go func() {
