@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { RelativeTime } from '@/components/relative-time'
-import { ExternalLink, Github, Loader2, Mail, Plus, Trash2, Unlink, User } from 'lucide-react'
+import { Cable, ExternalLink, Github, Loader2, Mail, Plus, Trash2, Unlink, User } from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -43,6 +43,20 @@ function SettingsPage() {
       <div className="space-y-6">
         <ProfileCard />
         <OrgsCard />
+        <Card>
+          <CardHeader>
+            <CardTitle>MCP Server</CardTitle>
+            <CardDescription>
+              xagent provides an MCP server that you can connect to from any MCP-compatible client.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Cable className="h-5 w-5 text-muted-foreground" />
+              <code className="text-sm bg-muted px-2 py-1 rounded">https://xagent.choly.ca/mcp</code>
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>GitHub Account</CardTitle>
