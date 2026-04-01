@@ -22,10 +22,10 @@ func (a *Auth) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"issuer":                           a.baseURL,
-		"authorization_endpoint":           a.baseURL + "/ui/oauth/authorize",
-		"token_endpoint":                   a.baseURL + "/oauth/token",
-		"registration_endpoint":            a.baseURL + "/oauth/register",
+		"issuer":                           a.baseURL.String(),
+		"authorization_endpoint":           a.baseURL.JoinPath("/ui/oauth/authorize").String(),
+		"token_endpoint":                   a.baseURL.JoinPath("/oauth/token").String(),
+		"registration_endpoint":            a.baseURL.JoinPath("/oauth/register").String(),
 		"response_types_supported":         []string{"code"},
 		"grant_types_supported":            []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported": []string{"S256"},
@@ -41,8 +41,8 @@ func (a *Auth) HandleResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"resource":              a.baseURL,
-		"authorization_servers": []string{a.baseURL},
+		"resource":              a.baseURL.String(),
+		"authorization_servers": []string{a.baseURL.String()},
 	})
 }
 

@@ -133,6 +133,12 @@ var ServerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("invalid app key: %w", err)
 		}
+		if appKey == nil {
+			appKey, err = apiauth.CreateAppPrivateKey()
+			if err != nil {
+				return fmt.Errorf("failed to generate app key: %w", err)
+			}
+		}
 		resolver := &storeUserResolver{store: st}
 		var devUser *apiauth.UserInfo
 		if noAuth {
@@ -162,12 +168,12 @@ var ServerCommand = &cli.Command{
 			return fmt.Errorf("failed to initialize auth: %w", err)
 		}
 
-		var oauth *oauthflow.Auth
-		if appKey != nil {
-			oauth = oauthflow.New(oauthflow.Options{
-				AppKey:  appKey,
-				BaseURL: baseURL,
-			})
+		oauth, err := oauthflow.New(oauthflow.Options{
+			AppKey:  appKey,
+			BaseURL: baseURL,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize oauth: %w", err)
 		}
 		opts := server.Options{
 			Store:         st,

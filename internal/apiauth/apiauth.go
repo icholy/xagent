@@ -283,7 +283,10 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 				}
 			default:
 				if !a.useDevUser(w, r, next) {
-					// Try app JWT from Bearer header before falling back to cookie auth
+					// Try app JWT from Bearer header before falling back to cookie auth.
+					// This is needed for OAuth clients (e.g. Claude.ai) that send
+					// app JWTs as Bearer tokens without the X-Auth-Type header.
+					// TODO: find a cleaner way to handle this.
 					if user, err := a.validateAppToken(r); err == nil && user != nil {
 						r = r.WithContext(WithUser(r.Context(), user))
 						next.ServeHTTP(w, r)
