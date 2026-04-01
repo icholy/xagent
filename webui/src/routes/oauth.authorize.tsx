@@ -7,12 +7,18 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/oauth/authorize')({
-  validateSearch: (search: Record<string, any>) => search,
   component: OAuthAuthorizePage,
 })
 
 function OAuthAuthorizePage() {
-  const search = Route.useSearch()
+  const params = new URLSearchParams(window.location.search)
+  const clientId = params.get('client_id') ?? ''
+  const redirectUri = params.get('redirect_uri') ?? ''
+  const state = params.get('state') ?? ''
+  const codeChallenge = params.get('code_challenge') ?? ''
+  const codeChallengeMethod = params.get('code_challenge_method') ?? ''
+  const responseType = params.get('response_type') ?? ''
+
   const { data: profileData, isLoading } = useQuery(getProfile, {})
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -32,12 +38,12 @@ function OAuthAuthorizePage() {
       }
       const body = new URLSearchParams({
         token: token!,
-        client_id: search.client_id,
-        redirect_uri: search.redirect_uri,
-        state: search.state,
-        code_challenge: search.code_challenge,
-        code_challenge_method: search.code_challenge_method,
-        response_type: search.response_type,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: codeChallengeMethod,
+        response_type: responseType,
       })
       // POST directly (not via authTransport.fetch) since this endpoint
       // does its own auth via the token in the body and returns a redirect.
@@ -77,7 +83,7 @@ function OAuthAuthorizePage() {
     )
   }
 
-  if (!search.client_id || !search.redirect_uri || !search.code_challenge) {
+  if (!clientId || !redirectUri || !codeChallenge) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Card>
