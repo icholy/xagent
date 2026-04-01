@@ -166,6 +166,7 @@ var ServerCommand = &cli.Command{
 			Auth:          auth,
 			BaseURL:       baseURL,
 			EncryptionKey: key,
+			AppKey:        appKey,
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",

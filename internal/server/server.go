@@ -3,6 +3,7 @@ package server
 import (
 	"cmp"
 	"context"
+	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -22,6 +23,7 @@ import (
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/ghauth"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/servermcp"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
@@ -48,6 +50,7 @@ type Server struct {
 	github        *GitHubConfig
 	baseURL       string
 	encryptionKey []byte
+	appKey        ed25519.PrivateKey
 }
 
 type Options struct {
@@ -58,6 +61,7 @@ type Options struct {
 	GitHub        *GitHubConfig
 	BaseURL       string
 	EncryptionKey []byte
+	AppKey        ed25519.PrivateKey
 }
 
 func New(opts Options) *Server {
@@ -73,6 +77,7 @@ func New(opts Options) *Server {
 		github:        opts.GitHub,
 		baseURL:       opts.BaseURL,
 		encryptionKey: opts.EncryptionKey,
+		appKey:        opts.AppKey,
 	}
 }
 
@@ -126,6 +131,16 @@ func (s *Server) Handler() http.Handler {
 			WebhookSecret: s.github.WebhookSecret,
 		})
 	}
+	// OAuth 2.1 endpoints (public)
+	oauthServer := oauthflow.New(oauthflow.Options{
+		AppKey:  s.appKey,
+		BaseURL: s.baseURL,
+	})
+	mux.HandleFunc("/.well-known/oauth-authorization-server", oauthServer.HandleMetadata)
+	mux.HandleFunc("/.well-known/oauth-protected-resource", oauthServer.HandleResourceMetadata)
+	mux.HandleFunc("/oauth/register", oauthServer.HandleRegister)
+	mux.HandleFunc("/oauth/authorize", oauthServer.HandleAuthorize)
+	mux.HandleFunc("/oauth/token", oauthServer.HandleToken)
 	// MCP endpoint (protected by auth middleware)
 	mux.Handle("/mcp", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(servermcp.New(s, s.baseURL).Handler()))
 	// React UI (SPA with client-side routing, protected by cookie auth)

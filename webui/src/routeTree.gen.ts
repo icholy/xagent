@@ -18,6 +18,7 @@ import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as KeysNewRouteImport } from './routes/keys.new'
 import { Route as EventsNewRouteImport } from './routes/events.new'
 import { Route as EventsIdRouteImport } from './routes/events.$id'
@@ -67,6 +68,11 @@ const TasksIdRoute = TasksIdRouteImport.update({
   path: '/tasks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const KeysNewRoute = KeysNewRouteImport.update({
   id: '/keys/new',
   path: '/keys/new',
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/events/$id': typeof EventsIdRoute
   '/events/new': typeof EventsNewRoute
   '/keys/new': typeof KeysNewRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/events/$id': typeof EventsIdRoute
   '/events/new': typeof EventsNewRoute
   '/keys/new': typeof KeysNewRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/events/$id': typeof EventsIdRoute
   '/events/new': typeof EventsNewRoute
   '/keys/new': typeof KeysNewRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/events/$id'
     | '/events/new'
     | '/keys/new'
+    | '/oauth/authorize'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events'
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/events/$id'
     | '/events/new'
     | '/keys/new'
+    | '/oauth/authorize'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/events/$id'
     | '/events/new'
     | '/keys/new'
+    | '/oauth/authorize'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
@@ -177,6 +189,7 @@ export interface RootRouteChildren {
   EventsIdRoute: typeof EventsIdRoute
   EventsNewRoute: typeof EventsNewRoute
   KeysNewRoute: typeof KeysNewRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   TasksIdRoute: typeof TasksIdRoute
   TasksNewRoute: typeof TasksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
@@ -251,6 +264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/keys/new': {
       id: '/keys/new'
       path: '/keys/new'
@@ -281,6 +301,7 @@ const rootRouteChildren: RootRouteChildren = {
   EventsIdRoute: EventsIdRoute,
   EventsNewRoute: EventsNewRoute,
   KeysNewRoute: KeysNewRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
   TasksIdRoute: TasksIdRoute,
   TasksNewRoute: TasksNewRoute,
   EventsIndexRoute: EventsIndexRoute,

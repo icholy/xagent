@@ -283,6 +283,12 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 				}
 			default:
 				if !a.useDevUser(w, r, next) {
+					// Try app JWT from Bearer header before falling back to cookie auth
+					if user, err := a.validateAppToken(r); err == nil && user != nil {
+						r = r.WithContext(WithUser(r.Context(), user))
+						next.ServeHTTP(w, r)
+						return
+					}
 					a.cookie.RequireAuthentication()(next).ServeHTTP(w, r)
 				}
 			}
