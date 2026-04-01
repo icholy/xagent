@@ -29,8 +29,7 @@ function OAuthAuthorizePage() {
     setSubmitting(true)
     try {
       const token = await authTransport.fetchToken()
-      const redirectUri = await authz.approve(token)
-      window.location.href = redirectUri
+      window.location.href = await authz.approve(token)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')
       setSubmitting(false)
