@@ -19,12 +19,11 @@ var defaultYAML = `workspaces:
   pets-workshop:
     description: Example Node.js pets workshop
     container:
-      image: node:20
+      image: ghcr.io/icholy/xagent-workspace-debian:latest
       working_dir: /root
       environment:
         CLAUDE_CODE_OAUTH_TOKEN: ${env:CLAUDE_CODE_OAUTH_TOKEN}
     commands:
-      - npm install -g @anthropic-ai/claude-code
       - git clone https://github.com/github-samples/pets-workshop
     agent:
       type: claude

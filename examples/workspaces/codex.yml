@@ -1,12 +1,11 @@
 workspaces:
   pets-workshop:
     container:
-      image: node:20
+      image: ghcr.io/icholy/xagent-workspace-debian:latest
       working_dir: /root
       environment:
         CODEX_API_KEY: ${env:CODEX_API_KEY}
     commands:
-      - npm install -g @openai/codex
       - git clone https://github.com/github-samples/pets-workshop
     agent:
       type: codex

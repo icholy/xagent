@@ -1,12 +1,11 @@
 workspaces:
   pets-workshop:
     container:
-      image: node:20
+      image: ghcr.io/icholy/xagent-workspace-debian:latest
       working_dir: /root
       environment:
         CURSOR_API_KEY: ${env:CURSOR_API_KEY}
     commands:
-      - curl -fsSL https://cursor.com/install | bash
       - git clone https://github.com/github-samples/pets-workshop
     agent:
       type: cursor

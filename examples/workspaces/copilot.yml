@@ -1,12 +1,11 @@
 workspaces:
   pets-workshop:
     container:
-      image: node:20
+      image: ghcr.io/icholy/xagent-workspace-debian:latest
       working_dir: /root
       environment:
         COPILOT_GITHUB_TOKEN: ${env:COPILOT_GITHUB_TOKEN}
     commands:
-      - npm install -g @github/copilot
       - git clone https://github.com/github-samples/pets-workshop
     agent:
       type: copilot

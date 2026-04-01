@@ -15,12 +15,6 @@ Create a `.env` file with your API key:
 echo "XAGENT_API_KEY=your-api-key" > .env
 ```
 
-Build the agent image:
-
-```bash
-docker build -t xagent-sysbox-workspace .
-```
-
 ## Usage
 
 Start the runner:
