@@ -12,20 +12,17 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/oauthflow"
 	"golang.org/x/oauth2"
+	"gotest.tools/v3/assert"
 )
 
 func TestAuthorizationCodeFlow(t *testing.T) {
 	key, err := apiauth.CreateAppPrivateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NilError(t, err)
 	auth, err := oauthflow.New(oauthflow.Options{
 		AppKey:  key,
 		BaseURL: "http://localhost:8080",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NilError(t, err)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/oauth/register", auth.HandleRegister)
@@ -37,15 +34,11 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 	// Register a client
 	regBody := `{"client_name":"test-client","redirect_uris":["http://localhost/callback"]}`
 	resp, err := http.Post(ts.URL+"/oauth/register", "application/json", strings.NewReader(regBody))
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NilError(t, err)
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("register: expected 201, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, resp.StatusCode, http.StatusCreated)
 	var regResp map[string]any
-	json.NewDecoder(resp.Body).Decode(&regResp)
+	assert.NilError(t, json.NewDecoder(resp.Body).Decode(&regResp))
 	clientID := regResp["client_id"].(string)
 
 	// Configure oauth2 client
@@ -72,58 +65,39 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 	}
 	claims := apiauth.NewAppClaims(user)
 	appToken, err := apiauth.SignAppToken(key, claims)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NilError(t, err)
 
 	// Build authorize URL with PKCE challenge
 	authURL := oauthCfg.AuthCodeURL("test-state", oauth2.S256ChallengeOption(verifier))
 
 	// POST to authorize endpoint with app JWT (non-standard: our authorize is a POST with a token field)
-	authParsed, _ := url.Parse(authURL)
+	authParsed, err := url.Parse(authURL)
+	assert.NilError(t, err)
 	authForm := authParsed.Query()
 	authForm.Set("token", appToken)
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
 	resp, err = client.PostForm(ts.URL+"/oauth/authorize", authForm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NilError(t, err)
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("authorize: expected 302, got %d", resp.StatusCode)
-	}
-	location, _ := url.Parse(resp.Header.Get("Location"))
+	assert.Equal(t, resp.StatusCode, http.StatusFound)
+	location, err := url.Parse(resp.Header.Get("Location"))
+	assert.NilError(t, err)
 	code := location.Query().Get("code")
-	if code == "" {
-		t.Fatal("authorize: no code in redirect")
-	}
-	if location.Query().Get("state") != "test-state" {
-		t.Fatal("authorize: state mismatch")
-	}
+	assert.Assert(t, code != "")
+	assert.Equal(t, location.Query().Get("state"), "test-state")
 
 	// Exchange authorization code for tokens using oauth2 client
 	ctx := context.Background()
 	token, err := oauthCfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
-	if err != nil {
-		t.Fatalf("token exchange: %v", err)
-	}
-	if token.AccessToken == "" {
-		t.Fatal("token exchange: empty access_token")
-	}
-	refreshToken := token.RefreshToken
-	if refreshToken == "" {
-		t.Fatal("token exchange: empty refresh_token")
-	}
+	assert.NilError(t, err)
+	assert.Assert(t, token.AccessToken != "")
+	assert.Assert(t, token.RefreshToken != "")
 
 	// Use oauth2 TokenSource to refresh the token
-	expiredToken := &oauth2.Token{RefreshToken: refreshToken}
+	expiredToken := &oauth2.Token{RefreshToken: token.RefreshToken}
 	newToken, err := oauthCfg.TokenSource(ctx, expiredToken).Token()
-	if err != nil {
-		t.Fatalf("token refresh: %v", err)
-	}
-	if newToken.AccessToken == "" {
-		t.Fatal("token refresh: empty access_token")
-	}
+	assert.NilError(t, err)
+	assert.Assert(t, newToken.AccessToken != "")
 }
