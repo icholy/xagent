@@ -7,15 +7,16 @@ import (
 	"sync"
 	"time"
 
-	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/common"
+	"github.com/icholy/xagent/internal/model"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
 
 // queuedEvent is a runner event waiting to be retried.
 type queuedEvent struct {
 	TaskID  int64
-	Event   string
+	Event   model.RunnerEventType
 	Version int64
 }
 
@@ -50,7 +51,7 @@ func NewEventQueue(opts EventQueueOptions) *EventQueue {
 }
 
 // Enqueue adds an event to the queue.
-func (q *EventQueue) Enqueue(taskID int64, event string, version int64) {
+func (q *EventQueue) Enqueue(taskID int64, event model.RunnerEventType, version int64) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.events.PushBack(queuedEvent{
@@ -81,7 +82,7 @@ func (q *EventQueue) Drain(ctx context.Context) error {
 		ev := el.Value.(queuedEvent)
 		_, err := q.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 			Events: []*xagentv1.RunnerEvent{
-				{TaskId: ev.TaskID, Event: ev.Event, Version: ev.Version},
+				{TaskId: ev.TaskID, Event: string(ev.Event), Version: ev.Version},
 			},
 		})
 		if err != nil {
