@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { authTransport } from '@/lib/transport'
+import { useOrgId } from '@/hooks/use-org-id'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -25,7 +26,7 @@ function OAuthAuthorizePage() {
 
   const profile = profileData?.profile
   const orgs = profileData?.orgs ?? []
-  const currentOrgId = authTransport.getOrgId()
+  const currentOrgId = useOrgId()
   const currentOrg = orgs.find((o) => String(o.id) === currentOrgId)
 
   const handleApprove = async () => {
