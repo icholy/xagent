@@ -51,7 +51,7 @@ func (s *Server) Handler() http.Handler {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_task",
-		Description: "Create a new task",
+		Description: "Create a new task. Use list_workspaces to find available workspaces and their runner IDs.",
 	}, s.createTask)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -106,10 +106,13 @@ type createTaskInput struct {
 	Name        string `json:"name,omitempty" jsonschema:"A short name for the task"`
 	Workspace   string `json:"workspace" jsonschema:"The workspace to run the task in"`
 	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
-	Runner      string `json:"runner,omitempty" jsonschema:"Optional runner ID to target"`
+	Runner      string `json:"runner" jsonschema:"The runner ID where the workspace is available (required, get this from list_workspaces)"`
 }
 
 func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
+	if input.Runner == "" {
+		return errorResult("runner is required: use list_workspaces to find the runner ID for your workspace"), nil, nil
+	}
 	resp, err := s.service.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Workspace: input.Workspace,
