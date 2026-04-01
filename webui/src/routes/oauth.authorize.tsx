@@ -54,13 +54,13 @@ function OAuthAuthorizePage() {
       if (!resp.ok) {
         const text = await resp.text()
         setError(text || `Authorization failed (${resp.status})`)
+        setSubmitting(false)
         return
       }
       const data = await resp.json()
       window.location.href = data.redirect_uri
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')
-    } finally {
       setSubmitting(false)
     }
   }
