@@ -22,7 +22,10 @@ sequenceDiagram
     participant X as xagent Server
 
     C->>X: GET /.well-known/oauth-authorization-server
-    X->>C: authorization_endpoint, token_endpoint
+    X->>C: authorization_endpoint, token_endpoint, registration_endpoint
+
+    C->>X: POST /oauth/register
+    X->>C: client_id (generated UUID)
 
     C->>U: Open /ui/oauth/authorize?client_id&redirect_uri&code_challenge&state
     U->>X: GET /ui/oauth/authorize (SPA served, cookie auth)
@@ -51,6 +54,7 @@ sequenceDiagram
 |--------|------|------|-------------|
 | GET | `/.well-known/oauth-authorization-server` | Public | RFC 8414 metadata |
 | GET | `/.well-known/oauth-protected-resource` | Public | RFC 9728 resource metadata |
+| POST | `/oauth/register` | Public | Stub DCR -- returns a generated client_id |
 | POST | `/oauth/authorize` | App JWT | Verifies JWT, issues auth code, redirects |
 | POST | `/oauth/token` | Public | Exchanges auth code for app JWT |
 
@@ -67,7 +71,8 @@ The `GET /ui/oauth/authorize` page is handled by the React frontend. The backend
   "token_endpoint": "https://xagent.example.com/oauth/token",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "refresh_token"],
-  "code_challenge_methods_supported": ["S256"]
+  "code_challenge_methods_supported": ["S256"],
+  "registration_endpoint": "https://xagent.example.com/oauth/register"
 }
 ```
 
@@ -79,6 +84,27 @@ The `GET /ui/oauth/authorize` page is handled by the React frontend. The backend
   "authorization_servers": ["https://xagent.example.com"]
 }
 ```
+
+### Registration Endpoint (Stub DCR)
+
+`POST /oauth/register` accepts a JSON body per [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591). The endpoint ignores most fields and returns a generated `client_id` (UUID) with no `client_secret`. This allows Claude.ai to automatically obtain a client_id without the user configuring one manually.
+
+```json
+// Request (most fields ignored)
+{
+  "client_name": "Claude",
+  "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"]
+}
+
+// Response
+{
+  "client_id": "<generated-uuid>",
+  "client_name": "Claude",
+  "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"]
+}
+```
+
+The client_id is not persisted -- it's only used for consistency checks between the authorize and token steps. Any valid UUID works.
 
 ### Authorization Endpoint
 
@@ -191,6 +217,7 @@ mcpOAuth := mcpauth.New(mcpauth.Options{
 })
 mux.HandleFunc("/.well-known/oauth-authorization-server", mcpOAuth.HandleMetadata)
 mux.HandleFunc("/.well-known/oauth-protected-resource", mcpOAuth.HandleResourceMetadata)
+mux.HandleFunc("/oauth/register", mcpOAuth.HandleRegister)
 mux.HandleFunc("/oauth/authorize", mcpOAuth.HandleAuthorize)
 mux.HandleFunc("/oauth/token", mcpOAuth.HandleToken)
 ```
@@ -212,9 +239,8 @@ This page is behind cookie auth middleware (like all `/ui/` routes). The user mu
 
 1. User adds a custom connector in Claude.ai with:
    - **URL**: `https://xagent.example.com/mcp`
-   - **Client ID**: any string (e.g. `claude`)
-   - **Client Secret**: leave blank (or any value -- ignored)
-2. Claude.ai fetches discovery metadata, opens browser to `/ui/oauth/authorize`
+   - **Client ID / Client Secret**: leave blank (Claude.ai auto-registers via DCR)
+2. Claude.ai fetches discovery metadata, registers via `/oauth/register`, opens browser to `/ui/oauth/authorize`
 3. If user is not logged into xagent, they log in via Zitadel (existing SSO flow)
 4. User sees a consent screen showing their identity and org, clicks "Approve"
 5. Frontend POSTs app JWT + OAuth params to `/oauth/authorize`
@@ -228,9 +254,9 @@ This page is behind cookie auth middleware (like all `/ui/` routes). The user mu
 
 Auth codes are self-contained signed JWTs rather than random tokens looked up in a database or cache. This avoids shared state between server instances -- any instance can verify the code using the shared `AppKey`. The tradeoff is that single-use enforcement is not possible (a code could theoretically be replayed within its 60s TTL), but PKCE makes this impractical since the attacker would also need the `code_verifier`.
 
-### client_id is not validated
+### Stub DCR vs. persistent client registry
 
-The `client_id` is not looked up in any database. It's only checked for consistency between the authorize and token steps. There's no client registry -- the user identity comes from the app JWT, and PKCE secures the exchange.
+The `/oauth/register` endpoint generates a UUID but doesn't persist it. The client_id is only checked for consistency between the authorize and token steps (it's embedded in the auth code JWT). A persistent `oauth_clients` table would enable revocation, UI visibility of connected clients, and per-client configuration, but isn't needed for the initial implementation.
 
 ### Refresh tokens are not revocable
 
