@@ -66,13 +66,19 @@ View container logs:
 xagent logs -f <taskid>
 ```
 
+Stream logs in real-time (useful for long-running tasks):
+
+```bash
+xagent logs -f --tail 100 <taskid>
+```
+
 Get a shell to a task container:
 
 ```bash
 xagent shell <taskid>
 ```
 
-List task containers
+List task containers:
 
 ```bash
 xagent containers
