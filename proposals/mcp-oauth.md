@@ -11,20 +11,18 @@ The `/mcp` endpoint cannot be used as a Claude.ai custom connector because Claud
 
 ### Overview
 
-Implement a minimal OAuth 2.1 authorization server within xagent. The user is already logged into the xagent web UI, so the authorize page is a simple consent screen -- no credentials entry needed. The `client_secret` configured in Claude.ai maps to an `xat_` API key which authenticates the client at the token endpoint. No Zitadel dependency.
+Implement a minimal OAuth 2.1 authorization server within xagent. The user is already logged into the xagent web UI and has an app JWT (from `/auth/token`) scoped to their selected org. The authorize page sends this JWT to the backend, which verifies it and issues an auth code. No API keys or cookie auth involved in the OAuth flow.
 
 ### New Routes
-
-All OAuth routes live under `/oauth/` and the well-known discovery paths:
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/.well-known/oauth-authorization-server` | Public | RFC 8414 metadata |
 | GET | `/.well-known/oauth-protected-resource` | Public | RFC 9728 resource metadata |
-| POST | `/oauth/authorize` | Cookie | Validates session, issues auth code, redirects |
+| POST | `/oauth/authorize` | App JWT | Verifies JWT, issues auth code, redirects |
 | POST | `/oauth/token` | Public | Exchanges auth code for app JWT |
 
-The `GET /oauth/authorize` page is handled entirely by the React frontend (a new route in the SPA). The backend only handles the `POST`.
+The `GET /ui/oauth/authorize` page is handled by the React frontend. The backend only handles the `POST`.
 
 ### Discovery Metadata
 
@@ -52,13 +50,9 @@ The `GET /oauth/authorize` page is handled entirely by the React frontend (a new
 
 ### Authorization Endpoint
 
-**Frontend (`/ui/oauth/authorize`)**: React page behind cookie auth. Receives standard OAuth query params (`client_id`, `redirect_uri`, `state`, `code_challenge`, `code_challenge_method`, `response_type`). Shows a consent screen ("Allow Claude to access your xagent account?") with an approve button. On approve, POSTs the OAuth params to `/oauth/authorize`.
+**Frontend (`/ui/oauth/authorize`)**: React page that reads the OAuth query params (`client_id`, `redirect_uri`, `state`, `code_challenge`, `code_challenge_method`, `response_type`). Shows a consent screen with the user's identity and org. On approve, POSTs the OAuth params plus the app JWT (from the existing auth context) to `/oauth/authorize`.
 
-If the user is not logged in, the existing cookie auth middleware redirects them to Zitadel login first, then back to the authorize page.
-
-The `authorization_endpoint` in the metadata points to `/ui/oauth/authorize`, which is served by the SPA. The SPA form POSTs to `/oauth/authorize` on the backend.
-
-**Backend (`POST /oauth/authorize`)**: Protected by cookie auth middleware. Reads the user identity from the cookie session via `apiauth.Caller(ctx)`. Accepts the OAuth params from the form. On success, signs an auth code JWT bound to the user, `code_challenge`, `client_id`, and `redirect_uri`, then redirects to `redirect_uri?code=<code>&state=<state>`.
+**Backend (`POST /oauth/authorize`)**: Verifies the app JWT from the request body via `VerifyAppToken()`. On success, signs an auth code JWT containing the user/org identity and OAuth params, then redirects to `redirect_uri?code=<code>&state=<state>`.
 
 ### Token Endpoint
 
@@ -68,18 +62,18 @@ The `authorization_endpoint` in the metadata points to `/ui/oauth/authorize`, wh
 |-----------|-------------|
 | `grant_type` | Must be `authorization_code` |
 | `code` | The auth code from the authorize step |
-| `client_id` | The client ID configured in Claude.ai |
-| `client_secret` | The client secret (an `xat_` API key) |
+| `client_id` | Must match the authorize request |
 | `code_verifier` | PKCE verifier matching the original `code_challenge` |
 | `redirect_uri` | Must match the original `redirect_uri` |
+
+`client_secret` is accepted but ignored -- PKCE is the sole proof of authorization.
 
 Validation steps:
 1. Verify the auth code JWT signature and expiry
 2. Verify `client_id` and `redirect_uri` match the JWT claims
 3. Verify `code_verifier` against the JWT's `code_challenge` (SHA256)
-4. Validate `client_secret` as an API key via `HashKey()` + `KeyValidator`
 
-On success, sign an app JWT using the existing `SignAppToken()` with the `UserInfo` from the auth code and return:
+On success, sign a new app JWT using `SignAppToken()` with the `UserInfo` from the auth code and return:
 
 ```json
 {
@@ -91,14 +85,14 @@ On success, sign an app JWT using the existing `SignAppToken()` with the `UserIn
 
 ### Auth Code as Signed JWT
 
-Auth codes are not stored server-side. Instead, the auth code itself is a short-lived signed JWT (60s TTL) containing all the state the token endpoint needs to verify the exchange. This avoids shared state between server instances.
+Auth codes are self-contained signed JWTs (60s TTL) containing all the state the token endpoint needs. This avoids shared state between server instances.
 
-The auth code JWT uses the existing Ed25519 `AppKey` for signing and contains:
+The auth code JWT uses the existing Ed25519 `AppKey` for signing:
 
 ```go
 type authCodeClaims struct {
     jwt.RegisteredClaims
-    // User identity from the cookie session
+    // User identity from the app JWT
     Email         string `json:"email"`
     Name          string `json:"name"`
     OrgID         int64  `json:"org_id"`
@@ -109,9 +103,9 @@ type authCodeClaims struct {
 }
 ```
 
-The `POST /oauth/authorize` handler reads the user from the cookie session and creates this JWT as the auth code. The `POST /oauth/token` handler verifies the signature, checks expiry, and validates `client_id`, `redirect_uri`, and `code_verifier` against the claims.
+The `POST /oauth/authorize` handler verifies the app JWT, extracts the user identity, and creates this auth code JWT. The `POST /oauth/token` handler verifies the signature, checks expiry, and validates the PKCE and OAuth params against the claims.
 
-Since the code is signed and has a 60s TTL, replay is limited to the expiry window. Single-use enforcement is not possible without shared state, but the short TTL and PKCE `code_verifier` requirement make replay impractical -- an attacker would need both the auth code and the original `code_verifier` within 60 seconds.
+Since the code is signed and has a 60s TTL, replay is limited to the expiry window. Single-use enforcement is not possible without shared state, but the short TTL and PKCE `code_verifier` requirement make replay impractical.
 
 No database migration needed. No shared state between instances.
 
@@ -143,53 +137,51 @@ The `Server` struct takes:
 
 ```go
 type Options struct {
-    KeyValidator apiauth.KeyValidator
-    AppKey       ed25519.PrivateKey
-    BaseURL      string
+    AppKey  ed25519.PrivateKey
+    BaseURL string
 }
 ```
 
-All dependencies are existing interfaces and types. No new store queries or proto changes.
+All dependencies are existing types. No new store queries or proto changes. `KeyValidator` is no longer needed.
 
 ### Route Registration in `server.go`
 
 ```go
 mcpOAuth := mcpauth.New(mcpauth.Options{
-    KeyValidator: &storeKeyValidator{store: s.store},
-    AppKey:       appKey,
-    BaseURL:      s.baseURL,
+    AppKey:  appKey,
+    BaseURL: s.baseURL,
 })
 mux.HandleFunc("/.well-known/oauth-authorization-server", mcpOAuth.HandleMetadata)
 mux.HandleFunc("/.well-known/oauth-protected-resource", mcpOAuth.HandleResourceMetadata)
-mux.Handle("/oauth/authorize", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(http.HandlerFunc(mcpOAuth.HandleAuthorize)))
+mux.HandleFunc("/oauth/authorize", mcpOAuth.HandleAuthorize)
 mux.HandleFunc("/oauth/token", mcpOAuth.HandleToken)
 ```
 
-The GET request to `/ui/oauth/authorize` serves the SPA (behind cookie auth). The POST to `/oauth/authorize` is handled by the backend (also behind cookie auth).
+All routes are public -- no auth middleware needed. The `/oauth/authorize` POST authenticates via the app JWT in the request body.
 
 ### Frontend Route
 
-New React route at `webui/src/routes/oauth.authorize.tsx` (maps to `/ui/oauth/authorize`). Minimal page:
+New React route at `webui/src/routes/oauth.authorize.tsx` (maps to `/ui/oauth/authorize`):
 
 - Reads OAuth query params from the URL
-- Shows the user's identity (from cookie session) and a consent prompt
-- Has an "Approve" button that POSTs the OAuth params to `/oauth/authorize`
+- Shows the user's identity and org (from the existing auth context)
+- Has an "Approve" button that POSTs the OAuth params + app JWT to `/oauth/authorize`
 - Shows error state if the POST fails
 
-This page is behind cookie auth middleware. If the user is not logged in, they get redirected to the Zitadel login page first, then back to the authorize page with the OAuth params preserved.
+This page is behind cookie auth middleware (like all `/ui/` routes). The user must be logged in and have an org selected to have a valid app JWT.
 
 ### User Flow
 
-1. User creates an API key in xagent UI (existing flow)
-2. User adds a custom connector in Claude.ai with:
+1. User adds a custom connector in Claude.ai with:
    - **URL**: `https://xagent.example.com/mcp`
    - **Client ID**: any string (e.g. `claude`)
-   - **Client Secret**: their `xat_` API key
-3. Claude.ai fetches discovery metadata, opens browser to `/ui/oauth/authorize`
-4. If user is not logged into xagent, they log in via Zitadel (existing SSO flow)
-5. User sees a consent screen and clicks "Approve"
-6. xagent reads user identity from cookie session, signs an auth code JWT, redirects back to Claude.ai
-7. Claude.ai exchanges the code + client secret at `/oauth/token` for an app JWT
+   - **Client Secret**: leave blank (or any value -- ignored)
+2. Claude.ai fetches discovery metadata, opens browser to `/ui/oauth/authorize`
+3. If user is not logged into xagent, they log in via Zitadel (existing SSO flow)
+4. User sees a consent screen showing their identity and org, clicks "Approve"
+5. Frontend POSTs app JWT + OAuth params to `/oauth/authorize`
+6. Backend verifies JWT, signs auth code JWT, redirects back to Claude.ai
+7. Claude.ai exchanges the code at `/oauth/token` (PKCE verified) for a new app JWT
 8. Claude.ai uses the JWT as Bearer token on `/mcp`
 
 ## Trade-offs
@@ -198,9 +190,9 @@ This page is behind cookie auth middleware. If the user is not logged in, they g
 
 Auth codes are self-contained signed JWTs rather than random tokens looked up in a database or cache. This avoids shared state between server instances -- any instance can verify the code using the shared `AppKey`. The tradeoff is that single-use enforcement is not possible (a code could theoretically be replayed within its 60s TTL), but PKCE makes this impractical since the attacker would also need the `code_verifier`.
 
-### client_id is not validated against the database
+### client_id is not validated
 
-The `client_id` in this design is essentially ignored beyond matching it between the authorize and token steps. It's not looked up in any database. The actual client authentication happens via the `client_secret` (an `xat_` API key) at the token endpoint. The user identity comes from the cookie session at the authorize step. This is intentional -- there's no need for a separate client registry when API keys already provide identity and org scoping.
+The `client_id` is not looked up in any database. It's only checked for consistency between the authorize and token steps. There's no client registry -- the user identity comes from the app JWT, and PKCE secures the exchange.
 
 ### No refresh tokens
 
