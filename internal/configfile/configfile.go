@@ -96,7 +96,7 @@ func (f *File) UnmarshalJSON(data []byte) error {
 	}
 	f.Token = jf.Token
 	if jf.PrivateKey != "" {
-		key, err := decodePrivateKey([]byte(jf.PrivateKey))
+		key, err := DecodePrivateKey([]byte(jf.PrivateKey))
 		if err != nil {
 			return err
 		}
@@ -116,7 +116,8 @@ func encodePrivateKey(key ed25519.PrivateKey) []byte {
 	})
 }
 
-func decodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
+// DecodePrivateKey parses a PEM-encoded PKCS8 Ed25519 private key.
+func DecodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
 	block, _ := pem.Decode(data)
 	if block == nil {
 		return nil, fmt.Errorf("invalid PEM data")

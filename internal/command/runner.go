@@ -107,7 +107,13 @@ var RunnerCommand = &cli.Command{
 		if cfg.Token == "" {
 			return fmt.Errorf("not authenticated, run setup first or provide -key flag")
 		}
-		if cfg.PrivateKey == nil {
+		if envKey := os.Getenv("XAGENT_PRIVATE_KEY"); envKey != "" {
+			key, err := configfile.DecodePrivateKey([]byte(envKey))
+			if err != nil {
+				return fmt.Errorf("failed to decode XAGENT_PRIVATE_KEY: %w", err)
+			}
+			cfg.PrivateKey = key
+		} else if cfg.PrivateKey == nil {
 			key, err := agentauth.CreatePrivateKey()
 			if err != nil {
 				return fmt.Errorf("failed to generate private key: %w", err)
