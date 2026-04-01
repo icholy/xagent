@@ -123,7 +123,11 @@ var RunnerCommand = &cli.Command{
 			return fmt.Errorf("failed to load workspace config: %w", err)
 		}
 
-		client := xagentclient.New(xagentclient.Options{BaseURL: serverAddr, Token: cfg.Token})
+		client := xagentclient.New(xagentclient.Options{
+			BaseURL: serverAddr,
+			Token:   cfg.Token,
+		})
+
 		queue := runner.NewEventQueue(runner.EventQueueOptions{
 			Client:        client,
 			Log:           log,
