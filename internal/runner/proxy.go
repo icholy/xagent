@@ -15,8 +15,7 @@ import (
 
 // AgentProxy manages a single Unix socket proxy for all tasks.
 type AgentProxy struct {
-	serverURL  string
-	token      string
+	client     xagentclient.Client
 	privateKey ed25519.PrivateKey
 	log        *slog.Logger
 	proxy      *xagentclient.UnixProxy
@@ -25,8 +24,7 @@ type AgentProxy struct {
 
 // AgentProxyOptions configures the AgentProxy.
 type AgentProxyOptions struct {
-	ServerURL  string
-	Token      string
+	Client     xagentclient.Client
 	PrivateKey ed25519.PrivateKey
 	Log        *slog.Logger
 	SocketPath string
@@ -35,8 +33,7 @@ type AgentProxyOptions struct {
 // NewProxy creates a new Proxy.
 func NewProxy(opts AgentProxyOptions) *AgentProxy {
 	return &AgentProxy{
-		serverURL:  opts.ServerURL,
-		token:      opts.Token,
+		client:     opts.Client,
 		privateKey: opts.PrivateKey,
 		log:        opts.Log,
 		socketPath: opts.SocketPath,
@@ -54,11 +51,8 @@ func (p *AgentProxy) Start() error {
 		return fmt.Errorf("proxy already started")
 	}
 
-	// Create client to the upstream server
-	client := xagentclient.New(xagentclient.Options{BaseURL: p.serverURL, Token: p.token})
-
 	// Create filter to enforce access control
-	filter := xmcp.NewAgentFilter(client)
+	filter := xmcp.NewAgentFilter(p.client)
 
 	// Create Connect RPC handler
 	path, handler := xagentv1connect.NewXAgentServiceHandler(filter)

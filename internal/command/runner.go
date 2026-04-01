@@ -123,15 +123,26 @@ var RunnerCommand = &cli.Command{
 			return fmt.Errorf("failed to load workspace config: %w", err)
 		}
 
+		client := xagentclient.New(xagentclient.Options{
+			BaseURL: serverAddr,
+			Token:   cfg.Token,
+		})
+
+		queue := runner.NewEventQueue(runner.EventQueueOptions{
+			Client:        client,
+			Log:           log,
+			RetryInterval: pollInterval,
+		})
+
 		r, err := runner.New(runner.Options{
-			ServerURL:   serverAddr,
+			Client:      client,
 			PrivateKey:  cfg.PrivateKey,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
 			Log:         log,
-			Auth:        cfg.Token,
 			SocketPath:  filepath.Join(os.TempDir(), "xagent", runnerID+".sock"),
+			Queue:       queue,
 		})
 		if err != nil {
 			return err
@@ -163,6 +174,9 @@ var RunnerCommand = &cli.Command{
 		if err := r.Reconcile(ctx); err != nil {
 			return fmt.Errorf("failed to reconcile: %w", err)
 		}
+
+		// Start event queue drain goroutine
+		go queue.Run(ctx)
 
 		// Start autoprune goroutine
 		go func() {

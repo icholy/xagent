@@ -2,12 +2,13 @@ package runner
 
 import (
 	"context"
+	"log/slog"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
+	dockerclient "github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/agentauth"
 	"github.com/icholy/xagent/internal/dockerx"
@@ -56,9 +57,11 @@ func TestRunnerStart(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Create runner
+	client := xagentclient.New(xagentclient.Options{BaseURL: ts.URL})
 	r, err := New(Options{
-		ServerURL:  ts.URL,
+		Client:     client,
 		PrivateKey: privateKey,
+		Queue:      NewEventQueue(EventQueueOptions{Client: client, Log: slog.Default()}),
 		Workspaces: &workspace.Config{
 			Workspaces: map[string]workspace.Workspace{
 				"test": {
@@ -89,7 +92,7 @@ func TestRunnerStart(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Wait for the container to exit
-	docker, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	docker, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	assert.NilError(t, err)
 	defer docker.Close()
 
