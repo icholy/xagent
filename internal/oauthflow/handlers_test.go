@@ -74,18 +74,17 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 	assert.NilError(t, err)
 	authForm := authParsed.Query()
 	authForm.Set("token", appToken)
-	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}}
-	resp, err = client.PostForm(ts.URL+"/oauth/authorize", authForm)
+	resp, err = http.PostForm(ts.URL+"/oauth/authorize", authForm)
 	assert.NilError(t, err)
 	defer resp.Body.Close()
-	assert.Equal(t, resp.StatusCode, http.StatusFound)
-	location, err := url.Parse(resp.Header.Get("Location"))
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
+	var authResp map[string]string
+	assert.NilError(t, json.NewDecoder(resp.Body).Decode(&authResp))
+	redirectURL, err := url.Parse(authResp["redirect_uri"])
 	assert.NilError(t, err)
-	code := location.Query().Get("code")
+	code := redirectURL.Query().Get("code")
 	assert.Assert(t, code != "")
-	assert.Equal(t, location.Query().Get("state"), "test-state")
+	assert.Equal(t, redirectURL.Query().Get("state"), "test-state")
 
 	// Exchange authorization code for tokens using oauth2 client
 	ctx := t.Context()
