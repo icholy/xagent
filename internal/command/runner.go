@@ -97,23 +97,25 @@ var RunnerCommand = &cli.Command{
 			log = slog.New(handler)
 		}
 
-		cfg, err := configfile.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
+		var overrides configfile.Overrides
 		if cmd.IsSet("key") {
-			cfg.Token = cmd.String("key")
-		}
-		if cfg.Token == "" {
-			return fmt.Errorf("not authenticated, run setup first or provide -key flag")
+			overrides.Token = cmd.String("key")
 		}
 		if envKey := os.Getenv("XAGENT_PRIVATE_KEY"); envKey != "" {
 			key, err := configfile.DecodePrivateKey([]byte(envKey))
 			if err != nil {
 				return fmt.Errorf("failed to decode XAGENT_PRIVATE_KEY: %w", err)
 			}
-			cfg.PrivateKey = key
-		} else if cfg.PrivateKey == nil {
+			overrides.PrivateKey = key
+		}
+		cfg, err := configfile.Load(&overrides)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		if cfg.Token == "" {
+			return fmt.Errorf("not authenticated, run setup first or provide -key flag")
+		}
+		if cfg.PrivateKey == nil {
 			key, err := agentauth.CreatePrivateKey()
 			if err != nil {
 				return fmt.Errorf("failed to generate private key: %w", err)
