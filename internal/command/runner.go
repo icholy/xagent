@@ -78,6 +78,11 @@ var RunnerCommand = &cli.Command{
 			Usage:   "API key (takes priority over config file)",
 			Sources: cli.EnvVars("XAGENT_API_KEY"),
 		},
+		&cli.StringFlag{
+			Name:    "private-key",
+			Usage:   "PEM-encoded Ed25519 private key (takes priority over config file)",
+			Sources: cli.EnvVars("XAGENT_PRIVATE_KEY"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -97,18 +102,10 @@ var RunnerCommand = &cli.Command{
 			log = slog.New(handler)
 		}
 
-		var overrides configfile.Overrides
-		if cmd.IsSet("key") {
-			overrides.Token = cmd.String("key")
-		}
-		if envKey := os.Getenv("XAGENT_PRIVATE_KEY"); envKey != "" {
-			key, err := configfile.DecodePrivateKey([]byte(envKey))
-			if err != nil {
-				return fmt.Errorf("failed to decode XAGENT_PRIVATE_KEY: %w", err)
-			}
-			overrides.PrivateKey = key
-		}
-		cfg, err := configfile.Load(&overrides)
+		cfg, err := configfile.Load(&configfile.Overrides{
+			Token:      cmd.String("key"),
+			PrivateKey: cmd.String("private-key"),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
