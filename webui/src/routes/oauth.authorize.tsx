@@ -33,12 +33,9 @@ function OAuthAuthorizePage() {
     setError(null)
     setSubmitting(true)
     try {
-      let token = authTransport.getToken()
-      if (!token) {
-        token = await authTransport.fetchToken()
-      }
+      const token = await authTransport.fetchToken()
       const body = new URLSearchParams({
-        token: token!,
+        token: token,
         client_id: clientId,
         redirect_uri: redirectUri,
         state,
