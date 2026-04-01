@@ -88,26 +88,31 @@ On success, sign an app JWT using the existing `SignAppToken()` with the `UserIn
 }
 ```
 
-### Auth Code Store
+### Auth Code as Signed JWT
 
-A simple in-memory store with expiration. Auth codes expire after 60 seconds and are single-use.
+Auth codes are not stored server-side. Instead, the auth code itself is a short-lived signed JWT (60s TTL) containing all the state the token endpoint needs to verify the exchange. This avoids shared state between server instances.
+
+The auth code JWT uses the existing Ed25519 `AppKey` for signing and contains:
 
 ```go
-type authCode struct {
-    UserInfo      *apiauth.UserInfo
-    ClientID      string
-    RedirectURI   string
-    CodeChallenge string
-    ExpiresAt     time.Time
-}
-
-type codeStore struct {
-    mu    sync.Mutex
-    codes map[string]*authCode // code string -> authCode
+type authCodeClaims struct {
+    jwt.RegisteredClaims
+    // User identity from the validated API key
+    Email         string `json:"email"`
+    Name          string `json:"name"`
+    OrgID         int64  `json:"org_id"`
+    // OAuth params that must match at the token endpoint
+    ClientID      string `json:"client_id"`
+    RedirectURI   string `json:"redirect_uri"`
+    CodeChallenge string `json:"code_challenge"`
 }
 ```
 
-No database migration needed. Auth codes are ephemeral and don't survive server restarts, which is fine -- Claude.ai will just re-initiate the flow.
+The `POST /oauth/authorize` handler creates this JWT as the auth code. The `POST /oauth/token` handler verifies the signature, checks expiry, and validates `client_id`, `redirect_uri`, and `code_verifier` against the claims.
+
+Since the code is signed and has a 60s TTL, replay is limited to the expiry window. Single-use enforcement is not possible without shared state, but the short TTL and PKCE `code_verifier` requirement make replay impractical -- an attacker would need both the auth code and the original `code_verifier` within 60 seconds.
+
+No database migration needed. No shared state between instances.
 
 ### MCP Endpoint Auth Change
 
@@ -130,7 +135,7 @@ default:
 `internal/mcpauth/` containing:
 
 - `mcpauth.go` -- `Server` struct, `Options`, `New()` constructor
-- `code.go` -- auth code store with expiry and cleanup
+- `code.go` -- auth code JWT claims, sign/verify helpers
 - `handlers.go` -- HTTP handlers for all 4 endpoints
 
 The `Server` struct takes:
@@ -191,9 +196,9 @@ This page is **not** behind auth middleware -- it must be publicly accessible si
 
 The user must enter their API key on the authorize page, even if they're already logged into the xagent UI. An alternative would be to detect an existing cookie session and auto-approve (or show a consent screen). This would be more convenient but adds complexity -- the authorize page would need to handle both authenticated and unauthenticated states, and the cookie auth middleware would need to be wired into the OAuth flow. The API key approach is simpler and self-contained. Could be added later as an enhancement.
 
-### In-memory auth code store vs. database
+### Auth code as signed JWT vs. shared store
 
-Auth codes are stored in memory, not in the database. This means auth codes don't survive server restarts, but since they're only valid for 60 seconds and are part of an interactive flow, this is acceptable. It avoids a database migration and keeps the implementation simple.
+Auth codes are self-contained signed JWTs rather than random tokens looked up in a database or cache. This avoids shared state between server instances -- any instance can verify the code using the shared `AppKey`. The tradeoff is that single-use enforcement is not possible (a code could theoretically be replayed within its 60s TTL), but PKCE makes this impractical since the attacker would also need the `code_verifier`.
 
 ### client_id is not validated against the database
 
