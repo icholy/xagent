@@ -185,13 +185,13 @@ func TestListTasks(t *testing.T) {
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
 		Runner:    "test-runner",
-		Workspace: "workspace-1",
+		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 	_, err = srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 2",
 		Runner:    "test-runner",
-		Workspace: "workspace-2",
+		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
 

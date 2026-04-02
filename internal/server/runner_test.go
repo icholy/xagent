@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
 
@@ -93,7 +94,12 @@ func TestListRunnerTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{
+		Workspaces: []teststore.WorkspaceOptions{
+			{RunnerID: "runner-1", Name: "test-workspace"},
+			{RunnerID: "runner-2", Name: "test-workspace"},
+		},
+	})
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task for runner-1",
 		Workspace: "test-workspace",
@@ -122,7 +128,11 @@ func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{
+		Workspaces: []teststore.WorkspaceOptions{
+			{RunnerID: "runner-1", Name: "test-workspace"},
+		},
+	})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with command",
 		Workspace: "test-workspace",
@@ -150,8 +160,13 @@ func TestListRunnerTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, defaultWorkspaces)
-	ctxB, _ := createTestOrg(t, srv, defaultWorkspaces)
+	runnerWorkspaces := &teststore.OrgOptions{
+		Workspaces: []teststore.WorkspaceOptions{
+			{RunnerID: "runner-1", Name: "test-workspace"},
+		},
+	}
+	ctxA, _ := createTestOrg(t, srv, runnerWorkspaces)
+	ctxB, _ := createTestOrg(t, srv, runnerWorkspaces)
 	_, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",

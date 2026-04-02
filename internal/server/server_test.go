@@ -11,17 +11,6 @@ import (
 var defaultWorkspaces = &teststore.OrgOptions{
 	Workspaces: []teststore.WorkspaceOptions{
 		{RunnerID: "test-runner", Name: "test-workspace"},
-		{RunnerID: "test-runner", Name: "workspace-1"},
-		{RunnerID: "test-runner", Name: "workspace-2"},
-		{RunnerID: "test-runner", Name: "default"},
-		{RunnerID: "runner-1", Name: "test-workspace"},
-		{RunnerID: "runner-1", Name: "workspace-1"},
-		{RunnerID: "runner-1", Name: "workspace-2"},
-		{RunnerID: "runner-1", Name: "default"},
-		{RunnerID: "runner-2", Name: "test-workspace"},
-		{RunnerID: "runner-2", Name: "workspace-1"},
-		{RunnerID: "runner-2", Name: "workspace-2"},
-		{RunnerID: "runner-2", Name: "default"},
 	},
 }
 
