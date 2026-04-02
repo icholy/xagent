@@ -47,6 +47,9 @@ func (s *Server) Handler() http.Handler {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_workspaces",
 		Description: "List available workspaces",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint: true,
+		},
 	}, s.listWorkspaces)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -57,11 +60,17 @@ func (s *Server) Handler() http.Handler {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_task",
 		Description: "Get full details of a task including instructions, logs, links, and children",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint: true,
+		},
 	}, s.getTask)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_tasks",
 		Description: "List all tasks",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint: true,
+		},
 	}, s.listTasks)
 
 	mcp.AddTool(server, &mcp.Tool{

@@ -228,9 +228,9 @@ func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest
 			Email: u.Email,
 			Name:  u.Name,
 		},
-		DefaultOrgId:      user.DefaultOrgID,
-		GithubAccount:     user.GitHubAccountProto(),
-		AtlassianAccount:  user.AtlassianAccountProto(),
+		DefaultOrgId:     user.DefaultOrgID,
+		GithubAccount:    user.GitHubAccountProto(),
+		AtlassianAccount: user.AtlassianAccountProto(),
 	}
 	if s.github != nil {
 		resp.GithubAppSlug = s.github.AppSlug
