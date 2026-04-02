@@ -10,7 +10,7 @@ import (
 func TestSubmitRunnerEvents(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 
 	// Create a task (starts as pending with start command)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -69,8 +69,8 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctxB, _ := createTestOrg(t, srv, defaultWorkspaces)
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -93,7 +93,7 @@ func TestListRunnerTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task for runner-1",
 		Workspace: "test-workspace",
@@ -122,7 +122,7 @@ func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with command",
 		Workspace: "test-workspace",
@@ -150,8 +150,8 @@ func TestListRunnerTasks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctxB, _ := createTestOrg(t, srv, defaultWorkspaces)
 	_, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",

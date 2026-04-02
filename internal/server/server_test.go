@@ -5,35 +5,31 @@ import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/apiauth"
-	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
-	"gotest.tools/v3/assert"
 )
 
-// testOrgOptions configures createTestOrg behavior.
-type testOrgOptions struct {
-	Workspaces bool
+var defaultWorkspaces = &teststore.OrgOptions{
+	Workspaces: []teststore.WorkspaceOptions{
+		{RunnerID: "test-runner", Name: "test-workspace"},
+		{RunnerID: "test-runner", Name: "workspace-1"},
+		{RunnerID: "test-runner", Name: "workspace-2"},
+		{RunnerID: "test-runner", Name: "default"},
+		{RunnerID: "runner-1", Name: "test-workspace"},
+		{RunnerID: "runner-1", Name: "workspace-1"},
+		{RunnerID: "runner-1", Name: "workspace-2"},
+		{RunnerID: "runner-1", Name: "default"},
+		{RunnerID: "runner-2", Name: "test-workspace"},
+		{RunnerID: "runner-2", Name: "workspace-1"},
+		{RunnerID: "runner-2", Name: "workspace-2"},
+		{RunnerID: "runner-2", Name: "default"},
+	},
 }
 
-// createTestOrg creates a user, org, and authenticated context.
-func createTestOrg(t *testing.T, srv *Server, opts testOrgOptions) (context.Context, *teststore.Org) {
+// createTestOrg creates a user, org, and authenticated context with default workspaces.
+func createTestOrg(t *testing.T, srv *Server, opts *teststore.OrgOptions) (context.Context, *teststore.Org) {
 	t.Helper()
-	org := teststore.CreateOrg(t, srv.store, nil)
+	org := teststore.CreateOrg(t, srv.store, opts)
 	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: org.UserID, OrgID: org.OrgID})
-	if opts.Workspaces {
-		for _, runner := range []string{"test-runner", "runner-1", "runner-2"} {
-			_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
-				RunnerId: runner,
-				Workspaces: []*xagentv1.RegisteredWorkspace{
-					{Name: "test-workspace"},
-					{Name: "workspace-1"},
-					{Name: "workspace-2"},
-					{Name: "default"},
-				},
-			})
-			assert.NilError(t, err)
-		}
-	}
 	return ctx, org
 }
 

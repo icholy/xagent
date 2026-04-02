@@ -11,7 +11,7 @@ func TestProcessEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 
 	// Create two tasks with links to the same URL with subscribe=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -102,7 +102,7 @@ func TestProcessEventWithoutURL(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 
 	// Create an event without URL
 	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -125,7 +125,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -165,7 +165,7 @@ func TestProcessEventWithSubscribeFalse(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -205,7 +205,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -254,7 +254,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
 
 	// Create two tasks with links to the same URL with subscribe=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -358,8 +358,8 @@ func TestProcessEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
-	ctxB, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
+	ctxA, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctxB, _ := createTestOrg(t, srv, defaultWorkspaces)
 	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Url:         "https://github.com/example/repo/pull/123",
