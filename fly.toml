@@ -3,7 +3,7 @@ primary_region = "yyz"
 
 [build]
   dockerfile = "Dockerfile"
-  target = "server"
+  build-target = "server"
 
 [env]
   # Set these secrets via `fly secrets set`:
