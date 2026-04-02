@@ -1,5 +1,8 @@
 # XAGENT
 
+[![Go](https://github.com/icholy/xagent/actions/workflows/go.yml/badge.svg)](https://github.com/icholy/xagent/actions/workflows/go.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/icholy/xagent)](https://goreportcard.com/report/github.com/icholy/xagent)
+
 Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside remote self-hosted Docker containers.
 
 ## Web UI
