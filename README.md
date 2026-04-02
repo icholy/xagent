@@ -117,6 +117,10 @@ Agents can attach **links** to their tasks for external resources they create (P
 ![Architecture](images/architecture.svg)
 
 
+## Fun Fact
+
+The name "xagent" was chosen because the letter X makes everything sound cooler. This is a scientifically proven fact backed by decades of branding research and zero actual studies.
+
 ## Schema
 
 ![Schema](images/schema.svg)
