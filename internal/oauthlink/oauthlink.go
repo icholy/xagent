@@ -1,9 +1,9 @@
-package atlassianauth
+package oauthlink
 
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -11,33 +11,31 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const (
-	stateCookie = "xagent_atlassian_state"
-	stateTTL    = 10 * time.Minute
-)
+const stateTTL = 10 * time.Minute
 
-var atlassianEndpoint = oauth2.Endpoint{
-	AuthURL:  "https://auth.atlassian.com/authorize",
-	TokenURL: "https://auth.atlassian.com/oauth/token",
-}
-
-// Config configures the Atlassian OAuth handler.
+// Config configures a generic OAuth link handler.
 type Config struct {
+	Provider     string // e.g. "github", "atlassian" - used for cookie name/path
 	ClientID     string
 	ClientSecret string
 	RedirectURL  string
+	Endpoint     oauth2.Endpoint
+	Scopes       []string
+	AuthParams   []oauth2.AuthCodeOption // extra params for AuthCodeURL
 	Log          *slog.Logger
-	OnSuccess    func(w http.ResponseWriter, r *http.Request, accountID, displayName string)
+	OnSuccess    func(w http.ResponseWriter, r *http.Request, token *oauth2.Token)
 }
 
-// Handler implements http.Handler for Atlassian OAuth2 login/callback.
+// Handler implements http.Handler for OAuth2 login/callback.
 // Mount it with http.StripPrefix so that "/login" and "/callback" are
 // routed correctly.
 type Handler struct {
-	oauth     *oauth2.Config
-	log       *slog.Logger
-	onSuccess func(w http.ResponseWriter, r *http.Request, accountID, displayName string)
-	mux       *http.ServeMux
+	oauth      *oauth2.Config
+	log        *slog.Logger
+	provider   string
+	authParams []oauth2.AuthCodeOption
+	onSuccess  func(w http.ResponseWriter, r *http.Request, token *oauth2.Token)
+	mux        *http.ServeMux
 }
 
 func New(cfg Config) *Handler {
@@ -50,12 +48,14 @@ func New(cfg Config) *Handler {
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
 			RedirectURL:  cfg.RedirectURL,
-			Scopes:       []string{"read:me"},
-			Endpoint:     atlassianEndpoint,
+			Scopes:       cfg.Scopes,
+			Endpoint:     cfg.Endpoint,
 		},
-		log:       log,
-		onSuccess: cfg.OnSuccess,
-		mux:       http.NewServeMux(),
+		log:        log,
+		provider:   cfg.Provider,
+		authParams: cfg.AuthParams,
+		onSuccess:  cfg.OnSuccess,
+		mux:        http.NewServeMux(),
 	}
 	h.mux.HandleFunc("/login", h.handleLogin)
 	h.mux.HandleFunc("/callback", h.handleCallback)
@@ -66,6 +66,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mux.ServeHTTP(w, r)
 }
 
+func (h *Handler) cookieName() string {
+	return fmt.Sprintf("xagent_%s_state", h.provider)
+}
+
+func (h *Handler) cookiePath() string {
+	return fmt.Sprintf("/%s/callback", h.provider)
+}
+
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := generateRandomState()
 	if err != nil {
@@ -74,23 +82,19 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     stateCookie,
+		Name:     h.cookieName(),
 		Value:    state,
-		Path:     "/atlassian/callback",
+		Path:     h.cookiePath(),
 		MaxAge:   int(stateTTL.Seconds()),
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	// Atlassian OAuth 2.0 3LO requires audience and prompt parameters
-	http.Redirect(w, r, h.oauth.AuthCodeURL(state,
-		oauth2.SetAuthURLParam("audience", "api.atlassian.com"),
-		oauth2.SetAuthURLParam("prompt", "consent"),
-	), http.StatusFound)
+	http.Redirect(w, r, h.oauth.AuthCodeURL(state, h.authParams...), http.StatusFound)
 }
 
 func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(stateCookie)
+	cookie, err := r.Cookie(h.cookieName())
 	if err != nil {
 		http.Error(w, "missing state cookie", http.StatusBadRequest)
 		return
@@ -112,18 +116,11 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	me, err := h.fetchMe(r, token.AccessToken)
-	if err != nil {
-		h.log.Error("failed to fetch Atlassian user", "error", err)
-		http.Error(w, "failed to fetch Atlassian user", http.StatusInternalServerError)
-		return
-	}
-
 	// Clear state cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     stateCookie,
+		Name:     h.cookieName(),
 		Value:    "",
-		Path:     "/atlassian/callback",
+		Path:     h.cookiePath(),
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
@@ -131,33 +128,10 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if h.onSuccess != nil {
-		h.onSuccess(w, r, me.AccountID, me.Name)
+		h.onSuccess(w, r, token)
 	} else {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
-}
-
-type atlassianUser struct {
-	AccountID string `json:"account_id"`
-	Name      string `json:"name"`
-}
-
-func (h *Handler) fetchMe(r *http.Request, accessToken string) (*atlassianUser, error) {
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://api.atlassian.com/me", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var me atlassianUser
-	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
-		return nil, err
-	}
-	return &me, nil
 }
 
 func generateRandomState() (string, error) {
