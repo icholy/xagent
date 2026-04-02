@@ -70,7 +70,7 @@ func (h *Handler) cookieName() string {
 	return fmt.Sprintf("xagent_%s_state", h.provider)
 }
 
-func (h *Handler) cookiePath() string {
+func (h *Handler) callbackPath() string {
 	return fmt.Sprintf("/%s/callback", h.provider)
 }
 
@@ -84,7 +84,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.cookieName(),
 		Value:    state,
-		Path:     h.cookiePath(),
+		Path:     h.callbackPath(),
 		MaxAge:   int(stateTTL.Seconds()),
 		HttpOnly: true,
 		Secure:   true,
@@ -120,7 +120,7 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.cookieName(),
 		Value:    "",
-		Path:     h.cookiePath(),
+		Path:     h.callbackPath(),
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
