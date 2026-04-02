@@ -2,6 +2,7 @@
 package teststore
 
 import (
+	"cmp"
 	"os"
 	"testing"
 
@@ -33,6 +34,30 @@ func New(t *testing.T) *store.Store {
 type Org struct {
 	UserID string
 	OrgID  int64
+}
+
+// TaskOptions configures CreateTask behavior. Zero values are replaced
+// with sensible defaults.
+type TaskOptions struct {
+	Status    model.TaskStatus
+	Workspace string
+}
+
+// CreateTask creates a task in the given org.
+func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *model.Task {
+	t.Helper()
+	if opts == nil {
+		opts = &TaskOptions{}
+	}
+	task := &model.Task{
+		OrgID:     org.OrgID,
+		Status:    cmp.Or(opts.Status, model.TaskStatusPending),
+		Workspace: cmp.Or(opts.Workspace, "default"),
+	}
+	if err := s.CreateTask(t.Context(), nil, task); err != nil {
+		t.Fatal(err)
+	}
+	return task
 }
 
 // CreateOrg creates a user, org, org membership, and sets the default org.
