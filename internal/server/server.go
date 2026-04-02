@@ -171,6 +171,11 @@ func (s *Server) Handler() http.Handler {
 		})
 		mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", ah)))
 	}
+	// Atlassian webhook (always registered — uses per-org secrets from DB)
+	mux.Handle("/webhook/atlassian", &webhook.AtlassianHandler{
+		Log:   s.log,
+		Store: s.store,
+	})
 	// OAuth 2.1 endpoints (public, conditionally registered)
 	if s.oauth != nil {
 		mux.HandleFunc("/.well-known/oauth-authorization-server", s.oauth.HandleMetadata)
