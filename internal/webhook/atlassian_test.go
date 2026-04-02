@@ -183,11 +183,10 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 	err = s.CreateTask(ctx, nil, task)
 	assert.NilError(t, err)
 
-	jiraIssueURL := "https://mycompany.atlassian.net/browse/PROJ-10"
 	link := &model.Link{
 		TaskID:    task.ID,
 		Relevance: "test",
-		URL:       jiraIssueURL,
+		URL:       "https://mycompany.atlassian.net/browse/PROJ-10",
 		Notify:    true,
 	}
 	err = s.CreateLink(ctx, nil, link)
