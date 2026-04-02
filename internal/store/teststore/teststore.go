@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 )
 
@@ -25,4 +27,46 @@ func New(t *testing.T) *store.Store {
 		db.Close()
 	})
 	return store.New(db)
+}
+
+// Org holds the user and org created by CreateOrg.
+type Org struct {
+	UserID string
+	OrgID  int64
+}
+
+// CreateOrg creates a user, org, org membership, and sets the default org.
+func CreateOrg(t *testing.T, s *store.Store) *Org {
+	t.Helper()
+	ctx := t.Context()
+	userID := uuid.NewString()
+	err := s.CreateUser(ctx, nil, &model.User{
+		ID:    userID,
+		Email: userID + "@test.com",
+		Name:  "Test User",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	org := &model.Org{
+		Name:  "test-org-" + userID,
+		Owner: userID,
+	}
+	if err := s.CreateOrg(ctx, nil, org); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddOrgMember(ctx, nil, &model.OrgMember{
+		OrgID:  org.ID,
+		UserID: userID,
+		Role:   "owner",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateDefaultOrgID(ctx, nil, userID, org.ID); err != nil {
+		t.Fatal(err)
+	}
+	return &Org{
+		UserID: userID,
+		OrgID:  org.ID,
+	}
 }
