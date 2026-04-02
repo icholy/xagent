@@ -152,8 +152,8 @@ func setupAtlassianTestHandler(t *testing.T) (*AtlassianHandler, *store.Store) {
 	t.Helper()
 	s := setupTestStore(t)
 	h := &AtlassianHandler{
-		Log:   slog.Default(),
-		Store: s,
+		Router: &EventRouter{Log: slog.Default(), Store: s},
+		Store:  s,
 	}
 	return h, s
 }

@@ -295,8 +295,8 @@ func setupTestHandler(t *testing.T) (*GitHubHandler, *store.Store) {
 	t.Helper()
 	s := setupTestStore(t)
 	h := &GitHubHandler{
-		Log:   slog.Default(),
-		Store: s,
+		Router: &EventRouter{Log: slog.Default(), Store: s},
+		Store:  s,
 	}
 	return h, s
 }

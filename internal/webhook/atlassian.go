@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -12,14 +11,13 @@ import (
 	"strings"
 
 	"github.com/icholy/xagent/internal/atlassian"
-	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 )
 
 // AtlassianHandler handles incoming Atlassian (Jira) webhook events.
 type AtlassianHandler struct {
-	Log   *slog.Logger
-	Store *store.Store
+	Router *EventRouter
+	Store  *store.Store
 }
 
 func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -88,87 +86,21 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find matching subscribed links across all the user's orgs
-	linksByOrg, err := h.findLinksByOrg(r.Context(), extracted.url, user.ID)
+	// Route event to subscribed tasks
+	event := Event{
+		Description: extracted.description,
+		Data:        extracted.data,
+		URL:         extracted.url,
+	}
+	totalRouted, err := h.Router.Route(r.Context(), event, user.ID, "atlassian webhook started task")
 	if err != nil {
-		slog.Error("failed to find matching links", "error", err)
+		slog.Error("failed to route event", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	// Create events and route to tasks per org
-	var totalRouted int
-	for orgID, links := range linksByOrg {
-		event := &model.Event{
-			Description: extracted.description,
-			Data:        extracted.data,
-			URL:         extracted.url,
-			OrgID:       orgID,
-		}
-		if err := h.Store.CreateEvent(r.Context(), nil, event); err != nil {
-			slog.Error("failed to create event", "org_id", orgID, "error", err)
-			continue
-		}
-		routed := h.routeEventToLinks(r.Context(), event.ID, links, orgID)
-		totalRouted += routed
-	}
-
-	slog.Info("Atlassian webhook processed", "url", extracted.url, "orgs", len(linksByOrg), "tasks_routed", totalRouted)
+	slog.Info("Atlassian webhook processed", "url", extracted.url, "tasks_routed", totalRouted)
 	fmt.Fprintf(w, "processed")
-}
-
-// findLinksByOrg queries all matching subscribed links for a URL across all
-// the user's orgs and groups them by org ID.
-func (h *AtlassianHandler) findLinksByOrg(ctx context.Context, url string, userID string) (map[int64][]*model.Link, error) {
-	if url == "" {
-		return nil, nil
-	}
-	matches, err := h.Store.FindSubscribedLinksByURLForUser(ctx, nil, url, userID)
-	if err != nil {
-		return nil, err
-	}
-	result := map[int64][]*model.Link{}
-	for _, m := range matches {
-		result[m.OrgID] = append(result[m.OrgID], m.Link)
-	}
-	return result, nil
-}
-
-// routeEventToLinks routes an event to the tasks referenced by the given links.
-// It returns the number of tasks successfully routed.
-func (h *AtlassianHandler) routeEventToLinks(ctx context.Context, eventID int64, links []*model.Link, orgID int64) int {
-	taskIDs := map[int64]bool{}
-	for _, link := range links {
-		if taskIDs[link.TaskID] {
-			continue
-		}
-		taskIDs[link.TaskID] = true
-		err := h.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			if err := h.Store.AddEventTask(ctx, tx, eventID, link.TaskID); err != nil {
-				return err
-			}
-			task, err := h.Store.GetTaskForUpdate(ctx, tx, link.TaskID, orgID)
-			if err != nil {
-				return err
-			}
-			task.Start()
-			if err := h.Store.UpdateTask(ctx, tx, task); err != nil {
-				return err
-			}
-			if err := h.Store.CreateLog(ctx, tx, &model.Log{
-				TaskID:  link.TaskID,
-				Type:    "audit",
-				Content: "atlassian webhook started task",
-			}); err != nil {
-				return err
-			}
-			return tx.Commit()
-		})
-		if err != nil {
-			h.Log.Warn("failed to route event to task", "event_id", eventID, "task_id", link.TaskID, "error", err)
-		}
-	}
-	return len(taskIDs)
 }
 
 type atlassianWebhookEvent struct {

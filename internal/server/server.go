@@ -152,7 +152,7 @@ func (s *Server) Handler() http.Handler {
 		})
 		mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", gh)))
 		mux.Handle("/webhook/github", &webhook.GitHubHandler{
-			Log:           s.log,
+			Router:        &webhook.EventRouter{Log: s.log, Store: s.store},
 			Store:         s.store,
 			WebhookSecret: s.github.WebhookSecret,
 		})
@@ -199,8 +199,8 @@ func (s *Server) Handler() http.Handler {
 		})
 		mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", ah)))
 		mux.Handle("/webhook/atlassian", &webhook.AtlassianHandler{
-			Log:   s.log,
-			Store: s.store,
+			Router: &webhook.EventRouter{Log: s.log, Store: s.store},
+			Store:  s.store,
 		})
 	}
 	// OAuth 2.1 endpoints (public, conditionally registered)
