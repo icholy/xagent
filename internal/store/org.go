@@ -137,12 +137,12 @@ func (s *Store) ResolveOrgOwner(ctx context.Context, tx *sql.Tx, orgID int64, us
 
 func toModelOrg(row sqlc.Org) *model.Org {
 	return &model.Org{
-		ID:                row.ID,
-		Name:              row.Name,
-		Owner:             row.Owner,
+		ID:        row.ID,
+		Name:      row.Name,
+		Owner:     row.Owner,
 		Archived:  row.Archived,
 		CreatedAt: row.CreatedAt,
-		UpdatedAt:         row.UpdatedAt,
+		UpdatedAt: row.UpdatedAt,
 	}
 }
 

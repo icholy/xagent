@@ -126,7 +126,7 @@ func toModelUserRow(id, email, name string, githubUserID sql.NullInt64, githubUs
 		ID:                id,
 		Email:             email,
 		Name:              name,
-		GitHubUsername:     githubUsername.String,
+		GitHubUsername:    githubUsername.String,
 		AtlassianUsername: atlassianUsername,
 		CreatedAt:         createdAt,
 		UpdatedAt:         updatedAt,
