@@ -31,6 +31,7 @@ import (
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/servermcp"
 	"github.com/icholy/xagent/internal/store"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/webhook"
 	"github.com/justinas/alice"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -152,7 +153,7 @@ func (s *Server) Handler() http.Handler {
 		})
 		mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", gh)))
 		mux.Handle("/webhook/github", &webhook.GitHubHandler{
-			Router:        &webhook.EventRouter{Log: s.log, Store: s.store},
+			Router:        &eventrouter.Router{Log: s.log, Store: s.store},
 			Store:         s.store,
 			WebhookSecret: s.github.WebhookSecret,
 		})
@@ -199,7 +200,7 @@ func (s *Server) Handler() http.Handler {
 		})
 		mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", ah)))
 		mux.Handle("/webhook/atlassian", &webhook.AtlassianHandler{
-			Router: &webhook.EventRouter{Log: s.log, Store: s.store},
+			Router: &eventrouter.Router{Log: s.log, Store: s.store},
 			Store:  s.store,
 		})
 	}

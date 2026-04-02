@@ -2,8 +2,8 @@ package webhook
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-github/v68/github"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 	"gotest.tools/v3/assert"
@@ -291,44 +292,29 @@ func makeWebhookRequest(t *testing.T, eventType string, payload any) *http.Reque
 	return req
 }
 
-func setupTestHandler(t *testing.T) (*GitHubHandler, *store.Store) {
+func setupTestHandler(t *testing.T) (*GitHubHandler, *store.Store, *RouterMock) {
 	t.Helper()
 	s := setupTestStore(t)
+	r := &RouterMock{
+		RouteFunc: func(ctx context.Context, event eventrouter.Event) (int, error) {
+			return 1, nil
+		},
+	}
 	h := &GitHubHandler{
-		Router: &EventRouter{Log: slog.Default(), Store: s},
+		Router: r,
 		Store:  s,
 	}
-	return h, s
+	return h, s, r
 }
 
 func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
-	h, s := setupTestHandler(t)
+	h, s, r := setupTestHandler(t)
 
 	userID, orgID := createTestUser(t, s)
 	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: orgID})
 
 	ghUserID := rand.Int64N(1<<53) + 1
 	err := s.LinkGitHubAccount(ctx, nil, userID, ghUserID, "testuser")
-	assert.NilError(t, err)
-
-	task := &model.Task{
-		Name:      "test-task",
-		Workspace: "test",
-		Status:    model.TaskStatusCompleted,
-		Command:   model.TaskCommandNone,
-		Version:   1,
-		OrgID:     orgID,
-	}
-	err = s.CreateTask(ctx, nil, task)
-	assert.NilError(t, err)
-
-	link := &model.Link{
-		TaskID:    task.ID,
-		Relevance: "test",
-		URL:       "https://github.com/owner/repo/pull/10",
-		Subscribe: true,
-	}
-	err = s.CreateLink(ctx, nil, link)
 	assert.NilError(t, err)
 
 	payload := github.IssueCommentEvent{
@@ -353,76 +339,28 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	updatedTask, err := s.GetTask(ctx, nil, task.ID, orgID)
-	assert.NilError(t, err)
-	assert.Equal(t, updatedTask.Status, model.TaskStatusPending)
+	calls := r.RouteCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].Event, eventrouter.Event{
+		Type:        eventrouter.EventTypeGitHub,
+		Description: "testuser commented on PR #10",
+		Data:        "xagent: please fix the tests",
+		URL:         "https://github.com/owner/repo/pull/10",
+		UserID:      userID,
+	})
 }
 
-func TestHandleGitHubWebhookRoutesToMultipleOrgs(t *testing.T) {
-	h, s := setupTestHandler(t)
+func TestHandleGitHubWebhookRoutesWithCorrectEvent(t *testing.T) {
+	h, s, r := setupTestHandler(t)
 
-	userID, orgID1 := createTestUser(t, s)
-	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: orgID1})
+	userID, orgID := createTestUser(t, s)
+	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: orgID})
 
 	ghUserID := rand.Int64N(1<<53) + 1
 	err := s.LinkGitHubAccount(ctx, nil, userID, ghUserID, "testuser")
 	assert.NilError(t, err)
 
-	// Create a second org and add the user as a member
-	org2 := &model.Org{
-		Name:  "second-org",
-		Owner: userID,
-	}
-	err = s.CreateOrg(ctx, nil, org2)
-	assert.NilError(t, err)
-	err = s.AddOrgMember(ctx, nil, &model.OrgMember{
-		OrgID:  org2.ID,
-		UserID: userID,
-		Role:   "owner",
-	})
-	assert.NilError(t, err)
-
 	prURL := "https://github.com/owner/repo/pull/42"
-
-	// Create a task in org1 with a subscribed link
-	task1 := &model.Task{
-		Name:      "org1-task",
-		Workspace: "test",
-		Status:    model.TaskStatusCompleted,
-		Command:   model.TaskCommandNone,
-		Version:   1,
-		OrgID:     orgID1,
-	}
-	err = s.CreateTask(ctx, nil, task1)
-	assert.NilError(t, err)
-	err = s.CreateLink(ctx, nil, &model.Link{
-		TaskID:    task1.ID,
-		Relevance: "test",
-		URL:       prURL,
-		Subscribe: true,
-	})
-	assert.NilError(t, err)
-
-	// Create a task in org2 with a subscribed link to the same URL
-	task2 := &model.Task{
-		Name:      "org2-task",
-		Workspace: "test",
-		Status:    model.TaskStatusCompleted,
-		Command:   model.TaskCommandNone,
-		Version:   1,
-		OrgID:     org2.ID,
-	}
-	err = s.CreateTask(ctx, nil, task2)
-	assert.NilError(t, err)
-	err = s.CreateLink(ctx, nil, &model.Link{
-		TaskID:    task2.ID,
-		Relevance: "test",
-		URL:       prURL,
-		Subscribe: true,
-	})
-	assert.NilError(t, err)
-
-	// Fire webhook
 	payload := github.IssueCommentEvent{
 		Action: github.Ptr("created"),
 		Comment: &github.IssueComment{
@@ -445,19 +383,19 @@ func TestHandleGitHubWebhookRoutesToMultipleOrgs(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	// Verify task in org1 was started
-	updatedTask1, err := s.GetTask(ctx, nil, task1.ID, orgID1)
-	assert.NilError(t, err)
-	assert.Equal(t, updatedTask1.Status, model.TaskStatusPending)
-
-	// Verify task in org2 was started
-	updatedTask2, err := s.GetTask(ctx, nil, task2.ID, org2.ID)
-	assert.NilError(t, err)
-	assert.Equal(t, updatedTask2.Status, model.TaskStatusPending)
+	calls := r.RouteCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].Event, eventrouter.Event{
+		Type:        eventrouter.EventTypeGitHub,
+		Description: "testuser commented on PR #42",
+		Data:        "xagent: deploy please",
+		URL:         prURL,
+		UserID:      userID,
+	})
 }
 
 func TestHandleGitHubWebhookIgnoredEventType(t *testing.T) {
-	h, _ := setupTestHandler(t)
+	h, _, _ := setupTestHandler(t)
 
 	payload := github.PushEvent{}
 	req := makeWebhookRequest(t, "push", payload)
@@ -469,7 +407,7 @@ func TestHandleGitHubWebhookIgnoredEventType(t *testing.T) {
 }
 
 func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {
-	h, _ := setupTestHandler(t)
+	h, _, _ := setupTestHandler(t)
 
 	payload := github.IssueCommentEvent{
 		Action: github.Ptr("created"),

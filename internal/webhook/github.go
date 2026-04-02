@@ -10,13 +10,14 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v68/github"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/githubx"
 	"github.com/icholy/xagent/internal/store"
 )
 
 // GitHubHandler handles incoming GitHub App webhook events.
 type GitHubHandler struct {
-	Router        *EventRouter
+	Router        Router
 	Store         *store.Store
 	WebhookSecret string
 }
@@ -63,12 +64,14 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Route event to subscribed tasks
-	event := Event{
+	event := eventrouter.Event{
+		Type:        eventrouter.EventTypeGitHub,
 		Description: extracted.description,
 		Data:        extracted.data,
 		URL:         extracted.url,
+		UserID:      user.ID,
 	}
-	totalRouted, err := h.Router.Route(r.Context(), event, user.ID, "github webhook started task")
+	totalRouted, err := h.Router.Route(r.Context(), event)
 	if err != nil {
 		slog.Error("failed to route event", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

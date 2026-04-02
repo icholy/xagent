@@ -2,8 +2,8 @@ package webhook
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/atlassian"
-	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/store"
 	"gotest.tools/v3/assert"
 )
@@ -148,18 +148,23 @@ func makeAtlassianWebhookRequest(t *testing.T, orgID int64, payload any, secret 
 	return req
 }
 
-func setupAtlassianTestHandler(t *testing.T) (*AtlassianHandler, *store.Store) {
+func setupAtlassianTestHandler(t *testing.T) (*AtlassianHandler, *store.Store, *RouterMock) {
 	t.Helper()
 	s := setupTestStore(t)
+	r := &RouterMock{
+		RouteFunc: func(ctx context.Context, event eventrouter.Event) (int, error) {
+			return 1, nil
+		},
+	}
 	h := &AtlassianHandler{
-		Router: &EventRouter{Log: slog.Default(), Store: s},
+		Router: r,
 		Store:  s,
 	}
-	return h, s
+	return h, s, r
 }
 
 func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
-	h, s := setupAtlassianTestHandler(t)
+	h, s, r := setupAtlassianTestHandler(t)
 
 	userID, orgID := createTestUser(t, s)
 	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: orgID})
@@ -170,26 +175,6 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 
 	secret := "test-webhook-secret"
 	err = s.SetOrgAtlassianWebhookSecret(ctx, nil, orgID, secret)
-	assert.NilError(t, err)
-
-	task := &model.Task{
-		Name:      "test-task",
-		Workspace: "test",
-		Status:    model.TaskStatusCompleted,
-		Command:   model.TaskCommandNone,
-		Version:   1,
-		OrgID:     orgID,
-	}
-	err = s.CreateTask(ctx, nil, task)
-	assert.NilError(t, err)
-
-	link := &model.Link{
-		TaskID:    task.ID,
-		Relevance: "test",
-		URL:       "https://mycompany.atlassian.net/browse/PROJ-10",
-		Subscribe: true,
-	}
-	err = s.CreateLink(ctx, nil, link)
 	assert.NilError(t, err)
 
 	payload := atlassian.WebhookPayload{
@@ -211,13 +196,19 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	updatedTask, err := s.GetTask(ctx, nil, task.ID, orgID)
-	assert.NilError(t, err)
-	assert.Equal(t, updatedTask.Status, model.TaskStatusPending)
+	calls := r.RouteCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].Event, eventrouter.Event{
+		Type:        eventrouter.EventTypeAtlassian,
+		Description: "Test User commented on PROJ-10",
+		Data:        "xagent: please fix the tests",
+		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
+		UserID:      userID,
+	})
 }
 
 func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
-	h, s := setupAtlassianTestHandler(t)
+	h, s, _ := setupAtlassianTestHandler(t)
 
 	_, orgID := createTestUser(t, s)
 	secret := "test-webhook-secret"
@@ -236,7 +227,7 @@ func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
 }
 
 func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
-	h, s := setupAtlassianTestHandler(t)
+	h, s, _ := setupAtlassianTestHandler(t)
 
 	_, orgID := createTestUser(t, s)
 	secret := "test-webhook-secret"
@@ -263,7 +254,7 @@ func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
 }
 
 func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {
-	h, s := setupAtlassianTestHandler(t)
+	h, s, _ := setupAtlassianTestHandler(t)
 
 	_, orgID := createTestUser(t, s)
 	secret := "test-webhook-secret"
@@ -284,7 +275,7 @@ func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {
 }
 
 func TestHandleAtlassianWebhookMissingOrg(t *testing.T) {
-	h, _ := setupAtlassianTestHandler(t)
+	h, _, _ := setupAtlassianTestHandler(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook/atlassian", bytes.NewReader([]byte("{}")))
 	rec := httptest.NewRecorder()

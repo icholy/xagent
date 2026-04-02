@@ -11,12 +11,13 @@ import (
 	"strings"
 
 	"github.com/icholy/xagent/internal/atlassian"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/store"
 )
 
 // AtlassianHandler handles incoming Atlassian (Jira) webhook events.
 type AtlassianHandler struct {
-	Router *EventRouter
+	Router Router
 	Store  *store.Store
 }
 
@@ -87,12 +88,14 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Route event to subscribed tasks
-	event := Event{
+	event := eventrouter.Event{
+		Type:        eventrouter.EventTypeAtlassian,
 		Description: extracted.description,
 		Data:        extracted.data,
 		URL:         extracted.url,
+		UserID:      user.ID,
 	}
-	totalRouted, err := h.Router.Route(r.Context(), event, user.ID, "atlassian webhook started task")
+	totalRouted, err := h.Router.Route(r.Context(), event)
 	if err != nil {
 		slog.Error("failed to route event", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
