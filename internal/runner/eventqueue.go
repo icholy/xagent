@@ -104,8 +104,7 @@ func (q *EventQueue) Drain(ctx context.Context) error {
 // isPermanentError returns true if the error indicates a condition that
 // will never succeed on retry (e.g. task not found, invalid argument).
 func isPermanentError(err error) bool {
-	code := connect.CodeOf(err)
-	switch code {
+	switch connect.CodeOf(err) {
 	case connect.CodeNotFound, connect.CodeInvalidArgument, connect.CodePermissionDenied:
 		return true
 	default:
