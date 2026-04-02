@@ -126,15 +126,9 @@ const (
 	XAgentServiceListKeysProcedure = "/xagent.v1.XAgentService/ListKeys"
 	// XAgentServiceDeleteKeyProcedure is the fully-qualified name of the XAgentService's DeleteKey RPC.
 	XAgentServiceDeleteKeyProcedure = "/xagent.v1.XAgentService/DeleteKey"
-	// XAgentServiceGetGitHubAccountProcedure is the fully-qualified name of the XAgentService's
-	// GetGitHubAccount RPC.
-	XAgentServiceGetGitHubAccountProcedure = "/xagent.v1.XAgentService/GetGitHubAccount"
 	// XAgentServiceUnlinkGitHubAccountProcedure is the fully-qualified name of the XAgentService's
 	// UnlinkGitHubAccount RPC.
 	XAgentServiceUnlinkGitHubAccountProcedure = "/xagent.v1.XAgentService/UnlinkGitHubAccount"
-	// XAgentServiceGetAtlassianAccountProcedure is the fully-qualified name of the XAgentService's
-	// GetAtlassianAccount RPC.
-	XAgentServiceGetAtlassianAccountProcedure = "/xagent.v1.XAgentService/GetAtlassianAccount"
 	// XAgentServiceUnlinkAtlassianAccountProcedure is the fully-qualified name of the XAgentService's
 	// UnlinkAtlassianAccount RPC.
 	XAgentServiceUnlinkAtlassianAccountProcedure = "/xagent.v1.XAgentService/UnlinkAtlassianAccount"
@@ -191,9 +185,7 @@ type XAgentServiceClient interface {
 	CreateKey(context.Context, *v1.CreateKeyRequest) (*v1.CreateKeyResponse, error)
 	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
-	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
-	GetAtlassianAccount(context.Context, *v1.GetAtlassianAccountRequest) (*v1.GetAtlassianAccountResponse, error)
 	UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
@@ -418,22 +410,10 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("DeleteKey")),
 			connect.WithClientOptions(opts...),
 		),
-		getGitHubAccount: connect.NewClient[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse](
-			httpClient,
-			baseURL+XAgentServiceGetGitHubAccountProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("GetGitHubAccount")),
-			connect.WithClientOptions(opts...),
-		),
 		unlinkGitHubAccount: connect.NewClient[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse](
 			httpClient,
 			baseURL+XAgentServiceUnlinkGitHubAccountProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
-			connect.WithClientOptions(opts...),
-		),
-		getAtlassianAccount: connect.NewClient[v1.GetAtlassianAccountRequest, v1.GetAtlassianAccountResponse](
-			httpClient,
-			baseURL+XAgentServiceGetAtlassianAccountProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("GetAtlassianAccount")),
 			connect.WithClientOptions(opts...),
 		),
 		unlinkAtlassianAccount: connect.NewClient[v1.UnlinkAtlassianAccountRequest, v1.UnlinkAtlassianAccountResponse](
@@ -517,9 +497,7 @@ type xAgentServiceClient struct {
 	createKey              *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
 	listKeys               *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
 	deleteKey              *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
-	getGitHubAccount       *connect.Client[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse]
 	unlinkGitHubAccount    *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
-	getAtlassianAccount    *connect.Client[v1.GetAtlassianAccountRequest, v1.GetAtlassianAccountResponse]
 	unlinkAtlassianAccount *connect.Client[v1.UnlinkAtlassianAccountRequest, v1.UnlinkAtlassianAccountResponse]
 	createOrg              *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
 	listOrgs               *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
@@ -835,27 +813,9 @@ func (c *xAgentServiceClient) DeleteKey(ctx context.Context, req *v1.DeleteKeyRe
 	return nil, err
 }
 
-// GetGitHubAccount calls xagent.v1.XAgentService.GetGitHubAccount.
-func (c *xAgentServiceClient) GetGitHubAccount(ctx context.Context, req *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error) {
-	response, err := c.getGitHubAccount.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
 // UnlinkGitHubAccount calls xagent.v1.XAgentService.UnlinkGitHubAccount.
 func (c *xAgentServiceClient) UnlinkGitHubAccount(ctx context.Context, req *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error) {
 	response, err := c.unlinkGitHubAccount.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// GetAtlassianAccount calls xagent.v1.XAgentService.GetAtlassianAccount.
-func (c *xAgentServiceClient) GetAtlassianAccount(ctx context.Context, req *v1.GetAtlassianAccountRequest) (*v1.GetAtlassianAccountResponse, error) {
-	response, err := c.getAtlassianAccount.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -961,9 +921,7 @@ type XAgentServiceHandler interface {
 	CreateKey(context.Context, *v1.CreateKeyRequest) (*v1.CreateKeyResponse, error)
 	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
-	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
-	GetAtlassianAccount(context.Context, *v1.GetAtlassianAccountRequest) (*v1.GetAtlassianAccountResponse, error)
 	UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
@@ -1184,22 +1142,10 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("DeleteKey")),
 		connect.WithHandlerOptions(opts...),
 	)
-	xAgentServiceGetGitHubAccountHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceGetGitHubAccountProcedure,
-		svc.GetGitHubAccount,
-		connect.WithSchema(xAgentServiceMethods.ByName("GetGitHubAccount")),
-		connect.WithHandlerOptions(opts...),
-	)
 	xAgentServiceUnlinkGitHubAccountHandler := connect.NewUnaryHandlerSimple(
 		XAgentServiceUnlinkGitHubAccountProcedure,
 		svc.UnlinkGitHubAccount,
 		connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceGetAtlassianAccountHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceGetAtlassianAccountProcedure,
-		svc.GetAtlassianAccount,
-		connect.WithSchema(xAgentServiceMethods.ByName("GetAtlassianAccount")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceUnlinkAtlassianAccountHandler := connect.NewUnaryHandlerSimple(
@@ -1314,12 +1260,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListKeysHandler.ServeHTTP(w, r)
 		case XAgentServiceDeleteKeyProcedure:
 			xAgentServiceDeleteKeyHandler.ServeHTTP(w, r)
-		case XAgentServiceGetGitHubAccountProcedure:
-			xAgentServiceGetGitHubAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceUnlinkGitHubAccountProcedure:
 			xAgentServiceUnlinkGitHubAccountHandler.ServeHTTP(w, r)
-		case XAgentServiceGetAtlassianAccountProcedure:
-			xAgentServiceGetAtlassianAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceUnlinkAtlassianAccountProcedure:
 			xAgentServiceUnlinkAtlassianAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateOrgProcedure:
@@ -1479,16 +1421,8 @@ func (UnimplementedXAgentServiceHandler) DeleteKey(context.Context, *v1.DeleteKe
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteKey is not implemented"))
 }
 
-func (UnimplementedXAgentServiceHandler) GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetGitHubAccount is not implemented"))
-}
-
 func (UnimplementedXAgentServiceHandler) UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UnlinkGitHubAccount is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) GetAtlassianAccount(context.Context, *v1.GetAtlassianAccountRequest) (*v1.GetAtlassianAccountResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetAtlassianAccount is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error) {

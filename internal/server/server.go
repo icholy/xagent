@@ -228,7 +228,12 @@ func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest
 			Email: u.Email,
 			Name:  u.Name,
 		},
-		DefaultOrgId: user.DefaultOrgID,
+		DefaultOrgId:      user.DefaultOrgID,
+		GithubAccount:     user.GitHubAccountProto(),
+		AtlassianAccount:  user.AtlassianAccountProto(),
+	}
+	if s.github != nil {
+		resp.GithubAppSlug = s.github.AppSlug
 	}
 	resp.Orgs = make([]*xagentv1.Org, len(orgs))
 	for i, o := range orgs {
@@ -1013,23 +1018,6 @@ func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) 
 	return &xagentv1.DeleteKeyResponse{}, nil
 }
 
-func (s *Server) GetGitHubAccount(ctx context.Context, req *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	resp := &xagentv1.GetGitHubAccountResponse{}
-	if s.github != nil {
-		resp.GithubAppSlug = s.github.AppSlug
-	}
-	user, err := s.store.GetUser(ctx, nil, caller.ID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return resp, nil
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	resp.Account = user.GitHubAccountProto()
-	return resp, nil
-}
-
 func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if err := s.store.UnlinkGitHubAccount(ctx, nil, caller.ID); err != nil {
@@ -1037,20 +1025,6 @@ func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGi
 	}
 	s.log.Info("github account unlinked", "owner", caller.ID)
 	return &xagentv1.UnlinkGitHubAccountResponse{}, nil
-}
-
-func (s *Server) GetAtlassianAccount(ctx context.Context, req *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	resp := &xagentv1.GetAtlassianAccountResponse{}
-	user, err := s.store.GetUser(ctx, nil, caller.ID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return resp, nil
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	resp.Account = user.AtlassianAccountProto()
-	return resp, nil
 }
 
 func (s *Server) UnlinkAtlassianAccount(ctx context.Context, req *xagentv1.UnlinkAtlassianAccountRequest) (*xagentv1.UnlinkAtlassianAccountResponse, error) {

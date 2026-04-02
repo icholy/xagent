@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
-  getGitHubAccount,
-  getAtlassianAccount,
   getProfile,
   unlinkGitHubAccount,
   unlinkAtlassianAccount,
@@ -31,13 +29,13 @@ export const Route = createFileRoute('/settings')({
 })
 
 function SettingsPage() {
-  const { data, isLoading, refetch } = useQuery(getGitHubAccount, {})
+  const { data: profileData, isLoading, refetch } = useQuery(getProfile, {})
   const unlinkMutation = useMutation(unlinkGitHubAccount, {
     onSuccess: () => refetch(),
   })
 
-  const account = data?.account
-  const appSlug = data?.githubAppSlug
+  const account = profileData?.githubAccount
+  const appSlug = profileData?.githubAppSlug
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -247,12 +245,12 @@ function OrgRow({ org, onDelete, isDefault }: { org: Org; onDelete: () => void; 
 }
 
 function AtlassianAccountCard() {
-  const { data, isLoading, refetch } = useQuery(getAtlassianAccount, {})
+  const { data, isLoading, refetch } = useQuery(getProfile, {})
   const unlinkMutation = useMutation(unlinkAtlassianAccount, {
     onSuccess: () => refetch(),
   })
 
-  const account = data?.account
+  const account = data?.atlassianAccount
 
   return (
     <Card>
