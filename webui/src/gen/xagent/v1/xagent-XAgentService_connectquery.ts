@@ -213,3 +213,13 @@ export const removeOrgMember = XAgentService.method.removeOrgMember;
  * @generated from rpc xagent.v1.XAgentService.ListOrgMembers
  */
 export const listOrgMembers = XAgentService.method.listOrgMembers;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.GetAtlassianWebhookSecret
+ */
+export const getAtlassianWebhookSecret = XAgentService.method.getAtlassianWebhookSecret;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.GenerateAtlassianWebhookSecret
+ */
+export const generateAtlassianWebhookSecret = XAgentService.method.generateAtlassianWebhookSecret;
