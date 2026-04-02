@@ -10,17 +10,9 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/icholy/xagent/internal/common"
-	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
-
-// queuedEvent is a runner event waiting to be retried.
-type queuedEvent struct {
-	TaskID  int64
-	Event   model.RunnerEventType
-	Version int64
-}
 
 // EventQueue buffers SubmitRunnerEvents calls that fail and retries them
 // on the next Drain call. Events are sent in FIFO order; if any event
@@ -53,14 +45,10 @@ func NewEventQueue(opts EventQueueOptions) *EventQueue {
 }
 
 // Enqueue adds an event to the queue.
-func (q *EventQueue) Enqueue(taskID int64, event model.RunnerEventType, version int64) {
+func (q *EventQueue) Enqueue(event *xagentv1.RunnerEvent) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.events.PushBack(queuedEvent{
-		TaskID:  taskID,
-		Event:   event,
-		Version: version,
-	})
+	q.events.PushBack(event)
 	select {
 	case q.notify <- struct{}{}:
 	default:
@@ -81,21 +69,19 @@ func (q *EventQueue) Drain(ctx context.Context) error {
 	defer q.mu.Unlock()
 	for q.events.Len() > 0 {
 		el := q.events.Front()
-		ev := el.Value.(queuedEvent)
+		ev := el.Value.(*xagentv1.RunnerEvent)
 		_, err := q.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-			Events: []*xagentv1.RunnerEvent{
-				{TaskId: ev.TaskID, Event: string(ev.Event), Version: ev.Version},
-			},
+			Events: []*xagentv1.RunnerEvent{ev},
 		})
 		if err != nil {
 			if isPermanentError(err) {
-				q.log.Warn("event dropped due to permanent error", "task", ev.TaskID, "event", ev.Event, "error", err)
+				q.log.Warn("event dropped due to permanent error", "task", ev.TaskId, "event", ev.Event, "error", err)
 				q.events.Remove(el)
 				continue
 			}
 			return err
 		}
-		q.log.Info("event delivered", "task", ev.TaskID, "event", ev.Event)
+		q.log.Info("event delivered", "task", ev.TaskId, "event", ev.Event)
 		q.events.Remove(el)
 	}
 	return nil
