@@ -80,6 +80,10 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 	for i, inst := range t.Instructions {
 		instructions[i] = inst.Proto()
 	}
+	var url string
+	if baseURL != "" {
+		url = fmt.Sprintf("%s/tasks/%d", baseURL, t.ID)
+	}
 	return &xagentv1.Task{
 		Id:           t.ID,
 		Name:         t.Name,
@@ -91,7 +95,7 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 		Command:      xagentv1.TaskCommand(t.Command),
 		Version:      t.Version,
 		Archived:     t.Archived,
-		Url:          fmt.Sprintf("%s/tasks/%d", baseURL, t.ID),
+		Url:          url,
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
 		Actions: &xagentv1.TaskActions{

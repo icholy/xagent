@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -59,7 +58,6 @@ func TestGetTask(t *testing.T) {
 		Command:   xagentv1.TaskCommand_START,
 		Actions:   &xagentv1.TaskActions{Cancel: true},
 		Version:   1,
-		Url:       fmt.Sprintf("/tasks/%d", createResp.Task.Id),
 		CreatedAt: getResp.Task.CreatedAt, // Copy timestamps since we can't predict them
 		UpdatedAt: getResp.Task.UpdatedAt,
 	}
@@ -148,7 +146,6 @@ func TestCreateTask(t *testing.T) {
 		Command:   xagentv1.TaskCommand_START,
 		Actions:   &xagentv1.TaskActions{Cancel: true},
 		Version:   1,
-		Url:       fmt.Sprintf("/tasks/%d", resp.Task.Id),
 		CreatedAt: resp.Task.CreatedAt,
 		UpdatedAt: resp.Task.UpdatedAt,
 	}
