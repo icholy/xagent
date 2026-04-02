@@ -73,11 +73,11 @@ func VerifyWebhook(body []byte, signature, secret string) error {
 	if signature == "" {
 		return fmt.Errorf("missing X-Hub-Signature header")
 	}
-	parts := strings.SplitN(signature, "=", 2)
-	if len(parts) != 2 || parts[0] != "sha256" {
+	algo, sigHex, ok := strings.Cut(signature, "=")
+	if !ok || algo != "sha256" {
 		return fmt.Errorf("unsupported signature format: %s", signature)
 	}
-	sigBytes, err := hex.DecodeString(parts[1])
+	sigBytes, err := hex.DecodeString(sigHex)
 	if err != nil {
 		return fmt.Errorf("invalid signature hex: %w", err)
 	}
