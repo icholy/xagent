@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RelativeTime } from '@/components/relative-time'
 import { Cable, ExternalLink, Github, Loader2, Mail, Plus, Trash2, Unlink, User } from 'lucide-react'
 
@@ -29,6 +30,29 @@ export const Route = createFileRoute('/settings')({
 })
 
 function SettingsPage() {
+  return (
+    <div className="container mx-auto py-8 px-4">
+      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+      <Tabs defaultValue="account">
+        <div className="flex items-center mb-4">
+          <ProfileCard />
+          <TabsList className="ml-auto">
+            <TabsTrigger value="account">Account</TabsTrigger>
+            <TabsTrigger value="organisation">Organisation</TabsTrigger>
+          </TabsList>
+        </div>
+        <TabsContent value="account">
+          <AccountSettings />
+        </TabsContent>
+        <TabsContent value="organisation">
+          <OrgSettings />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+function AccountSettings() {
   const { data, isLoading, refetch } = useQuery(getProfile, {})
   const unlinkMutation = useMutation(unlinkGitHubAccount, {
     onSuccess: () => refetch(),
@@ -38,79 +62,90 @@ function SettingsPage() {
   const appSlug = data?.githubAppSlug
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
-      <div className="space-y-6">
-        <ProfileCard />
-        <OrgsCard />
-        <Card>
-          <CardHeader>
-            <CardTitle>MCP Server</CardTitle>
-            <CardDescription>
-              xagent provides an MCP server that you can connect to from any MCP-compatible client.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Cable className="h-5 w-5 text-muted-foreground" />
-              <code className="text-sm bg-muted px-2 py-1 rounded">https://xagent.choly.ca/mcp</code>
-            </div>
-          </CardContent>
-        </Card>
-        <AtlassianAccountCard />
-        <Card>
-          <CardHeader>
-            <CardTitle>GitHub Account</CardTitle>
-            <CardDescription>
-              Link your GitHub account to receive webhook notifications for your tasks.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoading ? (
-              <div className="text-muted-foreground">Loading...</div>
-            ) : account ? (
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Github className="h-5 w-5" />
-                  <span className="font-medium">{account.githubUsername}</span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => unlinkMutation.mutateAsync({})}
-                  disabled={unlinkMutation.isPending}
-                >
-                  {unlinkMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Unlink className="h-4 w-4" />
-                  )}
-                  Unlink
-                </Button>
+    <div className="space-y-6">
+      <OrgsCard />
+      <Card>
+        <CardHeader>
+          <CardTitle>MCP Server</CardTitle>
+          <CardDescription>
+            xagent provides an MCP server that you can connect to from any MCP-compatible client.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2">
+            <Cable className="h-5 w-5 text-muted-foreground" />
+            <code className="text-sm bg-muted px-2 py-1 rounded">https://xagent.choly.ca/mcp</code>
+          </div>
+        </CardContent>
+      </Card>
+      <AtlassianAccountCard />
+      <Card>
+        <CardHeader>
+          <CardTitle>GitHub Account</CardTitle>
+          <CardDescription>
+            Link your GitHub account to receive webhook notifications for your tasks.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading ? (
+            <div className="text-muted-foreground">Loading...</div>
+          ) : account ? (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Github className="h-5 w-5" />
+                <span className="font-medium">{account.githubUsername}</span>
               </div>
-            ) : (
-              <a href="/github/login">
-                <Button>
-                  <Github className="h-4 w-4" />
-                  Link GitHub Account
-                </Button>
-              </a>
-            )}
-            {appSlug && (
-              <a
-                href={`https://github.com/apps/${appSlug}/installations/new`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => unlinkMutation.mutateAsync({})}
+                disabled={unlinkMutation.isPending}
               >
-                <Button variant="outline">
-                  <ExternalLink className="h-4 w-4" />
-                  Install GitHub App
-                </Button>
-              </a>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                {unlinkMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Unlink className="h-4 w-4" />
+                )}
+                Unlink
+              </Button>
+            </div>
+          ) : (
+            <a href="/github/login">
+              <Button>
+                <Github className="h-4 w-4" />
+                Link GitHub Account
+              </Button>
+            </a>
+          )}
+          {appSlug && (
+            <a
+              href={`https://github.com/apps/${appSlug}/installations/new`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="outline">
+                <ExternalLink className="h-4 w-4" />
+                Install GitHub App
+              </Button>
+            </a>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function OrgSettings() {
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>General</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-sm">Coming soon.</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -127,7 +162,7 @@ function ProfileCard() {
         <User className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium">{profile.name}</span>
       </div>
-      <div className="flex items-center gap-1.5 text-muted-foreground">
+      <div className="hidden md:flex items-center gap-1.5 text-muted-foreground">
         <Mail className="h-4 w-4" />
         <span>{profile.email}</span>
       </div>
@@ -143,7 +178,7 @@ function OrgsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Organisations</CardTitle>
+        <CardTitle>My Organisations</CardTitle>
         <CardDescription>
           Create and manage your organisations.
         </CardDescription>
