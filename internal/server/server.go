@@ -11,6 +11,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,11 +23,10 @@ import (
 	"github.com/google/go-github/v68/github"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
-	"github.com/icholy/xagent/internal/atlassianauth"
 	"github.com/icholy/xagent/internal/deviceauth"
-	"github.com/icholy/xagent/internal/ghauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/oauthflow"
+	"github.com/icholy/xagent/internal/oauthlink"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/servermcp"
@@ -34,6 +34,8 @@ import (
 	"github.com/icholy/xagent/internal/webhook"
 	"github.com/justinas/alice"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"golang.org/x/oauth2"
+	oauth2github "golang.org/x/oauth2/github"
 )
 
 type GitHubConfig struct {
@@ -116,12 +118,26 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
-		gh := ghauth.New(ghauth.Config{
+		gh := oauthlink.New(oauthlink.Config{
+			Provider:     "github",
 			ClientID:     s.github.ClientID,
 			ClientSecret: s.github.ClientSecret,
 			RedirectURL:  s.baseURL + "/github/callback",
+			Endpoint:     oauth2github.Endpoint,
+			Scopes:       []string{"read:user"},
 			Log:          s.log,
-			OnSuccess: func(w http.ResponseWriter, r *http.Request, ghUser *github.User) {
+			FetchUser: func(ctx context.Context, token *oauth2.Token) (*oauthlink.UserInfo, error) {
+				ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
+				ghUser, _, err := ghClient.Users.Get(ctx, "")
+				if err != nil {
+					return nil, err
+				}
+				return &oauthlink.UserInfo{
+					ID:   strconv.FormatInt(ghUser.GetID(), 10),
+					Name: ghUser.GetLogin(),
+				}, nil
+			},
+			OnSuccess: func(w http.ResponseWriter, r *http.Request, user *oauthlink.UserInfo) {
 				caller := apiauth.Caller(r.Context())
 				if caller == nil {
 					http.Error(w, "not authenticated", http.StatusUnauthorized)
@@ -131,7 +147,8 @@ func (s *Server) Handler() http.Handler {
 					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
 					return
 				}
-				if err := s.store.LinkGitHubAccount(r.Context(), nil, caller.ID, ghUser.GetID(), ghUser.GetLogin()); err != nil {
+				ghID, _ := strconv.ParseInt(user.ID, 10, 64)
+				if err := s.store.LinkGitHubAccount(r.Context(), nil, caller.ID, ghID, user.Name); err != nil {
 					http.Error(w, "failed to link GitHub account", http.StatusInternalServerError)
 					return
 				}
@@ -147,12 +164,25 @@ func (s *Server) Handler() http.Handler {
 	}
 	// Atlassian OAuth routes (conditionally registered)
 	if s.atlassian != nil {
-		ah := atlassianauth.New(atlassianauth.Config{
+		ah := oauthlink.New(oauthlink.Config{
+			Provider:     "atlassian",
 			ClientID:     s.atlassian.ClientID,
 			ClientSecret: s.atlassian.ClientSecret,
 			RedirectURL:  s.baseURL + "/atlassian/callback",
-			Log:          s.log,
-			OnSuccess: func(w http.ResponseWriter, r *http.Request, accountID, displayName string) {
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  "https://auth.atlassian.com/authorize",
+				TokenURL: "https://auth.atlassian.com/oauth/token",
+			},
+			Scopes: []string{"read:me"},
+			AuthParams: []oauth2.AuthCodeOption{
+				oauth2.SetAuthURLParam("audience", "api.atlassian.com"),
+				oauth2.SetAuthURLParam("prompt", "consent"),
+			},
+			Log: s.log,
+			FetchUser: func(ctx context.Context, token *oauth2.Token) (*oauthlink.UserInfo, error) {
+				return fetchAtlassianUser(ctx, token.AccessToken)
+			},
+			OnSuccess: func(w http.ResponseWriter, r *http.Request, user *oauthlink.UserInfo) {
 				caller := apiauth.Caller(r.Context())
 				if caller == nil {
 					http.Error(w, "not authenticated", http.StatusUnauthorized)
@@ -162,7 +192,7 @@ func (s *Server) Handler() http.Handler {
 					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
 					return
 				}
-				if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, accountID, displayName); err != nil {
+				if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, user.ID, user.Name); err != nil {
 					http.Error(w, "failed to link Atlassian account", http.StatusInternalServerError)
 					return
 				}
@@ -1215,4 +1245,25 @@ func (s *Server) GenerateAtlassianWebhookSecret(ctx context.Context, req *xagent
 		Secret:     secret,
 		WebhookUrl: s.atlassianWebhookURL(caller.OrgID),
 	}, nil
+}
+
+func fetchAtlassianUser(ctx context.Context, accessToken string) (*oauthlink.UserInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.atlassian.com/me", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var me struct {
+		AccountID string `json:"account_id"`
+		Name      string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
+		return nil, err
+	}
+	return &oauthlink.UserInfo{ID: me.AccountID, Name: me.Name}, nil
 }
