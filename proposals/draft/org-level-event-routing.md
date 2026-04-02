@@ -1,0 +1,400 @@
+# Org-Level Event Routing Configuration
+
+Issue: https://github.com/icholy/xagent/issues/458
+
+## Problem
+
+Event routing currently uses hardcoded filtering rules baked into the webhook handlers. Both `extractGitHubWebhookEvent` and `extractAtlassianWebhookEvent` require comments to start with the `xagent:` prefix before they are routed to tasks. This logic lives in the webhook layer, outside the `eventrouter.Router`, which means:
+
+1. **No per-org customization** — All orgs share the same `xagent:` prefix rule. An org cannot change or disable the prefix, nor add alternative trigger mechanisms.
+2. **No @mention routing** — There's no way to trigger events by mentioning a user (e.g. `@BotUser fix the tests`), which would be a natural fit since the runner already provisions per-user MCP server permissions.
+3. **Filtering is in the wrong layer** — The webhook handlers decide what gets routed *before* the Router sees the event. The Router should own filtering so it can apply per-org rules.
+
+## Design
+
+### Overview
+
+Move all event filtering from the webhook handlers into the `eventrouter.Router`. Introduce an `org_routing_rules` table that lets each org configure how events are matched. The Router resolves which orgs an event could be routed to, loads their routing rules, and applies them before creating events.
+
+### 1. Routing Rules Model
+
+Each org can have multiple routing rules. A rule defines a **trigger type** and its **configuration**. Rules are evaluated in order; an event matches an org if *any* rule matches.
+
+Two initial rule types:
+
+- **prefix** — Match comments that start with a configurable string (generalizing the current `xagent:` behavior).
+- **mention** — Match comments that @mention a specific username.
+
+```go
+// internal/model/routing_rule.go
+
+type RoutingRuleType string
+
+const (
+    RoutingRulePrefix  RoutingRuleType = "prefix"
+    RoutingRuleMention RoutingRuleType = "mention"
+)
+
+type RoutingRule struct {
+    ID        int64
+    OrgID     int64
+    Type      RoutingRuleType
+    Value     string    // the prefix string or the username
+    Priority  int       // evaluation order (lower = first)
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+```
+
+### 2. Database Schema
+
+New migration:
+
+```sql
+CREATE TABLE org_routing_rules (
+    id         BIGSERIAL PRIMARY KEY,
+    org_id     BIGINT NOT NULL REFERENCES orgs(id),
+    type       TEXT NOT NULL,        -- 'prefix' or 'mention'
+    value      TEXT NOT NULL,        -- e.g. 'xagent:' or 'BotUser'
+    priority   INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_org_routing_rules_org_id ON org_routing_rules(org_id);
+
+-- Prevent duplicate rules within an org
+CREATE UNIQUE INDEX idx_org_routing_rules_unique ON org_routing_rules(org_id, type, value);
+```
+
+No data migration is needed. Orgs without any routing rules use the default behavior (see section 5).
+
+### 3. Store Layer
+
+Add to `internal/store/sql/queries/routing_rule.sql`:
+
+```sql
+-- name: ListRoutingRulesByOrg :many
+SELECT id, org_id, type, value, priority, created_at, updated_at
+FROM org_routing_rules
+WHERE org_id = $1
+ORDER BY priority ASC, id ASC;
+
+-- name: ListRoutingRulesByOrgs :many
+SELECT id, org_id, type, value, priority, created_at, updated_at
+FROM org_routing_rules
+WHERE org_id = ANY($1::BIGINT[])
+ORDER BY org_id, priority ASC, id ASC;
+
+-- name: CreateRoutingRule :one
+INSERT INTO org_routing_rules (org_id, type, value, priority)
+VALUES ($1, $2, $3, $4)
+RETURNING id, org_id, type, value, priority, created_at, updated_at;
+
+-- name: DeleteRoutingRule :exec
+DELETE FROM org_routing_rules WHERE id = $1 AND org_id = $2;
+
+-- name: UpdateRoutingRule :exec
+UPDATE org_routing_rules SET
+    value = $3,
+    priority = $4,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND org_id = $2;
+```
+
+The batch query `ListRoutingRulesByOrgs` is critical — the Router needs rules for all candidate orgs in a single query to avoid N+1 lookups during routing.
+
+### 4. Proto Definitions
+
+```protobuf
+enum RoutingRuleType {
+    ROUTING_RULE_TYPE_UNSPECIFIED = 0;
+    ROUTING_RULE_TYPE_PREFIX = 1;
+    ROUTING_RULE_TYPE_MENTION = 2;
+}
+
+message RoutingRule {
+    int64 id = 1;
+    int64 org_id = 2;
+    RoutingRuleType type = 3;
+    string value = 4;
+    int32 priority = 5;
+    google.protobuf.Timestamp created_at = 6;
+    google.protobuf.Timestamp updated_at = 7;
+}
+
+// RPCs
+rpc ListRoutingRules(ListRoutingRulesRequest) returns (ListRoutingRulesResponse);
+rpc CreateRoutingRule(CreateRoutingRuleRequest) returns (CreateRoutingRuleResponse);
+rpc UpdateRoutingRule(UpdateRoutingRuleRequest) returns (UpdateRoutingRuleResponse);
+rpc DeleteRoutingRule(DeleteRoutingRuleRequest) returns (DeleteRoutingRuleResponse);
+
+message ListRoutingRulesRequest {}
+message ListRoutingRulesResponse {
+    repeated RoutingRule rules = 1;
+}
+
+message CreateRoutingRuleRequest {
+    RoutingRuleType type = 1;
+    string value = 2;
+    int32 priority = 3;
+}
+message CreateRoutingRuleResponse {
+    RoutingRule rule = 1;
+}
+
+message UpdateRoutingRuleRequest {
+    int64 id = 1;
+    string value = 2;
+    int32 priority = 3;
+}
+message UpdateRoutingRuleResponse {}
+
+message DeleteRoutingRuleRequest {
+    int64 id = 1;
+}
+message DeleteRoutingRuleResponse {}
+```
+
+All RPCs are org-scoped via `caller.OrgID` from the auth context.
+
+### 5. Default Behavior (No Rules Configured)
+
+When an org has no routing rules in `org_routing_rules`, the Router falls back to the current hardcoded behavior: prefix match on `xagent:`. This ensures backward compatibility — existing orgs work identically without any migration or configuration.
+
+```go
+func defaultRules() []*model.RoutingRule {
+    return []*model.RoutingRule{
+        {Type: model.RoutingRulePrefix, Value: "xagent:"},
+    }
+}
+```
+
+Once an org creates its first custom rule, the defaults are no longer applied. This is an explicit opt-in: if you configure rules, you own the full set. If you want to keep `xagent:` alongside a mention rule, you add both.
+
+### 6. Router Changes
+
+The `eventrouter.Router` currently receives a pre-filtered event (webhook handlers already checked for `xagent:` prefix). The new flow:
+
+**Before (current):**
+```
+Webhook Handler → filter (xagent: prefix) → Router.Route(event)
+                                              → findLinksByOrg(url, userID)
+                                              → create events, route to tasks
+```
+
+**After (proposed):**
+```
+Webhook Handler → parse (no filtering) → Router.Route(event)
+                                           → findCandidateOrgs(url, userID)
+                                           → loadRoutingRules(orgIDs)
+                                           → for each org: applyRules(event, rules)
+                                           → create events, route to matching tasks
+```
+
+#### Updated Event struct
+
+The Router needs the raw comment body (not pre-filtered) and knowledge of the event source to apply platform-specific mention patterns:
+
+```go
+type Event struct {
+    Type        EventType  // EventTypeGitHub, EventTypeAtlassian
+    Description string     // human-readable summary
+    Data        string     // raw comment body (unfiltered)
+    URL         string     // issue/PR/ticket URL for link matching
+    UserID      string     // xagent user ID
+}
+```
+
+No structural change — the `Data` field just now contains the *unfiltered* comment body.
+
+#### Updated Route method
+
+```go
+func (r *Router) Route(ctx context.Context, event *Event) (int, error) {
+    // Step 1: Find all subscribed links grouped by org (unchanged)
+    linksByOrg, err := r.findLinksByOrg(ctx, event.URL, event.UserID)
+    if err != nil {
+        return 0, err
+    }
+
+    // Step 2: Load routing rules for all candidate orgs (NEW)
+    orgIDs := maps.Keys(linksByOrg)
+    rulesByOrg, err := r.loadRoutingRules(ctx, orgIDs)
+    if err != nil {
+        return 0, err
+    }
+
+    // Step 3: For each org, check if the event matches that org's rules
+    total := 0
+    for orgID, links := range linksByOrg {
+        rules := rulesByOrg[orgID]
+        if !matchesAnyRule(event, rules) {
+            continue // event doesn't match this org's routing rules
+        }
+        // Create event and route to tasks (unchanged)
+        n, err := r.createAndRoute(ctx, event, orgID, links)
+        if err != nil {
+            return total, err
+        }
+        total += n
+    }
+    return total, nil
+}
+```
+
+#### Rule matching
+
+```go
+func matchesAnyRule(event *Event, rules []*model.RoutingRule) bool {
+    for _, rule := range rules {
+        if matchesRule(event, rule) {
+            return true
+        }
+    }
+    return false
+}
+
+func matchesRule(event *Event, rule *model.RoutingRule) bool {
+    body := strings.TrimSpace(event.Data)
+    switch rule.Type {
+    case model.RoutingRulePrefix:
+        return strings.HasPrefix(body, rule.Value)
+    case model.RoutingRuleMention:
+        return containsMention(event.Type, body, rule.Value)
+    default:
+        return false
+    }
+}
+```
+
+### 7. Mention Matching
+
+@mention syntax differs between platforms:
+
+- **GitHub**: `@username` in markdown — match `@<value>` as a word boundary.
+- **Jira/Atlassian**: `[~accountId:<id>]` in Atlassian Document Format, but `@displayName` in rendered/plain text webhooks.
+
+```go
+func containsMention(eventType EventType, body string, username string) bool {
+    switch eventType {
+    case EventTypeGitHub:
+        // Match @username with word boundary
+        pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(username) + `(?:$|[\s,.)!?])`
+        matched, _ := regexp.MatchString(pattern, body)
+        return matched
+    case EventTypeAtlassian:
+        // Jira webhook comment body contains @displayName mentions
+        pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(username) + `(?:$|[\s,.)!?])`
+        matched, _ := regexp.MatchString(pattern, body)
+        return matched
+    default:
+        return false
+    }
+}
+```
+
+For mention rules, the `value` field stores the **platform username** (e.g. GitHub username or Atlassian display name). The user model already has `github_username` and `atlassian_username` fields that can populate the UI when creating mention rules.
+
+> **Note:** Compiling regexps per-event is fine for webhook traffic volumes. If it becomes a concern, pre-compile patterns when loading rules.
+
+### 8. Webhook Handler Changes
+
+Both webhook handlers are simplified. They stop filtering and pass the raw event to the Router:
+
+**GitHub handler (`internal/webhook/github.go`):**
+
+```go
+func extractGitHubWebhookEvent(event any) *extractedEvent {
+    switch e := event.(type) {
+    case *github.IssueCommentEvent:
+        return &extractedEvent{
+            description: fmt.Sprintf("..."),
+            data:        e.GetComment().GetBody(), // no xagent: prefix check
+            url:         e.GetIssue().GetHTMLURL(),
+            githubUserID: e.GetSender().GetID(),
+        }
+    case *github.PullRequestReviewCommentEvent:
+        // same — remove prefix check
+    case *github.PullRequestReviewEvent:
+        // same — remove prefix check, keep action=="submitted" check
+    }
+    return nil
+}
+```
+
+The `action == "submitted"` check for PR reviews stays in the handler — it's event-type filtering (structural), not content filtering (routing). Similarly, the handler still ignores unsupported webhook event types. Only the `xagent:` prefix check moves to the Router.
+
+**Atlassian handler (`internal/webhook/atlassian.go`):**
+
+```go
+func extractAtlassianWebhookEvent(body []byte) *extractedEvent {
+    // Keep: only process comment_created events
+    // Remove: xagent: prefix check
+}
+```
+
+### 9. ProcessEvent Changes
+
+The `processEventInternal` method in `server.go` also needs updating. Currently it routes events that already exist in the DB. Since the event is already created (and was already filtered at creation time), `ProcessEvent` does not need to re-apply routing rules — it just routes to matching subscribed links as it does today.
+
+No changes needed for `ProcessEvent`.
+
+### 10. Settings UI
+
+Add a "Routing Rules" section to the org settings page:
+
+- List current rules with type, value, and priority
+- "Add Rule" form with type selector (prefix/mention) and value input
+- Delete button per rule
+- Help text explaining the default `xagent:` behavior when no rules are configured
+- For mention rules, suggest usernames from org members' linked GitHub/Atlassian accounts
+
+### 11. Implementation Order
+
+1. Database migration (new `org_routing_rules` table)
+2. Store layer (sqlc queries)
+3. Model (`routing_rule.go`)
+4. Proto definitions + generate
+5. Server RPC handlers (CRUD for routing rules)
+6. Router changes (load rules, apply filtering)
+7. Webhook handler changes (remove prefix filtering)
+8. Settings UI
+
+## Trade-offs
+
+### Rules table vs JSON column
+
+**Chosen: dedicated table.** An alternative is storing rules as a JSON array column on the `orgs` table. The dedicated table is better because:
+- Rules can be queried/indexed independently
+- The unique constraint prevents duplicates at the DB level
+- Batch loading across multiple orgs is a straightforward `WHERE org_id = ANY(...)` query
+- Consistent with the rest of the schema (no JSON columns elsewhere)
+
+### Per-org rules vs global rules with org overrides
+
+**Chosen: per-org only.** A global/default rule set with per-org overrides adds complexity (inheritance, precedence). The `defaultRules()` fallback for unconfigured orgs achieves the same practical effect with simpler semantics: either you have custom rules or you get the default.
+
+### Mention value: username vs account ID
+
+**Chosen: username (display name).** Using the platform username (e.g. `icholy` on GitHub, display name on Atlassian) is more intuitive for rule configuration. The alternative — storing platform-specific account IDs — is more precise but harder for users to configure. The trade-off is that username changes could break mention rules, but this is rare and easy to fix by updating the rule value.
+
+### Regex matching vs simple string matching for mentions
+
+**Chosen: regex with word boundaries.** Simple `strings.Contains(body, "@"+username)` would match substrings (e.g. `@bot` matching `@botmaster`). Word boundary regex is slightly more expensive but correct. The overhead is negligible at webhook traffic volumes.
+
+### Filtering all events vs only comment events
+
+**Chosen: filter all events that reach the Router.** Even though only comment events currently pass through, applying rules uniformly means future event types (e.g. PR status changes) would also respect org routing rules. If an org doesn't want noise from non-comment events, they can configure prefix/mention rules that naturally filter them out.
+
+## Open Questions
+
+1. **Should mention rules match against the user who *wrote* the comment, or the user *mentioned in* the comment?** The design assumes mentions *in* the comment body (e.g. `@BotUser please fix this`). But an org might also want "route all comments by @SpecificUser" — which is author matching, not body matching. Should this be a separate rule type (e.g. `author`)?
+
+2. **Atlassian mention format:** Jira's internal format uses `[~accountId:xxx]` but webhook payloads may contain rendered `@displayName`. Need to verify the exact format in Jira Cloud webhook comment bodies to ensure mention matching works reliably.
+
+3. **Rule limits:** Should there be a maximum number of routing rules per org? Unbounded rules could lead to performance issues if an org creates hundreds. A practical limit (e.g. 50) would be reasonable.
+
+4. **Audit logging:** Should routing rule changes be audit-logged? The current system has audit logs for task state changes. Routing rule changes affect event flow and could be important to trace.
+
+5. **Rule testing/preview:** Should there be an API to test a rule against a sample event body without actually creating the rule? This would help users verify their prefix or mention patterns before deploying them.
