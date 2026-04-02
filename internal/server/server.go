@@ -23,6 +23,7 @@ import (
 	"github.com/google/go-github/v68/github"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/oauthflow"
@@ -180,7 +181,11 @@ func (s *Server) Handler() http.Handler {
 			},
 			Log: s.log,
 			FetchUser: func(ctx context.Context, token *oauth2.Token) (*oauthlink.UserInfo, error) {
-				return fetchAtlassianUser(ctx, token.AccessToken)
+				me, err := atlassian.FetchMe(ctx, token.AccessToken)
+				if err != nil {
+					return nil, err
+				}
+				return &oauthlink.UserInfo{ID: me.AccountID, Name: me.Name}, nil
 			},
 			OnSuccess: func(w http.ResponseWriter, r *http.Request, user *oauthlink.UserInfo) {
 				caller := apiauth.Caller(r.Context())
@@ -1245,25 +1250,4 @@ func (s *Server) GenerateAtlassianWebhookSecret(ctx context.Context, req *xagent
 		Secret:     secret,
 		WebhookUrl: s.atlassianWebhookURL(caller.OrgID),
 	}, nil
-}
-
-func fetchAtlassianUser(ctx context.Context, accessToken string) (*oauthlink.UserInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.atlassian.com/me", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var me struct {
-		AccountID string `json:"account_id"`
-		Name      string `json:"name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
-		return nil, err
-	}
-	return &oauthlink.UserInfo{ID: me.AccountID, Name: me.Name}, nil
 }

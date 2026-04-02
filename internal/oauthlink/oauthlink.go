@@ -22,16 +22,16 @@ type UserInfo struct {
 
 // Config configures a generic OAuth link handler.
 type Config struct {
-	Provider     string                                                          // e.g. "github", "atlassian" - used for cookie name/path
-	ClientID     string                                                          //
-	ClientSecret string                                                          //
-	RedirectURL  string                                                          //
-	Endpoint     oauth2.Endpoint                                                 //
-	Scopes       []string                                                        //
-	AuthParams   []oauth2.AuthCodeOption                                         // extra params for AuthCodeURL
-	FetchUser    func(ctx context.Context, token *oauth2.Token) (*UserInfo, error) //
-	Log          *slog.Logger                                                    //
-	OnSuccess    func(w http.ResponseWriter, r *http.Request, user *UserInfo)    //
+	Provider     string // e.g. "github", "atlassian" - used for cookie name/path
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	Endpoint     oauth2.Endpoint
+	Scopes       []string
+	AuthParams   []oauth2.AuthCodeOption // extra params for AuthCodeURL
+	FetchUser    func(ctx context.Context, token *oauth2.Token) (*UserInfo, error)
+	Log          *slog.Logger
+	OnSuccess    func(w http.ResponseWriter, r *http.Request, user *UserInfo)
 }
 
 // Handler implements http.Handler for OAuth2 login/callback.
