@@ -106,6 +106,25 @@ mise run generate   # Generate protobuf code
 go build            # Build main binary only
 ```
 
+## Events
+
+Agents can attach **links** to their tasks for external resources they create (PRs, Jira issues, etc.). Links created with `notify=true` act as subscriptions. When someone comments on the resource, the agent is automatically restarted to respond.
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant GitHub
+    participant Reviewer
+
+    Agent->>GitHub: Creates PR
+    Note over Agent: Creates notify link
+    Note over Agent: Task completes
+
+    Reviewer->>GitHub: Comments "xagent: fix the failing test"
+    GitHub->>Agent: Webhook restarts agent
+    Agent->>GitHub: Pushes fix
+```
+
 ## Architecture
 
 ![Architecture](images/architecture.svg)
