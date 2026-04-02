@@ -113,7 +113,6 @@ Add to `proto/xagent/v1/xagent.proto`:
 
 ```protobuf
 // In service XAgentService:
-rpc GetAtlassianAccount(GetAtlassianAccountRequest) returns (GetAtlassianAccountResponse);
 rpc UnlinkAtlassianAccount(UnlinkAtlassianAccountRequest) returns (UnlinkAtlassianAccountResponse);
 rpc GetAtlassianWebhookSecret(GetAtlassianWebhookSecretRequest) returns (GetAtlassianWebhookSecretResponse);
 rpc GenerateAtlassianWebhookSecret(GenerateAtlassianWebhookSecretRequest) returns (GenerateAtlassianWebhookSecretResponse);
@@ -124,10 +123,8 @@ message AtlassianAccount {
   google.protobuf.Timestamp created_at = 2;
 }
 
-message GetAtlassianAccountRequest {}
-message GetAtlassianAccountResponse {
-  AtlassianAccount account = 1;
-}
+// Add to existing GetProfileResponse:
+// AtlassianAccount atlassian_account = N;
 
 message UnlinkAtlassianAccountRequest {}
 message UnlinkAtlassianAccountResponse {}
@@ -145,7 +142,7 @@ message GenerateAtlassianWebhookSecretResponse {
 }
 ```
 
-`GetAtlassianAccount` returns the current user's linked Atlassian account (mirrors `GetGitHubAccount`). `GetAtlassianWebhookSecret` / `GenerateAtlassianWebhookSecret` are org-scoped — they operate on the caller's current org.
+No standalone `GetAtlassianAccount` RPC is needed — the Atlassian account is returned as part of the existing `GetProfileResponse` (same pattern as the GitHub account after #440). `GetAtlassianWebhookSecret` / `GenerateAtlassianWebhookSecret` are org-scoped — they operate on the caller's current org.
 
 ### 5. Atlassian OAuth Flow
 
@@ -242,22 +239,7 @@ type atlassianWebhookEvent struct {
 
 Add to `internal/server/server.go`:
 
-**GetAtlassianAccount:**
-```go
-func (s *Server) GetAtlassianAccount(ctx context.Context, req *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error) {
-    caller := apiauth.MustCaller(ctx)
-    resp := &xagentv1.GetAtlassianAccountResponse{}
-    user, err := s.store.GetUser(ctx, nil, caller.ID)
-    if err != nil {
-        if errors.Is(err, sql.ErrNoRows) {
-            return resp, nil
-        }
-        return nil, connect.NewError(connect.CodeInternal, err)
-    }
-    resp.Account = user.AtlassianAccountProto()
-    return resp, nil
-}
-```
+**GetProfile (existing):** The existing `GetProfile` handler already fetches the user record. Add `AtlassianAccount: user.AtlassianAccountProto()` to the `GetProfileResponse` (same pattern as the existing `GitHubAccount` field).
 
 **UnlinkAtlassianAccount:** Clear `atlassian_account_id` on the caller's user record.
 
@@ -351,7 +333,7 @@ Add Atlassian section to `webui/src/routes/settings.tsx`:
 
 - If linked: show Atlassian account ID with an "Unlink" button (calls `unlinkAtlassianAccount` RPC)
 - If not linked: show "Link Atlassian Account" button (links to `/atlassian/login`)
-- Uses `getAtlassianAccount` query
+- Uses the `getProfile` query (Atlassian account is included in `GetProfileResponse`)
 
 **Atlassian Webhook Card** — new, per-org:
 
