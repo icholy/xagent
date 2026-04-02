@@ -649,7 +649,6 @@ type GetProfileResponse struct {
 	DefaultOrgId     int64                  `protobuf:"varint,3,opt,name=default_org_id,json=defaultOrgId,proto3" json:"default_org_id,omitempty"`
 	GithubAccount    *GitHubAccount         `protobuf:"bytes,4,opt,name=github_account,json=githubAccount,proto3" json:"github_account,omitempty"`
 	AtlassianAccount *AtlassianAccount      `protobuf:"bytes,5,opt,name=atlassian_account,json=atlassianAccount,proto3" json:"atlassian_account,omitempty"`
-	GithubAppSlug    string                 `protobuf:"bytes,6,opt,name=github_app_slug,json=githubAppSlug,proto3" json:"github_app_slug,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -717,13 +716,6 @@ func (x *GetProfileResponse) GetAtlassianAccount() *AtlassianAccount {
 		return x.AtlassianAccount
 	}
 	return nil
-}
-
-func (x *GetProfileResponse) GetGithubAppSlug() string {
-	if x != nil {
-		return x.GithubAppSlug
-	}
-	return ""
 }
 
 type ListTasksRequest struct {
@@ -4950,26 +4942,26 @@ func (x *ListOrgMembersResponse) GetMembers() []*OrgMember {
 	return nil
 }
 
-type GetAtlassianWebhookSecretRequest struct {
+type GetOrgSettingsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetAtlassianWebhookSecretRequest) Reset() {
-	*x = GetAtlassianWebhookSecretRequest{}
+func (x *GetOrgSettingsRequest) Reset() {
+	*x = GetOrgSettingsRequest{}
 	mi := &file_xagent_v1_xagent_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetAtlassianWebhookSecretRequest) String() string {
+func (x *GetOrgSettingsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetAtlassianWebhookSecretRequest) ProtoMessage() {}
+func (*GetOrgSettingsRequest) ProtoMessage() {}
 
-func (x *GetAtlassianWebhookSecretRequest) ProtoReflect() protoreflect.Message {
+func (x *GetOrgSettingsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_xagent_v1_xagent_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4981,33 +4973,35 @@ func (x *GetAtlassianWebhookSecretRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetAtlassianWebhookSecretRequest.ProtoReflect.Descriptor instead.
-func (*GetAtlassianWebhookSecretRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetOrgSettingsRequest.ProtoReflect.Descriptor instead.
+func (*GetOrgSettingsRequest) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{99}
 }
 
-type GetAtlassianWebhookSecretResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Secret        string                 `protobuf:"bytes,1,opt,name=secret,proto3" json:"secret,omitempty"`
-	WebhookUrl    string                 `protobuf:"bytes,2,opt,name=webhook_url,json=webhookUrl,proto3" json:"webhook_url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+type GetOrgSettingsResponse struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	AtlassianWebhookSecret string                 `protobuf:"bytes,1,opt,name=atlassian_webhook_secret,json=atlassianWebhookSecret,proto3" json:"atlassian_webhook_secret,omitempty"`
+	AtlassianWebhookUrl    string                 `protobuf:"bytes,2,opt,name=atlassian_webhook_url,json=atlassianWebhookUrl,proto3" json:"atlassian_webhook_url,omitempty"`
+	GithubAppUrl           string                 `protobuf:"bytes,3,opt,name=github_app_url,json=githubAppUrl,proto3" json:"github_app_url,omitempty"`
+	McpUrl                 string                 `protobuf:"bytes,4,opt,name=mcp_url,json=mcpUrl,proto3" json:"mcp_url,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
-func (x *GetAtlassianWebhookSecretResponse) Reset() {
-	*x = GetAtlassianWebhookSecretResponse{}
+func (x *GetOrgSettingsResponse) Reset() {
+	*x = GetOrgSettingsResponse{}
 	mi := &file_xagent_v1_xagent_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetAtlassianWebhookSecretResponse) String() string {
+func (x *GetOrgSettingsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetAtlassianWebhookSecretResponse) ProtoMessage() {}
+func (*GetOrgSettingsResponse) ProtoMessage() {}
 
-func (x *GetAtlassianWebhookSecretResponse) ProtoReflect() protoreflect.Message {
+func (x *GetOrgSettingsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_xagent_v1_xagent_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -5019,21 +5013,35 @@ func (x *GetAtlassianWebhookSecretResponse) ProtoReflect() protoreflect.Message 
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetAtlassianWebhookSecretResponse.ProtoReflect.Descriptor instead.
-func (*GetAtlassianWebhookSecretResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetOrgSettingsResponse.ProtoReflect.Descriptor instead.
+func (*GetOrgSettingsResponse) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{100}
 }
 
-func (x *GetAtlassianWebhookSecretResponse) GetSecret() string {
+func (x *GetOrgSettingsResponse) GetAtlassianWebhookSecret() string {
 	if x != nil {
-		return x.Secret
+		return x.AtlassianWebhookSecret
 	}
 	return ""
 }
 
-func (x *GetAtlassianWebhookSecretResponse) GetWebhookUrl() string {
+func (x *GetOrgSettingsResponse) GetAtlassianWebhookUrl() string {
 	if x != nil {
-		return x.WebhookUrl
+		return x.AtlassianWebhookUrl
+	}
+	return ""
+}
+
+func (x *GetOrgSettingsResponse) GetGithubAppUrl() string {
+	if x != nil {
+		return x.GithubAppUrl
+	}
+	return ""
+}
+
+func (x *GetOrgSettingsResponse) GetMcpUrl() string {
+	if x != nil {
+		return x.McpUrl
 	}
 	return ""
 }
@@ -5171,14 +5179,13 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\"\x13\n" +
-	"\x11GetProfileRequest\"\xbf\x02\n" +
+	"\x11GetProfileRequest\"\x97\x02\n" +
 	"\x12GetProfileResponse\x12,\n" +
 	"\aprofile\x18\x01 \x01(\v2\x12.xagent.v1.ProfileR\aprofile\x12\"\n" +
 	"\x04orgs\x18\x02 \x03(\v2\x0e.xagent.v1.OrgR\x04orgs\x12$\n" +
 	"\x0edefault_org_id\x18\x03 \x01(\x03R\fdefaultOrgId\x12?\n" +
 	"\x0egithub_account\x18\x04 \x01(\v2\x18.xagent.v1.GitHubAccountR\rgithubAccount\x12H\n" +
-	"\x11atlassian_account\x18\x05 \x01(\v2\x1b.xagent.v1.AtlassianAccountR\x10atlassianAccount\x12&\n" +
-	"\x0fgithub_app_slug\x18\x06 \x01(\tR\rgithubAppSlug\"\x12\n" +
+	"\x11atlassian_account\x18\x05 \x01(\v2\x1b.xagent.v1.AtlassianAccountR\x10atlassianAccount\"\x12\n" +
 	"\x10ListTasksRequest\":\n" +
 	"\x11ListTasksResponse\x12%\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"0\n" +
@@ -5407,12 +5414,13 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x17RemoveOrgMemberResponse\"\x17\n" +
 	"\x15ListOrgMembersRequest\"H\n" +
 	"\x16ListOrgMembersResponse\x12.\n" +
-	"\amembers\x18\x01 \x03(\v2\x14.xagent.v1.OrgMemberR\amembers\"\"\n" +
-	" GetAtlassianWebhookSecretRequest\"\\\n" +
-	"!GetAtlassianWebhookSecretResponse\x12\x16\n" +
-	"\x06secret\x18\x01 \x01(\tR\x06secret\x12\x1f\n" +
-	"\vwebhook_url\x18\x02 \x01(\tR\n" +
-	"webhookUrl\"'\n" +
+	"\amembers\x18\x01 \x03(\v2\x14.xagent.v1.OrgMemberR\amembers\"\x17\n" +
+	"\x15GetOrgSettingsRequest\"\xc5\x01\n" +
+	"\x16GetOrgSettingsResponse\x128\n" +
+	"\x18atlassian_webhook_secret\x18\x01 \x01(\tR\x16atlassianWebhookSecret\x122\n" +
+	"\x15atlassian_webhook_url\x18\x02 \x01(\tR\x13atlassianWebhookUrl\x12$\n" +
+	"\x0egithub_app_url\x18\x03 \x01(\tR\fgithubAppUrl\x12\x17\n" +
+	"\amcp_url\x18\x04 \x01(\tR\x06mcpUrl\"'\n" +
 	"%GenerateAtlassianWebhookSecretRequest\"a\n" +
 	"&GenerateAtlassianWebhookSecretResponse\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12\x1f\n" +
@@ -5435,7 +5443,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04NONE\x10\x00\x12\v\n" +
 	"\aRESTART\x10\x01\x12\b\n" +
 	"\x04STOP\x10\x02\x12\t\n" +
-	"\x05START\x10\x032\xc4\x1c\n" +
+	"\x05START\x10\x032\xa3\x1c\n" +
 	"\rXAgentService\x127\n" +
 	"\x04Ping\x12\x16.xagent.v1.PingRequest\x1a\x17.xagent.v1.PingResponse\x12I\n" +
 	"\n" +
@@ -5485,8 +5493,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\tDeleteOrg\x12\x1b.xagent.v1.DeleteOrgRequest\x1a\x1c.xagent.v1.DeleteOrgResponse\x12O\n" +
 	"\fAddOrgMember\x12\x1e.xagent.v1.AddOrgMemberRequest\x1a\x1f.xagent.v1.AddOrgMemberResponse\x12X\n" +
 	"\x0fRemoveOrgMember\x12!.xagent.v1.RemoveOrgMemberRequest\x1a\".xagent.v1.RemoveOrgMemberResponse\x12U\n" +
-	"\x0eListOrgMembers\x12 .xagent.v1.ListOrgMembersRequest\x1a!.xagent.v1.ListOrgMembersResponse\x12v\n" +
-	"\x19GetAtlassianWebhookSecret\x12+.xagent.v1.GetAtlassianWebhookSecretRequest\x1a,.xagent.v1.GetAtlassianWebhookSecretResponse\x12\x85\x01\n" +
+	"\x0eListOrgMembers\x12 .xagent.v1.ListOrgMembersRequest\x1a!.xagent.v1.ListOrgMembersResponse\x12U\n" +
+	"\x0eGetOrgSettings\x12 .xagent.v1.GetOrgSettingsRequest\x1a!.xagent.v1.GetOrgSettingsResponse\x12\x85\x01\n" +
 	"\x1eGenerateAtlassianWebhookSecret\x120.xagent.v1.GenerateAtlassianWebhookSecretRequest\x1a1.xagent.v1.GenerateAtlassianWebhookSecretResponseB<Z:github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1b\x06proto3"
 
 var (
@@ -5605,8 +5613,8 @@ var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*RemoveOrgMemberResponse)(nil),                // 98: xagent.v1.RemoveOrgMemberResponse
 	(*ListOrgMembersRequest)(nil),                  // 99: xagent.v1.ListOrgMembersRequest
 	(*ListOrgMembersResponse)(nil),                 // 100: xagent.v1.ListOrgMembersResponse
-	(*GetAtlassianWebhookSecretRequest)(nil),       // 101: xagent.v1.GetAtlassianWebhookSecretRequest
-	(*GetAtlassianWebhookSecretResponse)(nil),      // 102: xagent.v1.GetAtlassianWebhookSecretResponse
+	(*GetOrgSettingsRequest)(nil),                  // 101: xagent.v1.GetOrgSettingsRequest
+	(*GetOrgSettingsResponse)(nil),                 // 102: xagent.v1.GetOrgSettingsResponse
 	(*GenerateAtlassianWebhookSecretRequest)(nil),  // 103: xagent.v1.GenerateAtlassianWebhookSecretRequest
 	(*GenerateAtlassianWebhookSecretResponse)(nil), // 104: xagent.v1.GenerateAtlassianWebhookSecretResponse
 	nil,                           // 105: xagent.v1.McpServer.EnvEntry
@@ -5707,7 +5715,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	95,  // 91: xagent.v1.XAgentService.AddOrgMember:input_type -> xagent.v1.AddOrgMemberRequest
 	97,  // 92: xagent.v1.XAgentService.RemoveOrgMember:input_type -> xagent.v1.RemoveOrgMemberRequest
 	99,  // 93: xagent.v1.XAgentService.ListOrgMembers:input_type -> xagent.v1.ListOrgMembersRequest
-	101, // 94: xagent.v1.XAgentService.GetAtlassianWebhookSecret:input_type -> xagent.v1.GetAtlassianWebhookSecretRequest
+	101, // 94: xagent.v1.XAgentService.GetOrgSettings:input_type -> xagent.v1.GetOrgSettingsRequest
 	103, // 95: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:input_type -> xagent.v1.GenerateAtlassianWebhookSecretRequest
 	3,   // 96: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
 	10,  // 97: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
@@ -5751,7 +5759,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	96,  // 135: xagent.v1.XAgentService.AddOrgMember:output_type -> xagent.v1.AddOrgMemberResponse
 	98,  // 136: xagent.v1.XAgentService.RemoveOrgMember:output_type -> xagent.v1.RemoveOrgMemberResponse
 	100, // 137: xagent.v1.XAgentService.ListOrgMembers:output_type -> xagent.v1.ListOrgMembersResponse
-	102, // 138: xagent.v1.XAgentService.GetAtlassianWebhookSecret:output_type -> xagent.v1.GetAtlassianWebhookSecretResponse
+	102, // 138: xagent.v1.XAgentService.GetOrgSettings:output_type -> xagent.v1.GetOrgSettingsResponse
 	104, // 139: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:output_type -> xagent.v1.GenerateAtlassianWebhookSecretResponse
 	96,  // [96:140] is the sub-list for method output_type
 	52,  // [52:96] is the sub-list for method input_type

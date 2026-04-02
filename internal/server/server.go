@@ -235,9 +235,6 @@ func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest
 		GithubAccount:    user.GitHubAccountProto(),
 		AtlassianAccount: user.AtlassianAccountProto(),
 	}
-	if s.github != nil {
-		resp.GithubAppSlug = s.github.AppSlug
-	}
 	resp.Orgs = make([]*xagentv1.Org, len(orgs))
 	for i, o := range orgs {
 		resp.Orgs[i] = o.Proto()
@@ -1182,16 +1179,21 @@ func (s *Server) atlassianWebhookURL(orgID int64) string {
 	return fmt.Sprintf("%s/webhook/atlassian?org=%d", s.baseURL, orgID)
 }
 
-func (s *Server) GetAtlassianWebhookSecret(ctx context.Context, req *xagentv1.GetAtlassianWebhookSecretRequest) (*xagentv1.GetAtlassianWebhookSecretResponse, error) {
+func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	secret, err := s.store.GetOrgAtlassianWebhookSecret(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return &xagentv1.GetAtlassianWebhookSecretResponse{
-		Secret:     secret,
-		WebhookUrl: s.atlassianWebhookURL(caller.OrgID),
-	}, nil
+	resp := &xagentv1.GetOrgSettingsResponse{
+		AtlassianWebhookSecret: secret,
+		AtlassianWebhookUrl:    s.atlassianWebhookURL(caller.OrgID),
+		McpUrl:                 s.baseURL + "/mcp",
+	}
+	if s.github != nil && s.github.AppSlug != "" {
+		resp.GithubAppUrl = fmt.Sprintf("https://github.com/apps/%s/installations/new", s.github.AppSlug)
+	}
+	return resp, nil
 }
 
 func (s *Server) GenerateAtlassianWebhookSecret(ctx context.Context, req *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {

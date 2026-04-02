@@ -64,11 +64,11 @@ var _ Client = &ClientMock{}
 //			GenerateAtlassianWebhookSecretFunc: func(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {
 //				panic("mock out the GenerateAtlassianWebhookSecret method")
 //			},
-//			GetAtlassianWebhookSecretFunc: func(contextMoqParam context.Context, getAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest) (*xagentv1.GetAtlassianWebhookSecretResponse, error) {
-//				panic("mock out the GetAtlassianWebhookSecret method")
-//			},
 //			GetEventFunc: func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 //				panic("mock out the GetEvent method")
+//			},
+//			GetOrgSettingsFunc: func(contextMoqParam context.Context, getOrgSettingsRequest *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error) {
+//				panic("mock out the GetOrgSettings method")
 //			},
 //			GetProfileFunc: func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
 //				panic("mock out the GetProfile method")
@@ -203,11 +203,11 @@ type ClientMock struct {
 	// GenerateAtlassianWebhookSecretFunc mocks the GenerateAtlassianWebhookSecret method.
 	GenerateAtlassianWebhookSecretFunc func(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error)
 
-	// GetAtlassianWebhookSecretFunc mocks the GetAtlassianWebhookSecret method.
-	GetAtlassianWebhookSecretFunc func(contextMoqParam context.Context, getAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest) (*xagentv1.GetAtlassianWebhookSecretResponse, error)
-
 	// GetEventFunc mocks the GetEvent method.
 	GetEventFunc func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error)
+
+	// GetOrgSettingsFunc mocks the GetOrgSettings method.
+	GetOrgSettingsFunc func(contextMoqParam context.Context, getOrgSettingsRequest *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error)
 
 	// GetProfileFunc mocks the GetProfile method.
 	GetProfileFunc func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error)
@@ -397,19 +397,19 @@ type ClientMock struct {
 			// GenerateAtlassianWebhookSecretRequest is the generateAtlassianWebhookSecretRequest argument value.
 			GenerateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest
 		}
-		// GetAtlassianWebhookSecret holds details about calls to the GetAtlassianWebhookSecret method.
-		GetAtlassianWebhookSecret []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// GetAtlassianWebhookSecretRequest is the getAtlassianWebhookSecretRequest argument value.
-			GetAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest
-		}
 		// GetEvent holds details about calls to the GetEvent method.
 		GetEvent []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
 			ContextMoqParam context.Context
 			// GetEventRequest is the getEventRequest argument value.
 			GetEventRequest *xagentv1.GetEventRequest
+		}
+		// GetOrgSettings holds details about calls to the GetOrgSettings method.
+		GetOrgSettings []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetOrgSettingsRequest is the getOrgSettingsRequest argument value.
+			GetOrgSettingsRequest *xagentv1.GetOrgSettingsRequest
 		}
 		// GetProfile holds details about calls to the GetProfile method.
 		GetProfile []struct {
@@ -616,8 +616,8 @@ type ClientMock struct {
 	lockDeleteOrg                      sync.RWMutex
 	lockFindLinksByURL                 sync.RWMutex
 	lockGenerateAtlassianWebhookSecret sync.RWMutex
-	lockGetAtlassianWebhookSecret      sync.RWMutex
 	lockGetEvent                       sync.RWMutex
+	lockGetOrgSettings                 sync.RWMutex
 	lockGetProfile                     sync.RWMutex
 	lockGetTask                        sync.RWMutex
 	lockGetTaskDetails                 sync.RWMutex
@@ -1187,42 +1187,6 @@ func (mock *ClientMock) GenerateAtlassianWebhookSecretCalls() []struct {
 	return calls
 }
 
-// GetAtlassianWebhookSecret calls GetAtlassianWebhookSecretFunc.
-func (mock *ClientMock) GetAtlassianWebhookSecret(contextMoqParam context.Context, getAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest) (*xagentv1.GetAtlassianWebhookSecretResponse, error) {
-	if mock.GetAtlassianWebhookSecretFunc == nil {
-		panic("ClientMock.GetAtlassianWebhookSecretFunc: method is nil but Client.GetAtlassianWebhookSecret was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam                  context.Context
-		GetAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest
-	}{
-		ContextMoqParam:                  contextMoqParam,
-		GetAtlassianWebhookSecretRequest: getAtlassianWebhookSecretRequest,
-	}
-	mock.lockGetAtlassianWebhookSecret.Lock()
-	mock.calls.GetAtlassianWebhookSecret = append(mock.calls.GetAtlassianWebhookSecret, callInfo)
-	mock.lockGetAtlassianWebhookSecret.Unlock()
-	return mock.GetAtlassianWebhookSecretFunc(contextMoqParam, getAtlassianWebhookSecretRequest)
-}
-
-// GetAtlassianWebhookSecretCalls gets all the calls that were made to GetAtlassianWebhookSecret.
-// Check the length with:
-//
-//	len(mockedClient.GetAtlassianWebhookSecretCalls())
-func (mock *ClientMock) GetAtlassianWebhookSecretCalls() []struct {
-	ContextMoqParam                  context.Context
-	GetAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest
-} {
-	var calls []struct {
-		ContextMoqParam                  context.Context
-		GetAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest
-	}
-	mock.lockGetAtlassianWebhookSecret.RLock()
-	calls = mock.calls.GetAtlassianWebhookSecret
-	mock.lockGetAtlassianWebhookSecret.RUnlock()
-	return calls
-}
-
 // GetEvent calls GetEventFunc.
 func (mock *ClientMock) GetEvent(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 	if mock.GetEventFunc == nil {
@@ -1256,6 +1220,42 @@ func (mock *ClientMock) GetEventCalls() []struct {
 	mock.lockGetEvent.RLock()
 	calls = mock.calls.GetEvent
 	mock.lockGetEvent.RUnlock()
+	return calls
+}
+
+// GetOrgSettings calls GetOrgSettingsFunc.
+func (mock *ClientMock) GetOrgSettings(contextMoqParam context.Context, getOrgSettingsRequest *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error) {
+	if mock.GetOrgSettingsFunc == nil {
+		panic("ClientMock.GetOrgSettingsFunc: method is nil but Client.GetOrgSettings was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam       context.Context
+		GetOrgSettingsRequest *xagentv1.GetOrgSettingsRequest
+	}{
+		ContextMoqParam:       contextMoqParam,
+		GetOrgSettingsRequest: getOrgSettingsRequest,
+	}
+	mock.lockGetOrgSettings.Lock()
+	mock.calls.GetOrgSettings = append(mock.calls.GetOrgSettings, callInfo)
+	mock.lockGetOrgSettings.Unlock()
+	return mock.GetOrgSettingsFunc(contextMoqParam, getOrgSettingsRequest)
+}
+
+// GetOrgSettingsCalls gets all the calls that were made to GetOrgSettings.
+// Check the length with:
+//
+//	len(mockedClient.GetOrgSettingsCalls())
+func (mock *ClientMock) GetOrgSettingsCalls() []struct {
+	ContextMoqParam       context.Context
+	GetOrgSettingsRequest *xagentv1.GetOrgSettingsRequest
+} {
+	var calls []struct {
+		ContextMoqParam       context.Context
+		GetOrgSettingsRequest *xagentv1.GetOrgSettingsRequest
+	}
+	mock.lockGetOrgSettings.RLock()
+	calls = mock.calls.GetOrgSettings
+	mock.lockGetOrgSettings.RUnlock()
 	return calls
 }
 

@@ -147,9 +147,9 @@ const (
 	// XAgentServiceListOrgMembersProcedure is the fully-qualified name of the XAgentService's
 	// ListOrgMembers RPC.
 	XAgentServiceListOrgMembersProcedure = "/xagent.v1.XAgentService/ListOrgMembers"
-	// XAgentServiceGetAtlassianWebhookSecretProcedure is the fully-qualified name of the
-	// XAgentService's GetAtlassianWebhookSecret RPC.
-	XAgentServiceGetAtlassianWebhookSecretProcedure = "/xagent.v1.XAgentService/GetAtlassianWebhookSecret"
+	// XAgentServiceGetOrgSettingsProcedure is the fully-qualified name of the XAgentService's
+	// GetOrgSettings RPC.
+	XAgentServiceGetOrgSettingsProcedure = "/xagent.v1.XAgentService/GetOrgSettings"
 	// XAgentServiceGenerateAtlassianWebhookSecretProcedure is the fully-qualified name of the
 	// XAgentService's GenerateAtlassianWebhookSecret RPC.
 	XAgentServiceGenerateAtlassianWebhookSecretProcedure = "/xagent.v1.XAgentService/GenerateAtlassianWebhookSecret"
@@ -199,7 +199,7 @@ type XAgentServiceClient interface {
 	AddOrgMember(context.Context, *v1.AddOrgMemberRequest) (*v1.AddOrgMemberResponse, error)
 	RemoveOrgMember(context.Context, *v1.RemoveOrgMemberRequest) (*v1.RemoveOrgMemberResponse, error)
 	ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error)
-	GetAtlassianWebhookSecret(context.Context, *v1.GetAtlassianWebhookSecretRequest) (*v1.GetAtlassianWebhookSecretResponse, error)
+	GetOrgSettings(context.Context, *v1.GetOrgSettingsRequest) (*v1.GetOrgSettingsResponse, error)
 	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
 }
 
@@ -466,10 +466,10 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("ListOrgMembers")),
 			connect.WithClientOptions(opts...),
 		),
-		getAtlassianWebhookSecret: connect.NewClient[v1.GetAtlassianWebhookSecretRequest, v1.GetAtlassianWebhookSecretResponse](
+		getOrgSettings: connect.NewClient[v1.GetOrgSettingsRequest, v1.GetOrgSettingsResponse](
 			httpClient,
-			baseURL+XAgentServiceGetAtlassianWebhookSecretProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("GetAtlassianWebhookSecret")),
+			baseURL+XAgentServiceGetOrgSettingsProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GetOrgSettings")),
 			connect.WithClientOptions(opts...),
 		),
 		generateAtlassianWebhookSecret: connect.NewClient[v1.GenerateAtlassianWebhookSecretRequest, v1.GenerateAtlassianWebhookSecretResponse](
@@ -525,7 +525,7 @@ type xAgentServiceClient struct {
 	addOrgMember                   *connect.Client[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse]
 	removeOrgMember                *connect.Client[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse]
 	listOrgMembers                 *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
-	getAtlassianWebhookSecret      *connect.Client[v1.GetAtlassianWebhookSecretRequest, v1.GetAtlassianWebhookSecretResponse]
+	getOrgSettings                 *connect.Client[v1.GetOrgSettingsRequest, v1.GetOrgSettingsResponse]
 	generateAtlassianWebhookSecret *connect.Client[v1.GenerateAtlassianWebhookSecretRequest, v1.GenerateAtlassianWebhookSecretResponse]
 }
 
@@ -907,9 +907,9 @@ func (c *xAgentServiceClient) ListOrgMembers(ctx context.Context, req *v1.ListOr
 	return nil, err
 }
 
-// GetAtlassianWebhookSecret calls xagent.v1.XAgentService.GetAtlassianWebhookSecret.
-func (c *xAgentServiceClient) GetAtlassianWebhookSecret(ctx context.Context, req *v1.GetAtlassianWebhookSecretRequest) (*v1.GetAtlassianWebhookSecretResponse, error) {
-	response, err := c.getAtlassianWebhookSecret.CallUnary(ctx, connect.NewRequest(req))
+// GetOrgSettings calls xagent.v1.XAgentService.GetOrgSettings.
+func (c *xAgentServiceClient) GetOrgSettings(ctx context.Context, req *v1.GetOrgSettingsRequest) (*v1.GetOrgSettingsResponse, error) {
+	response, err := c.getOrgSettings.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -969,7 +969,7 @@ type XAgentServiceHandler interface {
 	AddOrgMember(context.Context, *v1.AddOrgMemberRequest) (*v1.AddOrgMemberResponse, error)
 	RemoveOrgMember(context.Context, *v1.RemoveOrgMemberRequest) (*v1.RemoveOrgMemberResponse, error)
 	ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error)
-	GetAtlassianWebhookSecret(context.Context, *v1.GetAtlassianWebhookSecretRequest) (*v1.GetAtlassianWebhookSecretResponse, error)
+	GetOrgSettings(context.Context, *v1.GetOrgSettingsRequest) (*v1.GetOrgSettingsResponse, error)
 	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
 }
 
@@ -1232,10 +1232,10 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("ListOrgMembers")),
 		connect.WithHandlerOptions(opts...),
 	)
-	xAgentServiceGetAtlassianWebhookSecretHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceGetAtlassianWebhookSecretProcedure,
-		svc.GetAtlassianWebhookSecret,
-		connect.WithSchema(xAgentServiceMethods.ByName("GetAtlassianWebhookSecret")),
+	xAgentServiceGetOrgSettingsHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGetOrgSettingsProcedure,
+		svc.GetOrgSettings,
+		connect.WithSchema(xAgentServiceMethods.ByName("GetOrgSettings")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceGenerateAtlassianWebhookSecretHandler := connect.NewUnaryHandlerSimple(
@@ -1330,8 +1330,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceRemoveOrgMemberHandler.ServeHTTP(w, r)
 		case XAgentServiceListOrgMembersProcedure:
 			xAgentServiceListOrgMembersHandler.ServeHTTP(w, r)
-		case XAgentServiceGetAtlassianWebhookSecretProcedure:
-			xAgentServiceGetAtlassianWebhookSecretHandler.ServeHTTP(w, r)
+		case XAgentServiceGetOrgSettingsProcedure:
+			xAgentServiceGetOrgSettingsHandler.ServeHTTP(w, r)
 		case XAgentServiceGenerateAtlassianWebhookSecretProcedure:
 			xAgentServiceGenerateAtlassianWebhookSecretHandler.ServeHTTP(w, r)
 		default:
@@ -1511,8 +1511,8 @@ func (UnimplementedXAgentServiceHandler) ListOrgMembers(context.Context, *v1.Lis
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListOrgMembers is not implemented"))
 }
 
-func (UnimplementedXAgentServiceHandler) GetAtlassianWebhookSecret(context.Context, *v1.GetAtlassianWebhookSecretRequest) (*v1.GetAtlassianWebhookSecretResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetAtlassianWebhookSecret is not implemented"))
+func (UnimplementedXAgentServiceHandler) GetOrgSettings(context.Context, *v1.GetOrgSettingsRequest) (*v1.GetOrgSettingsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetOrgSettings is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error) {
