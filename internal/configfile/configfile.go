@@ -2,9 +2,8 @@ package configfile
 
 import (
 	"crypto/ed25519"
-	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,7 +51,7 @@ func (o *Overrides) apply(f *File) error {
 		f.Token = o.Token
 	}
 	if o.PrivateKey != "" {
-		key, err := decodePrivateKey([]byte(o.PrivateKey))
+		key, err := decodePrivateKey(o.PrivateKey)
 		if err != nil {
 			return fmt.Errorf("decode override private key: %w", err)
 		}
@@ -122,7 +121,7 @@ type jsonFile struct {
 func (f *File) MarshalJSON() ([]byte, error) {
 	jf := jsonFile{Token: f.Token}
 	if f.PrivateKey != nil {
-		jf.PrivateKey = string(encodePrivateKey(f.PrivateKey))
+		jf.PrivateKey = encodePrivateKey(f.PrivateKey)
 	}
 	return json.Marshal(jf)
 }
@@ -134,7 +133,7 @@ func (f *File) UnmarshalJSON(data []byte) error {
 	}
 	f.Token = jf.Token
 	if jf.PrivateKey != "" {
-		key, err := decodePrivateKey([]byte(jf.PrivateKey))
+		key, err := decodePrivateKey(jf.PrivateKey)
 		if err != nil {
 			return err
 		}
@@ -143,30 +142,18 @@ func (f *File) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func encodePrivateKey(key ed25519.PrivateKey) []byte {
-	der, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		panic(fmt.Sprintf("marshal private key: %v", err))
-	}
-	return pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: der,
-	})
+func encodePrivateKey(key ed25519.PrivateKey) string {
+	return hex.EncodeToString(key.Seed())
 }
 
-// decodePrivateKey parses a PEM-encoded PKCS8 Ed25519 private key.
-func decodePrivateKey(data []byte) (ed25519.PrivateKey, error) {
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, fmt.Errorf("invalid PEM data")
-	}
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+// decodePrivateKey parses a hex-encoded Ed25519 seed.
+func decodePrivateKey(s string) (ed25519.PrivateKey, error) {
+	seed, err := hex.DecodeString(s)
 	if err != nil {
-		return nil, fmt.Errorf("parse private key: %w", err)
+		return nil, fmt.Errorf("decode private key hex: %w", err)
 	}
-	priv, ok := key.(ed25519.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("not an Ed25519 private key")
+	if len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("invalid seed length: got %d, want %d", len(seed), ed25519.SeedSize)
 	}
-	return priv, nil
+	return ed25519.NewKeyFromSeed(seed), nil
 }

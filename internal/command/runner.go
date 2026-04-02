@@ -80,7 +80,7 @@ var RunnerCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "private-key",
-			Usage:   "PEM-encoded Ed25519 private key (takes priority over config file)",
+			Usage:   "Hex-encoded Ed25519 private key seed (takes priority over config file)",
 			Sources: cli.EnvVars("XAGENT_PRIVATE_KEY"),
 		},
 	},
