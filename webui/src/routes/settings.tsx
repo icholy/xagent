@@ -29,13 +29,13 @@ export const Route = createFileRoute('/settings')({
 })
 
 function SettingsPage() {
-  const { data: profileData, isLoading, refetch } = useQuery(getProfile, {})
+  const { data, isLoading, refetch } = useQuery(getProfile, {})
   const unlinkMutation = useMutation(unlinkGitHubAccount, {
     onSuccess: () => refetch(),
   })
 
-  const account = profileData?.githubAccount
-  const appSlug = profileData?.githubAppSlug
+  const account = data?.githubAccount
+  const appSlug = data?.githubAppSlug
 
   return (
     <div className="container mx-auto py-8 px-4">
