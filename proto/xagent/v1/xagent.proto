@@ -49,7 +49,7 @@ service XAgentService {
   rpc AddOrgMember(AddOrgMemberRequest) returns (AddOrgMemberResponse);
   rpc RemoveOrgMember(RemoveOrgMemberRequest) returns (RemoveOrgMemberResponse);
   rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
-  rpc GetAtlassianWebhookSecret(GetAtlassianWebhookSecretRequest) returns (GetAtlassianWebhookSecretResponse);
+  rpc GetOrgSettings(GetOrgSettingsRequest) returns (GetOrgSettingsResponse);
   rpc GenerateAtlassianWebhookSecret(GenerateAtlassianWebhookSecretRequest) returns (GenerateAtlassianWebhookSecretResponse);
 }
 
@@ -125,7 +125,6 @@ message GetProfileResponse {
   int64 default_org_id = 3;
   GitHubAccount github_account = 4;
   AtlassianAccount atlassian_account = 5;
-  string github_app_slug = 6;
 }
 
 message ListTasksRequest {}
@@ -498,11 +497,13 @@ message ListOrgMembersResponse {
   repeated OrgMember members = 1;
 }
 
-message GetAtlassianWebhookSecretRequest {}
+message GetOrgSettingsRequest {}
 
-message GetAtlassianWebhookSecretResponse {
-  string secret = 1;
-  string webhook_url = 2;
+message GetOrgSettingsResponse {
+  string atlassian_webhook_secret = 1;
+  string atlassian_webhook_url = 2;
+  string github_app_url = 3;
+  string mcp_url = 4;
 }
 
 message GenerateAtlassianWebhookSecretRequest {}

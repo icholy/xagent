@@ -215,9 +215,9 @@ export const removeOrgMember = XAgentService.method.removeOrgMember;
 export const listOrgMembers = XAgentService.method.listOrgMembers;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.GetAtlassianWebhookSecret
+ * @generated from rpc xagent.v1.XAgentService.GetOrgSettings
  */
-export const getAtlassianWebhookSecret = XAgentService.method.getAtlassianWebhookSecret;
+export const getOrgSettings = XAgentService.method.getOrgSettings;
 
 /**
  * @generated from rpc xagent.v1.XAgentService.GenerateAtlassianWebhookSecret

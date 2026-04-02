@@ -7,7 +7,7 @@ import {
   unlinkAtlassianAccount,
   createOrg,
   deleteOrg,
-  getAtlassianWebhookSecret,
+  getOrgSettings,
   generateAtlassianWebhookSecret,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Org } from '@/gen/xagent/v1/xagent_pb'
@@ -61,25 +61,10 @@ function AccountSettings() {
   })
 
   const account = data?.githubAccount
-  const appSlug = data?.githubAppSlug
 
   return (
     <div className="space-y-6">
       <OrgsCard />
-      <Card>
-        <CardHeader>
-          <CardTitle>MCP Server</CardTitle>
-          <CardDescription>
-            xagent provides an MCP server that you can connect to from any MCP-compatible client.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2">
-            <Cable className="h-5 w-5 text-muted-foreground" />
-            <code className="text-sm bg-muted px-2 py-1 rounded">https://xagent.choly.ca/mcp</code>
-          </div>
-        </CardContent>
-      </Card>
       <AtlassianAccountCard />
       <Card>
         <CardHeader>
@@ -119,18 +104,6 @@ function AccountSettings() {
               </Button>
             </a>
           )}
-          {appSlug && (
-            <a
-              href={`https://github.com/apps/${appSlug}/installations/new`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="outline">
-                <ExternalLink className="h-4 w-4" />
-                Install GitHub App
-              </Button>
-            </a>
-          )}
         </CardContent>
       </Card>
     </div>
@@ -138,15 +111,7 @@ function AccountSettings() {
 }
 
 function OrgSettings() {
-  return (
-    <div className="space-y-6">
-      <AtlassianWebhookCard />
-    </div>
-  )
-}
-
-function AtlassianWebhookCard() {
-  const { data, isLoading, refetch } = useQuery(getAtlassianWebhookSecret, {})
+  const { data, isLoading, refetch } = useQuery(getOrgSettings, {})
   const generateMutation = useMutation(generateAtlassianWebhookSecret, {
     onSuccess: () => refetch(),
   })
@@ -159,76 +124,118 @@ function AtlassianWebhookCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Atlassian Webhook</CardTitle>
-        <CardDescription>
-          Configure a webhook secret to receive Atlassian events (e.g. Jira issue comments) for your tasks.
-          Register this webhook URL in your Atlassian admin settings.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
-        ) : (
-          <>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium">Webhook URL</label>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="text-sm bg-muted px-2 py-1 rounded flex-1 truncate">
-                    {data?.webhookUrl || '—'}
-                  </code>
-                  {data?.webhookUrl && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => copyToClipboard(data.webhookUrl, 'url')}
-                    >
-                      {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Secret</label>
-                <div className="flex items-center gap-2 mt-1">
-                  {data?.secret ? (
-                    <>
-                      <code className="text-sm bg-muted px-2 py-1 rounded flex-1 truncate">
-                        {data.secret.slice(0, 8)}{'•'.repeat(24)}
-                      </code>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>MCP Server</CardTitle>
+          <CardDescription>
+            xagent provides an MCP server that you can connect to from any MCP-compatible client.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-muted-foreground">Loading...</div>
+          ) : data?.mcpUrl ? (
+            <div className="flex items-center gap-2">
+              <Cable className="h-5 w-5 text-muted-foreground" />
+              <code className="text-sm bg-muted px-2 py-1 rounded">{data.mcpUrl}</code>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+      {data?.githubAppUrl && (
+        <Card>
+          <CardHeader>
+            <CardTitle>GitHub App</CardTitle>
+            <CardDescription>
+              Install the GitHub App to receive webhook notifications for pull requests on your tasks.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <a
+              href={data.githubAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="outline">
+                <ExternalLink className="h-4 w-4" />
+                Install GitHub App
+              </Button>
+            </a>
+          </CardContent>
+        </Card>
+      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Atlassian Webhook</CardTitle>
+          <CardDescription>
+            Configure a webhook secret to receive Atlassian events (e.g. Jira issue comments) for your tasks.
+            Register this webhook URL in your Atlassian admin settings.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading ? (
+            <div className="text-muted-foreground">Loading...</div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Webhook URL</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="text-sm bg-muted px-2 py-1 rounded flex-1 truncate">
+                      {data?.atlassianWebhookUrl || '—'}
+                    </code>
+                    {data?.atlassianWebhookUrl && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => copyToClipboard(data.secret, 'secret')}
+                        onClick={() => copyToClipboard(data.atlassianWebhookUrl, 'url')}
                       >
-                        {copied === 'secret' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       </Button>
-                    </>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">No secret configured</span>
-                  )}
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Secret</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    {data?.atlassianWebhookSecret ? (
+                      <>
+                        <code className="text-sm bg-muted px-2 py-1 rounded flex-1 truncate">
+                          {data.atlassianWebhookSecret.slice(0, 8)}{'•'.repeat(24)}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(data.atlassianWebhookSecret, 'secret')}
+                        >
+                          {copied === 'secret' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No secret configured</span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-            <Button
-              onClick={() => generateMutation.mutateAsync({})}
-              disabled={generateMutation.isPending}
-            >
-              {generateMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : data?.secret ? (
-                <RefreshCw className="h-4 w-4" />
-              ) : (
-                <KeyRound className="h-4 w-4" />
-              )}
-              {data?.secret ? 'Regenerate Secret' : 'Generate Secret'}
-            </Button>
-          </>
-        )}
-      </CardContent>
-    </Card>
+              <Button
+                onClick={() => generateMutation.mutateAsync({})}
+                disabled={generateMutation.isPending}
+              >
+                {generateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : data?.atlassianWebhookSecret ? (
+                  <RefreshCw className="h-4 w-4" />
+                ) : (
+                  <KeyRound className="h-4 w-4" />
+                )}
+                {data?.atlassianWebhookSecret ? 'Regenerate Secret' : 'Generate Secret'}
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 
