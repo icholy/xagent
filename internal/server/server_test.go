@@ -18,7 +18,7 @@ type testOrgOptions struct {
 // createTestOrg creates a user, org, and authenticated context.
 func createTestOrg(t *testing.T, srv *Server, opts testOrgOptions) (context.Context, *teststore.Org) {
 	t.Helper()
-	org := teststore.CreateOrg(t, srv.store)
+	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: org.UserID, OrgID: org.OrgID})
 	if opts.Workspaces {
 		for _, runner := range []string{"test-runner", "runner-1", "runner-2"} {

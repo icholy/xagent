@@ -12,7 +12,7 @@ import (
 func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 	t.Parallel()
 	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s)
+	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/1"
 	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
@@ -43,8 +43,8 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 func TestRouteMultipleOrgs(t *testing.T) {
 	t.Parallel()
 	s := teststore.New(t)
-	orgA := teststore.CreateOrg(t, s)
-	orgB := teststore.CreateOrg(t, s)
+	orgA := teststore.CreateOrg(t, s, nil)
+	orgB := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/1"
 	teststore.CreateTask(t, s, orgA, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
@@ -80,7 +80,7 @@ func TestRouteMultipleOrgs(t *testing.T) {
 func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 	t.Parallel()
 	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s)
+	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/1"
 	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
@@ -107,7 +107,7 @@ func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 func TestRouteNoMatchingLinks(t *testing.T) {
 	t.Parallel()
 	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s)
+	org := teststore.CreateOrg(t, s, nil)
 
 	r := &Router{
 		Log:   slog.Default(),
@@ -126,7 +126,7 @@ func TestRouteNoMatchingLinks(t *testing.T) {
 func TestRouteEmptyURL(t *testing.T) {
 	t.Parallel()
 	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s)
+	org := teststore.CreateOrg(t, s, nil)
 
 	r := &Router{
 		Log:   slog.Default(),

@@ -81,8 +81,20 @@ func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *mode
 	return task
 }
 
+// WorkspaceOptions configures a workspace created with an org.
+type WorkspaceOptions struct {
+	Name     string
+	RunnerID string
+}
+
+// OrgOptions configures CreateOrg behavior. Zero values are replaced
+// with sensible defaults.
+type OrgOptions struct {
+	Workspaces []WorkspaceOptions
+}
+
 // CreateOrg creates a user, org, org membership, and sets the default org.
-func CreateOrg(t *testing.T, s *store.Store) *Org {
+func CreateOrg(t *testing.T, s *store.Store, opts *OrgOptions) *Org {
 	t.Helper()
 	ctx := t.Context()
 	userID := uuid.NewString()
@@ -111,8 +123,21 @@ func CreateOrg(t *testing.T, s *store.Store) *Org {
 	if err := s.UpdateDefaultOrgID(ctx, nil, userID, org.ID); err != nil {
 		t.Fatal(err)
 	}
-	return &Org{
+	result := &Org{
 		UserID: userID,
 		OrgID:  org.ID,
 	}
+	if opts != nil {
+		for _, ws := range opts.Workspaces {
+			if err := s.CreateWorkspace(ctx, nil,
+				cmp.Or(ws.RunnerID, "test-runner"),
+				cmp.Or(ws.Name, "default"),
+				"",
+				org.ID,
+			); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	return result
 }
