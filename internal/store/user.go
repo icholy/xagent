@@ -120,17 +120,6 @@ func (s *Store) UnlinkAtlassianAccount(ctx context.Context, tx *sql.Tx, userID s
 	return s.q(tx).UnlinkAtlassianAccount(ctx, userID)
 }
 
-func (s *Store) GetOrgJiraWebhookSecret(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
-	return s.q(tx).GetOrgJiraWebhookSecret(ctx, orgID)
-}
-
-func (s *Store) SetOrgJiraWebhookSecret(ctx context.Context, tx *sql.Tx, orgID int64, secret string) error {
-	return s.q(tx).SetOrgJiraWebhookSecret(ctx, sqlc.SetOrgJiraWebhookSecretParams{
-		ID:                orgID,
-		JiraWebhookSecret: secret,
-	})
-}
-
 func toModelUserRow(id, email, name string, githubUserID sql.NullInt64, githubUsername, atlassianAccountID sql.NullString, defaultOrgID sql.NullInt64, createdAt, updatedAt time.Time) *model.User {
 	u := &model.User{
 		ID:             id,

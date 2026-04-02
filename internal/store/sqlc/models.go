@@ -41,13 +41,12 @@ type Log struct {
 }
 
 type Org struct {
-	ID                int64     `json:"id"`
-	Name              string    `json:"name"`
-	Owner             string    `json:"owner"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-	Archived          bool      `json:"archived"`
-	JiraWebhookSecret string    `json:"jira_webhook_secret"`
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Owner     string    `json:"owner"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Archived  bool      `json:"archived"`
 }
 
 type OrgMember struct {

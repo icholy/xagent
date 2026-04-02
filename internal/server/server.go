@@ -3,9 +3,7 @@ package server
 import (
 	"cmp"
 	"context"
-	cryptorand "crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1062,42 +1060,6 @@ func (s *Server) UnlinkJiraAccount(ctx context.Context, req *xagentv1.UnlinkJira
 	}
 	s.log.Info("jira account unlinked", "owner", caller.ID)
 	return &xagentv1.UnlinkJiraAccountResponse{}, nil
-}
-
-func (s *Server) GetJiraWebhookSecret(ctx context.Context, req *xagentv1.GetJiraWebhookSecretRequest) (*xagentv1.GetJiraWebhookSecretResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	secret, err := s.store.GetOrgJiraWebhookSecret(ctx, nil, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return &xagentv1.GetJiraWebhookSecretResponse{
-		Secret:     secret,
-		WebhookUrl: fmt.Sprintf("%s/webhook/jira?org=%d", s.baseURL, caller.OrgID),
-	}, nil
-}
-
-func (s *Server) GenerateJiraWebhookSecret(ctx context.Context, req *xagentv1.GenerateJiraWebhookSecretRequest) (*xagentv1.GenerateJiraWebhookSecretResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	secret, err := generateWebhookSecret()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if err := s.store.SetOrgJiraWebhookSecret(ctx, nil, caller.OrgID, secret); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	s.log.Info("jira webhook secret generated", "org_id", caller.OrgID)
-	return &xagentv1.GenerateJiraWebhookSecretResponse{
-		Secret:     secret,
-		WebhookUrl: fmt.Sprintf("%s/webhook/jira?org=%d", s.baseURL, caller.OrgID),
-	}, nil
-}
-
-func generateWebhookSecret() (string, error) {
-	b := make([]byte, 32)
-	if _, err := cryptorand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
 
 func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {

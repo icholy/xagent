@@ -138,12 +138,6 @@ const (
 	// XAgentServiceUnlinkJiraAccountProcedure is the fully-qualified name of the XAgentService's
 	// UnlinkJiraAccount RPC.
 	XAgentServiceUnlinkJiraAccountProcedure = "/xagent.v1.XAgentService/UnlinkJiraAccount"
-	// XAgentServiceGetJiraWebhookSecretProcedure is the fully-qualified name of the XAgentService's
-	// GetJiraWebhookSecret RPC.
-	XAgentServiceGetJiraWebhookSecretProcedure = "/xagent.v1.XAgentService/GetJiraWebhookSecret"
-	// XAgentServiceGenerateJiraWebhookSecretProcedure is the fully-qualified name of the
-	// XAgentService's GenerateJiraWebhookSecret RPC.
-	XAgentServiceGenerateJiraWebhookSecretProcedure = "/xagent.v1.XAgentService/GenerateJiraWebhookSecret"
 	// XAgentServiceCreateOrgProcedure is the fully-qualified name of the XAgentService's CreateOrg RPC.
 	XAgentServiceCreateOrgProcedure = "/xagent.v1.XAgentService/CreateOrg"
 	// XAgentServiceListOrgsProcedure is the fully-qualified name of the XAgentService's ListOrgs RPC.
@@ -201,8 +195,6 @@ type XAgentServiceClient interface {
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
 	GetJiraAccount(context.Context, *v1.GetJiraAccountRequest) (*v1.GetJiraAccountResponse, error)
 	UnlinkJiraAccount(context.Context, *v1.UnlinkJiraAccountRequest) (*v1.UnlinkJiraAccountResponse, error)
-	GetJiraWebhookSecret(context.Context, *v1.GetJiraWebhookSecretRequest) (*v1.GetJiraWebhookSecretResponse, error)
-	GenerateJiraWebhookSecret(context.Context, *v1.GenerateJiraWebhookSecretRequest) (*v1.GenerateJiraWebhookSecretResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
 	DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error)
@@ -450,18 +442,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("UnlinkJiraAccount")),
 			connect.WithClientOptions(opts...),
 		),
-		getJiraWebhookSecret: connect.NewClient[v1.GetJiraWebhookSecretRequest, v1.GetJiraWebhookSecretResponse](
-			httpClient,
-			baseURL+XAgentServiceGetJiraWebhookSecretProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("GetJiraWebhookSecret")),
-			connect.WithClientOptions(opts...),
-		),
-		generateJiraWebhookSecret: connect.NewClient[v1.GenerateJiraWebhookSecretRequest, v1.GenerateJiraWebhookSecretResponse](
-			httpClient,
-			baseURL+XAgentServiceGenerateJiraWebhookSecretProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("GenerateJiraWebhookSecret")),
-			connect.WithClientOptions(opts...),
-		),
 		createOrg: connect.NewClient[v1.CreateOrgRequest, v1.CreateOrgResponse](
 			httpClient,
 			baseURL+XAgentServiceCreateOrgProcedure,
@@ -503,52 +483,50 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // xAgentServiceClient implements XAgentServiceClient.
 type xAgentServiceClient struct {
-	ping                      *connect.Client[v1.PingRequest, v1.PingResponse]
-	getProfile                *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
-	listTasks                 *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
-	listRunnerTasks           *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
-	listChildTasks            *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
-	createTask                *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
-	getTask                   *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	getTaskDetails            *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
-	updateTask                *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	archiveTask               *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
-	unarchiveTask             *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
-	cancelTask                *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
-	restartTask               *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
-	uploadLogs                *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
-	listLogs                  *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
-	createLink                *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
-	listLinks                 *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
-	findLinksByURL            *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
-	listEvents                *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
-	createEvent               *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
-	getEvent                  *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
-	deleteEvent               *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
-	addEventTask              *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
-	removeEventTask           *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
-	listEventTasks            *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
-	listEventsByTask          *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
-	processEvent              *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
-	submitRunnerEvents        *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
-	registerWorkspaces        *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
-	listWorkspaces            *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
-	clearWorkspaces           *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
-	createKey                 *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
-	listKeys                  *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
-	deleteKey                 *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
-	getGitHubAccount          *connect.Client[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse]
-	unlinkGitHubAccount       *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
-	getJiraAccount            *connect.Client[v1.GetJiraAccountRequest, v1.GetJiraAccountResponse]
-	unlinkJiraAccount         *connect.Client[v1.UnlinkJiraAccountRequest, v1.UnlinkJiraAccountResponse]
-	getJiraWebhookSecret      *connect.Client[v1.GetJiraWebhookSecretRequest, v1.GetJiraWebhookSecretResponse]
-	generateJiraWebhookSecret *connect.Client[v1.GenerateJiraWebhookSecretRequest, v1.GenerateJiraWebhookSecretResponse]
-	createOrg                 *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
-	listOrgs                  *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
-	deleteOrg                 *connect.Client[v1.DeleteOrgRequest, v1.DeleteOrgResponse]
-	addOrgMember              *connect.Client[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse]
-	removeOrgMember           *connect.Client[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse]
-	listOrgMembers            *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
+	ping                *connect.Client[v1.PingRequest, v1.PingResponse]
+	getProfile          *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
+	listTasks           *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	listRunnerTasks     *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
+	listChildTasks      *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
+	createTask          *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	getTask             *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
+	getTaskDetails      *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
+	updateTask          *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
+	archiveTask         *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
+	unarchiveTask       *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
+	cancelTask          *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
+	restartTask         *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
+	uploadLogs          *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
+	listLogs            *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
+	createLink          *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
+	listLinks           *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
+	findLinksByURL      *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
+	listEvents          *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
+	createEvent         *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
+	getEvent            *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
+	deleteEvent         *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
+	addEventTask        *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
+	removeEventTask     *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
+	listEventTasks      *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
+	listEventsByTask    *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
+	processEvent        *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
+	submitRunnerEvents  *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
+	registerWorkspaces  *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
+	listWorkspaces      *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
+	clearWorkspaces     *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
+	createKey           *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
+	listKeys            *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
+	deleteKey           *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
+	getGitHubAccount    *connect.Client[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse]
+	unlinkGitHubAccount *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
+	getJiraAccount      *connect.Client[v1.GetJiraAccountRequest, v1.GetJiraAccountResponse]
+	unlinkJiraAccount   *connect.Client[v1.UnlinkJiraAccountRequest, v1.UnlinkJiraAccountResponse]
+	createOrg           *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
+	listOrgs            *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
+	deleteOrg           *connect.Client[v1.DeleteOrgRequest, v1.DeleteOrgResponse]
+	addOrgMember        *connect.Client[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse]
+	removeOrgMember     *connect.Client[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse]
+	listOrgMembers      *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -893,24 +871,6 @@ func (c *xAgentServiceClient) UnlinkJiraAccount(ctx context.Context, req *v1.Unl
 	return nil, err
 }
 
-// GetJiraWebhookSecret calls xagent.v1.XAgentService.GetJiraWebhookSecret.
-func (c *xAgentServiceClient) GetJiraWebhookSecret(ctx context.Context, req *v1.GetJiraWebhookSecretRequest) (*v1.GetJiraWebhookSecretResponse, error) {
-	response, err := c.getJiraWebhookSecret.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// GenerateJiraWebhookSecret calls xagent.v1.XAgentService.GenerateJiraWebhookSecret.
-func (c *xAgentServiceClient) GenerateJiraWebhookSecret(ctx context.Context, req *v1.GenerateJiraWebhookSecretRequest) (*v1.GenerateJiraWebhookSecretResponse, error) {
-	response, err := c.generateJiraWebhookSecret.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
 // CreateOrg calls xagent.v1.XAgentService.CreateOrg.
 func (c *xAgentServiceClient) CreateOrg(ctx context.Context, req *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error) {
 	response, err := c.createOrg.CallUnary(ctx, connect.NewRequest(req))
@@ -1005,8 +965,6 @@ type XAgentServiceHandler interface {
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
 	GetJiraAccount(context.Context, *v1.GetJiraAccountRequest) (*v1.GetJiraAccountResponse, error)
 	UnlinkJiraAccount(context.Context, *v1.UnlinkJiraAccountRequest) (*v1.UnlinkJiraAccountResponse, error)
-	GetJiraWebhookSecret(context.Context, *v1.GetJiraWebhookSecretRequest) (*v1.GetJiraWebhookSecretResponse, error)
-	GenerateJiraWebhookSecret(context.Context, *v1.GenerateJiraWebhookSecretRequest) (*v1.GenerateJiraWebhookSecretResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
 	DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error)
@@ -1250,18 +1208,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("UnlinkJiraAccount")),
 		connect.WithHandlerOptions(opts...),
 	)
-	xAgentServiceGetJiraWebhookSecretHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceGetJiraWebhookSecretProcedure,
-		svc.GetJiraWebhookSecret,
-		connect.WithSchema(xAgentServiceMethods.ByName("GetJiraWebhookSecret")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceGenerateJiraWebhookSecretHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceGenerateJiraWebhookSecretProcedure,
-		svc.GenerateJiraWebhookSecret,
-		connect.WithSchema(xAgentServiceMethods.ByName("GenerateJiraWebhookSecret")),
-		connect.WithHandlerOptions(opts...),
-	)
 	xAgentServiceCreateOrgHandler := connect.NewUnaryHandlerSimple(
 		XAgentServiceCreateOrgProcedure,
 		svc.CreateOrg,
@@ -1376,10 +1322,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetJiraAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceUnlinkJiraAccountProcedure:
 			xAgentServiceUnlinkJiraAccountHandler.ServeHTTP(w, r)
-		case XAgentServiceGetJiraWebhookSecretProcedure:
-			xAgentServiceGetJiraWebhookSecretHandler.ServeHTTP(w, r)
-		case XAgentServiceGenerateJiraWebhookSecretProcedure:
-			xAgentServiceGenerateJiraWebhookSecretHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateOrgProcedure:
 			xAgentServiceCreateOrgHandler.ServeHTTP(w, r)
 		case XAgentServiceListOrgsProcedure:
@@ -1551,14 +1493,6 @@ func (UnimplementedXAgentServiceHandler) GetJiraAccount(context.Context, *v1.Get
 
 func (UnimplementedXAgentServiceHandler) UnlinkJiraAccount(context.Context, *v1.UnlinkJiraAccountRequest) (*v1.UnlinkJiraAccountResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UnlinkJiraAccount is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) GetJiraWebhookSecret(context.Context, *v1.GetJiraWebhookSecretRequest) (*v1.GetJiraWebhookSecretResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetJiraWebhookSecret is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) GenerateJiraWebhookSecret(context.Context, *v1.GenerateJiraWebhookSecretRequest) (*v1.GenerateJiraWebhookSecretResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GenerateJiraWebhookSecret is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error) {

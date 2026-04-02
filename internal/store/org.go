@@ -140,9 +140,8 @@ func toModelOrg(row sqlc.Org) *model.Org {
 		ID:                row.ID,
 		Name:              row.Name,
 		Owner:             row.Owner,
-		Archived:          row.Archived,
-		JiraWebhookSecret: row.JiraWebhookSecret,
-		CreatedAt:         row.CreatedAt,
+		Archived:  row.Archived,
+		CreatedAt: row.CreatedAt,
 		UpdatedAt:         row.UpdatedAt,
 	}
 }
