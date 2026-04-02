@@ -41,9 +41,7 @@ service XAgentService {
   rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse);
   rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
-  rpc GetGitHubAccount(GetGitHubAccountRequest) returns (GetGitHubAccountResponse);
   rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
-  rpc GetAtlassianAccount(GetAtlassianAccountRequest) returns (GetAtlassianAccountResponse);
   rpc UnlinkAtlassianAccount(UnlinkAtlassianAccountRequest) returns (UnlinkAtlassianAccountResponse);
   rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
   rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
@@ -123,6 +121,9 @@ message GetProfileResponse {
   Profile profile = 1;
   repeated Org orgs = 2;
   int64 default_org_id = 3;
+  GitHubAccount github_account = 4;
+  AtlassianAccount atlassian_account = 5;
+  string github_app_slug = 6;
 }
 
 message ListTasksRequest {}
@@ -424,13 +425,6 @@ message GitHubAccount {
   google.protobuf.Timestamp created_at = 4;
 }
 
-message GetGitHubAccountRequest {}
-
-message GetGitHubAccountResponse {
-  GitHubAccount account = 1;
-  string github_app_slug = 2;
-}
-
 message UnlinkGitHubAccountRequest {}
 
 message UnlinkGitHubAccountResponse {}
@@ -439,12 +433,6 @@ message AtlassianAccount {
   string atlassian_account_id = 1;
   string atlassian_username = 3;
   google.protobuf.Timestamp created_at = 2;
-}
-
-message GetAtlassianAccountRequest {}
-
-message GetAtlassianAccountResponse {
-  AtlassianAccount account = 1;
 }
 
 message UnlinkAtlassianAccountRequest {}

@@ -175,19 +175,9 @@ export const listKeys = XAgentService.method.listKeys;
 export const deleteKey = XAgentService.method.deleteKey;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.GetGitHubAccount
- */
-export const getGitHubAccount = XAgentService.method.getGitHubAccount;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.UnlinkGitHubAccount
  */
 export const unlinkGitHubAccount = XAgentService.method.unlinkGitHubAccount;
-
-/**
- * @generated from rpc xagent.v1.XAgentService.GetAtlassianAccount
- */
-export const getAtlassianAccount = XAgentService.method.getAtlassianAccount;
 
 /**
  * @generated from rpc xagent.v1.XAgentService.UnlinkAtlassianAccount

@@ -61,14 +61,8 @@ var _ Client = &ClientMock{}
 //			FindLinksByURLFunc: func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
 //				panic("mock out the FindLinksByURL method")
 //			},
-//			GetAtlassianAccountFunc: func(contextMoqParam context.Context, getAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error) {
-//				panic("mock out the GetAtlassianAccount method")
-//			},
 //			GetEventFunc: func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 //				panic("mock out the GetEvent method")
-//			},
-//			GetGitHubAccountFunc: func(contextMoqParam context.Context, getGitHubAccountRequest *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
-//				panic("mock out the GetGitHubAccount method")
 //			},
 //			GetProfileFunc: func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
 //				panic("mock out the GetProfile method")
@@ -200,14 +194,8 @@ type ClientMock struct {
 	// FindLinksByURLFunc mocks the FindLinksByURL method.
 	FindLinksByURLFunc func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error)
 
-	// GetAtlassianAccountFunc mocks the GetAtlassianAccount method.
-	GetAtlassianAccountFunc func(contextMoqParam context.Context, getAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error)
-
 	// GetEventFunc mocks the GetEvent method.
 	GetEventFunc func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error)
-
-	// GetGitHubAccountFunc mocks the GetGitHubAccount method.
-	GetGitHubAccountFunc func(contextMoqParam context.Context, getGitHubAccountRequest *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error)
 
 	// GetProfileFunc mocks the GetProfile method.
 	GetProfileFunc func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error)
@@ -390,26 +378,12 @@ type ClientMock struct {
 			// FindLinksByURLRequest is the findLinksByURLRequest argument value.
 			FindLinksByURLRequest *xagentv1.FindLinksByURLRequest
 		}
-		// GetAtlassianAccount holds details about calls to the GetAtlassianAccount method.
-		GetAtlassianAccount []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// GetAtlassianAccountRequest is the getAtlassianAccountRequest argument value.
-			GetAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest
-		}
 		// GetEvent holds details about calls to the GetEvent method.
 		GetEvent []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
 			ContextMoqParam context.Context
 			// GetEventRequest is the getEventRequest argument value.
 			GetEventRequest *xagentv1.GetEventRequest
-		}
-		// GetGitHubAccount holds details about calls to the GetGitHubAccount method.
-		GetGitHubAccount []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// GetGitHubAccountRequest is the getGitHubAccountRequest argument value.
-			GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
 		}
 		// GetProfile holds details about calls to the GetProfile method.
 		GetProfile []struct {
@@ -615,9 +589,7 @@ type ClientMock struct {
 	lockDeleteKey              sync.RWMutex
 	lockDeleteOrg              sync.RWMutex
 	lockFindLinksByURL         sync.RWMutex
-	lockGetAtlassianAccount    sync.RWMutex
 	lockGetEvent               sync.RWMutex
-	lockGetGitHubAccount       sync.RWMutex
 	lockGetProfile             sync.RWMutex
 	lockGetTask                sync.RWMutex
 	lockGetTaskDetails         sync.RWMutex
@@ -1151,42 +1123,6 @@ func (mock *ClientMock) FindLinksByURLCalls() []struct {
 	return calls
 }
 
-// GetAtlassianAccount calls GetAtlassianAccountFunc.
-func (mock *ClientMock) GetAtlassianAccount(contextMoqParam context.Context, getAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error) {
-	if mock.GetAtlassianAccountFunc == nil {
-		panic("ClientMock.GetAtlassianAccountFunc: method is nil but Client.GetAtlassianAccount was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam            context.Context
-		GetAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest
-	}{
-		ContextMoqParam:            contextMoqParam,
-		GetAtlassianAccountRequest: getAtlassianAccountRequest,
-	}
-	mock.lockGetAtlassianAccount.Lock()
-	mock.calls.GetAtlassianAccount = append(mock.calls.GetAtlassianAccount, callInfo)
-	mock.lockGetAtlassianAccount.Unlock()
-	return mock.GetAtlassianAccountFunc(contextMoqParam, getAtlassianAccountRequest)
-}
-
-// GetAtlassianAccountCalls gets all the calls that were made to GetAtlassianAccount.
-// Check the length with:
-//
-//	len(mockedClient.GetAtlassianAccountCalls())
-func (mock *ClientMock) GetAtlassianAccountCalls() []struct {
-	ContextMoqParam            context.Context
-	GetAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest
-} {
-	var calls []struct {
-		ContextMoqParam            context.Context
-		GetAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest
-	}
-	mock.lockGetAtlassianAccount.RLock()
-	calls = mock.calls.GetAtlassianAccount
-	mock.lockGetAtlassianAccount.RUnlock()
-	return calls
-}
-
 // GetEvent calls GetEventFunc.
 func (mock *ClientMock) GetEvent(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 	if mock.GetEventFunc == nil {
@@ -1220,42 +1156,6 @@ func (mock *ClientMock) GetEventCalls() []struct {
 	mock.lockGetEvent.RLock()
 	calls = mock.calls.GetEvent
 	mock.lockGetEvent.RUnlock()
-	return calls
-}
-
-// GetGitHubAccount calls GetGitHubAccountFunc.
-func (mock *ClientMock) GetGitHubAccount(contextMoqParam context.Context, getGitHubAccountRequest *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
-	if mock.GetGitHubAccountFunc == nil {
-		panic("ClientMock.GetGitHubAccountFunc: method is nil but Client.GetGitHubAccount was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam         context.Context
-		GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
-	}{
-		ContextMoqParam:         contextMoqParam,
-		GetGitHubAccountRequest: getGitHubAccountRequest,
-	}
-	mock.lockGetGitHubAccount.Lock()
-	mock.calls.GetGitHubAccount = append(mock.calls.GetGitHubAccount, callInfo)
-	mock.lockGetGitHubAccount.Unlock()
-	return mock.GetGitHubAccountFunc(contextMoqParam, getGitHubAccountRequest)
-}
-
-// GetGitHubAccountCalls gets all the calls that were made to GetGitHubAccount.
-// Check the length with:
-//
-//	len(mockedClient.GetGitHubAccountCalls())
-func (mock *ClientMock) GetGitHubAccountCalls() []struct {
-	ContextMoqParam         context.Context
-	GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
-} {
-	var calls []struct {
-		ContextMoqParam         context.Context
-		GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
-	}
-	mock.lockGetGitHubAccount.RLock()
-	calls = mock.calls.GetGitHubAccount
-	mock.lockGetGitHubAccount.RUnlock()
 	return calls
 }
 
