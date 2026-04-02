@@ -2,11 +2,7 @@ package webhook
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 )
@@ -59,7 +56,7 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify HMAC-SHA256 signature
-	if err := verifyAtlassianSignature(body, r.Header.Get("X-Hub-Signature"), secret); err != nil {
+	if err := atlassian.VerifyWebhook(body, r.Header.Get("X-Hub-Signature"), secret); err != nil {
 		slog.Error("failed to verify Atlassian webhook signature", "error", err)
 		http.Error(w, "invalid signature", http.StatusForbidden)
 		return
@@ -174,29 +171,6 @@ func (h *AtlassianHandler) routeEventToLinks(ctx context.Context, eventID int64,
 	return len(taskIDs)
 }
 
-// verifyAtlassianSignature verifies the HMAC-SHA256 signature from Jira Cloud webhooks.
-func verifyAtlassianSignature(body []byte, signature, secret string) error {
-	if signature == "" {
-		return fmt.Errorf("missing X-Hub-Signature header")
-	}
-	// Jira sends "sha256=<hex>"
-	parts := strings.SplitN(signature, "=", 2)
-	if len(parts) != 2 || parts[0] != "sha256" {
-		return fmt.Errorf("unsupported signature format: %s", signature)
-	}
-	sigBytes, err := hex.DecodeString(parts[1])
-	if err != nil {
-		return fmt.Errorf("invalid signature hex: %w", err)
-	}
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(body)
-	expected := mac.Sum(nil)
-	if !hmac.Equal(sigBytes, expected) {
-		return fmt.Errorf("signature mismatch")
-	}
-	return nil
-}
-
 type atlassianWebhookEvent struct {
 	description        string
 	data               string
@@ -204,39 +178,9 @@ type atlassianWebhookEvent struct {
 	atlassianAccountID string
 }
 
-// jiraWebhookPayload represents the relevant fields of a Jira Cloud webhook payload.
-type jiraWebhookPayload struct {
-	WebhookEvent string `json:"webhookEvent"`
-	Comment *struct {
-		Body   string `json:"body"`
-		Author struct {
-			AccountID   string `json:"accountId"`
-			DisplayName string `json:"displayName"`
-		} `json:"author"`
-	} `json:"comment"`
-	Issue *struct {
-		Key    string `json:"key"`
-		Fields struct {
-			Summary string `json:"summary"`
-		} `json:"fields"`
-		Self string `json:"self"`
-	} `json:"issue"`
-}
-
-// issueURL constructs the browse URL for a Jira issue from the API self link and issue key.
-// The self link is like "https://mycompany.atlassian.net/rest/api/2/issue/12345".
-func issueURL(selfLink, issueKey string) string {
-	// Extract the base URL from the self link
-	idx := strings.Index(selfLink, "/rest/")
-	if idx == -1 {
-		return ""
-	}
-	return selfLink[:idx] + "/browse/" + issueKey
-}
-
 func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
-	var payload jiraWebhookPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
+	payload, err := atlassian.ParseWebhook(body)
+	if err != nil {
 		return nil, err
 	}
 
@@ -245,8 +189,8 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 		if payload.Comment == nil || payload.Issue == nil {
 			return nil, nil
 		}
-		body := strings.TrimSpace(payload.Comment.Body)
-		if !strings.HasPrefix(body, "xagent:") {
+		commentBody := strings.TrimSpace(payload.Comment.Body)
+		if !strings.HasPrefix(commentBody, "xagent:") {
 			return nil, nil
 		}
 
@@ -256,7 +200,7 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 			return nil, nil
 		}
 
-		url := issueURL(payload.Issue.Self, payload.Issue.Key)
+		url := atlassian.IssueURL(payload.Issue.Self, payload.Issue.Key)
 		if url == "" {
 			return nil, nil
 		}
@@ -265,7 +209,7 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 
 		return &atlassianWebhookEvent{
 			description:        description,
-			data:               body,
+			data:               commentBody,
 			url:                url,
 			atlassianAccountID: accountID,
 		}, nil

@@ -2,9 +2,6 @@ package webhook
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"math/rand/v2"
@@ -15,63 +12,30 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 	"gotest.tools/v3/assert"
 )
 
-func makeJiraComment(body, accountID, displayName string) *struct {
-	Body   string `json:"body"`
-	Author struct {
-		AccountID   string `json:"accountId"`
-		DisplayName string `json:"displayName"`
-	} `json:"author"`
-} {
-	c := &struct {
-		Body   string `json:"body"`
-		Author struct {
-			AccountID   string `json:"accountId"`
-			DisplayName string `json:"displayName"`
-		} `json:"author"`
-	}{
-		Body: body,
-	}
-	c.Author.AccountID = accountID
-	c.Author.DisplayName = displayName
-	return c
-}
-
-func makeJiraIssue(key, selfLink string) *struct {
-	Key    string `json:"key"`
-	Fields struct {
-		Summary string `json:"summary"`
-	} `json:"fields"`
-	Self string `json:"self"`
-} {
-	return &struct {
-		Key    string `json:"key"`
-		Fields struct {
-			Summary string `json:"summary"`
-		} `json:"fields"`
-		Self string `json:"self"`
-	}{
-		Key:  key,
-		Self: selfLink,
-	}
-}
-
 func TestExtractAtlassianWebhookEvent(t *testing.T) {
 	tests := []struct {
 		name     string
-		payload  jiraWebhookPayload
+		payload  atlassian.WebhookPayload
 		expected *atlassianWebhookEvent
 	}{
 		{
 			name: "CommentCreated",
-			payload: jiraWebhookPayload{
+			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_created",
-				Comment:      makeJiraComment("xagent: do something", "abc123", "Test User"),
-				Issue:        makeJiraIssue("PROJ-123", "https://mycompany.atlassian.net/rest/api/2/issue/12345"),
+				Comment: &atlassian.Comment{
+					Body:   "xagent: do something",
+					Author: atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				},
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-123",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+				},
 			},
 			expected: &atlassianWebhookEvent{
 				description:        "Test User commented on PROJ-123",
@@ -82,53 +46,77 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 		},
 		{
 			name: "NoXAgentPrefix",
-			payload: jiraWebhookPayload{
+			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_created",
-				Comment:      makeJiraComment("just a regular comment", "abc123", "Test User"),
-				Issue:        makeJiraIssue("PROJ-123", "https://mycompany.atlassian.net/rest/api/2/issue/12345"),
+				Comment: &atlassian.Comment{
+					Body:   "just a regular comment",
+					Author: atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				},
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-123",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+				},
 			},
 			expected: nil,
 		},
 		{
 			name: "NilComment",
-			payload: jiraWebhookPayload{
+			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_created",
 				Comment:      nil,
-				Issue:        makeJiraIssue("PROJ-123", "https://mycompany.atlassian.net/rest/api/2/issue/12345"),
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-123",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+				},
 			},
 			expected: nil,
 		},
 		{
 			name: "NilIssue",
-			payload: jiraWebhookPayload{
+			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_created",
-				Comment:      makeJiraComment("xagent: test", "abc123", "Test User"),
-				Issue:        nil,
+				Comment: &atlassian.Comment{
+					Body:   "xagent: test",
+					Author: atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				},
+				Issue: nil,
 			},
 			expected: nil,
 		},
 		{
 			name: "UnknownEventType",
-			payload: jiraWebhookPayload{
+			payload: atlassian.WebhookPayload{
 				WebhookEvent: "issue_updated",
 			},
 			expected: nil,
 		},
 		{
 			name: "CommentUpdatedIgnored",
-			payload: jiraWebhookPayload{
+			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_updated",
-				Comment:      makeJiraComment("xagent: test", "abc123", "Test User"),
-				Issue:        makeJiraIssue("PROJ-123", "https://mycompany.atlassian.net/rest/api/2/issue/12345"),
+				Comment: &atlassian.Comment{
+					Body:   "xagent: test",
+					Author: atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				},
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-123",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+				},
 			},
 			expected: nil,
 		},
 		{
 			name: "WhitespacePrefix",
-			payload: jiraWebhookPayload{
+			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_created",
-				Comment:      makeJiraComment("  xagent: trimmed", "abc123", "Test User"),
-				Issue:        makeJiraIssue("PROJ-1", "https://mycompany.atlassian.net/rest/api/2/issue/1"),
+				Comment: &atlassian.Comment{
+					Body:   "  xagent: trimmed",
+					Author: atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				},
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-1",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/1",
+				},
 			},
 			expected: &atlassianWebhookEvent{
 				description:        "Test User commented on PROJ-1",
@@ -150,82 +138,8 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 	}
 }
 
-func TestVerifyAtlassianSignature(t *testing.T) {
-	secret := "test-secret"
-	body := []byte(`{"test": "payload"}`)
-
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(body)
-	validSig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
-
-	tests := []struct {
-		name      string
-		signature string
-		errMsg    string
-	}{
-		{
-			name:      "ValidSignature",
-			signature: validSig,
-			errMsg:    "",
-		},
-		{
-			name:      "InvalidSignature",
-			signature: "sha256=deadbeef",
-			errMsg:    "signature mismatch",
-		},
-		{
-			name:      "MissingSignature",
-			signature: "",
-			errMsg:    "missing X-Hub-Signature header",
-		},
-		{
-			name:      "UnsupportedFormat",
-			signature: "sha1=abc",
-			errMsg:    "unsupported signature format",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := verifyAtlassianSignature(body, tt.signature, secret)
-			if tt.errMsg == "" {
-				assert.NilError(t, err)
-			} else {
-				assert.ErrorContains(t, err, tt.errMsg)
-			}
-		})
-	}
-}
-
-func TestIssueURL(t *testing.T) {
-	tests := []struct {
-		selfLink string
-		issueKey string
-		expected string
-	}{
-		{
-			selfLink: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
-			issueKey: "PROJ-123",
-			expected: "https://mycompany.atlassian.net/browse/PROJ-123",
-		},
-		{
-			selfLink: "invalid-url",
-			issueKey: "PROJ-123",
-			expected: "",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.issueKey, func(t *testing.T) {
-			got := issueURL(tt.selfLink, tt.issueKey)
-			assert.Equal(t, got, tt.expected)
-		})
-	}
-}
-
 func signPayload(body []byte, secret string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(body)
-	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	return atlassian.SignWebhook(body, secret)
 }
 
 func makeAtlassianWebhookRequest(t *testing.T, orgID int64, payload any, secret string) *http.Request {
@@ -273,20 +187,26 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 	err = s.CreateTask(ctx, nil, task)
 	assert.NilError(t, err)
 
-	issueURL := "https://mycompany.atlassian.net/browse/PROJ-10"
+	jiraIssueURL := "https://mycompany.atlassian.net/browse/PROJ-10"
 	link := &model.Link{
 		TaskID:    task.ID,
 		Relevance: "test",
-		URL:       issueURL,
+		URL:       jiraIssueURL,
 		Notify:    true,
 	}
 	err = s.CreateLink(ctx, nil, link)
 	assert.NilError(t, err)
 
-	payload := jiraWebhookPayload{
+	payload := atlassian.WebhookPayload{
 		WebhookEvent: "comment_created",
-		Comment:      makeJiraComment("xagent: please fix the tests", atlassianAccountID, "Test User"),
-		Issue:        makeJiraIssue("PROJ-10", "https://mycompany.atlassian.net/rest/api/2/issue/10"),
+		Comment: &atlassian.Comment{
+			Body:   "xagent: please fix the tests",
+			Author: atlassian.User{AccountID: atlassianAccountID, DisplayName: "Test User"},
+		},
+		Issue: &atlassian.Issue{
+			Key:  "PROJ-10",
+			Self: "https://mycompany.atlassian.net/rest/api/2/issue/10",
+		},
 	}
 
 	req := makeAtlassianWebhookRequest(t, orgID, payload, secret)
@@ -309,7 +229,7 @@ func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
 	err := s.SetOrgAtlassianWebhookSecret(t.Context(), nil, orgID, secret)
 	assert.NilError(t, err)
 
-	payload := jiraWebhookPayload{
+	payload := atlassian.WebhookPayload{
 		WebhookEvent: "issue_updated",
 	}
 	req := makeAtlassianWebhookRequest(t, orgID, payload, secret)
@@ -328,10 +248,16 @@ func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
 	err := s.SetOrgAtlassianWebhookSecret(t.Context(), nil, orgID, secret)
 	assert.NilError(t, err)
 
-	payload := jiraWebhookPayload{
+	payload := atlassian.WebhookPayload{
 		WebhookEvent: "comment_created",
-		Comment:      makeJiraComment("xagent: test", "unknown-account", "Unknown"),
-		Issue:        makeJiraIssue("PROJ-1", "https://mycompany.atlassian.net/rest/api/2/issue/1"),
+		Comment: &atlassian.Comment{
+			Body:   "xagent: test",
+			Author: atlassian.User{AccountID: "unknown-account", DisplayName: "Unknown"},
+		},
+		Issue: &atlassian.Issue{
+			Key:  "PROJ-1",
+			Self: "https://mycompany.atlassian.net/rest/api/2/issue/1",
+		},
 	}
 	req := makeAtlassianWebhookRequest(t, orgID, payload, secret)
 	rec := httptest.NewRecorder()
@@ -349,7 +275,7 @@ func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {
 	err := s.SetOrgAtlassianWebhookSecret(t.Context(), nil, orgID, secret)
 	assert.NilError(t, err)
 
-	payload := jiraWebhookPayload{WebhookEvent: "comment_created"}
+	payload := atlassian.WebhookPayload{WebhookEvent: "comment_created"}
 	body, err := json.Marshal(payload)
 	assert.NilError(t, err)
 
