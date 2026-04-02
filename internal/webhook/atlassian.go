@@ -12,13 +12,12 @@ import (
 
 	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/store"
 )
 
 // AtlassianHandler handles incoming Atlassian (Jira) webhook events.
 type AtlassianHandler struct {
 	Router Router
-	Store  *store.Store
+	Store  Store
 }
 
 func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

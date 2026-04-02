@@ -12,13 +12,12 @@ import (
 	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/githubx"
-	"github.com/icholy/xagent/internal/store"
 )
 
 // GitHubHandler handles incoming GitHub App webhook events.
 type GitHubHandler struct {
 	Router        Router
-	Store         *store.Store
+	Store         Store
 	WebhookSecret string
 }
 

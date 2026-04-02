@@ -3,18 +3,17 @@ package webhook
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
-	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/store"
+	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
 )
 
@@ -148,40 +147,34 @@ func makeAtlassianWebhookRequest(t *testing.T, orgID int64, payload any, secret 
 	return req
 }
 
-func setupAtlassianTestHandler(t *testing.T) (*AtlassianHandler, *store.Store, *RouterMock) {
-	t.Helper()
-	s := setupTestStore(t)
-	r := &RouterMock{
+func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
+	secret := "test-webhook-secret"
+	accountID := "atlassian-abc123"
+	router := &RouterMock{
 		RouteFunc: func(ctx context.Context, event eventrouter.Event) (int, error) {
 			return 1, nil
 		},
 	}
 	h := &AtlassianHandler{
-		Router: r,
-		Store:  s,
+		Router: router,
+		Store: &StoreMock{
+			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
+				return secret, nil
+			},
+			GetUserByAtlassianAccountIDFunc: func(ctx context.Context, tx *sql.Tx, id string) (*model.User, error) {
+				if id == accountID {
+					return &model.User{ID: "user-1"}, nil
+				}
+				return nil, sql.ErrNoRows
+			},
+		},
 	}
-	return h, s, r
-}
-
-func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
-	h, s, r := setupAtlassianTestHandler(t)
-
-	userID, orgID := createTestUser(t, s)
-	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: orgID})
-
-	atlassianAccountID := "atlassian-" + strconv.FormatInt(rand.Int64N(1<<53)+1, 10)
-	err := s.LinkAtlassianAccount(ctx, nil, userID, atlassianAccountID, "Test User")
-	assert.NilError(t, err)
-
-	secret := "test-webhook-secret"
-	err = s.SetOrgAtlassianWebhookSecret(ctx, nil, orgID, secret)
-	assert.NilError(t, err)
 
 	payload := atlassian.WebhookPayload{
 		WebhookEvent: "comment_created",
 		Comment: &atlassian.Comment{
 			Body:   "xagent: please fix the tests",
-			Author: atlassian.User{AccountID: atlassianAccountID, DisplayName: "Test User"},
+			Author: atlassian.User{AccountID: accountID, DisplayName: "Test User"},
 		},
 		Issue: &atlassian.Issue{
 			Key:  "PROJ-10",
@@ -189,36 +182,38 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 		},
 	}
 
-	req := makeAtlassianWebhookRequest(t, orgID, payload, secret)
+	req := makeAtlassianWebhookRequest(t, 1, payload, secret)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	calls := r.RouteCalls()
+	calls := router.RouteCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].Event, eventrouter.Event{
 		Type:        eventrouter.EventTypeAtlassian,
 		Description: "Test User commented on PROJ-10",
 		Data:        "xagent: please fix the tests",
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
-		UserID:      userID,
+		UserID:      "user-1",
 	})
 }
 
 func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
-	h, s, _ := setupAtlassianTestHandler(t)
-
-	_, orgID := createTestUser(t, s)
 	secret := "test-webhook-secret"
-	err := s.SetOrgAtlassianWebhookSecret(t.Context(), nil, orgID, secret)
-	assert.NilError(t, err)
+	h := &AtlassianHandler{
+		Store: &StoreMock{
+			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
+				return secret, nil
+			},
+		},
+	}
 
 	payload := atlassian.WebhookPayload{
 		WebhookEvent: "issue_updated",
 	}
-	req := makeAtlassianWebhookRequest(t, orgID, payload, secret)
+	req := makeAtlassianWebhookRequest(t, 1, payload, secret)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -227,12 +222,17 @@ func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
 }
 
 func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
-	h, s, _ := setupAtlassianTestHandler(t)
-
-	_, orgID := createTestUser(t, s)
 	secret := "test-webhook-secret"
-	err := s.SetOrgAtlassianWebhookSecret(t.Context(), nil, orgID, secret)
-	assert.NilError(t, err)
+	h := &AtlassianHandler{
+		Store: &StoreMock{
+			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
+				return secret, nil
+			},
+			GetUserByAtlassianAccountIDFunc: func(ctx context.Context, tx *sql.Tx, id string) (*model.User, error) {
+				return nil, sql.ErrNoRows
+			},
+		},
+	}
 
 	payload := atlassian.WebhookPayload{
 		WebhookEvent: "comment_created",
@@ -245,7 +245,7 @@ func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
 			Self: "https://mycompany.atlassian.net/rest/api/2/issue/1",
 		},
 	}
-	req := makeAtlassianWebhookRequest(t, orgID, payload, secret)
+	req := makeAtlassianWebhookRequest(t, 1, payload, secret)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -254,18 +254,20 @@ func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
 }
 
 func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {
-	h, s, _ := setupAtlassianTestHandler(t)
-
-	_, orgID := createTestUser(t, s)
 	secret := "test-webhook-secret"
-	err := s.SetOrgAtlassianWebhookSecret(t.Context(), nil, orgID, secret)
-	assert.NilError(t, err)
+	h := &AtlassianHandler{
+		Store: &StoreMock{
+			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
+				return secret, nil
+			},
+		},
+	}
 
 	payload := atlassian.WebhookPayload{WebhookEvent: "comment_created"}
 	body, err := json.Marshal(payload)
 	assert.NilError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/webhook/atlassian?org="+strconv.FormatInt(orgID, 10), bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/webhook/atlassian?org=1", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Hub-Signature", "sha256=deadbeef")
 	rec := httptest.NewRecorder()
@@ -275,7 +277,7 @@ func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {
 }
 
 func TestHandleAtlassianWebhookMissingOrg(t *testing.T) {
-	h, _, _ := setupAtlassianTestHandler(t)
+	h := &AtlassianHandler{}
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook/atlassian", bytes.NewReader([]byte("{}")))
 	rec := httptest.NewRecorder()

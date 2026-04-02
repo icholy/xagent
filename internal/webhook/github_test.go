@@ -3,63 +3,18 @@ package webhook
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
-	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v68/github"
-	"github.com/google/uuid"
-	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/store"
 	"gotest.tools/v3/assert"
 )
-
-// setupTestStore creates a test store with a clean database.
-// Requires TEST_DATABASE_URL environment variable to be set.
-func setupTestStore(t *testing.T) *store.Store {
-	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL not set")
-	}
-	db, err := store.Open(dsn, false)
-	assert.NilError(t, err)
-	t.Cleanup(func() { db.Close() })
-	return store.New(db)
-}
-
-// createTestUser creates a user with an org and returns the context, user ID, and org ID.
-func createTestUser(t *testing.T, s *store.Store) (userID string, orgID int64) {
-	t.Helper()
-	userID = uuid.NewString()
-	err := s.CreateUser(t.Context(), nil, &model.User{
-		ID:    userID,
-		Email: userID + "@test.com",
-		Name:  "Test User",
-	})
-	assert.NilError(t, err)
-	org := &model.Org{
-		Name:  "test-org-" + userID,
-		Owner: userID,
-	}
-	err = s.CreateOrg(t.Context(), nil, org)
-	assert.NilError(t, err)
-	err = s.AddOrgMember(t.Context(), nil, &model.OrgMember{
-		OrgID:  org.ID,
-		UserID: userID,
-		Role:   "owner",
-	})
-	assert.NilError(t, err)
-	err = s.UpdateDefaultOrgID(t.Context(), nil, userID, org.ID)
-	assert.NilError(t, err)
-	return userID, org.ID
-}
 
 func TestExtractGitHubWebhookEvent(t *testing.T) {
 	tests := []struct {
@@ -292,30 +247,27 @@ func makeWebhookRequest(t *testing.T, eventType string, payload any) *http.Reque
 	return req
 }
 
-func setupTestHandler(t *testing.T) (*GitHubHandler, *store.Store, *RouterMock) {
-	t.Helper()
-	s := setupTestStore(t)
-	r := &RouterMock{
+func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
+	var ghUserID int64 = 12345
+	router := &RouterMock{
 		RouteFunc: func(ctx context.Context, event eventrouter.Event) (int, error) {
 			return 1, nil
 		},
 	}
 	h := &GitHubHandler{
-		Router: r,
-		Store:  s,
+		Router: router,
+		Store: &StoreMock{
+			GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
+				if id == ghUserID {
+					return &model.User{ID: "user-1", GitHubUserID: ghUserID, GitHubUsername: "testuser"}, nil
+				}
+				return nil, sql.ErrNoRows
+			},
+			UpdateGitHubUsernameFunc: func(ctx context.Context, tx *sql.Tx, id int64, username string) error {
+				return nil
+			},
+		},
 	}
-	return h, s, r
-}
-
-func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
-	h, s, r := setupTestHandler(t)
-
-	userID, orgID := createTestUser(t, s)
-	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: orgID})
-
-	ghUserID := rand.Int64N(1<<53) + 1
-	err := s.LinkGitHubAccount(ctx, nil, userID, ghUserID, "testuser")
-	assert.NilError(t, err)
 
 	payload := github.IssueCommentEvent{
 		Action: github.Ptr("created"),
@@ -339,63 +291,19 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	calls := r.RouteCalls()
+	calls := router.RouteCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].Event, eventrouter.Event{
 		Type:        eventrouter.EventTypeGitHub,
 		Description: "testuser commented on PR #10",
 		Data:        "xagent: please fix the tests",
 		URL:         "https://github.com/owner/repo/pull/10",
-		UserID:      userID,
-	})
-}
-
-func TestHandleGitHubWebhookRoutesWithCorrectEvent(t *testing.T) {
-	h, s, r := setupTestHandler(t)
-
-	userID, orgID := createTestUser(t, s)
-	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: userID, OrgID: orgID})
-
-	ghUserID := rand.Int64N(1<<53) + 1
-	err := s.LinkGitHubAccount(ctx, nil, userID, ghUserID, "testuser")
-	assert.NilError(t, err)
-
-	prURL := "https://github.com/owner/repo/pull/42"
-	payload := github.IssueCommentEvent{
-		Action: github.Ptr("created"),
-		Comment: &github.IssueComment{
-			Body: github.Ptr("xagent: deploy please"),
-			User: &github.User{
-				ID:    github.Ptr(ghUserID),
-				Login: github.Ptr("testuser"),
-			},
-		},
-		Issue: &github.Issue{
-			Number:           github.Ptr(42),
-			HTMLURL:          github.Ptr(prURL),
-			PullRequestLinks: &github.PullRequestLinks{},
-		},
-	}
-	req := makeWebhookRequest(t, "issue_comment", payload)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	assert.Equal(t, rec.Code, http.StatusOK)
-	assert.Equal(t, rec.Body.String(), "processed")
-
-	calls := r.RouteCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].Event, eventrouter.Event{
-		Type:        eventrouter.EventTypeGitHub,
-		Description: "testuser commented on PR #42",
-		Data:        "xagent: deploy please",
-		URL:         prURL,
-		UserID:      userID,
+		UserID:      "user-1",
 	})
 }
 
 func TestHandleGitHubWebhookIgnoredEventType(t *testing.T) {
-	h, _, _ := setupTestHandler(t)
+	h := &GitHubHandler{}
 
 	payload := github.PushEvent{}
 	req := makeWebhookRequest(t, "push", payload)
@@ -407,7 +315,13 @@ func TestHandleGitHubWebhookIgnoredEventType(t *testing.T) {
 }
 
 func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {
-	h, _, _ := setupTestHandler(t)
+	h := &GitHubHandler{
+		Store: &StoreMock{
+			GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
+				return nil, sql.ErrNoRows
+			},
+		},
+	}
 
 	payload := github.IssueCommentEvent{
 		Action: github.Ptr("created"),
