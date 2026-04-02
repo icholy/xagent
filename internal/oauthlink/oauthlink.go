@@ -1,7 +1,6 @@
 package oauthlink
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -14,12 +13,6 @@ import (
 
 const stateTTL = 10 * time.Minute
 
-// UserInfo holds the identity returned by the OAuth provider.
-type UserInfo struct {
-	ID   string
-	Name string
-}
-
 // Config configures a generic OAuth link handler.
 type Config struct {
 	Provider     string // e.g. "github", "atlassian" - used for cookie name/path
@@ -29,9 +22,8 @@ type Config struct {
 	Endpoint     oauth2.Endpoint
 	Scopes       []string
 	AuthParams   []oauth2.AuthCodeOption // extra params for AuthCodeURL
-	FetchUser    func(ctx context.Context, token *oauth2.Token) (*UserInfo, error)
 	Log          *slog.Logger
-	OnSuccess    func(w http.ResponseWriter, r *http.Request, user *UserInfo)
+	OnSuccess    func(w http.ResponseWriter, r *http.Request, token *oauth2.Token)
 }
 
 // Handler implements http.Handler for OAuth2 login/callback.
@@ -42,8 +34,7 @@ type Handler struct {
 	log        *slog.Logger
 	provider   string
 	authParams []oauth2.AuthCodeOption
-	fetchUser  func(ctx context.Context, token *oauth2.Token) (*UserInfo, error)
-	onSuccess  func(w http.ResponseWriter, r *http.Request, user *UserInfo)
+	onSuccess  func(w http.ResponseWriter, r *http.Request, token *oauth2.Token)
 	mux        *http.ServeMux
 }
 
@@ -63,7 +54,6 @@ func New(cfg Config) *Handler {
 		log:        log,
 		provider:   cfg.Provider,
 		authParams: cfg.AuthParams,
-		fetchUser:  cfg.FetchUser,
 		onSuccess:  cfg.OnSuccess,
 		mux:        http.NewServeMux(),
 	}
@@ -126,13 +116,6 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.fetchUser(r.Context(), token)
-	if err != nil {
-		h.log.Error("failed to fetch user", "error", err)
-		http.Error(w, "failed to fetch user", http.StatusInternalServerError)
-		return
-	}
-
 	// Clear state cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.cookieName(),
@@ -145,7 +128,7 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if h.onSuccess != nil {
-		h.onSuccess(w, r, user)
+		h.onSuccess(w, r, token)
 	} else {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}

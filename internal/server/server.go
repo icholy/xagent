@@ -11,7 +11,6 @@ import (
 	"maps"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -127,18 +126,7 @@ func (s *Server) Handler() http.Handler {
 			Endpoint:     oauth2github.Endpoint,
 			Scopes:       []string{"read:user"},
 			Log:          s.log,
-			FetchUser: func(ctx context.Context, token *oauth2.Token) (*oauthlink.UserInfo, error) {
-				ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
-				ghUser, _, err := ghClient.Users.Get(ctx, "")
-				if err != nil {
-					return nil, err
-				}
-				return &oauthlink.UserInfo{
-					ID:   strconv.FormatInt(ghUser.GetID(), 10),
-					Name: ghUser.GetLogin(),
-				}, nil
-			},
-			OnSuccess: func(w http.ResponseWriter, r *http.Request, user *oauthlink.UserInfo) {
+			OnSuccess: func(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
 				caller := apiauth.Caller(r.Context())
 				if caller == nil {
 					http.Error(w, "not authenticated", http.StatusUnauthorized)
@@ -148,8 +136,14 @@ func (s *Server) Handler() http.Handler {
 					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
 					return
 				}
-				ghID, _ := strconv.ParseInt(user.ID, 10, 64)
-				if err := s.store.LinkGitHubAccount(r.Context(), nil, caller.ID, ghID, user.Name); err != nil {
+				ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
+				ghUser, _, err := ghClient.Users.Get(r.Context(), "")
+				if err != nil {
+					s.log.Error("failed to fetch GitHub user", "error", err)
+					http.Error(w, "failed to fetch GitHub user", http.StatusInternalServerError)
+					return
+				}
+				if err := s.store.LinkGitHubAccount(r.Context(), nil, caller.ID, ghUser.GetID(), ghUser.GetLogin()); err != nil {
 					http.Error(w, "failed to link GitHub account", http.StatusInternalServerError)
 					return
 				}
@@ -180,14 +174,7 @@ func (s *Server) Handler() http.Handler {
 				oauth2.SetAuthURLParam("prompt", "consent"),
 			},
 			Log: s.log,
-			FetchUser: func(ctx context.Context, token *oauth2.Token) (*oauthlink.UserInfo, error) {
-				me, err := atlassian.FetchMe(ctx, token.AccessToken)
-				if err != nil {
-					return nil, err
-				}
-				return &oauthlink.UserInfo{ID: me.AccountID, Name: me.Name}, nil
-			},
-			OnSuccess: func(w http.ResponseWriter, r *http.Request, user *oauthlink.UserInfo) {
+			OnSuccess: func(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
 				caller := apiauth.Caller(r.Context())
 				if caller == nil {
 					http.Error(w, "not authenticated", http.StatusUnauthorized)
@@ -197,7 +184,13 @@ func (s *Server) Handler() http.Handler {
 					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
 					return
 				}
-				if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, user.ID, user.Name); err != nil {
+				me, err := atlassian.FetchMe(r.Context(), token.AccessToken)
+				if err != nil {
+					s.log.Error("failed to fetch Atlassian user", "error", err)
+					http.Error(w, "failed to fetch Atlassian user", http.StatusInternalServerError)
+					return
+				}
+				if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, me.AccountID, me.Name); err != nil {
 					http.Error(w, "failed to link Atlassian account", http.StatusInternalServerError)
 					return
 				}
