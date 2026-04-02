@@ -207,16 +207,12 @@ type atlassianWebhookEvent struct {
 // jiraWebhookPayload represents the relevant fields of a Jira Cloud webhook payload.
 type jiraWebhookPayload struct {
 	WebhookEvent string `json:"webhookEvent"`
-	Comment      *struct {
+	Comment *struct {
 		Body   string `json:"body"`
 		Author struct {
 			AccountID   string `json:"accountId"`
 			DisplayName string `json:"displayName"`
 		} `json:"author"`
-		UpdateAuthor struct {
-			AccountID   string `json:"accountId"`
-			DisplayName string `json:"displayName"`
-		} `json:"updateAuthor"`
 	} `json:"comment"`
 	Issue *struct {
 		Key    string `json:"key"`
@@ -245,7 +241,7 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 	}
 
 	switch payload.WebhookEvent {
-	case "comment_created", "comment_updated":
+	case "comment_created":
 		if payload.Comment == nil || payload.Issue == nil {
 			return nil, nil
 		}
@@ -254,14 +250,8 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 			return nil, nil
 		}
 
-		// For comment_updated, use the update author; for comment_created, use the author
 		accountID := payload.Comment.Author.AccountID
 		displayName := payload.Comment.Author.DisplayName
-		if payload.WebhookEvent == "comment_updated" {
-			accountID = payload.Comment.UpdateAuthor.AccountID
-			displayName = payload.Comment.UpdateAuthor.DisplayName
-		}
-
 		if accountID == "" {
 			return nil, nil
 		}
@@ -271,11 +261,7 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 			return nil, nil
 		}
 
-		action := "commented on"
-		if payload.WebhookEvent == "comment_updated" {
-			action = "updated comment on"
-		}
-		description := fmt.Sprintf("%s %s %s", displayName, action, payload.Issue.Key)
+		description := fmt.Sprintf("%s commented on %s", displayName, payload.Issue.Key)
 
 		return &atlassianWebhookEvent{
 			description:        description,

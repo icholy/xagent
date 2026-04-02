@@ -20,6 +20,46 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+func makeJiraComment(body, accountID, displayName string) *struct {
+	Body   string `json:"body"`
+	Author struct {
+		AccountID   string `json:"accountId"`
+		DisplayName string `json:"displayName"`
+	} `json:"author"`
+} {
+	c := &struct {
+		Body   string `json:"body"`
+		Author struct {
+			AccountID   string `json:"accountId"`
+			DisplayName string `json:"displayName"`
+		} `json:"author"`
+	}{
+		Body: body,
+	}
+	c.Author.AccountID = accountID
+	c.Author.DisplayName = displayName
+	return c
+}
+
+func makeJiraIssue(key, selfLink string) *struct {
+	Key    string `json:"key"`
+	Fields struct {
+		Summary string `json:"summary"`
+	} `json:"fields"`
+	Self string `json:"self"`
+} {
+	return &struct {
+		Key    string `json:"key"`
+		Fields struct {
+			Summary string `json:"summary"`
+		} `json:"fields"`
+		Self string `json:"self"`
+	}{
+		Key:  key,
+		Self: selfLink,
+	}
+}
+
 func TestExtractAtlassianWebhookEvent(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -30,33 +70,8 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 			name: "CommentCreated",
 			payload: jiraWebhookPayload{
 				WebhookEvent: "comment_created",
-				Comment: &struct {
-					Body   string `json:"body"`
-					Author struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"author"`
-					UpdateAuthor struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"updateAuthor"`
-				}{
-					Body: "xagent: do something",
-					Author: struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					}{AccountID: "abc123", DisplayName: "Test User"},
-				},
-				Issue: &struct {
-					Key    string `json:"key"`
-					Fields struct {
-						Summary string `json:"summary"`
-					} `json:"fields"`
-					Self string `json:"self"`
-				}{
-					Key:  "PROJ-123",
-					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
-				},
+				Comment:      makeJiraComment("xagent: do something", "abc123", "Test User"),
+				Issue:        makeJiraIssue("PROJ-123", "https://mycompany.atlassian.net/rest/api/2/issue/12345"),
 			},
 			expected: &atlassianWebhookEvent{
 				description:        "Test User commented on PROJ-123",
@@ -66,79 +81,11 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 			},
 		},
 		{
-			name: "CommentUpdated_UsesUpdateAuthor",
-			payload: jiraWebhookPayload{
-				WebhookEvent: "comment_updated",
-				Comment: &struct {
-					Body   string `json:"body"`
-					Author struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"author"`
-					UpdateAuthor struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"updateAuthor"`
-				}{
-					Body: "xagent: updated instructions",
-					Author: struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					}{AccountID: "original-author", DisplayName: "Original Author"},
-					UpdateAuthor: struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					}{AccountID: "updater123", DisplayName: "Updater"},
-				},
-				Issue: &struct {
-					Key    string `json:"key"`
-					Fields struct {
-						Summary string `json:"summary"`
-					} `json:"fields"`
-					Self string `json:"self"`
-				}{
-					Key:  "PROJ-456",
-					Self: "https://mycompany.atlassian.net/rest/api/2/issue/67890",
-				},
-			},
-			expected: &atlassianWebhookEvent{
-				description:        "Updater updated comment on PROJ-456",
-				data:               "xagent: updated instructions",
-				url:                "https://mycompany.atlassian.net/browse/PROJ-456",
-				atlassianAccountID: "updater123",
-			},
-		},
-		{
 			name: "NoXAgentPrefix",
 			payload: jiraWebhookPayload{
 				WebhookEvent: "comment_created",
-				Comment: &struct {
-					Body   string `json:"body"`
-					Author struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"author"`
-					UpdateAuthor struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"updateAuthor"`
-				}{
-					Body: "just a regular comment",
-					Author: struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					}{AccountID: "abc123", DisplayName: "Test User"},
-				},
-				Issue: &struct {
-					Key    string `json:"key"`
-					Fields struct {
-						Summary string `json:"summary"`
-					} `json:"fields"`
-					Self string `json:"self"`
-				}{
-					Key:  "PROJ-123",
-					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
-				},
+				Comment:      makeJiraComment("just a regular comment", "abc123", "Test User"),
+				Issue:        makeJiraIssue("PROJ-123", "https://mycompany.atlassian.net/rest/api/2/issue/12345"),
 			},
 			expected: nil,
 		},
@@ -147,16 +94,7 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 			payload: jiraWebhookPayload{
 				WebhookEvent: "comment_created",
 				Comment:      nil,
-				Issue: &struct {
-					Key    string `json:"key"`
-					Fields struct {
-						Summary string `json:"summary"`
-					} `json:"fields"`
-					Self string `json:"self"`
-				}{
-					Key:  "PROJ-123",
-					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
-				},
+				Issue:        makeJiraIssue("PROJ-123", "https://mycompany.atlassian.net/rest/api/2/issue/12345"),
 			},
 			expected: nil,
 		},
@@ -164,24 +102,8 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 			name: "NilIssue",
 			payload: jiraWebhookPayload{
 				WebhookEvent: "comment_created",
-				Comment: &struct {
-					Body   string `json:"body"`
-					Author struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"author"`
-					UpdateAuthor struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"updateAuthor"`
-				}{
-					Body: "xagent: test",
-					Author: struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					}{AccountID: "abc123", DisplayName: "Test User"},
-				},
-				Issue: nil,
+				Comment:      makeJiraComment("xagent: test", "abc123", "Test User"),
+				Issue:        nil,
 			},
 			expected: nil,
 		},
@@ -193,36 +115,20 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 			expected: nil,
 		},
 		{
+			name: "CommentUpdatedIgnored",
+			payload: jiraWebhookPayload{
+				WebhookEvent: "comment_updated",
+				Comment:      makeJiraComment("xagent: test", "abc123", "Test User"),
+				Issue:        makeJiraIssue("PROJ-123", "https://mycompany.atlassian.net/rest/api/2/issue/12345"),
+			},
+			expected: nil,
+		},
+		{
 			name: "WhitespacePrefix",
 			payload: jiraWebhookPayload{
 				WebhookEvent: "comment_created",
-				Comment: &struct {
-					Body   string `json:"body"`
-					Author struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"author"`
-					UpdateAuthor struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					} `json:"updateAuthor"`
-				}{
-					Body: "  xagent: trimmed",
-					Author: struct {
-						AccountID   string `json:"accountId"`
-						DisplayName string `json:"displayName"`
-					}{AccountID: "abc123", DisplayName: "Test User"},
-				},
-				Issue: &struct {
-					Key    string `json:"key"`
-					Fields struct {
-						Summary string `json:"summary"`
-					} `json:"fields"`
-					Self string `json:"self"`
-				}{
-					Key:  "PROJ-1",
-					Self: "https://mycompany.atlassian.net/rest/api/2/issue/1",
-				},
+				Comment:      makeJiraComment("  xagent: trimmed", "abc123", "Test User"),
+				Issue:        makeJiraIssue("PROJ-1", "https://mycompany.atlassian.net/rest/api/2/issue/1"),
 			},
 			expected: &atlassianWebhookEvent{
 				description:        "Test User commented on PROJ-1",
@@ -252,25 +158,43 @@ func TestVerifyAtlassianSignature(t *testing.T) {
 	mac.Write(body)
 	validSig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 
-	t.Run("ValidSignature", func(t *testing.T) {
-		err := verifyAtlassianSignature(body, validSig, secret)
-		assert.NilError(t, err)
-	})
+	tests := []struct {
+		name      string
+		signature string
+		errMsg    string
+	}{
+		{
+			name:      "ValidSignature",
+			signature: validSig,
+			errMsg:    "",
+		},
+		{
+			name:      "InvalidSignature",
+			signature: "sha256=deadbeef",
+			errMsg:    "signature mismatch",
+		},
+		{
+			name:      "MissingSignature",
+			signature: "",
+			errMsg:    "missing X-Hub-Signature header",
+		},
+		{
+			name:      "UnsupportedFormat",
+			signature: "sha1=abc",
+			errMsg:    "unsupported signature format",
+		},
+	}
 
-	t.Run("InvalidSignature", func(t *testing.T) {
-		err := verifyAtlassianSignature(body, "sha256=deadbeef", secret)
-		assert.ErrorContains(t, err, "signature mismatch")
-	})
-
-	t.Run("MissingSignature", func(t *testing.T) {
-		err := verifyAtlassianSignature(body, "", secret)
-		assert.ErrorContains(t, err, "missing X-Hub-Signature header")
-	})
-
-	t.Run("UnsupportedFormat", func(t *testing.T) {
-		err := verifyAtlassianSignature(body, "sha1=abc", secret)
-		assert.ErrorContains(t, err, "unsupported signature format")
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := verifyAtlassianSignature(body, tt.signature, secret)
+			if tt.errMsg == "" {
+				assert.NilError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tt.errMsg)
+			}
+		})
+	}
 }
 
 func TestIssueURL(t *testing.T) {
@@ -361,33 +285,8 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 
 	payload := jiraWebhookPayload{
 		WebhookEvent: "comment_created",
-		Comment: &struct {
-			Body   string `json:"body"`
-			Author struct {
-				AccountID   string `json:"accountId"`
-				DisplayName string `json:"displayName"`
-			} `json:"author"`
-			UpdateAuthor struct {
-				AccountID   string `json:"accountId"`
-				DisplayName string `json:"displayName"`
-			} `json:"updateAuthor"`
-		}{
-			Body: "xagent: please fix the tests",
-			Author: struct {
-				AccountID   string `json:"accountId"`
-				DisplayName string `json:"displayName"`
-			}{AccountID: atlassianAccountID, DisplayName: "Test User"},
-		},
-		Issue: &struct {
-			Key    string `json:"key"`
-			Fields struct {
-				Summary string `json:"summary"`
-			} `json:"fields"`
-			Self string `json:"self"`
-		}{
-			Key:  "PROJ-10",
-			Self: "https://mycompany.atlassian.net/rest/api/2/issue/10",
-		},
+		Comment:      makeJiraComment("xagent: please fix the tests", atlassianAccountID, "Test User"),
+		Issue:        makeJiraIssue("PROJ-10", "https://mycompany.atlassian.net/rest/api/2/issue/10"),
 	}
 
 	req := makeAtlassianWebhookRequest(t, orgID, payload, secret)
@@ -431,33 +330,8 @@ func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
 
 	payload := jiraWebhookPayload{
 		WebhookEvent: "comment_created",
-		Comment: &struct {
-			Body   string `json:"body"`
-			Author struct {
-				AccountID   string `json:"accountId"`
-				DisplayName string `json:"displayName"`
-			} `json:"author"`
-			UpdateAuthor struct {
-				AccountID   string `json:"accountId"`
-				DisplayName string `json:"displayName"`
-			} `json:"updateAuthor"`
-		}{
-			Body: "xagent: test",
-			Author: struct {
-				AccountID   string `json:"accountId"`
-				DisplayName string `json:"displayName"`
-			}{AccountID: "unknown-account", DisplayName: "Unknown"},
-		},
-		Issue: &struct {
-			Key    string `json:"key"`
-			Fields struct {
-				Summary string `json:"summary"`
-			} `json:"fields"`
-			Self string `json:"self"`
-		}{
-			Key:  "PROJ-1",
-			Self: "https://mycompany.atlassian.net/rest/api/2/issue/1",
-		},
+		Comment:      makeJiraComment("xagent: test", "unknown-account", "Unknown"),
+		Issue:        makeJiraIssue("PROJ-1", "https://mycompany.atlassian.net/rest/api/2/issue/1"),
 	}
 	req := makeAtlassianWebhookRequest(t, orgID, payload, secret)
 	rec := httptest.NewRecorder()
