@@ -43,6 +43,10 @@ service XAgentService {
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
   rpc GetGitHubAccount(GetGitHubAccountRequest) returns (GetGitHubAccountResponse);
   rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
+  rpc GetJiraAccount(GetJiraAccountRequest) returns (GetJiraAccountResponse);
+  rpc UnlinkJiraAccount(UnlinkJiraAccountRequest) returns (UnlinkJiraAccountResponse);
+  rpc GetJiraWebhookSecret(GetJiraWebhookSecretRequest) returns (GetJiraWebhookSecretResponse);
+  rpc GenerateJiraWebhookSecret(GenerateJiraWebhookSecretRequest) returns (GenerateJiraWebhookSecretResponse);
   rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
   rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
   rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
@@ -432,6 +436,35 @@ message GetGitHubAccountResponse {
 message UnlinkGitHubAccountRequest {}
 
 message UnlinkGitHubAccountResponse {}
+
+message JiraAccount {
+  string atlassian_account_id = 1;
+  google.protobuf.Timestamp created_at = 2;
+}
+
+message GetJiraAccountRequest {}
+
+message GetJiraAccountResponse {
+  JiraAccount account = 1;
+}
+
+message UnlinkJiraAccountRequest {}
+
+message UnlinkJiraAccountResponse {}
+
+message GetJiraWebhookSecretRequest {}
+
+message GetJiraWebhookSecretResponse {
+  string secret = 1;
+  string webhook_url = 2;
+}
+
+message GenerateJiraWebhookSecretRequest {}
+
+message GenerateJiraWebhookSecretResponse {
+  string secret = 1;
+  string webhook_url = 2;
+}
 
 message Org {
   int64 id = 1;

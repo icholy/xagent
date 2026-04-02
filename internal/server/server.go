@@ -3,7 +3,9 @@ package server
 import (
 	"cmp"
 	"context"
+	cryptorand "crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +23,7 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/ghauth"
+	"github.com/icholy/xagent/internal/jiraauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/oauthflow"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -40,6 +43,11 @@ type GitHubConfig struct {
 	WebhookSecret string
 }
 
+type JiraConfig struct {
+	ClientID     string
+	ClientSecret string
+}
+
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
 	log           *slog.Logger
@@ -47,6 +55,7 @@ type Server struct {
 	auth          *apiauth.Auth
 	discovery     deviceauth.DiscoveryConfig
 	github        *GitHubConfig
+	jira          *JiraConfig
 	baseURL       string
 	encryptionKey []byte
 	oauth         *oauthflow.Auth
@@ -59,6 +68,7 @@ type Options struct {
 	Auth          *apiauth.Auth
 	Discovery     deviceauth.DiscoveryConfig
 	GitHub        *GitHubConfig
+	Jira          *JiraConfig
 	BaseURL       string
 	EncryptionKey []byte
 	OAuth         *oauthflow.Auth
@@ -76,6 +86,7 @@ func New(opts Options) *Server {
 		auth:          opts.Auth,
 		discovery:     opts.Discovery,
 		github:        opts.GitHub,
+		jira:          opts.Jira,
 		baseURL:       opts.BaseURL,
 		encryptionKey: opts.EncryptionKey,
 		oauth:         opts.OAuth,
@@ -132,6 +143,32 @@ func (s *Server) Handler() http.Handler {
 			Store:         s.store,
 			WebhookSecret: s.github.WebhookSecret,
 		})
+	}
+	// Jira OAuth routes (conditionally registered)
+	if s.jira != nil {
+		jh := jiraauth.New(jiraauth.Config{
+			ClientID:     s.jira.ClientID,
+			ClientSecret: s.jira.ClientSecret,
+			RedirectURL:  s.baseURL + "/jira/callback",
+			Log:          s.log,
+			OnSuccess: func(w http.ResponseWriter, r *http.Request, accountID string) {
+				caller := apiauth.Caller(r.Context())
+				if caller == nil {
+					http.Error(w, "not authenticated", http.StatusUnauthorized)
+					return
+				}
+				if caller.ID == "" {
+					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
+					return
+				}
+				if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, accountID); err != nil {
+					http.Error(w, "failed to link Jira account", http.StatusInternalServerError)
+					return
+				}
+				http.Redirect(w, r, "/ui/settings", http.StatusFound)
+			},
+		})
+		mux.Handle("/jira/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/jira", jh)))
 	}
 	// OAuth 2.1 endpoints (public, conditionally registered)
 	if s.oauth != nil {
@@ -1002,6 +1039,65 @@ func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGi
 	}
 	s.log.Info("github account unlinked", "owner", caller.ID)
 	return &xagentv1.UnlinkGitHubAccountResponse{}, nil
+}
+
+func (s *Server) GetJiraAccount(ctx context.Context, req *xagentv1.GetJiraAccountRequest) (*xagentv1.GetJiraAccountResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	resp := &xagentv1.GetJiraAccountResponse{}
+	user, err := s.store.GetUser(ctx, nil, caller.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return resp, nil
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp.Account = user.AtlassianAccountProto()
+	return resp, nil
+}
+
+func (s *Server) UnlinkJiraAccount(ctx context.Context, req *xagentv1.UnlinkJiraAccountRequest) (*xagentv1.UnlinkJiraAccountResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	if err := s.store.UnlinkAtlassianAccount(ctx, nil, caller.ID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("jira account unlinked", "owner", caller.ID)
+	return &xagentv1.UnlinkJiraAccountResponse{}, nil
+}
+
+func (s *Server) GetJiraWebhookSecret(ctx context.Context, req *xagentv1.GetJiraWebhookSecretRequest) (*xagentv1.GetJiraWebhookSecretResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	secret, err := s.store.GetOrgJiraWebhookSecret(ctx, nil, caller.OrgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return &xagentv1.GetJiraWebhookSecretResponse{
+		Secret:     secret,
+		WebhookUrl: fmt.Sprintf("%s/webhook/jira?org=%d", s.baseURL, caller.OrgID),
+	}, nil
+}
+
+func (s *Server) GenerateJiraWebhookSecret(ctx context.Context, req *xagentv1.GenerateJiraWebhookSecretRequest) (*xagentv1.GenerateJiraWebhookSecretResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	secret, err := generateWebhookSecret()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if err := s.store.SetOrgJiraWebhookSecret(ctx, nil, caller.OrgID, secret); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("jira webhook secret generated", "org_id", caller.OrgID)
+	return &xagentv1.GenerateJiraWebhookSecretResponse{
+		Secret:     secret,
+		WebhookUrl: fmt.Sprintf("%s/webhook/jira?org=%d", s.baseURL, caller.OrgID),
+	}, nil
+}
+
+func generateWebhookSecret() (string, error) {
+	b := make([]byte, 32)
+	if _, err := cryptorand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {

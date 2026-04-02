@@ -4,12 +4,12 @@ VALUES ($1, $2, $3, $4)
 RETURNING id;
 
 -- name: GetOrg :one
-SELECT id, name, owner, created_at, updated_at, archived
+SELECT id, name, owner, created_at, updated_at, archived, jira_webhook_secret
 FROM orgs
 WHERE id = $1;
 
 -- name: ListOrgsByMember :many
-SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived
+SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived, o.jira_webhook_secret
 FROM orgs o
 JOIN org_members om ON o.id = om.org_id
 WHERE om.user_id = $1 AND o.archived = FALSE
@@ -52,3 +52,12 @@ SELECT EXISTS(
     JOIN orgs o ON o.id = om.org_id
     WHERE om.org_id = $1 AND om.user_id = $2 AND o.archived = FALSE
 ) AS is_member;
+
+-- name: GetOrgJiraWebhookSecret :one
+SELECT jira_webhook_secret FROM orgs WHERE id = $1;
+
+-- name: SetOrgJiraWebhookSecret :exec
+UPDATE orgs SET
+    jira_webhook_secret = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;

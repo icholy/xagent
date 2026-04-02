@@ -3,8 +3,12 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getGitHubAccount,
+  getJiraAccount,
+  getJiraWebhookSecret,
   getProfile,
   unlinkGitHubAccount,
+  unlinkJiraAccount,
+  generateJiraWebhookSecret,
   createOrg,
   deleteOrg,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
@@ -22,7 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { RelativeTime } from '@/components/relative-time'
-import { Cable, ExternalLink, Github, Loader2, Mail, Plus, Trash2, Unlink, User } from 'lucide-react'
+import { Cable, Copy, ExternalLink, Github, Key, Loader2, Mail, Plus, Trash2, Unlink, User } from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -57,6 +61,8 @@ function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        <JiraAccountCard />
+        <JiraWebhookCard />
         <Card>
           <CardHeader>
             <CardTitle>GitHub Account</CardTitle>
@@ -240,5 +246,136 @@ function OrgRow({ org, onDelete, isDefault }: { org: Org; onDelete: () => void; 
         </Button>
       </TableCell>
     </TableRow>
+  )
+}
+
+function JiraAccountCard() {
+  const { data, isLoading, refetch } = useQuery(getJiraAccount, {})
+  const unlinkMutation = useMutation(unlinkJiraAccount, {
+    onSuccess: () => refetch(),
+  })
+
+  const account = data?.account
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Jira Account</CardTitle>
+        <CardDescription>
+          Link your Atlassian account to receive webhook notifications for Jira issues on your tasks.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-muted-foreground">Loading...</div>
+        ) : account ? (
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              <span className="font-medium">{account.atlassianAccountId}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => unlinkMutation.mutateAsync({})}
+              disabled={unlinkMutation.isPending}
+            >
+              {unlinkMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Unlink className="h-4 w-4" />
+              )}
+              Unlink
+            </Button>
+          </div>
+        ) : (
+          <a href="/jira/login">
+            <Button>
+              <ExternalLink className="h-4 w-4" />
+              Link Jira Account
+            </Button>
+          </a>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function JiraWebhookCard() {
+  const { data, isLoading, refetch } = useQuery(getJiraWebhookSecret, {})
+  const generateMutation = useMutation(generateJiraWebhookSecret, {
+    onSuccess: () => refetch(),
+  })
+  const [showSecret, setShowSecret] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const secret = data?.secret
+  const webhookUrl = data?.webhookUrl
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Jira Webhook</CardTitle>
+        <CardDescription>
+          Configure a webhook in your Jira Cloud instance to receive issue comment notifications.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <div className="text-muted-foreground">Loading...</div>
+        ) : (
+          <>
+            {webhookUrl && (
+              <div className="space-y-1">
+                <div className="text-sm font-medium">Webhook URL</div>
+                <div className="flex items-center gap-2">
+                  <code className="text-sm bg-muted px-2 py-1 rounded flex-1 break-all">{webhookUrl}</code>
+                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(webhookUrl)}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Webhook Secret</div>
+              {secret ? (
+                <div className="flex items-center gap-2">
+                  <code className="text-sm bg-muted px-2 py-1 rounded">
+                    {showSecret ? secret : '••••••••••••••••'}
+                  </code>
+                  <Button variant="ghost" size="sm" onClick={() => setShowSecret(!showSecret)}>
+                    <Key className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(secret)}>
+                    <Copy className="h-4 w-4" />
+                    {copied && <span className="text-xs text-muted-foreground ml-1">Copied</span>}
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No secret configured</div>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => generateMutation.mutateAsync({})}
+              disabled={generateMutation.isPending}
+            >
+              {generateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Key className="h-4 w-4" />
+              )}
+              {secret ? 'Regenerate Secret' : 'Generate Secret'}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

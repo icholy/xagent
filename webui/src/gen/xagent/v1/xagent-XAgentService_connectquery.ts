@@ -185,6 +185,26 @@ export const getGitHubAccount = XAgentService.method.getGitHubAccount;
 export const unlinkGitHubAccount = XAgentService.method.unlinkGitHubAccount;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.GetJiraAccount
+ */
+export const getJiraAccount = XAgentService.method.getJiraAccount;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.UnlinkJiraAccount
+ */
+export const unlinkJiraAccount = XAgentService.method.unlinkJiraAccount;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.GetJiraWebhookSecret
+ */
+export const getJiraWebhookSecret = XAgentService.method.getJiraWebhookSecret;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.GenerateJiraWebhookSecret
+ */
+export const generateJiraWebhookSecret = XAgentService.method.generateJiraWebhookSecret;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.CreateOrg
  */
 export const createOrg = XAgentService.method.createOrg;

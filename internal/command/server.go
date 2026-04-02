@@ -107,6 +107,16 @@ var ServerCommand = &cli.Command{
 			Usage:   "GitHub App webhook secret",
 			Sources: cli.EnvVars("XAGENT_GITHUB_WEBHOOK_SECRET"),
 		},
+		&cli.StringFlag{
+			Name:    "jira-client-id",
+			Usage:   "Atlassian OAuth client ID (for Jira account linking)",
+			Sources: cli.EnvVars("XAGENT_JIRA_CLIENT_ID"),
+		},
+		&cli.StringFlag{
+			Name:    "jira-client-secret",
+			Usage:   "Atlassian OAuth client secret",
+			Sources: cli.EnvVars("XAGENT_JIRA_CLIENT_SECRET"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
@@ -200,6 +210,12 @@ var ServerCommand = &cli.Command{
 				ClientID:      ghClientID,
 				ClientSecret:  cmd.String("github-client-secret"),
 				WebhookSecret: cmd.String("github-webhook-secret"),
+			}
+		}
+		if jiraClientID := cmd.String("jira-client-id"); jiraClientID != "" {
+			opts.Jira = &server.JiraConfig{
+				ClientID:     jiraClientID,
+				ClientSecret: cmd.String("jira-client-secret"),
 			}
 		}
 		srv := server.New(opts)

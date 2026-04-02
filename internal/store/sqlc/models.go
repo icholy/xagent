@@ -41,12 +41,13 @@ type Log struct {
 }
 
 type Org struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Owner     string    `json:"owner"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Archived  bool      `json:"archived"`
+	ID                int64     `json:"id"`
+	Name              string    `json:"name"`
+	Owner             string    `json:"owner"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	Archived          bool      `json:"archived"`
+	JiraWebhookSecret string    `json:"jira_webhook_secret"`
 }
 
 type OrgMember struct {
@@ -83,14 +84,15 @@ type TaskLink struct {
 }
 
 type User struct {
-	ID             string         `json:"id"`
-	Email          string         `json:"email"`
-	Name           string         `json:"name"`
-	GithubUserID   sql.NullInt64  `json:"github_user_id"`
-	GithubUsername sql.NullString `json:"github_username"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	DefaultOrgID   sql.NullInt64  `json:"default_org_id"`
+	ID                 string         `json:"id"`
+	Email              string         `json:"email"`
+	Name               string         `json:"name"`
+	GithubUserID       sql.NullInt64  `json:"github_user_id"`
+	GithubUsername     sql.NullString `json:"github_username"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
+	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
 }
 
 type Workspace struct {

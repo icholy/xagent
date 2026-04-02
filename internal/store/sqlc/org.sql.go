@@ -68,7 +68,7 @@ func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (int64, er
 }
 
 const getOrg = `-- name: GetOrg :one
-SELECT id, name, owner, created_at, updated_at, archived
+SELECT id, name, owner, created_at, updated_at, archived, jira_webhook_secret
 FROM orgs
 WHERE id = $1
 `
@@ -83,8 +83,20 @@ func (q *Queries) GetOrg(ctx context.Context, id int64) (Org, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Archived,
+		&i.JiraWebhookSecret,
 	)
 	return i, err
+}
+
+const getOrgJiraWebhookSecret = `-- name: GetOrgJiraWebhookSecret :one
+SELECT jira_webhook_secret FROM orgs WHERE id = $1
+`
+
+func (q *Queries) GetOrgJiraWebhookSecret(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getOrgJiraWebhookSecret, id)
+	var jira_webhook_secret string
+	err := row.Scan(&jira_webhook_secret)
+	return jira_webhook_secret, err
 }
 
 const isOrgMember = `-- name: IsOrgMember :one
@@ -190,7 +202,7 @@ func (q *Queries) ListOrgMembersWithUsers(ctx context.Context, orgID int64) ([]L
 }
 
 const listOrgsByMember = `-- name: ListOrgsByMember :many
-SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived
+SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived, o.jira_webhook_secret
 FROM orgs o
 JOIN org_members om ON o.id = om.org_id
 WHERE om.user_id = $1 AND o.archived = FALSE
@@ -213,6 +225,7 @@ func (q *Queries) ListOrgsByMember(ctx context.Context, userID string) ([]Org, e
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Archived,
+			&i.JiraWebhookSecret,
 		); err != nil {
 			return nil, err
 		}
@@ -239,6 +252,23 @@ type RemoveOrgMemberParams struct {
 
 func (q *Queries) RemoveOrgMember(ctx context.Context, arg RemoveOrgMemberParams) error {
 	_, err := q.db.ExecContext(ctx, removeOrgMember, arg.OrgID, arg.UserID)
+	return err
+}
+
+const setOrgJiraWebhookSecret = `-- name: SetOrgJiraWebhookSecret :exec
+UPDATE orgs SET
+    jira_webhook_secret = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type SetOrgJiraWebhookSecretParams struct {
+	ID                int64  `json:"id"`
+	JiraWebhookSecret string `json:"jira_webhook_secret"`
+}
+
+func (q *Queries) SetOrgJiraWebhookSecret(ctx context.Context, arg SetOrgJiraWebhookSecretParams) error {
+	_, err := q.db.ExecContext(ctx, setOrgJiraWebhookSecret, arg.ID, arg.JiraWebhookSecret)
 	return err
 }
 

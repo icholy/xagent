@@ -61,11 +61,20 @@ var _ Client = &ClientMock{}
 //			FindLinksByURLFunc: func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
 //				panic("mock out the FindLinksByURL method")
 //			},
+//			GenerateJiraWebhookSecretFunc: func(contextMoqParam context.Context, generateJiraWebhookSecretRequest *xagentv1.GenerateJiraWebhookSecretRequest) (*xagentv1.GenerateJiraWebhookSecretResponse, error) {
+//				panic("mock out the GenerateJiraWebhookSecret method")
+//			},
 //			GetEventFunc: func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 //				panic("mock out the GetEvent method")
 //			},
 //			GetGitHubAccountFunc: func(contextMoqParam context.Context, getGitHubAccountRequest *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error) {
 //				panic("mock out the GetGitHubAccount method")
+//			},
+//			GetJiraAccountFunc: func(contextMoqParam context.Context, getJiraAccountRequest *xagentv1.GetJiraAccountRequest) (*xagentv1.GetJiraAccountResponse, error) {
+//				panic("mock out the GetJiraAccount method")
+//			},
+//			GetJiraWebhookSecretFunc: func(contextMoqParam context.Context, getJiraWebhookSecretRequest *xagentv1.GetJiraWebhookSecretRequest) (*xagentv1.GetJiraWebhookSecretResponse, error) {
+//				panic("mock out the GetJiraWebhookSecret method")
 //			},
 //			GetProfileFunc: func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
 //				panic("mock out the GetProfile method")
@@ -139,6 +148,9 @@ var _ Client = &ClientMock{}
 //			UnlinkGitHubAccountFunc: func(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
 //				panic("mock out the UnlinkGitHubAccount method")
 //			},
+//			UnlinkJiraAccountFunc: func(contextMoqParam context.Context, unlinkJiraAccountRequest *xagentv1.UnlinkJiraAccountRequest) (*xagentv1.UnlinkJiraAccountResponse, error) {
+//				panic("mock out the UnlinkJiraAccount method")
+//			},
 //			UpdateTaskFunc: func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 //				panic("mock out the UpdateTask method")
 //			},
@@ -194,11 +206,20 @@ type ClientMock struct {
 	// FindLinksByURLFunc mocks the FindLinksByURL method.
 	FindLinksByURLFunc func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error)
 
+	// GenerateJiraWebhookSecretFunc mocks the GenerateJiraWebhookSecret method.
+	GenerateJiraWebhookSecretFunc func(contextMoqParam context.Context, generateJiraWebhookSecretRequest *xagentv1.GenerateJiraWebhookSecretRequest) (*xagentv1.GenerateJiraWebhookSecretResponse, error)
+
 	// GetEventFunc mocks the GetEvent method.
 	GetEventFunc func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error)
 
 	// GetGitHubAccountFunc mocks the GetGitHubAccount method.
 	GetGitHubAccountFunc func(contextMoqParam context.Context, getGitHubAccountRequest *xagentv1.GetGitHubAccountRequest) (*xagentv1.GetGitHubAccountResponse, error)
+
+	// GetJiraAccountFunc mocks the GetJiraAccount method.
+	GetJiraAccountFunc func(contextMoqParam context.Context, getJiraAccountRequest *xagentv1.GetJiraAccountRequest) (*xagentv1.GetJiraAccountResponse, error)
+
+	// GetJiraWebhookSecretFunc mocks the GetJiraWebhookSecret method.
+	GetJiraWebhookSecretFunc func(contextMoqParam context.Context, getJiraWebhookSecretRequest *xagentv1.GetJiraWebhookSecretRequest) (*xagentv1.GetJiraWebhookSecretResponse, error)
 
 	// GetProfileFunc mocks the GetProfile method.
 	GetProfileFunc func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error)
@@ -271,6 +292,9 @@ type ClientMock struct {
 
 	// UnlinkGitHubAccountFunc mocks the UnlinkGitHubAccount method.
 	UnlinkGitHubAccountFunc func(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error)
+
+	// UnlinkJiraAccountFunc mocks the UnlinkJiraAccount method.
+	UnlinkJiraAccountFunc func(contextMoqParam context.Context, unlinkJiraAccountRequest *xagentv1.UnlinkJiraAccountRequest) (*xagentv1.UnlinkJiraAccountResponse, error)
 
 	// UpdateTaskFunc mocks the UpdateTask method.
 	UpdateTaskFunc func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error)
@@ -378,6 +402,13 @@ type ClientMock struct {
 			// FindLinksByURLRequest is the findLinksByURLRequest argument value.
 			FindLinksByURLRequest *xagentv1.FindLinksByURLRequest
 		}
+		// GenerateJiraWebhookSecret holds details about calls to the GenerateJiraWebhookSecret method.
+		GenerateJiraWebhookSecret []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GenerateJiraWebhookSecretRequest is the generateJiraWebhookSecretRequest argument value.
+			GenerateJiraWebhookSecretRequest *xagentv1.GenerateJiraWebhookSecretRequest
+		}
 		// GetEvent holds details about calls to the GetEvent method.
 		GetEvent []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -391,6 +422,20 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// GetGitHubAccountRequest is the getGitHubAccountRequest argument value.
 			GetGitHubAccountRequest *xagentv1.GetGitHubAccountRequest
+		}
+		// GetJiraAccount holds details about calls to the GetJiraAccount method.
+		GetJiraAccount []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetJiraAccountRequest is the getJiraAccountRequest argument value.
+			GetJiraAccountRequest *xagentv1.GetJiraAccountRequest
+		}
+		// GetJiraWebhookSecret holds details about calls to the GetJiraWebhookSecret method.
+		GetJiraWebhookSecret []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetJiraWebhookSecretRequest is the getJiraWebhookSecretRequest argument value.
+			GetJiraWebhookSecretRequest *xagentv1.GetJiraWebhookSecretRequest
 		}
 		// GetProfile holds details about calls to the GetProfile method.
 		GetProfile []struct {
@@ -560,6 +605,13 @@ type ClientMock struct {
 			// UnlinkGitHubAccountRequest is the unlinkGitHubAccountRequest argument value.
 			UnlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest
 		}
+		// UnlinkJiraAccount holds details about calls to the UnlinkJiraAccount method.
+		UnlinkJiraAccount []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// UnlinkJiraAccountRequest is the unlinkJiraAccountRequest argument value.
+			UnlinkJiraAccountRequest *xagentv1.UnlinkJiraAccountRequest
+		}
 		// UpdateTask holds details about calls to the UpdateTask method.
 		UpdateTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -575,48 +627,52 @@ type ClientMock struct {
 			UploadLogsRequest *xagentv1.UploadLogsRequest
 		}
 	}
-	lockAddEventTask        sync.RWMutex
-	lockAddOrgMember        sync.RWMutex
-	lockArchiveTask         sync.RWMutex
-	lockCancelTask          sync.RWMutex
-	lockClearWorkspaces     sync.RWMutex
-	lockCreateEvent         sync.RWMutex
-	lockCreateKey           sync.RWMutex
-	lockCreateLink          sync.RWMutex
-	lockCreateOrg           sync.RWMutex
-	lockCreateTask          sync.RWMutex
-	lockDeleteEvent         sync.RWMutex
-	lockDeleteKey           sync.RWMutex
-	lockDeleteOrg           sync.RWMutex
-	lockFindLinksByURL      sync.RWMutex
-	lockGetEvent            sync.RWMutex
-	lockGetGitHubAccount    sync.RWMutex
-	lockGetProfile          sync.RWMutex
-	lockGetTask             sync.RWMutex
-	lockGetTaskDetails      sync.RWMutex
-	lockListChildTasks      sync.RWMutex
-	lockListEventTasks      sync.RWMutex
-	lockListEvents          sync.RWMutex
-	lockListEventsByTask    sync.RWMutex
-	lockListKeys            sync.RWMutex
-	lockListLinks           sync.RWMutex
-	lockListLogs            sync.RWMutex
-	lockListOrgMembers      sync.RWMutex
-	lockListOrgs            sync.RWMutex
-	lockListRunnerTasks     sync.RWMutex
-	lockListTasks           sync.RWMutex
-	lockListWorkspaces      sync.RWMutex
-	lockPing                sync.RWMutex
-	lockProcessEvent        sync.RWMutex
-	lockRegisterWorkspaces  sync.RWMutex
-	lockRemoveEventTask     sync.RWMutex
-	lockRemoveOrgMember     sync.RWMutex
-	lockRestartTask         sync.RWMutex
-	lockSubmitRunnerEvents  sync.RWMutex
-	lockUnarchiveTask       sync.RWMutex
-	lockUnlinkGitHubAccount sync.RWMutex
-	lockUpdateTask          sync.RWMutex
-	lockUploadLogs          sync.RWMutex
+	lockAddEventTask              sync.RWMutex
+	lockAddOrgMember              sync.RWMutex
+	lockArchiveTask               sync.RWMutex
+	lockCancelTask                sync.RWMutex
+	lockClearWorkspaces           sync.RWMutex
+	lockCreateEvent               sync.RWMutex
+	lockCreateKey                 sync.RWMutex
+	lockCreateLink                sync.RWMutex
+	lockCreateOrg                 sync.RWMutex
+	lockCreateTask                sync.RWMutex
+	lockDeleteEvent               sync.RWMutex
+	lockDeleteKey                 sync.RWMutex
+	lockDeleteOrg                 sync.RWMutex
+	lockFindLinksByURL            sync.RWMutex
+	lockGenerateJiraWebhookSecret sync.RWMutex
+	lockGetEvent                  sync.RWMutex
+	lockGetGitHubAccount          sync.RWMutex
+	lockGetJiraAccount            sync.RWMutex
+	lockGetJiraWebhookSecret      sync.RWMutex
+	lockGetProfile                sync.RWMutex
+	lockGetTask                   sync.RWMutex
+	lockGetTaskDetails            sync.RWMutex
+	lockListChildTasks            sync.RWMutex
+	lockListEventTasks            sync.RWMutex
+	lockListEvents                sync.RWMutex
+	lockListEventsByTask          sync.RWMutex
+	lockListKeys                  sync.RWMutex
+	lockListLinks                 sync.RWMutex
+	lockListLogs                  sync.RWMutex
+	lockListOrgMembers            sync.RWMutex
+	lockListOrgs                  sync.RWMutex
+	lockListRunnerTasks           sync.RWMutex
+	lockListTasks                 sync.RWMutex
+	lockListWorkspaces            sync.RWMutex
+	lockPing                      sync.RWMutex
+	lockProcessEvent              sync.RWMutex
+	lockRegisterWorkspaces        sync.RWMutex
+	lockRemoveEventTask           sync.RWMutex
+	lockRemoveOrgMember           sync.RWMutex
+	lockRestartTask               sync.RWMutex
+	lockSubmitRunnerEvents        sync.RWMutex
+	lockUnarchiveTask             sync.RWMutex
+	lockUnlinkGitHubAccount       sync.RWMutex
+	lockUnlinkJiraAccount         sync.RWMutex
+	lockUpdateTask                sync.RWMutex
+	lockUploadLogs                sync.RWMutex
 }
 
 // AddEventTask calls AddEventTaskFunc.
@@ -1123,6 +1179,42 @@ func (mock *ClientMock) FindLinksByURLCalls() []struct {
 	return calls
 }
 
+// GenerateJiraWebhookSecret calls GenerateJiraWebhookSecretFunc.
+func (mock *ClientMock) GenerateJiraWebhookSecret(contextMoqParam context.Context, generateJiraWebhookSecretRequest *xagentv1.GenerateJiraWebhookSecretRequest) (*xagentv1.GenerateJiraWebhookSecretResponse, error) {
+	if mock.GenerateJiraWebhookSecretFunc == nil {
+		panic("ClientMock.GenerateJiraWebhookSecretFunc: method is nil but Client.GenerateJiraWebhookSecret was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam                  context.Context
+		GenerateJiraWebhookSecretRequest *xagentv1.GenerateJiraWebhookSecretRequest
+	}{
+		ContextMoqParam:                  contextMoqParam,
+		GenerateJiraWebhookSecretRequest: generateJiraWebhookSecretRequest,
+	}
+	mock.lockGenerateJiraWebhookSecret.Lock()
+	mock.calls.GenerateJiraWebhookSecret = append(mock.calls.GenerateJiraWebhookSecret, callInfo)
+	mock.lockGenerateJiraWebhookSecret.Unlock()
+	return mock.GenerateJiraWebhookSecretFunc(contextMoqParam, generateJiraWebhookSecretRequest)
+}
+
+// GenerateJiraWebhookSecretCalls gets all the calls that were made to GenerateJiraWebhookSecret.
+// Check the length with:
+//
+//	len(mockedClient.GenerateJiraWebhookSecretCalls())
+func (mock *ClientMock) GenerateJiraWebhookSecretCalls() []struct {
+	ContextMoqParam                  context.Context
+	GenerateJiraWebhookSecretRequest *xagentv1.GenerateJiraWebhookSecretRequest
+} {
+	var calls []struct {
+		ContextMoqParam                  context.Context
+		GenerateJiraWebhookSecretRequest *xagentv1.GenerateJiraWebhookSecretRequest
+	}
+	mock.lockGenerateJiraWebhookSecret.RLock()
+	calls = mock.calls.GenerateJiraWebhookSecret
+	mock.lockGenerateJiraWebhookSecret.RUnlock()
+	return calls
+}
+
 // GetEvent calls GetEventFunc.
 func (mock *ClientMock) GetEvent(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 	if mock.GetEventFunc == nil {
@@ -1192,6 +1284,78 @@ func (mock *ClientMock) GetGitHubAccountCalls() []struct {
 	mock.lockGetGitHubAccount.RLock()
 	calls = mock.calls.GetGitHubAccount
 	mock.lockGetGitHubAccount.RUnlock()
+	return calls
+}
+
+// GetJiraAccount calls GetJiraAccountFunc.
+func (mock *ClientMock) GetJiraAccount(contextMoqParam context.Context, getJiraAccountRequest *xagentv1.GetJiraAccountRequest) (*xagentv1.GetJiraAccountResponse, error) {
+	if mock.GetJiraAccountFunc == nil {
+		panic("ClientMock.GetJiraAccountFunc: method is nil but Client.GetJiraAccount was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam       context.Context
+		GetJiraAccountRequest *xagentv1.GetJiraAccountRequest
+	}{
+		ContextMoqParam:       contextMoqParam,
+		GetJiraAccountRequest: getJiraAccountRequest,
+	}
+	mock.lockGetJiraAccount.Lock()
+	mock.calls.GetJiraAccount = append(mock.calls.GetJiraAccount, callInfo)
+	mock.lockGetJiraAccount.Unlock()
+	return mock.GetJiraAccountFunc(contextMoqParam, getJiraAccountRequest)
+}
+
+// GetJiraAccountCalls gets all the calls that were made to GetJiraAccount.
+// Check the length with:
+//
+//	len(mockedClient.GetJiraAccountCalls())
+func (mock *ClientMock) GetJiraAccountCalls() []struct {
+	ContextMoqParam       context.Context
+	GetJiraAccountRequest *xagentv1.GetJiraAccountRequest
+} {
+	var calls []struct {
+		ContextMoqParam       context.Context
+		GetJiraAccountRequest *xagentv1.GetJiraAccountRequest
+	}
+	mock.lockGetJiraAccount.RLock()
+	calls = mock.calls.GetJiraAccount
+	mock.lockGetJiraAccount.RUnlock()
+	return calls
+}
+
+// GetJiraWebhookSecret calls GetJiraWebhookSecretFunc.
+func (mock *ClientMock) GetJiraWebhookSecret(contextMoqParam context.Context, getJiraWebhookSecretRequest *xagentv1.GetJiraWebhookSecretRequest) (*xagentv1.GetJiraWebhookSecretResponse, error) {
+	if mock.GetJiraWebhookSecretFunc == nil {
+		panic("ClientMock.GetJiraWebhookSecretFunc: method is nil but Client.GetJiraWebhookSecret was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam             context.Context
+		GetJiraWebhookSecretRequest *xagentv1.GetJiraWebhookSecretRequest
+	}{
+		ContextMoqParam:             contextMoqParam,
+		GetJiraWebhookSecretRequest: getJiraWebhookSecretRequest,
+	}
+	mock.lockGetJiraWebhookSecret.Lock()
+	mock.calls.GetJiraWebhookSecret = append(mock.calls.GetJiraWebhookSecret, callInfo)
+	mock.lockGetJiraWebhookSecret.Unlock()
+	return mock.GetJiraWebhookSecretFunc(contextMoqParam, getJiraWebhookSecretRequest)
+}
+
+// GetJiraWebhookSecretCalls gets all the calls that were made to GetJiraWebhookSecret.
+// Check the length with:
+//
+//	len(mockedClient.GetJiraWebhookSecretCalls())
+func (mock *ClientMock) GetJiraWebhookSecretCalls() []struct {
+	ContextMoqParam             context.Context
+	GetJiraWebhookSecretRequest *xagentv1.GetJiraWebhookSecretRequest
+} {
+	var calls []struct {
+		ContextMoqParam             context.Context
+		GetJiraWebhookSecretRequest *xagentv1.GetJiraWebhookSecretRequest
+	}
+	mock.lockGetJiraWebhookSecret.RLock()
+	calls = mock.calls.GetJiraWebhookSecret
+	mock.lockGetJiraWebhookSecret.RUnlock()
 	return calls
 }
 
@@ -2056,6 +2220,42 @@ func (mock *ClientMock) UnlinkGitHubAccountCalls() []struct {
 	mock.lockUnlinkGitHubAccount.RLock()
 	calls = mock.calls.UnlinkGitHubAccount
 	mock.lockUnlinkGitHubAccount.RUnlock()
+	return calls
+}
+
+// UnlinkJiraAccount calls UnlinkJiraAccountFunc.
+func (mock *ClientMock) UnlinkJiraAccount(contextMoqParam context.Context, unlinkJiraAccountRequest *xagentv1.UnlinkJiraAccountRequest) (*xagentv1.UnlinkJiraAccountResponse, error) {
+	if mock.UnlinkJiraAccountFunc == nil {
+		panic("ClientMock.UnlinkJiraAccountFunc: method is nil but Client.UnlinkJiraAccount was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam          context.Context
+		UnlinkJiraAccountRequest *xagentv1.UnlinkJiraAccountRequest
+	}{
+		ContextMoqParam:          contextMoqParam,
+		UnlinkJiraAccountRequest: unlinkJiraAccountRequest,
+	}
+	mock.lockUnlinkJiraAccount.Lock()
+	mock.calls.UnlinkJiraAccount = append(mock.calls.UnlinkJiraAccount, callInfo)
+	mock.lockUnlinkJiraAccount.Unlock()
+	return mock.UnlinkJiraAccountFunc(contextMoqParam, unlinkJiraAccountRequest)
+}
+
+// UnlinkJiraAccountCalls gets all the calls that were made to UnlinkJiraAccount.
+// Check the length with:
+//
+//	len(mockedClient.UnlinkJiraAccountCalls())
+func (mock *ClientMock) UnlinkJiraAccountCalls() []struct {
+	ContextMoqParam          context.Context
+	UnlinkJiraAccountRequest *xagentv1.UnlinkJiraAccountRequest
+} {
+	var calls []struct {
+		ContextMoqParam          context.Context
+		UnlinkJiraAccountRequest *xagentv1.UnlinkJiraAccountRequest
+	}
+	mock.lockUnlinkJiraAccount.RLock()
+	calls = mock.calls.UnlinkJiraAccount
+	mock.lockUnlinkJiraAccount.RUnlock()
 	return calls
 }
 
