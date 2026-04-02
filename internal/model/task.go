@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -74,7 +75,7 @@ type Task struct {
 }
 
 // Proto converts a Task to its protobuf representation.
-func (t *Task) Proto() *xagentv1.Task {
+func (t *Task) Proto(baseURL string) *xagentv1.Task {
 	instructions := make([]*xagentv1.Instruction, len(t.Instructions))
 	for i, inst := range t.Instructions {
 		instructions[i] = inst.Proto()
@@ -90,6 +91,7 @@ func (t *Task) Proto() *xagentv1.Task {
 		Command:      xagentv1.TaskCommand(t.Command),
 		Version:      t.Version,
 		Archived:     t.Archived,
+		Url:          fmt.Sprintf("%s/tasks/%d", baseURL, t.ID),
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
 		Actions: &xagentv1.TaskActions{

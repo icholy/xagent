@@ -44,7 +44,7 @@ func TestRunnerStart(t *testing.T) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
 		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-			return &xagentv1.GetTaskDetailsResponse{Task: task.Proto()}, nil
+			return &xagentv1.GetTaskDetailsResponse{Task: task.Proto("")}, nil
 		},
 	}
 
