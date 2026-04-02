@@ -27,7 +27,7 @@ type Config struct {
 	ClientSecret string
 	RedirectURL  string
 	Log          *slog.Logger
-	OnSuccess    func(w http.ResponseWriter, r *http.Request, accountID string)
+	OnSuccess    func(w http.ResponseWriter, r *http.Request, accountID, displayName string)
 }
 
 // Handler implements http.Handler for Atlassian OAuth2 login/callback.
@@ -36,7 +36,7 @@ type Config struct {
 type Handler struct {
 	oauth     *oauth2.Config
 	log       *slog.Logger
-	onSuccess func(w http.ResponseWriter, r *http.Request, accountID string)
+	onSuccess func(w http.ResponseWriter, r *http.Request, accountID, displayName string)
 	mux       *http.ServeMux
 }
 
@@ -112,7 +112,7 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accountID, err := h.fetchAccountID(r, token.AccessToken)
+	me, err := h.fetchMe(r, token.AccessToken)
 	if err != nil {
 		h.log.Error("failed to fetch Atlassian user", "error", err)
 		http.Error(w, "failed to fetch Atlassian user", http.StatusInternalServerError)
@@ -131,30 +131,33 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if h.onSuccess != nil {
-		h.onSuccess(w, r, accountID)
+		h.onSuccess(w, r, me.AccountID, me.Name)
 	} else {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
 }
 
-func (h *Handler) fetchAccountID(r *http.Request, accessToken string) (string, error) {
+type atlassianUser struct {
+	AccountID string `json:"account_id"`
+	Name      string `json:"name"`
+}
+
+func (h *Handler) fetchMe(r *http.Request, accessToken string) (*atlassianUser, error) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://api.atlassian.com/me", nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	var me struct {
-		AccountID string `json:"account_id"`
-	}
+	var me atlassianUser
 	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
-		return "", err
+		return nil, err
 	}
-	return me.AccountID, nil
+	return &me, nil
 }
 
 func generateRandomState() (string, error) {

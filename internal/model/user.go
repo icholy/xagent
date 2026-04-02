@@ -15,6 +15,7 @@ type User struct {
 	GitHubUserID       int64     `json:"github_user_id"`
 	GitHubUsername     string    `json:"github_username"`
 	AtlassianAccountID string    `json:"atlassian_account_id"`
+	AtlassianUsername  string    `json:"atlassian_username"`
 	DefaultOrgID       int64     `json:"default_org_id"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
@@ -49,6 +50,7 @@ func (u *User) AtlassianAccountProto() *xagentv1.JiraAccount {
 	}
 	return &xagentv1.JiraAccount{
 		AtlassianAccountId: u.AtlassianAccountID,
+		AtlassianUsername:  u.AtlassianUsername,
 		CreatedAt:          timestamppb.New(u.CreatedAt),
 	}
 }

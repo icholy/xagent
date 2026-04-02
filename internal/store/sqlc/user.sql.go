@@ -14,7 +14,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, email, name, github_user_id, github_username, default_org_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, email, name, github_user_id, github_username, atlassian_account_id, default_org_id, created_at, updated_at
+RETURNING id, email, name, github_user_id, github_username, atlassian_account_id, atlassian_username, default_org_id, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -33,6 +33,7 @@ type CreateUserRow struct {
 	GithubUserID       sql.NullInt64  `json:"github_user_id"`
 	GithubUsername     sql.NullString `json:"github_username"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
+	AtlassianUsername  string         `json:"atlassian_username"`
 	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
@@ -55,6 +56,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.GithubUserID,
 		&i.GithubUsername,
 		&i.AtlassianAccountID,
+		&i.AtlassianUsername,
 		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -63,7 +65,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, github_user_id, github_username, atlassian_account_id, default_org_id, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, atlassian_account_id, atlassian_username, default_org_id, created_at, updated_at
 FROM users
 WHERE id = $1
 `
@@ -75,6 +77,7 @@ type GetUserRow struct {
 	GithubUserID       sql.NullInt64  `json:"github_user_id"`
 	GithubUsername     sql.NullString `json:"github_username"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
+	AtlassianUsername  string         `json:"atlassian_username"`
 	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
@@ -90,6 +93,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
 		&i.GithubUserID,
 		&i.GithubUsername,
 		&i.AtlassianAccountID,
+		&i.AtlassianUsername,
 		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -98,7 +102,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
 }
 
 const getUserByAtlassianAccountID = `-- name: GetUserByAtlassianAccountID :one
-SELECT id, email, name, github_user_id, github_username, atlassian_account_id, default_org_id, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, atlassian_account_id, atlassian_username, default_org_id, created_at, updated_at
 FROM users
 WHERE atlassian_account_id = $1
 `
@@ -110,6 +114,7 @@ type GetUserByAtlassianAccountIDRow struct {
 	GithubUserID       sql.NullInt64  `json:"github_user_id"`
 	GithubUsername     sql.NullString `json:"github_username"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
+	AtlassianUsername  string         `json:"atlassian_username"`
 	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
@@ -125,6 +130,7 @@ func (q *Queries) GetUserByAtlassianAccountID(ctx context.Context, atlassianAcco
 		&i.GithubUserID,
 		&i.GithubUsername,
 		&i.AtlassianAccountID,
+		&i.AtlassianUsername,
 		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -133,7 +139,7 @@ func (q *Queries) GetUserByAtlassianAccountID(ctx context.Context, atlassianAcco
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, github_user_id, github_username, atlassian_account_id, default_org_id, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, atlassian_account_id, atlassian_username, default_org_id, created_at, updated_at
 FROM users
 WHERE email = $1
 `
@@ -145,6 +151,7 @@ type GetUserByEmailRow struct {
 	GithubUserID       sql.NullInt64  `json:"github_user_id"`
 	GithubUsername     sql.NullString `json:"github_username"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
+	AtlassianUsername  string         `json:"atlassian_username"`
 	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
@@ -160,6 +167,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.GithubUserID,
 		&i.GithubUsername,
 		&i.AtlassianAccountID,
+		&i.AtlassianUsername,
 		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -168,7 +176,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 }
 
 const getUserByGitHubUserID = `-- name: GetUserByGitHubUserID :one
-SELECT id, email, name, github_user_id, github_username, atlassian_account_id, default_org_id, created_at, updated_at
+SELECT id, email, name, github_user_id, github_username, atlassian_account_id, atlassian_username, default_org_id, created_at, updated_at
 FROM users
 WHERE github_user_id = $1
 `
@@ -180,6 +188,7 @@ type GetUserByGitHubUserIDRow struct {
 	GithubUserID       sql.NullInt64  `json:"github_user_id"`
 	GithubUsername     sql.NullString `json:"github_username"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
+	AtlassianUsername  string         `json:"atlassian_username"`
 	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
@@ -195,6 +204,7 @@ func (q *Queries) GetUserByGitHubUserID(ctx context.Context, githubUserID sql.Nu
 		&i.GithubUserID,
 		&i.GithubUsername,
 		&i.AtlassianAccountID,
+		&i.AtlassianUsername,
 		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -205,6 +215,7 @@ func (q *Queries) GetUserByGitHubUserID(ctx context.Context, githubUserID sql.Nu
 const linkAtlassianAccount = `-- name: LinkAtlassianAccount :exec
 UPDATE users SET
     atlassian_account_id = $2,
+    atlassian_username = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 `
@@ -212,10 +223,11 @@ WHERE id = $1
 type LinkAtlassianAccountParams struct {
 	ID                 string         `json:"id"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
+	AtlassianUsername  string         `json:"atlassian_username"`
 }
 
 func (q *Queries) LinkAtlassianAccount(ctx context.Context, arg LinkAtlassianAccountParams) error {
-	_, err := q.db.ExecContext(ctx, linkAtlassianAccount, arg.ID, arg.AtlassianAccountID)
+	_, err := q.db.ExecContext(ctx, linkAtlassianAccount, arg.ID, arg.AtlassianAccountID, arg.AtlassianUsername)
 	return err
 }
 
@@ -241,6 +253,7 @@ func (q *Queries) LinkGitHubAccount(ctx context.Context, arg LinkGitHubAccountPa
 const unlinkAtlassianAccount = `-- name: UnlinkAtlassianAccount :exec
 UPDATE users SET
     atlassian_account_id = NULL,
+    atlassian_username = '',
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 `
@@ -304,7 +317,7 @@ ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = EXCLUDED.name,
     updated_at = CURRENT_TIMESTAMP
-RETURNING id, email, name, github_user_id, github_username, atlassian_account_id, default_org_id, created_at, updated_at
+RETURNING id, email, name, github_user_id, github_username, atlassian_account_id, atlassian_username, default_org_id, created_at, updated_at
 `
 
 type UpsertUserParams struct {
@@ -320,6 +333,7 @@ type UpsertUserRow struct {
 	GithubUserID       sql.NullInt64  `json:"github_user_id"`
 	GithubUsername     sql.NullString `json:"github_username"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
+	AtlassianUsername  string         `json:"atlassian_username"`
 	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
@@ -335,6 +349,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (UpsertU
 		&i.GithubUserID,
 		&i.GithubUsername,
 		&i.AtlassianAccountID,
+		&i.AtlassianUsername,
 		&i.DefaultOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,

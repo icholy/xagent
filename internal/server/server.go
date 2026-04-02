@@ -149,7 +149,7 @@ func (s *Server) Handler() http.Handler {
 			ClientSecret: s.jira.ClientSecret,
 			RedirectURL:  s.baseURL + "/jira/callback",
 			Log:          s.log,
-			OnSuccess: func(w http.ResponseWriter, r *http.Request, accountID string) {
+			OnSuccess: func(w http.ResponseWriter, r *http.Request, accountID, displayName string) {
 				caller := apiauth.Caller(r.Context())
 				if caller == nil {
 					http.Error(w, "not authenticated", http.StatusUnauthorized)
@@ -159,7 +159,7 @@ func (s *Server) Handler() http.Handler {
 					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
 					return
 				}
-				if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, accountID); err != nil {
+				if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, accountID, displayName); err != nil {
 					http.Error(w, "failed to link Jira account", http.StatusInternalServerError)
 					return
 				}

@@ -92,6 +92,7 @@ type User struct {
 	UpdatedAt          time.Time      `json:"updated_at"`
 	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
+	AtlassianUsername  string         `json:"atlassian_username"`
 }
 
 type Workspace struct {

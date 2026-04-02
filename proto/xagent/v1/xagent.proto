@@ -437,6 +437,7 @@ message UnlinkGitHubAccountResponse {}
 
 message JiraAccount {
   string atlassian_account_id = 1;
+  string atlassian_username = 3;
   google.protobuf.Timestamp created_at = 2;
 }
 

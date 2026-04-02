@@ -4229,6 +4229,7 @@ func (*UnlinkGitHubAccountResponse) Descriptor() ([]byte, []int) {
 type JiraAccount struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	AtlassianAccountId string                 `protobuf:"bytes,1,opt,name=atlassian_account_id,json=atlassianAccountId,proto3" json:"atlassian_account_id,omitempty"`
+	AtlassianUsername  string                 `protobuf:"bytes,3,opt,name=atlassian_username,json=atlassianUsername,proto3" json:"atlassian_username,omitempty"`
 	CreatedAt          *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
@@ -4267,6 +4268,13 @@ func (*JiraAccount) Descriptor() ([]byte, []int) {
 func (x *JiraAccount) GetAtlassianAccountId() string {
 	if x != nil {
 		return x.AtlassianAccountId
+	}
+	return ""
+}
+
+func (x *JiraAccount) GetAtlassianUsername() string {
+	if x != nil {
+		return x.AtlassianUsername
 	}
 	return ""
 }
@@ -5325,9 +5333,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\aaccount\x18\x01 \x01(\v2\x18.xagent.v1.GitHubAccountR\aaccount\x12&\n" +
 	"\x0fgithub_app_slug\x18\x02 \x01(\tR\rgithubAppSlug\"\x1c\n" +
 	"\x1aUnlinkGitHubAccountRequest\"\x1d\n" +
-	"\x1bUnlinkGitHubAccountResponse\"z\n" +
+	"\x1bUnlinkGitHubAccountResponse\"\xa9\x01\n" +
 	"\vJiraAccount\x120\n" +
-	"\x14atlassian_account_id\x18\x01 \x01(\tR\x12atlassianAccountId\x129\n" +
+	"\x14atlassian_account_id\x18\x01 \x01(\tR\x12atlassianAccountId\x12-\n" +
+	"\x12atlassian_username\x18\x03 \x01(\tR\x11atlassianUsername\x129\n" +
 	"\n" +
 	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x17\n" +
 	"\x15GetJiraAccountRequest\"J\n" +

@@ -269,7 +269,7 @@ function JiraAccountCard() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <User className="h-5 w-5" />
-              <span className="font-medium">{account.atlassianAccountId}</span>
+              <span className="font-medium">{account.atlassianUsername || account.atlassianAccountId}</span>
             </div>
             <Button
               variant="outline"
