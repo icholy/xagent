@@ -124,6 +124,7 @@ message GetProfileResponse {
   GitHubAccount github_account = 4;
   AtlassianAccount atlassian_account = 5;
   string github_app_slug = 6;
+  string server_base_url = 7;
 }
 
 message ListTasksRequest {}

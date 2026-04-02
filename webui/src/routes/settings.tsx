@@ -74,7 +74,7 @@ function AccountSettings() {
         <CardContent>
           <div className="flex items-center gap-2">
             <Cable className="h-5 w-5 text-muted-foreground" />
-            <code className="text-sm bg-muted px-2 py-1 rounded">https://xagent.choly.ca/mcp</code>
+            <code className="text-sm bg-muted px-2 py-1 rounded">{`${data?.serverBaseUrl ?? ""}/mcp`}</code>
           </div>
         </CardContent>
       </Card>
