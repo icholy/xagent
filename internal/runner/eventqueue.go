@@ -126,7 +126,7 @@ func (q *EventQueue) Run(ctx context.Context) {
 			if err == nil {
 				break
 			}
-			q.log.Warn("event delivery failed, will retry", "error", err)
+			q.log.Warn("event delivery failed, will retry", "error", err, "queued", q.Len())
 			if !common.SleepContext(ctx, q.retryInterval) {
 				return
 			}
