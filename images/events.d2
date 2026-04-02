@@ -1,0 +1,12 @@
+shape: sequence_diagram
+
+agent: Agent
+github: GitHub
+reviewer: Reviewer
+
+agent -> github: Creates PR
+agent."Creates notify link"
+agent."Task completes"
+reviewer -> github: "xagent: fix the failing test"
+github -> agent: Webhook restarts agent
+agent -> github: Pushes fix
