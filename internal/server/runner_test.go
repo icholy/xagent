@@ -11,7 +11,8 @@ import (
 func TestSubmitRunnerEvents(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
 
 	// Create a task (starts as pending with start command)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -70,8 +71,10 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctxA, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctxA := createCtx(t, orgA)
+	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctxB := createCtx(t, orgB)
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",
@@ -94,12 +97,13 @@ func TestListRunnerTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{
 		Workspaces: []teststore.WorkspaceOptions{
 			{RunnerID: "runner-1", Name: "test-workspace"},
 			{RunnerID: "runner-2", Name: "test-workspace"},
 		},
 	})
+	ctx := createCtx(t, org)
 	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task for runner-1",
 		Workspace: "test-workspace",
@@ -128,11 +132,12 @@ func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{
 		Workspaces: []teststore.WorkspaceOptions{
 			{RunnerID: "runner-1", Name: "test-workspace"},
 		},
 	})
+	ctx := createCtx(t, org)
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with command",
 		Workspace: "test-workspace",
@@ -165,8 +170,10 @@ func TestListRunnerTasks_Permissions(t *testing.T) {
 			{RunnerID: "runner-1", Name: "test-workspace"},
 		},
 	}
-	ctxA, _ := createTestOrg(t, srv, runnerWorkspaces)
-	ctxB, _ := createTestOrg(t, srv, runnerWorkspaces)
+	orgA := teststore.CreateOrg(t, srv.store, runnerWorkspaces)
+	ctxA := createCtx(t, orgA)
+	orgB := teststore.CreateOrg(t, srv.store, runnerWorkspaces)
+	ctxB := createCtx(t, orgB)
 	_, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Workspace: "test-workspace",

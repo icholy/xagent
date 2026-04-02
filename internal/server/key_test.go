@@ -13,7 +13,8 @@ func TestCreateKey(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 
 	// Act
 	resp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
@@ -32,7 +33,8 @@ func TestCreateAndListKeys(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 	_, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: "key-1",
 	})
@@ -54,7 +56,8 @@ func TestDeleteKey(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 	createResp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
 		Name: "to-delete",
 	})
@@ -76,8 +79,10 @@ func TestListKeys_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctxA, _ := createTestOrg(t, srv, nil)
-	ctxB, _ := createTestOrg(t, srv, nil)
+	orgA := teststore.CreateOrg(t, srv.store, nil)
+	ctxA := createCtx(t, orgA)
+	orgB := teststore.CreateOrg(t, srv.store, nil)
+	ctxB := createCtx(t, orgB)
 	_, err := srv.CreateKey(ctxA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})
@@ -104,8 +109,10 @@ func TestDeleteKey_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctxA, _ := createTestOrg(t, srv, nil)
-	ctxB, _ := createTestOrg(t, srv, nil)
+	orgA := teststore.CreateOrg(t, srv.store, nil)
+	ctxA := createCtx(t, orgA)
+	orgB := teststore.CreateOrg(t, srv.store, nil)
+	ctxB := createCtx(t, orgB)
 	createResp, err := srv.CreateKey(ctxA, &xagentv1.CreateKeyRequest{
 		Name: "user-a-key",
 	})

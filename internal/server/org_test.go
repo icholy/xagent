@@ -12,7 +12,8 @@ import (
 func TestCreateOrg(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 
 	resp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{
 		Name: "my-org",
@@ -26,7 +27,8 @@ func TestCreateOrg(t *testing.T) {
 func TestListOrgs(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 	_, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "org-1"})
 	assert.NilError(t, err)
 	_, err = srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "org-2"})
@@ -35,14 +37,15 @@ func TestListOrgs(t *testing.T) {
 	resp, err := srv.ListOrgs(ctx, &xagentv1.ListOrgsRequest{})
 
 	assert.NilError(t, err)
-	// 2 created + 1 from createTestOrg
+	// 2 created + 1 from CreateOrg
 	assert.Equal(t, len(resp.Orgs), 3)
 }
 
 func TestDeleteOrg(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "to-delete"})
 	assert.NilError(t, err)
 
@@ -57,8 +60,10 @@ func TestDeleteOrg(t *testing.T) {
 func TestDeleteOrg_Permissions(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctxA, _ := createTestOrg(t, srv, nil)
-	ctxB, _ := createTestOrg(t, srv, nil)
+	orgA := teststore.CreateOrg(t, srv.store, nil)
+	ctxA := createCtx(t, orgA)
+	orgB := teststore.CreateOrg(t, srv.store, nil)
+	ctxB := createCtx(t, orgB)
 	createResp, err := srv.CreateOrg(ctxA, &xagentv1.CreateOrgRequest{Name: "user-a-org"})
 	assert.NilError(t, err)
 
@@ -70,7 +75,8 @@ func TestDeleteOrg_Permissions(t *testing.T) {
 func TestDeleteOrg_DefaultOrg(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 	user := apiauth.Caller(ctx)
 
 	_, err := srv.DeleteOrg(ctx, &xagentv1.DeleteOrgRequest{Id: user.OrgID})
@@ -81,8 +87,10 @@ func TestDeleteOrg_DefaultOrg(t *testing.T) {
 func TestAddAndListOrgMembers(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	owner, _ := createTestOrg(t, srv, nil)
-	member, _ := createTestOrg(t, srv, nil)
+	ownerOrg := teststore.CreateOrg(t, srv.store, nil)
+	owner := createCtx(t, ownerOrg)
+	memberOrg := teststore.CreateOrg(t, srv.store, nil)
+	member := createCtx(t, memberOrg)
 	memberEmail := apiauth.Caller(member).ID + "@test.com"
 
 	resp, err := srv.AddOrgMember(owner, &xagentv1.AddOrgMemberRequest{
@@ -99,7 +107,8 @@ func TestAddAndListOrgMembers(t *testing.T) {
 func TestDeleteOrg_WithTasks(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 
 	// Create a second org and switch to it.
 	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "has-tasks"})
@@ -140,8 +149,10 @@ func TestDeleteOrg_WithTasks(t *testing.T) {
 func TestRemoveOrgMember(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	owner, _ := createTestOrg(t, srv, nil)
-	member, _ := createTestOrg(t, srv, nil)
+	ownerOrg := teststore.CreateOrg(t, srv.store, nil)
+	owner := createCtx(t, ownerOrg)
+	memberOrg := teststore.CreateOrg(t, srv.store, nil)
+	member := createCtx(t, memberOrg)
 	memberUser := apiauth.Caller(member)
 	memberEmail := memberUser.ID + "@test.com"
 

@@ -11,7 +11,8 @@ import (
 func TestRegisterWorkspaces(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 
 	// Register workspaces
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
@@ -37,8 +38,10 @@ func TestRegisterWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	ctxA, _ := createTestOrg(t, srv, nil)
-	ctxB, _ := createTestOrg(t, srv, nil)
+	orgA := teststore.CreateOrg(t, srv.store, nil)
+	ctxA := createCtx(t, orgA)
+	orgB := teststore.CreateOrg(t, srv.store, nil)
+	ctxB := createCtx(t, orgB)
 
 	// User A registers workspaces
 	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
@@ -75,8 +78,10 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	t.Parallel()
 	// Arrange - both users register workspaces for the same runner ID
 	srv := New(Options{Store: teststore.New(t)})
-	ctxA, _ := createTestOrg(t, srv, nil)
-	ctxB, _ := createTestOrg(t, srv, nil)
+	orgA := teststore.CreateOrg(t, srv.store, nil)
+	ctxA := createCtx(t, orgA)
+	orgB := teststore.CreateOrg(t, srv.store, nil)
+	ctxB := createCtx(t, orgB)
 
 	// User A registers workspaces for runner-1
 	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
@@ -120,7 +125,8 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 func TestClearWorkspaces(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctx, _ := createTestOrg(t, srv, nil)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
 
 	// Register workspaces
 	_, err := srv.RegisterWorkspaces(ctx, &xagentv1.RegisterWorkspacesRequest{
@@ -150,8 +156,10 @@ func TestClearWorkspaces(t *testing.T) {
 func TestClearWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	ctxA, _ := createTestOrg(t, srv, nil)
-	ctxB, _ := createTestOrg(t, srv, nil)
+	orgA := teststore.CreateOrg(t, srv.store, nil)
+	ctxA := createCtx(t, orgA)
+	orgB := teststore.CreateOrg(t, srv.store, nil)
+	ctxB := createCtx(t, orgB)
 
 	// User A registers workspaces
 	_, err := srv.RegisterWorkspaces(ctxA, &xagentv1.RegisterWorkspacesRequest{
