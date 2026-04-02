@@ -256,7 +256,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 		Tasks: make([]*xagentv1.Task, len(tasks)),
 	}
 	for i, t := range tasks {
-		resp.Tasks[i] = t.Proto()
+		resp.Tasks[i] = t.Proto(s.baseURL)
 	}
 	return resp, nil
 }
@@ -274,7 +274,7 @@ func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTa
 		Tasks: make([]*xagentv1.Task, len(tasks)),
 	}
 	for i, t := range tasks {
-		resp.Tasks[i] = t.Proto()
+		resp.Tasks[i] = t.Proto(s.baseURL)
 	}
 	return resp, nil
 }
@@ -289,7 +289,7 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 		Tasks: make([]*xagentv1.Task, len(tasks)),
 	}
 	for i, t := range tasks {
-		resp.Tasks[i] = t.Proto()
+		resp.Tasks[i] = t.Proto(s.baseURL)
 	}
 	return resp, nil
 }
@@ -347,7 +347,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
 	return &xagentv1.CreateTaskResponse{
-		Task: task.Proto(),
+		Task: task.Proto(s.baseURL),
 	}, nil
 }
 
@@ -361,7 +361,7 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.GetTaskResponse{
-		Task: task.Proto(),
+		Task: task.Proto(s.baseURL),
 	}, nil
 }
 
@@ -378,13 +378,13 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, caller.OrgID)
 	links, _ := s.store.ListLinksByTask(ctx, nil, req.Id, caller.OrgID)
 	resp := &xagentv1.GetTaskDetailsResponse{
-		Task:     task.Proto(),
+		Task:     task.Proto(s.baseURL),
 		Children: make([]*xagentv1.Task, len(children)),
 		Events:   make([]*xagentv1.Event, len(events)),
 		Links:    make([]*xagentv1.TaskLink, len(links)),
 	}
 	for i, c := range children {
-		resp.Children[i] = c.Proto()
+		resp.Children[i] = c.Proto(s.baseURL)
 	}
 	for i, e := range events {
 		resp.Events[i] = e.Proto()
