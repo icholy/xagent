@@ -7,7 +7,6 @@ import (
 	"log/slog"
 
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/store"
 )
 
 // EventType identifies the source of a webhook event.
@@ -30,7 +29,7 @@ type Event struct {
 // Router routes events to subscribed tasks via the store.
 type Router struct {
 	Log   *slog.Logger
-	Store *store.Store
+	Store Store
 }
 
 // Route finds all subscribed links matching the event URL for the given user,
