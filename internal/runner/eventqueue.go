@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"connectrpc.com/connect"
+
 	"github.com/icholy/xagent/internal/common"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -86,12 +88,28 @@ func (q *EventQueue) Drain(ctx context.Context) error {
 			},
 		})
 		if err != nil {
+			if isPermanentError(err) {
+				q.log.Warn("event dropped due to permanent error", "task", ev.TaskID, "event", ev.Event, "error", err)
+				q.events.Remove(el)
+				continue
+			}
 			return err
 		}
 		q.log.Info("event delivered", "task", ev.TaskID, "event", ev.Event)
 		q.events.Remove(el)
 	}
 	return nil
+}
+
+// isPermanentError returns true if the error indicates a condition that
+// will never succeed on retry (e.g. task not found, invalid argument).
+func isPermanentError(err error) bool {
+	switch connect.CodeOf(err) {
+	case connect.CodeNotFound, connect.CodeInvalidArgument, connect.CodePermissionDenied:
+		return true
+	default:
+		return false
+	}
 }
 
 // Run drains the queue whenever events are enqueued. On error it waits
