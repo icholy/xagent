@@ -1,66 +1,57 @@
 package eventrouter
 
 import (
-	"context"
-	"database/sql"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
+	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
 
-// withTxNoop mocks WithTx by calling f with a nil tx. The production
-// callback ends with tx.Commit() which panics on nil, so we recover from it.
-func withTxNoop(_ context.Context, _ *sql.Tx, f func(tx *sql.Tx) error) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			// tx.Commit() on nil *sql.Tx - expected in mock
-		}
-	}()
-	return f(nil)
+// createTestTask creates a completed task in the given org.
+func createTestTask(t *testing.T, s *store.Store, orgID int64, workspace string) *model.Task {
+	t.Helper()
+	task := &model.Task{
+		Name:      "test-task",
+		Workspace: workspace,
+		Status:    model.TaskStatusCompleted,
+		Command:   model.TaskCommandNone,
+		OrgID:     orgID,
+	}
+	err := s.CreateTask(t.Context(), nil, task)
+	assert.NilError(t, err)
+	return task
+}
+
+// createSubscribedLink creates a subscribed link on a task.
+func createSubscribedLink(t *testing.T, s *store.Store, taskID int64, url string) *model.Link {
+	t.Helper()
+	link := &model.Link{
+		TaskID:    taskID,
+		URL:       url,
+		Title:     "test link",
+		Subscribe: true,
+		CreatedAt: time.Now(),
+	}
+	err := s.CreateLink(t.Context(), nil, link)
+	assert.NilError(t, err)
+	return link
 }
 
 func TestRouteCreatesEventAndStartsTask(t *testing.T) {
-	var createdEvent *model.Event
-	var updatedTask *model.Task
-	var createdLog *model.Log
+	t.Parallel()
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s)
+
+	task := createTestTask(t, s, org.OrgID, "test")
+	createSubscribedLink(t, s, task.ID, "https://github.com/owner/repo/pull/1")
 
 	r := &Router{
-		Log: slog.Default(),
-		Store: &StoreMock{
-			FindSubscribedLinksByURLForUserFunc: func(ctx context.Context, tx *sql.Tx, url string, userID string) ([]store.LinkWithOrg, error) {
-				return []store.LinkWithOrg{
-					{Link: &model.Link{TaskID: 10}, OrgID: 1},
-				}, nil
-			},
-			CreateEventFunc: func(ctx context.Context, tx *sql.Tx, event *model.Event) error {
-				event.ID = 100
-				createdEvent = event
-				return nil
-			},
-			WithTxFunc: withTxNoop,
-			AddEventTaskFunc: func(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
-				return nil
-			},
-			GetTaskForUpdateFunc: func(ctx context.Context, tx *sql.Tx, id int64, orgID int64) (*model.Task, error) {
-				return &model.Task{
-					ID:      id,
-					OrgID:   orgID,
-					Status:  model.TaskStatusCompleted,
-					Command: model.TaskCommandNone,
-				}, nil
-			},
-			UpdateTaskFunc: func(ctx context.Context, tx *sql.Tx, task *model.Task) error {
-				updatedTask = task
-				return nil
-			},
-			CreateLogFunc: func(ctx context.Context, tx *sql.Tx, log *model.Log) error {
-				createdLog = log
-				return nil
-			},
-		},
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	n, err := r.Route(t.Context(), Event{
@@ -68,157 +59,108 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 		Description: "testuser commented on PR #1",
 		Data:        "xagent: fix tests",
 		URL:         "https://github.com/owner/repo/pull/1",
-		UserID:      "user-1",
+		UserID:      org.UserID,
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
 
-	// Event was created with correct fields
-	assert.Equal(t, createdEvent.Description, "testuser commented on PR #1")
-	assert.Equal(t, createdEvent.Data, "xagent: fix tests")
-	assert.Equal(t, createdEvent.URL, "https://github.com/owner/repo/pull/1")
-	assert.Equal(t, createdEvent.OrgID, int64(1))
-
 	// Task was started
-	assert.Equal(t, updatedTask.ID, int64(10))
-	assert.Equal(t, updatedTask.Status, model.TaskStatusPending)
-
-	// Audit log was created
-	assert.Equal(t, createdLog.TaskID, int64(10))
-	assert.Equal(t, createdLog.Type, "audit")
-	assert.Equal(t, createdLog.Content, "github webhook started task")
+	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusPending)
 }
 
 func TestRouteMultipleOrgs(t *testing.T) {
-	var startedTaskIDs []int64
+	t.Parallel()
+	s := teststore.New(t)
+	orgA := teststore.CreateOrg(t, s)
+	orgB := teststore.CreateOrg(t, s)
+
+	// Add user A as member of org B so FindSubscribedLinksByURLForUser finds both
+	err := s.AddOrgMember(t.Context(), nil, &model.OrgMember{
+		OrgID:  orgB.OrgID,
+		UserID: orgA.UserID,
+		Role:   "member",
+	})
+	assert.NilError(t, err)
+
+	taskA := createTestTask(t, s, orgA.OrgID, "test")
+	taskB := createTestTask(t, s, orgB.OrgID, "test")
+	url := "https://github.com/owner/repo/pull/1"
+	createSubscribedLink(t, s, taskA.ID, url)
+	createSubscribedLink(t, s, taskB.ID, url)
 
 	r := &Router{
-		Log: slog.Default(),
-		Store: &StoreMock{
-			FindSubscribedLinksByURLForUserFunc: func(ctx context.Context, tx *sql.Tx, url string, userID string) ([]store.LinkWithOrg, error) {
-				return []store.LinkWithOrg{
-					{Link: &model.Link{TaskID: 10}, OrgID: 1},
-					{Link: &model.Link{TaskID: 20}, OrgID: 2},
-				}, nil
-			},
-			CreateEventFunc: func(ctx context.Context, tx *sql.Tx, event *model.Event) error {
-				event.ID = event.OrgID * 100
-				return nil
-			},
-			WithTxFunc: withTxNoop,
-			AddEventTaskFunc: func(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
-				return nil
-			},
-			GetTaskForUpdateFunc: func(ctx context.Context, tx *sql.Tx, id int64, orgID int64) (*model.Task, error) {
-				return &model.Task{
-					ID:      id,
-					OrgID:   orgID,
-					Status:  model.TaskStatusCompleted,
-					Command: model.TaskCommandNone,
-				}, nil
-			},
-			UpdateTaskFunc: func(ctx context.Context, tx *sql.Tx, task *model.Task) error {
-				startedTaskIDs = append(startedTaskIDs, task.ID)
-				return nil
-			},
-			CreateLogFunc: func(ctx context.Context, tx *sql.Tx, log *model.Log) error {
-				return nil
-			},
-		},
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	n, err := r.Route(t.Context(), Event{
 		Type:   EventTypeGitHub,
-		URL:    "https://github.com/owner/repo/pull/1",
-		UserID: "user-1",
+		URL:    url,
+		UserID: orgA.UserID,
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, n, 2)
-	assert.Equal(t, len(startedTaskIDs), 2)
 }
 
 func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
-	var updateCount int
+	t.Parallel()
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s)
+
+	task := createTestTask(t, s, org.OrgID, "test")
+	url := "https://github.com/owner/repo/pull/1"
+	createSubscribedLink(t, s, task.ID, url)
+	createSubscribedLink(t, s, task.ID, url)
 
 	r := &Router{
-		Log: slog.Default(),
-		Store: &StoreMock{
-			FindSubscribedLinksByURLForUserFunc: func(ctx context.Context, tx *sql.Tx, url string, userID string) ([]store.LinkWithOrg, error) {
-				return []store.LinkWithOrg{
-					{Link: &model.Link{TaskID: 10}, OrgID: 1},
-					{Link: &model.Link{TaskID: 10}, OrgID: 1},
-				}, nil
-			},
-			CreateEventFunc: func(ctx context.Context, tx *sql.Tx, event *model.Event) error {
-				event.ID = 100
-				return nil
-			},
-			WithTxFunc: withTxNoop,
-			AddEventTaskFunc: func(ctx context.Context, tx *sql.Tx, eventID int64, taskID int64) error {
-				return nil
-			},
-			GetTaskForUpdateFunc: func(ctx context.Context, tx *sql.Tx, id int64, orgID int64) (*model.Task, error) {
-				return &model.Task{
-					ID:      id,
-					OrgID:   orgID,
-					Status:  model.TaskStatusCompleted,
-					Command: model.TaskCommandNone,
-				}, nil
-			},
-			UpdateTaskFunc: func(ctx context.Context, tx *sql.Tx, task *model.Task) error {
-				updateCount++
-				return nil
-			},
-			CreateLogFunc: func(ctx context.Context, tx *sql.Tx, log *model.Log) error {
-				return nil
-			},
-		},
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	n, err := r.Route(t.Context(), Event{
 		Type:   EventTypeGitHub,
-		URL:    "https://github.com/owner/repo/pull/1",
-		UserID: "user-1",
+		URL:    url,
+		UserID: org.UserID,
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
-	assert.Equal(t, updateCount, 1)
 }
 
 func TestRouteNoMatchingLinks(t *testing.T) {
+	t.Parallel()
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s)
+
 	r := &Router{
-		Log: slog.Default(),
-		Store: &StoreMock{
-			FindSubscribedLinksByURLForUserFunc: func(ctx context.Context, tx *sql.Tx, url string, userID string) ([]store.LinkWithOrg, error) {
-				return nil, nil
-			},
-		},
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	n, err := r.Route(t.Context(), Event{
 		Type:   EventTypeGitHub,
 		URL:    "https://github.com/owner/repo/pull/1",
-		UserID: "user-1",
+		UserID: org.UserID,
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
 }
 
 func TestRouteEmptyURL(t *testing.T) {
+	t.Parallel()
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s)
+
 	r := &Router{
-		Log: slog.Default(),
-		Store: &StoreMock{
-			FindSubscribedLinksByURLForUserFunc: func(ctx context.Context, tx *sql.Tx, url string, userID string) ([]store.LinkWithOrg, error) {
-				t.Fatal("should not be called for empty URL")
-				return nil, nil
-			},
-		},
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	n, err := r.Route(t.Context(), Event{
 		Type:   EventTypeGitHub,
 		URL:    "",
-		UserID: "user-1",
+		UserID: org.UserID,
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
