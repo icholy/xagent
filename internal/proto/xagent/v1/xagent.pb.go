@@ -353,6 +353,7 @@ type Task struct {
 	Version       int64                  `protobuf:"varint,11,opt,name=version,proto3" json:"version,omitempty"` // Incremented when command changes
 	Actions       *TaskActions           `protobuf:"bytes,12,opt,name=actions,proto3" json:"actions,omitempty"`
 	Archived      bool                   `protobuf:"varint,13,opt,name=archived,proto3" json:"archived,omitempty"`
+	Url           string                 `protobuf:"bytes,14,opt,name=url,proto3" json:"url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -476,6 +477,13 @@ func (x *Task) GetArchived() bool {
 		return x.Archived
 	}
 	return false
+}
+
+func (x *Task) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
 }
 
 type McpServer struct {
@@ -5149,7 +5157,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x06cancel\x18\x02 \x01(\bR\x06cancel\x12\x18\n" +
 	"\arestart\x18\x03 \x01(\bR\arestart\x12\x14\n" +
 	"\x05start\x18\x04 \x01(\bR\x05start\x12\x1c\n" +
-	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\xf3\x03\n" +
+	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\x85\x04\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -5166,7 +5174,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	" \x01(\x0e2\x16.xagent.v1.TaskCommandR\acommand\x12\x18\n" +
 	"\aversion\x18\v \x01(\x03R\aversion\x120\n" +
 	"\aactions\x18\f \x01(\v2\x16.xagent.v1.TaskActionsR\aactions\x12\x1a\n" +
-	"\barchived\x18\r \x01(\bR\barchived\"\xb6\x01\n" +
+	"\barchived\x18\r \x01(\bR\barchived\x12\x10\n" +
+	"\x03url\x18\x0e \x01(\tR\x03url\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +

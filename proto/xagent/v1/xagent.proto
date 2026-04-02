@@ -102,6 +102,7 @@ message Task {
   int64 version = 11;  // Incremented when command changes
   TaskActions actions = 12;
   bool archived = 13;
+  string url = 14;
 }
 
 message McpServer {
