@@ -185,14 +185,14 @@ export const getGitHubAccount = XAgentService.method.getGitHubAccount;
 export const unlinkGitHubAccount = XAgentService.method.unlinkGitHubAccount;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.GetJiraAccount
+ * @generated from rpc xagent.v1.XAgentService.GetAtlassianAccount
  */
-export const getJiraAccount = XAgentService.method.getJiraAccount;
+export const getAtlassianAccount = XAgentService.method.getAtlassianAccount;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.UnlinkJiraAccount
+ * @generated from rpc xagent.v1.XAgentService.UnlinkAtlassianAccount
  */
-export const unlinkJiraAccount = XAgentService.method.unlinkJiraAccount;
+export const unlinkAtlassianAccount = XAgentService.method.unlinkAtlassianAccount;
 
 /**
  * @generated from rpc xagent.v1.XAgentService.CreateOrg

@@ -3,10 +3,10 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getGitHubAccount,
-  getJiraAccount,
+  getAtlassianAccount,
   getProfile,
   unlinkGitHubAccount,
-  unlinkJiraAccount,
+  unlinkAtlassianAccount,
   createOrg,
   deleteOrg,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
@@ -59,7 +59,7 @@ function SettingsPage() {
             </div>
           </CardContent>
         </Card>
-        <JiraAccountCard />
+        <AtlassianAccountCard />
         <Card>
           <CardHeader>
             <CardTitle>GitHub Account</CardTitle>
@@ -246,9 +246,9 @@ function OrgRow({ org, onDelete, isDefault }: { org: Org; onDelete: () => void; 
   )
 }
 
-function JiraAccountCard() {
-  const { data, isLoading, refetch } = useQuery(getJiraAccount, {})
-  const unlinkMutation = useMutation(unlinkJiraAccount, {
+function AtlassianAccountCard() {
+  const { data, isLoading, refetch } = useQuery(getAtlassianAccount, {})
+  const unlinkMutation = useMutation(unlinkAtlassianAccount, {
     onSuccess: () => refetch(),
   })
 
@@ -257,9 +257,9 @@ function JiraAccountCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Jira Account</CardTitle>
+        <CardTitle>Atlassian Account</CardTitle>
         <CardDescription>
-          Link your Atlassian account to receive webhook notifications for Jira issues on your tasks.
+          Link your Atlassian account to receive notifications for Jira issues on your tasks.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -286,10 +286,10 @@ function JiraAccountCard() {
             </Button>
           </div>
         ) : (
-          <a href="/jira/login">
+          <a href="/atlassian/login">
             <Button>
               <ExternalLink className="h-4 w-4" />
-              Link Jira Account
+              Link Atlassian Account
             </Button>
           </a>
         )}

@@ -108,14 +108,14 @@ var ServerCommand = &cli.Command{
 			Sources: cli.EnvVars("XAGENT_GITHUB_WEBHOOK_SECRET"),
 		},
 		&cli.StringFlag{
-			Name:    "jira-client-id",
-			Usage:   "Atlassian OAuth client ID (for Jira account linking)",
-			Sources: cli.EnvVars("XAGENT_JIRA_CLIENT_ID"),
+			Name:    "atlassian-client-id",
+			Usage:   "Atlassian OAuth client ID (for account linking)",
+			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_ID"),
 		},
 		&cli.StringFlag{
-			Name:    "jira-client-secret",
+			Name:    "atlassian-client-secret",
 			Usage:   "Atlassian OAuth client secret",
-			Sources: cli.EnvVars("XAGENT_JIRA_CLIENT_SECRET"),
+			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_SECRET"),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -212,10 +212,10 @@ var ServerCommand = &cli.Command{
 				WebhookSecret: cmd.String("github-webhook-secret"),
 			}
 		}
-		if jiraClientID := cmd.String("jira-client-id"); jiraClientID != "" {
-			opts.Jira = &server.JiraConfig{
-				ClientID:     jiraClientID,
-				ClientSecret: cmd.String("jira-client-secret"),
+		if atlassianClientID := cmd.String("atlassian-client-id"); atlassianClientID != "" {
+			opts.Atlassian = &server.AtlassianConfig{
+				ClientID:     atlassianClientID,
+				ClientSecret: cmd.String("atlassian-client-secret"),
 			}
 		}
 		srv := server.New(opts)

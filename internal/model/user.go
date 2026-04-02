@@ -44,11 +44,11 @@ func (u *User) HasAtlassian() bool {
 }
 
 // AtlassianAccountProto converts the user's Atlassian info to the protobuf representation.
-func (u *User) AtlassianAccountProto() *xagentv1.JiraAccount {
+func (u *User) AtlassianAccountProto() *xagentv1.AtlassianAccount {
 	if !u.HasAtlassian() {
 		return nil
 	}
-	return &xagentv1.JiraAccount{
+	return &xagentv1.AtlassianAccount{
 		AtlassianAccountId: u.AtlassianAccountID,
 		AtlassianUsername:  u.AtlassianUsername,
 		CreatedAt:          timestamppb.New(u.CreatedAt),

@@ -1,4 +1,4 @@
-package jiraauth
+package atlassianauth
 
 import (
 	"crypto/rand"
@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	stateCookie = "xagent_jira_state"
+	stateCookie = "xagent_atlassian_state"
 	stateTTL    = 10 * time.Minute
 )
 
@@ -76,7 +76,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookie,
 		Value:    state,
-		Path:     "/jira/callback",
+		Path:     "/atlassian/callback",
 		MaxAge:   int(stateTTL.Seconds()),
 		HttpOnly: true,
 		Secure:   true,
@@ -123,7 +123,7 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookie,
 		Value:    "",
-		Path:     "/jira/callback",
+		Path:     "/atlassian/callback",
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,

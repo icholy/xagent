@@ -43,8 +43,8 @@ service XAgentService {
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
   rpc GetGitHubAccount(GetGitHubAccountRequest) returns (GetGitHubAccountResponse);
   rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
-  rpc GetJiraAccount(GetJiraAccountRequest) returns (GetJiraAccountResponse);
-  rpc UnlinkJiraAccount(UnlinkJiraAccountRequest) returns (UnlinkJiraAccountResponse);
+  rpc GetAtlassianAccount(GetAtlassianAccountRequest) returns (GetAtlassianAccountResponse);
+  rpc UnlinkAtlassianAccount(UnlinkAtlassianAccountRequest) returns (UnlinkAtlassianAccountResponse);
   rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
   rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
   rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
@@ -435,21 +435,21 @@ message UnlinkGitHubAccountRequest {}
 
 message UnlinkGitHubAccountResponse {}
 
-message JiraAccount {
+message AtlassianAccount {
   string atlassian_account_id = 1;
   string atlassian_username = 3;
   google.protobuf.Timestamp created_at = 2;
 }
 
-message GetJiraAccountRequest {}
+message GetAtlassianAccountRequest {}
 
-message GetJiraAccountResponse {
-  JiraAccount account = 1;
+message GetAtlassianAccountResponse {
+  AtlassianAccount account = 1;
 }
 
-message UnlinkJiraAccountRequest {}
+message UnlinkAtlassianAccountRequest {}
 
-message UnlinkJiraAccountResponse {}
+message UnlinkAtlassianAccountResponse {}
 
 message Org {
   int64 id = 1;
