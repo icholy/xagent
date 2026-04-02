@@ -230,28 +230,26 @@ func matchesRule(event *Event, rule *model.RoutingRule) bool {
 @mention syntax differs between platforms:
 
 - **GitHub**: `@username` in markdown — match `@<value>` as a word boundary.
-- **Jira/Atlassian**: `[~accountId:<id>]` in Atlassian Document Format, but `@displayName` in rendered/plain text webhooks.
+- **Jira/Atlassian**: `[~accountid:<account-id>]` in webhook comment bodies. For example: `[~accountid:712020:7a3600f2-2543-459b-8178-fa99fde08d48]`.
 
 ```go
-func containsMention(eventType EventType, body string, username string) bool {
+func containsMention(eventType EventType, body string, value string) bool {
     switch eventType {
     case EventTypeGitHub:
         // Match @username with word boundary
-        pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(username) + `(?:$|[\s,.)!?])`
+        pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(value) + `(?:$|[\s,.)!?])`
         matched, _ := regexp.MatchString(pattern, body)
         return matched
     case EventTypeAtlassian:
-        // Jira webhook comment body contains @displayName mentions
-        pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(username) + `(?:$|[\s,.)!?])`
-        matched, _ := regexp.MatchString(pattern, body)
-        return matched
+        // Jira webhook comments use [~accountid:<id>] format
+        return strings.Contains(body, "[~accountid:"+value+"]")
     default:
         return false
     }
 }
 ```
 
-For mention rules, the `value` field stores the **platform username** (e.g. GitHub username or Atlassian display name). The user model already has `github_username` and `atlassian_username` fields that can populate the UI when creating mention rules.
+For GitHub mention rules, the `value` field stores the **GitHub username** (e.g. `icholy`). For Atlassian mention rules, the `value` field stores the **Atlassian account ID** (e.g. `712020:7a3600f2-2543-459b-8178-fa99fde08d48`). The user model already has `github_username` and `atlassian_account_id` fields that can populate the UI when creating mention rules.
 
 > **Note:** Compiling regexps per-event is fine for webhook traffic volumes. If it becomes a concern, pre-compile patterns when loading rules.
 
@@ -334,9 +332,13 @@ The trade-off is that individual rules can't be queried or constrained at the DB
 
 **Chosen: per-org only.** A global/default rule set with per-org overrides adds complexity (inheritance, precedence). The `defaultRules()` fallback for unconfigured orgs achieves the same practical effect with simpler semantics: either you have custom rules or you get the default.
 
-### Mention value: username vs account ID
+### Mention value: platform-native identifiers
 
-**Chosen: username (display name).** Using the platform username (e.g. `icholy` on GitHub, display name on Atlassian) is more intuitive for rule configuration. The alternative — storing platform-specific account IDs — is more precise but harder for users to configure. The trade-off is that username changes could break mention rules, but this is rare and easy to fix by updating the rule value.
+**Chosen: GitHub username for GitHub, Atlassian account ID for Atlassian.** Each platform uses the identifier that appears in its webhook payloads:
+- GitHub comments contain `@username`, so mention rules use the GitHub username (e.g. `icholy`).
+- Jira comments contain `[~accountid:<id>]`, so mention rules use the Atlassian account ID (e.g. `712020:7a3600f2-2543-459b-8178-fa99fde08d48`).
+
+The trade-off is that Atlassian account IDs are opaque to users, but the UI can display the associated username alongside the ID. GitHub usernames can change, but this is rare.
 
 ### Regex matching vs simple string matching for mentions
 
@@ -348,10 +350,8 @@ The trade-off is that individual rules can't be queried or constrained at the DB
 
 ## Open Questions
 
-1. **Atlassian mention format:** Jira's internal format uses `[~accountId:xxx]` but webhook payloads may contain rendered `@displayName`. Need to verify the exact format in Jira Cloud webhook comment bodies to ensure mention matching works reliably.
+1. **Rule limits:** Should there be a maximum number of routing rules per org? Unbounded rules could lead to performance issues if an org creates hundreds. A practical limit (e.g. 50) would be reasonable.
 
-2. **Rule limits:** Should there be a maximum number of routing rules per org? Unbounded rules could lead to performance issues if an org creates hundreds. A practical limit (e.g. 50) would be reasonable.
+2. **Audit logging:** Should routing rule changes be audit-logged? The current system has audit logs for task state changes. Routing rule changes affect event flow and could be important to trace.
 
-3. **Audit logging:** Should routing rule changes be audit-logged? The current system has audit logs for task state changes. Routing rule changes affect event flow and could be important to trace.
-
-4. **Rule testing/preview:** Should there be an API to test a rule against a sample event body without actually creating the rule? This would help users verify their prefix or mention patterns before deploying them.
+3. **Rule testing/preview:** Should there be an API to test a rule against a sample event body without actually creating the rule? This would help users verify their prefix or mention patterns before deploying them.
