@@ -5,12 +5,13 @@ import (
 
 	"github.com/icholy/xagent/internal/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
 
 func TestCreateOrg(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, nil)
 
 	resp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{
@@ -24,7 +25,7 @@ func TestCreateOrg(t *testing.T) {
 
 func TestListOrgs(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, nil)
 	_, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "org-1"})
 	assert.NilError(t, err)
@@ -40,7 +41,7 @@ func TestListOrgs(t *testing.T) {
 
 func TestDeleteOrg(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, nil)
 	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "to-delete"})
 	assert.NilError(t, err)
@@ -55,7 +56,7 @@ func TestDeleteOrg(t *testing.T) {
 
 func TestDeleteOrg_Permissions(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, nil)
 	ctxB, _ := createTestOrg(t, srv, nil)
 	createResp, err := srv.CreateOrg(ctxA, &xagentv1.CreateOrgRequest{Name: "user-a-org"})
@@ -68,7 +69,7 @@ func TestDeleteOrg_Permissions(t *testing.T) {
 
 func TestDeleteOrg_DefaultOrg(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, nil)
 	user := apiauth.Caller(ctx)
 
@@ -79,7 +80,7 @@ func TestDeleteOrg_DefaultOrg(t *testing.T) {
 
 func TestAddAndListOrgMembers(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	owner, _ := createTestOrg(t, srv, nil)
 	member, _ := createTestOrg(t, srv, nil)
 	memberEmail := apiauth.Caller(member).ID + "@test.com"
@@ -97,7 +98,7 @@ func TestAddAndListOrgMembers(t *testing.T) {
 
 func TestDeleteOrg_WithTasks(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, nil)
 
 	// Create a second org and switch to it.
@@ -138,7 +139,7 @@ func TestDeleteOrg_WithTasks(t *testing.T) {
 
 func TestRemoveOrgMember(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	owner, _ := createTestOrg(t, srv, nil)
 	member, _ := createTestOrg(t, srv, nil)
 	memberUser := apiauth.Caller(member)

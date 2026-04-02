@@ -11,7 +11,7 @@ import (
 func TestUploadLogs(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
@@ -36,7 +36,7 @@ func TestUploadLogs(t *testing.T) {
 func TestUploadLogs_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctxB, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
@@ -61,7 +61,7 @@ func TestUploadLogs_Permissions(t *testing.T) {
 func TestListLogs(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Logs",
@@ -94,7 +94,7 @@ func TestListLogs(t *testing.T) {
 func TestListLogs_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctxB, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{

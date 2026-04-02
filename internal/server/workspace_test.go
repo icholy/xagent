@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
 
 func TestRegisterWorkspaces(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, nil)
 
 	// Register workspaces
@@ -35,7 +36,7 @@ func TestRegisterWorkspaces(t *testing.T) {
 func TestRegisterWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, nil)
 	ctxB, _ := createTestOrg(t, srv, nil)
 
@@ -73,7 +74,7 @@ func TestRegisterWorkspaces_Permissions(t *testing.T) {
 func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 	t.Parallel()
 	// Arrange - both users register workspaces for the same runner ID
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, nil)
 	ctxB, _ := createTestOrg(t, srv, nil)
 
@@ -118,7 +119,7 @@ func TestRegisterWorkspaces_SameRunnerDifferentUsers(t *testing.T) {
 
 func TestClearWorkspaces(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, nil)
 
 	// Register workspaces
@@ -148,7 +149,7 @@ func TestClearWorkspaces(t *testing.T) {
 
 func TestClearWorkspaces_Permissions(t *testing.T) {
 	t.Parallel()
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, nil)
 	ctxB, _ := createTestOrg(t, srv, nil)
 

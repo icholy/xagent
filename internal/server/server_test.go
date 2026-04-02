@@ -15,12 +15,3 @@ func createTestOrg(t *testing.T, srv *Server, opts *teststore.OrgOptions) (conte
 	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{ID: org.UserID, OrgID: org.OrgID})
 	return ctx, org
 }
-
-// setupTestServer creates a test server with a clean database.
-// Requires TEST_DATABASE_URL environment variable to be set.
-func setupTestServer(t *testing.T) *Server {
-	t.Helper()
-	return New(Options{
-		Store: teststore.New(t),
-	})
-}

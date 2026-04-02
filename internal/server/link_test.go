@@ -11,7 +11,7 @@ import (
 func TestCreateLink(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Link",
@@ -39,7 +39,7 @@ func TestCreateLink(t *testing.T) {
 func TestCreateLink_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctxB, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
@@ -63,7 +63,7 @@ func TestCreateLink_Permissions(t *testing.T) {
 func TestListLinks(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task with Links",
@@ -97,7 +97,7 @@ func TestListLinks(t *testing.T) {
 func TestListLinks_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctxB, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
@@ -126,7 +126,7 @@ func TestListLinks_Permissions(t *testing.T) {
 func TestFindLinksByURL(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
@@ -166,7 +166,7 @@ func TestFindLinksByURL(t *testing.T) {
 func TestFindLinksByURL_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	srv := setupTestServer(t)
+	srv := New(Options{Store: teststore.New(t)})
 	ctxA, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctxB, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskA, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
