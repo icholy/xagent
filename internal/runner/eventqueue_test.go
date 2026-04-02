@@ -8,6 +8,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"connectrpc.com/connect"
+
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -139,4 +141,29 @@ func TestEventQueue_RunRetriesAfterInterval(t *testing.T) {
 		assert.Equal(t, q.Len(), 0)
 		assert.Equal(t, calls, 2)
 	})
+}
+
+func TestEventQueue_DrainDropsPermanentErrors(t *testing.T) {
+	calls := 0
+	mock := &xagentclient.ClientMock{
+		SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+			calls++
+			taskID := req.Events[0].TaskId
+			if taskID == 1 {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", taskID))
+			}
+			return &xagentv1.SubmitRunnerEventsResponse{}, nil
+		},
+	}
+
+	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
+
+	q.Enqueue(1, model.RunnerEventStopped, 0) // will get NotFound
+	q.Enqueue(2, model.RunnerEventStarted, 0) // should still be delivered
+	assert.Equal(t, q.Len(), 2)
+
+	// Drain should drop the first event and deliver the second
+	assert.NilError(t, q.Drain(t.Context()))
+	assert.Equal(t, q.Len(), 0)
+	assert.Equal(t, calls, 2)
 }
