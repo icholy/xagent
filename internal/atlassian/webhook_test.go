@@ -50,29 +50,32 @@ func TestVerifyWebhook(t *testing.T) {
 	}
 }
 
-func TestIssueURL(t *testing.T) {
+func TestIssueBrowseURL(t *testing.T) {
 	tests := []struct {
 		name     string
-		selfLink string
-		issueKey string
+		issue    Issue
 		expected string
 	}{
 		{
-			name:     "ValidSelfLink",
-			selfLink: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
-			issueKey: "PROJ-123",
+			name: "ValidSelfLink",
+			issue: Issue{
+				Key:  "PROJ-123",
+				Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+			},
 			expected: "https://mycompany.atlassian.net/browse/PROJ-123",
 		},
 		{
-			name:     "InvalidSelfLink",
-			selfLink: "invalid-url",
-			issueKey: "PROJ-123",
+			name: "InvalidSelfLink",
+			issue: Issue{
+				Key:  "PROJ-123",
+				Self: "invalid-url",
+			},
 			expected: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IssueURL(tt.selfLink, tt.issueKey)
+			got := tt.issue.BrowseURL()
 			assert.Equal(t, got, tt.expected)
 		})
 	}

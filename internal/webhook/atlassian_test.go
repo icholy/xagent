@@ -138,17 +138,13 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 	}
 }
 
-func signPayload(body []byte, secret string) string {
-	return atlassian.SignWebhook(body, secret)
-}
-
 func makeAtlassianWebhookRequest(t *testing.T, orgID int64, payload any, secret string) *http.Request {
 	t.Helper()
 	body, err := json.Marshal(payload)
 	assert.NilError(t, err)
 	req := httptest.NewRequest(http.MethodPost, "/webhook/atlassian?org="+strconv.FormatInt(orgID, 10), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Hub-Signature", signPayload(body, secret))
+	req.Header.Set("X-Hub-Signature", atlassian.SignWebhook(body, secret))
 	return req
 }
 

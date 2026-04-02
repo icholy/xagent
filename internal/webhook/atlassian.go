@@ -200,7 +200,7 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 			return nil, nil
 		}
 
-		url := atlassian.IssueURL(payload.Issue.Self, payload.Issue.Key)
+		url := payload.Issue.BrowseURL()
 		if url == "" {
 			return nil, nil
 		}

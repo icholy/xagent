@@ -49,14 +49,14 @@ func ParseWebhook(body []byte) (*WebhookPayload, error) {
 	return &payload, nil
 }
 
-// IssueURL constructs the browse URL for a Jira issue from the API self link and issue key.
+// BrowseURL constructs the browse URL for a Jira issue from the API self link and issue key.
 // The self link is like "https://mycompany.atlassian.net/rest/api/2/issue/12345".
-func IssueURL(selfLink, issueKey string) string {
-	idx := strings.Index(selfLink, "/rest/")
+func (i *Issue) BrowseURL() string {
+	idx := strings.Index(i.Self, "/rest/")
 	if idx == -1 {
 		return ""
 	}
-	return selfLink[:idx] + "/browse/" + issueKey
+	return i.Self[:idx] + "/browse/" + i.Key
 }
 
 // SignWebhook computes the HMAC-SHA256 signature for a webhook payload.
