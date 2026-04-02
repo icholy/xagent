@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
 
@@ -11,7 +12,7 @@ func TestProcessEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 
 	// Create two tasks with links to the same URL with subscribe=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -102,7 +103,7 @@ func TestProcessEventWithoutURL(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 
 	// Create an event without URL
 	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
@@ -125,7 +126,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -165,7 +166,7 @@ func TestProcessEventWithSubscribeFalse(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -205,7 +206,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 
 	task, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
@@ -254,7 +255,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 
 	// Create two tasks with links to the same URL with subscribe=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -358,8 +359,8 @@ func TestProcessEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, defaultWorkspaces)
-	ctxB, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctxA, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctxB, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Url:         "https://github.com/example/repo/pull/123",

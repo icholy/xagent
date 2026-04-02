@@ -11,7 +11,7 @@ import (
 func TestSubmitRunnerEvents(t *testing.T) {
 	t.Parallel()
 	srv := setupTestServer(t)
-	ctx, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctx, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 
 	// Create a task (starts as pending with start command)
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
@@ -70,8 +70,8 @@ func TestSubmitRunnerEvents_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
-	ctxA, _ := createTestOrg(t, srv, defaultWorkspaces)
-	ctxB, _ := createTestOrg(t, srv, defaultWorkspaces)
+	ctxA, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctxB, _ := createTestOrg(t, srv, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
 		Name:      "User A's Task",
 		Runner:    "test-runner",

@@ -8,13 +8,7 @@ import (
 	"github.com/icholy/xagent/internal/store/teststore"
 )
 
-var defaultWorkspaces = &teststore.OrgOptions{
-	Workspaces: []teststore.WorkspaceOptions{
-		{RunnerID: "test-runner", Name: "test-workspace"},
-	},
-}
-
-// createTestOrg creates a user, org, and authenticated context with default workspaces.
+// createTestOrg creates a user, org, and authenticated context.
 func createTestOrg(t *testing.T, srv *Server, opts *teststore.OrgOptions) (context.Context, *teststore.Org) {
 	t.Helper()
 	org := teststore.CreateOrg(t, srv.store, opts)
