@@ -12,13 +12,13 @@ This proposal mirrors the existing GitHub integration pattern: OAuth account lin
 
 ### 1. Database Migration
 
-New migration `internal/store/sql/migrations/015_jira.sql`:
+New migration `internal/store/sql/migrations/015_atlassian.sql`:
 
 ```sql
 ALTER TABLE users ADD COLUMN atlassian_account_id TEXT;
 CREATE UNIQUE INDEX idx_users_atlassian_account_id ON users(atlassian_account_id);
 
-ALTER TABLE orgs ADD COLUMN jira_webhook_secret TEXT NOT NULL DEFAULT '';
+ALTER TABLE orgs ADD COLUMN atlassian_webhook_secret TEXT NOT NULL DEFAULT '';
 ```
 
 **Rationale:** Same pattern as GitHub — the Atlassian account ID is stored directly on the `users` table (nullable, unique indexed) rather than in a separate table. The webhook secret is per-org because each org has its own Jira Cloud instance, unlike GitHub where a single GitHub App webhook secret is configured globally.
@@ -49,12 +49,12 @@ WHERE id = $1;
 Add to `internal/store/sql/queries/org.sql`:
 
 ```sql
--- name: GetOrgJiraWebhookSecret :one
-SELECT jira_webhook_secret FROM orgs WHERE id = $1;
+-- name: GetOrgAtlassianWebhookSecret :one
+SELECT atlassian_webhook_secret FROM orgs WHERE id = $1;
 
--- name: SetOrgJiraWebhookSecret :exec
+-- name: SetOrgAtlassianWebhookSecret :exec
 UPDATE orgs SET
-    jira_webhook_secret = $2,
+    atlassian_webhook_secret = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1;
 ```
@@ -82,11 +82,11 @@ func (u *User) HasAtlassian() bool {
     return u.AtlassianAccountID != ""
 }
 
-func (u *User) AtlassianAccountProto() *xagentv1.JiraAccount {
+func (u *User) AtlassianAccountProto() *xagentv1.AtlassianAccount {
     if !u.HasAtlassian() {
         return nil
     }
-    return &xagentv1.JiraAccount{
+    return &xagentv1.AtlassianAccount{
         AtlassianAccountId: u.AtlassianAccountID,
         CreatedAt:          timestamppb.New(u.CreatedAt),
     }
@@ -97,13 +97,13 @@ Update `internal/model/org.go`:
 
 ```go
 type Org struct {
-    ID               int64     `json:"id"`
-    Name             string    `json:"name"`
-    Owner            string    `json:"owner"`
-    Archived         bool      `json:"archived"`
-    JiraWebhookSecret string  `json:"jira_webhook_secret"`
-    CreatedAt        time.Time `json:"created_at"`
-    UpdatedAt        time.Time `json:"updated_at"`
+    ID                     int64     `json:"id"`
+    Name                   string    `json:"name"`
+    Owner                  string    `json:"owner"`
+    Archived               bool      `json:"archived"`
+    AtlassianWebhookSecret string   `json:"atlassian_webhook_secret"`
+    CreatedAt              time.Time `json:"created_at"`
+    UpdatedAt              time.Time `json:"updated_at"`
 }
 ```
 
@@ -113,46 +113,46 @@ Add to `proto/xagent/v1/xagent.proto`:
 
 ```protobuf
 // In service XAgentService:
-rpc GetJiraAccount(GetJiraAccountRequest) returns (GetJiraAccountResponse);
-rpc UnlinkJiraAccount(UnlinkJiraAccountRequest) returns (UnlinkJiraAccountResponse);
-rpc GetJiraWebhookSecret(GetJiraWebhookSecretRequest) returns (GetJiraWebhookSecretResponse);
-rpc GenerateJiraWebhookSecret(GenerateJiraWebhookSecretRequest) returns (GenerateJiraWebhookSecretResponse);
+rpc GetAtlassianAccount(GetAtlassianAccountRequest) returns (GetAtlassianAccountResponse);
+rpc UnlinkAtlassianAccount(UnlinkAtlassianAccountRequest) returns (UnlinkAtlassianAccountResponse);
+rpc GetAtlassianWebhookSecret(GetAtlassianWebhookSecretRequest) returns (GetAtlassianWebhookSecretResponse);
+rpc GenerateAtlassianWebhookSecret(GenerateAtlassianWebhookSecretRequest) returns (GenerateAtlassianWebhookSecretResponse);
 
 // Messages:
-message JiraAccount {
+message AtlassianAccount {
   string atlassian_account_id = 1;
   google.protobuf.Timestamp created_at = 2;
 }
 
-message GetJiraAccountRequest {}
-message GetJiraAccountResponse {
-  JiraAccount account = 1;
+message GetAtlassianAccountRequest {}
+message GetAtlassianAccountResponse {
+  AtlassianAccount account = 1;
 }
 
-message UnlinkJiraAccountRequest {}
-message UnlinkJiraAccountResponse {}
+message UnlinkAtlassianAccountRequest {}
+message UnlinkAtlassianAccountResponse {}
 
-message GetJiraWebhookSecretRequest {}
-message GetJiraWebhookSecretResponse {
+message GetAtlassianWebhookSecretRequest {}
+message GetAtlassianWebhookSecretResponse {
   string secret = 1;
   string webhook_url = 2;
 }
 
-message GenerateJiraWebhookSecretRequest {}
-message GenerateJiraWebhookSecretResponse {
+message GenerateAtlassianWebhookSecretRequest {}
+message GenerateAtlassianWebhookSecretResponse {
   string secret = 1;
   string webhook_url = 2;
 }
 ```
 
-`GetJiraAccount` returns the current user's linked Atlassian account (mirrors `GetGitHubAccount`). `GetJiraWebhookSecret` / `GenerateJiraWebhookSecret` are org-scoped — they operate on the caller's current org.
+`GetAtlassianAccount` returns the current user's linked Atlassian account (mirrors `GetGitHubAccount`). `GetAtlassianWebhookSecret` / `GenerateAtlassianWebhookSecret` are org-scoped — they operate on the caller's current org.
 
 ### 5. Atlassian OAuth Flow
 
-Create `internal/jiraauth/jiraauth.go` mirroring `internal/ghauth/ghauth.go`:
+Create `internal/atlassianauth/atlassianauth.go` mirroring `internal/ghauth/ghauth.go`:
 
 ```go
-package jiraauth
+package atlassianauth
 
 type Config struct {
     ClientID     string
@@ -175,8 +175,8 @@ Key differences from `ghauth`:
 - **OAuth endpoint:** `https://auth.atlassian.com/authorize` / `https://auth.atlassian.com/oauth/token` (Atlassian OAuth 2.0 3LO)
 - **Scopes:** `read:me` (to fetch account ID)
 - **User fetch:** After token exchange, call `GET https://api.atlassian.com/me` with Bearer token to get `account_id`
-- **State cookie:** `xagent_jira_state` (same TTL and security flags as GitHub)
-- **Routes:** `/login` and `/callback` (mounted at `/jira/`)
+- **State cookie:** `xagent_atlassian_state` (same TTL and security flags as GitHub)
+- **Routes:** `/login` and `/callback` (mounted at `/atlassian/`)
 - **OnSuccess callback:** Passes `accountID string` instead of `*github.User`
 
 The `/me` endpoint returns:
@@ -192,10 +192,10 @@ The `/me` endpoint returns:
 
 ### 6. Webhook Handler
 
-Create `internal/webhook/jira.go` mirroring `internal/webhook/github.go`:
+Create `internal/webhook/atlassian.go` mirroring `internal/webhook/github.go`:
 
 ```go
-type JiraHandler struct {
+type AtlassianHandler struct {
     Log   *slog.Logger
     Store *store.Store
 }
@@ -203,12 +203,12 @@ type JiraHandler struct {
 
 **Key difference from `GitHubHandler`:** No `WebhookSecret` field on the handler. The Jira webhook secret is per-org, looked up from the database at request time using the `org` query parameter.
 
-Endpoint: `POST /webhook/jira?org=<org_id>`
+Endpoint: `POST /webhook/atlassian?org=<org_id>`
 
 Processing steps:
 
 1. Extract `org_id` from `org` query parameter
-2. Look up the org's `jira_webhook_secret` from the database
+2. Look up the org's `atlassian_webhook_secret` from the database
 3. Verify HMAC-SHA256 signature using `X-Hub-Signature` header (Jira Cloud uses the same `X-Hub-Signature` header format as GitHub)
 4. Parse the webhook payload JSON
 5. Extract event details (comment body, author account ID, issue URL)
@@ -225,10 +225,10 @@ Processing steps:
 - `comment_created` — A comment was added to an issue. Extract `comment.author.accountId`, comment body, and issue URL.
 - `comment_updated` — A comment was updated. Same extraction as `comment_created`.
 
-The `extractJiraWebhookEvent` function mirrors `extractGitHubWebhookEvent`:
+The `extractAtlassianWebhookEvent` function mirrors `extractGitHubWebhookEvent`:
 
 ```go
-type jiraWebhookEvent struct {
+type atlassianWebhookEvent struct {
     description          string
     data                 string
     url                  string
@@ -242,11 +242,11 @@ type jiraWebhookEvent struct {
 
 Add to `internal/server/server.go`:
 
-**GetJiraAccount:**
+**GetAtlassianAccount:**
 ```go
-func (s *Server) GetJiraAccount(ctx context.Context, req *xagentv1.GetJiraAccountRequest) (*xagentv1.GetJiraAccountResponse, error) {
+func (s *Server) GetAtlassianAccount(ctx context.Context, req *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error) {
     caller := apiauth.MustCaller(ctx)
-    resp := &xagentv1.GetJiraAccountResponse{}
+    resp := &xagentv1.GetAtlassianAccountResponse{}
     user, err := s.store.GetUser(ctx, nil, caller.ID)
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {
@@ -259,23 +259,23 @@ func (s *Server) GetJiraAccount(ctx context.Context, req *xagentv1.GetJiraAccoun
 }
 ```
 
-**UnlinkJiraAccount:** Clear `atlassian_account_id` on the caller's user record.
+**UnlinkAtlassianAccount:** Clear `atlassian_account_id` on the caller's user record.
 
-**GetJiraWebhookSecret:** Return the current org's `jira_webhook_secret` and the webhook URL (`{baseURL}/webhook/jira?org={orgID}`). Uses `caller.OrgID` from context.
+**GetAtlassianWebhookSecret:** Return the current org's `atlassian_webhook_secret` and the webhook URL (`{baseURL}/webhook/atlassian?org={orgID}`). Uses `caller.OrgID` from context.
 
-**GenerateJiraWebhookSecret:** Generate a cryptographically random secret (e.g. 32 bytes, hex-encoded), store it on the org via `SetOrgJiraWebhookSecret`, and return it along with the webhook URL. This is idempotent — calling it again replaces the previous secret.
+**GenerateAtlassianWebhookSecret:** Generate a cryptographically random secret (e.g. 32 bytes, hex-encoded), store it on the org via `SetOrgAtlassianWebhookSecret`, and return it along with the webhook URL. This is idempotent — calling it again replaces the previous secret.
 
 ### 8. Server HTTP Routes
 
 Add to `server.Handler()`:
 
 ```go
-// Jira OAuth routes (conditional on Jira config)
-if s.jira != nil {
-    jh := jiraauth.New(jiraauth.Config{
-        ClientID:     s.jira.ClientID,
-        ClientSecret: s.jira.ClientSecret,
-        RedirectURL:  s.baseURL + "/jira/callback",
+// Atlassian OAuth routes (conditional on Atlassian config)
+if s.atlassian != nil {
+    ah := atlassianauth.New(atlassianauth.Config{
+        ClientID:     s.atlassian.ClientID,
+        ClientSecret: s.atlassian.ClientSecret,
+        RedirectURL:  s.baseURL + "/atlassian/callback",
         Log:          s.log,
         OnSuccess: func(w http.ResponseWriter, r *http.Request, accountID string) {
             caller := apiauth.Caller(r.Context())
@@ -284,23 +284,23 @@ if s.jira != nil {
                 return
             }
             if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, accountID); err != nil {
-                http.Error(w, "failed to link Jira account", http.StatusInternalServerError)
+                http.Error(w, "failed to link Atlassian account", http.StatusInternalServerError)
                 return
             }
             http.Redirect(w, r, "/ui/settings", http.StatusFound)
         },
     })
-    mux.Handle("/jira/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/jira", jh)))
+    mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", ah)))
 }
 
-// Jira webhook (always registered — uses per-org secrets from DB)
-mux.Handle("/webhook/jira", &webhook.JiraHandler{
+// Atlassian webhook (always registered — uses per-org secrets from DB)
+mux.Handle("/webhook/atlassian", &webhook.AtlassianHandler{
     Log:   s.log,
     Store: s.store,
 })
 ```
 
-**Important:** The webhook endpoint is **always registered** (not gated on Jira config) because webhook secrets are per-org in the database. Even without OAuth configured, orgs can still receive webhooks. The OAuth routes are conditional on having `--jira-client-id` / `--jira-client-secret` configured.
+**Important:** The webhook endpoint is **always registered** (not gated on Atlassian config) because webhook secrets are per-org in the database. Even without OAuth configured, orgs can still receive webhooks. The OAuth routes are conditional on having `--atlassian-client-id` / `--atlassian-client-secret` configured.
 
 ### 9. CLI Flags
 
@@ -308,14 +308,14 @@ Add to `internal/command/server.go`:
 
 ```go
 &cli.StringFlag{
-    Name:    "jira-client-id",
+    Name:    "atlassian-client-id",
     Usage:   "Atlassian OAuth client ID (for Jira account linking)",
-    Sources: cli.EnvVars("XAGENT_JIRA_CLIENT_ID"),
+    Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_ID"),
 },
 &cli.StringFlag{
-    Name:    "jira-client-secret",
+    Name:    "atlassian-client-secret",
     Usage:   "Atlassian OAuth client secret",
-    Sources: cli.EnvVars("XAGENT_JIRA_CLIENT_SECRET"),
+    Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_SECRET"),
 },
 ```
 
@@ -324,10 +324,10 @@ No global webhook secret flag — secrets are per-org.
 Configuration passed to server:
 
 ```go
-if jiraClientID := cmd.String("jira-client-id"); jiraClientID != "" {
-    opts.Jira = &server.JiraConfig{
-        ClientID:     jiraClientID,
-        ClientSecret: cmd.String("jira-client-secret"),
+if atlassianClientID := cmd.String("atlassian-client-id"); atlassianClientID != "" {
+    opts.Atlassian = &server.AtlassianConfig{
+        ClientID:     atlassianClientID,
+        ClientSecret: cmd.String("atlassian-client-secret"),
     }
 }
 ```
@@ -335,40 +335,40 @@ if jiraClientID := cmd.String("jira-client-id"); jiraClientID != "" {
 Add to `server.go`:
 
 ```go
-type JiraConfig struct {
+type AtlassianConfig struct {
     ClientID     string
     ClientSecret string
 }
 ```
 
-And add `Jira *JiraConfig` field to both `Options` and `Server`.
+And add `Atlassian *AtlassianConfig` field to both `Options` and `Server`.
 
 ### 10. Settings UI
 
-Add Jira section to `webui/src/routes/settings.tsx`:
+Add Atlassian section to `webui/src/routes/settings.tsx`:
 
-**Jira Account Card** — mirrors the GitHub Account card:
+**Atlassian Account Card** — mirrors the GitHub Account card:
 
-- If linked: show Atlassian account ID with an "Unlink" button (calls `unlinkJiraAccount` RPC)
-- If not linked: show "Link Jira Account" button (links to `/jira/login`)
-- Uses `getJiraAccount` query
+- If linked: show Atlassian account ID with an "Unlink" button (calls `unlinkAtlassianAccount` RPC)
+- If not linked: show "Link Atlassian Account" button (links to `/atlassian/login`)
+- Uses `getAtlassianAccount` query
 
-**Jira Webhook Card** — new, per-org:
+**Atlassian Webhook Card** — new, per-org:
 
-- Shows the webhook URL for the current org: `{baseURL}/webhook/jira?org={orgID}`
+- Shows the webhook URL for the current org: `{baseURL}/webhook/atlassian?org={orgID}`
 - Shows the current webhook secret (masked) or "No secret configured"
-- "Generate Secret" button calls `generateJiraWebhookSecret` RPC and displays the new secret
+- "Generate Secret" button calls `generateAtlassianWebhookSecret` RPC and displays the new secret
 - Instructions text explaining that the user needs to register this webhook URL in their Jira Cloud instance settings
 
 Both cards use the same `useQuery` / `useMutation` patterns from `@connectrpc/connect-query` as the existing GitHub card.
 
 ### 11. Implementation Order
 
-1. Database migration (`015_jira.sql`) + store queries
+1. Database migration (`015_atlassian.sql`) + store queries
 2. Model updates (`user.go` + `org.go`)
 3. Proto definitions + `mise run generate`
-4. Atlassian OAuth flow (`internal/jiraauth/`)
-5. Webhook handler (`internal/webhook/jira.go`)
+4. Atlassian OAuth flow (`internal/atlassianauth/`)
+5. Webhook handler (`internal/webhook/atlassian.go`)
 6. Server RPC handlers
 7. Server HTTP route registration
 8. CLI flags
