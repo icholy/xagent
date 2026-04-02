@@ -43,6 +43,8 @@ service XAgentService {
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
   rpc GetGitHubAccount(GetGitHubAccountRequest) returns (GetGitHubAccountResponse);
   rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
+  rpc GetAtlassianAccount(GetAtlassianAccountRequest) returns (GetAtlassianAccountResponse);
+  rpc UnlinkAtlassianAccount(UnlinkAtlassianAccountRequest) returns (UnlinkAtlassianAccountResponse);
   rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
   rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
   rpc DeleteOrg(DeleteOrgRequest) returns (DeleteOrgResponse);
@@ -432,6 +434,22 @@ message GetGitHubAccountResponse {
 message UnlinkGitHubAccountRequest {}
 
 message UnlinkGitHubAccountResponse {}
+
+message AtlassianAccount {
+  string atlassian_account_id = 1;
+  string atlassian_username = 3;
+  google.protobuf.Timestamp created_at = 2;
+}
+
+message GetAtlassianAccountRequest {}
+
+message GetAtlassianAccountResponse {
+  AtlassianAccount account = 1;
+}
+
+message UnlinkAtlassianAccountRequest {}
+
+message UnlinkAtlassianAccountResponse {}
 
 message Org {
   int64 id = 1;

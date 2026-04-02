@@ -56,7 +56,7 @@ func (s *Store) GetUser(ctx context.Context, tx *sql.Tx, id string) (*model.User
 	if err != nil {
 		return nil, err
 	}
-	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
+	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.AtlassianAccountID, row.AtlassianUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (s *Store) GetUserByEmail(ctx context.Context, tx *sql.Tx, email string) (*model.User, error) {
@@ -64,7 +64,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, tx *sql.Tx, email string) (*
 	if err != nil {
 		return nil, err
 	}
-	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
+	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.AtlassianAccountID, row.AtlassianUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (s *Store) GetUserByGitHubUserID(ctx context.Context, tx *sql.Tx, githubUserID int64) (*model.User, error) {
@@ -72,7 +72,15 @@ func (s *Store) GetUserByGitHubUserID(ctx context.Context, tx *sql.Tx, githubUse
 	if err != nil {
 		return nil, err
 	}
-	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
+	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.AtlassianAccountID, row.AtlassianUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
+}
+
+func (s *Store) GetUserByAtlassianAccountID(ctx context.Context, tx *sql.Tx, atlassianAccountID string) (*model.User, error) {
+	row, err := s.q(tx).GetUserByAtlassianAccountID(ctx, sql.NullString{String: atlassianAccountID, Valid: true})
+	if err != nil {
+		return nil, err
+	}
+	return toModelUserRow(row.ID, row.Email, row.Name, row.GithubUserID, row.GithubUsername, row.AtlassianAccountID, row.AtlassianUsername, row.DefaultOrgID, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (s *Store) LinkGitHubAccount(ctx context.Context, tx *sql.Tx, userID string, githubUserID int64, githubUsername string) error {
@@ -101,17 +109,33 @@ func (s *Store) UpdateDefaultOrgID(ctx context.Context, tx *sql.Tx, userID strin
 	})
 }
 
-func toModelUserRow(id, email, name string, githubUserID sql.NullInt64, githubUsername sql.NullString, defaultOrgID sql.NullInt64, createdAt, updatedAt time.Time) *model.User {
+func (s *Store) LinkAtlassianAccount(ctx context.Context, tx *sql.Tx, userID string, atlassianAccountID, atlassianUsername string) error {
+	return s.q(tx).LinkAtlassianAccount(ctx, sqlc.LinkAtlassianAccountParams{
+		ID:                 userID,
+		AtlassianAccountID: sql.NullString{String: atlassianAccountID, Valid: true},
+		AtlassianUsername:  atlassianUsername,
+	})
+}
+
+func (s *Store) UnlinkAtlassianAccount(ctx context.Context, tx *sql.Tx, userID string) error {
+	return s.q(tx).UnlinkAtlassianAccount(ctx, userID)
+}
+
+func toModelUserRow(id, email, name string, githubUserID sql.NullInt64, githubUsername, atlassianAccountID sql.NullString, atlassianUsername string, defaultOrgID sql.NullInt64, createdAt, updatedAt time.Time) *model.User {
 	u := &model.User{
-		ID:             id,
-		Email:          email,
-		Name:           name,
-		GitHubUsername: githubUsername.String,
-		CreatedAt:      createdAt,
-		UpdatedAt:      updatedAt,
+		ID:                id,
+		Email:             email,
+		Name:              name,
+		GitHubUsername:    githubUsername.String,
+		AtlassianUsername: atlassianUsername,
+		CreatedAt:         createdAt,
+		UpdatedAt:         updatedAt,
 	}
 	if githubUserID.Valid {
 		u.GitHubUserID = githubUserID.Int64
+	}
+	if atlassianAccountID.Valid {
+		u.AtlassianAccountID = atlassianAccountID.String
 	}
 	if defaultOrgID.Valid {
 		u.DefaultOrgID = defaultOrgID.Int64

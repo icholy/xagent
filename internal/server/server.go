@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-github/v68/github"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/atlassianauth"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/ghauth"
 	"github.com/icholy/xagent/internal/model"
@@ -40,6 +41,11 @@ type GitHubConfig struct {
 	WebhookSecret string
 }
 
+type AtlassianConfig struct {
+	ClientID     string
+	ClientSecret string
+}
+
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
 	log           *slog.Logger
@@ -47,6 +53,7 @@ type Server struct {
 	auth          *apiauth.Auth
 	discovery     deviceauth.DiscoveryConfig
 	github        *GitHubConfig
+	atlassian     *AtlassianConfig
 	baseURL       string
 	encryptionKey []byte
 	oauth         *oauthflow.Auth
@@ -59,6 +66,7 @@ type Options struct {
 	Auth          *apiauth.Auth
 	Discovery     deviceauth.DiscoveryConfig
 	GitHub        *GitHubConfig
+	Atlassian     *AtlassianConfig
 	BaseURL       string
 	EncryptionKey []byte
 	OAuth         *oauthflow.Auth
@@ -76,6 +84,7 @@ func New(opts Options) *Server {
 		auth:          opts.Auth,
 		discovery:     opts.Discovery,
 		github:        opts.GitHub,
+		atlassian:     opts.Atlassian,
 		baseURL:       opts.BaseURL,
 		encryptionKey: opts.EncryptionKey,
 		oauth:         opts.OAuth,
@@ -132,6 +141,32 @@ func (s *Server) Handler() http.Handler {
 			Store:         s.store,
 			WebhookSecret: s.github.WebhookSecret,
 		})
+	}
+	// Atlassian OAuth routes (conditionally registered)
+	if s.atlassian != nil {
+		ah := atlassianauth.New(atlassianauth.Config{
+			ClientID:     s.atlassian.ClientID,
+			ClientSecret: s.atlassian.ClientSecret,
+			RedirectURL:  s.baseURL + "/atlassian/callback",
+			Log:          s.log,
+			OnSuccess: func(w http.ResponseWriter, r *http.Request, accountID, displayName string) {
+				caller := apiauth.Caller(r.Context())
+				if caller == nil {
+					http.Error(w, "not authenticated", http.StatusUnauthorized)
+					return
+				}
+				if caller.ID == "" {
+					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
+					return
+				}
+				if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, accountID, displayName); err != nil {
+					http.Error(w, "failed to link Atlassian account", http.StatusInternalServerError)
+					return
+				}
+				http.Redirect(w, r, "/ui/settings", http.StatusFound)
+			},
+		})
+		mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", ah)))
 	}
 	// OAuth 2.1 endpoints (public, conditionally registered)
 	if s.oauth != nil {
@@ -1002,6 +1037,29 @@ func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGi
 	}
 	s.log.Info("github account unlinked", "owner", caller.ID)
 	return &xagentv1.UnlinkGitHubAccountResponse{}, nil
+}
+
+func (s *Server) GetAtlassianAccount(ctx context.Context, req *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	resp := &xagentv1.GetAtlassianAccountResponse{}
+	user, err := s.store.GetUser(ctx, nil, caller.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return resp, nil
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp.Account = user.AtlassianAccountProto()
+	return resp, nil
+}
+
+func (s *Server) UnlinkAtlassianAccount(ctx context.Context, req *xagentv1.UnlinkAtlassianAccountRequest) (*xagentv1.UnlinkAtlassianAccountResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	if err := s.store.UnlinkAtlassianAccount(ctx, nil, caller.ID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("atlassian account unlinked", "owner", caller.ID)
+	return &xagentv1.UnlinkAtlassianAccountResponse{}, nil
 }
 
 func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {

@@ -61,6 +61,9 @@ var _ Client = &ClientMock{}
 //			FindLinksByURLFunc: func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
 //				panic("mock out the FindLinksByURL method")
 //			},
+//			GetAtlassianAccountFunc: func(contextMoqParam context.Context, getAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error) {
+//				panic("mock out the GetAtlassianAccount method")
+//			},
 //			GetEventFunc: func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 //				panic("mock out the GetEvent method")
 //			},
@@ -136,6 +139,9 @@ var _ Client = &ClientMock{}
 //			UnarchiveTaskFunc: func(contextMoqParam context.Context, unarchiveTaskRequest *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
 //				panic("mock out the UnarchiveTask method")
 //			},
+//			UnlinkAtlassianAccountFunc: func(contextMoqParam context.Context, unlinkAtlassianAccountRequest *xagentv1.UnlinkAtlassianAccountRequest) (*xagentv1.UnlinkAtlassianAccountResponse, error) {
+//				panic("mock out the UnlinkAtlassianAccount method")
+//			},
 //			UnlinkGitHubAccountFunc: func(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
 //				panic("mock out the UnlinkGitHubAccount method")
 //			},
@@ -193,6 +199,9 @@ type ClientMock struct {
 
 	// FindLinksByURLFunc mocks the FindLinksByURL method.
 	FindLinksByURLFunc func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error)
+
+	// GetAtlassianAccountFunc mocks the GetAtlassianAccount method.
+	GetAtlassianAccountFunc func(contextMoqParam context.Context, getAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error)
 
 	// GetEventFunc mocks the GetEvent method.
 	GetEventFunc func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error)
@@ -268,6 +277,9 @@ type ClientMock struct {
 
 	// UnarchiveTaskFunc mocks the UnarchiveTask method.
 	UnarchiveTaskFunc func(contextMoqParam context.Context, unarchiveTaskRequest *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error)
+
+	// UnlinkAtlassianAccountFunc mocks the UnlinkAtlassianAccount method.
+	UnlinkAtlassianAccountFunc func(contextMoqParam context.Context, unlinkAtlassianAccountRequest *xagentv1.UnlinkAtlassianAccountRequest) (*xagentv1.UnlinkAtlassianAccountResponse, error)
 
 	// UnlinkGitHubAccountFunc mocks the UnlinkGitHubAccount method.
 	UnlinkGitHubAccountFunc func(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error)
@@ -377,6 +389,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// FindLinksByURLRequest is the findLinksByURLRequest argument value.
 			FindLinksByURLRequest *xagentv1.FindLinksByURLRequest
+		}
+		// GetAtlassianAccount holds details about calls to the GetAtlassianAccount method.
+		GetAtlassianAccount []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetAtlassianAccountRequest is the getAtlassianAccountRequest argument value.
+			GetAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest
 		}
 		// GetEvent holds details about calls to the GetEvent method.
 		GetEvent []struct {
@@ -553,6 +572,13 @@ type ClientMock struct {
 			// UnarchiveTaskRequest is the unarchiveTaskRequest argument value.
 			UnarchiveTaskRequest *xagentv1.UnarchiveTaskRequest
 		}
+		// UnlinkAtlassianAccount holds details about calls to the UnlinkAtlassianAccount method.
+		UnlinkAtlassianAccount []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// UnlinkAtlassianAccountRequest is the unlinkAtlassianAccountRequest argument value.
+			UnlinkAtlassianAccountRequest *xagentv1.UnlinkAtlassianAccountRequest
+		}
 		// UnlinkGitHubAccount holds details about calls to the UnlinkGitHubAccount method.
 		UnlinkGitHubAccount []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -575,48 +601,50 @@ type ClientMock struct {
 			UploadLogsRequest *xagentv1.UploadLogsRequest
 		}
 	}
-	lockAddEventTask        sync.RWMutex
-	lockAddOrgMember        sync.RWMutex
-	lockArchiveTask         sync.RWMutex
-	lockCancelTask          sync.RWMutex
-	lockClearWorkspaces     sync.RWMutex
-	lockCreateEvent         sync.RWMutex
-	lockCreateKey           sync.RWMutex
-	lockCreateLink          sync.RWMutex
-	lockCreateOrg           sync.RWMutex
-	lockCreateTask          sync.RWMutex
-	lockDeleteEvent         sync.RWMutex
-	lockDeleteKey           sync.RWMutex
-	lockDeleteOrg           sync.RWMutex
-	lockFindLinksByURL      sync.RWMutex
-	lockGetEvent            sync.RWMutex
-	lockGetGitHubAccount    sync.RWMutex
-	lockGetProfile          sync.RWMutex
-	lockGetTask             sync.RWMutex
-	lockGetTaskDetails      sync.RWMutex
-	lockListChildTasks      sync.RWMutex
-	lockListEventTasks      sync.RWMutex
-	lockListEvents          sync.RWMutex
-	lockListEventsByTask    sync.RWMutex
-	lockListKeys            sync.RWMutex
-	lockListLinks           sync.RWMutex
-	lockListLogs            sync.RWMutex
-	lockListOrgMembers      sync.RWMutex
-	lockListOrgs            sync.RWMutex
-	lockListRunnerTasks     sync.RWMutex
-	lockListTasks           sync.RWMutex
-	lockListWorkspaces      sync.RWMutex
-	lockPing                sync.RWMutex
-	lockProcessEvent        sync.RWMutex
-	lockRegisterWorkspaces  sync.RWMutex
-	lockRemoveEventTask     sync.RWMutex
-	lockRemoveOrgMember     sync.RWMutex
-	lockRestartTask         sync.RWMutex
-	lockSubmitRunnerEvents  sync.RWMutex
-	lockUnarchiveTask       sync.RWMutex
-	lockUnlinkGitHubAccount sync.RWMutex
-	lockUpdateTask          sync.RWMutex
-	lockUploadLogs          sync.RWMutex
+	lockAddEventTask           sync.RWMutex
+	lockAddOrgMember           sync.RWMutex
+	lockArchiveTask            sync.RWMutex
+	lockCancelTask             sync.RWMutex
+	lockClearWorkspaces        sync.RWMutex
+	lockCreateEvent            sync.RWMutex
+	lockCreateKey              sync.RWMutex
+	lockCreateLink             sync.RWMutex
+	lockCreateOrg              sync.RWMutex
+	lockCreateTask             sync.RWMutex
+	lockDeleteEvent            sync.RWMutex
+	lockDeleteKey              sync.RWMutex
+	lockDeleteOrg              sync.RWMutex
+	lockFindLinksByURL         sync.RWMutex
+	lockGetAtlassianAccount    sync.RWMutex
+	lockGetEvent               sync.RWMutex
+	lockGetGitHubAccount       sync.RWMutex
+	lockGetProfile             sync.RWMutex
+	lockGetTask                sync.RWMutex
+	lockGetTaskDetails         sync.RWMutex
+	lockListChildTasks         sync.RWMutex
+	lockListEventTasks         sync.RWMutex
+	lockListEvents             sync.RWMutex
+	lockListEventsByTask       sync.RWMutex
+	lockListKeys               sync.RWMutex
+	lockListLinks              sync.RWMutex
+	lockListLogs               sync.RWMutex
+	lockListOrgMembers         sync.RWMutex
+	lockListOrgs               sync.RWMutex
+	lockListRunnerTasks        sync.RWMutex
+	lockListTasks              sync.RWMutex
+	lockListWorkspaces         sync.RWMutex
+	lockPing                   sync.RWMutex
+	lockProcessEvent           sync.RWMutex
+	lockRegisterWorkspaces     sync.RWMutex
+	lockRemoveEventTask        sync.RWMutex
+	lockRemoveOrgMember        sync.RWMutex
+	lockRestartTask            sync.RWMutex
+	lockSubmitRunnerEvents     sync.RWMutex
+	lockUnarchiveTask          sync.RWMutex
+	lockUnlinkAtlassianAccount sync.RWMutex
+	lockUnlinkGitHubAccount    sync.RWMutex
+	lockUpdateTask             sync.RWMutex
+	lockUploadLogs             sync.RWMutex
 }
 
 // AddEventTask calls AddEventTaskFunc.
@@ -1120,6 +1148,42 @@ func (mock *ClientMock) FindLinksByURLCalls() []struct {
 	mock.lockFindLinksByURL.RLock()
 	calls = mock.calls.FindLinksByURL
 	mock.lockFindLinksByURL.RUnlock()
+	return calls
+}
+
+// GetAtlassianAccount calls GetAtlassianAccountFunc.
+func (mock *ClientMock) GetAtlassianAccount(contextMoqParam context.Context, getAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest) (*xagentv1.GetAtlassianAccountResponse, error) {
+	if mock.GetAtlassianAccountFunc == nil {
+		panic("ClientMock.GetAtlassianAccountFunc: method is nil but Client.GetAtlassianAccount was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam            context.Context
+		GetAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest
+	}{
+		ContextMoqParam:            contextMoqParam,
+		GetAtlassianAccountRequest: getAtlassianAccountRequest,
+	}
+	mock.lockGetAtlassianAccount.Lock()
+	mock.calls.GetAtlassianAccount = append(mock.calls.GetAtlassianAccount, callInfo)
+	mock.lockGetAtlassianAccount.Unlock()
+	return mock.GetAtlassianAccountFunc(contextMoqParam, getAtlassianAccountRequest)
+}
+
+// GetAtlassianAccountCalls gets all the calls that were made to GetAtlassianAccount.
+// Check the length with:
+//
+//	len(mockedClient.GetAtlassianAccountCalls())
+func (mock *ClientMock) GetAtlassianAccountCalls() []struct {
+	ContextMoqParam            context.Context
+	GetAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest
+} {
+	var calls []struct {
+		ContextMoqParam            context.Context
+		GetAtlassianAccountRequest *xagentv1.GetAtlassianAccountRequest
+	}
+	mock.lockGetAtlassianAccount.RLock()
+	calls = mock.calls.GetAtlassianAccount
+	mock.lockGetAtlassianAccount.RUnlock()
 	return calls
 }
 
@@ -2020,6 +2084,42 @@ func (mock *ClientMock) UnarchiveTaskCalls() []struct {
 	mock.lockUnarchiveTask.RLock()
 	calls = mock.calls.UnarchiveTask
 	mock.lockUnarchiveTask.RUnlock()
+	return calls
+}
+
+// UnlinkAtlassianAccount calls UnlinkAtlassianAccountFunc.
+func (mock *ClientMock) UnlinkAtlassianAccount(contextMoqParam context.Context, unlinkAtlassianAccountRequest *xagentv1.UnlinkAtlassianAccountRequest) (*xagentv1.UnlinkAtlassianAccountResponse, error) {
+	if mock.UnlinkAtlassianAccountFunc == nil {
+		panic("ClientMock.UnlinkAtlassianAccountFunc: method is nil but Client.UnlinkAtlassianAccount was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam               context.Context
+		UnlinkAtlassianAccountRequest *xagentv1.UnlinkAtlassianAccountRequest
+	}{
+		ContextMoqParam:               contextMoqParam,
+		UnlinkAtlassianAccountRequest: unlinkAtlassianAccountRequest,
+	}
+	mock.lockUnlinkAtlassianAccount.Lock()
+	mock.calls.UnlinkAtlassianAccount = append(mock.calls.UnlinkAtlassianAccount, callInfo)
+	mock.lockUnlinkAtlassianAccount.Unlock()
+	return mock.UnlinkAtlassianAccountFunc(contextMoqParam, unlinkAtlassianAccountRequest)
+}
+
+// UnlinkAtlassianAccountCalls gets all the calls that were made to UnlinkAtlassianAccount.
+// Check the length with:
+//
+//	len(mockedClient.UnlinkAtlassianAccountCalls())
+func (mock *ClientMock) UnlinkAtlassianAccountCalls() []struct {
+	ContextMoqParam               context.Context
+	UnlinkAtlassianAccountRequest *xagentv1.UnlinkAtlassianAccountRequest
+} {
+	var calls []struct {
+		ContextMoqParam               context.Context
+		UnlinkAtlassianAccountRequest *xagentv1.UnlinkAtlassianAccountRequest
+	}
+	mock.lockUnlinkAtlassianAccount.RLock()
+	calls = mock.calls.UnlinkAtlassianAccount
+	mock.lockUnlinkAtlassianAccount.RUnlock()
 	return calls
 }
 

@@ -3,8 +3,10 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getGitHubAccount,
+  getAtlassianAccount,
   getProfile,
   unlinkGitHubAccount,
+  unlinkAtlassianAccount,
   createOrg,
   deleteOrg,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
@@ -57,6 +59,7 @@ function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        <AtlassianAccountCard />
         <Card>
           <CardHeader>
             <CardTitle>GitHub Account</CardTitle>
@@ -242,3 +245,56 @@ function OrgRow({ org, onDelete, isDefault }: { org: Org; onDelete: () => void; 
     </TableRow>
   )
 }
+
+function AtlassianAccountCard() {
+  const { data, isLoading, refetch } = useQuery(getAtlassianAccount, {})
+  const unlinkMutation = useMutation(unlinkAtlassianAccount, {
+    onSuccess: () => refetch(),
+  })
+
+  const account = data?.account
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Atlassian Account</CardTitle>
+        <CardDescription>
+          Link your Atlassian account to receive notifications for Jira issues on your tasks.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-muted-foreground">Loading...</div>
+        ) : account ? (
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              <span className="font-medium">{account.atlassianUsername || account.atlassianAccountId}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => unlinkMutation.mutateAsync({})}
+              disabled={unlinkMutation.isPending}
+            >
+              {unlinkMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Unlink className="h-4 w-4" />
+              )}
+              Unlink
+            </Button>
+          </div>
+        ) : (
+          <a href="/atlassian/login">
+            <Button>
+              <ExternalLink className="h-4 w-4" />
+              Link Atlassian Account
+            </Button>
+          </a>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+

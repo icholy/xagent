@@ -132,6 +132,12 @@ const (
 	// XAgentServiceUnlinkGitHubAccountProcedure is the fully-qualified name of the XAgentService's
 	// UnlinkGitHubAccount RPC.
 	XAgentServiceUnlinkGitHubAccountProcedure = "/xagent.v1.XAgentService/UnlinkGitHubAccount"
+	// XAgentServiceGetAtlassianAccountProcedure is the fully-qualified name of the XAgentService's
+	// GetAtlassianAccount RPC.
+	XAgentServiceGetAtlassianAccountProcedure = "/xagent.v1.XAgentService/GetAtlassianAccount"
+	// XAgentServiceUnlinkAtlassianAccountProcedure is the fully-qualified name of the XAgentService's
+	// UnlinkAtlassianAccount RPC.
+	XAgentServiceUnlinkAtlassianAccountProcedure = "/xagent.v1.XAgentService/UnlinkAtlassianAccount"
 	// XAgentServiceCreateOrgProcedure is the fully-qualified name of the XAgentService's CreateOrg RPC.
 	XAgentServiceCreateOrgProcedure = "/xagent.v1.XAgentService/CreateOrg"
 	// XAgentServiceListOrgsProcedure is the fully-qualified name of the XAgentService's ListOrgs RPC.
@@ -187,6 +193,8 @@ type XAgentServiceClient interface {
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
+	GetAtlassianAccount(context.Context, *v1.GetAtlassianAccountRequest) (*v1.GetAtlassianAccountResponse, error)
+	UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
 	DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error)
@@ -422,6 +430,18 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
 			connect.WithClientOptions(opts...),
 		),
+		getAtlassianAccount: connect.NewClient[v1.GetAtlassianAccountRequest, v1.GetAtlassianAccountResponse](
+			httpClient,
+			baseURL+XAgentServiceGetAtlassianAccountProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GetAtlassianAccount")),
+			connect.WithClientOptions(opts...),
+		),
+		unlinkAtlassianAccount: connect.NewClient[v1.UnlinkAtlassianAccountRequest, v1.UnlinkAtlassianAccountResponse](
+			httpClient,
+			baseURL+XAgentServiceUnlinkAtlassianAccountProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("UnlinkAtlassianAccount")),
+			connect.WithClientOptions(opts...),
+		),
 		createOrg: connect.NewClient[v1.CreateOrgRequest, v1.CreateOrgResponse](
 			httpClient,
 			baseURL+XAgentServiceCreateOrgProcedure,
@@ -463,48 +483,50 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // xAgentServiceClient implements XAgentServiceClient.
 type xAgentServiceClient struct {
-	ping                *connect.Client[v1.PingRequest, v1.PingResponse]
-	getProfile          *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
-	listTasks           *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
-	listRunnerTasks     *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
-	listChildTasks      *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
-	createTask          *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
-	getTask             *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	getTaskDetails      *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
-	updateTask          *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	archiveTask         *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
-	unarchiveTask       *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
-	cancelTask          *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
-	restartTask         *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
-	uploadLogs          *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
-	listLogs            *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
-	createLink          *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
-	listLinks           *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
-	findLinksByURL      *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
-	listEvents          *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
-	createEvent         *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
-	getEvent            *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
-	deleteEvent         *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
-	addEventTask        *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
-	removeEventTask     *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
-	listEventTasks      *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
-	listEventsByTask    *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
-	processEvent        *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
-	submitRunnerEvents  *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
-	registerWorkspaces  *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
-	listWorkspaces      *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
-	clearWorkspaces     *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
-	createKey           *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
-	listKeys            *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
-	deleteKey           *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
-	getGitHubAccount    *connect.Client[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse]
-	unlinkGitHubAccount *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
-	createOrg           *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
-	listOrgs            *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
-	deleteOrg           *connect.Client[v1.DeleteOrgRequest, v1.DeleteOrgResponse]
-	addOrgMember        *connect.Client[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse]
-	removeOrgMember     *connect.Client[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse]
-	listOrgMembers      *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
+	ping                   *connect.Client[v1.PingRequest, v1.PingResponse]
+	getProfile             *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
+	listTasks              *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	listRunnerTasks        *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
+	listChildTasks         *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
+	createTask             *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	getTask                *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
+	getTaskDetails         *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
+	updateTask             *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
+	archiveTask            *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
+	unarchiveTask          *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
+	cancelTask             *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
+	restartTask            *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
+	uploadLogs             *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
+	listLogs               *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
+	createLink             *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
+	listLinks              *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
+	findLinksByURL         *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
+	listEvents             *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
+	createEvent            *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
+	getEvent               *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
+	deleteEvent            *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
+	addEventTask           *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
+	removeEventTask        *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
+	listEventTasks         *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
+	listEventsByTask       *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
+	processEvent           *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
+	submitRunnerEvents     *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
+	registerWorkspaces     *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
+	listWorkspaces         *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
+	clearWorkspaces        *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
+	createKey              *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
+	listKeys               *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
+	deleteKey              *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
+	getGitHubAccount       *connect.Client[v1.GetGitHubAccountRequest, v1.GetGitHubAccountResponse]
+	unlinkGitHubAccount    *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
+	getAtlassianAccount    *connect.Client[v1.GetAtlassianAccountRequest, v1.GetAtlassianAccountResponse]
+	unlinkAtlassianAccount *connect.Client[v1.UnlinkAtlassianAccountRequest, v1.UnlinkAtlassianAccountResponse]
+	createOrg              *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
+	listOrgs               *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
+	deleteOrg              *connect.Client[v1.DeleteOrgRequest, v1.DeleteOrgResponse]
+	addOrgMember           *connect.Client[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse]
+	removeOrgMember        *connect.Client[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse]
+	listOrgMembers         *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -831,6 +853,24 @@ func (c *xAgentServiceClient) UnlinkGitHubAccount(ctx context.Context, req *v1.U
 	return nil, err
 }
 
+// GetAtlassianAccount calls xagent.v1.XAgentService.GetAtlassianAccount.
+func (c *xAgentServiceClient) GetAtlassianAccount(ctx context.Context, req *v1.GetAtlassianAccountRequest) (*v1.GetAtlassianAccountResponse, error) {
+	response, err := c.getAtlassianAccount.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// UnlinkAtlassianAccount calls xagent.v1.XAgentService.UnlinkAtlassianAccount.
+func (c *xAgentServiceClient) UnlinkAtlassianAccount(ctx context.Context, req *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error) {
+	response, err := c.unlinkAtlassianAccount.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // CreateOrg calls xagent.v1.XAgentService.CreateOrg.
 func (c *xAgentServiceClient) CreateOrg(ctx context.Context, req *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error) {
 	response, err := c.createOrg.CallUnary(ctx, connect.NewRequest(req))
@@ -923,6 +963,8 @@ type XAgentServiceHandler interface {
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	GetGitHubAccount(context.Context, *v1.GetGitHubAccountRequest) (*v1.GetGitHubAccountResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
+	GetAtlassianAccount(context.Context, *v1.GetAtlassianAccountRequest) (*v1.GetAtlassianAccountResponse, error)
+	UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
 	DeleteOrg(context.Context, *v1.DeleteOrgRequest) (*v1.DeleteOrgResponse, error)
@@ -1154,6 +1196,18 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceGetAtlassianAccountHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGetAtlassianAccountProcedure,
+		svc.GetAtlassianAccount,
+		connect.WithSchema(xAgentServiceMethods.ByName("GetAtlassianAccount")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceUnlinkAtlassianAccountHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceUnlinkAtlassianAccountProcedure,
+		svc.UnlinkAtlassianAccount,
+		connect.WithSchema(xAgentServiceMethods.ByName("UnlinkAtlassianAccount")),
+		connect.WithHandlerOptions(opts...),
+	)
 	xAgentServiceCreateOrgHandler := connect.NewUnaryHandlerSimple(
 		XAgentServiceCreateOrgProcedure,
 		svc.CreateOrg,
@@ -1264,6 +1318,10 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetGitHubAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceUnlinkGitHubAccountProcedure:
 			xAgentServiceUnlinkGitHubAccountHandler.ServeHTTP(w, r)
+		case XAgentServiceGetAtlassianAccountProcedure:
+			xAgentServiceGetAtlassianAccountHandler.ServeHTTP(w, r)
+		case XAgentServiceUnlinkAtlassianAccountProcedure:
+			xAgentServiceUnlinkAtlassianAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateOrgProcedure:
 			xAgentServiceCreateOrgHandler.ServeHTTP(w, r)
 		case XAgentServiceListOrgsProcedure:
@@ -1427,6 +1485,14 @@ func (UnimplementedXAgentServiceHandler) GetGitHubAccount(context.Context, *v1.G
 
 func (UnimplementedXAgentServiceHandler) UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UnlinkGitHubAccount is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) GetAtlassianAccount(context.Context, *v1.GetAtlassianAccountRequest) (*v1.GetAtlassianAccountResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetAtlassianAccount is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UnlinkAtlassianAccount is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error) {

@@ -107,6 +107,16 @@ var ServerCommand = &cli.Command{
 			Usage:   "GitHub App webhook secret",
 			Sources: cli.EnvVars("XAGENT_GITHUB_WEBHOOK_SECRET"),
 		},
+		&cli.StringFlag{
+			Name:    "atlassian-client-id",
+			Usage:   "Atlassian OAuth client ID (for account linking)",
+			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_ID"),
+		},
+		&cli.StringFlag{
+			Name:    "atlassian-client-secret",
+			Usage:   "Atlassian OAuth client secret",
+			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_SECRET"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
@@ -200,6 +210,12 @@ var ServerCommand = &cli.Command{
 				ClientID:      ghClientID,
 				ClientSecret:  cmd.String("github-client-secret"),
 				WebhookSecret: cmd.String("github-webhook-secret"),
+			}
+		}
+		if atlassianClientID := cmd.String("atlassian-client-id"); atlassianClientID != "" {
+			opts.Atlassian = &server.AtlassianConfig{
+				ClientID:     atlassianClientID,
+				ClientSecret: cmd.String("atlassian-client-secret"),
 			}
 		}
 		srv := server.New(opts)

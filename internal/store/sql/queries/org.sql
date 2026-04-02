@@ -52,3 +52,4 @@ SELECT EXISTS(
     JOIN orgs o ON o.id = om.org_id
     WHERE om.org_id = $1 AND om.user_id = $2 AND o.archived = FALSE
 ) AS is_member;
+
