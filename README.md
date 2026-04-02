@@ -72,7 +72,7 @@ Get a shell to a task container:
 xagent shell <taskid>
 ```
 
-List task containers
+List task containers:
 
 ```bash
 xagent containers
