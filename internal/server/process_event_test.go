@@ -13,7 +13,7 @@ func TestProcessEvent(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
-	// Create two tasks with links to the same URL with notify=true
+	// Create two tasks with links to the same URL with subscribe=true
 	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task 1",
 		Runner:    "test-runner",
@@ -37,12 +37,12 @@ func TestProcessEvent(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Create links with notify=true
+	// Create links with subscribe=true
 	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId:    task1.Task.Id,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "PR to monitor",
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 
@@ -50,7 +50,7 @@ func TestProcessEvent(t *testing.T) {
 		TaskId:    task2.Task.Id,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "PR to monitor",
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 
@@ -139,7 +139,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 		TaskId:    task.Task.Id,
 		Url:       "https://github.com/example/repo/pull/456",
 		Relevance: "Different PR",
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 
@@ -161,7 +161,7 @@ func TestProcessEventWithNoMatchingLinks(t *testing.T) {
 	assert.Equal(t, len(processResp.TaskIds), 0)
 }
 
-func TestProcessEventWithNotifyFalse(t *testing.T) {
+func TestProcessEventWithSubscribeFalse(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := setupTestServer(t)
@@ -174,12 +174,12 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Create link with notify=false
+	// Create link with subscribe=false
 	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId:    task.Task.Id,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "Reference only",
-		Notify:    false,
+		Subscribe: false,
 	})
 	assert.NilError(t, err)
 
@@ -196,7 +196,7 @@ func TestProcessEventWithNotifyFalse(t *testing.T) {
 		Id: eventResp.Event.Id,
 	})
 
-	// Assert - should not route to task since notify=false
+	// Assert - should not route to task since subscribe=false
 	assert.NilError(t, err)
 	assert.Equal(t, len(processResp.TaskIds), 0)
 }
@@ -219,7 +219,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 		TaskId:    task.Task.Id,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "Link 1",
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 
@@ -227,7 +227,7 @@ func TestProcessEventDeduplicatesTasks(t *testing.T) {
 		TaskId:    task.Task.Id,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "Link 2",
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 
@@ -256,7 +256,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	srv := setupTestServer(t)
 	ctx, _ := createTestOrg(t, srv, testOrgOptions{Workspaces: true})
 
-	// Create two tasks with links to the same URL with notify=true
+	// Create two tasks with links to the same URL with subscribe=true
 	activeTask, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Active Task",
 		Runner:    "test-runner",
@@ -294,12 +294,12 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Create links with notify=true for both tasks
+	// Create links with subscribe=true for both tasks
 	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId:    activeTask.Task.Id,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "PR to monitor",
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 
@@ -307,7 +307,7 @@ func TestProcessEventSkipsArchivedTasks(t *testing.T) {
 		TaskId:    archivedTask.Task.Id,
 		Url:       "https://github.com/example/repo/pull/123",
 		Relevance: "PR to monitor",
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 

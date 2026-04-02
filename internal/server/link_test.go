@@ -25,14 +25,14 @@ func TestCreateLink(t *testing.T) {
 		Relevance: "Related PR",
 		Url:       "https://github.com/example/repo/pull/123",
 		Title:     "Fix bug",
-		Notify:    true,
+		Subscribe: true,
 	})
 
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, resp.Link.TaskId, taskResp.Task.Id)
 	assert.Equal(t, resp.Link.Url, "https://github.com/example/repo/pull/123")
-	assert.Equal(t, resp.Link.Notify, true)
+	assert.Equal(t, resp.Link.Subscribe, true)
 }
 
 func TestCreateLink_Permissions(t *testing.T) {

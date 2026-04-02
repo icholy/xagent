@@ -14,7 +14,7 @@ func (s *Store) CreateLink(ctx context.Context, tx *sql.Tx, link *model.Link) er
 		Relevance: link.Relevance,
 		Url:       link.URL,
 		Title:     link.Title,
-		Notify:    link.Notify,
+		Subscribe: link.Subscribe,
 		CreatedAt: link.CreatedAt,
 	})
 	if err != nil {
@@ -56,8 +56,8 @@ type LinkWithOrg struct {
 	OrgID int64
 }
 
-func (s *Store) FindNotifyLinksByURLForUser(ctx context.Context, tx *sql.Tx, url string, userID string) ([]LinkWithOrg, error) {
-	rows, err := s.q(tx).FindNotifyLinksByURLForUser(ctx, sqlc.FindNotifyLinksByURLForUserParams{
+func (s *Store) FindSubscribedLinksByURLForUser(ctx context.Context, tx *sql.Tx, url string, userID string) ([]LinkWithOrg, error) {
+	rows, err := s.q(tx).FindSubscribedLinksByURLForUser(ctx, sqlc.FindSubscribedLinksByURLForUserParams{
 		Url:    url,
 		UserID: userID,
 	})
@@ -73,7 +73,7 @@ func (s *Store) FindNotifyLinksByURLForUser(ctx context.Context, tx *sql.Tx, url
 				Relevance: row.Relevance,
 				URL:       row.Url,
 				Title:     row.Title,
-				Notify:    row.Notify,
+				Subscribe: row.Subscribe,
 				CreatedAt: row.CreatedAt,
 			},
 			OrgID: row.OrgID,
@@ -91,7 +91,7 @@ func toModelLinks(rows []sqlc.TaskLink) []*model.Link {
 			Relevance: row.Relevance,
 			URL:       row.Url,
 			Title:     row.Title,
-			Notify:    row.Notify,
+			Subscribe: row.Subscribe,
 			CreatedAt: row.CreatedAt,
 		}
 	}

@@ -615,7 +615,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		Relevance: req.Relevance,
 		URL:       req.Url,
 		Title:     req.Title,
-		Notify:    req.Notify,
+		Subscribe: req.Subscribe,
 		CreatedAt: time.Now(),
 	}
 	if err := s.store.CreateLink(ctx, nil, link); err != nil {
@@ -817,7 +817,7 @@ func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventU
 	}
 	taskIDs := map[int64]bool{}
 	for _, link := range links {
-		if !link.Notify || taskIDs[link.TaskID] {
+		if !link.Subscribe || taskIDs[link.TaskID] {
 			continue
 		}
 		task, err := s.store.GetTask(ctx, nil, link.TaskID, orgID)

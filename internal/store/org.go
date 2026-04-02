@@ -155,7 +155,7 @@ func (s *Store) GetOrgAtlassianWebhookSecret(ctx context.Context, tx *sql.Tx, or
 
 func (s *Store) SetOrgAtlassianWebhookSecret(ctx context.Context, tx *sql.Tx, orgID int64, secret string) error {
 	return s.q(tx).SetOrgAtlassianWebhookSecret(ctx, sqlc.SetOrgAtlassianWebhookSecretParams{
-		ID:                      orgID,
+		ID:                     orgID,
 		AtlassianWebhookSecret: secret,
 	})
 }

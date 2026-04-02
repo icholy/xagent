@@ -326,7 +326,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		TaskID:    task.ID,
 		Relevance: "test",
 		URL:       "https://github.com/owner/repo/pull/10",
-		Notify:    true,
+		Subscribe: true,
 	}
 	err = s.CreateLink(ctx, nil, link)
 	assert.NilError(t, err)
@@ -384,7 +384,7 @@ func TestHandleGitHubWebhookRoutesToMultipleOrgs(t *testing.T) {
 
 	prURL := "https://github.com/owner/repo/pull/42"
 
-	// Create a task in org1 with a notify link
+	// Create a task in org1 with a subscribed link
 	task1 := &model.Task{
 		Name:      "org1-task",
 		Workspace: "test",
@@ -399,11 +399,11 @@ func TestHandleGitHubWebhookRoutesToMultipleOrgs(t *testing.T) {
 		TaskID:    task1.ID,
 		Relevance: "test",
 		URL:       prURL,
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 
-	// Create a task in org2 with a notify link to the same URL
+	// Create a task in org2 with a subscribed link to the same URL
 	task2 := &model.Task{
 		Name:      "org2-task",
 		Workspace: "test",
@@ -418,7 +418,7 @@ func TestHandleGitHubWebhookRoutesToMultipleOrgs(t *testing.T) {
 		TaskID:    task2.ID,
 		Relevance: "test",
 		URL:       prURL,
-		Notify:    true,
+		Subscribe: true,
 	})
 	assert.NilError(t, err)
 

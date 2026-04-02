@@ -326,12 +326,12 @@ function LinksSection({ links }: { links: TaskLink[] }) {
             >
               {link.title || link.url}
             </a>
-            {link.notify && (
+            {link.subscribe && (
               <Badge
                 variant="outline"
                 className="bg-blue-100 text-blue-800 border-blue-200 text-xs"
               >
-                notify
+                subscribed
               </Badge>
             )}
           </div>

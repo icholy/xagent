@@ -172,4 +172,5 @@ tool (
 	github.com/bufbuild/buf/cmd/buf
 	github.com/matryer/moq
 	github.com/sqlc-dev/sqlc/cmd/sqlc
+	golang.org/x/tools/cmd/stringer
 )

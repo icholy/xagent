@@ -88,7 +88,7 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find matching notify links across all the user's orgs
+	// Find matching subscribed links across all the user's orgs
 	linksByOrg, err := h.findLinksByOrg(r.Context(), extracted.url, user.ID)
 	if err != nil {
 		slog.Error("failed to find matching links", "error", err)
@@ -117,13 +117,13 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "processed")
 }
 
-// findLinksByOrg queries all matching notify links for a URL across all
+// findLinksByOrg queries all matching subscribed links for a URL across all
 // the user's orgs and groups them by org ID.
 func (h *AtlassianHandler) findLinksByOrg(ctx context.Context, url string, userID string) (map[int64][]*model.Link, error) {
 	if url == "" {
 		return nil, nil
 	}
-	matches, err := h.Store.FindNotifyLinksByURLForUser(ctx, nil, url, userID)
+	matches, err := h.Store.FindSubscribedLinksByURLForUser(ctx, nil, url, userID)
 	if err != nil {
 		return nil, err
 	}

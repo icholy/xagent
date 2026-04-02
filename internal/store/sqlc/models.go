@@ -79,7 +79,7 @@ type TaskLink struct {
 	Relevance string    `json:"relevance"`
 	Url       string    `json:"url"`
 	Title     string    `json:"title"`
-	Notify    bool      `json:"notify"`
+	Subscribe bool      `json:"subscribe"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

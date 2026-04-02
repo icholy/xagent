@@ -69,12 +69,12 @@ Tasks can spawn child tasks to delegate work. The parent task can monitor and in
 Tasks can be notified about external events through the event system:
 
 - **Events** represent external triggers (GitHub PR comments, Jira issue updates, etc.)
-- **Links** created with `notify=true` route events to tasks when the event URL matches the link URL
-- When an event is processed, all tasks with matching notify links receive the event
+- **Links** created with `subscribe=true` route events to tasks when the event URL matches the link URL
+- When an event is processed, all tasks with matching subscribed links receive the event
 - Events appear in `get_my_task` output and provide additional context to agents
 - External pollers (GitHub, Jira) create events and process them to notify linked tasks
 
-Use `create_link` with `notify=true` for resources that may need follow-up (PRs awaiting review, issues awaiting response, etc.)
+Use `create_link` with `subscribe=true` for resources that may need follow-up (PRs awaiting review, issues awaiting response, etc.)
 
 ### CLI Subcommands
 

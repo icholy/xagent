@@ -14,7 +14,7 @@ type Link struct {
 	Relevance string    `json:"relevance"`
 	URL       string    `json:"url"`
 	Title     string    `json:"title"`
-	Notify    bool      `json:"notify"`
+	Subscribe bool      `json:"subscribe"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -26,7 +26,7 @@ func (l *Link) Proto() *xagentv1.TaskLink {
 		Relevance: l.Relevance,
 		Url:       l.URL,
 		Title:     l.Title,
-		Notify:    l.Notify,
+		Subscribe: l.Subscribe,
 		CreatedAt: timestamppb.New(l.CreatedAt),
 	}
 }
@@ -43,7 +43,7 @@ func LinkFromProto(pb *xagentv1.TaskLink) *Link {
 		Relevance: pb.Relevance,
 		URL:       pb.Url,
 		Title:     pb.Title,
-		Notify:    pb.Notify,
+		Subscribe: pb.Subscribe,
 		CreatedAt: createdAt,
 	}
 }

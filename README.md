@@ -108,7 +108,7 @@ go build            # Build main binary only
 
 ## Events
 
-Agents can attach **links** to their tasks for external resources they create (PRs, Jira issues, etc.). Links created with `notify=true` act as subscriptions. When someone comments on the resource, the agent is automatically restarted to respond.
+Agents can attach **links** to their tasks for external resources they create (PRs, Jira issues, etc.). Links created with `subscribe=true` act as subscriptions. When someone comments on the resource, the agent is automatically restarted to respond.
 
 ![Events](images/events.svg)
 

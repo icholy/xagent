@@ -1961,7 +1961,7 @@ type TaskLink struct {
 	Relevance     string                 `protobuf:"bytes,3,opt,name=relevance,proto3" json:"relevance,omitempty"`
 	Url           string                 `protobuf:"bytes,4,opt,name=url,proto3" json:"url,omitempty"`
 	Title         string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
-	Notify        bool                   `protobuf:"varint,6,opt,name=notify,proto3" json:"notify,omitempty"`
+	Subscribe     bool                   `protobuf:"varint,6,opt,name=subscribe,proto3" json:"subscribe,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2032,9 +2032,9 @@ func (x *TaskLink) GetTitle() string {
 	return ""
 }
 
-func (x *TaskLink) GetNotify() bool {
+func (x *TaskLink) GetSubscribe() bool {
 	if x != nil {
-		return x.Notify
+		return x.Subscribe
 	}
 	return false
 }
@@ -2052,7 +2052,7 @@ type CreateLinkRequest struct {
 	Relevance     string                 `protobuf:"bytes,2,opt,name=relevance,proto3" json:"relevance,omitempty"`
 	Url           string                 `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
 	Title         string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
-	Notify        bool                   `protobuf:"varint,5,opt,name=notify,proto3" json:"notify,omitempty"`
+	Subscribe     bool                   `protobuf:"varint,5,opt,name=subscribe,proto3" json:"subscribe,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2115,9 +2115,9 @@ func (x *CreateLinkRequest) GetTitle() string {
 	return ""
 }
 
-func (x *CreateLinkRequest) GetNotify() bool {
+func (x *CreateLinkRequest) GetSubscribe() bool {
 	if x != nil {
-		return x.Notify
+		return x.Subscribe
 	}
 	return false
 }
@@ -5246,22 +5246,22 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x0fListLogsRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\"A\n" +
 	"\x10ListLogsResponse\x12-\n" +
-	"\aentries\x18\x01 \x03(\v2\x13.xagent.v1.LogEntryR\aentries\"\xcc\x01\n" +
+	"\aentries\x18\x01 \x03(\v2\x13.xagent.v1.LogEntryR\aentries\"\xd2\x01\n" +
 	"\bTaskLink\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
 	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12\x1c\n" +
 	"\trelevance\x18\x03 \x01(\tR\trelevance\x12\x10\n" +
 	"\x03url\x18\x04 \x01(\tR\x03url\x12\x14\n" +
-	"\x05title\x18\x05 \x01(\tR\x05title\x12\x16\n" +
-	"\x06notify\x18\x06 \x01(\bR\x06notify\x129\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12\x1c\n" +
+	"\tsubscribe\x18\x06 \x01(\bR\tsubscribe\x129\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x8a\x01\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x90\x01\n" +
 	"\x11CreateLinkRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x1c\n" +
 	"\trelevance\x18\x02 \x01(\tR\trelevance\x12\x10\n" +
 	"\x03url\x18\x03 \x01(\tR\x03url\x12\x14\n" +
-	"\x05title\x18\x04 \x01(\tR\x05title\x12\x16\n" +
-	"\x06notify\x18\x05 \x01(\bR\x06notify\"=\n" +
+	"\x05title\x18\x04 \x01(\tR\x05title\x12\x1c\n" +
+	"\tsubscribe\x18\x05 \x01(\bR\tsubscribe\"=\n" +
 	"\x12CreateLinkResponse\x12'\n" +
 	"\x04link\x18\x01 \x01(\v2\x13.xagent.v1.TaskLinkR\x04link\"+\n" +
 	"\x10ListLinksRequest\x12\x17\n" +

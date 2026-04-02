@@ -171,7 +171,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Relevance string `json:"relevance"`
 		URL       string `json:"url"`
 		Title     string `json:"title,omitempty"`
-		Notify    bool   `json:"notify"`
+		Subscribe bool   `json:"subscribe"`
 	}
 	type childTask struct {
 		ID        int64  `json:"id"`
@@ -226,7 +226,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 			Relevance: l.Relevance,
 			URL:       l.Url,
 			Title:     l.Title,
-			Notify:    l.Notify,
+			Subscribe: l.Subscribe,
 		})
 	}
 	for _, c := range resp.Children {

@@ -241,7 +241,7 @@ message TaskLink {
   string relevance = 3;
   string url = 4;
   string title = 5;
-  bool notify = 6;
+  bool subscribe = 6;
   google.protobuf.Timestamp created_at = 7;
 }
 
@@ -250,7 +250,7 @@ message CreateLinkRequest {
   string relevance = 2;
   string url = 3;
   string title = 4;
-  bool notify = 5;
+  bool subscribe = 5;
 }
 
 message CreateLinkResponse {
