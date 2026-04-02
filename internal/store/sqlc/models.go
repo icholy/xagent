@@ -41,12 +41,13 @@ type Log struct {
 }
 
 type Org struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Owner     string    `json:"owner"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Archived  bool      `json:"archived"`
+	ID                     int64     `json:"id"`
+	Name                   string    `json:"name"`
+	Owner                  string    `json:"owner"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
+	Archived               bool      `json:"archived"`
+	AtlassianWebhookSecret string    `json:"atlassian_webhook_secret"`
 }
 
 type OrgMember struct {

@@ -14,6 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"crypto/rand"
+	"encoding/hex"
+
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
 	"github.com/google/go-github/v68/github"
@@ -1173,4 +1176,37 @@ func (s *Server) ListOrgMembers(ctx context.Context, req *xagentv1.ListOrgMember
 		pbMembers[i] = m.Proto()
 	}
 	return &xagentv1.ListOrgMembersResponse{Members: pbMembers}, nil
+}
+
+func (s *Server) atlassianWebhookURL(orgID int64) string {
+	return fmt.Sprintf("%s/webhook/atlassian?org=%d", s.baseURL, orgID)
+}
+
+func (s *Server) GetAtlassianWebhookSecret(ctx context.Context, req *xagentv1.GetAtlassianWebhookSecretRequest) (*xagentv1.GetAtlassianWebhookSecretResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	secret, err := s.store.GetOrgAtlassianWebhookSecret(ctx, nil, caller.OrgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return &xagentv1.GetAtlassianWebhookSecretResponse{
+		Secret:     secret,
+		WebhookUrl: s.atlassianWebhookURL(caller.OrgID),
+	}, nil
+}
+
+func (s *Server) GenerateAtlassianWebhookSecret(ctx context.Context, req *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	secret := hex.EncodeToString(b)
+	if err := s.store.SetOrgAtlassianWebhookSecret(ctx, nil, caller.OrgID, secret); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.Info("atlassian webhook secret generated", "org_id", caller.OrgID)
+	return &xagentv1.GenerateAtlassianWebhookSecretResponse{
+		Secret:     secret,
+		WebhookUrl: s.atlassianWebhookURL(caller.OrgID),
+	}, nil
 }

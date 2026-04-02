@@ -73,9 +73,18 @@ FROM orgs
 WHERE id = $1
 `
 
-func (q *Queries) GetOrg(ctx context.Context, id int64) (Org, error) {
+type GetOrgRow struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Owner     string    `json:"owner"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Archived  bool      `json:"archived"`
+}
+
+func (q *Queries) GetOrg(ctx context.Context, id int64) (GetOrgRow, error) {
 	row := q.db.QueryRowContext(ctx, getOrg, id)
-	var i Org
+	var i GetOrgRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -85,6 +94,17 @@ func (q *Queries) GetOrg(ctx context.Context, id int64) (Org, error) {
 		&i.Archived,
 	)
 	return i, err
+}
+
+const getOrgAtlassianWebhookSecret = `-- name: GetOrgAtlassianWebhookSecret :one
+SELECT atlassian_webhook_secret FROM orgs WHERE id = $1
+`
+
+func (q *Queries) GetOrgAtlassianWebhookSecret(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getOrgAtlassianWebhookSecret, id)
+	var atlassian_webhook_secret string
+	err := row.Scan(&atlassian_webhook_secret)
+	return atlassian_webhook_secret, err
 }
 
 const isOrgMember = `-- name: IsOrgMember :one
@@ -197,15 +217,24 @@ WHERE om.user_id = $1 AND o.archived = FALSE
 ORDER BY o.name
 `
 
-func (q *Queries) ListOrgsByMember(ctx context.Context, userID string) ([]Org, error) {
+type ListOrgsByMemberRow struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Owner     string    `json:"owner"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Archived  bool      `json:"archived"`
+}
+
+func (q *Queries) ListOrgsByMember(ctx context.Context, userID string) ([]ListOrgsByMemberRow, error) {
 	rows, err := q.db.QueryContext(ctx, listOrgsByMember, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Org{}
+	items := []ListOrgsByMemberRow{}
 	for rows.Next() {
-		var i Org
+		var i ListOrgsByMemberRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -239,6 +268,20 @@ type RemoveOrgMemberParams struct {
 
 func (q *Queries) RemoveOrgMember(ctx context.Context, arg RemoveOrgMemberParams) error {
 	_, err := q.db.ExecContext(ctx, removeOrgMember, arg.OrgID, arg.UserID)
+	return err
+}
+
+const setOrgAtlassianWebhookSecret = `-- name: SetOrgAtlassianWebhookSecret :exec
+UPDATE orgs SET atlassian_webhook_secret = $2 WHERE id = $1
+`
+
+type SetOrgAtlassianWebhookSecretParams struct {
+	ID                     int64  `json:"id"`
+	AtlassianWebhookSecret string `json:"atlassian_webhook_secret"`
+}
+
+func (q *Queries) SetOrgAtlassianWebhookSecret(ctx context.Context, arg SetOrgAtlassianWebhookSecretParams) error {
+	_, err := q.db.ExecContext(ctx, setOrgAtlassianWebhookSecret, arg.ID, arg.AtlassianWebhookSecret)
 	return err
 }
 

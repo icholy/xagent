@@ -49,6 +49,8 @@ service XAgentService {
   rpc AddOrgMember(AddOrgMemberRequest) returns (AddOrgMemberResponse);
   rpc RemoveOrgMember(RemoveOrgMemberRequest) returns (RemoveOrgMemberResponse);
   rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
+  rpc GetAtlassianWebhookSecret(GetAtlassianWebhookSecretRequest) returns (GetAtlassianWebhookSecretResponse);
+  rpc GenerateAtlassianWebhookSecret(GenerateAtlassianWebhookSecretRequest) returns (GenerateAtlassianWebhookSecretResponse);
 }
 
 message PingRequest {}
@@ -494,4 +496,18 @@ message ListOrgMembersRequest {}
 
 message ListOrgMembersResponse {
   repeated OrgMember members = 1;
+}
+
+message GetAtlassianWebhookSecretRequest {}
+
+message GetAtlassianWebhookSecretResponse {
+  string secret = 1;
+  string webhook_url = 2;
+}
+
+message GenerateAtlassianWebhookSecretRequest {}
+
+message GenerateAtlassianWebhookSecretResponse {
+  string secret = 1;
+  string webhook_url = 2;
 }

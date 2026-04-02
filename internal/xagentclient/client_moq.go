@@ -61,6 +61,12 @@ var _ Client = &ClientMock{}
 //			FindLinksByURLFunc: func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
 //				panic("mock out the FindLinksByURL method")
 //			},
+//			GenerateAtlassianWebhookSecretFunc: func(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {
+//				panic("mock out the GenerateAtlassianWebhookSecret method")
+//			},
+//			GetAtlassianWebhookSecretFunc: func(contextMoqParam context.Context, getAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest) (*xagentv1.GetAtlassianWebhookSecretResponse, error) {
+//				panic("mock out the GetAtlassianWebhookSecret method")
+//			},
 //			GetEventFunc: func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 //				panic("mock out the GetEvent method")
 //			},
@@ -193,6 +199,12 @@ type ClientMock struct {
 
 	// FindLinksByURLFunc mocks the FindLinksByURL method.
 	FindLinksByURLFunc func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error)
+
+	// GenerateAtlassianWebhookSecretFunc mocks the GenerateAtlassianWebhookSecret method.
+	GenerateAtlassianWebhookSecretFunc func(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error)
+
+	// GetAtlassianWebhookSecretFunc mocks the GetAtlassianWebhookSecret method.
+	GetAtlassianWebhookSecretFunc func(contextMoqParam context.Context, getAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest) (*xagentv1.GetAtlassianWebhookSecretResponse, error)
 
 	// GetEventFunc mocks the GetEvent method.
 	GetEventFunc func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error)
@@ -377,6 +389,20 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// FindLinksByURLRequest is the findLinksByURLRequest argument value.
 			FindLinksByURLRequest *xagentv1.FindLinksByURLRequest
+		}
+		// GenerateAtlassianWebhookSecret holds details about calls to the GenerateAtlassianWebhookSecret method.
+		GenerateAtlassianWebhookSecret []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GenerateAtlassianWebhookSecretRequest is the generateAtlassianWebhookSecretRequest argument value.
+			GenerateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest
+		}
+		// GetAtlassianWebhookSecret holds details about calls to the GetAtlassianWebhookSecret method.
+		GetAtlassianWebhookSecret []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetAtlassianWebhookSecretRequest is the getAtlassianWebhookSecretRequest argument value.
+			GetAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest
 		}
 		// GetEvent holds details about calls to the GetEvent method.
 		GetEvent []struct {
@@ -575,48 +601,50 @@ type ClientMock struct {
 			UploadLogsRequest *xagentv1.UploadLogsRequest
 		}
 	}
-	lockAddEventTask           sync.RWMutex
-	lockAddOrgMember           sync.RWMutex
-	lockArchiveTask            sync.RWMutex
-	lockCancelTask             sync.RWMutex
-	lockClearWorkspaces        sync.RWMutex
-	lockCreateEvent            sync.RWMutex
-	lockCreateKey              sync.RWMutex
-	lockCreateLink             sync.RWMutex
-	lockCreateOrg              sync.RWMutex
-	lockCreateTask             sync.RWMutex
-	lockDeleteEvent            sync.RWMutex
-	lockDeleteKey              sync.RWMutex
-	lockDeleteOrg              sync.RWMutex
-	lockFindLinksByURL         sync.RWMutex
-	lockGetEvent               sync.RWMutex
-	lockGetProfile             sync.RWMutex
-	lockGetTask                sync.RWMutex
-	lockGetTaskDetails         sync.RWMutex
-	lockListChildTasks         sync.RWMutex
-	lockListEventTasks         sync.RWMutex
-	lockListEvents             sync.RWMutex
-	lockListEventsByTask       sync.RWMutex
-	lockListKeys               sync.RWMutex
-	lockListLinks              sync.RWMutex
-	lockListLogs               sync.RWMutex
-	lockListOrgMembers         sync.RWMutex
-	lockListOrgs               sync.RWMutex
-	lockListRunnerTasks        sync.RWMutex
-	lockListTasks              sync.RWMutex
-	lockListWorkspaces         sync.RWMutex
-	lockPing                   sync.RWMutex
-	lockProcessEvent           sync.RWMutex
-	lockRegisterWorkspaces     sync.RWMutex
-	lockRemoveEventTask        sync.RWMutex
-	lockRemoveOrgMember        sync.RWMutex
-	lockRestartTask            sync.RWMutex
-	lockSubmitRunnerEvents     sync.RWMutex
-	lockUnarchiveTask          sync.RWMutex
-	lockUnlinkAtlassianAccount sync.RWMutex
-	lockUnlinkGitHubAccount    sync.RWMutex
-	lockUpdateTask             sync.RWMutex
-	lockUploadLogs             sync.RWMutex
+	lockAddEventTask                   sync.RWMutex
+	lockAddOrgMember                   sync.RWMutex
+	lockArchiveTask                    sync.RWMutex
+	lockCancelTask                     sync.RWMutex
+	lockClearWorkspaces                sync.RWMutex
+	lockCreateEvent                    sync.RWMutex
+	lockCreateKey                      sync.RWMutex
+	lockCreateLink                     sync.RWMutex
+	lockCreateOrg                      sync.RWMutex
+	lockCreateTask                     sync.RWMutex
+	lockDeleteEvent                    sync.RWMutex
+	lockDeleteKey                      sync.RWMutex
+	lockDeleteOrg                      sync.RWMutex
+	lockFindLinksByURL                 sync.RWMutex
+	lockGenerateAtlassianWebhookSecret sync.RWMutex
+	lockGetAtlassianWebhookSecret      sync.RWMutex
+	lockGetEvent                       sync.RWMutex
+	lockGetProfile                     sync.RWMutex
+	lockGetTask                        sync.RWMutex
+	lockGetTaskDetails                 sync.RWMutex
+	lockListChildTasks                 sync.RWMutex
+	lockListEventTasks                 sync.RWMutex
+	lockListEvents                     sync.RWMutex
+	lockListEventsByTask               sync.RWMutex
+	lockListKeys                       sync.RWMutex
+	lockListLinks                      sync.RWMutex
+	lockListLogs                       sync.RWMutex
+	lockListOrgMembers                 sync.RWMutex
+	lockListOrgs                       sync.RWMutex
+	lockListRunnerTasks                sync.RWMutex
+	lockListTasks                      sync.RWMutex
+	lockListWorkspaces                 sync.RWMutex
+	lockPing                           sync.RWMutex
+	lockProcessEvent                   sync.RWMutex
+	lockRegisterWorkspaces             sync.RWMutex
+	lockRemoveEventTask                sync.RWMutex
+	lockRemoveOrgMember                sync.RWMutex
+	lockRestartTask                    sync.RWMutex
+	lockSubmitRunnerEvents             sync.RWMutex
+	lockUnarchiveTask                  sync.RWMutex
+	lockUnlinkAtlassianAccount         sync.RWMutex
+	lockUnlinkGitHubAccount            sync.RWMutex
+	lockUpdateTask                     sync.RWMutex
+	lockUploadLogs                     sync.RWMutex
 }
 
 // AddEventTask calls AddEventTaskFunc.
@@ -1120,6 +1148,78 @@ func (mock *ClientMock) FindLinksByURLCalls() []struct {
 	mock.lockFindLinksByURL.RLock()
 	calls = mock.calls.FindLinksByURL
 	mock.lockFindLinksByURL.RUnlock()
+	return calls
+}
+
+// GenerateAtlassianWebhookSecret calls GenerateAtlassianWebhookSecretFunc.
+func (mock *ClientMock) GenerateAtlassianWebhookSecret(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {
+	if mock.GenerateAtlassianWebhookSecretFunc == nil {
+		panic("ClientMock.GenerateAtlassianWebhookSecretFunc: method is nil but Client.GenerateAtlassianWebhookSecret was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam                       context.Context
+		GenerateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest
+	}{
+		ContextMoqParam:                       contextMoqParam,
+		GenerateAtlassianWebhookSecretRequest: generateAtlassianWebhookSecretRequest,
+	}
+	mock.lockGenerateAtlassianWebhookSecret.Lock()
+	mock.calls.GenerateAtlassianWebhookSecret = append(mock.calls.GenerateAtlassianWebhookSecret, callInfo)
+	mock.lockGenerateAtlassianWebhookSecret.Unlock()
+	return mock.GenerateAtlassianWebhookSecretFunc(contextMoqParam, generateAtlassianWebhookSecretRequest)
+}
+
+// GenerateAtlassianWebhookSecretCalls gets all the calls that were made to GenerateAtlassianWebhookSecret.
+// Check the length with:
+//
+//	len(mockedClient.GenerateAtlassianWebhookSecretCalls())
+func (mock *ClientMock) GenerateAtlassianWebhookSecretCalls() []struct {
+	ContextMoqParam                       context.Context
+	GenerateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest
+} {
+	var calls []struct {
+		ContextMoqParam                       context.Context
+		GenerateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest
+	}
+	mock.lockGenerateAtlassianWebhookSecret.RLock()
+	calls = mock.calls.GenerateAtlassianWebhookSecret
+	mock.lockGenerateAtlassianWebhookSecret.RUnlock()
+	return calls
+}
+
+// GetAtlassianWebhookSecret calls GetAtlassianWebhookSecretFunc.
+func (mock *ClientMock) GetAtlassianWebhookSecret(contextMoqParam context.Context, getAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest) (*xagentv1.GetAtlassianWebhookSecretResponse, error) {
+	if mock.GetAtlassianWebhookSecretFunc == nil {
+		panic("ClientMock.GetAtlassianWebhookSecretFunc: method is nil but Client.GetAtlassianWebhookSecret was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam                  context.Context
+		GetAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest
+	}{
+		ContextMoqParam:                  contextMoqParam,
+		GetAtlassianWebhookSecretRequest: getAtlassianWebhookSecretRequest,
+	}
+	mock.lockGetAtlassianWebhookSecret.Lock()
+	mock.calls.GetAtlassianWebhookSecret = append(mock.calls.GetAtlassianWebhookSecret, callInfo)
+	mock.lockGetAtlassianWebhookSecret.Unlock()
+	return mock.GetAtlassianWebhookSecretFunc(contextMoqParam, getAtlassianWebhookSecretRequest)
+}
+
+// GetAtlassianWebhookSecretCalls gets all the calls that were made to GetAtlassianWebhookSecret.
+// Check the length with:
+//
+//	len(mockedClient.GetAtlassianWebhookSecretCalls())
+func (mock *ClientMock) GetAtlassianWebhookSecretCalls() []struct {
+	ContextMoqParam                  context.Context
+	GetAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest
+} {
+	var calls []struct {
+		ContextMoqParam                  context.Context
+		GetAtlassianWebhookSecretRequest *xagentv1.GetAtlassianWebhookSecretRequest
+	}
+	mock.lockGetAtlassianWebhookSecret.RLock()
+	calls = mock.calls.GetAtlassianWebhookSecret
+	mock.lockGetAtlassianWebhookSecret.RUnlock()
 	return calls
 }
 

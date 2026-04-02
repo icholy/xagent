@@ -147,6 +147,12 @@ const (
 	// XAgentServiceListOrgMembersProcedure is the fully-qualified name of the XAgentService's
 	// ListOrgMembers RPC.
 	XAgentServiceListOrgMembersProcedure = "/xagent.v1.XAgentService/ListOrgMembers"
+	// XAgentServiceGetAtlassianWebhookSecretProcedure is the fully-qualified name of the
+	// XAgentService's GetAtlassianWebhookSecret RPC.
+	XAgentServiceGetAtlassianWebhookSecretProcedure = "/xagent.v1.XAgentService/GetAtlassianWebhookSecret"
+	// XAgentServiceGenerateAtlassianWebhookSecretProcedure is the fully-qualified name of the
+	// XAgentService's GenerateAtlassianWebhookSecret RPC.
+	XAgentServiceGenerateAtlassianWebhookSecretProcedure = "/xagent.v1.XAgentService/GenerateAtlassianWebhookSecret"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -193,6 +199,8 @@ type XAgentServiceClient interface {
 	AddOrgMember(context.Context, *v1.AddOrgMemberRequest) (*v1.AddOrgMemberResponse, error)
 	RemoveOrgMember(context.Context, *v1.RemoveOrgMemberRequest) (*v1.RemoveOrgMemberResponse, error)
 	ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error)
+	GetAtlassianWebhookSecret(context.Context, *v1.GetAtlassianWebhookSecretRequest) (*v1.GetAtlassianWebhookSecretResponse, error)
+	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -458,53 +466,67 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("ListOrgMembers")),
 			connect.WithClientOptions(opts...),
 		),
+		getAtlassianWebhookSecret: connect.NewClient[v1.GetAtlassianWebhookSecretRequest, v1.GetAtlassianWebhookSecretResponse](
+			httpClient,
+			baseURL+XAgentServiceGetAtlassianWebhookSecretProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GetAtlassianWebhookSecret")),
+			connect.WithClientOptions(opts...),
+		),
+		generateAtlassianWebhookSecret: connect.NewClient[v1.GenerateAtlassianWebhookSecretRequest, v1.GenerateAtlassianWebhookSecretResponse](
+			httpClient,
+			baseURL+XAgentServiceGenerateAtlassianWebhookSecretProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GenerateAtlassianWebhookSecret")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // xAgentServiceClient implements XAgentServiceClient.
 type xAgentServiceClient struct {
-	ping                   *connect.Client[v1.PingRequest, v1.PingResponse]
-	getProfile             *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
-	listTasks              *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
-	listRunnerTasks        *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
-	listChildTasks         *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
-	createTask             *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
-	getTask                *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	getTaskDetails         *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
-	updateTask             *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	archiveTask            *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
-	unarchiveTask          *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
-	cancelTask             *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
-	restartTask            *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
-	uploadLogs             *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
-	listLogs               *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
-	createLink             *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
-	listLinks              *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
-	findLinksByURL         *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
-	listEvents             *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
-	createEvent            *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
-	getEvent               *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
-	deleteEvent            *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
-	addEventTask           *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
-	removeEventTask        *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
-	listEventTasks         *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
-	listEventsByTask       *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
-	processEvent           *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
-	submitRunnerEvents     *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
-	registerWorkspaces     *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
-	listWorkspaces         *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
-	clearWorkspaces        *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
-	createKey              *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
-	listKeys               *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
-	deleteKey              *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
-	unlinkGitHubAccount    *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
-	unlinkAtlassianAccount *connect.Client[v1.UnlinkAtlassianAccountRequest, v1.UnlinkAtlassianAccountResponse]
-	createOrg              *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
-	listOrgs               *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
-	deleteOrg              *connect.Client[v1.DeleteOrgRequest, v1.DeleteOrgResponse]
-	addOrgMember           *connect.Client[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse]
-	removeOrgMember        *connect.Client[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse]
-	listOrgMembers         *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
+	ping                           *connect.Client[v1.PingRequest, v1.PingResponse]
+	getProfile                     *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
+	listTasks                      *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	listRunnerTasks                *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
+	listChildTasks                 *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
+	createTask                     *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	getTask                        *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
+	getTaskDetails                 *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
+	updateTask                     *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
+	archiveTask                    *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
+	unarchiveTask                  *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
+	cancelTask                     *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
+	restartTask                    *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
+	uploadLogs                     *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
+	listLogs                       *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
+	createLink                     *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
+	listLinks                      *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
+	findLinksByURL                 *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
+	listEvents                     *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
+	createEvent                    *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
+	getEvent                       *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
+	deleteEvent                    *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
+	addEventTask                   *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
+	removeEventTask                *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
+	listEventTasks                 *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
+	listEventsByTask               *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
+	processEvent                   *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
+	submitRunnerEvents             *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
+	registerWorkspaces             *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
+	listWorkspaces                 *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
+	clearWorkspaces                *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
+	createKey                      *connect.Client[v1.CreateKeyRequest, v1.CreateKeyResponse]
+	listKeys                       *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
+	deleteKey                      *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
+	unlinkGitHubAccount            *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
+	unlinkAtlassianAccount         *connect.Client[v1.UnlinkAtlassianAccountRequest, v1.UnlinkAtlassianAccountResponse]
+	createOrg                      *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
+	listOrgs                       *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
+	deleteOrg                      *connect.Client[v1.DeleteOrgRequest, v1.DeleteOrgResponse]
+	addOrgMember                   *connect.Client[v1.AddOrgMemberRequest, v1.AddOrgMemberResponse]
+	removeOrgMember                *connect.Client[v1.RemoveOrgMemberRequest, v1.RemoveOrgMemberResponse]
+	listOrgMembers                 *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
+	getAtlassianWebhookSecret      *connect.Client[v1.GetAtlassianWebhookSecretRequest, v1.GetAtlassianWebhookSecretResponse]
+	generateAtlassianWebhookSecret *connect.Client[v1.GenerateAtlassianWebhookSecretRequest, v1.GenerateAtlassianWebhookSecretResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -885,6 +907,24 @@ func (c *xAgentServiceClient) ListOrgMembers(ctx context.Context, req *v1.ListOr
 	return nil, err
 }
 
+// GetAtlassianWebhookSecret calls xagent.v1.XAgentService.GetAtlassianWebhookSecret.
+func (c *xAgentServiceClient) GetAtlassianWebhookSecret(ctx context.Context, req *v1.GetAtlassianWebhookSecretRequest) (*v1.GetAtlassianWebhookSecretResponse, error) {
+	response, err := c.getAtlassianWebhookSecret.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// GenerateAtlassianWebhookSecret calls xagent.v1.XAgentService.GenerateAtlassianWebhookSecret.
+func (c *xAgentServiceClient) GenerateAtlassianWebhookSecret(ctx context.Context, req *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error) {
+	response, err := c.generateAtlassianWebhookSecret.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -929,6 +969,8 @@ type XAgentServiceHandler interface {
 	AddOrgMember(context.Context, *v1.AddOrgMemberRequest) (*v1.AddOrgMemberResponse, error)
 	RemoveOrgMember(context.Context, *v1.RemoveOrgMemberRequest) (*v1.RemoveOrgMemberResponse, error)
 	ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error)
+	GetAtlassianWebhookSecret(context.Context, *v1.GetAtlassianWebhookSecretRequest) (*v1.GetAtlassianWebhookSecretResponse, error)
+	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1190,6 +1232,18 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("ListOrgMembers")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceGetAtlassianWebhookSecretHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGetAtlassianWebhookSecretProcedure,
+		svc.GetAtlassianWebhookSecret,
+		connect.WithSchema(xAgentServiceMethods.ByName("GetAtlassianWebhookSecret")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceGenerateAtlassianWebhookSecretHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGenerateAtlassianWebhookSecretProcedure,
+		svc.GenerateAtlassianWebhookSecret,
+		connect.WithSchema(xAgentServiceMethods.ByName("GenerateAtlassianWebhookSecret")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1276,6 +1330,10 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceRemoveOrgMemberHandler.ServeHTTP(w, r)
 		case XAgentServiceListOrgMembersProcedure:
 			xAgentServiceListOrgMembersHandler.ServeHTTP(w, r)
+		case XAgentServiceGetAtlassianWebhookSecretProcedure:
+			xAgentServiceGetAtlassianWebhookSecretHandler.ServeHTTP(w, r)
+		case XAgentServiceGenerateAtlassianWebhookSecretProcedure:
+			xAgentServiceGenerateAtlassianWebhookSecretHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1451,4 +1509,12 @@ func (UnimplementedXAgentServiceHandler) RemoveOrgMember(context.Context, *v1.Re
 
 func (UnimplementedXAgentServiceHandler) ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListOrgMembers is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) GetAtlassianWebhookSecret(context.Context, *v1.GetAtlassianWebhookSecretRequest) (*v1.GetAtlassianWebhookSecretResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetAtlassianWebhookSecret is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GenerateAtlassianWebhookSecret is not implemented"))
 }

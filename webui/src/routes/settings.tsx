@@ -7,6 +7,8 @@ import {
   unlinkAtlassianAccount,
   createOrg,
   deleteOrg,
+  getAtlassianWebhookSecret,
+  generateAtlassianWebhookSecret,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Org } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
@@ -23,7 +25,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RelativeTime } from '@/components/relative-time'
-import { Cable, ExternalLink, Github, Loader2, Mail, Plus, Trash2, Unlink, User } from 'lucide-react'
+import { Cable, Check, Copy, ExternalLink, Github, KeyRound, Loader2, Mail, Plus, RefreshCw, Trash2, Unlink, User } from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -138,15 +140,95 @@ function AccountSettings() {
 function OrgSettings() {
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>General</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">Coming soon.</p>
-        </CardContent>
-      </Card>
+      <AtlassianWebhookCard />
     </div>
+  )
+}
+
+function AtlassianWebhookCard() {
+  const { data, isLoading, refetch } = useQuery(getAtlassianWebhookSecret, {})
+  const generateMutation = useMutation(generateAtlassianWebhookSecret, {
+    onSuccess: () => refetch(),
+  })
+  const [copied, setCopied] = useState<'secret' | 'url' | null>(null)
+
+  const copyToClipboard = (text: string, field: 'secret' | 'url') => {
+    navigator.clipboard.writeText(text)
+    setCopied(field)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Atlassian Webhook</CardTitle>
+        <CardDescription>
+          Configure a webhook secret to receive Atlassian events (e.g. Jira issue comments) for your tasks.
+          Register this webhook URL in your Atlassian admin settings.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <div className="text-muted-foreground">Loading...</div>
+        ) : (
+          <>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Webhook URL</label>
+                <div className="flex items-center gap-2 mt-1">
+                  <code className="text-sm bg-muted px-2 py-1 rounded flex-1 truncate">
+                    {data?.webhookUrl || '—'}
+                  </code>
+                  {data?.webhookUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyToClipboard(data.webhookUrl, 'url')}
+                    >
+                      {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Secret</label>
+                <div className="flex items-center gap-2 mt-1">
+                  {data?.secret ? (
+                    <>
+                      <code className="text-sm bg-muted px-2 py-1 rounded flex-1 truncate">
+                        {data.secret.slice(0, 8)}{'•'.repeat(24)}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyToClipboard(data.secret, 'secret')}
+                      >
+                        {copied === 'secret' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No secret configured</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <Button
+              onClick={() => generateMutation.mutateAsync({})}
+              disabled={generateMutation.isPending}
+            >
+              {generateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : data?.secret ? (
+                <RefreshCw className="h-4 w-4" />
+              ) : (
+                <KeyRound className="h-4 w-4" />
+              )}
+              {data?.secret ? 'Regenerate Secret' : 'Generate Secret'}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

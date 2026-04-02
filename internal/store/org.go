@@ -32,7 +32,14 @@ func (s *Store) GetOrg(ctx context.Context, tx *sql.Tx, id int64) (*model.Org, e
 	if err != nil {
 		return nil, err
 	}
-	return toModelOrg(row), nil
+	return &model.Org{
+		ID:        row.ID,
+		Name:      row.Name,
+		Owner:     row.Owner,
+		Archived:  row.Archived,
+		CreatedAt: row.CreatedAt,
+		UpdatedAt: row.UpdatedAt,
+	}, nil
 }
 
 func (s *Store) ListOrgsByMember(ctx context.Context, tx *sql.Tx, userID string) ([]*model.Org, error) {
@@ -42,7 +49,14 @@ func (s *Store) ListOrgsByMember(ctx context.Context, tx *sql.Tx, userID string)
 	}
 	orgs := make([]*model.Org, len(rows))
 	for i, row := range rows {
-		orgs[i] = toModelOrg(row)
+		orgs[i] = &model.Org{
+			ID:        row.ID,
+			Name:      row.Name,
+			Owner:     row.Owner,
+			Archived:  row.Archived,
+			CreatedAt: row.CreatedAt,
+			UpdatedAt: row.UpdatedAt,
+		}
 	}
 	return orgs, nil
 }
@@ -135,15 +149,15 @@ func (s *Store) ResolveOrgOwner(ctx context.Context, tx *sql.Tx, orgID int64, us
 	return orgID, nil
 }
 
-func toModelOrg(row sqlc.Org) *model.Org {
-	return &model.Org{
-		ID:        row.ID,
-		Name:      row.Name,
-		Owner:     row.Owner,
-		Archived:  row.Archived,
-		CreatedAt: row.CreatedAt,
-		UpdatedAt: row.UpdatedAt,
-	}
+func (s *Store) GetOrgAtlassianWebhookSecret(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
+	return s.q(tx).GetOrgAtlassianWebhookSecret(ctx, orgID)
+}
+
+func (s *Store) SetOrgAtlassianWebhookSecret(ctx context.Context, tx *sql.Tx, orgID int64, secret string) error {
+	return s.q(tx).SetOrgAtlassianWebhookSecret(ctx, sqlc.SetOrgAtlassianWebhookSecretParams{
+		ID:                      orgID,
+		AtlassianWebhookSecret: secret,
+	})
 }
 
 func toModelOrgMember(row sqlc.OrgMember) *model.OrgMember {
