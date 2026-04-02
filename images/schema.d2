@@ -59,6 +59,7 @@ workspaces: {
   org_id: BIGINT {constraint: foreign_key}
   runner_id: TEXT
   name: TEXT
+  description: TEXT
   updated_at: TIMESTAMP
 }
 
@@ -79,6 +80,8 @@ users: {
   name: TEXT
   github_user_id: BIGINT
   github_username: TEXT
+  atlassian_account_id: TEXT
+  atlassian_username: TEXT
   created_at: TIMESTAMP
   updated_at: TIMESTAMP
   default_org_id: BIGINT {constraint: foreign_key}
@@ -89,6 +92,7 @@ orgs: {
   id: BIGSERIAL {constraint: primary_key}
   name: TEXT {constraint: unique}
   owner: TEXT
+  atlassian_webhook_secret: TEXT
   created_at: TIMESTAMP
   updated_at: TIMESTAMP
   archived: BOOLEAN
