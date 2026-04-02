@@ -36,73 +36,51 @@ const (
 )
 
 type RoutingRule struct {
-    ID        int64
-    OrgID     int64
-    Type      RoutingRuleType
-    Value     string    // the prefix string or the username
-    Priority  int       // evaluation order (lower = first)
-    CreatedAt time.Time
-    UpdatedAt time.Time
+    Type  RoutingRuleType `json:"type"`
+    Value string          `json:"value"` // the prefix string or the username
 }
 ```
 
 ### 2. Database Schema
 
-New migration:
+New migration — add a JSON column to the `orgs` table:
 
 ```sql
-CREATE TABLE org_routing_rules (
-    id         BIGSERIAL PRIMARY KEY,
-    org_id     BIGINT NOT NULL REFERENCES orgs(id),
-    type       TEXT NOT NULL,        -- 'prefix' or 'mention'
-    value      TEXT NOT NULL,        -- e.g. 'xagent:' or 'BotUser'
-    priority   INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_org_routing_rules_org_id ON org_routing_rules(org_id);
-
--- Prevent duplicate rules within an org
-CREATE UNIQUE INDEX idx_org_routing_rules_unique ON org_routing_rules(org_id, type, value);
+ALTER TABLE orgs ADD COLUMN routing_rules JSONB NOT NULL DEFAULT '[]';
 ```
 
-No data migration is needed. Orgs without any routing rules use the default behavior (see section 5).
+The column stores an array of routing rule objects:
+
+```json
+[
+    {"type": "prefix", "value": "xagent:"},
+    {"type": "mention", "value": "BotUser"}
+]
+```
+
+No data migration is needed. The default empty array `[]` means "use default behavior" (see section 5). This is simpler than a dedicated table — routing rules are a small, org-scoped configuration that is always read as a unit. A JSON column avoids extra joins and keeps the rules co-located with the org they belong to.
 
 ### 3. Store Layer
 
-Add to `internal/store/sql/queries/routing_rule.sql`:
+Add to `internal/store/sql/queries/org.sql`:
 
 ```sql
--- name: ListRoutingRulesByOrg :many
-SELECT id, org_id, type, value, priority, created_at, updated_at
-FROM org_routing_rules
-WHERE org_id = $1
-ORDER BY priority ASC, id ASC;
+-- name: GetOrgRoutingRules :one
+SELECT routing_rules FROM orgs WHERE id = $1;
 
--- name: ListRoutingRulesByOrgs :many
-SELECT id, org_id, type, value, priority, created_at, updated_at
-FROM org_routing_rules
-WHERE org_id = ANY($1::BIGINT[])
-ORDER BY org_id, priority ASC, id ASC;
-
--- name: CreateRoutingRule :one
-INSERT INTO org_routing_rules (org_id, type, value, priority)
-VALUES ($1, $2, $3, $4)
-RETURNING id, org_id, type, value, priority, created_at, updated_at;
-
--- name: DeleteRoutingRule :exec
-DELETE FROM org_routing_rules WHERE id = $1 AND org_id = $2;
-
--- name: UpdateRoutingRule :exec
-UPDATE org_routing_rules SET
-    value = $3,
-    priority = $4,
+-- name: SetOrgRoutingRules :exec
+UPDATE orgs SET
+    routing_rules = $2,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND org_id = $2;
+WHERE id = $1;
+
+-- name: GetRoutingRulesByOrgs :many
+SELECT id, routing_rules FROM orgs WHERE id = ANY($1::BIGINT[]);
 ```
 
-The batch query `ListRoutingRulesByOrgs` is critical — the Router needs rules for all candidate orgs in a single query to avoid N+1 lookups during routing.
+The batch query `GetRoutingRulesByOrgs` is critical — the Router needs rules for all candidate orgs in a single query to avoid N+1 lookups during routing.
+
+In the Go store layer, the `routing_rules` column is scanned into `[]model.RoutingRule` using `json.Unmarshal`. The `Org` model gains a `RoutingRules []RoutingRule` field.
 
 ### 4. Proto Definitions
 
@@ -114,63 +92,42 @@ enum RoutingRuleType {
 }
 
 message RoutingRule {
-    int64 id = 1;
-    int64 org_id = 2;
-    RoutingRuleType type = 3;
-    string value = 4;
-    int32 priority = 5;
-    google.protobuf.Timestamp created_at = 6;
-    google.protobuf.Timestamp updated_at = 7;
+    RoutingRuleType type = 1;
+    string value = 2;
 }
 
 // RPCs
-rpc ListRoutingRules(ListRoutingRulesRequest) returns (ListRoutingRulesResponse);
-rpc CreateRoutingRule(CreateRoutingRuleRequest) returns (CreateRoutingRuleResponse);
-rpc UpdateRoutingRule(UpdateRoutingRuleRequest) returns (UpdateRoutingRuleResponse);
-rpc DeleteRoutingRule(DeleteRoutingRuleRequest) returns (DeleteRoutingRuleResponse);
+rpc GetRoutingRules(GetRoutingRulesRequest) returns (GetRoutingRulesResponse);
+rpc SetRoutingRules(SetRoutingRulesRequest) returns (SetRoutingRulesResponse);
 
-message ListRoutingRulesRequest {}
-message ListRoutingRulesResponse {
+message GetRoutingRulesRequest {}
+message GetRoutingRulesResponse {
     repeated RoutingRule rules = 1;
 }
 
-message CreateRoutingRuleRequest {
-    RoutingRuleType type = 1;
-    string value = 2;
-    int32 priority = 3;
+message SetRoutingRulesRequest {
+    repeated RoutingRule rules = 1;
 }
-message CreateRoutingRuleResponse {
-    RoutingRule rule = 1;
+message SetRoutingRulesResponse {
+    repeated RoutingRule rules = 1;
 }
-
-message UpdateRoutingRuleRequest {
-    int64 id = 1;
-    string value = 2;
-    int32 priority = 3;
-}
-message UpdateRoutingRuleResponse {}
-
-message DeleteRoutingRuleRequest {
-    int64 id = 1;
-}
-message DeleteRoutingRuleResponse {}
 ```
 
-All RPCs are org-scoped via `caller.OrgID` from the auth context.
+All RPCs are org-scoped via `caller.OrgID` from the auth context. The API is set/get rather than CRUD — the client sends the full list of rules, and the server replaces the JSON column. This matches the JSON column approach: rules are always read and written as a unit.
 
 ### 5. Default Behavior (No Rules Configured)
 
-When an org has no routing rules in `org_routing_rules`, the Router falls back to the current hardcoded behavior: prefix match on `xagent:`. This ensures backward compatibility — existing orgs work identically without any migration or configuration.
+When an org's `routing_rules` column is an empty array `[]` (the default), the Router falls back to the current hardcoded behavior: prefix match on `xagent:`. This ensures backward compatibility — existing orgs work identically without any migration or configuration.
 
 ```go
-func defaultRules() []*model.RoutingRule {
-    return []*model.RoutingRule{
+func defaultRules() []model.RoutingRule {
+    return []model.RoutingRule{
         {Type: model.RoutingRulePrefix, Value: "xagent:"},
     }
 }
 ```
 
-Once an org creates its first custom rule, the defaults are no longer applied. This is an explicit opt-in: if you configure rules, you own the full set. If you want to keep `xagent:` alongside a mention rule, you add both.
+Once an org sets custom rules, the defaults are no longer applied. This is an explicit opt-in: if you configure rules, you own the full set. If you want to keep `xagent:` alongside a mention rule, you add both.
 
 ### 6. Router Changes
 
@@ -220,7 +177,7 @@ func (r *Router) Route(ctx context.Context, event *Event) (int, error) {
 
     // Step 2: Load routing rules for all candidate orgs (NEW)
     orgIDs := maps.Keys(linksByOrg)
-    rulesByOrg, err := r.loadRoutingRules(ctx, orgIDs)
+    rulesByOrg, err := r.loadRoutingRules(ctx, orgIDs) // uses GetRoutingRulesByOrgs
     if err != nil {
         return 0, err
     }
@@ -352,24 +309,26 @@ Add a "Routing Rules" section to the org settings page:
 
 ### 11. Implementation Order
 
-1. Database migration (new `org_routing_rules` table)
-2. Store layer (sqlc queries)
-3. Model (`routing_rule.go`)
+1. Database migration (add `routing_rules` JSONB column to `orgs`)
+2. Store layer (queries + JSON scanning)
+3. Model (`RoutingRule` type, `Org.RoutingRules` field)
 4. Proto definitions + generate
-5. Server RPC handlers (CRUD for routing rules)
+5. Server RPC handlers (get/set routing rules)
 6. Router changes (load rules, apply filtering)
 7. Webhook handler changes (remove prefix filtering)
 8. Settings UI
 
 ## Trade-offs
 
-### Rules table vs JSON column
+### JSON column vs dedicated table
 
-**Chosen: dedicated table.** An alternative is storing rules as a JSON array column on the `orgs` table. The dedicated table is better because:
-- Rules can be queried/indexed independently
-- The unique constraint prevents duplicates at the DB level
-- Batch loading across multiple orgs is a straightforward `WHERE org_id = ANY(...)` query
-- Consistent with the rest of the schema (no JSON columns elsewhere)
+**Chosen: JSON column on `orgs`.** Routing rules are a small, org-scoped configuration that is always read and written as a unit. A JSON column is simpler:
+- No extra table, joins, or foreign keys
+- Rules are co-located with the org they belong to
+- The API is naturally set/get (replace the whole list) rather than CRUD
+- Batch loading across orgs is a straightforward `SELECT id, routing_rules FROM orgs WHERE id = ANY(...)`
+
+The trade-off is that individual rules can't be queried or constrained at the DB level (e.g. no unique index on type+value). Duplicate prevention must happen in application code. This is acceptable given the small size and simple structure of the rules list.
 
 ### Per-org rules vs global rules with org overrides
 
@@ -389,12 +348,10 @@ Add a "Routing Rules" section to the org settings page:
 
 ## Open Questions
 
-1. **Should mention rules match against the user who *wrote* the comment, or the user *mentioned in* the comment?** The design assumes mentions *in* the comment body (e.g. `@BotUser please fix this`). But an org might also want "route all comments by @SpecificUser" — which is author matching, not body matching. Should this be a separate rule type (e.g. `author`)?
+1. **Atlassian mention format:** Jira's internal format uses `[~accountId:xxx]` but webhook payloads may contain rendered `@displayName`. Need to verify the exact format in Jira Cloud webhook comment bodies to ensure mention matching works reliably.
 
-2. **Atlassian mention format:** Jira's internal format uses `[~accountId:xxx]` but webhook payloads may contain rendered `@displayName`. Need to verify the exact format in Jira Cloud webhook comment bodies to ensure mention matching works reliably.
+2. **Rule limits:** Should there be a maximum number of routing rules per org? Unbounded rules could lead to performance issues if an org creates hundreds. A practical limit (e.g. 50) would be reasonable.
 
-3. **Rule limits:** Should there be a maximum number of routing rules per org? Unbounded rules could lead to performance issues if an org creates hundreds. A practical limit (e.g. 50) would be reasonable.
+3. **Audit logging:** Should routing rule changes be audit-logged? The current system has audit logs for task state changes. Routing rule changes affect event flow and could be important to trace.
 
-4. **Audit logging:** Should routing rule changes be audit-logged? The current system has audit logs for task state changes. Routing rule changes affect event flow and could be important to trace.
-
-5. **Rule testing/preview:** Should there be an API to test a rule against a sample event body without actually creating the rule? This would help users verify their prefix or mention patterns before deploying them.
+4. **Rule testing/preview:** Should there be an API to test a rule against a sample event body without actually creating the rule? This would help users verify their prefix or mention patterns before deploying them.
