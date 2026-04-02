@@ -3,35 +3,21 @@ package eventrouter
 import (
 	"log/slog"
 	"testing"
-	"time"
 
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
-
-// createSubscribedLink creates a subscribed link on a task.
-func createSubscribedLink(t *testing.T, s *store.Store, taskID int64, url string) {
-	t.Helper()
-	err := s.CreateLink(t.Context(), nil, &model.Link{
-		TaskID:    taskID,
-		URL:       url,
-		Title:     "test link",
-		Subscribe: true,
-		CreatedAt: time.Now(),
-	})
-	assert.NilError(t, err)
-}
 
 func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 	t.Parallel()
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s)
+	url := "https://github.com/owner/repo/pull/1"
 	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-	createSubscribedLink(t, s, task.ID, "https://github.com/owner/repo/pull/1")
 
 	r := &Router{
 		Log:   slog.Default(),
@@ -42,7 +28,7 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 		Type:        EventTypeGitHub,
 		Description: "testuser commented on PR #1",
 		Data:        "xagent: fix tests",
-		URL:         "https://github.com/owner/repo/pull/1",
+		URL:         url,
 		UserID:      org.UserID,
 	})
 	assert.NilError(t, err)
@@ -59,11 +45,14 @@ func TestRouteMultipleOrgs(t *testing.T) {
 	s := teststore.New(t)
 	orgA := teststore.CreateOrg(t, s)
 	orgB := teststore.CreateOrg(t, s)
-	taskA := teststore.CreateTask(t, s, orgA, &teststore.TaskOptions{
+	url := "https://github.com/owner/repo/pull/1"
+	teststore.CreateTask(t, s, orgA, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-	taskB := teststore.CreateTask(t, s, orgB, &teststore.TaskOptions{
+	teststore.CreateTask(t, s, orgB, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
 
 	// Add user A as member of org B so FindSubscribedLinksByURLForUser finds both
@@ -73,10 +62,6 @@ func TestRouteMultipleOrgs(t *testing.T) {
 		Role:   "member",
 	})
 	assert.NilError(t, err)
-
-	url := "https://github.com/owner/repo/pull/1"
-	createSubscribedLink(t, s, taskA.ID, url)
-	createSubscribedLink(t, s, taskB.ID, url)
 
 	r := &Router{
 		Log:   slog.Default(),
@@ -96,12 +81,14 @@ func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 	t.Parallel()
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s)
-	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
-		Status: model.TaskStatusCompleted,
-	})
 	url := "https://github.com/owner/repo/pull/1"
-	createSubscribedLink(t, s, task.ID, url)
-	createSubscribedLink(t, s, task.ID, url)
+	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links: []teststore.LinkOptions{
+			{URL: url, Subscribe: true},
+			{URL: url, Subscribe: true},
+		},
+	})
 
 	r := &Router{
 		Log:   slog.Default(),

@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/model"
@@ -36,14 +37,22 @@ type Org struct {
 	OrgID  int64
 }
 
+// LinkOptions configures a link created with a task.
+type LinkOptions struct {
+	URL       string
+	Title     string
+	Subscribe bool
+}
+
 // TaskOptions configures CreateTask behavior. Zero values are replaced
 // with sensible defaults.
 type TaskOptions struct {
 	Status    model.TaskStatus
 	Workspace string
+	Links     []LinkOptions
 }
 
-// CreateTask creates a task in the given org.
+// CreateTask creates a task in the given org, along with any links.
 func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *model.Task {
 	t.Helper()
 	if opts == nil {
@@ -56,6 +65,18 @@ func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *mode
 	}
 	if err := s.CreateTask(t.Context(), nil, task); err != nil {
 		t.Fatal(err)
+	}
+	for _, lo := range opts.Links {
+		link := &model.Link{
+			TaskID:    task.ID,
+			URL:       cmp.Or(lo.URL, "https://example.com"),
+			Title:     cmp.Or(lo.Title, "test link"),
+			Subscribe: lo.Subscribe,
+			CreatedAt: time.Now(),
+		}
+		if err := s.CreateLink(t.Context(), nil, link); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return task
 }
