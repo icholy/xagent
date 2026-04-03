@@ -105,9 +105,6 @@ const (
 	// XAgentServiceListEventsByTaskProcedure is the fully-qualified name of the XAgentService's
 	// ListEventsByTask RPC.
 	XAgentServiceListEventsByTaskProcedure = "/xagent.v1.XAgentService/ListEventsByTask"
-	// XAgentServiceProcessEventProcedure is the fully-qualified name of the XAgentService's
-	// ProcessEvent RPC.
-	XAgentServiceProcessEventProcedure = "/xagent.v1.XAgentService/ProcessEvent"
 	// XAgentServiceSubmitRunnerEventsProcedure is the fully-qualified name of the XAgentService's
 	// SubmitRunnerEvents RPC.
 	XAgentServiceSubmitRunnerEventsProcedure = "/xagent.v1.XAgentService/SubmitRunnerEvents"
@@ -183,7 +180,6 @@ type XAgentServiceClient interface {
 	RemoveEventTask(context.Context, *v1.RemoveEventTaskRequest) (*v1.RemoveEventTaskResponse, error)
 	ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
-	ProcessEvent(context.Context, *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error)
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
 	RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error)
 	ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error)
@@ -370,12 +366,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("ListEventsByTask")),
 			connect.WithClientOptions(opts...),
 		),
-		processEvent: connect.NewClient[v1.ProcessEventRequest, v1.ProcessEventResponse](
-			httpClient,
-			baseURL+XAgentServiceProcessEventProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("ProcessEvent")),
-			connect.WithClientOptions(opts...),
-		),
 		submitRunnerEvents: connect.NewClient[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse](
 			httpClient,
 			baseURL+XAgentServiceSubmitRunnerEventsProcedure,
@@ -509,7 +499,6 @@ type xAgentServiceClient struct {
 	removeEventTask                *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
 	listEventTasks                 *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
 	listEventsByTask               *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
-	processEvent                   *connect.Client[v1.ProcessEventRequest, v1.ProcessEventResponse]
 	submitRunnerEvents             *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
 	registerWorkspaces             *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
 	listWorkspaces                 *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
@@ -763,15 +752,6 @@ func (c *xAgentServiceClient) ListEventsByTask(ctx context.Context, req *v1.List
 	return nil, err
 }
 
-// ProcessEvent calls xagent.v1.XAgentService.ProcessEvent.
-func (c *xAgentServiceClient) ProcessEvent(ctx context.Context, req *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error) {
-	response, err := c.processEvent.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
 // SubmitRunnerEvents calls xagent.v1.XAgentService.SubmitRunnerEvents.
 func (c *xAgentServiceClient) SubmitRunnerEvents(ctx context.Context, req *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error) {
 	response, err := c.submitRunnerEvents.CallUnary(ctx, connect.NewRequest(req))
@@ -953,7 +933,6 @@ type XAgentServiceHandler interface {
 	RemoveEventTask(context.Context, *v1.RemoveEventTaskRequest) (*v1.RemoveEventTaskResponse, error)
 	ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
-	ProcessEvent(context.Context, *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error)
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
 	RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error)
 	ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error)
@@ -1136,12 +1115,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("ListEventsByTask")),
 		connect.WithHandlerOptions(opts...),
 	)
-	xAgentServiceProcessEventHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceProcessEventProcedure,
-		svc.ProcessEvent,
-		connect.WithSchema(xAgentServiceMethods.ByName("ProcessEvent")),
-		connect.WithHandlerOptions(opts...),
-	)
 	xAgentServiceSubmitRunnerEventsHandler := connect.NewUnaryHandlerSimple(
 		XAgentServiceSubmitRunnerEventsProcedure,
 		svc.SubmitRunnerEvents,
@@ -1298,8 +1271,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListEventTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceListEventsByTaskProcedure:
 			xAgentServiceListEventsByTaskHandler.ServeHTTP(w, r)
-		case XAgentServiceProcessEventProcedure:
-			xAgentServiceProcessEventHandler.ServeHTTP(w, r)
 		case XAgentServiceSubmitRunnerEventsProcedure:
 			xAgentServiceSubmitRunnerEventsHandler.ServeHTTP(w, r)
 		case XAgentServiceRegisterWorkspacesProcedure:
@@ -1445,10 +1416,6 @@ func (UnimplementedXAgentServiceHandler) ListEventTasks(context.Context, *v1.Lis
 
 func (UnimplementedXAgentServiceHandler) ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListEventsByTask is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) ProcessEvent(context.Context, *v1.ProcessEventRequest) (*v1.ProcessEventResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ProcessEvent is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error) {

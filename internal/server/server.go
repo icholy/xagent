@@ -8,9 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -820,67 +818,6 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 	return resp, nil
 }
 
-func (s *Server) ProcessEvent(ctx context.Context, req *xagentv1.ProcessEventRequest) (*xagentv1.ProcessEventResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	event, err := s.store.GetEvent(ctx, nil, req.Id, caller.OrgID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.Id))
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	ids, err := s.processEventInternal(ctx, event.ID, event.URL, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return &xagentv1.ProcessEventResponse{TaskIds: ids}, nil
-}
-
-func (s *Server) processEventInternal(ctx context.Context, eventID int64, eventURL string, orgID int64) ([]int64, error) {
-	if eventURL == "" {
-		return nil, nil
-	}
-	links, err := s.store.FindLinksByURL(ctx, nil, eventURL, orgID)
-	if err != nil {
-		return nil, err
-	}
-	taskIDs := map[int64]bool{}
-	for _, link := range links {
-		if !link.Subscribe || taskIDs[link.TaskID] {
-			continue
-		}
-		task, err := s.store.GetTask(ctx, nil, link.TaskID, orgID)
-		if err != nil {
-			s.log.Warn("failed to get task", "task_id", link.TaskID, "error", err)
-			continue
-		}
-		if task.Archived {
-			s.log.Info("skipping archived task", "task_id", link.TaskID)
-			continue
-		}
-		taskIDs[link.TaskID] = true
-		if err := s.store.AddEventTask(ctx, nil, eventID, link.TaskID); err != nil {
-			s.log.Warn("failed to add event task", "event_id", eventID, "task_id", link.TaskID, "error", err)
-		}
-		err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			task, err := s.store.GetTaskForUpdate(ctx, tx, link.TaskID, orgID)
-			if err != nil {
-				return err
-			}
-			task.Start()
-			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
-				return err
-			}
-			return tx.Commit()
-		})
-		if err != nil {
-			s.log.Warn("failed to start task", "task_id", link.TaskID, "error", err)
-		}
-	}
-	ids := slices.Collect(maps.Keys(taskIDs))
-	s.log.Info("event processed", "id", eventID, "tasks_routed", len(ids))
-	return ids, nil
-}
 
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
