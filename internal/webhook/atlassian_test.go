@@ -37,6 +37,7 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &atlassianWebhookEvent{
+				eventType:          "comment_created",
 				description:        "Test User commented on PROJ-123",
 				data:               "xagent: do something",
 				url:                "https://mycompany.atlassian.net/browse/PROJ-123",
@@ -57,6 +58,7 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &atlassianWebhookEvent{
+				eventType:          "comment_created",
 				description:        "Test User commented on PROJ-123",
 				data:               "just a regular comment",
 				url:                "https://mycompany.atlassian.net/browse/PROJ-123",
@@ -123,6 +125,7 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &atlassianWebhookEvent{
+				eventType:          "comment_created",
 				description:        "Test User commented on PROJ-1",
 				data:               "xagent: trimmed",
 				url:                "https://mycompany.atlassian.net/browse/PROJ-1",
