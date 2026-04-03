@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
+import { create } from '@bufbuild/protobuf'
 import {
   getProfile,
   unlinkGitHubAccount,
@@ -9,8 +10,11 @@ import {
   deleteOrg,
   getOrgSettings,
   generateAtlassianWebhookSecret,
+  getRoutingRules,
+  setRoutingRules,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { Org } from '@/gen/xagent/v1/xagent_pb'
+import type { Org, RoutingRule } from '@/gen/xagent/v1/xagent_pb'
+import { RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,9 +27,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RelativeTime } from '@/components/relative-time'
-import { Cable, Check, Copy, ExternalLink, Github, KeyRound, Loader2, Mail, Plus, RefreshCw, Trash2, Unlink, User } from 'lucide-react'
+import { Cable, Check, Copy, ExternalLink, Github, KeyRound, Loader2, Mail, Pencil, Plus, RefreshCw, Save, Trash2, Unlink, User, X } from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -235,7 +246,186 @@ function OrgSettings() {
           )}
         </CardContent>
       </Card>
+      <RoutingRulesCard />
     </div>
+  )
+}
+
+const ROUTING_SOURCES = ['github', 'atlassian'] as const
+
+interface RuleFormState {
+  source: string
+  type: string
+  prefix: string
+  mention: string
+}
+
+function RoutingRulesCard() {
+  const { data, isLoading, refetch } = useQuery(getRoutingRules, {}, {
+    refetchInterval: 6000,
+  })
+  const saveMutation = useMutation(setRoutingRules, {
+    onSuccess: () => refetch(),
+  })
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<RuleFormState>({ source: '', type: '', prefix: '', mention: '' })
+
+  const rules = data?.rules ?? []
+
+  const handleDelete = async (index: number) => {
+    const updated = rules.filter((_, i) => i !== index)
+    await saveMutation.mutateAsync({ rules: updated })
+  }
+
+  const handleStartEdit = (index: number) => {
+    const rule = rules[index]
+    setEditForm({ source: rule.source, type: rule.type, prefix: rule.prefix, mention: rule.mention })
+    setEditingIndex(index)
+  }
+
+  const handleSaveEdit = async () => {
+    if (editingIndex === null) return
+    const updated = rules.map((rule, i) =>
+      i === editingIndex
+        ? create(RoutingRuleSchema, { source: editForm.source, type: editForm.type, prefix: editForm.prefix, mention: editForm.mention })
+        : rule
+    )
+    await saveMutation.mutateAsync({ rules: updated })
+    setEditingIndex(null)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Routing Rules</CardTitle>
+        <CardDescription>
+          Configure how events get routed to tasks and workspaces.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <div className="text-muted-foreground">Loading...</div>
+        ) : (
+          <>
+            <AddRuleForm rules={rules} onAdd={refetch} />
+            {saveMutation.error && (
+              <div className="text-destructive text-sm">{saveMutation.error.message}</div>
+            )}
+            {rules.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Prefix</TableHead>
+                    <TableHead>Mention</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rules.map((rule, index) =>
+                    editingIndex === index ? (
+                      <TableRow key={index}>
+                        <TableCell>
+                          <Select value={editForm.source} onValueChange={(v) => setEditForm({ ...editForm, source: v })}>
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ROUTING_SOURCES.map((s) => (
+                                <SelectItem key={s} value={s}>{s}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Input value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })} placeholder="Type" className="w-32" />
+                        </TableCell>
+                        <TableCell>
+                          <Input value={editForm.prefix} onChange={(e) => setEditForm({ ...editForm, prefix: e.target.value })} placeholder="Prefix" className="w-48" />
+                        </TableCell>
+                        <TableCell>
+                          <Input value={editForm.mention} onChange={(e) => setEditForm({ ...editForm, mention: e.target.value })} placeholder="Mention" className="w-32" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="outline" size="sm" onClick={handleSaveEdit} disabled={saveMutation.isPending || !editForm.source}>
+                              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setEditingIndex(null)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{rule.source}</TableCell>
+                        <TableCell className="text-muted-foreground">{rule.type || '-'}</TableCell>
+                        <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
+                        <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="outline" size="sm" onClick={() => handleStartEdit(index)} disabled={saveMutation.isPending}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={() => handleDelete(index)} disabled={saveMutation.isPending}>
+                              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function AddRuleForm({ rules, onAdd }: { rules: RoutingRule[]; onAdd: () => void }) {
+  const [form, setForm] = useState<RuleFormState>({ source: '', type: '', prefix: '', mention: '' })
+  const saveMutation = useMutation(setRoutingRules, {
+    onSuccess: () => {
+      setForm({ source: '', type: '', prefix: '', mention: '' })
+      onAdd()
+    },
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.source) return
+    const newRule = create(RoutingRuleSchema, { source: form.source, type: form.type, prefix: form.prefix, mention: form.mention })
+    await saveMutation.mutateAsync({ rules: [...rules, newRule] })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex gap-2 flex-wrap">
+      <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })}>
+        <SelectTrigger className="w-32">
+          <SelectValue placeholder="Source" />
+        </SelectTrigger>
+        <SelectContent>
+          {ROUTING_SOURCES.map((s) => (
+            <SelectItem key={s} value={s}>{s}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Input placeholder="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-32" />
+      <Input placeholder="Prefix" value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value })} className="w-48" />
+      <Input placeholder="Mention" value={form.mention} onChange={(e) => setForm({ ...form, mention: e.target.value })} className="w-32" />
+      <Button type="submit" disabled={saveMutation.isPending || !form.source}>
+        {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        Add Rule
+      </Button>
+      {saveMutation.error && (
+        <span className="text-destructive text-sm self-center">{saveMutation.error.message}</span>
+      )}
+    </form>
   )
 }
 

@@ -135,11 +135,6 @@ export const listEventTasks = XAgentService.method.listEventTasks;
 export const listEventsByTask = XAgentService.method.listEventsByTask;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.ProcessEvent
- */
-export const processEvent = XAgentService.method.processEvent;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.SubmitRunnerEvents
  */
 export const submitRunnerEvents = XAgentService.method.submitRunnerEvents;
@@ -223,3 +218,13 @@ export const getOrgSettings = XAgentService.method.getOrgSettings;
  * @generated from rpc xagent.v1.XAgentService.GenerateAtlassianWebhookSecret
  */
 export const generateAtlassianWebhookSecret = XAgentService.method.generateAtlassianWebhookSecret;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.GetRoutingRules
+ */
+export const getRoutingRules = XAgentService.method.getRoutingRules;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.SetRoutingRules
+ */
+export const setRoutingRules = XAgentService.method.setRoutingRules;
