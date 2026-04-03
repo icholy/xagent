@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"maps"
 	"slices"
 
 	"github.com/icholy/xagent/internal/model"
@@ -35,18 +36,23 @@ var defaultRules = []Rule{
 // creates events per org, and starts the associated tasks. It returns the total
 // number of tasks routed and any error finding links.
 func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
-	match := slices.ContainsFunc(defaultRules, func(r Rule) bool {
-		return r.Match(input)
-	})
-	if !match {
+	linksByOrg, err := r.find(ctx, input)
+	if err != nil {
+		return 0, err
+	}
+	if len(linksByOrg) == 0 {
 		return 0, nil
 	}
-	linksByOrg, err := r.find(ctx, input)
+	orgRules, err := r.Store.GetRoutingRulesByOrgs(ctx, nil, slices.Collect(maps.Keys(linksByOrg)))
 	if err != nil {
 		return 0, err
 	}
 	var n int
 	for orgID, links := range linksByOrg {
+		rules := orgRulesFor(orgRules[orgID])
+		if !slices.ContainsFunc(rules, func(r Rule) bool { return r.Match(input) }) {
+			continue
+		}
 		event := &model.Event{
 			Description: input.Description,
 			Data:        input.Data,
@@ -66,6 +72,19 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// orgRulesFor returns the routing rules for an org, falling back to
+// defaultRules when the org has no custom rules configured.
+func orgRulesFor(models []model.RoutingRule) []Rule {
+	if len(models) == 0 {
+		return defaultRules
+	}
+	rules := make([]Rule, len(models))
+	for i, m := range models {
+		rules[i] = RuleFromModel(m)
+	}
+	return rules
 }
 
 // find queries all matching subscribed links for a URL across all
