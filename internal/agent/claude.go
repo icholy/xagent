@@ -47,6 +47,13 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 		args = append(args, "--mcp-config", string(mcpJSON))
 	}
 
+	// Add channel support
+	if a.options != nil && len(a.options.Channels) > 0 {
+		for _, ch := range a.options.Channels {
+			args = append(args, "--dangerously-load-development-channels", ch)
+		}
+	}
+
 	// Resume previous session if requested
 	if resume {
 		args = append(args, "--continue")

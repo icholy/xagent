@@ -75,6 +75,15 @@ type Task struct {
 	OrgID        int64     `json:"org_id"`
 }
 
+type TaskEvent struct {
+	ID        int64           `json:"id"`
+	TaskID    int64           `json:"task_id"`
+	Type      string          `json:"type"`
+	Content   string          `json:"content"`
+	Meta      json.RawMessage `json:"meta"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
 type TaskLink struct {
 	ID        int64     `json:"id"`
 	TaskID    int64     `json:"task_id"`

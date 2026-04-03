@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -35,6 +36,49 @@ func (s *Server) log(ctx context.Context, format string, args ...any) {
 	})
 	if err != nil {
 		slog.Warn("failed to upload log", "error", err)
+	}
+}
+
+// ChannelInstructions is the system prompt added for the channel capability.
+const ChannelInstructions = "Events from the xagent channel arrive as <channel source=\"xagent\" ...>. " +
+	"They notify you about task status changes, new instructions, and external events. " +
+	"You do not need to reply to these events — they are informational. " +
+	"Use the existing xagent MCP tools to take action based on them."
+
+// PollEvents polls for new task events and sends them as channel notifications.
+// It blocks until the context is cancelled.
+func (s *Server) PollEvents(ctx context.Context, notifier *ChannelNotifier, interval time.Duration) {
+	var cursor int64
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			events, err := s.client.PollTaskEvents(ctx, &xagentv1.PollTaskEventsRequest{
+				TaskId:       s.task.ID,
+				AfterEventId: cursor,
+				Limit:        50,
+			})
+			if err != nil {
+				slog.Warn("failed to poll task events", "error", err)
+				continue
+			}
+			for _, e := range events.Events {
+				meta := e.Meta
+				if meta == nil {
+					meta = map[string]string{}
+				}
+				meta["task_id"] = fmt.Sprint(s.task.ID)
+				meta["event_type"] = e.Type
+				if err := notifier.Notify(ctx, e.Content, meta); err != nil {
+					slog.Warn("failed to send channel notification", "error", err)
+				}
+				cursor = e.Id
+			}
+		}
 	}
 }
 

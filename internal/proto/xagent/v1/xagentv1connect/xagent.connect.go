@@ -156,6 +156,12 @@ const (
 	// XAgentServiceSetRoutingRulesProcedure is the fully-qualified name of the XAgentService's
 	// SetRoutingRules RPC.
 	XAgentServiceSetRoutingRulesProcedure = "/xagent.v1.XAgentService/SetRoutingRules"
+	// XAgentServicePollTaskEventsProcedure is the fully-qualified name of the XAgentService's
+	// PollTaskEvents RPC.
+	XAgentServicePollTaskEventsProcedure = "/xagent.v1.XAgentService/PollTaskEvents"
+	// XAgentServiceCreateTaskEventProcedure is the fully-qualified name of the XAgentService's
+	// CreateTaskEvent RPC.
+	XAgentServiceCreateTaskEventProcedure = "/xagent.v1.XAgentService/CreateTaskEvent"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -205,6 +211,8 @@ type XAgentServiceClient interface {
 	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
 	GetRoutingRules(context.Context, *v1.GetRoutingRulesRequest) (*v1.GetRoutingRulesResponse, error)
 	SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error)
+	PollTaskEvents(context.Context, *v1.PollTaskEventsRequest) (*v1.PollTaskEventsResponse, error)
+	CreateTaskEvent(context.Context, *v1.CreateTaskEventRequest) (*v1.CreateTaskEventResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -488,6 +496,18 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("SetRoutingRules")),
 			connect.WithClientOptions(opts...),
 		),
+		pollTaskEvents: connect.NewClient[v1.PollTaskEventsRequest, v1.PollTaskEventsResponse](
+			httpClient,
+			baseURL+XAgentServicePollTaskEventsProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("PollTaskEvents")),
+			connect.WithClientOptions(opts...),
+		),
+		createTaskEvent: connect.NewClient[v1.CreateTaskEventRequest, v1.CreateTaskEventResponse](
+			httpClient,
+			baseURL+XAgentServiceCreateTaskEventProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("CreateTaskEvent")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -538,6 +558,8 @@ type xAgentServiceClient struct {
 	generateAtlassianWebhookSecret *connect.Client[v1.GenerateAtlassianWebhookSecretRequest, v1.GenerateAtlassianWebhookSecretResponse]
 	getRoutingRules                *connect.Client[v1.GetRoutingRulesRequest, v1.GetRoutingRulesResponse]
 	setRoutingRules                *connect.Client[v1.SetRoutingRulesRequest, v1.SetRoutingRulesResponse]
+	pollTaskEvents                 *connect.Client[v1.PollTaskEventsRequest, v1.PollTaskEventsResponse]
+	createTaskEvent                *connect.Client[v1.CreateTaskEventRequest, v1.CreateTaskEventResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -945,6 +967,24 @@ func (c *xAgentServiceClient) SetRoutingRules(ctx context.Context, req *v1.SetRo
 	return nil, err
 }
 
+// PollTaskEvents calls xagent.v1.XAgentService.PollTaskEvents.
+func (c *xAgentServiceClient) PollTaskEvents(ctx context.Context, req *v1.PollTaskEventsRequest) (*v1.PollTaskEventsResponse, error) {
+	response, err := c.pollTaskEvents.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// CreateTaskEvent calls xagent.v1.XAgentService.CreateTaskEvent.
+func (c *xAgentServiceClient) CreateTaskEvent(ctx context.Context, req *v1.CreateTaskEventRequest) (*v1.CreateTaskEventResponse, error) {
+	response, err := c.createTaskEvent.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -992,6 +1032,8 @@ type XAgentServiceHandler interface {
 	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
 	GetRoutingRules(context.Context, *v1.GetRoutingRulesRequest) (*v1.GetRoutingRulesResponse, error)
 	SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error)
+	PollTaskEvents(context.Context, *v1.PollTaskEventsRequest) (*v1.PollTaskEventsResponse, error)
+	CreateTaskEvent(context.Context, *v1.CreateTaskEventRequest) (*v1.CreateTaskEventResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1271,6 +1313,18 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("SetRoutingRules")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServicePollTaskEventsHandler := connect.NewUnaryHandlerSimple(
+		XAgentServicePollTaskEventsProcedure,
+		svc.PollTaskEvents,
+		connect.WithSchema(xAgentServiceMethods.ByName("PollTaskEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceCreateTaskEventHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceCreateTaskEventProcedure,
+		svc.CreateTaskEvent,
+		connect.WithSchema(xAgentServiceMethods.ByName("CreateTaskEvent")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1363,6 +1417,10 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetRoutingRulesHandler.ServeHTTP(w, r)
 		case XAgentServiceSetRoutingRulesProcedure:
 			xAgentServiceSetRoutingRulesHandler.ServeHTTP(w, r)
+		case XAgentServicePollTaskEventsProcedure:
+			xAgentServicePollTaskEventsHandler.ServeHTTP(w, r)
+		case XAgentServiceCreateTaskEventProcedure:
+			xAgentServiceCreateTaskEventHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1550,4 +1608,12 @@ func (UnimplementedXAgentServiceHandler) GetRoutingRules(context.Context, *v1.Ge
 
 func (UnimplementedXAgentServiceHandler) SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SetRoutingRules is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) PollTaskEvents(context.Context, *v1.PollTaskEventsRequest) (*v1.PollTaskEventsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.PollTaskEvents is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) CreateTaskEvent(context.Context, *v1.CreateTaskEventRequest) (*v1.CreateTaskEventResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateTaskEvent is not implemented"))
 }

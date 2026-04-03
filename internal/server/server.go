@@ -452,6 +452,21 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		}); err != nil {
 			return err
 		}
+		// Create task event when instructions are added
+		if len(req.AddInstructions) > 0 {
+			for _, inst := range req.AddInstructions {
+				if err := s.store.CreateTaskEvent(ctx, tx, &model.TaskEvent{
+					TaskID:  req.Id,
+					Type:    "instruction_added",
+					Content: inst.Text,
+					Meta: map[string]string{
+						"source": caller.AuditName(),
+					},
+				}); err != nil {
+					s.log.Warn("failed to create task event", "error", err)
+				}
+			}
+		}
 		return tx.Commit()
 	})
 	if err != nil {
@@ -594,19 +609,32 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	// Verify task ownership
-	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
+	// Verify task ownership and get task details
+	task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
 	}
 	for _, entry := range req.Entries {
 		log := model.LogFromProto(entry)
 		log.TaskID = req.TaskId
 		if err := s.store.CreateLog(ctx, nil, &log); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		// Forward "llm" logs to parent as channel events
+		if task.Parent != 0 && entry.Type == "llm" {
+			if err := s.store.CreateTaskEvent(ctx, nil, &model.TaskEvent{
+				TaskID:  task.Parent,
+				Type:    "child_log",
+				Content: entry.Content,
+				Meta: map[string]string{
+					"child_id": fmt.Sprint(task.ID),
+				},
+			}); err != nil {
+				s.log.Warn("failed to create child_log task event", "error", err)
+			}
 		}
 	}
 	return &xagentv1.UploadLogsResponse{}, nil
@@ -850,6 +878,14 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 					return err
 				}
 			}
+			// Notify parent task of child status changes
+			if task.Parent != 0 {
+				if te, ok := s.toChildStatusTaskEvent(task, event); ok {
+					if err := s.store.CreateTaskEvent(ctx, tx, &te); err != nil {
+						s.log.Warn("failed to create task event for parent", "error", err)
+					}
+				}
+			}
 			return tx.Commit()
 		})
 		if err != nil {
@@ -860,6 +896,28 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
+}
+
+func (s *Server) toChildStatusTaskEvent(task *model.Task, event model.RunnerEvent) (model.TaskEvent, bool) {
+	var eventType, content string
+	switch event.Event {
+	case model.RunnerEventStopped:
+		eventType = "child_completed"
+		content = fmt.Sprintf("Child task %d (%s) completed successfully.", task.ID, task.Name)
+	case model.RunnerEventFailed:
+		eventType = "child_failed"
+		content = fmt.Sprintf("Child task %d (%s) failed.", task.ID, task.Name)
+	default:
+		return model.TaskEvent{}, false
+	}
+	return model.TaskEvent{
+		TaskID:  task.Parent,
+		Type:    eventType,
+		Content: content,
+		Meta: map[string]string{
+			"child_id": fmt.Sprint(task.ID),
+		},
+	}, true
 }
 
 func (s *Server) toRunnerEventLog(e model.RunnerEvent) (model.Log, bool) {
@@ -1210,4 +1268,49 @@ func (s *Server) SetRoutingRules(ctx context.Context, req *xagentv1.SetRoutingRu
 		pb[i] = rules[i].Proto()
 	}
 	return &xagentv1.SetRoutingRulesResponse{Rules: pb}, nil
+}
+
+func (s *Server) PollTaskEvents(ctx context.Context, req *xagentv1.PollTaskEventsRequest) (*xagentv1.PollTaskEventsResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	// Verify the task belongs to this org
+	if _, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	limit := int(req.Limit)
+	if limit <= 0 {
+		limit = 100
+	}
+	events, err := s.store.PollTaskEvents(ctx, nil, req.TaskId, req.AfterEventId, limit)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	pbEvents := make([]*xagentv1.TaskEvent, len(events))
+	for i, e := range events {
+		pbEvents[i] = e.Proto()
+	}
+	return &xagentv1.PollTaskEventsResponse{Events: pbEvents}, nil
+}
+
+func (s *Server) CreateTaskEvent(ctx context.Context, req *xagentv1.CreateTaskEventRequest) (*xagentv1.CreateTaskEventResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	// Verify the task belongs to this org
+	if _, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	event := &model.TaskEvent{
+		TaskID:  req.TaskId,
+		Type:    req.Type,
+		Content: req.Content,
+		Meta:    req.Meta,
+	}
+	if err := s.store.CreateTaskEvent(ctx, nil, event); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return &xagentv1.CreateTaskEventResponse{Event: event.Proto()}, nil
 }

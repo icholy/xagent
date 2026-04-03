@@ -49,6 +49,9 @@ var _ Client = &ClientMock{}
 //			CreateTaskFunc: func(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 //				panic("mock out the CreateTask method")
 //			},
+//			CreateTaskEventFunc: func(contextMoqParam context.Context, createTaskEventRequest *xagentv1.CreateTaskEventRequest) (*xagentv1.CreateTaskEventResponse, error) {
+//				panic("mock out the CreateTaskEvent method")
+//			},
 //			DeleteEventFunc: func(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
 //				panic("mock out the DeleteEvent method")
 //			},
@@ -121,6 +124,9 @@ var _ Client = &ClientMock{}
 //			PingFunc: func(contextMoqParam context.Context, pingRequest *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
 //				panic("mock out the Ping method")
 //			},
+//			PollTaskEventsFunc: func(contextMoqParam context.Context, pollTaskEventsRequest *xagentv1.PollTaskEventsRequest) (*xagentv1.PollTaskEventsResponse, error) {
+//				panic("mock out the PollTaskEvents method")
+//			},
 //			RegisterWorkspacesFunc: func(contextMoqParam context.Context, registerWorkspacesRequest *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
 //				panic("mock out the RegisterWorkspaces method")
 //			},
@@ -190,6 +196,9 @@ type ClientMock struct {
 
 	// CreateTaskFunc mocks the CreateTask method.
 	CreateTaskFunc func(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error)
+
+	// CreateTaskEventFunc mocks the CreateTaskEvent method.
+	CreateTaskEventFunc func(contextMoqParam context.Context, createTaskEventRequest *xagentv1.CreateTaskEventRequest) (*xagentv1.CreateTaskEventResponse, error)
 
 	// DeleteEventFunc mocks the DeleteEvent method.
 	DeleteEventFunc func(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error)
@@ -262,6 +271,9 @@ type ClientMock struct {
 
 	// PingFunc mocks the Ping method.
 	PingFunc func(contextMoqParam context.Context, pingRequest *xagentv1.PingRequest) (*xagentv1.PingResponse, error)
+
+	// PollTaskEventsFunc mocks the PollTaskEvents method.
+	PollTaskEventsFunc func(contextMoqParam context.Context, pollTaskEventsRequest *xagentv1.PollTaskEventsRequest) (*xagentv1.PollTaskEventsResponse, error)
 
 	// RegisterWorkspacesFunc mocks the RegisterWorkspaces method.
 	RegisterWorkspacesFunc func(contextMoqParam context.Context, registerWorkspacesRequest *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error)
@@ -367,6 +379,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// CreateTaskRequest is the createTaskRequest argument value.
 			CreateTaskRequest *xagentv1.CreateTaskRequest
+		}
+		// CreateTaskEvent holds details about calls to the CreateTaskEvent method.
+		CreateTaskEvent []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// CreateTaskEventRequest is the createTaskEventRequest argument value.
+			CreateTaskEventRequest *xagentv1.CreateTaskEventRequest
 		}
 		// DeleteEvent holds details about calls to the DeleteEvent method.
 		DeleteEvent []struct {
@@ -536,6 +555,13 @@ type ClientMock struct {
 			// PingRequest is the pingRequest argument value.
 			PingRequest *xagentv1.PingRequest
 		}
+		// PollTaskEvents holds details about calls to the PollTaskEvents method.
+		PollTaskEvents []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// PollTaskEventsRequest is the pollTaskEventsRequest argument value.
+			PollTaskEventsRequest *xagentv1.PollTaskEventsRequest
+		}
 		// RegisterWorkspaces holds details about calls to the RegisterWorkspaces method.
 		RegisterWorkspaces []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -624,6 +650,7 @@ type ClientMock struct {
 	lockCreateLink                     sync.RWMutex
 	lockCreateOrg                      sync.RWMutex
 	lockCreateTask                     sync.RWMutex
+	lockCreateTaskEvent                sync.RWMutex
 	lockDeleteEvent                    sync.RWMutex
 	lockDeleteKey                      sync.RWMutex
 	lockDeleteOrg                      sync.RWMutex
@@ -648,6 +675,7 @@ type ClientMock struct {
 	lockListTasks                      sync.RWMutex
 	lockListWorkspaces                 sync.RWMutex
 	lockPing                           sync.RWMutex
+	lockPollTaskEvents                 sync.RWMutex
 	lockRegisterWorkspaces             sync.RWMutex
 	lockRemoveEventTask                sync.RWMutex
 	lockRemoveOrgMember                sync.RWMutex
@@ -1018,6 +1046,42 @@ func (mock *ClientMock) CreateTaskCalls() []struct {
 	mock.lockCreateTask.RLock()
 	calls = mock.calls.CreateTask
 	mock.lockCreateTask.RUnlock()
+	return calls
+}
+
+// CreateTaskEvent calls CreateTaskEventFunc.
+func (mock *ClientMock) CreateTaskEvent(contextMoqParam context.Context, createTaskEventRequest *xagentv1.CreateTaskEventRequest) (*xagentv1.CreateTaskEventResponse, error) {
+	if mock.CreateTaskEventFunc == nil {
+		panic("ClientMock.CreateTaskEventFunc: method is nil but Client.CreateTaskEvent was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam        context.Context
+		CreateTaskEventRequest *xagentv1.CreateTaskEventRequest
+	}{
+		ContextMoqParam:        contextMoqParam,
+		CreateTaskEventRequest: createTaskEventRequest,
+	}
+	mock.lockCreateTaskEvent.Lock()
+	mock.calls.CreateTaskEvent = append(mock.calls.CreateTaskEvent, callInfo)
+	mock.lockCreateTaskEvent.Unlock()
+	return mock.CreateTaskEventFunc(contextMoqParam, createTaskEventRequest)
+}
+
+// CreateTaskEventCalls gets all the calls that were made to CreateTaskEvent.
+// Check the length with:
+//
+//	len(mockedClient.CreateTaskEventCalls())
+func (mock *ClientMock) CreateTaskEventCalls() []struct {
+	ContextMoqParam        context.Context
+	CreateTaskEventRequest *xagentv1.CreateTaskEventRequest
+} {
+	var calls []struct {
+		ContextMoqParam        context.Context
+		CreateTaskEventRequest *xagentv1.CreateTaskEventRequest
+	}
+	mock.lockCreateTaskEvent.RLock()
+	calls = mock.calls.CreateTaskEvent
+	mock.lockCreateTaskEvent.RUnlock()
 	return calls
 }
 
@@ -1882,6 +1946,42 @@ func (mock *ClientMock) PingCalls() []struct {
 	mock.lockPing.RLock()
 	calls = mock.calls.Ping
 	mock.lockPing.RUnlock()
+	return calls
+}
+
+// PollTaskEvents calls PollTaskEventsFunc.
+func (mock *ClientMock) PollTaskEvents(contextMoqParam context.Context, pollTaskEventsRequest *xagentv1.PollTaskEventsRequest) (*xagentv1.PollTaskEventsResponse, error) {
+	if mock.PollTaskEventsFunc == nil {
+		panic("ClientMock.PollTaskEventsFunc: method is nil but Client.PollTaskEvents was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam       context.Context
+		PollTaskEventsRequest *xagentv1.PollTaskEventsRequest
+	}{
+		ContextMoqParam:       contextMoqParam,
+		PollTaskEventsRequest: pollTaskEventsRequest,
+	}
+	mock.lockPollTaskEvents.Lock()
+	mock.calls.PollTaskEvents = append(mock.calls.PollTaskEvents, callInfo)
+	mock.lockPollTaskEvents.Unlock()
+	return mock.PollTaskEventsFunc(contextMoqParam, pollTaskEventsRequest)
+}
+
+// PollTaskEventsCalls gets all the calls that were made to PollTaskEvents.
+// Check the length with:
+//
+//	len(mockedClient.PollTaskEventsCalls())
+func (mock *ClientMock) PollTaskEventsCalls() []struct {
+	ContextMoqParam       context.Context
+	PollTaskEventsRequest *xagentv1.PollTaskEventsRequest
+} {
+	var calls []struct {
+		ContextMoqParam       context.Context
+		PollTaskEventsRequest *xagentv1.PollTaskEventsRequest
+	}
+	mock.lockPollTaskEvents.RLock()
+	calls = mock.calls.PollTaskEvents
+	mock.lockPollTaskEvents.RUnlock()
 	return calls
 }
 

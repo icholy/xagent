@@ -3,6 +3,7 @@ package eventrouter
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"slices"
 
@@ -110,6 +111,18 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 			Content: "webhook started task",
 		}); err != nil {
 			return err
+		}
+		// Create task event for channel notification
+		if err := r.Store.CreateTaskEvent(ctx, tx, &model.TaskEvent{
+			TaskID:  taskID,
+			Type:    "external_event",
+			Content: event.Description,
+			Meta: map[string]string{
+				"event_id": fmt.Sprint(event.ID),
+				"url":      event.URL,
+			},
+		}); err != nil {
+			r.Log.Warn("failed to create task event", "error", err)
 		}
 		return tx.Commit()
 	})

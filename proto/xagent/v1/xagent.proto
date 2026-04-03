@@ -52,6 +52,8 @@ service XAgentService {
   rpc GenerateAtlassianWebhookSecret(GenerateAtlassianWebhookSecretRequest) returns (GenerateAtlassianWebhookSecretResponse);
   rpc GetRoutingRules(GetRoutingRulesRequest) returns (GetRoutingRulesResponse);
   rpc SetRoutingRules(SetRoutingRulesRequest) returns (SetRoutingRulesResponse);
+  rpc PollTaskEvents(PollTaskEventsRequest) returns (PollTaskEventsResponse);
+  rpc CreateTaskEvent(CreateTaskEventRequest) returns (CreateTaskEventResponse);
 }
 
 message PingRequest {}
@@ -526,4 +528,34 @@ message SetRoutingRulesRequest {
 
 message SetRoutingRulesResponse {
   repeated RoutingRule rules = 1;
+}
+
+message TaskEvent {
+  int64 id = 1;
+  int64 task_id = 2;
+  string type = 3;
+  string content = 4;
+  map<string, string> meta = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message PollTaskEventsRequest {
+  int64 task_id = 1;
+  int64 after_event_id = 2;
+  int32 limit = 3;
+}
+
+message PollTaskEventsResponse {
+  repeated TaskEvent events = 1;
+}
+
+message CreateTaskEventRequest {
+  int64 task_id = 1;
+  string type = 2;
+  string content = 3;
+  map<string, string> meta = 4;
+}
+
+message CreateTaskEventResponse {
+  TaskEvent event = 1;
 }

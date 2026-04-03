@@ -155,6 +155,17 @@ func (p *AgentFilter) ListLogs(ctx context.Context, req *xagentv1.ListLogsReques
 	return p.client.ListLogs(ctx, req)
 }
 
+func (p *AgentFilter) PollTaskEvents(ctx context.Context, req *xagentv1.PollTaskEventsRequest) (*xagentv1.PollTaskEventsResponse, error) {
+	claims, err := p.claims(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.TaskId != claims.TaskID {
+		return nil, errPermissionDenied("can only poll events for own task")
+	}
+	return p.client.PollTaskEvents(ctx, req)
+}
+
 func errPermissionDenied(msg string) error {
 	return connect.NewError(connect.CodePermissionDenied, errors.New(msg))
 }
