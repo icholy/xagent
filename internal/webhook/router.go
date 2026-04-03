@@ -10,5 +10,5 @@ import (
 
 // Router routes events to subscribed tasks.
 type Router interface {
-	Route(ctx context.Context, event eventrouter.Event) (int, error)
+	Route(ctx context.Context, input eventrouter.InputEvent) (int, error)
 }

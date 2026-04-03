@@ -19,7 +19,7 @@ var _ Router = &RouterMock{}
 //
 //		// make and configure a mocked Router
 //		mockedRouter := &RouterMock{
-//			RouteFunc: func(ctx context.Context, event eventrouter.Event) (int, error) {
+//			RouteFunc: func(ctx context.Context, input eventrouter.InputEvent) (int, error) {
 //				panic("mock out the Route method")
 //			},
 //		}
@@ -30,7 +30,7 @@ var _ Router = &RouterMock{}
 //	}
 type RouterMock struct {
 	// RouteFunc mocks the Route method.
-	RouteFunc func(ctx context.Context, event eventrouter.Event) (int, error)
+	RouteFunc func(ctx context.Context, input eventrouter.InputEvent) (int, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -38,29 +38,29 @@ type RouterMock struct {
 		Route []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Event is the event argument value.
-			Event eventrouter.Event
+			// Input is the input argument value.
+			Input eventrouter.InputEvent
 		}
 	}
 	lockRoute sync.RWMutex
 }
 
 // Route calls RouteFunc.
-func (mock *RouterMock) Route(ctx context.Context, event eventrouter.Event) (int, error) {
+func (mock *RouterMock) Route(ctx context.Context, input eventrouter.InputEvent) (int, error) {
 	if mock.RouteFunc == nil {
 		panic("RouterMock.RouteFunc: method is nil but Router.Route was just called")
 	}
 	callInfo := struct {
 		Ctx   context.Context
-		Event eventrouter.Event
+		Input eventrouter.InputEvent
 	}{
 		Ctx:   ctx,
-		Event: event,
+		Input: input,
 	}
 	mock.lockRoute.Lock()
 	mock.calls.Route = append(mock.calls.Route, callInfo)
 	mock.lockRoute.Unlock()
-	return mock.RouteFunc(ctx, event)
+	return mock.RouteFunc(ctx, input)
 }
 
 // RouteCalls gets all the calls that were made to Route.
@@ -69,11 +69,11 @@ func (mock *RouterMock) Route(ctx context.Context, event eventrouter.Event) (int
 //	len(mockedRouter.RouteCalls())
 func (mock *RouterMock) RouteCalls() []struct {
 	Ctx   context.Context
-	Event eventrouter.Event
+	Input eventrouter.InputEvent
 } {
 	var calls []struct {
 		Ctx   context.Context
-		Event eventrouter.Event
+		Input eventrouter.InputEvent
 	}
 	mock.lockRoute.RLock()
 	calls = mock.calls.Route

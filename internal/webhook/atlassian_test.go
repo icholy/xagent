@@ -156,7 +156,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 	secret := "test-webhook-secret"
 	accountID := "atlassian-abc123"
 	router := &RouterMock{
-		RouteFunc: func(ctx context.Context, event eventrouter.Event) (int, error) {
+		RouteFunc: func(ctx context.Context, input eventrouter.InputEvent) (int, error) {
 			return 1, nil
 		},
 	}
@@ -196,7 +196,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 
 	calls := router.RouteCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].Event, eventrouter.Event{
+	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
 		Type:        eventrouter.EventTypeAtlassian,
 		Description: "Test User commented on PROJ-10",
 		Data:        "xagent: please fix the tests",

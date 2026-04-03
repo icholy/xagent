@@ -18,8 +18,8 @@ const (
 	EventTypeAtlassian EventType = "atlassian"
 )
 
-// Event represents a parsed webhook event ready for routing.
-type Event struct {
+// InputEvent represents a parsed webhook event ready for routing.
+type InputEvent struct {
 	Type        EventType
 	Description string
 	Data        string
@@ -36,29 +36,29 @@ type Router struct {
 // Route finds all subscribed links matching the event URL for the given user,
 // creates events per org, and starts the associated tasks. It returns the total
 // number of tasks routed and any error finding links.
-func (r *Router) Route(ctx context.Context, event Event) (int, error) {
-	if !strings.HasPrefix(strings.TrimSpace(event.Data), "xagent:") {
+func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
+	if !strings.HasPrefix(strings.TrimSpace(input.Data), "xagent:") {
 		return 0, nil
 	}
-	linksByOrg, err := r.find(ctx, event)
+	linksByOrg, err := r.find(ctx, input)
 	if err != nil {
 		return 0, err
 	}
 	var n int
 	for orgID, links := range linksByOrg {
-		me := &model.Event{
-			Description: event.Description,
-			Data:        event.Data,
-			URL:         event.URL,
+		event := &model.Event{
+			Description: input.Description,
+			Data:        input.Data,
+			URL:         input.URL,
 			OrgID:       orgID,
 		}
-		if err := r.Store.CreateEvent(ctx, nil, me); err != nil {
+		if err := r.Store.CreateEvent(ctx, nil, event); err != nil {
 			r.Log.Error("failed to create event", "org_id", orgID, "error", err)
 			continue
 		}
 		for _, link := range links {
-			if err := r.attach(ctx, link.TaskID, me); err != nil {
-				r.Log.Error("failed to attach event to task", "event_id", me.ID, "task_id", link.TaskID, "error", err)
+			if err := r.attach(ctx, link.TaskID, event); err != nil {
+				r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
 				continue
 			}
 			n++
@@ -69,11 +69,11 @@ func (r *Router) Route(ctx context.Context, event Event) (int, error) {
 
 // find queries all matching subscribed links for a URL across all
 // the user's orgs and groups them by org ID.
-func (r *Router) find(ctx context.Context, event Event) (map[int64][]*model.Link, error) {
-	if event.URL == "" {
+func (r *Router) find(ctx context.Context, input InputEvent) (map[int64][]*model.Link, error) {
+	if input.URL == "" {
 		return nil, nil
 	}
-	matches, err := r.Store.FindSubscribedLinksByURLForUser(ctx, nil, event.URL, event.UserID)
+	matches, err := r.Store.FindSubscribedLinksByURLForUser(ctx, nil, input.URL, input.UserID)
 	if err != nil {
 		return nil, err
 	}

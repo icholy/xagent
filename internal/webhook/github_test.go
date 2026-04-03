@@ -271,7 +271,7 @@ func makeWebhookRequest(t *testing.T, eventType string, payload any) *http.Reque
 func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	var ghUserID int64 = 12345
 	router := &RouterMock{
-		RouteFunc: func(ctx context.Context, event eventrouter.Event) (int, error) {
+		RouteFunc: func(ctx context.Context, input eventrouter.InputEvent) (int, error) {
 			return 1, nil
 		},
 	}
@@ -314,7 +314,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 
 	calls := router.RouteCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].Event, eventrouter.Event{
+	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
 		Type:        eventrouter.EventTypeGitHub,
 		Description: "testuser commented on PR #10",
 		Data:        "xagent: please fix the tests",
