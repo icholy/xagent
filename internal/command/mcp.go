@@ -5,7 +5,7 @@ import (
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/xagentclient"
-	"github.com/icholy/xagent/internal/xmcp"
+	"github.com/icholy/xagent/internal/agentmcp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/urfave/cli/v3"
 )
@@ -56,7 +56,7 @@ var McpCommand = &cli.Command{
 			Runner:    cmd.String("runner"),
 			Workspace: cmd.String("workspace"),
 		}
-		xmcp.NewServer(client, task).AddTools(server)
+		agentmcp.NewServer(client, task).AddTools(server)
 
 		return server.Run(ctx, &mcp.StdioTransport{})
 	},

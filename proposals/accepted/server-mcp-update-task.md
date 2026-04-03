@@ -6,7 +6,7 @@ Issue: https://github.com/icholy/xagent/issues/405
 
 The server MCP (`internal/servermcp/servermcp.go`) exposes tools for creating and reading tasks (`create_task`, `get_task`, `list_tasks`, `list_workspaces`), but there is no way to update a task. External clients using the server MCP (e.g. Claude Code running locally) cannot modify tasks after creation — they can't add instructions or restart them.
 
-The agent MCP (`internal/xmcp/xmcp.go`) has `update_my_task` and `update_child_task`, but these are scoped to the agent's own task and its direct children via the `AgentFilter`. The server MCP needs a general-purpose `update_task` tool that can update any task by ID.
+The agent MCP (`internal/agentmcp/xmcp.go`) has `update_my_task` and `update_child_task`, but these are scoped to the agent's own task and its direct children via the `AgentFilter`. The server MCP needs a general-purpose `update_task` tool that can update any task by ID.
 
 ## Design
 
