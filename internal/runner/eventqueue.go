@@ -71,9 +71,8 @@ func (q *EventQueue) Drain(ctx context.Context) error {
 	for q.events.Len() > 0 {
 		el := q.events.Front()
 		ev := el.Value.(model.RunnerEvent)
-		pb := ev.Proto()
 		_, err := q.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-			Events: []*xagentv1.RunnerEvent{pb},
+			Events: []*xagentv1.RunnerEvent{ev.Proto()},
 		})
 		if err != nil {
 			if isPermanentError(err) {
