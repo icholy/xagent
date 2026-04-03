@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -171,4 +172,43 @@ func toModelOrgMember(row sqlc.OrgMember) *model.OrgMember {
 		Role:      row.Role,
 		CreatedAt: row.CreatedAt,
 	}
+}
+
+func (s *Store) GetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64) ([]model.RoutingRule, error) {
+	data, err := s.q(tx).GetOrgRoutingRules(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	var rules []model.RoutingRule
+	if err := json.Unmarshal(data, &rules); err != nil {
+		return nil, err
+	}
+	return rules, nil
+}
+
+func (s *Store) SetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64, rules []model.RoutingRule) error {
+	data, err := json.Marshal(rules)
+	if err != nil {
+		return err
+	}
+	return s.q(tx).SetOrgRoutingRules(ctx, sqlc.SetOrgRoutingRulesParams{
+		ID:           orgID,
+		RoutingRules: data,
+	})
+}
+
+func (s *Store) GetRoutingRulesByOrgs(ctx context.Context, tx *sql.Tx, orgIDs []int64) (map[int64][]model.RoutingRule, error) {
+	rows, err := s.q(tx).GetRoutingRulesByOrgs(ctx, orgIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[int64][]model.RoutingRule, len(rows))
+	for _, row := range rows {
+		var rules []model.RoutingRule
+		if err := json.Unmarshal(row.RoutingRules, &rules); err != nil {
+			return nil, fmt.Errorf("org %d: %w", row.ID, err)
+		}
+		result[row.ID] = rules
+	}
+	return result, nil
 }

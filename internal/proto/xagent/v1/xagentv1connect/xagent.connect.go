@@ -150,6 +150,12 @@ const (
 	// XAgentServiceGenerateAtlassianWebhookSecretProcedure is the fully-qualified name of the
 	// XAgentService's GenerateAtlassianWebhookSecret RPC.
 	XAgentServiceGenerateAtlassianWebhookSecretProcedure = "/xagent.v1.XAgentService/GenerateAtlassianWebhookSecret"
+	// XAgentServiceGetRoutingRulesProcedure is the fully-qualified name of the XAgentService's
+	// GetRoutingRules RPC.
+	XAgentServiceGetRoutingRulesProcedure = "/xagent.v1.XAgentService/GetRoutingRules"
+	// XAgentServiceSetRoutingRulesProcedure is the fully-qualified name of the XAgentService's
+	// SetRoutingRules RPC.
+	XAgentServiceSetRoutingRulesProcedure = "/xagent.v1.XAgentService/SetRoutingRules"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -197,6 +203,8 @@ type XAgentServiceClient interface {
 	ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error)
 	GetOrgSettings(context.Context, *v1.GetOrgSettingsRequest) (*v1.GetOrgSettingsResponse, error)
 	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
+	GetRoutingRules(context.Context, *v1.GetRoutingRulesRequest) (*v1.GetRoutingRulesResponse, error)
+	SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -468,6 +476,18 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("GenerateAtlassianWebhookSecret")),
 			connect.WithClientOptions(opts...),
 		),
+		getRoutingRules: connect.NewClient[v1.GetRoutingRulesRequest, v1.GetRoutingRulesResponse](
+			httpClient,
+			baseURL+XAgentServiceGetRoutingRulesProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GetRoutingRules")),
+			connect.WithClientOptions(opts...),
+		),
+		setRoutingRules: connect.NewClient[v1.SetRoutingRulesRequest, v1.SetRoutingRulesResponse](
+			httpClient,
+			baseURL+XAgentServiceSetRoutingRulesProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("SetRoutingRules")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -516,6 +536,8 @@ type xAgentServiceClient struct {
 	listOrgMembers                 *connect.Client[v1.ListOrgMembersRequest, v1.ListOrgMembersResponse]
 	getOrgSettings                 *connect.Client[v1.GetOrgSettingsRequest, v1.GetOrgSettingsResponse]
 	generateAtlassianWebhookSecret *connect.Client[v1.GenerateAtlassianWebhookSecretRequest, v1.GenerateAtlassianWebhookSecretResponse]
+	getRoutingRules                *connect.Client[v1.GetRoutingRulesRequest, v1.GetRoutingRulesResponse]
+	setRoutingRules                *connect.Client[v1.SetRoutingRulesRequest, v1.SetRoutingRulesResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -905,6 +927,24 @@ func (c *xAgentServiceClient) GenerateAtlassianWebhookSecret(ctx context.Context
 	return nil, err
 }
 
+// GetRoutingRules calls xagent.v1.XAgentService.GetRoutingRules.
+func (c *xAgentServiceClient) GetRoutingRules(ctx context.Context, req *v1.GetRoutingRulesRequest) (*v1.GetRoutingRulesResponse, error) {
+	response, err := c.getRoutingRules.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// SetRoutingRules calls xagent.v1.XAgentService.SetRoutingRules.
+func (c *xAgentServiceClient) SetRoutingRules(ctx context.Context, req *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error) {
+	response, err := c.setRoutingRules.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -950,6 +990,8 @@ type XAgentServiceHandler interface {
 	ListOrgMembers(context.Context, *v1.ListOrgMembersRequest) (*v1.ListOrgMembersResponse, error)
 	GetOrgSettings(context.Context, *v1.GetOrgSettingsRequest) (*v1.GetOrgSettingsResponse, error)
 	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
+	GetRoutingRules(context.Context, *v1.GetRoutingRulesRequest) (*v1.GetRoutingRulesResponse, error)
+	SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1217,6 +1259,18 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("GenerateAtlassianWebhookSecret")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceGetRoutingRulesHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGetRoutingRulesProcedure,
+		svc.GetRoutingRules,
+		connect.WithSchema(xAgentServiceMethods.ByName("GetRoutingRules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceSetRoutingRulesHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceSetRoutingRulesProcedure,
+		svc.SetRoutingRules,
+		connect.WithSchema(xAgentServiceMethods.ByName("SetRoutingRules")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1305,6 +1359,10 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetOrgSettingsHandler.ServeHTTP(w, r)
 		case XAgentServiceGenerateAtlassianWebhookSecretProcedure:
 			xAgentServiceGenerateAtlassianWebhookSecretHandler.ServeHTTP(w, r)
+		case XAgentServiceGetRoutingRulesProcedure:
+			xAgentServiceGetRoutingRulesHandler.ServeHTTP(w, r)
+		case XAgentServiceSetRoutingRulesProcedure:
+			xAgentServiceSetRoutingRulesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1484,4 +1542,12 @@ func (UnimplementedXAgentServiceHandler) GetOrgSettings(context.Context, *v1.Get
 
 func (UnimplementedXAgentServiceHandler) GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GenerateAtlassianWebhookSecret is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) GetRoutingRules(context.Context, *v1.GetRoutingRulesRequest) (*v1.GetRoutingRulesResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetRoutingRules is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SetRoutingRules is not implemented"))
 }

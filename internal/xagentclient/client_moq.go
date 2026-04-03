@@ -73,6 +73,9 @@ var _ Client = &ClientMock{}
 //			GetProfileFunc: func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
 //				panic("mock out the GetProfile method")
 //			},
+//			GetRoutingRulesFunc: func(contextMoqParam context.Context, getRoutingRulesRequest *xagentv1.GetRoutingRulesRequest) (*xagentv1.GetRoutingRulesResponse, error) {
+//				panic("mock out the GetRoutingRules method")
+//			},
 //			GetTaskFunc: func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 //				panic("mock out the GetTask method")
 //			},
@@ -129,6 +132,9 @@ var _ Client = &ClientMock{}
 //			},
 //			RestartTaskFunc: func(contextMoqParam context.Context, restartTaskRequest *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 //				panic("mock out the RestartTask method")
+//			},
+//			SetRoutingRulesFunc: func(contextMoqParam context.Context, setRoutingRulesRequest *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error) {
+//				panic("mock out the SetRoutingRules method")
 //			},
 //			SubmitRunnerEventsFunc: func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 //				panic("mock out the SubmitRunnerEvents method")
@@ -209,6 +215,9 @@ type ClientMock struct {
 	// GetProfileFunc mocks the GetProfile method.
 	GetProfileFunc func(contextMoqParam context.Context, getProfileRequest *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error)
 
+	// GetRoutingRulesFunc mocks the GetRoutingRules method.
+	GetRoutingRulesFunc func(contextMoqParam context.Context, getRoutingRulesRequest *xagentv1.GetRoutingRulesRequest) (*xagentv1.GetRoutingRulesResponse, error)
+
 	// GetTaskFunc mocks the GetTask method.
 	GetTaskFunc func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error)
 
@@ -265,6 +274,9 @@ type ClientMock struct {
 
 	// RestartTaskFunc mocks the RestartTask method.
 	RestartTaskFunc func(contextMoqParam context.Context, restartTaskRequest *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error)
+
+	// SetRoutingRulesFunc mocks the SetRoutingRules method.
+	SetRoutingRulesFunc func(contextMoqParam context.Context, setRoutingRulesRequest *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error)
 
 	// SubmitRunnerEventsFunc mocks the SubmitRunnerEvents method.
 	SubmitRunnerEventsFunc func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error)
@@ -412,6 +424,13 @@ type ClientMock struct {
 			// GetProfileRequest is the getProfileRequest argument value.
 			GetProfileRequest *xagentv1.GetProfileRequest
 		}
+		// GetRoutingRules holds details about calls to the GetRoutingRules method.
+		GetRoutingRules []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetRoutingRulesRequest is the getRoutingRulesRequest argument value.
+			GetRoutingRulesRequest *xagentv1.GetRoutingRulesRequest
+		}
 		// GetTask holds details about calls to the GetTask method.
 		GetTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -545,6 +564,13 @@ type ClientMock struct {
 			// RestartTaskRequest is the restartTaskRequest argument value.
 			RestartTaskRequest *xagentv1.RestartTaskRequest
 		}
+		// SetRoutingRules holds details about calls to the SetRoutingRules method.
+		SetRoutingRules []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// SetRoutingRulesRequest is the setRoutingRulesRequest argument value.
+			SetRoutingRulesRequest *xagentv1.SetRoutingRulesRequest
+		}
 		// SubmitRunnerEvents holds details about calls to the SubmitRunnerEvents method.
 		SubmitRunnerEvents []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -606,6 +632,7 @@ type ClientMock struct {
 	lockGetEvent                       sync.RWMutex
 	lockGetOrgSettings                 sync.RWMutex
 	lockGetProfile                     sync.RWMutex
+	lockGetRoutingRules                sync.RWMutex
 	lockGetTask                        sync.RWMutex
 	lockGetTaskDetails                 sync.RWMutex
 	lockListChildTasks                 sync.RWMutex
@@ -625,6 +652,7 @@ type ClientMock struct {
 	lockRemoveEventTask                sync.RWMutex
 	lockRemoveOrgMember                sync.RWMutex
 	lockRestartTask                    sync.RWMutex
+	lockSetRoutingRules                sync.RWMutex
 	lockSubmitRunnerEvents             sync.RWMutex
 	lockUnarchiveTask                  sync.RWMutex
 	lockUnlinkAtlassianAccount         sync.RWMutex
@@ -1278,6 +1306,42 @@ func (mock *ClientMock) GetProfileCalls() []struct {
 	mock.lockGetProfile.RLock()
 	calls = mock.calls.GetProfile
 	mock.lockGetProfile.RUnlock()
+	return calls
+}
+
+// GetRoutingRules calls GetRoutingRulesFunc.
+func (mock *ClientMock) GetRoutingRules(contextMoqParam context.Context, getRoutingRulesRequest *xagentv1.GetRoutingRulesRequest) (*xagentv1.GetRoutingRulesResponse, error) {
+	if mock.GetRoutingRulesFunc == nil {
+		panic("ClientMock.GetRoutingRulesFunc: method is nil but Client.GetRoutingRules was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam        context.Context
+		GetRoutingRulesRequest *xagentv1.GetRoutingRulesRequest
+	}{
+		ContextMoqParam:        contextMoqParam,
+		GetRoutingRulesRequest: getRoutingRulesRequest,
+	}
+	mock.lockGetRoutingRules.Lock()
+	mock.calls.GetRoutingRules = append(mock.calls.GetRoutingRules, callInfo)
+	mock.lockGetRoutingRules.Unlock()
+	return mock.GetRoutingRulesFunc(contextMoqParam, getRoutingRulesRequest)
+}
+
+// GetRoutingRulesCalls gets all the calls that were made to GetRoutingRules.
+// Check the length with:
+//
+//	len(mockedClient.GetRoutingRulesCalls())
+func (mock *ClientMock) GetRoutingRulesCalls() []struct {
+	ContextMoqParam        context.Context
+	GetRoutingRulesRequest *xagentv1.GetRoutingRulesRequest
+} {
+	var calls []struct {
+		ContextMoqParam        context.Context
+		GetRoutingRulesRequest *xagentv1.GetRoutingRulesRequest
+	}
+	mock.lockGetRoutingRules.RLock()
+	calls = mock.calls.GetRoutingRules
+	mock.lockGetRoutingRules.RUnlock()
 	return calls
 }
 
@@ -1962,6 +2026,42 @@ func (mock *ClientMock) RestartTaskCalls() []struct {
 	mock.lockRestartTask.RLock()
 	calls = mock.calls.RestartTask
 	mock.lockRestartTask.RUnlock()
+	return calls
+}
+
+// SetRoutingRules calls SetRoutingRulesFunc.
+func (mock *ClientMock) SetRoutingRules(contextMoqParam context.Context, setRoutingRulesRequest *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error) {
+	if mock.SetRoutingRulesFunc == nil {
+		panic("ClientMock.SetRoutingRulesFunc: method is nil but Client.SetRoutingRules was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam        context.Context
+		SetRoutingRulesRequest *xagentv1.SetRoutingRulesRequest
+	}{
+		ContextMoqParam:        contextMoqParam,
+		SetRoutingRulesRequest: setRoutingRulesRequest,
+	}
+	mock.lockSetRoutingRules.Lock()
+	mock.calls.SetRoutingRules = append(mock.calls.SetRoutingRules, callInfo)
+	mock.lockSetRoutingRules.Unlock()
+	return mock.SetRoutingRulesFunc(contextMoqParam, setRoutingRulesRequest)
+}
+
+// SetRoutingRulesCalls gets all the calls that were made to SetRoutingRules.
+// Check the length with:
+//
+//	len(mockedClient.SetRoutingRulesCalls())
+func (mock *ClientMock) SetRoutingRulesCalls() []struct {
+	ContextMoqParam        context.Context
+	SetRoutingRulesRequest *xagentv1.SetRoutingRulesRequest
+} {
+	var calls []struct {
+		ContextMoqParam        context.Context
+		SetRoutingRulesRequest *xagentv1.SetRoutingRulesRequest
+	}
+	mock.lockSetRoutingRules.RLock()
+	calls = mock.calls.SetRoutingRules
+	mock.lockSetRoutingRules.RUnlock()
 	return calls
 }
 

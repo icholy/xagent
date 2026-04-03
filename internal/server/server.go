@@ -1182,3 +1182,32 @@ func (s *Server) GenerateAtlassianWebhookSecret(ctx context.Context, req *xagent
 		WebhookUrl: s.atlassianWebhookURL(caller.OrgID),
 	}, nil
 }
+
+func (s *Server) GetRoutingRules(ctx context.Context, req *xagentv1.GetRoutingRulesRequest) (*xagentv1.GetRoutingRulesResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	rules, err := s.store.GetOrgRoutingRules(ctx, nil, caller.OrgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	pb := make([]*xagentv1.RoutingRule, len(rules))
+	for i := range rules {
+		pb[i] = rules[i].Proto()
+	}
+	return &xagentv1.GetRoutingRulesResponse{Rules: pb}, nil
+}
+
+func (s *Server) SetRoutingRules(ctx context.Context, req *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	rules := make([]model.RoutingRule, len(req.Rules))
+	for i, r := range req.Rules {
+		rules[i] = model.RoutingRuleFromProto(r)
+	}
+	if err := s.store.SetOrgRoutingRules(ctx, nil, caller.OrgID, rules); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	pb := make([]*xagentv1.RoutingRule, len(rules))
+	for i := range rules {
+		pb[i] = rules[i].Proto()
+	}
+	return &xagentv1.SetRoutingRulesResponse{Rules: pb}, nil
+}
