@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -178,11 +179,15 @@ func (s *Store) GetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64)
 	if err != nil {
 		return nil, err
 	}
-	return model.UnmarshalRoutingRules(data)
+	var rules []model.RoutingRule
+	if err := json.Unmarshal(data, &rules); err != nil {
+		return nil, err
+	}
+	return rules, nil
 }
 
 func (s *Store) SetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64, rules []model.RoutingRule) error {
-	data, err := model.MarshalRoutingRules(rules)
+	data, err := json.Marshal(rules)
 	if err != nil {
 		return err
 	}
@@ -199,8 +204,8 @@ func (s *Store) GetRoutingRulesByOrgs(ctx context.Context, tx *sql.Tx, orgIDs []
 	}
 	result := make(map[int64][]model.RoutingRule, len(rows))
 	for _, row := range rows {
-		rules, err := model.UnmarshalRoutingRules(row.RoutingRules)
-		if err != nil {
+		var rules []model.RoutingRule
+		if err := json.Unmarshal(row.RoutingRules, &rules); err != nil {
 			return nil, fmt.Errorf("org %d: %w", row.ID, err)
 		}
 		result[row.ID] = rules
