@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { create } from '@bufbuild/protobuf'
 import {
@@ -40,13 +40,19 @@ import { Cable, Check, Copy, ExternalLink, Github, KeyRound, Loader2, Mail, Penc
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
+  validateSearch: (search: Record<string, unknown>): { tab: string } => ({
+    tab: search.tab === 'organisation' ? 'organisation' : 'account',
+  }),
 })
 
 function SettingsPage() {
+  const { tab } = Route.useSearch()
+  const navigate = useNavigate()
+
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
-      <Tabs defaultValue="account">
+      <Tabs value={tab} onValueChange={(value) => navigate({ search: { tab: value }, replace: true })}>
         <div className="flex items-center mb-4">
           <ProfileCard />
           <TabsList className="ml-auto">
