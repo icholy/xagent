@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
-	"maps"
 	"slices"
 
 	"github.com/icholy/xagent/internal/model"
@@ -27,8 +26,8 @@ type Router struct {
 	Store *store.Store
 }
 
-// DefaultRules is the fallback when an org has no custom routing rules configured.
-var DefaultRules = []Rule{
+// defaultRules is the fallback when an org has no custom routing rules configured.
+var defaultRules = []Rule{
 	{Prefix: "xagent:"},
 }
 
@@ -36,27 +35,18 @@ var DefaultRules = []Rule{
 // creates events per org, and starts the associated tasks. It returns the total
 // number of tasks routed and any error finding links.
 func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
+	match := slices.ContainsFunc(defaultRules, func(r Rule) bool {
+		return r.Match(input.Source, input.Type, input.Data)
+	})
+	if !match {
+		return 0, nil
+	}
 	linksByOrg, err := r.find(ctx, input)
 	if err != nil {
 		return 0, err
 	}
-	if len(linksByOrg) == 0 {
-		return 0, nil
-	}
-
-	// Load routing rules for all candidate orgs.
-	orgIDs := slices.Collect(maps.Keys(linksByOrg))
-	rulesByOrg, err := r.loadRoutingRules(ctx, orgIDs)
-	if err != nil {
-		return 0, err
-	}
-
 	var n int
 	for orgID, links := range linksByOrg {
-		rules := rulesByOrg[orgID]
-		if !matchesAnyRule(input, rules) {
-			continue
-		}
 		event := &model.Event{
 			Description: input.Description,
 			Data:        input.Data,
@@ -76,31 +66,6 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		}
 	}
 	return n, nil
-}
-
-// loadRoutingRules loads routing rules for the given orgs, falling back to
-// DefaultRules for orgs that have no custom rules configured.
-func (r *Router) loadRoutingRules(ctx context.Context, orgIDs []int64) (map[int64][]Rule, error) {
-	rulesByOrg, err := r.Store.GetRoutingRulesByOrgs(ctx, nil, orgIDs)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[int64][]Rule, len(orgIDs))
-	for _, orgID := range orgIDs {
-		rules := rulesByOrg[orgID]
-		if len(rules) == 0 {
-			rules = DefaultRules
-		}
-		result[orgID] = rules
-	}
-	return result, nil
-}
-
-// matchesAnyRule returns true if the event matches any of the given rules.
-func matchesAnyRule(input InputEvent, rules []Rule) bool {
-	return slices.ContainsFunc(rules, func(r Rule) bool {
-		return r.Match(input.Source, input.Type, input.Data)
-	})
 }
 
 // find queries all matching subscribed links for a URL across all
