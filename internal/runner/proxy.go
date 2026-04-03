@@ -10,7 +10,7 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/xagentclient"
-	"github.com/icholy/xagent/internal/xmcp"
+	"github.com/icholy/xagent/internal/agentmcp"
 )
 
 // AgentProxy manages a single Unix socket proxy for all tasks.
@@ -52,7 +52,7 @@ func (p *AgentProxy) Start() error {
 	}
 
 	// Create filter to enforce access control
-	filter := xmcp.NewAgentFilter(p.client)
+	filter := agentmcp.NewAgentFilter(p.client)
 
 	// Create Connect RPC handler
 	path, handler := xagentv1connect.NewXAgentServiceHandler(filter)
