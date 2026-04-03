@@ -54,7 +54,7 @@ func (r *Router) Route(ctx context.Context, event Event) (int, error) {
 		}
 		for _, link := range links {
 			if err := r.attach(ctx, link.TaskID, me); err != nil {
-				r.Log.Error("failed to route event to task", "event_id", me.ID, "task_id", link.TaskID, "error", err)
+				r.Log.Error("failed to attach event to task", "event_id", me.ID, "task_id", link.TaskID, "error", err)
 				continue
 			}
 			n++
