@@ -486,9 +486,10 @@ func (r *Runner) Monitor(ctx context.Context) error {
 	for {
 		select {
 		case event := <-eventCh:
-			taskID, err := strconv.ParseInt(event.Actor.Attributes["xagent.task"], 10, 64)
+			taskIDStr := event.Actor.Attributes["xagent.task"]
+			taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
 			if err != nil {
-				r.log.Error("invalid task ID in container event", "task", taskID, "error", err)
+				r.log.Error("invalid task ID in container event", "task", taskIDStr, "error", err)
 				continue
 			}
 
