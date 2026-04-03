@@ -67,6 +67,15 @@ func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (int64, er
 	return id, err
 }
 
+const destroyOrg = `-- name: DestroyOrg :exec
+DELETE FROM orgs WHERE id = $1
+`
+
+func (q *Queries) DestroyOrg(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, destroyOrg, id)
+	return err
+}
+
 const getOrg = `-- name: GetOrg :one
 SELECT id, name, owner, created_at, updated_at, archived
 FROM orgs

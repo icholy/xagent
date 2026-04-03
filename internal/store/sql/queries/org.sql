@@ -52,6 +52,9 @@ SELECT atlassian_webhook_secret FROM orgs WHERE id = $1;
 -- name: SetOrgAtlassianWebhookSecret :exec
 UPDATE orgs SET atlassian_webhook_secret = $2 WHERE id = $1;
 
+-- name: DestroyOrg :exec
+DELETE FROM orgs WHERE id = $1;
+
 -- name: IsOrgMember :one
 SELECT EXISTS(
     SELECT 1 FROM org_members om
