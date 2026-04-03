@@ -25,8 +25,8 @@ func TestEventQueue_DrainSuccess(t *testing.T) {
 
 	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 
-	q.Enqueue(&xagentv1.RunnerEvent{TaskId: 1, Event: string(model.RunnerEventStopped)})
-	q.Enqueue(&xagentv1.RunnerEvent{TaskId: 2, Event: string(model.RunnerEventFailed), Version: 5})
+	q.Enqueue(model.RunnerEvent{TaskID: 1, Event: model.RunnerEventStopped})
+	q.Enqueue(model.RunnerEvent{TaskID: 2, Event: model.RunnerEventFailed, Version: 5})
 	assert.Equal(t, q.Len(), 2)
 
 	assert.NilError(t, q.Drain(t.Context()))
@@ -54,8 +54,8 @@ func TestEventQueue_DrainBlocksOnFailure(t *testing.T) {
 
 	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 
-	q.Enqueue(&xagentv1.RunnerEvent{TaskId: 1, Event: string(model.RunnerEventStarted)})
-	q.Enqueue(&xagentv1.RunnerEvent{TaskId: 2, Event: string(model.RunnerEventStopped)})
+	q.Enqueue(model.RunnerEvent{TaskID: 1, Event: model.RunnerEventStarted})
+	q.Enqueue(model.RunnerEvent{TaskID: 2, Event: model.RunnerEventStopped})
 	assert.Equal(t, q.Len(), 2)
 
 	// First drain: first event fails, second is blocked
@@ -97,7 +97,7 @@ func TestEventQueue_RunDrainsImmediately(t *testing.T) {
 		})
 		go q.Run(t.Context())
 
-		q.Enqueue(&xagentv1.RunnerEvent{TaskId: 1, Event: string(model.RunnerEventStarted)})
+		q.Enqueue(model.RunnerEvent{TaskID: 1, Event: model.RunnerEventStarted})
 		synctest.Wait()
 
 		assert.Equal(t, q.Len(), 0)
@@ -127,7 +127,7 @@ func TestEventQueue_RunRetriesAfterInterval(t *testing.T) {
 		})
 		go q.Run(t.Context())
 
-		q.Enqueue(&xagentv1.RunnerEvent{TaskId: 1, Event: string(model.RunnerEventStarted)})
+		q.Enqueue(model.RunnerEvent{TaskID: 1, Event: model.RunnerEventStarted})
 		synctest.Wait()
 
 		// First attempt failed, event still queued
@@ -158,8 +158,8 @@ func TestEventQueue_DrainDropsPermanentErrors(t *testing.T) {
 
 	q := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 
-	q.Enqueue(&xagentv1.RunnerEvent{TaskId: 1, Event: string(model.RunnerEventStopped)}) // will get NotFound
-	q.Enqueue(&xagentv1.RunnerEvent{TaskId: 2, Event: string(model.RunnerEventStarted)}) // should still be delivered
+	q.Enqueue(model.RunnerEvent{TaskID: 1, Event: model.RunnerEventStopped}) // will get NotFound
+	q.Enqueue(model.RunnerEvent{TaskID: 2, Event: model.RunnerEventStarted}) // should still be delivered
 	assert.Equal(t, q.Len(), 2)
 
 	// Drain should drop the first event and deliver the second

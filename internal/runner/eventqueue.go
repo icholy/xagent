@@ -10,6 +10,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/icholy/xagent/internal/common"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
@@ -45,7 +46,7 @@ func NewEventQueue(opts EventQueueOptions) *EventQueue {
 }
 
 // Enqueue adds an event to the queue.
-func (q *EventQueue) Enqueue(event *xagentv1.RunnerEvent) {
+func (q *EventQueue) Enqueue(event model.RunnerEvent) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.events.PushBack(event)
@@ -69,19 +70,20 @@ func (q *EventQueue) Drain(ctx context.Context) error {
 	defer q.mu.Unlock()
 	for q.events.Len() > 0 {
 		el := q.events.Front()
-		ev := el.Value.(*xagentv1.RunnerEvent)
+		ev := el.Value.(model.RunnerEvent)
+		pb := ev.Proto()
 		_, err := q.client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-			Events: []*xagentv1.RunnerEvent{ev},
+			Events: []*xagentv1.RunnerEvent{pb},
 		})
 		if err != nil {
 			if isPermanentError(err) {
-				q.log.Warn("event dropped due to permanent error", "task", ev.TaskId, "event", ev.Event, "error", err)
+				q.log.Warn("event dropped due to permanent error", "task", ev.TaskID, "event", ev.Event, "error", err)
 				q.events.Remove(el)
 				continue
 			}
 			return err
 		}
-		q.log.Info("event delivered", "task", ev.TaskId, "event", ev.Event)
+		q.log.Info("event delivered", "task", ev.TaskID, "event", ev.Event)
 		q.events.Remove(el)
 	}
 	return nil
