@@ -1,6 +1,12 @@
 # XAGENT
 
-Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside remote self-hosted Docker containers.
+Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside remote sandboxes.
+
+## Features
+
+- **Self-hosted runners** - Run agents on your own infrastructure inside Docker containers
+- **Third-party integrations** - Interact with agents via GitHub and Jira comments
+- **MCP server** - Create and manage tasks from Claude Code, Cursor, or any MCP client
 
 ## Web UI
 
