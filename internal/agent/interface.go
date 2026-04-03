@@ -56,8 +56,9 @@ type Options struct {
 
 // ClaudeOptions contains Claude-specific agent options.
 type ClaudeOptions struct {
-	Model string
-	Bin   string
+	Model    string   `json:"model,omitempty"`
+	Bin      string   `json:"bin,omitempty"`
+	Channels []string `json:"channels,omitempty"`
 }
 
 // CodexOptions contains Codex-specific agent options.

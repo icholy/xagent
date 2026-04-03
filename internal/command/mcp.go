@@ -2,10 +2,11 @@ package command
 
 import (
 	"context"
+	"time"
 
+	"github.com/icholy/xagent/internal/agentmcp"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/xagentclient"
-	"github.com/icholy/xagent/internal/agentmcp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/urfave/cli/v3"
 )
@@ -43,12 +44,33 @@ var McpCommand = &cli.Command{
 			Usage:    "Authentication token",
 			Required: true,
 		},
+		&cli.BoolFlag{
+			Name:  "channel",
+			Usage: "Enable Claude Code channel support",
+		},
+		&cli.DurationFlag{
+			Name:  "channel-poll-interval",
+			Usage: "Channel event polling interval",
+			Value: 3 * time.Second,
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		channelEnabled := cmd.Bool("channel")
+
+		opts := &mcp.ServerOptions{}
+		if channelEnabled {
+			opts.Capabilities = &mcp.ServerCapabilities{
+				Experimental: map[string]any{
+					"claude/channel": map[string]any{},
+				},
+			}
+			opts.Instructions = agentmcp.ChannelInstructions
+		}
+
 		server := mcp.NewServer(&mcp.Implementation{
 			Name:    "xagent",
 			Version: "1.0.0",
-		}, nil)
+		}, opts)
 
 		client := xagentclient.New(xagentclient.Options{BaseURL: cmd.String("server"), Token: cmd.String("token")})
 		task := &model.Task{
@@ -56,7 +78,18 @@ var McpCommand = &cli.Command{
 			Runner:    cmd.String("runner"),
 			Workspace: cmd.String("workspace"),
 		}
-		agentmcp.NewServer(client, task).AddTools(server)
+		xmcp := agentmcp.NewServer(client, task)
+		xmcp.AddTools(server)
+
+		if channelEnabled {
+			transport, notifier := agentmcp.WrapTransport(&mcp.StdioTransport{})
+			session, err := server.Connect(ctx, transport, nil)
+			if err != nil {
+				return err
+			}
+			go xmcp.PollEvents(ctx, notifier, cmd.Duration("channel-poll-interval"))
+			return session.Wait()
+		}
 
 		return server.Run(ctx, &mcp.StdioTransport{})
 	},
