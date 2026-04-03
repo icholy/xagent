@@ -80,10 +80,17 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					},
 				},
 				Issue: &github.Issue{
+					Number:  github.Ptr(1),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
-			expected: nil,
+			expected: &githubWebhookEvent{
+				description:    "testuser commented on issue #1",
+				data:           "just a regular comment",
+				url:            "https://github.com/owner/repo/issues/1",
+				githubUserID:   123,
+				githubUsername: "testuser",
+			},
 		},
 		{
 			name:     "IssueComment_NilFields",
@@ -124,10 +131,17 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					},
 				},
 				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(3),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
 				},
 			},
-			expected: nil,
+			expected: &githubWebhookEvent{
+				description:    "reviewer reviewed PR #3",
+				data:           "looks good",
+				url:            "https://github.com/owner/repo/pull/3",
+				githubUserID:   789,
+				githubUsername: "reviewer",
+			},
 		},
 		{
 			name:     "PullRequestReviewComment_NilFields",
@@ -187,10 +201,17 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					},
 				},
 				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(4),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4"),
 				},
 			},
-			expected: nil,
+			expected: &githubWebhookEvent{
+				description:    "lead reviewed PR #4",
+				data:           "approved",
+				url:            "https://github.com/owner/repo/pull/4",
+				githubUserID:   101,
+				githubUsername: "lead",
+			},
 		},
 		{
 			name:     "PullRequestReview_NilFields",

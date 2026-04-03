@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/model"
+
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
@@ -70,6 +71,7 @@ func TestRouteMultipleOrgs(t *testing.T) {
 
 	n, err := r.Route(t.Context(), Event{
 		Type:   EventTypeGitHub,
+		Data:   "xagent: do something",
 		URL:    url,
 		UserID: orgA.UserID,
 	})
@@ -97,6 +99,7 @@ func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 
 	n, err := r.Route(t.Context(), Event{
 		Type:   EventTypeGitHub,
+		Data:   "xagent: do something",
 		URL:    url,
 		UserID: org.UserID,
 	})
@@ -116,6 +119,7 @@ func TestRouteNoMatchingLinks(t *testing.T) {
 
 	n, err := r.Route(t.Context(), Event{
 		Type:   EventTypeGitHub,
+		Data:   "xagent: do something",
 		URL:    "https://github.com/owner/repo/pull/1",
 		UserID: org.UserID,
 	})
@@ -135,7 +139,33 @@ func TestRouteEmptyURL(t *testing.T) {
 
 	n, err := r.Route(t.Context(), Event{
 		Type:   EventTypeGitHub,
+		Data:   "xagent: do something",
 		URL:    "",
+		UserID: org.UserID,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
+}
+
+func TestRouteSkipsEventsWithoutXAgentPrefix(t *testing.T) {
+	t.Parallel()
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/1"
+	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+
+	r := &Router{
+		Log:   slog.Default(),
+		Store: s,
+	}
+
+	n, err := r.Route(t.Context(), Event{
+		Type:   EventTypeGitHub,
+		Data:   "just a regular comment",
+		URL:    url,
 		UserID: org.UserID,
 	})
 	assert.NilError(t, err)

@@ -124,9 +124,6 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 			return nil, nil
 		}
 		commentBody := strings.TrimSpace(payload.Comment.Body)
-		if !strings.HasPrefix(commentBody, "xagent:") {
-			return nil, nil
-		}
 
 		accountID := payload.Comment.Author.AccountID
 		displayName := payload.Comment.Author.DisplayName

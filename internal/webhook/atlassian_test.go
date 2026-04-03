@@ -56,7 +56,12 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
 				},
 			},
-			expected: nil,
+			expected: &atlassianWebhookEvent{
+				description:        "Test User commented on PROJ-123",
+				data:               "just a regular comment",
+				url:                "https://mycompany.atlassian.net/browse/PROJ-123",
+				atlassianAccountID: "abc123",
+			},
 		},
 		{
 			name: "NilComment",
