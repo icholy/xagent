@@ -3,6 +3,8 @@ package eventrouter
 import (
 	"regexp"
 	"strings"
+
+	"github.com/icholy/xagent/internal/model"
 )
 
 // Rule defines a routing rule that determines whether an event should be routed to an org's tasks.
@@ -11,6 +13,16 @@ type Rule struct {
 	Type    string
 	Prefix  string
 	Mention string
+}
+
+// RuleFromModel converts a model.RoutingRule to an eventrouter Rule.
+func RuleFromModel(r model.RoutingRule) Rule {
+	return Rule{
+		Source:  r.Source,
+		Type:    r.Type,
+		Prefix:  r.Prefix,
+		Mention: r.Mention,
+	}
 }
 
 // Match reports whether the rule matches the given event.
