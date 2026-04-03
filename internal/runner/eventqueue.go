@@ -107,12 +107,12 @@ func (q *EventQueue) Run(ctx context.Context) {
 			return
 		case <-q.notify:
 		}
-		for {
+		for i := 1; true; i++ {
 			err := q.Drain(ctx)
 			if err == nil {
 				break
 			}
-			q.log.Warn("event delivery failed, will retry", "error", err, "queued", q.Len())
+			q.log.Warn("event delivery failed, will retry", "error", err, "queued", q.Len(), "failures", i)
 			if !common.SleepContext(ctx, q.retryInterval) {
 				return
 			}
