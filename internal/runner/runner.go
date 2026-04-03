@@ -150,9 +150,9 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Kill(ctx, task); err != nil {
 					r.log.Error("failed to stop task", "task", task.ID, "error", err)
 				}
-				r.queue.Enqueue(&xagentv1.RunnerEvent{
-					TaskId:  task.ID,
-					Event:   string(model.RunnerEventStopped),
+				r.queue.Enqueue(model.RunnerEvent{
+					TaskID:  task.ID,
+					Event:   model.RunnerEventStopped,
 					Version: task.Version,
 				})
 				return nil
@@ -171,9 +171,9 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "error", err)
-					r.queue.Enqueue(&xagentv1.RunnerEvent{
-						TaskId:  task.ID,
-						Event:   string(model.RunnerEventFailed),
+					r.queue.Enqueue(model.RunnerEvent{
+						TaskID:  task.ID,
+						Event:   model.RunnerEventFailed,
 						Version: task.Version,
 					})
 					return nil
@@ -209,9 +209,9 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "error", err)
-					r.queue.Enqueue(&xagentv1.RunnerEvent{
-						TaskId:  task.ID,
-						Event:   string(model.RunnerEventFailed),
+					r.queue.Enqueue(model.RunnerEvent{
+						TaskID:  task.ID,
+						Event:   model.RunnerEventFailed,
 						Version: task.Version,
 					})
 					return nil
@@ -282,15 +282,15 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 		exitCode := info.State.ExitCode
 		if exitCode == 0 {
 			r.log.Info("reconcile: container exited successfully", "task", taskID)
-			r.queue.Enqueue(&xagentv1.RunnerEvent{
-				TaskId: taskID,
-				Event:  string(model.RunnerEventStopped),
+			r.queue.Enqueue(model.RunnerEvent{
+				TaskID: taskID,
+				Event:  model.RunnerEventStopped,
 			})
 		} else {
 			r.log.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
-			r.queue.Enqueue(&xagentv1.RunnerEvent{
-				TaskId: taskID,
-				Event:  string(model.RunnerEventFailed),
+			r.queue.Enqueue(model.RunnerEvent{
+				TaskID: taskID,
+				Event:  model.RunnerEventFailed,
 			})
 		}
 	}
@@ -497,9 +497,9 @@ func (r *Runner) Monitor(ctx context.Context) error {
 			case events.ActionStart:
 				r.log.Info("container started", "task", taskID)
 				// Use version 0 to bypass version check (spontaneous events)
-				r.queue.Enqueue(&xagentv1.RunnerEvent{
-					TaskId: taskID,
-					Event:  string(model.RunnerEventStarted),
+				r.queue.Enqueue(model.RunnerEvent{
+					TaskID: taskID,
+					Event:  model.RunnerEventStarted,
 				})
 			case events.ActionDie:
 				r.sem.Release(1)
@@ -507,15 +507,15 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				exitCode := event.Actor.Attributes["exitCode"]
 				if exitCode == "0" {
 					r.log.Info("container exited successfully", "task", taskID)
-					r.queue.Enqueue(&xagentv1.RunnerEvent{
-						TaskId: taskID,
-						Event:  string(model.RunnerEventStopped),
+					r.queue.Enqueue(model.RunnerEvent{
+						TaskID: taskID,
+						Event:  model.RunnerEventStopped,
 					})
 				} else {
 					r.log.Error("container exited with error", "task", taskID, "exitCode", exitCode)
-					r.queue.Enqueue(&xagentv1.RunnerEvent{
-						TaskId: taskID,
-						Event:  string(model.RunnerEventFailed),
+					r.queue.Enqueue(model.RunnerEvent{
+						TaskID: taskID,
+						Event:  model.RunnerEventFailed,
 					})
 				}
 			}
