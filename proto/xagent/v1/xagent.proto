@@ -33,7 +33,6 @@ service XAgentService {
   rpc RemoveEventTask(RemoveEventTaskRequest) returns (RemoveEventTaskResponse);
   rpc ListEventTasks(ListEventTasksRequest) returns (ListEventTasksResponse);
   rpc ListEventsByTask(ListEventsByTaskRequest) returns (ListEventsByTaskResponse);
-  rpc ProcessEvent(ProcessEventRequest) returns (ProcessEventResponse);
   rpc SubmitRunnerEvents(SubmitRunnerEventsRequest) returns (SubmitRunnerEventsResponse);
   rpc RegisterWorkspaces(RegisterWorkspacesRequest) returns (RegisterWorkspacesResponse);
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
@@ -342,14 +341,6 @@ message ListEventsByTaskRequest {
 
 message ListEventsByTaskResponse {
   repeated Event events = 1;
-}
-
-message ProcessEventRequest {
-  int64 id = 1;
-}
-
-message ProcessEventResponse {
-  repeated int64 task_ids = 1;
 }
 
 message RunnerEvent {
