@@ -1,16 +1,17 @@
 package eventrouter
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 )
 
 // Rule defines a routing rule that determines whether an event should be routed to an org's tasks.
 type Rule struct {
-	Source  string
-	Type    string
-	Prefix  string
-	Mention string
+	Source  string `json:"source,omitempty"`
+	Type    string `json:"type,omitempty"`
+	Prefix  string `json:"prefix,omitempty"`
+	Mention string `json:"mention,omitempty"`
 }
 
 // Match reports whether the rule matches the given event.
@@ -30,6 +31,23 @@ func (r *Rule) Match(event InputEvent) bool {
 		return false
 	}
 	return true
+}
+
+// MarshalRules marshals a slice of Rules to JSON for database storage.
+func MarshalRules(rules []Rule) (json.RawMessage, error) {
+	return json.Marshal(rules)
+}
+
+// UnmarshalRules unmarshals JSON from the database into a slice of Rules.
+func UnmarshalRules(data json.RawMessage) ([]Rule, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	var rules []Rule
+	if err := json.Unmarshal(data, &rules); err != nil {
+		return nil, err
+	}
+	return rules, nil
 }
 
 // matchMention checks whether body contains an @mention of r.Mention

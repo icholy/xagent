@@ -50,6 +50,8 @@ service XAgentService {
   rpc ListOrgMembers(ListOrgMembersRequest) returns (ListOrgMembersResponse);
   rpc GetOrgSettings(GetOrgSettingsRequest) returns (GetOrgSettingsResponse);
   rpc GenerateAtlassianWebhookSecret(GenerateAtlassianWebhookSecretRequest) returns (GenerateAtlassianWebhookSecretResponse);
+  rpc GetRoutingRules(GetRoutingRulesRequest) returns (GetRoutingRulesResponse);
+  rpc SetRoutingRules(SetRoutingRulesRequest) returns (SetRoutingRulesResponse);
 }
 
 message PingRequest {}
@@ -503,4 +505,25 @@ message GenerateAtlassianWebhookSecretRequest {}
 message GenerateAtlassianWebhookSecretResponse {
   string secret = 1;
   string webhook_url = 2;
+}
+
+message RoutingRule {
+  string source = 1;
+  string type = 2;
+  string prefix = 3;
+  string mention = 4;
+}
+
+message GetRoutingRulesRequest {}
+
+message GetRoutingRulesResponse {
+  repeated RoutingRule rules = 1;
+}
+
+message SetRoutingRulesRequest {
+  repeated RoutingRule rules = 1;
+}
+
+message SetRoutingRulesResponse {
+  repeated RoutingRule rules = 1;
 }

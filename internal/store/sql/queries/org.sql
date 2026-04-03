@@ -62,3 +62,15 @@ SELECT EXISTS(
     WHERE om.org_id = $1 AND om.user_id = $2 AND o.archived = FALSE
 ) AS is_member;
 
+-- name: GetOrgRoutingRules :one
+SELECT routing_rules FROM orgs WHERE id = $1;
+
+-- name: SetOrgRoutingRules :exec
+UPDATE orgs SET
+    routing_rules = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
+
+-- name: GetRoutingRulesByOrgs :many
+SELECT id, routing_rules FROM orgs WHERE id = ANY($1::BIGINT[]);
+

@@ -6,6 +6,30 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+func TestRuleMarshalUnmarshal(t *testing.T) {
+	rules := []Rule{
+		{Source: "github", Type: "issue_comment", Prefix: "xagent:"},
+		{Mention: "botuser"},
+		{},
+	}
+	data, err := MarshalRules(rules)
+	assert.NilError(t, err)
+
+	got, err := UnmarshalRules(data)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, got, rules)
+}
+
+func TestUnmarshalRulesEmpty(t *testing.T) {
+	rules, err := UnmarshalRules(nil)
+	assert.NilError(t, err)
+	assert.Assert(t, rules == nil)
+
+	rules, err = UnmarshalRules([]byte("[]"))
+	assert.NilError(t, err)
+	assert.Equal(t, len(rules), 0)
+}
+
 func TestRuleMatch(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -171,4 +172,27 @@ func toModelOrgMember(row sqlc.OrgMember) *model.OrgMember {
 		Role:      row.Role,
 		CreatedAt: row.CreatedAt,
 	}
+}
+
+func (s *Store) GetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64) (json.RawMessage, error) {
+	return s.q(tx).GetOrgRoutingRules(ctx, orgID)
+}
+
+func (s *Store) SetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64, rules json.RawMessage) error {
+	return s.q(tx).SetOrgRoutingRules(ctx, sqlc.SetOrgRoutingRulesParams{
+		ID:           orgID,
+		RoutingRules: rules,
+	})
+}
+
+func (s *Store) GetRoutingRulesByOrgs(ctx context.Context, tx *sql.Tx, orgIDs []int64) (map[int64]json.RawMessage, error) {
+	rows, err := s.q(tx).GetRoutingRulesByOrgs(ctx, orgIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[int64]json.RawMessage, len(rows))
+	for _, row := range rows {
+		result[row.ID] = row.RoutingRules
+	}
+	return result, nil
 }

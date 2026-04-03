@@ -6,6 +6,7 @@ package sqlc
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -41,13 +42,14 @@ type Log struct {
 }
 
 type Org struct {
-	ID                     int64     `json:"id"`
-	Name                   string    `json:"name"`
-	Owner                  string    `json:"owner"`
-	CreatedAt              time.Time `json:"created_at"`
-	UpdatedAt              time.Time `json:"updated_at"`
-	Archived               bool      `json:"archived"`
-	AtlassianWebhookSecret string    `json:"atlassian_webhook_secret"`
+	ID                     int64           `json:"id"`
+	Name                   string          `json:"name"`
+	Owner                  string          `json:"owner"`
+	CreatedAt              time.Time       `json:"created_at"`
+	UpdatedAt              time.Time       `json:"updated_at"`
+	Archived               bool            `json:"archived"`
+	AtlassianWebhookSecret string          `json:"atlassian_webhook_secret"`
+	RoutingRules           json.RawMessage `json:"routing_rules"`
 }
 
 type OrgMember struct {

@@ -7,7 +7,10 @@ package sqlc
 
 import (
 	"context"
+	"encoding/json"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const addOrgMember = `-- name: AddOrgMember :exec
@@ -114,6 +117,49 @@ func (q *Queries) GetOrgAtlassianWebhookSecret(ctx context.Context, id int64) (s
 	var atlassian_webhook_secret string
 	err := row.Scan(&atlassian_webhook_secret)
 	return atlassian_webhook_secret, err
+}
+
+const getOrgRoutingRules = `-- name: GetOrgRoutingRules :one
+SELECT routing_rules FROM orgs WHERE id = $1
+`
+
+func (q *Queries) GetOrgRoutingRules(ctx context.Context, id int64) (json.RawMessage, error) {
+	row := q.db.QueryRowContext(ctx, getOrgRoutingRules, id)
+	var routing_rules json.RawMessage
+	err := row.Scan(&routing_rules)
+	return routing_rules, err
+}
+
+const getRoutingRulesByOrgs = `-- name: GetRoutingRulesByOrgs :many
+SELECT id, routing_rules FROM orgs WHERE id = ANY($1::BIGINT[])
+`
+
+type GetRoutingRulesByOrgsRow struct {
+	ID           int64           `json:"id"`
+	RoutingRules json.RawMessage `json:"routing_rules"`
+}
+
+func (q *Queries) GetRoutingRulesByOrgs(ctx context.Context, dollar_1 []int64) ([]GetRoutingRulesByOrgsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getRoutingRulesByOrgs, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRoutingRulesByOrgsRow{}
+	for rows.Next() {
+		var i GetRoutingRulesByOrgsRow
+		if err := rows.Scan(&i.ID, &i.RoutingRules); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const isOrgMember = `-- name: IsOrgMember :one
@@ -291,6 +337,23 @@ type SetOrgAtlassianWebhookSecretParams struct {
 
 func (q *Queries) SetOrgAtlassianWebhookSecret(ctx context.Context, arg SetOrgAtlassianWebhookSecretParams) error {
 	_, err := q.db.ExecContext(ctx, setOrgAtlassianWebhookSecret, arg.ID, arg.AtlassianWebhookSecret)
+	return err
+}
+
+const setOrgRoutingRules = `-- name: SetOrgRoutingRules :exec
+UPDATE orgs SET
+    routing_rules = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type SetOrgRoutingRulesParams struct {
+	ID           int64           `json:"id"`
+	RoutingRules json.RawMessage `json:"routing_rules"`
+}
+
+func (q *Queries) SetOrgRoutingRules(ctx context.Context, arg SetOrgRoutingRulesParams) error {
+	_, err := q.db.ExecContext(ctx, setOrgRoutingRules, arg.ID, arg.RoutingRules)
 	return err
 }
 
