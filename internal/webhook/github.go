@@ -64,7 +64,8 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Route event to subscribed tasks
 	input := eventrouter.InputEvent{
-		Type:        eventrouter.EventTypeGitHub,
+		Source:      "github",
+		Type:        r.Header.Get("X-GitHub-Event"),
 		Description: extracted.description,
 		Data:        extracted.data,
 		URL:         extracted.url,

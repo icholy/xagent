@@ -197,7 +197,8 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 	calls := router.RouteCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
-		Type:        eventrouter.EventTypeAtlassian,
+		Source:      "atlassian",
+		Type:        "comment_created",
 		Description: "Test User commented on PROJ-10",
 		Data:        "xagent: please fix the tests",
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",

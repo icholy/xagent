@@ -88,7 +88,8 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Route event to subscribed tasks
 	input := eventrouter.InputEvent{
-		Type:        eventrouter.EventTypeAtlassian,
+		Source:      "atlassian",
+		Type:        extracted.eventType,
 		Description: extracted.description,
 		Data:        extracted.data,
 		URL:         extracted.url,
@@ -106,6 +107,7 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type atlassianWebhookEvent struct {
+	eventType          string
 	description        string
 	data               string
 	url                string
@@ -139,6 +141,7 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 		description := fmt.Sprintf("%s commented on %s", displayName, payload.Issue.Key)
 
 		return &atlassianWebhookEvent{
+			eventType:          payload.WebhookEvent,
 			description:        description,
 			data:               commentBody,
 			url:                url,

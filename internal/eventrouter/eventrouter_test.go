@@ -26,7 +26,7 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 	}
 
 	n, err := r.Route(t.Context(), InputEvent{
-		Type:        EventTypeGitHub,
+		Source:      "github",
 		Description: "testuser commented on PR #1",
 		Data:        "xagent: fix tests",
 		URL:         url,
@@ -70,7 +70,7 @@ func TestRouteMultipleOrgs(t *testing.T) {
 	}
 
 	n, err := r.Route(t.Context(), InputEvent{
-		Type:   EventTypeGitHub,
+		Source: "github",
 		Data:   "xagent: do something",
 		URL:    url,
 		UserID: orgA.UserID,
@@ -98,7 +98,7 @@ func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 	}
 
 	n, err := r.Route(t.Context(), InputEvent{
-		Type:   EventTypeGitHub,
+		Source: "github",
 		Data:   "xagent: do something",
 		URL:    url,
 		UserID: org.UserID,
@@ -118,7 +118,7 @@ func TestRouteNoMatchingLinks(t *testing.T) {
 	}
 
 	n, err := r.Route(t.Context(), InputEvent{
-		Type:   EventTypeGitHub,
+		Source: "github",
 		Data:   "xagent: do something",
 		URL:    "https://github.com/owner/repo/pull/1",
 		UserID: org.UserID,
@@ -138,7 +138,7 @@ func TestRouteEmptyURL(t *testing.T) {
 	}
 
 	n, err := r.Route(t.Context(), InputEvent{
-		Type:   EventTypeGitHub,
+		Source: "github",
 		Data:   "xagent: do something",
 		URL:    "",
 		UserID: org.UserID,
@@ -163,7 +163,7 @@ func TestRouteSkipsEventsWithoutXAgentPrefix(t *testing.T) {
 	}
 
 	n, err := r.Route(t.Context(), InputEvent{
-		Type:   EventTypeGitHub,
+		Source: "github",
 		Data:   "just a regular comment",
 		URL:    url,
 		UserID: org.UserID,

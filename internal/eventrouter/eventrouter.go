@@ -10,17 +10,10 @@ import (
 	"github.com/icholy/xagent/internal/store"
 )
 
-// EventType identifies the source of a webhook event.
-type EventType string
-
-const (
-	EventTypeGitHub    EventType = "github"
-	EventTypeAtlassian EventType = "atlassian"
-)
-
 // InputEvent represents a parsed webhook event ready for routing.
 type InputEvent struct {
-	Type        EventType
+	Source      string
+	Type       string
 	Description string
 	Data        string
 	URL         string

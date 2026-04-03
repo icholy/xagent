@@ -315,7 +315,8 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	calls := router.RouteCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
-		Type:        eventrouter.EventTypeGitHub,
+		Source:      "github",
+		Type:        "issue_comment",
 		Description: "testuser commented on PR #10",
 		Data:        "xagent: please fix the tests",
 		URL:         "https://github.com/owner/repo/pull/10",
