@@ -74,6 +74,10 @@ func (s *Store) ArchiveOrg(ctx context.Context, tx *sql.Tx, id int64) error {
 	return s.q(tx).ArchiveOrg(ctx, id)
 }
 
+func (s *Store) DestroyOrg(ctx context.Context, tx *sql.Tx, id int64) error {
+	return s.q(tx).DestroyOrg(ctx, id)
+}
+
 func (s *Store) AddOrgMember(ctx context.Context, tx *sql.Tx, member *model.OrgMember) error {
 	now := time.Now()
 	err := s.q(tx).AddOrgMember(ctx, sqlc.AddOrgMemberParams{
