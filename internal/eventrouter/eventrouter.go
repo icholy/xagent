@@ -13,7 +13,7 @@ import (
 // InputEvent represents a parsed webhook event ready for routing.
 type InputEvent struct {
 	Source      string
-	Type        string
+	Type       string
 	Description string
 	Data        string
 	URL         string
@@ -36,7 +36,7 @@ var defaultRules = []Rule{
 // number of tasks routed and any error finding links.
 func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	match := slices.ContainsFunc(defaultRules, func(r Rule) bool {
-		return r.Match(input.Source, input.Type, input.Data)
+		return r.Match(input)
 	})
 	if !match {
 		return 0, nil
