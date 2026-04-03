@@ -98,9 +98,6 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 			return nil
 		}
 		body := strings.TrimSpace(*event.Comment.Body)
-		if !strings.HasPrefix(body, "xagent:") {
-			return nil
-		}
 		login := event.Comment.User.GetLogin()
 		number := event.Issue.GetNumber()
 		description := fmt.Sprintf("%s commented on issue #%d", login, number)
@@ -122,9 +119,6 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 			return nil
 		}
 		body := strings.TrimSpace(*event.Comment.Body)
-		if !strings.HasPrefix(body, "xagent:") {
-			return nil
-		}
 		login := event.Comment.User.GetLogin()
 		number := event.PullRequest.GetNumber()
 		return &githubWebhookEvent{
@@ -143,9 +137,6 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 			return nil
 		}
 		body := strings.TrimSpace(*event.Review.Body)
-		if !strings.HasPrefix(body, "xagent:") {
-			return nil
-		}
 		login := event.Review.User.GetLogin()
 		number := event.PullRequest.GetNumber()
 		return &githubWebhookEvent{

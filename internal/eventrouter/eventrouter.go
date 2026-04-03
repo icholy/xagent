@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"strings"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
@@ -36,6 +37,9 @@ type Router struct {
 // creates events per org, and starts the associated tasks. It returns the total
 // number of tasks routed and any error finding links.
 func (r *Router) Route(ctx context.Context, event Event) (int, error) {
+	if !strings.HasPrefix(strings.TrimSpace(event.Data), "xagent:") {
+		return 0, nil
+	}
 	linksByOrg, err := r.find(ctx, event)
 	if err != nil {
 		return 0, err
