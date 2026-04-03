@@ -124,6 +124,11 @@ func CreateOrg(t *testing.T, s *store.Store, opts *OrgOptions) *Org {
 	if err := s.UpdateDefaultOrgID(ctx, nil, userID, org.ID); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := s.DestroyOrg(t.Context(), nil, org.ID); err != nil {
+			t.Logf("DestroyOrg cleanup: %v", err)
+		}
+	})
 	result := &Org{
 		UserID: userID,
 		OrgID:  org.ID,
