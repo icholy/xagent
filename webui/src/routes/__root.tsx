@@ -99,12 +99,6 @@ function RootComponent() {
             >
               Keys
             </Link>
-            <Link
-              to="/routing-rules"
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Routing
-            </Link>
           </div>
           <div className="ml-auto flex items-center gap-4">
             {orgs.length > 0 && (

@@ -13,7 +13,6 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspacesIndexRouteImport } from './routes/workspaces.index'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
-import { Route as RoutingRulesIndexRouteImport } from './routes/routing-rules.index'
 import { Route as MembersIndexRouteImport } from './routes/members.index'
 import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
@@ -42,11 +41,6 @@ const WorkspacesIndexRoute = WorkspacesIndexRouteImport.update({
 const TasksIndexRoute = TasksIndexRouteImport.update({
   id: '/tasks/',
   path: '/tasks/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RoutingRulesIndexRoute = RoutingRulesIndexRouteImport.update({
-  id: '/routing-rules/',
-  path: '/routing-rules/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MembersIndexRoute = MembersIndexRouteImport.update({
@@ -107,7 +101,6 @@ export interface FileRoutesByFullPath {
   '/events': typeof EventsIndexRoute
   '/keys': typeof KeysIndexRoute
   '/members': typeof MembersIndexRoute
-  '/routing-rules': typeof RoutingRulesIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
 }
@@ -123,7 +116,6 @@ export interface FileRoutesByTo {
   '/events': typeof EventsIndexRoute
   '/keys': typeof KeysIndexRoute
   '/members': typeof MembersIndexRoute
-  '/routing-rules': typeof RoutingRulesIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
 }
@@ -140,7 +132,6 @@ export interface FileRoutesById {
   '/events/': typeof EventsIndexRoute
   '/keys/': typeof KeysIndexRoute
   '/members/': typeof MembersIndexRoute
-  '/routing-rules/': typeof RoutingRulesIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
 }
@@ -158,7 +149,6 @@ export interface FileRouteTypes {
     | '/events'
     | '/keys'
     | '/members'
-    | '/routing-rules'
     | '/tasks'
     | '/workspaces'
   fileRoutesByTo: FileRoutesByTo
@@ -174,7 +164,6 @@ export interface FileRouteTypes {
     | '/events'
     | '/keys'
     | '/members'
-    | '/routing-rules'
     | '/tasks'
     | '/workspaces'
   id:
@@ -190,7 +179,6 @@ export interface FileRouteTypes {
     | '/events/'
     | '/keys/'
     | '/members/'
-    | '/routing-rules/'
     | '/tasks/'
     | '/workspaces/'
   fileRoutesById: FileRoutesById
@@ -207,7 +195,6 @@ export interface RootRouteChildren {
   EventsIndexRoute: typeof EventsIndexRoute
   KeysIndexRoute: typeof KeysIndexRoute
   MembersIndexRoute: typeof MembersIndexRoute
-  RoutingRulesIndexRoute: typeof RoutingRulesIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
 }
@@ -240,13 +227,6 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof TasksIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/routing-rules/': {
-      id: '/routing-rules/'
-      path: '/routing-rules'
-      fullPath: '/routing-rules'
-      preLoaderRoute: typeof RoutingRulesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/members/': {
@@ -327,7 +307,6 @@ const rootRouteChildren: RootRouteChildren = {
   EventsIndexRoute: EventsIndexRoute,
   KeysIndexRoute: KeysIndexRoute,
   MembersIndexRoute: MembersIndexRoute,
-  RoutingRulesIndexRoute: RoutingRulesIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
 }
