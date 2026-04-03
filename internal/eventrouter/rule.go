@@ -16,7 +16,7 @@ type Rule struct {
 // Match reports whether the rule matches the given event.
 // Empty fields are treated as wildcards. For content matching,
 // Prefix and Mention are checked against the event's Data field.
-func (r *Rule) Match(event *InputEvent) bool {
+func (r *Rule) Match(event InputEvent) bool {
 	if r.Source != "" && r.Source != event.Source {
 		return false
 	}
@@ -34,7 +34,7 @@ func (r *Rule) Match(event *InputEvent) bool {
 
 // matchMention checks whether body contains an @mention of r.Mention
 // using platform-specific syntax.
-func (r *Rule) matchMention(event *InputEvent) bool {
+func (r *Rule) matchMention(event InputEvent) bool {
 	switch event.Source {
 	case "github":
 		pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(r.Mention) + `(?:$|[\s,.)!?])`

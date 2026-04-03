@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
-	"strings"
+	"slices"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
@@ -26,11 +26,19 @@ type Router struct {
 	Store *store.Store
 }
 
+// defaultRules is the fallback when an org has no custom routing rules configured.
+var defaultRules = []Rule{
+	{Prefix: "xagent:"},
+}
+
 // Route finds all subscribed links matching the event URL for the given user,
 // creates events per org, and starts the associated tasks. It returns the total
 // number of tasks routed and any error finding links.
 func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
-	if !strings.HasPrefix(strings.TrimSpace(input.Data), "xagent:") {
+	match := slices.ContainsFunc(defaultRules, func(r Rule) bool {
+		return r.Match(input)
+	})
+	if !match {
 		return 0, nil
 	}
 	linksByOrg, err := r.find(ctx, input)
