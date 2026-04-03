@@ -3,7 +3,6 @@ package eventrouter
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
 
 	"github.com/icholy/xagent/internal/model"
@@ -37,12 +36,11 @@ type Router struct {
 // creates events per org, and starts the associated tasks. It returns the total
 // number of tasks routed and any error finding links.
 func (r *Router) Route(ctx context.Context, event Event) (int, error) {
-	linksByOrg, err := r.findLinksByOrg(ctx, event.URL, event.UserID)
+	linksByOrg, err := r.find(ctx, event)
 	if err != nil {
 		return 0, err
 	}
-	auditMessage := fmt.Sprintf("%s webhook started task", event.Type)
-	var totalRouted int
+	var n int
 	for orgID, links := range linksByOrg {
 		me := &model.Event{
 			Description: event.Description,
@@ -54,61 +52,60 @@ func (r *Router) Route(ctx context.Context, event Event) (int, error) {
 			r.Log.Error("failed to create event", "org_id", orgID, "error", err)
 			continue
 		}
-		totalRouted += r.routeEventToLinks(ctx, me.ID, links, orgID, auditMessage)
+		for _, link := range links {
+			if err := r.attach(ctx, link.TaskID, me); err != nil {
+				r.Log.Error("failed to route event to task", "event_id", me.ID, "task_id", link.TaskID, "error", err)
+				continue
+			}
+			n++
+		}
 	}
-	return totalRouted, nil
+	return n, nil
 }
 
-// findLinksByOrg queries all matching subscribed links for a URL across all
+// find queries all matching subscribed links for a URL across all
 // the user's orgs and groups them by org ID.
-func (r *Router) findLinksByOrg(ctx context.Context, url string, userID string) (map[int64][]*model.Link, error) {
-	if url == "" {
+func (r *Router) find(ctx context.Context, event Event) (map[int64][]*model.Link, error) {
+	if event.URL == "" {
 		return nil, nil
 	}
-	matches, err := r.Store.FindSubscribedLinksByURLForUser(ctx, nil, url, userID)
+	matches, err := r.Store.FindSubscribedLinksByURLForUser(ctx, nil, event.URL, event.UserID)
 	if err != nil {
 		return nil, err
 	}
+	seen := map[int64]bool{}
 	result := map[int64][]*model.Link{}
 	for _, m := range matches {
+		if seen[m.Link.TaskID] {
+			continue
+		}
+		seen[m.Link.TaskID] = true
 		result[m.OrgID] = append(result[m.OrgID], m.Link)
 	}
 	return result, nil
 }
 
-// routeEventToLinks routes an event to the tasks referenced by the given links.
-// It returns the number of tasks successfully routed.
-func (r *Router) routeEventToLinks(ctx context.Context, eventID int64, links []*model.Link, orgID int64, auditMessage string) int {
-	taskIDs := map[int64]bool{}
-	for _, link := range links {
-		if taskIDs[link.TaskID] {
-			continue
+// attach associates an event with a task, starts the task, and logs the action.
+func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) error {
+	return r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := r.Store.AddEventTask(ctx, tx, event.ID, taskID); err != nil {
+			return err
 		}
-		taskIDs[link.TaskID] = true
-		err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			if err := r.Store.AddEventTask(ctx, tx, eventID, link.TaskID); err != nil {
-				return err
-			}
-			task, err := r.Store.GetTaskForUpdate(ctx, tx, link.TaskID, orgID)
-			if err != nil {
-				return err
-			}
-			task.Start()
-			if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
-				return err
-			}
-			if err := r.Store.CreateLog(ctx, tx, &model.Log{
-				TaskID:  link.TaskID,
-				Type:    "audit",
-				Content: auditMessage,
-			}); err != nil {
-				return err
-			}
-			return tx.Commit()
-		})
+		task, err := r.Store.GetTaskForUpdate(ctx, tx, taskID, event.OrgID)
 		if err != nil {
-			r.Log.Warn("failed to route event to task", "event_id", eventID, "task_id", link.TaskID, "error", err)
+			return err
 		}
-	}
-	return len(taskIDs)
+		task.Start()
+		if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
+			return err
+		}
+		if err := r.Store.CreateLog(ctx, tx, &model.Log{
+			TaskID:  taskID,
+			Type:    "audit",
+			Content: "webhook started task",
+		}); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
