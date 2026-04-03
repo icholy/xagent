@@ -17,11 +17,7 @@ Use the `mcp__xagent__create_task` and `mcp__xagent__list_workspaces` MCP tools 
 
 - **Always set `runner`**: Use the runner_id from `list_workspaces` (don't omit it).
 - **Name**: Keep task names short and descriptive (under 60 chars).
-- **Instruction**: Write clear, actionable instructions. Include:
-  - What needs to change and why
-  - Relevant file paths or package names if known
-  - Specific implementation hints if the user provided them
-  - Details from the current conversation (code you've read, architecture discussed) so the agent doesn't have to rediscover it
+- **Instruction**: Write clear, actionable instructions. Include context you **already have** from the current conversation (code you've read, file paths discussed, architecture context). Do **not** go researching or exploring the codebase to gather more context before creating the task — the agent can do that itself. The whole point of delegating to xagent is to offload work, not to front-load it.
 
 ## Task Types
 
