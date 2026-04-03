@@ -14,11 +14,7 @@ import (
 // setOrgRules is a test helper to set routing rules for an org.
 func setOrgRules(t *testing.T, s *store.Store, orgID int64, rules []Rule) {
 	t.Helper()
-	data, err := MarshalRules(rules)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetOrgRoutingRules(t.Context(), nil, orgID, data); err != nil {
+	if err := s.SetOrgRoutingRules(t.Context(), nil, orgID, rules); err != nil {
 		t.Fatal(err)
 	}
 }

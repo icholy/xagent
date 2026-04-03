@@ -81,23 +81,13 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 // loadRoutingRules loads routing rules for the given orgs, falling back to
 // DefaultRules for orgs that have no custom rules configured.
 func (r *Router) loadRoutingRules(ctx context.Context, orgIDs []int64) (map[int64][]Rule, error) {
-	rawByOrg, err := r.Store.GetRoutingRulesByOrgs(ctx, nil, orgIDs)
+	rulesByOrg, err := r.Store.GetRoutingRulesByOrgs(ctx, nil, orgIDs)
 	if err != nil {
 		return nil, err
 	}
 	result := make(map[int64][]Rule, len(orgIDs))
 	for _, orgID := range orgIDs {
-		data, ok := rawByOrg[orgID]
-		if !ok {
-			result[orgID] = DefaultRules
-			continue
-		}
-		rules, err := UnmarshalRules(data)
-		if err != nil {
-			r.Log.Error("failed to unmarshal routing rules", "org_id", orgID, "error", err)
-			result[orgID] = DefaultRules
-			continue
-		}
+		rules := rulesByOrg[orgID]
 		if len(rules) == 0 {
 			rules = DefaultRules
 		}
@@ -109,7 +99,7 @@ func (r *Router) loadRoutingRules(ctx context.Context, orgIDs []int64) (map[int6
 // matchesAnyRule returns true if the event matches any of the given rules.
 func matchesAnyRule(input InputEvent, rules []Rule) bool {
 	return slices.ContainsFunc(rules, func(r Rule) bool {
-		return r.Match(input)
+		return r.Match(input.Source, input.Type, input.Data)
 	})
 }
 
