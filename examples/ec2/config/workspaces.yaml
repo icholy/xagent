@@ -1,0 +1,11 @@
+workspaces:
+  default:
+    description: Default workspace
+    container:
+      image: ghcr.io/icholy/xagent-workspace-debian:latest
+      runtime: sysbox-runc
+      networks:
+        - xagent_default
+      environment:
+        ENABLE_DOCKERD: "1"
+        REGISTRY_MIRROR: http://registry:5000

@@ -31,7 +31,7 @@ terraform apply
 
 ## Configuration
 
-Edit the workspaces config in `cloud-init.yaml.tftpl` under the `/opt/xagent/config/workspaces.yaml` write_files entry to configure which workspaces the runner supports.
+Edit `config/workspaces.yaml` to configure which workspaces the runner supports. Edit `docker-compose.yml` to customize the compose stack. Both files are deployed to the instance via cloud-init.
 
 To pass additional environment variables (e.g. `CLAUDE_CODE_OAUTH_TOKEN`), use the `env_file_content` variable:
 
