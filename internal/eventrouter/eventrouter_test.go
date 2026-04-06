@@ -223,15 +223,30 @@ func TestRouteUsesOrgRoutingRules(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
+}
 
-	// Arrange - event with "xagent:" prefix should NOT match because the org overrode the defaults
-	task2 := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+func TestRouteOrgRulesOverrideDefaults(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/1"
+	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{Prefix: "bot:"},
+	})
+	assert.NilError(t, err)
+	r := &Router{
+		Log:   slog.Default(),
+		Store: s,
+	}
 
-	// Act
-	n, err = r.Route(t.Context(), InputEvent{
+	// Act - "xagent:" prefix should NOT match because the org overrode the defaults
+	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "xagent: do something",
 		URL:    url,
@@ -241,7 +256,7 @@ func TestRouteUsesOrgRoutingRules(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
-	updated, err := s.GetTask(t.Context(), nil, task2.ID, org.OrgID)
+	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
 }
