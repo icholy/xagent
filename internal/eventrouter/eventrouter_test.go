@@ -12,6 +12,8 @@ import (
 
 func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 	t.Parallel()
+
+	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/1"
@@ -19,12 +21,12 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-
 	r := &Router{
 		Log:   slog.Default(),
 		Store: s,
 	}
 
+	// Act
 	n, err := r.Route(t.Context(), InputEvent{
 		Source:      "github",
 		Description: "testuser commented on PR #1",
@@ -32,10 +34,10 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 		URL:         url,
 		UserID:      org.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
-
-	// Task was started
 	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, updated.Status, model.TaskStatusPending)
@@ -43,6 +45,8 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 
 func TestRouteMultipleOrgs(t *testing.T) {
 	t.Parallel()
+
+	// Arrange
 	s := teststore.New(t)
 	orgA := teststore.CreateOrg(t, s, nil)
 	orgB := teststore.CreateOrg(t, s, nil)
@@ -55,32 +59,34 @@ func TestRouteMultipleOrgs(t *testing.T) {
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-
-	// Add user A as member of org B so FindSubscribedLinksByURLForUser finds both
 	err := s.AddOrgMember(t.Context(), nil, &model.OrgMember{
 		OrgID:  orgB.OrgID,
 		UserID: orgA.UserID,
 		Role:   "member",
 	})
 	assert.NilError(t, err)
-
 	r := &Router{
 		Log:   slog.Default(),
 		Store: s,
 	}
 
+	// Act
 	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "xagent: do something",
 		URL:    url,
 		UserID: orgA.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 2)
 }
 
 func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 	t.Parallel()
+
+	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/1"
@@ -91,64 +97,76 @@ func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 			{URL: url, Subscribe: true},
 		},
 	})
-
 	r := &Router{
 		Log:   slog.Default(),
 		Store: s,
 	}
 
+	// Act
 	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "xagent: do something",
 		URL:    url,
 		UserID: org.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
 }
 
 func TestRouteNoMatchingLinks(t *testing.T) {
 	t.Parallel()
+
+	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
-
 	r := &Router{
 		Log:   slog.Default(),
 		Store: s,
 	}
 
+	// Act
 	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "xagent: do something",
 		URL:    "https://github.com/owner/repo/pull/1",
 		UserID: org.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
 }
 
 func TestRouteEmptyURL(t *testing.T) {
 	t.Parallel()
+
+	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
-
 	r := &Router{
 		Log:   slog.Default(),
 		Store: s,
 	}
 
+	// Act
 	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "xagent: do something",
 		URL:    "",
 		UserID: org.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
 }
 
 func TestRouteSkipsEventsWithoutXAgentPrefix(t *testing.T) {
 	t.Parallel()
+
+	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/1"
@@ -156,24 +174,28 @@ func TestRouteSkipsEventsWithoutXAgentPrefix(t *testing.T) {
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-
 	r := &Router{
 		Log:   slog.Default(),
 		Store: s,
 	}
 
+	// Act
 	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "just a regular comment",
 		URL:    url,
 		UserID: org.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
 }
 
 func TestRouteUsesOrgRoutingRules(t *testing.T) {
 	t.Parallel()
+
+	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/1"
@@ -181,43 +203,44 @@ func TestRouteUsesOrgRoutingRules(t *testing.T) {
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-
-	// Set a custom routing rule for the org
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
 		{Prefix: "bot:"},
 	})
 	assert.NilError(t, err)
-
 	r := &Router{
 		Log:   slog.Default(),
 		Store: s,
 	}
 
-	// Event with "bot:" prefix should match the org's custom rule
+	// Act
 	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "bot: do something",
 		URL:    url,
 		UserID: org.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
 
-	// Event with "xagent:" prefix should NOT match because the org overrode the defaults
+	// Arrange - event with "xagent:" prefix should NOT match because the org overrode the defaults
 	task2 := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
+
+	// Act
 	n, err = r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "xagent: do something",
 		URL:    url,
 		UserID: org.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
-
-	// Task should not have been started
 	updated, err := s.GetTask(t.Context(), nil, task2.ID, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
@@ -225,6 +248,8 @@ func TestRouteUsesOrgRoutingRules(t *testing.T) {
 
 func TestRoutePerOrgRuleFiltering(t *testing.T) {
 	t.Parallel()
+
+	// Arrange
 	s := teststore.New(t)
 	orgA := teststore.CreateOrg(t, s, nil)
 	orgB := teststore.CreateOrg(t, s, nil)
@@ -237,33 +262,30 @@ func TestRoutePerOrgRuleFiltering(t *testing.T) {
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-
-	// Add user A as member of org B
 	err := s.AddOrgMember(t.Context(), nil, &model.OrgMember{
 		OrgID:  orgB.OrgID,
 		UserID: orgA.UserID,
 		Role:   "member",
 	})
 	assert.NilError(t, err)
-
-	// Org A uses default rules (xagent: prefix), org B requires "bot:" prefix
 	err = s.SetOrgRoutingRules(t.Context(), nil, orgB.OrgID, []model.RoutingRule{
 		{Prefix: "bot:"},
 	})
 	assert.NilError(t, err)
-
 	r := &Router{
 		Log:   slog.Default(),
 		Store: s,
 	}
 
-	// Event with "xagent:" prefix should only route to org A (default rules)
+	// Act - event with "xagent:" prefix should only route to org A (default rules)
 	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Data:   "xagent: do something",
 		URL:    url,
 		UserID: orgA.UserID,
 	})
+
+	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
 }
