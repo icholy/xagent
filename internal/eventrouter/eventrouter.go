@@ -28,7 +28,7 @@ type Router struct {
 }
 
 // defaultRules is the fallback when an org has no custom routing rules configured.
-var defaultRules = []Rule{
+var defaultRules = []model.RoutingRule{
 	{Prefix: "xagent:"},
 }
 
@@ -50,7 +50,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	var n int
 	for orgID, links := range linksByOrg {
 		rules := orgRulesFor(orgRules[orgID])
-		if !slices.ContainsFunc(rules, func(r Rule) bool { return r.Match(input) }) {
+		if !slices.ContainsFunc(rules, func(r model.RoutingRule) bool { return matchRule(r, input) }) {
 			continue
 		}
 		event := &model.Event{
@@ -76,13 +76,9 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 
 // orgRulesFor returns the routing rules for an org, falling back to
 // defaultRules when the org has no custom rules configured.
-func orgRulesFor(models []model.RoutingRule) []Rule {
-	if len(models) == 0 {
+func orgRulesFor(rules []model.RoutingRule) []model.RoutingRule {
+	if len(rules) == 0 {
 		return defaultRules
-	}
-	rules := make([]Rule, len(models))
-	for i, m := range models {
-		rules[i] = RuleFromModel(m)
 	}
 	return rules
 }

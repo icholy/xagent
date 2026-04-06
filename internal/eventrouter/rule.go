@@ -7,53 +7,35 @@ import (
 	"github.com/icholy/xagent/internal/model"
 )
 
-// Rule defines a routing rule that determines whether an event should be routed to an org's tasks.
-type Rule struct {
-	Source  string
-	Type    string
-	Prefix  string
-	Mention string
-}
-
-// RuleFromModel converts a model.RoutingRule to an eventrouter Rule.
-func RuleFromModel(r model.RoutingRule) Rule {
-	return Rule{
-		Source:  r.Source,
-		Type:    r.Type,
-		Prefix:  r.Prefix,
-		Mention: r.Mention,
-	}
-}
-
-// Match reports whether the rule matches the given event.
+// matchRule reports whether the rule matches the given event.
 // Empty fields are treated as wildcards. For content matching,
 // Prefix and Mention are checked against the event's Data field.
-func (r *Rule) Match(event InputEvent) bool {
-	if r.Source != "" && r.Source != event.Source {
+func matchRule(rule model.RoutingRule, event InputEvent) bool {
+	if rule.Source != "" && rule.Source != event.Source {
 		return false
 	}
-	if r.Type != "" && r.Type != event.Type {
+	if rule.Type != "" && rule.Type != event.Type {
 		return false
 	}
-	if r.Prefix != "" && !strings.HasPrefix(event.Data, r.Prefix) {
+	if rule.Prefix != "" && !strings.HasPrefix(event.Data, rule.Prefix) {
 		return false
 	}
-	if r.Mention != "" && !r.matchMention(event) {
+	if rule.Mention != "" && !matchMention(rule.Mention, event) {
 		return false
 	}
 	return true
 }
 
-// matchMention checks whether body contains an @mention of r.Mention
+// matchMention checks whether body contains an @mention
 // using platform-specific syntax.
-func (r *Rule) matchMention(event InputEvent) bool {
+func matchMention(mention string, event InputEvent) bool {
 	switch event.Source {
 	case "github":
-		pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(r.Mention) + `(?:$|[\s,.)!?])`
+		pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(mention) + `(?:$|[\s,.)!?])`
 		matched, _ := regexp.MatchString(pattern, event.Data)
 		return matched
 	case "atlassian":
-		return strings.Contains(event.Data, "[~accountid:"+r.Mention+"]")
+		return strings.Contains(event.Data, "[~accountid:"+mention+"]")
 	default:
 		return false
 	}
