@@ -1,0 +1,76 @@
+#cloud-config
+
+package_update: true
+
+apt:
+  sources:
+    docker:
+      source: "deb [arch=$ARCH] https://download.docker.com/linux/ubuntu noble stable"
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+
+packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+  - jq
+
+write_files:
+  - path: /opt/xagent/docker-compose.yml
+    content: |
+      services:
+        registry:
+          image: registry:2
+          environment:
+            REGISTRY_PROXY_REMOTEURL: https://registry-1.docker.io
+          volumes:
+            - registry_data:/var/lib/registry
+
+        runner:
+          image: ghcr.io/icholy/xagent-runner:latest
+          env_file: .env
+          environment:
+            XAGENT_CONFIG_DIR: /etc/xagent
+          volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - ./config:/etc/xagent
+            - /tmp/xagent:/tmp/xagent
+          depends_on:
+            - registry
+          restart: unless-stopped
+
+      volumes:
+        registry_data:
+
+  - path: /opt/xagent/.env
+    permissions: "0600"
+    content: |
+      ${indent(6, env_file_content)}
+
+  - path: /opt/xagent/config/workspaces.yaml
+    content: |
+      workspaces:
+        default:
+          description: Default workspace
+          container:
+            image: ghcr.io/icholy/xagent-workspace-debian:latest
+            runtime: sysbox-runc
+            networks:
+              - xagent_default
+            environment:
+              ENABLE_DOCKERD: "1"
+              REGISTRY_MIRROR: http://registry:5000
+
+runcmd:
+  # Install sysbox
+  - |
+    ARCH=$(dpkg --print-architecture)
+    SYSBOX_VERSION="0.7.0"
+    wget -q "https://github.com/nestybox/sysbox/releases/download/v$${SYSBOX_VERSION}/sysbox-ce_$${SYSBOX_VERSION}-0.linux_$${ARCH}.deb" -O /tmp/sysbox.deb
+    apt-get install -y /tmp/sysbox.deb
+    rm /tmp/sysbox.deb
+    systemctl enable sysbox
+    systemctl start sysbox
+
+  # Start docker compose
+  - cd /opt/xagent && docker compose up -d

@@ -1,0 +1,18 @@
+aws_region       = "us-east-1"
+instance_type    = "m5.xlarge"
+arch             = "amd64"
+vpc_id           = "vpc-xxxxxxxxx"
+subnet_id        = "subnet-xxxxxxxxx"
+root_volume_size = 100
+
+xagent_server    = "https://xagent.example.com"
+xagent_api_key   = "your-api-key"
+xagent_runner_id = "ec2-runner"
+
+# Optional: SSH access for debugging
+# key_name        = "my-key-pair"
+# allow_ssh       = true
+# ssh_cidr_blocks = ["1.2.3.4/32"]
+
+# Optional: additional env vars for the runner
+# env_file_content = "CLAUDE_CODE_OAUTH_TOKEN=xxx"
