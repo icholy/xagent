@@ -49,7 +49,10 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	}
 	var n int
 	for orgID, links := range linksByOrg {
-		rules := orgRulesFor(orgRules[orgID])
+		rules := orgRules[orgID]
+		if len(rules) == 0 {
+			rules = defaultRules
+		}
 		if !slices.ContainsFunc(rules, func(r model.RoutingRule) bool { return matchRule(r, input) }) {
 			continue
 		}
@@ -72,15 +75,6 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		}
 	}
 	return n, nil
-}
-
-// orgRulesFor returns the routing rules for an org, falling back to
-// defaultRules when the org has no custom rules configured.
-func orgRulesFor(rules []model.RoutingRule) []model.RoutingRule {
-	if len(rules) == 0 {
-		return defaultRules
-	}
-	return rules
 }
 
 // find queries all matching subscribed links for a URL across all
