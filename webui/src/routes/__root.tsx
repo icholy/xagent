@@ -119,6 +119,7 @@ function RootComponent() {
             )}
             <Link
               to="/settings"
+              search={{ tab: 'account' }}
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
               title="Settings"
             >

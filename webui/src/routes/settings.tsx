@@ -52,7 +52,7 @@ function SettingsPage() {
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
-      <Tabs value={tab} onValueChange={(value) => navigate({ search: { tab: value }, replace: true })}>
+      <Tabs value={tab} onValueChange={(value) => navigate({ to: '/settings', search: { tab: value }, replace: true })}>
         <div className="flex items-center mb-4">
           <ProfileCard />
           <TabsList className="ml-auto">
