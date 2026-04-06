@@ -125,7 +125,7 @@ func TestMatchRule(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.DeepEqual(t, matchRule(tt.rule, tt.event), tt.want)
+			assert.DeepEqual(t, tt.event.MatchRule(tt.rule), tt.want)
 		})
 	}
 }

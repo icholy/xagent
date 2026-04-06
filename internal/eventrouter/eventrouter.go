@@ -53,7 +53,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		if len(rules) == 0 {
 			rules = defaultRules
 		}
-		if !slices.ContainsFunc(rules, func(r model.RoutingRule) bool { return matchRule(r, input) }) {
+		if !slices.ContainsFunc(rules, input.MatchRule) {
 			continue
 		}
 		event := &model.Event{

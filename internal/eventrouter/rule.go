@@ -7,35 +7,35 @@ import (
 	"github.com/icholy/xagent/internal/model"
 )
 
-// matchRule reports whether the rule matches the given event.
+// MatchRule reports whether the rule matches the event.
 // Empty fields are treated as wildcards. For content matching,
 // Prefix and Mention are checked against the event's Data field.
-func matchRule(rule model.RoutingRule, event InputEvent) bool {
-	if rule.Source != "" && rule.Source != event.Source {
+func (e InputEvent) MatchRule(rule model.RoutingRule) bool {
+	if rule.Source != "" && rule.Source != e.Source {
 		return false
 	}
-	if rule.Type != "" && rule.Type != event.Type {
+	if rule.Type != "" && rule.Type != e.Type {
 		return false
 	}
-	if rule.Prefix != "" && !strings.HasPrefix(event.Data, rule.Prefix) {
+	if rule.Prefix != "" && !strings.HasPrefix(e.Data, rule.Prefix) {
 		return false
 	}
-	if rule.Mention != "" && !matchMention(rule.Mention, event) {
+	if rule.Mention != "" && !e.matchMention(rule.Mention) {
 		return false
 	}
 	return true
 }
 
-// matchMention checks whether body contains an @mention
+// matchMention checks whether the event data contains an @mention
 // using platform-specific syntax.
-func matchMention(mention string, event InputEvent) bool {
-	switch event.Source {
+func (e InputEvent) matchMention(mention string) bool {
+	switch e.Source {
 	case "github":
 		pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(mention) + `(?:$|[\s,.)!?])`
-		matched, _ := regexp.MatchString(pattern, event.Data)
+		matched, _ := regexp.MatchString(pattern, e.Data)
 		return matched
 	case "atlassian":
-		return strings.Contains(event.Data, "[~accountid:"+mention+"]")
+		return strings.Contains(e.Data, "[~accountid:"+mention+"]")
 	default:
 		return false
 	}
