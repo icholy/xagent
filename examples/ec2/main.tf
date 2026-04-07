@@ -49,9 +49,9 @@ data "cloudinit_config" "runner" {
   part {
     content_type = "text/cloud-config"
     content = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-      docker_compose   = file("${path.module}/docker-compose.yml")
-      workspaces       = file("${path.module}/config/workspaces.yaml")
-      env_file_content = join("\n", local.env_lines)
+      docker_compose   = base64encode(file("${path.module}/docker-compose.yml"))
+      workspaces       = base64encode(file("${path.module}/config/workspaces.yaml"))
+      env_file_content = base64encode(join("\n", local.env_lines))
     })
   }
 }

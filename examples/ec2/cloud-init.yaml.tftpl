@@ -17,17 +17,17 @@ packages:
 
 write_files:
   - path: /opt/xagent/docker-compose.yml
-    content: |
-      ${indent(6, docker_compose)}
+    encoding: b64
+    content: ${docker_compose}
 
   - path: /opt/xagent/.env
     permissions: "0600"
-    content: |
-      ${indent(6, env_file_content)}
+    encoding: b64
+    content: ${env_file_content}
 
   - path: /opt/xagent/config/workspaces.yaml
-    content: |
-      ${indent(6, workspaces)}
+    encoding: b64
+    content: ${workspaces}
 
 runcmd:
   # Install sysbox
