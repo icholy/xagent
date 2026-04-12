@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/distribution/reference"
 	"github.com/docker/cli/cli/config"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/image"
@@ -87,31 +88,11 @@ func ResolveRegistryAuth(imageRef string) string {
 
 // resolveRegistryHostname extracts the registry hostname from an image
 // reference. For Docker Hub images (no explicit registry), it returns
-// the default Docker Hub registry URL.
+// "docker.io".
 func resolveRegistryHostname(imageRef string) string {
-	// Docker Hub images have no slash or a single slash (library/alpine, alpine)
-	// Images with an explicit registry have a dot or colon before the first slash
-	for i, c := range imageRef {
-		if c == '/' {
-			prefix := imageRef[:i]
-			if containsAny(prefix, ".:") {
-				return prefix
-			}
-			// No dot or colon means it's a Docker Hub user/repo
-			return "https://index.docker.io/v1/"
-		}
+	ref, err := reference.ParseNormalizedNamed(imageRef)
+	if err != nil {
+		return "docker.io"
 	}
-	// No slash at all means it's a Docker Hub library image (e.g. "alpine")
-	return "https://index.docker.io/v1/"
-}
-
-func containsAny(s, chars string) bool {
-	for _, c := range chars {
-		for _, sc := range s {
-			if sc == c {
-				return true
-			}
-		}
-	}
-	return false
+	return reference.Domain(ref)
 }
