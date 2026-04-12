@@ -2,6 +2,8 @@ package otelx
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Provider manages the OpenTelemetry trace provider.
@@ -47,4 +50,16 @@ func Setup(ctx context.Context) (*Provider, error) {
 		propagation.Baggage{},
 	))
 	return &Provider{tp: tp}, nil
+}
+
+// TraceResponseHeader is middleware that writes the OTel trace ID to a Traceresponse header.
+// It must be wrapped by otelhttp.NewHandler so the span context is available.
+func TraceResponseHeader(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sc := trace.SpanFromContext(r.Context()).SpanContext()
+		if sc.HasTraceID() {
+			w.Header().Set("Traceresponse", fmt.Sprintf("00-%s-%s-%s", sc.TraceID(), sc.SpanID(), sc.TraceFlags()))
+		}
+		next.ServeHTTP(w, r)
+	})
 }

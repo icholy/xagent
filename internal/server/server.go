@@ -27,6 +27,7 @@ import (
 	"github.com/icholy/xagent/internal/oauthlink"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
+	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/servermcp"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/eventrouter"
@@ -215,7 +216,7 @@ func (s *Server) Handler() http.Handler {
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
-	return otelhttp.NewHandler(s.handleCORS(mux), "xagent")
+	return otelhttp.NewHandler(otelx.TraceResponseHeader(s.handleCORS(mux)), "xagent")
 }
 
 // handleCORS adds permissive CORS headers to all responses when CORS is enabled.
@@ -227,6 +228,7 @@ func (s *Server) handleCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, MCP-Protocol-Version")
+		w.Header().Set("Access-Control-Expose-Headers", "Traceresponse")
 		if r.Method == http.MethodOptions {
 			return
 		}
