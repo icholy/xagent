@@ -23,7 +23,7 @@ type PullProgress struct {
 // ImageEnsureOptions configures the ImageEnsure function.
 type ImageEnsureOptions struct {
 	Ref          string
-	RegistryAuth string
+	PullOptions  image.PullOptions
 	PullProgress func(PullProgress)
 }
 
@@ -34,7 +34,7 @@ func ImageEnsure(ctx context.Context, docker *client.Client, opts ImageEnsureOpt
 	if err == nil {
 		return info, nil
 	}
-	reader, err := docker.ImagePull(ctx, opts.Ref, image.PullOptions{RegistryAuth: opts.RegistryAuth})
+	reader, err := docker.ImagePull(ctx, opts.Ref, opts.PullOptions)
 	if err != nil {
 		return types.ImageInspect{}, fmt.Errorf("failed to pull image: %w", err)
 	}

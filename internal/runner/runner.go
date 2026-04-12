@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/containerbuild"
@@ -378,8 +379,8 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 
 	// Ensure the image is available locally (pulls if needed).
 	info, err := dockerx.ImageEnsure(ctx, r.docker, dockerx.ImageEnsureOptions{
-		Ref:          ws.Container.Image,
-		RegistryAuth: dockerx.ResolveRegistryAuth(ws.Container.Image),
+		Ref:         ws.Container.Image,
+		PullOptions: image.PullOptions{RegistryAuth: dockerx.ResolveRegistryAuth(ws.Container.Image)},
 		PullProgress: func(p dockerx.PullProgress) {
 			if p.Status != "" && p.Progress == "" {
 				r.log.Info("pull", "image", ws.Container.Image, "status", p.Status)
