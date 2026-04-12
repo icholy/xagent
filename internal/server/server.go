@@ -33,6 +33,7 @@ import (
 	"github.com/icholy/xagent/internal/webhook"
 	"github.com/justinas/alice"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 	oauth2github "golang.org/x/oauth2/github"
 )
@@ -215,7 +216,7 @@ func (s *Server) Handler() http.Handler {
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
-	return otelhttp.NewHandler(s.handleCORS(mux), "xagent")
+	return otelhttp.NewHandler(traceResponseHeader(s.handleCORS(mux)), "xagent")
 }
 
 // handleCORS adds permissive CORS headers to all responses when CORS is enabled.
@@ -227,8 +228,21 @@ func (s *Server) handleCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, MCP-Protocol-Version")
+		w.Header().Set("Access-Control-Expose-Headers", "Traceresponse")
 		if r.Method == http.MethodOptions {
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// traceResponseHeader is middleware that writes the OTel trace ID to a Traceresponse header.
+// It must be wrapped by otelhttp.NewHandler so the span context is available.
+func traceResponseHeader(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sc := trace.SpanFromContext(r.Context()).SpanContext()
+		if sc.HasTraceID() {
+			w.Header().Set("Traceresponse", fmt.Sprintf("00-%s-%s-%s", sc.TraceID(), sc.SpanID(), sc.TraceFlags()))
 		}
 		next.ServeHTTP(w, r)
 	})
