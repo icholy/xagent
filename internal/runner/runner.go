@@ -376,13 +376,10 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 
 	r.log.Info("creating container", "task", task.ID, "image", ws.Container.Image, "workspace", task.Workspace)
 
-	// Resolve registry auth (best-effort, empty string if no credentials configured).
-	registryAuth := dockerx.ResolveRegistryAuth(ws.Container.Image)
-
 	// Ensure the image is available locally (pulls if needed).
 	info, err := dockerx.ImageEnsure(ctx, r.docker, dockerx.ImageEnsureOptions{
 		Ref:          ws.Container.Image,
-		RegistryAuth: registryAuth,
+		RegistryAuth: dockerx.ResolveRegistryAuth(ws.Container.Image),
 		PullProgress: func(p dockerx.PullProgress) {
 			if p.Status != "" && p.Progress == "" {
 				r.log.Info("pull", "image", ws.Container.Image, "status", p.Status)
