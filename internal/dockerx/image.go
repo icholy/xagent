@@ -60,12 +60,15 @@ func ImageEnsure(ctx context.Context, docker *client.Client, opts ImageEnsureOpt
 // image reference by reading ~/.docker/config.json. It returns an empty string
 // if no credentials are configured for the registry.
 func ResolveRegistryAuth(imageRef string) string {
-	hostname := resolveRegistryHostname(imageRef)
+	ref, err := reference.ParseNormalizedNamed(imageRef)
+	if err != nil {
+		return ""
+	}
 	cfg, err := config.Load("")
 	if err != nil {
 		return ""
 	}
-	authConfig, err := cfg.GetAuthConfig(hostname)
+	authConfig, err := cfg.GetAuthConfig(reference.Domain(ref))
 	if err != nil {
 		return ""
 	}
@@ -84,15 +87,4 @@ func ResolveRegistryAuth(imageRef string) string {
 		return ""
 	}
 	return encoded
-}
-
-// resolveRegistryHostname extracts the registry hostname from an image
-// reference. For Docker Hub images (no explicit registry), it returns
-// "docker.io".
-func resolveRegistryHostname(imageRef string) string {
-	ref, err := reference.ParseNormalizedNamed(imageRef)
-	if err != nil {
-		return "docker.io"
-	}
-	return reference.Domain(ref)
 }
