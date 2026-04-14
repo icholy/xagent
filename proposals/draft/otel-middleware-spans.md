@@ -140,15 +140,78 @@ A GitHub OAuth callback would produce:
 
 ```
 xagent (otelhttp)
-  └── middleware.RequireAuth
-       └── middleware.AttachUserInfo
-            └── GitHubOAuth
+  └── middleware.RequireAuth          {http.request.method=GET, http.route="/github/"}
+       └── middleware.AttachUserInfo  {http.request.method=GET, http.route="/github/"}
+            └── GitHubOAuth           {http.request.method=GET, http.route="/github/"}
                  └── SQL query (otelsql)
 ```
 
 Compared to the current state where only the outer `xagent` span is visible.
 
-### Span Attributes
+### HTTP Verb and Route Attributes
+
+The handler wrapper should record the HTTP method and route pattern on each span using [OTel HTTP semantic conventions](https://opentelemetry.io/docs/specs/semconv/http/http-spans/):
+
+```go
+func Handler(name string, h http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        ctx, span := otel.Tracer("xagent").Start(r.Context(), name)
+        defer span.End()
+        span.SetAttributes(
+            semconv.HTTPRequestMethodKey.String(r.Method),
+            semconv.HTTPRouteKey.String(r.Pattern),
+        )
+        h.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+```
+
+Standard OTel semantic convention attributes:
+- `http.request.method` — the HTTP verb (`GET`, `POST`, etc.)
+- `http.route` — the matched route pattern from the mux
+
+Go 1.22+ `http.ServeMux` makes `r.Pattern` available on each request (e.g., `GET /auth/token`, `/github/`). This is the matched mux pattern, which is exactly what `http.route` should contain.
+
+For middleware spans, the same attributes can be set since the request is available:
+
+```go
+func Middleware(name string, mw func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        traced := mw(next)
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            ctx, span := otel.Tracer("xagent").Start(r.Context(), "middleware."+name)
+            defer span.End()
+            span.SetAttributes(
+                semconv.HTTPRequestMethodKey.String(r.Method),
+                semconv.HTTPRouteKey.String(r.Pattern),
+            )
+            traced.ServeHTTP(w, r.WithContext(ctx))
+        })
+    }
+}
+```
+
+**Note**: `r.Pattern` is populated by the `ServeMux` after routing, so it will be available in both middleware and handler spans since they execute after the mux has matched the route. The `semconv` package is `go.opentelemetry.io/otel/semconv/v1.26.0` (already an indirect dependency via `otelhttp`).
+
+#### Enriching route patterns with HTTP methods
+
+Currently routes are registered without HTTP method prefixes:
+
+```go
+mux.Handle("/auth/token", ...)   // r.Pattern = "/auth/token"
+mux.Handle("/mcp", ...)          // r.Pattern = "/mcp"
+```
+
+Go 1.22+ supports method-prefixed patterns like `"GET /auth/token"`, which would make `r.Pattern` more descriptive. This is optional — the `http.request.method` attribute already carries the verb separately. But for routes that only accept one method, adding the method prefix makes the route pattern self-documenting:
+
+```go
+mux.Handle("GET /auth/token", ...)    // r.Pattern = "GET /auth/token"
+mux.Handle("POST /webhook/github", ...)  // r.Pattern = "POST /webhook/github"
+```
+
+This is a minor routing change but improves trace readability. Routes that accept multiple methods (like Connect RPC's path which handles both GET and POST) should stay as-is.
+
+### Other Span Attributes
 
 For auth middleware specifically, it would be useful to record the auth type on the span:
 
@@ -164,8 +227,8 @@ A typical Connect RPC request would produce:
 
 ```
 xagent (otelhttp)
-  └── middleware.CheckAuth
-       └── middleware.AttachUserInfo
+  └── middleware.CheckAuth            {http.request.method=POST, http.route="/xagent.v1.XAgentService/"}
+       └── middleware.AttachUserInfo  {http.request.method=POST, http.route="/xagent.v1.XAgentService/"}
             └── xagent.v1.XAgentService/ListTasks (otelconnect)
                  └── SQL query (otelsql)
 ```
