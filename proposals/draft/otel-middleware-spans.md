@@ -4,7 +4,11 @@ Issue: https://github.com/icholy/xagent/issues/480
 
 ## Problem
 
-The server has OTel instrumentation at two levels: `otelhttp.NewHandler` wraps the entire mux (one span per request), and `otelconnect.NewInterceptor` covers Connect RPC methods. But individual HTTP middleware — `CheckAuth`, `RequireAuth`, `AttachUserInfo`, CORS — are invisible in traces. There's no way to see how long each middleware step takes or whether a request was rejected at the auth layer vs. downstream.
+The server has OTel instrumentation at two levels: `otelhttp.NewHandler` wraps the entire mux (one span per request), and `otelconnect.NewInterceptor` covers Connect RPC methods. But there are two gaps:
+
+1. **Middleware is invisible**: Individual HTTP middleware — `CheckAuth`, `RequireAuth`, `AttachUserInfo`, CORS — don't produce spans. There's no way to see how long each middleware step takes or whether a request was rejected at the auth layer vs. downstream.
+
+2. **Non-RPC routes have no handler-level spans**: Routes like `/auth/token`, `/github/callback`, `/atlassian/callback`, `/mcp`, `/webhook/github`, and `/ui/` only get the outer `otelhttp` span. Unlike Connect RPC routes (which get `otelconnect` spans with method names), these plain HTTP handlers are opaque in traces — you can see the request happened but not which handler served it.
 
 ## Design
 
@@ -71,6 +75,79 @@ Apply the same pattern to all alice chains in `Handler()`:
 
 The CORS handler and `TraceResponseHeader` are applied outside alice chains. These could optionally be wrapped too, but they're trivial (header setting) and unlikely to be useful in traces.
 
+### Traced Handler Wrapper for Non-RPC Routes
+
+Non-RPC routes only get the generic outer `otelhttp` span. Add a handler wrapper in `internal/otelx/` that names the span for the route:
+
+```go
+// Handler wraps an http.Handler with an OTel span named after the route.
+func Handler(name string, h http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        ctx, span := otel.Tracer("xagent").Start(r.Context(), name)
+        defer span.End()
+        h.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// HandlerFunc wraps an http.HandlerFunc with an OTel span.
+func HandlerFunc(name string, f http.HandlerFunc) http.Handler {
+    return Handler(name, f)
+}
+```
+
+Apply to non-RPC route registrations in `server.go`:
+
+```go
+// Before
+mux.HandleFunc(deviceauth.DiscoveryPath, s.handleDeviceConfig)
+mux.Handle("/auth/token", alice.New(...).Then(s.auth.HandleToken()))
+mux.Handle("/github/", alice.New(...).Then(http.StripPrefix("/github", gh)))
+mux.Handle("/webhook/github", &webhook.GitHubHandler{...})
+mux.Handle("/mcp", alice.New(...).Then(servermcp.New(s, s.baseURL).Handler()))
+
+// After
+mux.Handle(deviceauth.DiscoveryPath, otelx.HandlerFunc("DeviceDiscovery", s.handleDeviceConfig))
+mux.Handle("/auth/token", alice.New(...).Then(otelx.Handler("AuthToken", s.auth.HandleToken())))
+mux.Handle("/github/", alice.New(...).Then(otelx.Handler("GitHubOAuth", http.StripPrefix("/github", gh))))
+mux.Handle("/webhook/github", otelx.Handler("GitHubWebhook", &webhook.GitHubHandler{...}))
+mux.Handle("/mcp", alice.New(...).Then(otelx.Handler("MCP", servermcp.New(s, s.baseURL).Handler())))
+```
+
+All non-RPC routes that should get handler-level spans:
+
+| Route | Span Name |
+|-------|-----------|
+| `/.well-known/oauth-authorization-server` | `OAuthMetadata` |
+| `/.well-known/oauth-protected-resource` | `OAuthResourceMetadata` |
+| `/oauth/register` | `OAuthRegister` |
+| `/oauth/authorize` | `OAuthAuthorize` |
+| `/oauth/token` | `OAuthToken` |
+| `/auth/token` | `AuthToken` |
+| `/auth/*` | `AuthFlow` |
+| `/github/` | `GitHubOAuth` |
+| `/github/webhook` | `GitHubWebhook` |
+| `/atlassian/` | `AtlassianOAuth` |
+| `/atlassian/webhook` | `AtlassianWebhook` |
+| `/mcp` | `MCP` |
+| `/ui/` | `WebUI` |
+| Device discovery | `DeviceDiscovery` |
+
+This gives non-RPC routes the same trace visibility that Connect RPC routes get from `otelconnect`.
+
+### Resulting Trace Structure (Non-RPC)
+
+A GitHub OAuth callback would produce:
+
+```
+xagent (otelhttp)
+  └── middleware.RequireAuth
+       └── middleware.AttachUserInfo
+            └── GitHubOAuth
+                 └── SQL query (otelsql)
+```
+
+Compared to the current state where only the outer `xagent` span is visible.
+
 ### Span Attributes
 
 For auth middleware specifically, it would be useful to record the auth type on the span:
@@ -81,7 +158,7 @@ span.SetAttributes(attribute.String("auth.type", r.Header.Get("X-Auth-Type")))
 
 This could be done inside `CheckAuth`/`RequireAuth` directly rather than in the generic wrapper, to keep `otelx.Middleware` simple and reusable. Whether to add attributes inside the auth middleware is a follow-up decision — the wrapper alone provides timing visibility.
 
-### Resulting Trace Structure
+### Resulting Trace Structure (RPC)
 
 A typical Connect RPC request would produce:
 
