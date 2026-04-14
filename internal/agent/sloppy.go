@@ -89,15 +89,14 @@ type sloppyMcpServer struct {
 }
 
 // writeMcpConfig writes the MCP servers configuration to a sloppy.json file.
-// Sloppy only supports stdio MCP servers; http/sse servers are skipped.
+// Sloppy only supports stdio MCP servers; http/sse servers cause an error.
 func (a *SloppyAgent) writeMcpConfig() (string, error) {
 	config := sloppyMcpConfig{
 		McpServers: make(map[string]sloppyMcpServer),
 	}
 	for name, srv := range a.mcpServers {
 		if srv.Type != "stdio" {
-			a.log.Warn("skipping non-stdio MCP server (sloppy only supports stdio)", "name", name, "type", srv.Type)
-			continue
+			return "", fmt.Errorf("sloppy only supports stdio MCP servers, got %s for %q", srv.Type, name)
 		}
 		server := sloppyMcpServer{
 			Command: srv.Command,
