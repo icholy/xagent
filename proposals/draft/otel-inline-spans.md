@@ -28,6 +28,7 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
                 trace.WithAttributes(
                     semconv.HTTPRequestMethodKey.String(r.Method),
                     semconv.HTTPRouteKey.String(r.Pattern),
+                    semconv.URLPathKey.String(r.URL.Path),
                 ))
             defer span.End()
 
@@ -135,6 +136,7 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         trace.WithAttributes(
             semconv.HTTPRequestMethodKey.String(r.Method),
             semconv.HTTPRouteKey.String(r.Pattern),
+            semconv.URLPathKey.String(r.URL.Path),
             attribute.String("github.event", r.Header.Get("X-GitHub-Event")),
         ))
     defer span.End()
@@ -152,6 +154,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         trace.WithAttributes(
             semconv.HTTPRequestMethodKey.String(r.Method),
             semconv.HTTPRouteKey.String(r.Pattern),
+            semconv.URLPathKey.String(r.URL.Path),
             attribute.String("oauth.provider", h.provider),
         ))
     defer span.End()
@@ -169,8 +172,44 @@ ctx, span := tracer.Start(r.Context(), "MCP",
     trace.WithAttributes(
         semconv.HTTPRequestMethodKey.String(r.Method),
         semconv.HTTPRouteKey.String(r.Pattern),
+        semconv.URLPathKey.String(r.URL.Path),
     ))
 defer span.End()
+```
+
+### Handling Incomplete `r.Pattern`
+
+`r.Pattern` is set by `http.ServeMux` to the matched mux pattern, which for prefix routes is just the prefix:
+
+| Mux registration | Actual request path | `r.Pattern` |
+|-----------------|-------------------|------------|
+| `/github/` | `/github/callback` | `/github/` |
+| `/atlassian/` | `/atlassian/callback` | `/atlassian/` |
+| `/xagent.v1.XAgentService/` | `/xagent.v1.XAgentService/ListTasks` | `/xagent.v1.XAgentService/` |
+| `/auth/token` | `/auth/token` | `/auth/token` |
+| `/mcp` | `/mcp` | `/mcp` |
+| `/webhook/github` | `/webhook/github` | `/webhook/github` |
+
+For prefix routes, `r.Pattern` is incomplete. To get full path visibility, set both attributes:
+
+```go
+span.SetAttributes(
+    semconv.HTTPRequestMethodKey.String(r.Method),
+    semconv.HTTPRouteKey.String(r.Pattern),   // mux pattern (for grouping)
+    semconv.URLPathKey.String(r.URL.Path),     // full path (for detail)
+)
+```
+
+- `http.route` (`r.Pattern`) — useful for grouping/aggregating traces by route pattern
+- `url.path` (`r.URL.Path`) — useful for seeing the exact path hit
+
+Both are standard OTel semantic convention attributes. `http.route` is the low-cardinality grouping key; `url.path` has full detail. For exact-match routes like `/auth/token` or `/mcp`, they're identical. For prefix routes, `url.path` shows the full path.
+
+Alternatively, handlers that do their own sub-routing (like `oauthlink` which dispatches `/login` vs `/callback`) can set `http.route` to a more specific pattern:
+
+```go
+// Inside oauthlink handler, after determining the sub-route:
+span.SetAttributes(semconv.HTTPRouteKey.String("/github/callback"))
 ```
 
 ### What Changes in `server.go`
@@ -210,7 +249,18 @@ A GitHub webhook:
 ```
 xagent (otelhttp)
   └── GitHubWebhook                   {http.request.method=POST, http.route="/webhook/github",
-                                       github.event="pull_request"}
+                                       url.path="/webhook/github", github.event="pull_request"}
+```
+
+A GitHub OAuth callback (prefix route — `url.path` provides the full path):
+
+```
+xagent (otelhttp)
+  └── RequireAuth                     {http.request.method=GET, http.route="/github/",
+                                       url.path="/github/callback", auth.type="cookie"}
+       └── AttachUserInfo             {enduser.id="user123", enduser.org_id=1}
+            └── OAuthLink             {http.request.method=GET, http.route="/github/",
+                                       url.path="/github/callback", oauth.provider="github"}
 ```
 
 ### Packages That Need Changes
