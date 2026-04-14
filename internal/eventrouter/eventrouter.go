@@ -83,7 +83,7 @@ func (r *Router) find(ctx context.Context, input InputEvent) (map[int64][]*model
 	if input.URL == "" {
 		return nil, nil
 	}
-	matches, err := r.Store.FindSubscribedLinksByURLForUser(ctx, nil, input.URL, input.UserID)
+	matches, err := r.Store.FindSubscribedLinksForUser(ctx, nil, input.URL, input.UserID)
 	if err != nil {
 		return nil, err
 	}

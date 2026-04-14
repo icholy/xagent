@@ -92,7 +92,7 @@ func (q *Queries) FindLinksByURL(ctx context.Context, arg FindLinksByURLParams) 
 	return items, nil
 }
 
-const findSubscribedLinksByURLForUser = `-- name: FindSubscribedLinksByURLForUser :many
+const findSubscribedLinksForUser = `-- name: FindSubscribedLinksForUser :many
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, t.org_id
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
@@ -101,12 +101,12 @@ WHERE l.url = $1 AND l.subscribe = TRUE AND t.archived = FALSE AND om.user_id = 
 ORDER BY t.org_id, l.created_at DESC
 `
 
-type FindSubscribedLinksByURLForUserParams struct {
+type FindSubscribedLinksForUserParams struct {
 	Url    string `json:"url"`
 	UserID string `json:"user_id"`
 }
 
-type FindSubscribedLinksByURLForUserRow struct {
+type FindSubscribedLinksForUserRow struct {
 	ID        int64     `json:"id"`
 	TaskID    int64     `json:"task_id"`
 	Relevance string    `json:"relevance"`
@@ -117,15 +117,15 @@ type FindSubscribedLinksByURLForUserRow struct {
 	OrgID     int64     `json:"org_id"`
 }
 
-func (q *Queries) FindSubscribedLinksByURLForUser(ctx context.Context, arg FindSubscribedLinksByURLForUserParams) ([]FindSubscribedLinksByURLForUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, findSubscribedLinksByURLForUser, arg.Url, arg.UserID)
+func (q *Queries) FindSubscribedLinksForUser(ctx context.Context, arg FindSubscribedLinksForUserParams) ([]FindSubscribedLinksForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, findSubscribedLinksForUser, arg.Url, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []FindSubscribedLinksByURLForUserRow{}
+	items := []FindSubscribedLinksForUserRow{}
 	for rows.Next() {
-		var i FindSubscribedLinksByURLForUserRow
+		var i FindSubscribedLinksForUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TaskID,
