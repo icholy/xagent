@@ -100,6 +100,7 @@ var DriverCommand = &cli.Command{
 			Codex:      cfg.Codex,
 			Copilot:    cfg.Copilot,
 			Cursor:     cfg.Cursor,
+			Sloppy:     cfg.Sloppy,
 			Dummy:      cfg.Dummy,
 		})
 		if err != nil {

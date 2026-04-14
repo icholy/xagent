@@ -40,3 +40,11 @@ RUN curl -fsSL https://gh.io/copilot-install | bash
 
 # https://cursor.com/cli
 RUN curl -fsSL https://cursor.com/install | bash
+
+# https://go.dev/dl/
+RUN curl -fsSL https://go.dev/dl/go1.24.2.linux-$(dpkg --print-architecture).tar.gz \
+        | tar -C /usr/local -xz
+ENV PATH="/usr/local/go/bin:/root/go/bin:$PATH"
+
+# https://github.com/icholy/sloppy
+RUN go install github.com/icholy/sloppy@latest

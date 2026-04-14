@@ -94,6 +94,7 @@ type Agent struct {
 	Codex      *CodexConfig               `yaml:"codex,omitempty"`
 	Copilot    *CopilotConfig             `yaml:"copilot,omitempty"`
 	Cursor     *CursorConfig              `yaml:"cursor,omitempty"`
+	Sloppy     *SloppyConfig              `yaml:"sloppy,omitempty"`
 	Dummy      *DummyConfig               `yaml:"dummy,omitempty"`
 }
 
@@ -119,6 +120,11 @@ type CopilotConfig struct {
 type CursorConfig struct {
 	Model string `yaml:"model"`
 	Bin   string `yaml:"bin"`
+}
+
+// SloppyConfig contains Sloppy-specific agent configuration.
+type SloppyConfig struct {
+	Bin string `yaml:"bin"`
 }
 
 // DummyConfig contains Dummy-specific agent configuration.
@@ -312,6 +318,11 @@ func (w *Workspace) AgentConfig() agent.Config {
 		cfg.Cursor = &agent.CursorOptions{
 			Model: w.Agent.Cursor.Model,
 			Bin:   w.Agent.Cursor.Bin,
+		}
+	}
+	if w.Agent.Sloppy != nil {
+		cfg.Sloppy = &agent.SloppyOptions{
+			Bin: w.Agent.Sloppy.Bin,
 		}
 	}
 	if w.Agent.Dummy != nil {
