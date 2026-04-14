@@ -141,7 +141,8 @@ A GitHub OAuth callback would produce:
 ```
 xagent (otelhttp)
   └── middleware.RequireAuth          {http.request.method=GET, http.route="/github/"}
-       └── middleware.AttachUserInfo  {http.request.method=GET, http.route="/github/"}
+       └── middleware.AttachUserInfo  {http.request.method=GET, http.route="/github/",
+                                      enduser.id="user123", enduser.org_id=1, enduser.auth_type="cookie"}
             └── GitHubOAuth           {http.request.method=GET, http.route="/github/"}
                  └── SQL query (otelsql)
 ```
@@ -211,15 +212,45 @@ mux.Handle("POST /webhook/github", ...)  // r.Pattern = "POST /webhook/github"
 
 This is a minor routing change but improves trace readability. Routes that accept multiple methods (like Connect RPC's path which handles both GET and POST) should stay as-is.
 
-### Other Span Attributes
+### User Identity Attributes
 
-For auth middleware specifically, it would be useful to record the auth type on the span:
+After auth middleware runs, `apiauth.Caller(ctx)` returns the authenticated user's `UserInfo` (containing `ID`, `OrgID`, auth `Type`). Add a dedicated middleware that reads the caller from context and sets span attributes:
 
 ```go
-span.SetAttributes(attribute.String("auth.type", r.Header.Get("X-Auth-Type")))
+// UserAttributes is middleware that adds authenticated user attributes to the current span.
+// It should be placed after auth middleware in the chain so that UserInfo is available.
+func UserAttributes() func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            if user := apiauth.Caller(r.Context()); user != nil {
+                span := trace.SpanFromContext(r.Context())
+                span.SetAttributes(
+                    attribute.String("enduser.id", user.ID),
+                    attribute.Int64("enduser.org_id", user.OrgID),
+                    attribute.String("enduser.auth_type", user.Type),
+                )
+            }
+            next.ServeHTTP(w, r)
+        })
+    }
+}
 ```
 
-This could be done inside `CheckAuth`/`RequireAuth` directly rather than in the generic wrapper, to keep `otelx.Middleware` simple and reusable. Whether to add attributes inside the auth middleware is a follow-up decision — the wrapper alone provides timing visibility.
+`enduser.id` is an [OTel semantic convention attribute](https://opentelemetry.io/docs/specs/semconv/general/attributes/#general-identity-attributes). `enduser.org_id` and `enduser.auth_type` are custom attributes specific to xagent.
+
+This middleware goes at the end of each alice chain, after `AttachUserInfo` (which populates the context):
+
+```go
+mux.Handle(path, alice.New(
+    otelx.Middleware("CheckAuth", s.auth.CheckAuth()),
+    otelx.Middleware("AttachUserInfo", s.auth.AttachUserInfo()),
+    otelx.UserAttributes(),
+).Then(handler))
+```
+
+Since `UserAttributes` reads from the context set by `AttachUserInfo` (or `CheckAuth`/`RequireAuth` for API key/app token auth), it works for all auth types. The attributes propagate to all child spans in the trace, so downstream handler and database spans can be correlated to the user.
+
+**Note**: This is a thin middleware, not wrapped in `otelx.Middleware` — it doesn't need its own span, it just decorates the existing one. Alternatively, this logic could live inside `AttachUserInfo` itself, but keeping it separate avoids coupling the auth package to OTel.
 
 ### Resulting Trace Structure (RPC)
 
@@ -228,7 +259,8 @@ A typical Connect RPC request would produce:
 ```
 xagent (otelhttp)
   └── middleware.CheckAuth            {http.request.method=POST, http.route="/xagent.v1.XAgentService/"}
-       └── middleware.AttachUserInfo  {http.request.method=POST, http.route="/xagent.v1.XAgentService/"}
+       └── middleware.AttachUserInfo  {http.request.method=POST, http.route="/xagent.v1.XAgentService/",
+                                      enduser.id="user123", enduser.org_id=1, enduser.auth_type="cookie"}
             └── xagent.v1.XAgentService/ListTasks (otelconnect)
                  └── SQL query (otelsql)
 ```
@@ -248,5 +280,5 @@ This uses `go.opentelemetry.io/otel` which is already a dependency. No new packa
 ## Open Questions
 
 1. Should the wrapper record HTTP status codes? This would require wrapping `http.ResponseWriter`, adding complexity. The outermost `otelhttp.NewHandler` already records status codes on the root span.
-2. Should auth middleware set span attributes (auth type, user ID) directly, or should that be a separate concern?
-3. Should CORS and `TraceResponseHeader` also be wrapped, or are they too trivial to be worth tracing?
+2. Should CORS and `TraceResponseHeader` also be wrapped, or are they too trivial to be worth tracing?
+3. Should `UserAttributes` live in `otelx/` (importing `apiauth`) or in `apiauth/` (importing OTel)? Putting it in `otelx/` keeps auth unaware of tracing but creates a dependency from `otelx` → `apiauth`.
