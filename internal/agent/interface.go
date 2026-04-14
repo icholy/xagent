@@ -24,6 +24,7 @@ const (
 	TypeCodex   = "codex"
 	TypeCopilot = "copilot"
 	TypeCursor  = "cursor"
+	TypeSloppy  = "sloppy"
 	TypeDummy   = "dummy"
 )
 
@@ -51,6 +52,7 @@ type Options struct {
 	Codex      *CodexOptions
 	Copilot    *CopilotOptions
 	Cursor     *CursorOptions
+	Sloppy     *SloppyOptions
 	Dummy      *DummyOptions
 }
 
@@ -76,6 +78,11 @@ type CopilotOptions struct {
 type CursorOptions struct {
 	Model string
 	Bin   string
+}
+
+// SloppyOptions contains Sloppy-specific agent options.
+type SloppyOptions struct {
+	Bin string
 }
 
 // DummyOptions contains Dummy-specific agent options.
@@ -128,6 +135,13 @@ func NewAgent(opts Options) (Agent, error) {
 			cwd:        cmp.Or(opts.Cwd, "."),
 			mcpServers: opts.McpServers,
 			options:    opts.Cursor,
+		}, nil
+	case TypeSloppy:
+		return &SloppyAgent{
+			log:        log,
+			cwd:        cmp.Or(opts.Cwd, "."),
+			mcpServers: opts.McpServers,
+			options:    opts.Sloppy,
 		}, nil
 	case TypeDummy:
 		return &DummyAgent{
