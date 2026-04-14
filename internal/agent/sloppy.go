@@ -28,9 +28,7 @@ func (a *SloppyAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 	}
 	a.log.Info("sending prompt", "text", prompt)
 
-	args := []string{
-		"--builtin=false",
-	}
+	var args []string
 
 	// Write MCP config file if we have MCP servers
 	if len(a.mcpServers) > 0 {
