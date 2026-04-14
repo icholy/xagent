@@ -56,8 +56,8 @@ type LinkWithOrg struct {
 	OrgID int64
 }
 
-func (s *Store) FindSubscribedLinksByURLForUser(ctx context.Context, tx *sql.Tx, url string, userID string) ([]LinkWithOrg, error) {
-	rows, err := s.q(tx).FindSubscribedLinksByURLForUser(ctx, sqlc.FindSubscribedLinksByURLForUserParams{
+func (s *Store) FindSubscribedLinksForUser(ctx context.Context, tx *sql.Tx, url string, userID string) ([]LinkWithOrg, error) {
+	rows, err := s.q(tx).FindSubscribedLinksForUser(ctx, sqlc.FindSubscribedLinksForUserParams{
 		Url:    url,
 		UserID: userID,
 	})

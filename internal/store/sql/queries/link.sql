@@ -20,7 +20,7 @@ JOIN tasks t ON l.task_id = t.id
 WHERE l.url = $1 AND t.archived = FALSE AND t.org_id = $2
 ORDER BY l.created_at DESC;
 
--- name: FindSubscribedLinksByURLForUser :many
+-- name: FindSubscribedLinksForUser :many
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, t.org_id
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
