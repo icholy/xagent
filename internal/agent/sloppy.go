@@ -23,6 +23,9 @@ type SloppyAgent struct {
 
 // Prompt sends a prompt to Sloppy and waits for completion.
 func (a *SloppyAgent) Prompt(ctx context.Context, prompt string, resume bool) error {
+	if resume {
+		return fmt.Errorf("sloppy does not support session resume")
+	}
 	a.log.Info("sending prompt", "text", prompt)
 
 	args := []string{
