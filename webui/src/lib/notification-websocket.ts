@@ -21,6 +21,7 @@ class NotificationEvent extends Event {
  * Events:
  *   "notification" (NotificationEvent) — fired for each parsed message
  *   "reconnect" (Event) — fired on successful (re)connect
+ *   "error" (Event) — fired on WebSocket error (reconnect is automatic)
  */
 export class NotificationWebSocket extends EventTarget {
   private ws: WebSocket | null = null;
@@ -78,6 +79,8 @@ export class NotificationWebSocket extends EventTarget {
     };
 
     this.ws.onerror = () => {
+      console.warn("NotificationWebSocket: connection error, reconnecting...");
+      this.dispatchEvent(new Event("error"));
       // onclose fires after onerror, triggering reconnect
     };
   }
