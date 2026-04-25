@@ -32,6 +32,7 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "registered", Type: "workspaces"}},
 		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
 		Time:      time.Now(),
 	})
 	return &xagentv1.RegisterWorkspacesResponse{}, nil
@@ -67,6 +68,7 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "cleared", Type: "workspaces"}},
 		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
 		Time:      time.Now(),
 	})
 	return &xagentv1.ClearWorkspacesResponse{}, nil

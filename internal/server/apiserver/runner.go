@@ -59,8 +59,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 					{Action: "updated", Type: "task", ID: event.TaskID},
 					{Action: "appended", Type: "task_logs", ID: event.TaskID},
 				},
-				OrgID: caller.OrgID,
-				Time:  time.Now(),
+				OrgID:  caller.OrgID,
+				UserID: caller.ID,
+				Time:   time.Now(),
 			})
 		}
 	}

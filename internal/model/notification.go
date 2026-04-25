@@ -8,6 +8,7 @@ type Notification struct {
 	Type      string                 `json:"type"`
 	Resources []NotificationResource `json:"resources,omitempty"`
 	OrgID     int64                  `json:"org_id"`
+	UserID    string                 `json:"user_id,omitempty"`
 	Time      time.Time              `json:"timestamp"`
 }
 

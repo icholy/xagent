@@ -39,8 +39,9 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 			{Action: "created", Type: "task_links", ID: req.TaskId},
 			{Action: "created", Type: "link", ID: link.ID},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.CreateLinkResponse{
 		Link: link.Proto(),
