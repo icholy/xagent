@@ -1,9 +1,8 @@
-package server
+package notifyserver
 
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -12,7 +11,6 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
-	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 	"nhooyr.io/websocket"
 )
@@ -21,20 +19,10 @@ func TestWebSocket(t *testing.T) {
 	t.Parallel()
 
 	ps := pubsub.NewLocalPubSub()
-	st := teststore.New(t)
-	srv := New(Options{
-		Store:      st,
-		Publisher:  ps,
-		Subscriber: ps,
-	})
-	org := teststore.CreateOrg(t, st, nil)
+	const orgID int64 = 1
+	srv := New(Options{Subscriber: ps})
 
-	// Create HTTP test server with auth context injected
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r = r.WithContext(apiauth.WithUser(r.Context(), &apiauth.UserInfo{ID: org.UserID, OrgID: org.OrgID}))
-		srv.handleWebSocket(w, r)
-	})
-	ts := httptest.NewServer(handler)
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
 	defer ts.Close()
 
 	// Connect WebSocket client
@@ -53,11 +41,11 @@ func TestWebSocket(t *testing.T) {
 		Type:     "created",
 		Resource: "task",
 		ID:       42,
-		OrgID:    org.OrgID,
+		OrgID:    orgID,
 		Version:  1,
 		Time:     time.Now().Truncate(time.Second),
 	}
-	err = ps.Publish(ctx, org.OrgID, want)
+	err = ps.Publish(ctx, orgID, want)
 	assert.NilError(t, err)
 
 	// Read the notification from the WebSocket
@@ -81,45 +69,25 @@ func TestWebSocket_OrgIsolation(t *testing.T) {
 	t.Parallel()
 
 	ps := pubsub.NewLocalPubSub()
-	st := teststore.New(t)
-	srv := New(Options{
-		Store:      st,
-		Publisher:  ps,
-		Subscriber: ps,
-	})
-	orgA := teststore.CreateOrg(t, st, nil)
-	orgB := teststore.CreateOrg(t, st, nil)
-
-	// Create test server that routes to the correct org based on query param
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		orgIDStr := r.URL.Query().Get("org")
-		var user *apiauth.UserInfo
-		if orgIDStr == "a" {
-			user = &apiauth.UserInfo{ID: orgA.UserID, OrgID: orgA.OrgID}
-		} else {
-			user = &apiauth.UserInfo{ID: orgB.UserID, OrgID: orgB.OrgID}
-		}
-		r = r.WithContext(apiauth.WithUser(r.Context(), user))
-		srv.handleWebSocket(w, r)
-	})
-	ts := httptest.NewServer(handler)
+	const orgA, orgB int64 = 1, 2
+	srv := New(Options{Subscriber: ps})
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgB}))
 	defer ts.Close()
 
-	ctx := t.Context()
-	baseURL := "ws" + strings.TrimPrefix(ts.URL, "http")
-
 	// Connect org B subscriber
-	connB, _, err := websocket.Dial(ctx, baseURL+"/?org=b", nil)
+	ctx := t.Context()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
+	connB, _, err := websocket.Dial(ctx, wsURL, nil)
 	assert.NilError(t, err)
 	defer connB.CloseNow()
 	readReady(t, ctx, connB)
 
 	// Publish to org A only
-	err = ps.Publish(ctx, orgA.OrgID, model.Notification{
+	err = ps.Publish(ctx, orgA, model.Notification{
 		Type:     "created",
 		Resource: "task",
 		ID:       1,
-		OrgID:    orgA.OrgID,
+		OrgID:    orgA,
 	})
 	assert.NilError(t, err)
 

@@ -15,6 +15,7 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/notifyserver"
 	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/pubsub"
@@ -192,6 +193,7 @@ var ServerCommand = &cli.Command{
 			return fmt.Errorf("failed to initialize oauth: %w", err)
 		}
 		ps := pubsub.NewLocalPubSub()
+		notify := notifyserver.New(notifyserver.Options{Subscriber: ps})
 		opts := server.Options{
 			Store:         st,
 			Auth:          auth,
@@ -200,7 +202,7 @@ var ServerCommand = &cli.Command{
 			OAuth:         oauth,
 			CORS:          cmd.Bool("cors"),
 			Publisher:     ps,
-			Subscriber:    ps,
+			Notify:        notify,
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",

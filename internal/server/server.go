@@ -24,6 +24,7 @@ import (
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/notifyserver"
 	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/oauthlink"
 	"github.com/icholy/xagent/internal/otelx"
@@ -65,7 +66,7 @@ type Server struct {
 	oauth         *oauthflow.Auth
 	cors          bool
 	publisher     pubsub.Publisher
-	subscriber    pubsub.Subscriber
+	notify        *notifyserver.Server
 }
 
 type Options struct {
@@ -80,7 +81,7 @@ type Options struct {
 	OAuth         *oauthflow.Auth
 	CORS          bool
 	Publisher     pubsub.Publisher
-	Subscriber    pubsub.Subscriber
+	Notify        *notifyserver.Server
 }
 
 func New(opts Options) *Server {
@@ -100,7 +101,7 @@ func New(opts Options) *Server {
 		oauth:         opts.OAuth,
 		cors:          opts.CORS,
 		publisher:     opts.Publisher,
-		subscriber:    opts.Subscriber,
+		notify:        opts.Notify,
 	}
 }
 
@@ -124,8 +125,8 @@ func (s *Server) Handler() http.Handler {
 	)
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
 	// WebSocket endpoint (protected)
-	if s.subscriber != nil {
-		mux.Handle("/ws", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).ThenFunc(s.handleWebSocket))
+	if s.notify != nil {
+		mux.Handle("/ws", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.Handler()))
 	}
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {

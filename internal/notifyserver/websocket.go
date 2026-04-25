@@ -1,9 +1,8 @@
-package server
+package notifyserver
 
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -67,7 +66,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for n := range ch {
 		data, err := json.Marshal(n)
 		if err != nil {
-			slog.Warn("failed to marshal notification", "error", err)
+			s.log.Warn("failed to marshal notification", "error", err)
 			continue
 		}
 		if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
