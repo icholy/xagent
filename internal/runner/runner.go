@@ -28,7 +28,7 @@ import (
 	"github.com/icholy/xagent/internal/runner/prebuilt"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/x/safesem"
-	"github.com/icholy/xagent/internal/workspace"
+	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"golang.org/x/sync/errgroup"
 )

@@ -13,7 +13,7 @@ import (
 	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/runner"
-	"github.com/icholy/xagent/internal/workspace"
+	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
