@@ -31,9 +31,12 @@ func TestCreateTask_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].N, model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: resp.Task.Id}},
-		OrgID:     org.OrgID,
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "created", Type: "task", ID: resp.Task.Id},
+			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
+		},
+		OrgID: org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -62,9 +65,12 @@ func TestUpdateTask_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].N, model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: resp.Task.Id}},
-		OrgID:     org.OrgID,
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: resp.Task.Id},
+			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
+		},
+		OrgID: org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -91,9 +97,12 @@ func TestCancelTask_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].N, model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "cancelled", Type: "task", ID: resp.Task.Id}},
-		OrgID:     org.OrgID,
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "cancelled", Type: "task", ID: resp.Task.Id},
+			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
+		},
+		OrgID: org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -238,8 +247,11 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].N, model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: taskResp.Task.Id}},
-		OrgID:     org.OrgID,
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: taskResp.Task.Id},
+			{Action: "appended", Type: "task_logs", ID: taskResp.Task.Id},
+		},
+		OrgID: org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
