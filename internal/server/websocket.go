@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/apiauth"
-	"github.com/icholy/xagent/internal/pubsub"
+	"github.com/icholy/xagent/internal/model"
 	"nhooyr.io/websocket"
 )
 
@@ -35,7 +35,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Send a ready frame so clients know the subscription is live and any
 	// notifications published from this point forward will be delivered.
-	ready, err := json.Marshal(pubsub.Notification{Type: "ready", OrgID: caller.OrgID})
+	ready, err := json.Marshal(model.Notification{Type: "ready", OrgID: caller.OrgID})
 	if err != nil {
 		return
 	}

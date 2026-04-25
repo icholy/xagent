@@ -179,7 +179,7 @@ func (s *Server) handleCORS(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) publish(orgID int64, n pubsub.Notification) {
+func (s *Server) publish(orgID int64, n model.Notification) {
 	if s.publisher == nil {
 		return
 	}
@@ -403,7 +403,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "created",
 		Resource: "task",
 		ID:       task.ID,
@@ -499,7 +499,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task updated", "id", req.Id, "name", req.Name, "start", req.Start, "instructions_added", len(req.AddInstructions))
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       req.Id,
@@ -538,7 +538,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task archived", "id", req.Id)
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       req.Id,
@@ -577,7 +577,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task unarchived", "id", req.Id)
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       req.Id,
@@ -616,7 +616,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task cancelled", "id", req.Id)
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       req.Id,
@@ -655,7 +655,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task restarted", "id", req.Id)
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       req.Id,
@@ -682,7 +682,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "appended",
 		Resource: "log",
 		ID:       req.TaskId,
@@ -729,7 +729,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "created",
 		Resource: "link",
 		ID:       link.ID,
@@ -853,7 +853,7 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event task added", "event_id", req.EventId, "task_id", req.TaskId)
-	s.publish(caller.OrgID, pubsub.Notification{
+	s.publish(caller.OrgID, model.Notification{
 		Type:     "created",
 		Resource: "event",
 		ID:       req.EventId,
@@ -952,7 +952,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if applied {
-			s.publish(caller.OrgID, pubsub.Notification{
+			s.publish(caller.OrgID, model.Notification{
 				Type:     "updated",
 				Resource: "task",
 				ID:       event.TaskID,

@@ -16,7 +16,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -30,20 +30,20 @@ func TestCreateTask_Publishes(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type:     "created",
 		Resource: "task",
 		ID:       resp.Task.Id,
 		OrgID:    org.OrgID,
 		Version:  1,
-	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
 func TestUpdateTask_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -62,19 +62,19 @@ func TestUpdateTask_Publishes(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+	assert.DeepEqual(t, calls[1].N, model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       resp.Task.Id,
 		OrgID:    org.OrgID,
-	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
 func TestCancelTask_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -91,19 +91,19 @@ func TestCancelTask_Publishes(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+	assert.DeepEqual(t, calls[1].N, model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       resp.Task.Id,
 		OrgID:    org.OrgID,
-	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
 func TestUploadLogs_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -125,19 +125,19 @@ func TestUploadLogs_Publishes(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+	assert.DeepEqual(t, calls[1].N, model.Notification{
 		Type:     "appended",
 		Resource: "log",
 		ID:       resp.Task.Id,
 		OrgID:    org.OrgID,
-	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
 func TestCreateLink_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -158,19 +158,19 @@ func TestCreateLink_Publishes(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+	assert.DeepEqual(t, calls[1].N, model.Notification{
 		Type:     "created",
 		Resource: "link",
 		ID:       linkResp.Link.Id,
 		OrgID:    org.OrgID,
-	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
 func TestAddEventTask_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -195,19 +195,19 @@ func TestAddEventTask_Publishes(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+	assert.DeepEqual(t, calls[1].N, model.Notification{
 		Type:     "created",
 		Resource: "event",
 		ID:       eventResp.Event.Id,
 		OrgID:    org.OrgID,
-	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
 func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -232,10 +232,10 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+	assert.DeepEqual(t, calls[1].N, model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       taskResp.Task.Id,
 		OrgID:    org.OrgID,
-	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time", "Version"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "Version"))
 }

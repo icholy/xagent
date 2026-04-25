@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
@@ -48,7 +49,7 @@ func TestWebSocket(t *testing.T) {
 	readReady(t, ctx, conn)
 
 	// Publish a notification
-	want := pubsub.Notification{
+	want := model.Notification{
 		Type:     "created",
 		Resource: "task",
 		ID:       42,
@@ -66,7 +67,7 @@ func TestWebSocket(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, typ, websocket.MessageText)
 
-	var got pubsub.Notification
+	var got model.Notification
 	err = json.Unmarshal(data, &got)
 	assert.NilError(t, err)
 	assert.Equal(t, got.Type, want.Type)
@@ -114,7 +115,7 @@ func TestWebSocket_OrgIsolation(t *testing.T) {
 	readReady(t, ctx, connB)
 
 	// Publish to org A only
-	err = ps.Publish(ctx, orgA.OrgID, pubsub.Notification{
+	err = ps.Publish(ctx, orgA.OrgID, model.Notification{
 		Type:     "created",
 		Resource: "task",
 		ID:       1,
@@ -135,7 +136,7 @@ func readReady(t *testing.T, ctx context.Context, conn *websocket.Conn) {
 	defer cancel()
 	_, data, err := conn.Read(readCtx)
 	assert.NilError(t, err)
-	var n pubsub.Notification
+	var n model.Notification
 	assert.NilError(t, json.Unmarshal(data, &n))
 	assert.Equal(t, n.Type, "ready")
 }

@@ -6,6 +6,8 @@ package pubsub
 import (
 	"context"
 	"sync"
+
+	"github.com/icholy/xagent/internal/model"
 )
 
 // Ensure, that PublisherMock does implement Publisher.
@@ -18,7 +20,7 @@ var _ Publisher = &PublisherMock{}
 //
 //		// make and configure a mocked Publisher
 //		mockedPublisher := &PublisherMock{
-//			PublishFunc: func(ctx context.Context, orgID int64, n Notification) error {
+//			PublishFunc: func(ctx context.Context, orgID int64, n model.Notification) error {
 //				panic("mock out the Publish method")
 //			},
 //		}
@@ -29,7 +31,7 @@ var _ Publisher = &PublisherMock{}
 //	}
 type PublisherMock struct {
 	// PublishFunc mocks the Publish method.
-	PublishFunc func(ctx context.Context, orgID int64, n Notification) error
+	PublishFunc func(ctx context.Context, orgID int64, n model.Notification) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -40,21 +42,21 @@ type PublisherMock struct {
 			// OrgID is the orgID argument value.
 			OrgID int64
 			// N is the n argument value.
-			N Notification
+			N model.Notification
 		}
 	}
 	lockPublish sync.RWMutex
 }
 
 // Publish calls PublishFunc.
-func (mock *PublisherMock) Publish(ctx context.Context, orgID int64, n Notification) error {
+func (mock *PublisherMock) Publish(ctx context.Context, orgID int64, n model.Notification) error {
 	if mock.PublishFunc == nil {
 		panic("PublisherMock.PublishFunc: method is nil but Publisher.Publish was just called")
 	}
 	callInfo := struct {
 		Ctx   context.Context
 		OrgID int64
-		N     Notification
+		N     model.Notification
 	}{
 		Ctx:   ctx,
 		OrgID: orgID,
@@ -73,12 +75,12 @@ func (mock *PublisherMock) Publish(ctx context.Context, orgID int64, n Notificat
 func (mock *PublisherMock) PublishCalls() []struct {
 	Ctx   context.Context
 	OrgID int64
-	N     Notification
+	N     model.Notification
 } {
 	var calls []struct {
 		Ctx   context.Context
 		OrgID int64
-		N     Notification
+		N     model.Notification
 	}
 	mock.lockPublish.RLock()
 	calls = mock.calls.Publish
