@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -11,18 +12,12 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func newTestPublisher() *pubsub.PublisherMock {
-	return &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error {
-			return nil
-		},
-	}
-}
-
 func TestCreateTask_Publishes(t *testing.T) {
 	t.Parallel()
 
-	pub := newTestPublisher()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
 	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
@@ -35,16 +30,21 @@ func TestCreateTask_Publishes(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.Type, "created")
-	assert.Equal(t, calls[0].N.Resource, "task")
-	assert.Equal(t, calls[0].N.ID, resp.Task.Id)
-	assert.Equal(t, calls[0].OrgID, org.OrgID)
+	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+		Type:     "created",
+		Resource: "task",
+		ID:       resp.Task.Id,
+		OrgID:    org.OrgID,
+		Version:  1,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
 }
 
 func TestUpdateTask_Publishes(t *testing.T) {
 	t.Parallel()
 
-	pub := newTestPublisher()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
 	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
@@ -55,8 +55,9 @@ func TestUpdateTask_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Reset calls after CreateTask
-	pub2 := newTestPublisher()
+	pub2 := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	srv.publisher = pub2
 
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
@@ -66,15 +67,20 @@ func TestUpdateTask_Publishes(t *testing.T) {
 
 	calls := pub2.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.Type, "updated")
-	assert.Equal(t, calls[0].N.Resource, "task")
-	assert.Equal(t, calls[0].N.ID, resp.Task.Id)
+	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       resp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
 }
 
 func TestCancelTask_Publishes(t *testing.T) {
 	t.Parallel()
 
-	pub := newTestPublisher()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
 	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
@@ -85,7 +91,9 @@ func TestCancelTask_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := newTestPublisher()
+	pub2 := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	srv.publisher = pub2
 
 	_, err = srv.CancelTask(ctx, &xagentv1.CancelTaskRequest{Id: resp.Task.Id})
@@ -93,14 +101,20 @@ func TestCancelTask_Publishes(t *testing.T) {
 
 	calls := pub2.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.Type, "updated")
-	assert.Equal(t, calls[0].N.Resource, "task")
+	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       resp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
 }
 
 func TestUploadLogs_Publishes(t *testing.T) {
 	t.Parallel()
 
-	pub := newTestPublisher()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
 	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
@@ -111,7 +125,9 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := newTestPublisher()
+	pub2 := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	srv.publisher = pub2
 
 	_, err = srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
@@ -124,15 +140,20 @@ func TestUploadLogs_Publishes(t *testing.T) {
 
 	calls := pub2.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.Type, "appended")
-	assert.Equal(t, calls[0].N.Resource, "log")
-	assert.Equal(t, calls[0].N.ID, resp.Task.Id)
+	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+		Type:     "appended",
+		Resource: "log",
+		ID:       resp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
 }
 
 func TestCreateLink_Publishes(t *testing.T) {
 	t.Parallel()
 
-	pub := newTestPublisher()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
 	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
@@ -143,7 +164,9 @@ func TestCreateLink_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := newTestPublisher()
+	pub2 := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	srv.publisher = pub2
 
 	linkResp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
@@ -155,15 +178,20 @@ func TestCreateLink_Publishes(t *testing.T) {
 
 	calls := pub2.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.Type, "created")
-	assert.Equal(t, calls[0].N.Resource, "link")
-	assert.Equal(t, calls[0].N.ID, linkResp.Link.Id)
+	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+		Type:     "created",
+		Resource: "link",
+		ID:       linkResp.Link.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
 }
 
 func TestAddEventTask_Publishes(t *testing.T) {
 	t.Parallel()
 
-	pub := newTestPublisher()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
 	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
@@ -179,7 +207,9 @@ func TestAddEventTask_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := newTestPublisher()
+	pub2 := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	srv.publisher = pub2
 
 	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
@@ -190,15 +220,20 @@ func TestAddEventTask_Publishes(t *testing.T) {
 
 	calls := pub2.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.Type, "created")
-	assert.Equal(t, calls[0].N.Resource, "event")
-	assert.Equal(t, calls[0].N.ID, eventResp.Event.Id)
+	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+		Type:     "created",
+		Resource: "event",
+		ID:       eventResp.Event.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
 }
 
 func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	t.Parallel()
 
-	pub := newTestPublisher()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
 	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
@@ -209,7 +244,9 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := newTestPublisher()
+	pub2 := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
 	srv.publisher = pub2
 
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
@@ -225,7 +262,10 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 
 	calls := pub2.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.Type, "updated")
-	assert.Equal(t, calls[0].N.Resource, "task")
-	assert.Equal(t, calls[0].N.ID, taskResp.Task.Id)
+	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       taskResp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time", "Version"))
 }

@@ -64,9 +64,8 @@ type Server struct {
 	encryptionKey []byte
 	oauth         *oauthflow.Auth
 	cors          bool
-	publisher     pubsub.Publisher
-	subscriber    pubsub.Subscriber
-	wsConns       orgConns
+	publisher  pubsub.Publisher
+	subscriber pubsub.Subscriber
 }
 
 type Options struct {
@@ -100,9 +99,8 @@ func New(opts Options) *Server {
 		encryptionKey: opts.EncryptionKey,
 		oauth:         opts.OAuth,
 		cors:          opts.CORS,
-		publisher:     opts.Publisher,
-		subscriber:    opts.Subscriber,
-		wsConns:       orgConns{counts: make(map[int64]int)},
+		publisher:  opts.Publisher,
+		subscriber: opts.Subscriber,
 	}
 }
 
