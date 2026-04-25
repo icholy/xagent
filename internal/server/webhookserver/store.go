@@ -1,6 +1,6 @@
 //go:generate go tool moq -out store_moq_test.go . Store
 
-package webhook
+package webhookserver
 
 import (
 	"context"

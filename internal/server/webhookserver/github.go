@@ -1,4 +1,4 @@
-package webhook
+package webhookserver
 
 import (
 	"database/sql"

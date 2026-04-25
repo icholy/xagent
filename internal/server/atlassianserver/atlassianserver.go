@@ -14,8 +14,8 @@ import (
 	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/oauthlink"
+	"github.com/icholy/xagent/internal/server/webhookserver"
 	"github.com/icholy/xagent/internal/store"
-	"github.com/icholy/xagent/internal/webhook"
 	"golang.org/x/oauth2"
 )
 
@@ -98,7 +98,7 @@ func (s *Server) OAuthHandler() http.Handler {
 
 // WebhookHandler returns the HTTP handler for Atlassian/Jira webhook events.
 func (s *Server) WebhookHandler() http.Handler {
-	return &webhook.AtlassianHandler{
+	return &webhookserver.AtlassianHandler{
 		Router: &eventrouter.Router{Log: s.log, Store: s.store},
 		Store:  s.store,
 	}

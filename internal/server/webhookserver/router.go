@@ -1,6 +1,6 @@
 //go:generate go tool moq -out router_moq_test.go . Router
 
-package webhook
+package webhookserver
 
 import (
 	"context"

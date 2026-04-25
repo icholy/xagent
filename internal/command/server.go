@@ -13,15 +13,15 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/apiauth"
-	"github.com/icholy/xagent/internal/atlassianserver"
 	"github.com/icholy/xagent/internal/deviceauth"
-	"github.com/icholy/xagent/internal/githubserver"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/notifyserver"
 	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server"
+	"github.com/icholy/xagent/internal/server/atlassianserver"
+	"github.com/icholy/xagent/internal/server/githubserver"
+	"github.com/icholy/xagent/internal/server/notifyserver"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/urfave/cli/v3"
 )
