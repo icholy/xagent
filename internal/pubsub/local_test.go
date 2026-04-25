@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
 )
 
@@ -12,7 +13,7 @@ func TestPublish_NoSubscribers(t *testing.T) {
 	t.Parallel()
 	ps := NewLocalPubSub()
 
-	err := ps.Publish(context.Background(), 1, Notification{
+	err := ps.Publish(context.Background(), 1, model.Notification{
 		Type:     "created",
 		Resource: "task",
 		ID:       1,
@@ -29,7 +30,7 @@ func TestSubscribe_ReceivesNotification(t *testing.T) {
 	assert.NilError(t, err)
 	defer cancel()
 
-	want := Notification{
+	want := model.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       42,
@@ -55,7 +56,7 @@ func TestSubscribe_OrgIsolation(t *testing.T) {
 	assert.NilError(t, err)
 	defer cancel()
 
-	err = ps.Publish(context.Background(), 2, Notification{
+	err = ps.Publish(context.Background(), 2, model.Notification{
 		Type:     "created",
 		Resource: "task",
 		ID:       1,
@@ -82,11 +83,11 @@ func TestSubscribe_MultipleSubscribers(t *testing.T) {
 	assert.NilError(t, err)
 	defer cancel2()
 
-	want := Notification{Type: "created", Resource: "task", ID: 1, OrgID: 1}
+	want := model.Notification{Type: "created", Resource: "task", ID: 1, OrgID: 1}
 	err = ps.Publish(context.Background(), 1, want)
 	assert.NilError(t, err)
 
-	for _, ch := range []<-chan Notification{ch1, ch2} {
+	for _, ch := range []<-chan model.Notification{ch1, ch2} {
 		select {
 		case got := <-ch:
 			assert.Equal(t, got, want)
@@ -109,7 +110,7 @@ func TestCancel_RemovesSubscription(t *testing.T) {
 	assert.Assert(t, !ok, "expected channel to be closed")
 
 	// Publishing after cancel should not panic.
-	err = ps.Publish(context.Background(), 1, Notification{
+	err = ps.Publish(context.Background(), 1, model.Notification{
 		Type:     "created",
 		Resource: "task",
 		ID:       1,
@@ -137,7 +138,7 @@ func TestPublish_SlowSubscriberDoesNotBlock(t *testing.T) {
 
 	// Fill the subscriber's buffer.
 	for i := range subscriberBufSize {
-		err = ps.Publish(context.Background(), 1, Notification{
+		err = ps.Publish(context.Background(), 1, model.Notification{
 			Type:     "updated",
 			Resource: "task",
 			ID:       int64(i),
@@ -149,7 +150,7 @@ func TestPublish_SlowSubscriberDoesNotBlock(t *testing.T) {
 	// Next publish should not block — it drops the notification.
 	done := make(chan struct{})
 	go func() {
-		err := ps.Publish(context.Background(), 1, Notification{
+		err := ps.Publish(context.Background(), 1, model.Notification{
 			Type:     "updated",
 			Resource: "task",
 			ID:       999,

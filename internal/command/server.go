@@ -17,7 +17,7 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/otelx"
-	"github.com/icholy/xagent/internal/pubsub"
+	"github.com/icholy/xagent/internal/websocketserver"
 	"github.com/icholy/xagent/internal/server"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/urfave/cli/v3"
@@ -191,7 +191,7 @@ var ServerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to initialize oauth: %w", err)
 		}
-		ps := pubsub.NewLocalPubSub()
+		wss := websocketserver.New()
 		opts := server.Options{
 			Store:         st,
 			Auth:          auth,
@@ -199,8 +199,7 @@ var ServerCommand = &cli.Command{
 			EncryptionKey: key,
 			OAuth:         oauth,
 			CORS:          cmd.Bool("cors"),
-			Publisher:     ps,
-			Subscriber:    ps,
+			WSS:           wss,
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",
