@@ -7,6 +7,7 @@ import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import xagentIcon from '@/assets/icon.png'
 import { useAuthTransport } from '@/lib/services'
 import { useOrgId } from '@/hooks/use-org-id'
+import { ConnectionIndicator } from '@/components/connection-indicator'
 import {
   Select,
   SelectContent,
@@ -118,6 +119,7 @@ function RootComponent() {
                 </Select>
               </div>
             )}
+            <ConnectionIndicator />
             <Link
               to="/settings"
               search={{ tab: 'account' }}

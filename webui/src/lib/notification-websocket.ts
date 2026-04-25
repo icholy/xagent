@@ -11,6 +11,12 @@ export interface Notification {
 
 export type NotificationListener = (notification: Notification) => void;
 
+// idle: no org set
+// connecting: opening or waiting on a reconnect attempt's onopen
+// open: connected to /ws
+// closed: connection lost; waiting on the backoff timer to retry
+export type ConnectionState = "idle" | "connecting" | "open" | "closed";
+
 /**
  * Manages a WebSocket connection to /ws with automatic reconnection
  * and exponential backoff. Parses incoming JSON notifications and
@@ -27,6 +33,7 @@ export class NotificationWebSocket {
   // Active org for the subscription. NO_ORG means "do not connect";
   // any other value is the org id sent to /ws as ?org_id=.
   private orgId: string = NO_ORG;
+  private state: ConnectionState = "idle";
 
   addNotificationListener(listener: NotificationListener): () => void {
     const handler = (e: Event) => {
@@ -46,6 +53,24 @@ export class NotificationWebSocket {
     return () => this.events.removeEventListener("error", listener);
   }
 
+  getState(): ConnectionState {
+    return this.state;
+  }
+
+  addStateListener(listener: (state: ConnectionState) => void): () => void {
+    const handler = (e: Event) => {
+      listener((e as CustomEvent<ConnectionState>).detail);
+    };
+    this.events.addEventListener("state", handler);
+    return () => this.events.removeEventListener("state", handler);
+  }
+
+  private setState(next: ConnectionState) {
+    if (next === this.state) return;
+    this.state = next;
+    this.events.dispatchEvent(new CustomEvent("state", { detail: next }));
+  }
+
   // Opens a subscription for the given org, replacing any existing
   // connection. Pass NO_ORG to disconnect. No-op when the orgId
   // hasn't changed.
@@ -53,7 +78,9 @@ export class NotificationWebSocket {
     if (orgId === this.orgId) return;
     this.orgId = orgId;
     this.disconnect();
-    if (orgId !== NO_ORG) {
+    if (orgId === NO_ORG) {
+      this.setState("idle");
+    } else {
       this.backoffDelay = 1000;
       this.connect();
     }
@@ -62,6 +89,7 @@ export class NotificationWebSocket {
   close() {
     this.closed = true;
     this.disconnect();
+    this.setState("idle");
   }
 
   private disconnect() {
@@ -82,11 +110,13 @@ export class NotificationWebSocket {
   private connect() {
     if (this.closed || this.orgId === NO_ORG) return;
 
+    this.setState("connecting");
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     this.ws = new WebSocket(`${protocol}//${location.host}/ws?org_id=${this.orgId}`);
 
     this.ws.onopen = () => {
       this.backoffDelay = 1000;
+      this.setState("open");
       this.events.dispatchEvent(new Event("reconnect"));
     };
 
@@ -108,6 +138,7 @@ export class NotificationWebSocket {
 
     this.ws.onclose = () => {
       if (this.closed || this.orgId === NO_ORG) return;
+      this.setState("closed");
       const delay = this.backoffDelay + Math.random() * 1000;
       this.backoffDelay = Math.min(this.backoffDelay * 2, 30000);
       this.reconnectTimer = setTimeout(() => this.connect(), delay);
