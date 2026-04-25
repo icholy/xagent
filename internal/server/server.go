@@ -22,16 +22,16 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/oauthlink"
+	"github.com/icholy/xagent/internal/otelx"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
-	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/servermcp"
 	"github.com/icholy/xagent/internal/store"
-	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/webhook"
 	"github.com/justinas/alice"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -64,23 +64,23 @@ type Server struct {
 	encryptionKey []byte
 	oauth         *oauthflow.Auth
 	cors          bool
-	publisher  pubsub.Publisher
-	subscriber pubsub.Subscriber
+	publisher     pubsub.Publisher
+	subscriber    pubsub.Subscriber
 }
 
 type Options struct {
-	Log            *slog.Logger
-	Store          *store.Store
-	Auth           *apiauth.Auth
-	Discovery      deviceauth.DiscoveryConfig
-	GitHub         *GitHubConfig
-	Atlassian      *AtlassianConfig
-	BaseURL        string
-	EncryptionKey  []byte
-	OAuth          *oauthflow.Auth
-	CORS           bool
-	Publisher  pubsub.Publisher
-	Subscriber pubsub.Subscriber
+	Log           *slog.Logger
+	Store         *store.Store
+	Auth          *apiauth.Auth
+	Discovery     deviceauth.DiscoveryConfig
+	GitHub        *GitHubConfig
+	Atlassian     *AtlassianConfig
+	BaseURL       string
+	EncryptionKey []byte
+	OAuth         *oauthflow.Auth
+	CORS          bool
+	Publisher     pubsub.Publisher
+	Subscriber    pubsub.Subscriber
 }
 
 func New(opts Options) *Server {
@@ -99,8 +99,8 @@ func New(opts Options) *Server {
 		encryptionKey: opts.EncryptionKey,
 		oauth:         opts.OAuth,
 		cors:          opts.CORS,
-		publisher:  opts.Publisher,
-		subscriber: opts.Subscriber,
+		publisher:     opts.Publisher,
+		subscriber:    opts.Subscriber,
 	}
 }
 
@@ -903,7 +903,6 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 	}
 	return resp, nil
 }
-
 
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	caller := apiauth.MustCaller(ctx)

@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/pubsub"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
