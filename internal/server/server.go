@@ -118,11 +118,22 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
-		s.registerGitHubRoutes(mux)
+		gh := s.githubOAuthHandler()
+		mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", gh)))
+		mux.Handle("/webhook/github", &webhook.GitHubHandler{
+			Router:        &eventrouter.Router{Log: s.log, Store: s.store},
+			Store:         s.store,
+			WebhookSecret: s.github.WebhookSecret,
+		})
 	}
 	// Atlassian OAuth routes (conditionally registered)
 	if s.atlassian != nil {
-		s.registerAtlassianRoutes(mux)
+		ah := s.atlassianOAuthHandler()
+		mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", ah)))
+		mux.Handle("/webhook/atlassian", &webhook.AtlassianHandler{
+			Router: &eventrouter.Router{Log: s.log, Store: s.store},
+			Store:  s.store,
+		})
 	}
 	// OAuth 2.1 endpoints (public, conditionally registered)
 	if s.oauth != nil {
@@ -162,8 +173,8 @@ func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(s.discovery)
 }
 
-func (s *Server) registerGitHubRoutes(mux *http.ServeMux) {
-	gh := oauthlink.New(oauthlink.Config{
+func (s *Server) githubOAuthHandler() http.Handler {
+	return oauthlink.New(oauthlink.Config{
 		Provider:     "github",
 		ClientID:     s.github.ClientID,
 		ClientSecret: s.github.ClientSecret,
@@ -195,16 +206,10 @@ func (s *Server) registerGitHubRoutes(mux *http.ServeMux) {
 			http.Redirect(w, r, "/ui/settings", http.StatusFound)
 		},
 	})
-	mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", gh)))
-	mux.Handle("/webhook/github", &webhook.GitHubHandler{
-		Router:        &eventrouter.Router{Log: s.log, Store: s.store},
-		Store:         s.store,
-		WebhookSecret: s.github.WebhookSecret,
-	})
 }
 
-func (s *Server) registerAtlassianRoutes(mux *http.ServeMux) {
-	ah := oauthlink.New(oauthlink.Config{
+func (s *Server) atlassianOAuthHandler() http.Handler {
+	return oauthlink.New(oauthlink.Config{
 		Provider:     "atlassian",
 		ClientID:     s.atlassian.ClientID,
 		ClientSecret: s.atlassian.ClientSecret,
@@ -241,11 +246,6 @@ func (s *Server) registerAtlassianRoutes(mux *http.ServeMux) {
 			}
 			http.Redirect(w, r, "/ui/settings", http.StatusFound)
 		},
-	})
-	mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", ah)))
-	mux.Handle("/webhook/atlassian", &webhook.AtlassianHandler{
-		Router: &eventrouter.Router{Log: s.log, Store: s.store},
-		Store:  s.store,
 	})
 }
 
