@@ -4,8 +4,18 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TransportProvider } from '@connectrpc/connect-query'
 import { routeTree } from './routeTree.gen'
-import { transport } from './lib/transport'
+import { transport, authTransport } from './lib/transport'
+import { notificationWebSocket } from './lib/notification-websocket'
 import './index.css'
+
+let lastOrgId = authTransport.getOrgId()
+authTransport.subscribe(() => {
+  const next = authTransport.getOrgId()
+  if (next !== lastOrgId) {
+    lastOrgId = next
+    notificationWebSocket.reconnect()
+  }
+})
 
 const queryClient = new QueryClient()
 

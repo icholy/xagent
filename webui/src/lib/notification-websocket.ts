@@ -55,6 +55,28 @@ export class NotificationWebSocket {
     }
   }
 
+  // Closes the current connection (without triggering the onclose
+  // backoff path) and immediately opens a fresh one. Call this when
+  // the auth context changes so the server-side subscription is
+  // re-bound to the new identity.
+  reconnect() {
+    if (this.closed) return;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+    }
+    this.backoffDelay = 1000;
+    this.connect();
+  }
+
   private connect() {
     if (this.closed) return;
 
