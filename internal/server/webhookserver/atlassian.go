@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/icholy/xagent/internal/atlassian"
+	"github.com/icholy/xagent/internal/x/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
 )
 

@@ -19,7 +19,7 @@ import (
 	"github.com/icholy/xagent/internal/auth/deviceauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/auth/oauthflow"
-	"github.com/icholy/xagent/internal/otelx"
+	"github.com/icholy/xagent/internal/x/otelx"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/pubsub"

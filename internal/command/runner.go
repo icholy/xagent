@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/agentauth"
-	"github.com/icholy/xagent/internal/common"
+	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/workspace"

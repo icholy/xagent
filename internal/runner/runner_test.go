@@ -11,7 +11,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/auth/agentauth"
-	"github.com/icholy/xagent/internal/dockerx"
+	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"

@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/githubx"
+	"github.com/icholy/xagent/internal/x/githubx"
 )
 
 // GitHubHandler handles incoming GitHub App webhook events.

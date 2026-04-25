@@ -11,7 +11,7 @@ import (
 	"net/http"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/atlassian"
+	"github.com/icholy/xagent/internal/x/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/auth/oauthlink"
 	"github.com/icholy/xagent/internal/server/webhookserver"

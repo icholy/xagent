@@ -11,7 +11,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/configfile"
-	"github.com/icholy/xagent/internal/expandvar"
+	"github.com/icholy/xagent/internal/x/expandvar"
 	"gopkg.in/yaml.v3"
 )
 
