@@ -1,4 +1,4 @@
-//go:generate go tool moq -out publisher_moq.go . Publisher
+//go:generate go tool moq -with-resets -out publisher_moq.go . Publisher
 
 package pubsub
 

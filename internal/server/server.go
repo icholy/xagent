@@ -692,6 +692,12 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event created", "id", event.ID, "description", event.Description)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "event", ID: event.ID}},
+		OrgID:     caller.OrgID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.CreateEventResponse{
 		Event: event.Proto(),
 	}, nil
@@ -717,6 +723,12 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event deleted", "id", req.Id)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "deleted", Type: "event", ID: req.Id}},
+		OrgID:     caller.OrgID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.DeleteEventResponse{}, nil
 }
 
@@ -776,6 +788,15 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event task removed", "event_id", req.EventId, "task_id", req.TaskId)
+	s.publish(model.Notification{
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: req.TaskId},
+			{Action: "updated", Type: "event", ID: req.EventId},
+		},
+		OrgID: caller.OrgID,
+		Time:  time.Now(),
+	})
 	return &xagentv1.RemoveEventTaskResponse{}, nil
 }
 

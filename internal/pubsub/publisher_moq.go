@@ -80,3 +80,17 @@ func (mock *PublisherMock) PublishCalls() []struct {
 	mock.lockPublish.RUnlock()
 	return calls
 }
+
+// ResetPublishCalls reset all the calls that were made to Publish.
+func (mock *PublisherMock) ResetPublishCalls() {
+	mock.lockPublish.Lock()
+	mock.calls.Publish = nil
+	mock.lockPublish.Unlock()
+}
+
+// ResetCalls reset all the calls that were made to all mocked methods.
+func (mock *PublisherMock) ResetCalls() {
+	mock.lockPublish.Lock()
+	mock.calls.Publish = nil
+	mock.lockPublish.Unlock()
+}

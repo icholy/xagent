@@ -52,6 +52,7 @@ func TestUpdateTask_Publishes(t *testing.T) {
 		Name: "test", Runner: "r", Workspace: "w",
 	})
 	assert.NilError(t, err)
+	pub.ResetCalls()
 
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id: resp.Task.Id, Name: "updated",
@@ -59,8 +60,8 @@ func TestUpdateTask_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, model.Notification{
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
@@ -82,13 +83,14 @@ func TestCancelTask_Publishes(t *testing.T) {
 		Name: "test", Runner: "r", Workspace: "w",
 	})
 	assert.NilError(t, err)
+	pub.ResetCalls()
 
 	_, err = srv.CancelTask(ctx, &xagentv1.CancelTaskRequest{Id: resp.Task.Id})
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, model.Notification{
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "cancelled", Type: "task", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
@@ -110,6 +112,7 @@ func TestUploadLogs_Publishes(t *testing.T) {
 		Name: "test", Runner: "r", Workspace: "w",
 	})
 	assert.NilError(t, err)
+	pub.ResetCalls()
 
 	_, err = srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 		TaskId: resp.Task.Id,
@@ -120,8 +123,8 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, model.Notification{
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
@@ -143,6 +146,7 @@ func TestCreateLink_Publishes(t *testing.T) {
 		Name: "test", Runner: "r", Workspace: "w",
 	})
 	assert.NilError(t, err)
+	pub.ResetCalls()
 
 	linkResp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId: resp.Task.Id,
@@ -152,8 +156,8 @@ func TestCreateLink_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, model.Notification{
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "created", Type: "task_links", ID: resp.Task.Id},
@@ -183,6 +187,7 @@ func TestAddEventTask_Publishes(t *testing.T) {
 		Url:         "https://example.com",
 	})
 	assert.NilError(t, err)
+	pub.ResetCalls()
 
 	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
 		EventId: eventResp.Event.Id,
@@ -191,8 +196,8 @@ func TestAddEventTask_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, model.Notification{
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: taskResp.Task.Id},
@@ -217,6 +222,7 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 		Name: "test", Runner: "r", Workspace: "w",
 	})
 	assert.NilError(t, err)
+	pub.ResetCalls()
 
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
@@ -230,8 +236,8 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 2)
-	assert.DeepEqual(t, calls[1].N, model.Notification{
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: taskResp.Task.Id}},
 		OrgID:     org.OrgID,
