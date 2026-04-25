@@ -102,10 +102,7 @@ func TestSSE_SelfNotificationFiltered(t *testing.T) {
 	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
 	defer ts.Close()
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/events?org_id=%d", ts.URL, orgID), nil)
+	req, err := http.NewRequestWithContext(t.Context(), "GET", fmt.Sprintf("%s/events?org_id=%d", ts.URL, orgID), nil)
 	assert.NilError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -122,7 +119,7 @@ func TestSSE_SelfNotificationFiltered(t *testing.T) {
 	assert.Equal(t, ev.Event, "ready")
 
 	// Publish a notification from the same user — should be filtered.
-	err = ps.Publish(ctx, model.Notification{
+	err = ps.Publish(t.Context(), model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 1}},
 		OrgID:     orgID,
@@ -138,7 +135,7 @@ func TestSSE_SelfNotificationFiltered(t *testing.T) {
 		UserID:    "other",
 		Time:      time.Now().Truncate(time.Second),
 	}
-	err = ps.Publish(ctx, want)
+	err = ps.Publish(t.Context(), want)
 	assert.NilError(t, err)
 
 	// Should only receive the notification from the other user.
