@@ -55,19 +55,14 @@ func TestUpdateTask_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
-	}
-	srv.publisher = pub2
-
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id: resp.Task.Id, Name: "updated",
 	})
 	assert.NilError(t, err)
 
-	calls := pub2.PublishCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       resp.Task.Id,
@@ -91,17 +86,12 @@ func TestCancelTask_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
-	}
-	srv.publisher = pub2
-
 	_, err = srv.CancelTask(ctx, &xagentv1.CancelTaskRequest{Id: resp.Task.Id})
 	assert.NilError(t, err)
 
-	calls := pub2.PublishCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       resp.Task.Id,
@@ -125,11 +115,6 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
-	}
-	srv.publisher = pub2
-
 	_, err = srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 		TaskId: resp.Task.Id,
 		Entries: []*xagentv1.LogEntry{
@@ -138,9 +123,9 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub2.PublishCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
 		Type:     "appended",
 		Resource: "log",
 		ID:       resp.Task.Id,
@@ -164,11 +149,6 @@ func TestCreateLink_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
-	}
-	srv.publisher = pub2
-
 	linkResp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId: resp.Task.Id,
 		Url:    "https://example.com",
@@ -176,9 +156,9 @@ func TestCreateLink_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub2.PublishCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
 		Type:     "created",
 		Resource: "link",
 		ID:       linkResp.Link.Id,
@@ -207,20 +187,15 @@ func TestAddEventTask_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
-	}
-	srv.publisher = pub2
-
 	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
 		EventId: eventResp.Event.Id,
 		TaskId:  taskResp.Task.Id,
 	})
 	assert.NilError(t, err)
 
-	calls := pub2.PublishCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
 		Type:     "created",
 		Resource: "event",
 		ID:       eventResp.Event.Id,
@@ -244,11 +219,6 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	pub2 := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
-	}
-	srv.publisher = pub2
-
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{
@@ -260,9 +230,9 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub2.PublishCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
 		Type:     "updated",
 		Resource: "task",
 		ID:       taskResp.Task.Id,
