@@ -3,6 +3,7 @@ package teststore
 
 import (
 	"cmp"
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -125,7 +126,7 @@ func CreateOrg(t *testing.T, s *store.Store, opts *OrgOptions) *Org {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := s.DestroyOrg(t.Context(), nil, org.ID); err != nil {
+		if err := s.DestroyOrg(context.Background(), nil, org.ID); err != nil {
 			t.Logf("DestroyOrg cleanup: %v", err)
 		}
 	})
