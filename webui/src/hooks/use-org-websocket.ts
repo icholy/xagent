@@ -3,15 +3,27 @@ import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { createConnectQueryKey } from "@connectrpc/connect-query";
 import {
   getTaskDetails,
+  listTasks,
   listLogs,
+  listEvents,
+  getEvent,
+  listEventTasks,
 } from "@/gen/xagent/v1/xagent-XAgentService_connectquery";
 import { useNotificationWebSocket } from "@/lib/services";
 
 const invalidationKeys: Record<string, QueryKey[]> = {
-  task: [createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" })],
+  task: [
+    createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" }),
+    createConnectQueryKey({ schema: listTasks, cardinality: "finite" }),
+    createConnectQueryKey({ schema: listEventTasks, cardinality: "finite" }),
+  ],
   log: [createConnectQueryKey({ schema: listLogs, cardinality: "finite" })],
   link: [createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" })],
-  event: [createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" })],
+  event: [
+    createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" }),
+    createConnectQueryKey({ schema: listEvents, cardinality: "finite" }),
+    createConnectQueryKey({ schema: getEvent, cardinality: "finite" }),
+  ],
 };
 
 export function useOrgWebSocket() {
