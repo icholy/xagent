@@ -53,7 +53,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if applied {
-			s.publish(model.Notification{
+			s.publish(caller.ID, model.Notification{
 				Type: "change",
 				Resources: []model.NotificationResource{
 					{Action: "updated", Type: "task", ID: event.TaskID},

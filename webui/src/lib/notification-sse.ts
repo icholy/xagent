@@ -10,6 +10,7 @@ export interface Notification {
   type: "ready" | "change";
   resources?: NotificationResource[];
   org_id: number;
+  user_id?: string;
   timestamp: string;
 }
 

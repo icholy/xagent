@@ -61,10 +61,11 @@ func New(opts Options) *Server {
 	}
 }
 
-func (s *Server) publish(n model.Notification) {
+func (s *Server) publish(userID string, n model.Notification) {
 	if s.publisher == nil {
 		return
 	}
+	n.UserID = userID
 	if err := s.publisher.Publish(context.Background(), n); err != nil {
 		s.log.Warn("failed to publish notification", "error", err, "type", n.Type, "resources", n.Resources)
 	}

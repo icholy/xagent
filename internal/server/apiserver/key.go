@@ -33,7 +33,7 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("key created", "id", key.ID, "org_id", caller.OrgID)
-	s.publish(model.Notification{
+	s.publish(caller.ID, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "created", Type: "keys"}},
 		OrgID:     caller.OrgID,
@@ -66,7 +66,7 @@ func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("key deleted", "id", req.Id)
-	s.publish(model.Notification{
+	s.publish(caller.ID, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "deleted", Type: "keys"}},
 		OrgID:     caller.OrgID,

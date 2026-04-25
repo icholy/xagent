@@ -28,7 +28,7 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "org_id", caller.OrgID, "count", len(req.Workspaces))
-	s.publish(model.Notification{
+	s.publish(caller.ID, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "registered", Type: "workspaces"}},
 		OrgID:     caller.OrgID,
@@ -63,7 +63,7 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 		}
 		s.log.Info("workspaces cleared", "org_id", caller.OrgID)
 	}
-	s.publish(model.Notification{
+	s.publish(caller.ID, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "cleared", Type: "workspaces"}},
 		OrgID:     caller.OrgID,

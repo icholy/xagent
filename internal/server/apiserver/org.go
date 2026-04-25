@@ -109,7 +109,7 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("org member added", "org_id", caller.OrgID, "user_id", user.ID, "email", req.Email)
-	s.publish(model.Notification{
+	s.publish(caller.ID, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "added", Type: "org_members"}},
 		OrgID:     caller.OrgID,
@@ -142,7 +142,7 @@ func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMem
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("org member removed", "org_id", caller.OrgID, "user_id", req.UserId)
-	s.publish(model.Notification{
+	s.publish(caller.ID, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "removed", Type: "org_members"}},
 		OrgID:     caller.OrgID,

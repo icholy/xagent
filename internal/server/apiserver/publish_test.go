@@ -37,7 +37,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
 		},
 		OrgID: org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "UserID"))
 }
 
 func TestUpdateTask_Publishes(t *testing.T) {
@@ -71,7 +71,7 @@ func TestUpdateTask_Publishes(t *testing.T) {
 			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
 		},
 		OrgID: org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "UserID"))
 }
 
 func TestCancelTask_Publishes(t *testing.T) {
@@ -103,7 +103,7 @@ func TestCancelTask_Publishes(t *testing.T) {
 			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
 		},
 		OrgID: org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "UserID"))
 }
 
 func TestUploadLogs_Publishes(t *testing.T) {
@@ -137,7 +137,7 @@ func TestUploadLogs_Publishes(t *testing.T) {
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "UserID"))
 }
 
 func TestCreateLink_Publishes(t *testing.T) {
@@ -173,7 +173,7 @@ func TestCreateLink_Publishes(t *testing.T) {
 			{Action: "created", Type: "link", ID: linkResp.Link.Id},
 		},
 		OrgID: org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "UserID"))
 }
 
 func TestAddEventTask_Publishes(t *testing.T) {
@@ -213,7 +213,7 @@ func TestAddEventTask_Publishes(t *testing.T) {
 			{Action: "updated", Type: "event", ID: eventResp.Event.Id},
 		},
 		OrgID: org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "UserID"))
 }
 
 func TestSubmitRunnerEvents_Publishes(t *testing.T) {
@@ -253,5 +253,5 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 			{Action: "appended", Type: "task_logs", ID: taskResp.Task.Id},
 		},
 		OrgID: org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "UserID"))
 }
