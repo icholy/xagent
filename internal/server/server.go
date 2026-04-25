@@ -16,7 +16,7 @@ import (
 	"github.com/icholy/xagent/internal/server/atlassianserver"
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
-	"github.com/icholy/xagent/internal/server/servermcp"
+	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/justinas/alice"
@@ -120,7 +120,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/oauth/token", s.oauth.HandleToken)
 	}
 	// MCP endpoint (protected by auth middleware)
-	mux.Handle("/mcp", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(servermcp.New(s.api, s.baseURL).Handler()))
+	mux.Handle("/mcp", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(mcpserver.New(s.api, s.baseURL).Handler()))
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
