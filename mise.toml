@@ -19,6 +19,10 @@ run = [
 	"CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o prebuilt/xagent-linux-arm64 ./cmd/xagent",
 ]
 
+[tasks.dev]
+description = "Start a local server in Docker"
+run = "docker compose -f docker-compose.dev.yml up"
+
 [tasks.install]
 description = "Build and install xagent bin"
 run = [
