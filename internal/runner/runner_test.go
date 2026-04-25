@@ -87,15 +87,18 @@ func TestRunnerStart(t *testing.T) {
 	assert.NilError(t, err)
 	t.Cleanup(func() { r.Close() })
 
+	docker, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	assert.NilError(t, err)
+	defer docker.Close()
+
+	// Remove any leftover container from a previous aborted run.
+	_ = docker.ContainerRemove(t.Context(), "xagent-1", container.RemoveOptions{Force: true})
+
 	// Start a task
 	err = r.Start(t.Context(), task)
 	assert.NilError(t, err)
 
 	// Wait for the container to exit
-	docker, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
-	assert.NilError(t, err)
-	defer docker.Close()
-
 	err = dockerx.ContainerWait(t.Context(), docker, "xagent-1", container.WaitConditionNotRunning)
 	assert.NilError(t, err)
 
