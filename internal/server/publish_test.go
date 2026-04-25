@@ -194,9 +194,15 @@ func TestAddEventTask_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 2)
+	assert.Equal(t, len(calls), 3)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
-		Type:     "created",
+		Type:     "updated",
+		Resource: "task",
+		ID:       taskResp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	assert.DeepEqual(t, calls[2].N, model.Notification{
+		Type:     "updated",
 		Resource: "event",
 		ID:       eventResp.Event.Id,
 		OrgID:    org.OrgID,

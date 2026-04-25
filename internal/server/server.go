@@ -749,7 +749,14 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 	}
 	s.log.Info("event task added", "event_id", req.EventId, "task_id", req.TaskId)
 	s.publish(caller.OrgID, model.Notification{
-		Type:     "created",
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.TaskId,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
+	s.publish(caller.OrgID, model.Notification{
+		Type:     "updated",
 		Resource: "event",
 		ID:       req.EventId,
 		OrgID:    caller.OrgID,

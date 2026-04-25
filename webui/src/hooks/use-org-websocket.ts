@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { createConnectQueryKey } from "@connectrpc/connect-query";
 import {
   getTaskDetails,
@@ -10,21 +10,61 @@ import {
   listEventTasks,
 } from "@/gen/xagent/v1/xagent-XAgentService_connectquery";
 import { useNotificationWebSocket } from "@/lib/services";
+import type { Notification } from "@/lib/notification-websocket";
 
-const invalidationKeys: Record<string, QueryKey[]> = {
-  task: [
-    createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" }),
-    createConnectQueryKey({ schema: listTasks, cardinality: "finite" }),
-    createConnectQueryKey({ schema: listEventTasks, cardinality: "finite" }),
-  ],
-  log: [createConnectQueryKey({ schema: listLogs, cardinality: "finite" })],
-  link: [createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" })],
-  event: [
-    createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" }),
-    createConnectQueryKey({ schema: listEvents, cardinality: "finite" }),
-    createConnectQueryKey({ schema: getEvent, cardinality: "finite" }),
-  ],
-};
+function invalidateTask(qc: QueryClient) {
+  qc.invalidateQueries({
+    queryKey: createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" }),
+  });
+  qc.invalidateQueries({
+    queryKey: createConnectQueryKey({ schema: listTasks, cardinality: "finite" }),
+  });
+  qc.invalidateQueries({
+    queryKey: createConnectQueryKey({ schema: listEventTasks, cardinality: "finite" }),
+  });
+}
+
+function invalidateLog(qc: QueryClient, taskId: number) {
+  qc.invalidateQueries({
+    queryKey: createConnectQueryKey({
+      schema: listLogs,
+      input: { taskId: BigInt(taskId) },
+      cardinality: "finite",
+    }),
+  });
+}
+
+function invalidateLink(qc: QueryClient) {
+  qc.invalidateQueries({
+    queryKey: createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" }),
+  });
+}
+
+function invalidateEvent(qc: QueryClient) {
+  qc.invalidateQueries({
+    queryKey: createConnectQueryKey({ schema: listEvents, cardinality: "finite" }),
+  });
+  qc.invalidateQueries({
+    queryKey: createConnectQueryKey({ schema: getEvent, cardinality: "finite" }),
+  });
+}
+
+function handleNotification(qc: QueryClient, n: Notification) {
+  switch (n.resource) {
+    case "task":
+      invalidateTask(qc);
+      break;
+    case "log":
+      invalidateLog(qc, n.id);
+      break;
+    case "link":
+      invalidateLink(qc);
+      break;
+    case "event":
+      invalidateEvent(qc);
+      break;
+  }
+}
 
 export function useOrgWebSocket() {
   const queryClient = useQueryClient();
@@ -32,9 +72,7 @@ export function useOrgWebSocket() {
 
   useEffect(() => {
     const removeNotification = ws.addNotificationListener((n) => {
-      for (const key of invalidationKeys[n.resource] ?? []) {
-        queryClient.invalidateQueries({ queryKey: key });
-      }
+      handleNotification(queryClient, n);
     });
     const removeReconnect = ws.addReconnectListener(() => {
       queryClient.invalidateQueries();
