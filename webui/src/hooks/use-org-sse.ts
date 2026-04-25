@@ -12,11 +12,11 @@ import {
   listOrgMembers,
   listKeys,
 } from "@/gen/xagent/v1/xagent-XAgentService_connectquery";
-import { useNotificationWebSocket } from "@/lib/services";
-import type { Notification, NotificationResource } from "@/lib/notification-websocket";
+import { useNotificationSSE } from "@/lib/services";
+import type { Notification, NotificationResource } from "@/lib/notification-sse";
 
 function invalidateResource(qc: QueryClient, r: NotificationResource) {
-  console.debug("[ws] invalidate", r);
+  console.debug("[sse] invalidate", r);
   switch (r.type) {
     case "task":
       qc.invalidateQueries({
@@ -83,12 +83,12 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
       });
       break;
     default:
-      console.warn("[ws] unhandled resource type", r);
+      console.warn("[sse] unhandled resource type", r);
   }
 }
 
 function handleNotification(qc: QueryClient, n: Notification) {
-  console.debug("[ws] notification", n);
+  console.debug("[sse] notification", n);
   if (n.type === "ready") {
     return;
   }
@@ -97,20 +97,20 @@ function handleNotification(qc: QueryClient, n: Notification) {
   }
 }
 
-export function useOrgWebSocket() {
+export function useOrgSSE() {
   const queryClient = useQueryClient();
-  const ws = useNotificationWebSocket();
+  const sse = useNotificationSSE();
 
   useEffect(() => {
-    const removeNotification = ws.addNotificationListener((n) => {
+    const removeNotification = sse.addNotificationListener((n) => {
       handleNotification(queryClient, n);
     });
-    const removeReconnect = ws.addReconnectListener(() => {
+    const removeReconnect = sse.addReconnectListener(() => {
       queryClient.invalidateQueries();
     });
     return () => {
       removeNotification();
       removeReconnect();
     };
-  }, [queryClient, ws]);
+  }, [queryClient, sse]);
 }

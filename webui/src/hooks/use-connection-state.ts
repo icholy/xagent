@@ -1,12 +1,12 @@
 import { useSyncExternalStore } from "react";
-import { useNotificationWebSocket } from "@/lib/services";
-import type { ConnectionState } from "@/lib/notification-websocket";
+import { useNotificationSSE } from "@/lib/services";
+import type { ConnectionState } from "@/lib/notification-sse";
 
-/** Subscribes to the WebSocket connection state, re-rendering on change. */
+/** Subscribes to the SSE connection state, re-rendering on change. */
 export function useConnectionState(): ConnectionState {
-  const ws = useNotificationWebSocket();
+  const sse = useNotificationSSE();
   return useSyncExternalStore(
-    (cb) => ws.addStateListener(cb),
-    () => ws.getState(),
+    (cb) => sse.addStateListener(cb),
+    () => sse.getState(),
   );
 }
