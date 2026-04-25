@@ -214,7 +214,7 @@ var ServerCommand = &cli.Command{
 				ClientID:                    cmd.String("auth-device-client-id"),
 			},
 		}
-		if ghClientID := cmd.String("github-client-id"); ghClientID != "" {
+		if cmd.IsSet("github-client-id") {
 			opts.GitHub = githubserver.New(githubserver.Options{
 				Store:     st,
 				BaseURL:   baseURL,
@@ -222,18 +222,18 @@ var ServerCommand = &cli.Command{
 				Config: &githubserver.Config{
 					AppID:         cmd.String("github-app-id"),
 					AppSlug:       cmd.String("github-app-slug"),
-					ClientID:      ghClientID,
+					ClientID:      cmd.String("github-client-id"),
 					ClientSecret:  cmd.String("github-client-secret"),
 					WebhookSecret: cmd.String("github-webhook-secret"),
 				},
 			})
 		}
-		if atlassianClientID := cmd.String("atlassian-client-id"); atlassianClientID != "" {
+		if cmd.IsSet("atlassian-client-id") {
 			opts.Atlassian = atlassianserver.New(atlassianserver.Options{
 				Store:        st,
 				BaseURL:      baseURL,
 				Publisher:    ps,
-				ClientID:     atlassianClientID,
+				ClientID:     cmd.String("atlassian-client-id"),
 				ClientSecret: cmd.String("atlassian-client-secret"),
 			})
 		}
