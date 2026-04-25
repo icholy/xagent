@@ -30,6 +30,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Plus, Loader2 } from 'lucide-react'
+import { useOrgWebSocket } from '@/hooks/use-org-websocket'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -45,6 +46,7 @@ const logTypeStyles: Record<string, string> = {
 
 
 function TaskDetail() {
+  useOrgWebSocket()
   const { id } = Route.useParams()
   const taskId = BigInt(id)
   const [instruction, setInstruction] = useState('')
@@ -52,13 +54,13 @@ function TaskDetail() {
   const { data, isLoading, error, refetch } = useQuery(
     getTaskDetails,
     { id: taskId },
-    { refetchInterval: 6000 }
+    { refetchInterval: 60000 }
   )
 
   const { data: logsData } = useQuery(
     listLogs,
     { taskId },
-    { refetchInterval: 6000 }
+    { refetchInterval: 60000 }
   )
 
   const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
