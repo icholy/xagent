@@ -97,10 +97,9 @@ func (s *Server) Handler() http.Handler {
 		connect.WithInterceptors(otelInterceptor, apiauth.RequireUserInterceptor()),
 	)
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
-	// WebSocket endpoint (protected)
+	// SSE endpoint (protected)
 	if s.notify != nil {
-		mux.Handle("/ws", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.Handler()))
-		mux.Handle("/events", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.SSEHandler()))
+		mux.Handle("/events", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.Handler()))
 	}
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
