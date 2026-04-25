@@ -15,7 +15,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-github/v68 v68.0.0
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.7.5
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/justinas/alice v1.2.0
 	github.com/lib/pq v1.12.2
 	github.com/modelcontextprotocol/go-sdk v1.4.1
