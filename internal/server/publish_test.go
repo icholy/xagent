@@ -90,7 +90,7 @@ func TestCancelTask_Publishes(t *testing.T) {
 	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: resp.Task.Id}},
+		Resources: []model.NotificationResource{{Action: "cancelled", Type: "task", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
@@ -123,7 +123,7 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "appended", Type: "log", ID: resp.Task.Id}},
+		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
@@ -154,9 +154,12 @@ func TestCreateLink_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "created", Type: "link", ID: linkResp.Link.Id}},
-		OrgID:     org.OrgID,
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "created", Type: "task_links", ID: resp.Task.Id},
+			{Action: "created", Type: "link", ID: linkResp.Link.Id},
+		},
+		OrgID: org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 

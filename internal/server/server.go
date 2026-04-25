@@ -432,7 +432,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 	s.log.Info("task archived", "id", req.Id)
 	s.publish(model.Notification{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: req.Id}},
+		Resources: []model.NotificationResource{{Action: "archived", Type: "task", ID: req.Id}},
 		OrgID:     caller.OrgID,
 		Time:      time.Now(),
 	})
@@ -470,7 +470,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 	s.log.Info("task unarchived", "id", req.Id)
 	s.publish(model.Notification{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: req.Id}},
+		Resources: []model.NotificationResource{{Action: "unarchived", Type: "task", ID: req.Id}},
 		OrgID:     caller.OrgID,
 		Time:      time.Now(),
 	})
@@ -508,7 +508,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 	s.log.Info("task cancelled", "id", req.Id)
 	s.publish(model.Notification{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: req.Id}},
+		Resources: []model.NotificationResource{{Action: "cancelled", Type: "task", ID: req.Id}},
 		OrgID:     caller.OrgID,
 		Time:      time.Now(),
 	})
@@ -546,7 +546,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 	s.log.Info("task restarted", "id", req.Id)
 	s.publish(model.Notification{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: req.Id}},
+		Resources: []model.NotificationResource{{Action: "restarted", Type: "task", ID: req.Id}},
 		OrgID:     caller.OrgID,
 		Time:      time.Now(),
 	})
@@ -572,7 +572,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 	}
 	s.publish(model.Notification{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "appended", Type: "log", ID: req.TaskId}},
+		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: req.TaskId}},
 		OrgID:     caller.OrgID,
 		Time:      time.Now(),
 	})
@@ -617,10 +617,13 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
 	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "created", Type: "link", ID: link.ID}},
-		OrgID:     caller.OrgID,
-		Time:      time.Now(),
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "created", Type: "task_links", ID: req.TaskId},
+			{Action: "created", Type: "link", ID: link.ID},
+		},
+		OrgID: caller.OrgID,
+		Time:  time.Now(),
 	})
 	return &xagentv1.CreateLinkResponse{
 		Link: link.Proto(),
@@ -893,6 +896,12 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "org_id", caller.OrgID, "count", len(req.Workspaces))
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "registered", Type: "workspaces"}},
+		OrgID:     caller.OrgID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.RegisterWorkspacesResponse{}, nil
 }
 
@@ -922,6 +931,12 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 		}
 		s.log.Info("workspaces cleared", "org_id", caller.OrgID)
 	}
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "cleared", Type: "workspaces"}},
+		OrgID:     caller.OrgID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.ClearWorkspacesResponse{}, nil
 }
 
@@ -947,6 +962,12 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("key created", "id", key.ID, "org_id", caller.OrgID)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "keys"}},
+		OrgID:     caller.OrgID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.CreateKeyResponse{
 		Key:      key.Proto(),
 		RawToken: rawKey,
@@ -974,6 +995,12 @@ func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("key deleted", "id", req.Id)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "deleted", Type: "keys"}},
+		OrgID:     caller.OrgID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.DeleteKeyResponse{}, nil
 }
 
@@ -1091,6 +1118,12 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("org member added", "org_id", caller.OrgID, "user_id", user.ID, "email", req.Email)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "added", Type: "org_members"}},
+		OrgID:     caller.OrgID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.AddOrgMemberResponse{
 		Member: &xagentv1.OrgMember{
 			OrgId:  member.OrgID,
@@ -1118,6 +1151,12 @@ func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMem
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("org member removed", "org_id", caller.OrgID, "user_id", req.UserId)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "removed", Type: "org_members"}},
+		OrgID:     caller.OrgID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.RemoveOrgMemberResponse{}, nil
 }
 
