@@ -51,3 +51,10 @@ func New(opts Options) *Server {
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(s.handleWebSocket)
 }
+
+// SSEHandler returns the Server-Sent Events HTTP handler. The caller is
+// responsible for wrapping it with authentication middleware that populates
+// apiauth.UserInfo in the request context.
+func (s *Server) SSEHandler() http.Handler {
+	return http.HandlerFunc(s.handleSSE)
+}

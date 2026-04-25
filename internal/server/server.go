@@ -106,6 +106,7 @@ func (s *Server) Handler() http.Handler {
 	// WebSocket endpoint (protected)
 	if s.notify != nil {
 		mux.Handle("/ws", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.Handler()))
+		mux.Handle("/events", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.SSEHandler()))
 	}
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
