@@ -6,7 +6,6 @@ require (
 	connectrpc.com/connect v1.19.1
 	connectrpc.com/otelconnect v0.8.0
 	github.com/XSAM/otelsql v0.41.0
-	github.com/coder/websocket v1.8.12
 	github.com/containerd/errdefs v1.0.0
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.2.0+incompatible

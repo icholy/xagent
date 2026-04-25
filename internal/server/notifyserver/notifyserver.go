@@ -1,4 +1,4 @@
-// Package notifyserver serves the WebSocket endpoint that fans out
+// Package notifyserver serves the SSE endpoint that fans out
 // pubsub notifications to connected clients.
 //
 //go:generate go tool moq -out org_resolver_moq_test.go . OrgResolver
@@ -18,7 +18,7 @@ type OrgResolver interface {
 	ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error)
 }
 
-// Server handles WebSocket subscriptions backed by a pubsub.Subscriber.
+// Server handles SSE subscriptions backed by a pubsub.Subscriber.
 type Server struct {
 	log         *slog.Logger
 	subscriber  pubsub.Subscriber
@@ -45,16 +45,9 @@ func New(opts Options) *Server {
 	}
 }
 
-// Handler returns the WebSocket HTTP handler. The caller is responsible for
-// wrapping it with authentication middleware that populates apiauth.UserInfo
-// in the request context.
-func (s *Server) Handler() http.Handler {
-	return http.HandlerFunc(s.handleWebSocket)
-}
-
-// SSEHandler returns the Server-Sent Events HTTP handler. The caller is
+// Handler returns the Server-Sent Events HTTP handler. The caller is
 // responsible for wrapping it with authentication middleware that populates
 // apiauth.UserInfo in the request context.
-func (s *Server) SSEHandler() http.Handler {
+func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(s.handleSSE)
 }
