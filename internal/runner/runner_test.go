@@ -10,7 +10,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
-	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/dockerx"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"

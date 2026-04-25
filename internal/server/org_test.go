@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/auth/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"

@@ -10,10 +10,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/oauthlink"
+	"github.com/icholy/xagent/internal/auth/oauthlink"
 	"github.com/icholy/xagent/internal/server/webhookserver"
 	"github.com/icholy/xagent/internal/store"
 	"golang.org/x/oauth2"

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	"gotest.tools/v3/assert"

@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/icholy/xagent/internal/apiauth"
-	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/deviceauth"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/oauthflow"
+	"github.com/icholy/xagent/internal/auth/oauthflow"
 	"github.com/icholy/xagent/internal/otelx"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server"

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/configfile"
-	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/auth/deviceauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"

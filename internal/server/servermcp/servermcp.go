@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/auth/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/xagentclient"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/store/teststore"
 )
 

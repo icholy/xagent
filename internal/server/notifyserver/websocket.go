@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/coder/websocket"
 )

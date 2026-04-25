@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/common"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/runner"

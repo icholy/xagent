@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/icholy/xagent/internal/agentauth"
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
