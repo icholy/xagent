@@ -20,11 +20,8 @@ export function useOrgWebSocket() {
   useEffect(() => {
     const ws = new NotificationWebSocket({
       onNotification: (n) => {
-        const keys = invalidationKeys[n.resource];
-        if (keys) {
-          for (const key of keys) {
-            queryClient.invalidateQueries({ queryKey: key });
-          }
+        for (const key of invalidationKeys[n.resource] ?? []) {
+          queryClient.invalidateQueries({ queryKey: key });
         }
       },
       onReconnect: () => {
