@@ -13,11 +13,10 @@ func TestPublish_NoSubscribers(t *testing.T) {
 	t.Parallel()
 	ps := NewLocalPubSub()
 
-	err := ps.Publish(context.Background(), 1, model.Notification{
-		Type:     "created",
-		Resource: "task",
-		ID:       1,
-		OrgID:    1,
+	err := ps.Publish(context.Background(), model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 1}},
+		OrgID:     1,
 	})
 
 	assert.NilError(t, err)
@@ -31,19 +30,17 @@ func TestSubscribe_ReceivesNotification(t *testing.T) {
 	defer cancel()
 
 	want := model.Notification{
-		Type:     "updated",
-		Resource: "task",
-		ID:       42,
-		OrgID:    1,
-		Version:  5,
-		Time:     time.Now().Truncate(time.Second),
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
+		OrgID:     1,
+		Time:      time.Now().Truncate(time.Second),
 	}
-	err = ps.Publish(context.Background(), 1, want)
+	err = ps.Publish(context.Background(), want)
 	assert.NilError(t, err)
 
 	select {
 	case got := <-ch:
-		assert.Equal(t, got, want)
+		assert.DeepEqual(t, got, want)
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for notification")
 	}
@@ -56,11 +53,10 @@ func TestSubscribe_OrgIsolation(t *testing.T) {
 	assert.NilError(t, err)
 	defer cancel()
 
-	err = ps.Publish(context.Background(), 2, model.Notification{
-		Type:     "created",
-		Resource: "task",
-		ID:       1,
-		OrgID:    2,
+	err = ps.Publish(context.Background(), model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 1}},
+		OrgID:     2,
 	})
 	assert.NilError(t, err)
 
@@ -83,14 +79,18 @@ func TestSubscribe_MultipleSubscribers(t *testing.T) {
 	assert.NilError(t, err)
 	defer cancel2()
 
-	want := model.Notification{Type: "created", Resource: "task", ID: 1, OrgID: 1}
-	err = ps.Publish(context.Background(), 1, want)
+	want := model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 1}},
+		OrgID:     1,
+	}
+	err = ps.Publish(context.Background(), want)
 	assert.NilError(t, err)
 
 	for _, ch := range []<-chan model.Notification{ch1, ch2} {
 		select {
 		case got := <-ch:
-			assert.Equal(t, got, want)
+			assert.DeepEqual(t, got, want)
 		case <-time.After(time.Second):
 			t.Fatal("timed out waiting for notification")
 		}
@@ -110,11 +110,10 @@ func TestCancel_RemovesSubscription(t *testing.T) {
 	assert.Assert(t, !ok, "expected channel to be closed")
 
 	// Publishing after cancel should not panic.
-	err = ps.Publish(context.Background(), 1, model.Notification{
-		Type:     "created",
-		Resource: "task",
-		ID:       1,
-		OrgID:    1,
+	err = ps.Publish(context.Background(), model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 1}},
+		OrgID:     1,
 	})
 	assert.NilError(t, err)
 }
@@ -138,11 +137,10 @@ func TestPublish_SlowSubscriberDoesNotBlock(t *testing.T) {
 
 	// Fill the subscriber's buffer.
 	for i := range subscriberBufSize {
-		err = ps.Publish(context.Background(), 1, model.Notification{
-			Type:     "updated",
-			Resource: "task",
-			ID:       int64(i),
-			OrgID:    1,
+		err = ps.Publish(context.Background(), model.Notification{
+			Type:      "change",
+			Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: int64(i)}},
+			OrgID:     1,
 		})
 		assert.NilError(t, err)
 	}
@@ -150,11 +148,10 @@ func TestPublish_SlowSubscriberDoesNotBlock(t *testing.T) {
 	// Next publish should not block — it drops the notification.
 	done := make(chan struct{})
 	go func() {
-		err := ps.Publish(context.Background(), 1, model.Notification{
-			Type:     "updated",
-			Resource: "task",
-			ID:       999,
-			OrgID:    1,
+		err := ps.Publish(context.Background(), model.Notification{
+			Type:      "change",
+			Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: 999}},
+			OrgID:     1,
 		})
 		assert.NilError(t, err)
 		close(done)

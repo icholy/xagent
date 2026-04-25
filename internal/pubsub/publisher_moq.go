@@ -5,9 +5,8 @@ package pubsub
 
 import (
 	"context"
-	"sync"
-
 	"github.com/icholy/xagent/internal/model"
+	"sync"
 )
 
 // Ensure, that PublisherMock does implement Publisher.
@@ -20,7 +19,7 @@ var _ Publisher = &PublisherMock{}
 //
 //		// make and configure a mocked Publisher
 //		mockedPublisher := &PublisherMock{
-//			PublishFunc: func(ctx context.Context, orgID int64, n model.Notification) error {
+//			PublishFunc: func(ctx context.Context, n model.Notification) error {
 //				panic("mock out the Publish method")
 //			},
 //		}
@@ -31,7 +30,7 @@ var _ Publisher = &PublisherMock{}
 //	}
 type PublisherMock struct {
 	// PublishFunc mocks the Publish method.
-	PublishFunc func(ctx context.Context, orgID int64, n model.Notification) error
+	PublishFunc func(ctx context.Context, n model.Notification) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -39,8 +38,6 @@ type PublisherMock struct {
 		Publish []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgID is the orgID argument value.
-			OrgID int64
 			// N is the n argument value.
 			N model.Notification
 		}
@@ -49,23 +46,21 @@ type PublisherMock struct {
 }
 
 // Publish calls PublishFunc.
-func (mock *PublisherMock) Publish(ctx context.Context, orgID int64, n model.Notification) error {
+func (mock *PublisherMock) Publish(ctx context.Context, n model.Notification) error {
 	if mock.PublishFunc == nil {
 		panic("PublisherMock.PublishFunc: method is nil but Publisher.Publish was just called")
 	}
 	callInfo := struct {
-		Ctx   context.Context
-		OrgID int64
-		N     model.Notification
+		Ctx context.Context
+		N   model.Notification
 	}{
-		Ctx:   ctx,
-		OrgID: orgID,
-		N:     n,
+		Ctx: ctx,
+		N:   n,
 	}
 	mock.lockPublish.Lock()
 	mock.calls.Publish = append(mock.calls.Publish, callInfo)
 	mock.lockPublish.Unlock()
-	return mock.PublishFunc(ctx, orgID, n)
+	return mock.PublishFunc(ctx, n)
 }
 
 // PublishCalls gets all the calls that were made to Publish.
@@ -73,14 +68,12 @@ func (mock *PublisherMock) Publish(ctx context.Context, orgID int64, n model.Not
 //
 //	len(mockedPublisher.PublishCalls())
 func (mock *PublisherMock) PublishCalls() []struct {
-	Ctx   context.Context
-	OrgID int64
-	N     model.Notification
+	Ctx context.Context
+	N   model.Notification
 } {
 	var calls []struct {
-		Ctx   context.Context
-		OrgID int64
-		N     model.Notification
+		Ctx context.Context
+		N   model.Notification
 	}
 	mock.lockPublish.RLock()
 	calls = mock.calls.Publish

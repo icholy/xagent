@@ -16,7 +16,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -31,11 +31,9 @@ func TestCreateTask_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].N, model.Notification{
-		Type:     "created",
-		Resource: "task",
-		ID:       resp.Task.Id,
-		OrgID:    org.OrgID,
-		Version:  1,
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: resp.Task.Id}},
+		OrgID:     org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -43,7 +41,7 @@ func TestUpdateTask_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -63,10 +61,9 @@ func TestUpdateTask_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
-		Type:     "updated",
-		Resource: "task",
-		ID:       resp.Task.Id,
-		OrgID:    org.OrgID,
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: resp.Task.Id}},
+		OrgID:     org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -74,7 +71,7 @@ func TestCancelTask_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -92,10 +89,9 @@ func TestCancelTask_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
-		Type:     "updated",
-		Resource: "task",
-		ID:       resp.Task.Id,
-		OrgID:    org.OrgID,
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: resp.Task.Id}},
+		OrgID:     org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -103,7 +99,7 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -126,10 +122,9 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
-		Type:     "appended",
-		Resource: "log",
-		ID:       resp.Task.Id,
-		OrgID:    org.OrgID,
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "appended", Type: "log", ID: resp.Task.Id}},
+		OrgID:     org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -137,7 +132,7 @@ func TestCreateLink_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -159,10 +154,9 @@ func TestCreateLink_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
-		Type:     "created",
-		Resource: "link",
-		ID:       linkResp.Link.Id,
-		OrgID:    org.OrgID,
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "link", ID: linkResp.Link.Id}},
+		OrgID:     org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -170,7 +164,7 @@ func TestAddEventTask_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -194,18 +188,14 @@ func TestAddEventTask_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 3)
+	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
-		Type:     "updated",
-		Resource: "task",
-		ID:       taskResp.Task.Id,
-		OrgID:    org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
-	assert.DeepEqual(t, calls[2].N, model.Notification{
-		Type:     "updated",
-		Resource: "event",
-		ID:       eventResp.Event.Id,
-		OrgID:    org.OrgID,
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: taskResp.Task.Id},
+			{Action: "updated", Type: "event", ID: eventResp.Event.Id},
+		},
+		OrgID: org.OrgID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 
@@ -213,7 +203,7 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ int64, _ model.Notification) error { return nil },
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	st := teststore.New(t)
 	srv := New(Options{Store: st, Publisher: pub})
@@ -239,9 +229,8 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 2)
 	assert.DeepEqual(t, calls[1].N, model.Notification{
-		Type:     "updated",
-		Resource: "task",
-		ID:       taskResp.Task.Id,
-		OrgID:    org.OrgID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "Version"))
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: taskResp.Task.Id}},
+		OrgID:     org.OrgID,
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }

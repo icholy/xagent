@@ -59,14 +59,12 @@ func TestWebSocket(t *testing.T) {
 
 	// Publish a notification
 	want := model.Notification{
-		Type:     "created",
-		Resource: "task",
-		ID:       42,
-		OrgID:    orgID,
-		Version:  1,
-		Time:     time.Now().Truncate(time.Second),
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 42}},
+		OrgID:     orgID,
+		Time:      time.Now().Truncate(time.Second),
 	}
-	err = ps.Publish(ctx, orgID, want)
+	err = ps.Publish(ctx, want)
 	assert.NilError(t, err)
 
 	// Read the notification from the WebSocket
@@ -103,11 +101,10 @@ func TestWebSocket_OrgIsolation(t *testing.T) {
 	readReady(t, ctx, connB)
 
 	// Publish to org A only
-	err = ps.Publish(ctx, orgA, model.Notification{
-		Type:     "created",
-		Resource: "task",
-		ID:       1,
-		OrgID:    orgA,
+	err = ps.Publish(ctx, model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 1}},
+		OrgID:     orgA,
 	})
 	assert.NilError(t, err)
 

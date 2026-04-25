@@ -24,21 +24,20 @@ func NewLocalPubSub() *LocalPubSub {
 	}
 }
 
-// Publish fans out the notification to all current subscribers for the org.
-// A slow subscriber whose buffer is full will have the notification dropped
-// rather than blocking the publisher.
-func (ps *LocalPubSub) Publish(ctx context.Context, orgID int64, n model.Notification) error {
+// Publish fans out the notification to all current subscribers for the
+// notification's org. A slow subscriber whose buffer is full will have the
+// notification dropped rather than blocking the publisher.
+func (ps *LocalPubSub) Publish(ctx context.Context, n model.Notification) error {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
-	for _, ch := range ps.subs[orgID] {
+	for _, ch := range ps.subs[n.OrgID] {
 		select {
 		case ch <- n:
 		default:
 			slog.Warn("dropping notification for slow subscriber",
-				"org_id", orgID,
-				"resource", n.Resource,
+				"org_id", n.OrgID,
 				"type", n.Type,
-				"id", n.ID,
+				"resources", n.Resources,
 			)
 		}
 	}

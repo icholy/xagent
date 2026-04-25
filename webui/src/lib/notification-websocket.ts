@@ -1,11 +1,15 @@
 import { NO_ORG } from "./transport";
 
-export interface Notification {
+export interface NotificationResource {
+  action: string;
   type: string;
-  resource: string;
   id: number;
+}
+
+export interface Notification {
+  type: "ready" | "change";
+  resources?: NotificationResource[];
   org_id: number;
-  version: number;
   timestamp: string;
 }
 

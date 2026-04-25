@@ -8,9 +8,9 @@ import (
 	"github.com/icholy/xagent/internal/model"
 )
 
-// Publisher publishes notifications to subscribers of the given org.
+// Publisher publishes notifications to subscribers of the notification's org.
 type Publisher interface {
-	Publish(ctx context.Context, orgID int64, n model.Notification) error
+	Publish(ctx context.Context, n model.Notification) error
 }
 
 // Subscriber subscribes to notifications for the given org. The returned
