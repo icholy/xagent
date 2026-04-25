@@ -1,20 +1,13 @@
 package notifyserver
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/coder/websocket"
-)
-
-const (
-	wsPingInterval = 30 * time.Second
-	wsPongTimeout  = 10 * time.Second
 )
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -58,23 +51,16 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Start ping loop
 	ctx := r.Context()
+
+	// Read loop to detect client disconnection and process control frames.
+	// Without this, the connection has no way to observe a client-side close.
 	go func() {
-		ticker := time.NewTicker(wsPingInterval)
-		defer ticker.Stop()
+		defer conn.CloseNow()
 		for {
-			select {
-			case <-ctx.Done():
+			_, _, err := conn.Read(ctx)
+			if err != nil {
 				return
-			case <-ticker.C:
-				pingCtx, pingCancel := context.WithTimeout(ctx, wsPongTimeout)
-				err := conn.Ping(pingCtx)
-				pingCancel()
-				if err != nil {
-					conn.CloseNow()
-					return
-				}
 			}
 		}
 	}()
