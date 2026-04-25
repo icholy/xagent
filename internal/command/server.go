@@ -14,6 +14,7 @@ import (
 
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/githubserver"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/notifyserver"
 	"github.com/icholy/xagent/internal/oauthflow"
@@ -210,13 +211,17 @@ var ServerCommand = &cli.Command{
 			},
 		}
 		if ghClientID := cmd.String("github-client-id"); ghClientID != "" {
-			opts.GitHub = &server.GitHubConfig{
-				AppID:         cmd.String("github-app-id"),
-				AppSlug:       cmd.String("github-app-slug"),
-				ClientID:      ghClientID,
-				ClientSecret:  cmd.String("github-client-secret"),
-				WebhookSecret: cmd.String("github-webhook-secret"),
-			}
+			opts.GitHub = githubserver.New(githubserver.Options{
+				Store:   st,
+				BaseURL: baseURL,
+				Config: &githubserver.Config{
+					AppID:         cmd.String("github-app-id"),
+					AppSlug:       cmd.String("github-app-slug"),
+					ClientID:      ghClientID,
+					ClientSecret:  cmd.String("github-client-secret"),
+					WebhookSecret: cmd.String("github-webhook-secret"),
+				},
+			})
 		}
 		if atlassianClientID := cmd.String("atlassian-client-id"); atlassianClientID != "" {
 			opts.Atlassian = &server.AtlassianConfig{

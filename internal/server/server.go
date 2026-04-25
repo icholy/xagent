@@ -17,12 +17,12 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
-	"github.com/google/go-github/v68/github"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/eventrouter"
+	"github.com/icholy/xagent/internal/githubserver"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/notifyserver"
 	"github.com/icholy/xagent/internal/oauthflow"
@@ -37,16 +37,7 @@ import (
 	"github.com/justinas/alice"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/oauth2"
-	oauth2github "golang.org/x/oauth2/github"
 )
-
-type GitHubConfig struct {
-	AppID         string
-	AppSlug       string
-	ClientID      string
-	ClientSecret  string
-	WebhookSecret string
-}
 
 type AtlassianConfig struct {
 	ClientID     string
@@ -59,7 +50,7 @@ type Server struct {
 	store         *store.Store
 	auth          *apiauth.Auth
 	discovery     deviceauth.DiscoveryConfig
-	github        *GitHubConfig
+	github        *githubserver.Server
 	atlassian     *AtlassianConfig
 	baseURL       string
 	encryptionKey []byte
@@ -74,7 +65,7 @@ type Options struct {
 	Store         *store.Store
 	Auth          *apiauth.Auth
 	Discovery     deviceauth.DiscoveryConfig
-	GitHub        *GitHubConfig
+	GitHub        *githubserver.Server
 	Atlassian     *AtlassianConfig
 	BaseURL       string
 	EncryptionKey []byte
@@ -130,13 +121,8 @@ func (s *Server) Handler() http.Handler {
 	}
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
-		gh := s.githubOAuthHandler()
-		mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", gh)))
-		mux.Handle("/webhook/github", &webhook.GitHubHandler{
-			Router:        &eventrouter.Router{Log: s.log, Store: s.store},
-			Store:         s.store,
-			WebhookSecret: s.github.WebhookSecret,
-		})
+		mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", s.github.OAuthHandler())))
+		mux.Handle("/webhook/github", s.github.WebhookHandler())
 	}
 	// Atlassian OAuth routes (conditionally registered)
 	if s.atlassian != nil {
@@ -192,41 +178,6 @@ func (s *Server) publish(orgID int64, n model.Notification) {
 func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(s.discovery)
-}
-
-func (s *Server) githubOAuthHandler() http.Handler {
-	return oauthlink.New(oauthlink.Config{
-		Provider:     "github",
-		ClientID:     s.github.ClientID,
-		ClientSecret: s.github.ClientSecret,
-		RedirectURL:  s.baseURL + "/github/callback",
-		Endpoint:     oauth2github.Endpoint,
-		Scopes:       []string{"read:user"},
-		Log:          s.log,
-		OnSuccess: func(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
-			caller := apiauth.Caller(r.Context())
-			if caller == nil {
-				http.Error(w, "not authenticated", http.StatusUnauthorized)
-				return
-			}
-			if caller.ID == "" {
-				http.Error(w, "this operation requires a user identity", http.StatusForbidden)
-				return
-			}
-			ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
-			ghUser, _, err := ghClient.Users.Get(r.Context(), "")
-			if err != nil {
-				s.log.Error("failed to fetch GitHub user", "error", err)
-				http.Error(w, "failed to fetch GitHub user", http.StatusInternalServerError)
-				return
-			}
-			if err := s.store.LinkGitHubAccount(r.Context(), nil, caller.ID, ghUser.GetID(), ghUser.GetLogin()); err != nil {
-				http.Error(w, "failed to link GitHub account", http.StatusInternalServerError)
-				return
-			}
-			http.Redirect(w, r, "/ui/settings", http.StatusFound)
-		},
-	})
 }
 
 func (s *Server) atlassianOAuthHandler() http.Handler {
@@ -1264,8 +1215,8 @@ func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSetting
 		AtlassianWebhookUrl:    s.atlassianWebhookURL(caller.OrgID),
 		McpUrl:                 s.baseURL + "/mcp",
 	}
-	if s.github != nil && s.github.AppSlug != "" {
-		resp.GithubAppUrl = fmt.Sprintf("https://github.com/apps/%s/installations/new", s.github.AppSlug)
+	if s.github != nil {
+		resp.GithubAppUrl = s.github.AppInstallURL()
 	}
 	return resp, nil
 }
