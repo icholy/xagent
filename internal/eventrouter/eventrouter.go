@@ -79,6 +79,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 				Resources: []model.NotificationResource{
 					{Action: "updated", Type: "task", ID: link.TaskID},
 					{Action: "updated", Type: "event", ID: event.ID},
+					{Action: "appended", Type: "task_logs", ID: link.TaskID},
 				},
 				OrgID: orgID,
 				Time:  time.Now(),
