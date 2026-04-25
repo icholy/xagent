@@ -17,7 +17,7 @@ services:
   server:
     build:
       context: .
-      target: server
+      dockerfile: Dockerfile.dev
     command: ["./xagent", "server", "--no-auth"]
     ports:
       - "6464:6464"

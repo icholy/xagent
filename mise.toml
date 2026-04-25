@@ -19,9 +19,33 @@ run = [
 	"CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o prebuilt/xagent-linux-arm64 ./cmd/xagent",
 ]
 
+[tasks."build:webui"]
+description = "Build the web UI (skipped if nothing changed)"
+sources = [
+	"webui/src/**/*",
+	"webui/public/**/*",
+	"webui/index.html",
+	"webui/package.json",
+	"webui/pnpm-lock.yaml",
+	"webui/vite.config.ts",
+	"webui/tsconfig*.json",
+	"webui/components.json",
+]
+outputs = ["internal/server/webui/index.html"]
+run = "cd webui && pnpm install --frozen-lockfile && pnpm exec vite build"
+
 [tasks.dev]
 description = "Start a local server in Docker"
-run = "docker compose -f docker-compose.dev.yml up"
+depends = ["build:webui"]
+run = [
+	"CGO_ENABLED=0 GOOS=linux go build -o xagent ./cmd/xagent",
+	"docker compose -f docker-compose.dev.yml up --build",
+]
+
+[tasks."dev:webui"]
+description = "Start docker dev server (detached) and the vite dev server"
+depends = ["build:webui"]
+run = "cd webui && pnpm install --frozen-lockfile && pnpm dev"
 
 [tasks.install]
 description = "Build and install xagent bin"
