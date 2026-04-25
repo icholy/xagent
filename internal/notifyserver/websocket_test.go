@@ -58,11 +58,7 @@ func TestWebSocket(t *testing.T) {
 	var got model.Notification
 	err = json.Unmarshal(data, &got)
 	assert.NilError(t, err)
-	assert.Equal(t, got.Type, want.Type)
-	assert.Equal(t, got.Resource, want.Resource)
-	assert.Equal(t, got.ID, want.ID)
-	assert.Equal(t, got.OrgID, want.OrgID)
-	assert.Equal(t, got.Version, want.Version)
+	assert.DeepEqual(t, got, want)
 }
 
 func TestWebSocket_OrgIsolation(t *testing.T) {
