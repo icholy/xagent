@@ -12,7 +12,7 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	"gotest.tools/v3/assert"
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 func TestWebSocket(t *testing.T) {

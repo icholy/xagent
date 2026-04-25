@@ -8,7 +8,7 @@ import (
 
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/model"
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 const (
