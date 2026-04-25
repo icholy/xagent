@@ -17,6 +17,7 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/otelx"
+	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/urfave/cli/v3"
@@ -117,6 +118,12 @@ var ServerCommand = &cli.Command{
 			Usage:   "Atlassian OAuth client secret",
 			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_SECRET"),
 		},
+		&cli.DurationFlag{
+			Name:    "ws-ping-interval",
+			Usage:   "WebSocket ping interval",
+			Value:   30 * time.Second,
+			Sources: cli.EnvVars("XAGENT_WS_PING_INTERVAL"),
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
@@ -190,13 +197,17 @@ var ServerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to initialize oauth: %w", err)
 		}
+		ps := pubsub.NewLocalPubSub()
 		opts := server.Options{
-			Store:         st,
-			Auth:          auth,
-			BaseURL:       baseURL,
-			EncryptionKey: key,
-			OAuth:         oauth,
-			CORS:          cmd.Bool("cors"),
+			Store:          st,
+			Auth:           auth,
+			BaseURL:        baseURL,
+			EncryptionKey:  key,
+			OAuth:          oauth,
+			CORS:           cmd.Bool("cors"),
+			Publisher:      ps,
+			Subscriber:     ps,
+			WSPingInterval: cmd.Duration("ws-ping-interval"),
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",
