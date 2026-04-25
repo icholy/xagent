@@ -1,0 +1,241 @@
+package server
+
+import (
+	"context"
+	"testing"
+
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/icholy/xagent/internal/model"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/pubsub"
+	"github.com/icholy/xagent/internal/store/teststore"
+	"gotest.tools/v3/assert"
+)
+
+func TestCreateTask_Publishes(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].N, pubsub.Notification{
+		Type:     "created",
+		Resource: "task",
+		ID:       resp.Task.Id,
+		OrgID:    org.OrgID,
+		Version:  1,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+}
+
+func TestUpdateTask_Publishes(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id: resp.Task.Id, Name: "updated",
+	})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       resp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+}
+
+func TestCancelTask_Publishes(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.CancelTask(ctx, &xagentv1.CancelTaskRequest{Id: resp.Task.Id})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       resp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+}
+
+func TestUploadLogs_Publishes(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
+		TaskId: resp.Task.Id,
+		Entries: []*xagentv1.LogEntry{
+			{Type: "info", Content: "hello"},
+		},
+	})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+		Type:     "appended",
+		Resource: "log",
+		ID:       resp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+}
+
+func TestCreateLink_Publishes(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+
+	linkResp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId: resp.Task.Id,
+		Url:    "https://example.com",
+		Title:  "test",
+	})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+		Type:     "created",
+		Resource: "link",
+		ID:       linkResp.Link.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+}
+
+func TestAddEventTask_Publishes(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+		Description: "test event",
+		Url:         "https://example.com",
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
+		EventId: eventResp.Event.Id,
+		TaskId:  taskResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+		Type:     "created",
+		Resource: "event",
+		ID:       eventResp.Event.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time"))
+}
+
+func TestSubmitRunnerEvents_Publishes(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ int64, _ pubsub.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{
+				TaskId:  taskResp.Task.Id,
+				Event:   string(model.RunnerEventStarted),
+				Version: 1,
+			},
+		},
+	})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 2)
+	assert.DeepEqual(t, calls[1].N, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       taskResp.Task.Id,
+		OrgID:    org.OrgID,
+	}, cmpopts.IgnoreFields(pubsub.Notification{}, "Time", "Version"))
+}

@@ -1,3 +1,5 @@
+//go:generate go tool moq -out publisher_moq.go . Publisher
+
 package pubsub
 
 import (

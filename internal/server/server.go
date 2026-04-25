@@ -22,15 +22,16 @@ import (
 	"github.com/icholy/xagent/internal/apiauth"
 	"github.com/icholy/xagent/internal/atlassian"
 	"github.com/icholy/xagent/internal/deviceauth"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/oauthflow"
 	"github.com/icholy/xagent/internal/oauthlink"
+	"github.com/icholy/xagent/internal/otelx"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
-	"github.com/icholy/xagent/internal/otelx"
+	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/servermcp"
 	"github.com/icholy/xagent/internal/store"
-	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/webhook"
 	"github.com/justinas/alice"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -63,6 +64,8 @@ type Server struct {
 	encryptionKey []byte
 	oauth         *oauthflow.Auth
 	cors          bool
+	publisher     pubsub.Publisher
+	subscriber    pubsub.Subscriber
 }
 
 type Options struct {
@@ -76,6 +79,8 @@ type Options struct {
 	EncryptionKey []byte
 	OAuth         *oauthflow.Auth
 	CORS          bool
+	Publisher     pubsub.Publisher
+	Subscriber    pubsub.Subscriber
 }
 
 func New(opts Options) *Server {
@@ -94,6 +99,8 @@ func New(opts Options) *Server {
 		encryptionKey: opts.EncryptionKey,
 		oauth:         opts.OAuth,
 		cors:          opts.CORS,
+		publisher:     opts.Publisher,
+		subscriber:    opts.Subscriber,
 	}
 }
 
@@ -116,6 +123,10 @@ func (s *Server) Handler() http.Handler {
 		connect.WithInterceptors(otelInterceptor, apiauth.RequireUserInterceptor()),
 	)
 	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
+	// WebSocket endpoint (protected)
+	if s.subscriber != nil {
+		mux.Handle("/ws", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).ThenFunc(s.handleWebSocket))
+	}
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
 		gh := s.githubOAuthHandler()
@@ -166,6 +177,15 @@ func (s *Server) handleCORS(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) publish(orgID int64, n pubsub.Notification) {
+	if s.publisher == nil {
+		return
+	}
+	if err := s.publisher.Publish(context.Background(), orgID, n); err != nil {
+		s.log.Warn("failed to publish notification", "error", err, "resource", n.Resource, "type", n.Type, "id", n.ID)
+	}
 }
 
 func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
@@ -383,6 +403,14 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "created",
+		Resource: "task",
+		ID:       task.ID,
+		OrgID:    caller.OrgID,
+		Version:  task.Version,
+		Time:     time.Now(),
+	})
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(s.baseURL),
 	}, nil
@@ -471,6 +499,13 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task updated", "id", req.Id, "name", req.Name, "start", req.Start, "instructions_added", len(req.AddInstructions))
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 
@@ -503,6 +538,13 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task archived", "id", req.Id)
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.ArchiveTaskResponse{}, nil
 }
 
@@ -535,6 +577,13 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task unarchived", "id", req.Id)
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.UnarchiveTaskResponse{}, nil
 }
 
@@ -567,6 +616,13 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task cancelled", "id", req.Id)
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.CancelTaskResponse{}, nil
 }
 
@@ -599,6 +655,13 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task restarted", "id", req.Id)
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.RestartTaskResponse{}, nil
 }
 
@@ -619,6 +682,13 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "appended",
+		Resource: "log",
+		ID:       req.TaskId,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.UploadLogsResponse{}, nil
 }
 
@@ -659,6 +729,13 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "created",
+		Resource: "link",
+		ID:       link.ID,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.CreateLinkResponse{
 		Link: link.Proto(),
 	}, nil
@@ -776,6 +853,13 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event task added", "event_id", req.EventId, "task_id", req.TaskId)
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "created",
+		Resource: "event",
+		ID:       req.EventId,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.AddEventTaskResponse{}, nil
 }
 
@@ -828,7 +912,6 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 	return resp, nil
 }
 
-
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	for _, pbEvent := range req.Events {
@@ -867,6 +950,16 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", event.TaskID))
 			}
 			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if applied {
+			s.publish(caller.OrgID, pubsub.Notification{
+				Type:     "updated",
+				Resource: "task",
+				ID:       event.TaskID,
+				OrgID:    caller.OrgID,
+				Version:  task.Version,
+				Time:     time.Now(),
+			})
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
