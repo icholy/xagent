@@ -70,10 +70,8 @@ func (ps *LocalPubSub) Subscribe(ctx context.Context, orgID int64) (<-chan Notif
 	}
 
 	go func() {
-		select {
-		case <-ctx.Done():
-			cancel()
-		}
+		<-ctx.Done()
+		cancel()
 	}()
 
 	return ch, cancel, nil
