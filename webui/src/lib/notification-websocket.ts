@@ -7,31 +7,40 @@ export interface Notification {
   timestamp: string;
 }
 
-class NotificationEvent extends Event {
-  constructor(public readonly notification: Notification) {
-    super("notification");
-  }
-}
+export type NotificationListener = (notification: Notification) => void;
 
 /**
  * Manages a WebSocket connection to /ws with automatic reconnection
  * and exponential backoff. Parses incoming JSON notifications and
- * dispatches them via EventTarget.
- *
- * Events:
- *   "notification" (NotificationEvent) — fired for each parsed message
- *   "reconnect" (Event) — fired on successful (re)connect
- *   "error" (Event) — fired on WebSocket error (reconnect is automatic)
+ * dispatches them to registered listeners.
  */
-export class NotificationWebSocket extends EventTarget {
+export class NotificationWebSocket {
   private ws: WebSocket | null = null;
   private closed = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private backoffDelay = 1000;
+  private events = new EventTarget();
 
   constructor() {
-    super();
     this.connect();
+  }
+
+  addNotificationListener(listener: NotificationListener): () => void {
+    const handler = (e: Event) => {
+      listener((e as CustomEvent<Notification>).detail);
+    };
+    this.events.addEventListener("notification", handler);
+    return () => this.events.removeEventListener("notification", handler);
+  }
+
+  addReconnectListener(listener: () => void): () => void {
+    this.events.addEventListener("reconnect", listener);
+    return () => this.events.removeEventListener("reconnect", listener);
+  }
+
+  addErrorListener(listener: () => void): () => void {
+    this.events.addEventListener("error", listener);
+    return () => this.events.removeEventListener("error", listener);
   }
 
   close() {
@@ -54,7 +63,7 @@ export class NotificationWebSocket extends EventTarget {
 
     this.ws.onopen = () => {
       this.backoffDelay = 1000;
-      this.dispatchEvent(new Event("reconnect"));
+      this.events.dispatchEvent(new Event("reconnect"));
     };
 
     this.ws.onmessage = (event) => {
@@ -68,7 +77,9 @@ export class NotificationWebSocket extends EventTarget {
         );
         return;
       }
-      this.dispatchEvent(new NotificationEvent(n));
+      this.events.dispatchEvent(
+        new CustomEvent("notification", { detail: n }),
+      );
     };
 
     this.ws.onclose = () => {
@@ -80,7 +91,7 @@ export class NotificationWebSocket extends EventTarget {
 
     this.ws.onerror = () => {
       console.warn("NotificationWebSocket: connection error, reconnecting...");
-      this.dispatchEvent(new Event("error"));
+      this.events.dispatchEvent(new Event("error"));
       // onclose fires after onerror, triggering reconnect
     };
   }

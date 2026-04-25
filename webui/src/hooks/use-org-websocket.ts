@@ -8,33 +8,29 @@ import {
 import { notificationWebSocket } from "@/lib/notification-websocket";
 
 const invalidationKeys: Record<string, QueryKey[]> = {
-  task: [createConnectQueryKey({ schema: getTaskDetails })],
-  log: [createConnectQueryKey({ schema: listLogs })],
-  link: [createConnectQueryKey({ schema: getTaskDetails })],
-  event: [createConnectQueryKey({ schema: getTaskDetails })],
+  task: [createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" })],
+  log: [createConnectQueryKey({ schema: listLogs, cardinality: "finite" })],
+  link: [createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" })],
+  event: [createConnectQueryKey({ schema: getTaskDetails, cardinality: "finite" })],
 };
 
 export function useOrgWebSocket() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const onNotification = (e: Event) => {
-      const { notification: n } = e as { notification: { resource: string } };
-      for (const key of invalidationKeys[n.resource] ?? []) {
-        queryClient.invalidateQueries({ queryKey: key });
-      }
-    };
-    const onReconnect = () => {
+    const removeNotification = notificationWebSocket.addNotificationListener(
+      (n) => {
+        for (const key of invalidationKeys[n.resource] ?? []) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      },
+    );
+    const removeReconnect = notificationWebSocket.addReconnectListener(() => {
       queryClient.invalidateQueries();
-    };
-    notificationWebSocket.addEventListener("notification", onNotification);
-    notificationWebSocket.addEventListener("reconnect", onReconnect);
+    });
     return () => {
-      notificationWebSocket.removeEventListener(
-        "notification",
-        onNotification,
-      );
-      notificationWebSocket.removeEventListener("reconnect", onReconnect);
+      removeNotification();
+      removeReconnect();
     };
   }, [queryClient]);
 }
