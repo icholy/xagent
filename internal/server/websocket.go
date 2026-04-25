@@ -12,11 +12,11 @@ import (
 	"nhooyr.io/websocket"
 )
 
-const maxConnsPerOrg = 100
-
-type wsConfig struct {
-	pingInterval time.Duration
-}
+const (
+	maxConnsPerOrg = 100
+	wsPingInterval = 30 * time.Second
+	wsPongTimeout  = 10 * time.Second
+)
 
 // orgConns tracks active WebSocket connections per org.
 type orgConns struct {
@@ -71,14 +71,14 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Start ping loop
 	ctx := r.Context()
 	go func() {
-		ticker := time.NewTicker(s.wsCfg.pingInterval)
+		ticker := time.NewTicker(wsPingInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
+				pingCtx, pingCancel := context.WithTimeout(ctx, wsPongTimeout)
 				err := conn.Ping(pingCtx)
 				pingCancel()
 				if err != nil {

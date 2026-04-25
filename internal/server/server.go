@@ -67,7 +67,6 @@ type Server struct {
 	publisher     pubsub.Publisher
 	subscriber    pubsub.Subscriber
 	wsConns       orgConns
-	wsCfg         wsConfig
 }
 
 type Options struct {
@@ -81,9 +80,8 @@ type Options struct {
 	EncryptionKey  []byte
 	OAuth          *oauthflow.Auth
 	CORS           bool
-	Publisher      pubsub.Publisher
-	Subscriber     pubsub.Subscriber
-	WSPingInterval time.Duration
+	Publisher  pubsub.Publisher
+	Subscriber pubsub.Subscriber
 }
 
 func New(opts Options) *Server {
@@ -105,7 +103,6 @@ func New(opts Options) *Server {
 		publisher:     opts.Publisher,
 		subscriber:    opts.Subscriber,
 		wsConns:       orgConns{counts: make(map[int64]int)},
-		wsCfg:         wsConfig{pingInterval: cmp.Or(opts.WSPingInterval, 30*time.Second)},
 	}
 }
 

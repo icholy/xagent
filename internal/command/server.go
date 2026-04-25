@@ -118,12 +118,6 @@ var ServerCommand = &cli.Command{
 			Usage:   "Atlassian OAuth client secret",
 			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_SECRET"),
 		},
-		&cli.DurationFlag{
-			Name:    "ws-ping-interval",
-			Usage:   "WebSocket ping interval",
-			Value:   30 * time.Second,
-			Sources: cli.EnvVars("XAGENT_WS_PING_INTERVAL"),
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		addr := cmd.String("addr")
@@ -199,15 +193,14 @@ var ServerCommand = &cli.Command{
 		}
 		ps := pubsub.NewLocalPubSub()
 		opts := server.Options{
-			Store:          st,
-			Auth:           auth,
-			BaseURL:        baseURL,
-			EncryptionKey:  key,
-			OAuth:          oauth,
-			CORS:           cmd.Bool("cors"),
-			Publisher:      ps,
-			Subscriber:     ps,
-			WSPingInterval: cmd.Duration("ws-ping-interval"),
+			Store:         st,
+			Auth:          auth,
+			BaseURL:       baseURL,
+			EncryptionKey: key,
+			OAuth:         oauth,
+			CORS:          cmd.Bool("cors"),
+			Publisher:     ps,
+			Subscriber:    ps,
 			Discovery: deviceauth.DiscoveryConfig{
 				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
 				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",
