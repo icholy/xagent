@@ -2,12 +2,12 @@ package notifyserver
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/x/sse"
 )
 
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
@@ -45,30 +45,43 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
+	sw := sse.NewWriter(w)
 	var seq int64
 
 	// Send ready event so clients know the subscription is live.
-	ready, err := json.Marshal(model.Notification{Type: "ready", OrgID: orgID})
+	data, err := json.Marshal(model.Notification{Type: "ready", OrgID: orgID})
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(w, "id: %d\nevent: ready\ndata: %s\n\n", seq, ready)
+	if err := sw.Write(sse.Event{
+		ID:    strconv.FormatInt(seq, 10),
+		Event: "ready",
+		Data:  data,
+	}); err != nil {
+		return
+	}
 	flusher.Flush()
 
 	ctx := r.Context()
-	for n := range ch {
+	for {
 		select {
+		case n := <-ch:
+			seq++
+			data, err := json.Marshal(n)
+			if err != nil {
+				s.log.Warn("failed to marshal notification", "error", err)
+				continue
+			}
+			if err := sw.Write(sse.Event{
+				ID:    strconv.FormatInt(seq, 10),
+				Event: n.Type,
+				Data:  data,
+			}); err != nil {
+				return
+			}
+			flusher.Flush()
 		case <-ctx.Done():
 			return
-		default:
 		}
-		seq++
-		data, err := json.Marshal(n)
-		if err != nil {
-			s.log.Warn("failed to marshal notification", "error", err)
-			continue
-		}
-		fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", seq, n.Type, data)
-		flusher.Flush()
 	}
 }
