@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/atlassianserver"
 	"github.com/icholy/xagent/internal/deviceauth"
 	"github.com/icholy/xagent/internal/githubserver"
 	"github.com/icholy/xagent/internal/model"
@@ -224,10 +225,12 @@ var ServerCommand = &cli.Command{
 			})
 		}
 		if atlassianClientID := cmd.String("atlassian-client-id"); atlassianClientID != "" {
-			opts.Atlassian = &server.AtlassianConfig{
+			opts.Atlassian = atlassianserver.New(atlassianserver.Options{
+				Store:        st,
+				BaseURL:      baseURL,
 				ClientID:     atlassianClientID,
 				ClientSecret: cmd.String("atlassian-client-secret"),
-			}
+			})
 		}
 		srv := server.New(opts)
 

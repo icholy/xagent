@@ -12,37 +12,25 @@ import (
 	"strings"
 	"time"
 
-	"crypto/rand"
-	"encoding/hex"
-
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/apiauth"
-	"github.com/icholy/xagent/internal/atlassian"
+	"github.com/icholy/xagent/internal/atlassianserver"
 	"github.com/icholy/xagent/internal/deviceauth"
-	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/githubserver"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/notifyserver"
 	"github.com/icholy/xagent/internal/oauthflow"
-	"github.com/icholy/xagent/internal/oauthlink"
 	"github.com/icholy/xagent/internal/otelx"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/servermcp"
 	"github.com/icholy/xagent/internal/store"
-	"github.com/icholy/xagent/internal/webhook"
 	"github.com/justinas/alice"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"golang.org/x/oauth2"
 )
-
-type AtlassianConfig struct {
-	ClientID     string
-	ClientSecret string
-}
 
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
@@ -51,7 +39,7 @@ type Server struct {
 	auth          *apiauth.Auth
 	discovery     deviceauth.DiscoveryConfig
 	github        *githubserver.Server
-	atlassian     *AtlassianConfig
+	atlassian     *atlassianserver.Server
 	baseURL       string
 	encryptionKey []byte
 	oauth         *oauthflow.Auth
@@ -66,7 +54,7 @@ type Options struct {
 	Auth          *apiauth.Auth
 	Discovery     deviceauth.DiscoveryConfig
 	GitHub        *githubserver.Server
-	Atlassian     *AtlassianConfig
+	Atlassian     *atlassianserver.Server
 	BaseURL       string
 	EncryptionKey []byte
 	OAuth         *oauthflow.Auth
@@ -126,12 +114,8 @@ func (s *Server) Handler() http.Handler {
 	}
 	// Atlassian OAuth routes (conditionally registered)
 	if s.atlassian != nil {
-		ah := s.atlassianOAuthHandler()
-		mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", ah)))
-		mux.Handle("/webhook/atlassian", &webhook.AtlassianHandler{
-			Router: &eventrouter.Router{Log: s.log, Store: s.store},
-			Store:  s.store,
-		})
+		mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", s.atlassian.OAuthHandler())))
+		mux.Handle("/webhook/atlassian", s.atlassian.WebhookHandler())
 	}
 	// OAuth 2.1 endpoints (public, conditionally registered)
 	if s.oauth != nil {
@@ -178,47 +162,6 @@ func (s *Server) publish(orgID int64, n model.Notification) {
 func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(s.discovery)
-}
-
-func (s *Server) atlassianOAuthHandler() http.Handler {
-	return oauthlink.New(oauthlink.Config{
-		Provider:     "atlassian",
-		ClientID:     s.atlassian.ClientID,
-		ClientSecret: s.atlassian.ClientSecret,
-		RedirectURL:  s.baseURL + "/atlassian/callback",
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://auth.atlassian.com/authorize",
-			TokenURL: "https://auth.atlassian.com/oauth/token",
-		},
-		Scopes: []string{"read:me"},
-		AuthParams: []oauth2.AuthCodeOption{
-			oauth2.SetAuthURLParam("audience", "api.atlassian.com"),
-			oauth2.SetAuthURLParam("prompt", "consent"),
-		},
-		Log: s.log,
-		OnSuccess: func(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
-			caller := apiauth.Caller(r.Context())
-			if caller == nil {
-				http.Error(w, "not authenticated", http.StatusUnauthorized)
-				return
-			}
-			if caller.ID == "" {
-				http.Error(w, "this operation requires a user identity", http.StatusForbidden)
-				return
-			}
-			me, err := atlassian.FetchMe(r.Context(), token.AccessToken)
-			if err != nil {
-				s.log.Error("failed to fetch Atlassian user", "error", err)
-				http.Error(w, "failed to fetch Atlassian user", http.StatusInternalServerError)
-				return
-			}
-			if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, me.AccountID, me.Name); err != nil {
-				http.Error(w, "failed to link Atlassian account", http.StatusInternalServerError)
-				return
-			}
-			http.Redirect(w, r, "/ui/settings", http.StatusFound)
-		},
-	})
 }
 
 func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
@@ -1054,7 +997,7 @@ func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGi
 
 func (s *Server) UnlinkAtlassianAccount(ctx context.Context, req *xagentv1.UnlinkAtlassianAccountRequest) (*xagentv1.UnlinkAtlassianAccountResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if err := s.store.UnlinkAtlassianAccount(ctx, nil, caller.ID); err != nil {
+	if err := s.atlassian.UnlinkAccount(ctx, caller.ID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("atlassian account unlinked", "owner", caller.ID)
@@ -1200,20 +1143,18 @@ func (s *Server) ListOrgMembers(ctx context.Context, req *xagentv1.ListOrgMember
 	return &xagentv1.ListOrgMembersResponse{Members: pbMembers}, nil
 }
 
-func (s *Server) atlassianWebhookURL(orgID int64) string {
-	return fmt.Sprintf("%s/webhook/atlassian?org=%d", s.baseURL, orgID)
-}
-
 func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	secret, err := s.store.GetOrgAtlassianWebhookSecret(ctx, nil, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
 	resp := &xagentv1.GetOrgSettingsResponse{
-		AtlassianWebhookSecret: secret,
-		AtlassianWebhookUrl:    s.atlassianWebhookURL(caller.OrgID),
-		McpUrl:                 s.baseURL + "/mcp",
+		McpUrl: s.baseURL + "/mcp",
+	}
+	if s.atlassian != nil {
+		secret, err := s.atlassian.GetWebhookSecret(ctx, caller.OrgID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		resp.AtlassianWebhookSecret = secret
+		resp.AtlassianWebhookUrl = s.atlassian.WebhookURL(caller.OrgID)
 	}
 	if s.github != nil {
 		resp.GithubAppUrl = s.github.AppInstallURL()
@@ -1223,18 +1164,13 @@ func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSetting
 
 func (s *Server) GenerateAtlassianWebhookSecret(ctx context.Context, req *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+	secret, err := s.atlassian.GenerateWebhookSecret(ctx, caller.OrgID)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	secret := hex.EncodeToString(b)
-	if err := s.store.SetOrgAtlassianWebhookSecret(ctx, nil, caller.OrgID, secret); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	s.log.Info("atlassian webhook secret generated", "org_id", caller.OrgID)
 	return &xagentv1.GenerateAtlassianWebhookSecretResponse{
 		Secret:     secret,
-		WebhookUrl: s.atlassianWebhookURL(caller.OrgID),
+		WebhookUrl: s.atlassian.WebhookURL(caller.OrgID),
 	}, nil
 }
 
