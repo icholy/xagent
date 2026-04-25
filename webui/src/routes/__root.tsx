@@ -7,6 +7,7 @@ import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import xagentIcon from '@/assets/icon.png'
 import { useAuthTransport } from '@/lib/services'
 import { useOrgId } from '@/hooks/use-org-id'
+import { useOrgWebSocket } from '@/hooks/use-org-websocket'
 import { ConnectionIndicator } from '@/components/connection-indicator'
 import {
   Select,
@@ -43,6 +44,7 @@ export const Route = createRootRouteWithContext<{
 })
 
 function RootComponent() {
+  useOrgWebSocket()
   const { data: profileData } = useQuery(getProfile, {})
   const queryClient = useQueryClient()
   const auth = useAuthTransport()

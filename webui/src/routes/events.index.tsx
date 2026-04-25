@@ -22,14 +22,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Plus } from 'lucide-react'
-import { useOrgWebSocket } from '@/hooks/use-org-websocket'
 
 export const Route = createFileRoute('/events/')({
   component: EventsPage,
 })
 
 function EventsPage() {
-  useOrgWebSocket()
   const [limit, setLimit] = useState(25)
   const { data, isLoading, error } = useQuery(listEvents, { limit }, {
     refetchInterval: 60000,

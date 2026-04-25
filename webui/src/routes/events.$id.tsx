@@ -3,7 +3,6 @@ import { useQuery } from '@connectrpc/connect-query'
 import { getEvent, listEventTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { RelativeTime } from '@/components/relative-time'
-import { useOrgWebSocket } from '@/hooks/use-org-websocket'
 
 export const Route = createFileRoute('/events/$id')({
   staticData: { orgSwitchRedirect: '/events' },
@@ -11,7 +10,6 @@ export const Route = createFileRoute('/events/$id')({
 })
 
 function EventDetail() {
-  useOrgWebSocket()
   const { id } = Route.useParams()
   const eventId = BigInt(id)
 

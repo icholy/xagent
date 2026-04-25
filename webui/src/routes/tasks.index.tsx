@@ -23,14 +23,12 @@ import { CommandBadge } from '@/components/command-badge'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { Plus, Search, Loader2, X } from 'lucide-react'
-import { useOrgWebSocket } from '@/hooks/use-org-websocket'
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
 })
 
 function TasksPage() {
-  useOrgWebSocket()
   const [showChildTasks, setShowChildTasks] = useLocalStorage('showChildTasks', false)
   const [searchQuery, setSearchQuery] = useState('')
 
