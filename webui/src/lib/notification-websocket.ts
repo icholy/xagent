@@ -7,28 +7,34 @@ export interface Notification {
   timestamp: string;
 }
 
-export type NotificationHandler = (notification: Notification) => void;
+export type NotificationListener = (notification: Notification) => void;
+export type ReconnectListener = () => void;
 
 /**
  * Manages a WebSocket connection to /ws with automatic reconnection
  * and exponential backoff. Parses incoming JSON notifications and
- * dispatches them to registered handlers.
+ * dispatches them to registered listeners.
  */
 export class NotificationWebSocket {
   private ws: WebSocket | null = null;
   private closed = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private backoffDelay = 1000;
-  private onNotification: NotificationHandler;
-  private onReconnect: () => void;
+  private notificationListeners = new Set<NotificationListener>();
+  private reconnectListeners = new Set<ReconnectListener>();
 
-  constructor(opts: {
-    onNotification: NotificationHandler;
-    onReconnect: () => void;
-  }) {
-    this.onNotification = opts.onNotification;
-    this.onReconnect = opts.onReconnect;
+  constructor() {
     this.connect();
+  }
+
+  addNotificationListener(listener: NotificationListener): () => void {
+    this.notificationListeners.add(listener);
+    return () => this.notificationListeners.delete(listener);
+  }
+
+  addReconnectListener(listener: ReconnectListener): () => void {
+    this.reconnectListeners.add(listener);
+    return () => this.reconnectListeners.delete(listener);
   }
 
   close() {
@@ -51,7 +57,9 @@ export class NotificationWebSocket {
 
     this.ws.onopen = () => {
       this.backoffDelay = 1000;
-      this.onReconnect();
+      for (const listener of this.reconnectListeners) {
+        listener();
+      }
     };
 
     this.ws.onmessage = (event) => {
@@ -65,7 +73,9 @@ export class NotificationWebSocket {
         );
         return;
       }
-      this.onNotification(n);
+      for (const listener of this.notificationListeners) {
+        listener(n);
+      }
     };
 
     this.ws.onclose = () => {
@@ -80,3 +90,5 @@ export class NotificationWebSocket {
     };
   }
 }
+
+export const notificationWebSocket = new NotificationWebSocket();

@@ -5,7 +5,7 @@ import {
   getTaskDetails,
   listLogs,
 } from "@/gen/xagent/v1/xagent-XAgentService_connectquery";
-import { NotificationWebSocket } from "@/lib/notification-websocket";
+import { notificationWebSocket } from "@/lib/notification-websocket";
 
 const invalidationKeys: Record<string, QueryKey[]> = {
   task: [createConnectQueryKey({ schema: getTaskDetails })],
@@ -18,16 +18,19 @@ export function useOrgWebSocket() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const ws = new NotificationWebSocket({
-      onNotification: (n) => {
+    const removeNotification = notificationWebSocket.addNotificationListener(
+      (n) => {
         for (const key of invalidationKeys[n.resource] ?? []) {
           queryClient.invalidateQueries({ queryKey: key });
         }
       },
-      onReconnect: () => {
-        queryClient.invalidateQueries();
-      },
+    );
+    const removeReconnect = notificationWebSocket.addReconnectListener(() => {
+      queryClient.invalidateQueries();
     });
-    return () => ws.close();
+    return () => {
+      removeNotification();
+      removeReconnect();
+    };
   }, [queryClient]);
 }
