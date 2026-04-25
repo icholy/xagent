@@ -7,34 +7,30 @@ export interface Notification {
   timestamp: string;
 }
 
-export type NotificationListener = (notification: Notification) => void;
-export type ReconnectListener = () => void;
+class NotificationEvent extends Event {
+  constructor(public readonly notification: Notification) {
+    super("notification");
+  }
+}
 
 /**
  * Manages a WebSocket connection to /ws with automatic reconnection
  * and exponential backoff. Parses incoming JSON notifications and
- * dispatches them to registered listeners.
+ * dispatches them via EventTarget.
+ *
+ * Events:
+ *   "notification" (NotificationEvent) — fired for each parsed message
+ *   "reconnect" (Event) — fired on successful (re)connect
  */
-export class NotificationWebSocket {
+export class NotificationWebSocket extends EventTarget {
   private ws: WebSocket | null = null;
   private closed = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private backoffDelay = 1000;
-  private notificationListeners = new Set<NotificationListener>();
-  private reconnectListeners = new Set<ReconnectListener>();
 
   constructor() {
+    super();
     this.connect();
-  }
-
-  addNotificationListener(listener: NotificationListener): () => void {
-    this.notificationListeners.add(listener);
-    return () => this.notificationListeners.delete(listener);
-  }
-
-  addReconnectListener(listener: ReconnectListener): () => void {
-    this.reconnectListeners.add(listener);
-    return () => this.reconnectListeners.delete(listener);
   }
 
   close() {
@@ -57,9 +53,7 @@ export class NotificationWebSocket {
 
     this.ws.onopen = () => {
       this.backoffDelay = 1000;
-      for (const listener of this.reconnectListeners) {
-        listener();
-      }
+      this.dispatchEvent(new Event("reconnect"));
     };
 
     this.ws.onmessage = (event) => {
@@ -73,9 +67,7 @@ export class NotificationWebSocket {
         );
         return;
       }
-      for (const listener of this.notificationListeners) {
-        listener(n);
-      }
+      this.dispatchEvent(new NotificationEvent(n));
     };
 
     this.ws.onclose = () => {

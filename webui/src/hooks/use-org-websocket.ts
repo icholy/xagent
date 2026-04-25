@@ -18,19 +18,23 @@ export function useOrgWebSocket() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const removeNotification = notificationWebSocket.addNotificationListener(
-      (n) => {
-        for (const key of invalidationKeys[n.resource] ?? []) {
-          queryClient.invalidateQueries({ queryKey: key });
-        }
-      },
-    );
-    const removeReconnect = notificationWebSocket.addReconnectListener(() => {
+    const onNotification = (e: Event) => {
+      const { notification: n } = e as { notification: { resource: string } };
+      for (const key of invalidationKeys[n.resource] ?? []) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    };
+    const onReconnect = () => {
       queryClient.invalidateQueries();
-    });
+    };
+    notificationWebSocket.addEventListener("notification", onNotification);
+    notificationWebSocket.addEventListener("reconnect", onReconnect);
     return () => {
-      removeNotification();
-      removeReconnect();
+      notificationWebSocket.removeEventListener(
+        "notification",
+        onNotification,
+      );
+      notificationWebSocket.removeEventListener("reconnect", onReconnect);
     };
   }, [queryClient]);
 }
