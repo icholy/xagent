@@ -3,6 +3,7 @@ package pubsub
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 )
 
@@ -58,13 +59,9 @@ func (ps *LocalPubSub) Subscribe(ctx context.Context, orgID int64) (<-chan Notif
 		once.Do(func() {
 			ps.mu.Lock()
 			defer ps.mu.Unlock()
-			subs := ps.subs[orgID]
-			for i, s := range subs {
-				if s == ch {
-					ps.subs[orgID] = append(subs[:i], subs[i+1:]...)
-					break
-				}
-			}
+			ps.subs[orgID] = slices.DeleteFunc(ps.subs[orgID], func(s chan Notification) bool {
+				return s == ch
+			})
 			close(ch)
 		})
 	}
