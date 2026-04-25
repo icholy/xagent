@@ -1,4 +1,4 @@
-package servermcp
+package mcpserver
 
 import (
 	"cmp"
