@@ -11,21 +11,10 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/pubsub"
+	"github.com/icholy/xagent/internal/server/atlassianserver"
+	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/store"
 )
-
-// AtlassianIntegration provides Atlassian-related operations needed by the API server.
-type AtlassianIntegration interface {
-	UnlinkAccount(ctx context.Context, userID string) error
-	GetWebhookSecret(ctx context.Context, orgID int64) (string, error)
-	WebhookURL(orgID int64) string
-	GenerateWebhookSecret(ctx context.Context, orgID int64) (string, error)
-}
-
-// GitHubIntegration provides GitHub-related operations needed by the API server.
-type GitHubIntegration interface {
-	AppInstallURL() string
-}
 
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
@@ -33,8 +22,8 @@ type Server struct {
 	store     *store.Store
 	baseURL   string
 	publisher pubsub.Publisher
-	atlassian AtlassianIntegration
-	github    GitHubIntegration
+	atlassian *atlassianserver.Server
+	github    *githubserver.Server
 }
 
 type Options struct {
@@ -42,8 +31,8 @@ type Options struct {
 	Store     *store.Store
 	BaseURL   string
 	Publisher pubsub.Publisher
-	Atlassian AtlassianIntegration
-	GitHub    GitHubIntegration
+	Atlassian *atlassianserver.Server
+	GitHub    *githubserver.Server
 }
 
 func New(opts Options) *Server {
