@@ -1,6 +1,11 @@
 const TOKEN_KEY = "xagent_token";
 const ORG_ID_KEY = "xagent_org_id";
 
+// Sentinel returned by getOrgId() when no org is selected (pre-login or
+// after clearToken). The backend's ResolveOrg treats org_id=0 as "use
+// the user's default org".
+export const NO_ORG = "0";
+
 export class AuthTransport {
   private refreshPromise: Promise<string> | null = null;
   private events = new EventTarget();
@@ -10,9 +15,12 @@ export class AuthTransport {
     this.lastOrgId = this.getOrgId();
   }
 
-  onOrgChange(listener: () => void): () => void {
-    this.events.addEventListener("orgchange", listener);
-    return () => this.events.removeEventListener("orgchange", listener);
+  onOrgChange(listener: (orgId: string) => void): () => void {
+    const handler = (e: Event) => {
+      listener((e as CustomEvent<string>).detail);
+    };
+    this.events.addEventListener("orgchange", handler);
+    return () => this.events.removeEventListener("orgchange", handler);
   }
 
   getToken(): string | null {
@@ -20,14 +28,14 @@ export class AuthTransport {
   }
 
   getOrgId(): string {
-    return localStorage.getItem(ORG_ID_KEY) ?? "0";
+    return localStorage.getItem(ORG_ID_KEY) ?? NO_ORG;
   }
 
   private notifyOrgChange(): void {
     const next = this.getOrgId();
     if (next === this.lastOrgId) return;
     this.lastOrgId = next;
-    this.events.dispatchEvent(new Event("orgchange"));
+    this.events.dispatchEvent(new CustomEvent("orgchange", { detail: next }));
   }
 
   private storeToken(token: string, orgId: string): void {

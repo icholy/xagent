@@ -195,7 +195,10 @@ var ServerCommand = &cli.Command{
 			return fmt.Errorf("failed to initialize oauth: %w", err)
 		}
 		ps := pubsub.NewLocalPubSub()
-		notify := notifyserver.New(notifyserver.Options{Subscriber: ps})
+		notify := notifyserver.New(notifyserver.Options{
+			Subscriber:  ps,
+			OrgResolver: resolver,
+		})
 		opts := server.Options{
 			Store:         st,
 			Auth:          auth,

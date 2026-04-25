@@ -14,7 +14,8 @@ const auth = new AuthTransport()
 const transport = createConnectTransport({ baseUrl: '/', fetch: auth.fetch })
 const ws = new NotificationWebSocket()
 
-auth.onOrgChange(() => ws.reconnect())
+ws.setOrgId(auth.getOrgId())
+auth.onOrgChange((orgId) => ws.setOrgId(orgId))
 
 const queryClient = new QueryClient()
 

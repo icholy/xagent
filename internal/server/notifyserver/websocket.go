@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
@@ -19,13 +20,28 @@ const (
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	caller := apiauth.MustCaller(r.Context())
 
+	var orgID int64
+	if raw := r.URL.Query().Get("org_id"); raw != "" {
+		var err error
+		orgID, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid org_id", http.StatusBadRequest)
+			return
+		}
+	}
+	orgID, err := s.orgResolver.ResolveOrg(r.Context(), caller.ID, orgID)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
 	}
 	defer conn.CloseNow()
 
-	ch, cancel, err := s.subscriber.Subscribe(r.Context(), caller.OrgID)
+	ch, cancel, err := s.subscriber.Subscribe(r.Context(), orgID)
 	if err != nil {
 		conn.Close(websocket.StatusInternalError, "subscribe failed")
 		return
@@ -34,7 +50,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Send a ready frame so clients know the subscription is live and any
 	// notifications published from this point forward will be delivered.
-	ready, err := json.Marshal(model.Notification{Type: "ready", OrgID: caller.OrgID})
+	ready, err := json.Marshal(model.Notification{Type: "ready", OrgID: orgID})
 	if err != nil {
 		return
 	}

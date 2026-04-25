@@ -1,3 +1,5 @@
+import { NO_ORG } from "./transport";
+
 export interface Notification {
   type: string;
   resource: string;
@@ -13,6 +15,8 @@ export type NotificationListener = (notification: Notification) => void;
  * Manages a WebSocket connection to /ws with automatic reconnection
  * and exponential backoff. Parses incoming JSON notifications and
  * dispatches them to registered listeners.
+ *
+ * Idle by default — call setOrgId() with a real org id to open a subscription.
  */
 export class NotificationWebSocket {
   private ws: WebSocket | null = null;
@@ -20,10 +24,9 @@ export class NotificationWebSocket {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private backoffDelay = 1000;
   private events = new EventTarget();
-
-  constructor() {
-    this.connect();
-  }
+  // Active org for the subscription. NO_ORG means "do not connect";
+  // any other value is the org id sent to /ws as ?org_id=.
+  private orgId: string = NO_ORG;
 
   addNotificationListener(listener: NotificationListener): () => void {
     const handler = (e: Event) => {
@@ -43,24 +46,25 @@ export class NotificationWebSocket {
     return () => this.events.removeEventListener("error", listener);
   }
 
-  close() {
-    this.closed = true;
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+  // Opens a subscription for the given org, replacing any existing
+  // connection. Pass NO_ORG to disconnect. No-op when the orgId
+  // hasn't changed.
+  setOrgId(orgId: string) {
+    if (orgId === this.orgId) return;
+    this.orgId = orgId;
+    this.disconnect();
+    if (orgId !== NO_ORG) {
+      this.backoffDelay = 1000;
+      this.connect();
     }
   }
 
-  // Closes the current connection (without triggering the onclose
-  // backoff path) and immediately opens a fresh one. Call this when
-  // the auth context changes so the server-side subscription is
-  // re-bound to the new identity.
-  reconnect() {
-    if (this.closed) return;
+  close() {
+    this.closed = true;
+    this.disconnect();
+  }
+
+  private disconnect() {
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -73,15 +77,13 @@ export class NotificationWebSocket {
       this.ws.close();
       this.ws = null;
     }
-    this.backoffDelay = 1000;
-    this.connect();
   }
 
   private connect() {
-    if (this.closed) return;
+    if (this.closed || this.orgId === NO_ORG) return;
 
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    this.ws = new WebSocket(`${protocol}//${location.host}/ws`);
+    this.ws = new WebSocket(`${protocol}//${location.host}/ws?org_id=${this.orgId}`);
 
     this.ws.onopen = () => {
       this.backoffDelay = 1000;
@@ -105,7 +107,7 @@ export class NotificationWebSocket {
     };
 
     this.ws.onclose = () => {
-      if (this.closed) return;
+      if (this.closed || this.orgId === NO_ORG) return;
       const delay = this.backoffDelay + Math.random() * 1000;
       this.backoffDelay = Math.min(this.backoffDelay * 2, 30000);
       this.reconnectTimer = setTimeout(() => this.connect(), delay);
@@ -118,4 +120,3 @@ export class NotificationWebSocket {
     };
   }
 }
-
