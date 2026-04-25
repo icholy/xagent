@@ -91,10 +91,6 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	pingInterval := opts.WSPingInterval
-	if pingInterval == 0 {
-		pingInterval = 30 * time.Second
-	}
 	return &Server{
 		log:           log,
 		store:         opts.Store,
@@ -109,7 +105,7 @@ func New(opts Options) *Server {
 		publisher:     opts.Publisher,
 		subscriber:    opts.Subscriber,
 		wsConns:       orgConns{counts: make(map[int64]int)},
-		wsCfg:         wsConfig{pingInterval: pingInterval},
+		wsCfg:         wsConfig{pingInterval: cmp.Or(opts.WSPingInterval, 30*time.Second)},
 	}
 }
 
@@ -404,7 +400,14 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
-	s.publish(caller.OrgID, pubsub.Notification{Type: "created", Resource: "task", ID: task.ID, OrgID: caller.OrgID, Version: task.Version, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "created",
+		Resource: "task",
+		ID:       task.ID,
+		OrgID:    caller.OrgID,
+		Version:  task.Version,
+		Time:     time.Now(),
+	})
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(s.baseURL),
 	}, nil
@@ -493,7 +496,13 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task updated", "id", req.Id, "name", req.Name, "start", req.Start, "instructions_added", len(req.AddInstructions))
-	s.publish(caller.OrgID, pubsub.Notification{Type: "updated", Resource: "task", ID: req.Id, OrgID: caller.OrgID, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 
@@ -526,7 +535,13 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task archived", "id", req.Id)
-	s.publish(caller.OrgID, pubsub.Notification{Type: "updated", Resource: "task", ID: req.Id, OrgID: caller.OrgID, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.ArchiveTaskResponse{}, nil
 }
 
@@ -559,7 +574,13 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task unarchived", "id", req.Id)
-	s.publish(caller.OrgID, pubsub.Notification{Type: "updated", Resource: "task", ID: req.Id, OrgID: caller.OrgID, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.UnarchiveTaskResponse{}, nil
 }
 
@@ -592,7 +613,13 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task cancelled", "id", req.Id)
-	s.publish(caller.OrgID, pubsub.Notification{Type: "updated", Resource: "task", ID: req.Id, OrgID: caller.OrgID, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.CancelTaskResponse{}, nil
 }
 
@@ -625,7 +652,13 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task restarted", "id", req.Id)
-	s.publish(caller.OrgID, pubsub.Notification{Type: "updated", Resource: "task", ID: req.Id, OrgID: caller.OrgID, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "updated",
+		Resource: "task",
+		ID:       req.Id,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.RestartTaskResponse{}, nil
 }
 
@@ -646,7 +679,13 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
-	s.publish(caller.OrgID, pubsub.Notification{Type: "appended", Resource: "log", ID: req.TaskId, OrgID: caller.OrgID, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "appended",
+		Resource: "log",
+		ID:       req.TaskId,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.UploadLogsResponse{}, nil
 }
 
@@ -687,7 +726,13 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
-	s.publish(caller.OrgID, pubsub.Notification{Type: "created", Resource: "link", ID: link.ID, OrgID: caller.OrgID, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "created",
+		Resource: "link",
+		ID:       link.ID,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.CreateLinkResponse{
 		Link: link.Proto(),
 	}, nil
@@ -805,7 +850,13 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("event task added", "event_id", req.EventId, "task_id", req.TaskId)
-	s.publish(caller.OrgID, pubsub.Notification{Type: "created", Resource: "event", ID: req.EventId, OrgID: caller.OrgID, Time: time.Now()})
+	s.publish(caller.OrgID, pubsub.Notification{
+		Type:     "created",
+		Resource: "event",
+		ID:       req.EventId,
+		OrgID:    caller.OrgID,
+		Time:     time.Now(),
+	})
 	return &xagentv1.AddEventTaskResponse{}, nil
 }
 
@@ -899,7 +950,14 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if applied {
-			s.publish(caller.OrgID, pubsub.Notification{Type: "updated", Resource: "task", ID: event.TaskID, OrgID: caller.OrgID, Version: task.Version, Time: time.Now()})
+			s.publish(caller.OrgID, pubsub.Notification{
+				Type:     "updated",
+				Resource: "task",
+				ID:       event.TaskID,
+				OrgID:    caller.OrgID,
+				Version:  task.Version,
+				Time:     time.Now(),
+			})
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
