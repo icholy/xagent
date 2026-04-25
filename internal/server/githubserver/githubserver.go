@@ -11,6 +11,7 @@ import (
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/auth/oauthlink"
+	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server/webhookserver"
 	"github.com/icholy/xagent/internal/store"
 	"golang.org/x/oauth2"
@@ -28,18 +29,20 @@ type Config struct {
 
 // Server handles GitHub OAuth and webhook routes.
 type Server struct {
-	log     *slog.Logger
-	config  *Config
-	store   *store.Store
-	baseURL string
+	log       *slog.Logger
+	config    *Config
+	store     *store.Store
+	baseURL   string
+	publisher pubsub.Publisher
 }
 
 // Options configures a Server.
 type Options struct {
-	Log     *slog.Logger
-	Config  *Config
-	Store   *store.Store
-	BaseURL string
+	Log       *slog.Logger
+	Config    *Config
+	Store     *store.Store
+	BaseURL   string
+	Publisher pubsub.Publisher
 }
 
 // New returns a new Server.
@@ -49,10 +52,11 @@ func New(opts Options) *Server {
 		log = slog.Default()
 	}
 	return &Server{
-		log:     log,
-		config:  opts.Config,
-		store:   opts.Store,
-		baseURL: opts.BaseURL,
+		log:       log,
+		config:    opts.Config,
+		store:     opts.Store,
+		baseURL:   opts.BaseURL,
+		publisher: opts.Publisher,
 	}
 }
 
@@ -105,7 +109,7 @@ func (s *Server) OAuthHandler() http.Handler {
 // WebhookHandler returns the HTTP handler for GitHub App webhook events.
 func (s *Server) WebhookHandler() http.Handler {
 	return &webhookserver.GitHubHandler{
-		Router:        &eventrouter.Router{Log: s.log, Store: s.store},
+		Router:        &eventrouter.Router{Log: s.log, Store: s.store, Publisher: s.publisher},
 		Store:         s.store,
 		WebhookSecret: s.config.WebhookSecret,
 	}

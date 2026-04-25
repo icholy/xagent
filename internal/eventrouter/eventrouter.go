@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store"
 )
 
@@ -23,8 +25,9 @@ type InputEvent struct {
 
 // Router routes events to subscribed tasks via the store.
 type Router struct {
-	Log   *slog.Logger
-	Store *store.Store
+	Log       *slog.Logger
+	Store     *store.Store
+	Publisher pubsub.Publisher
 }
 
 // defaultRules is the fallback when an org has no custom routing rules configured.
@@ -71,6 +74,16 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 				r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
 				continue
 			}
+			r.publish(ctx, model.Notification{
+				Type: "change",
+				Resources: []model.NotificationResource{
+					{Action: "updated", Type: "task", ID: link.TaskID},
+					{Action: "updated", Type: "event", ID: event.ID},
+					{Action: "appended", Type: "task_logs", ID: link.TaskID},
+				},
+				OrgID: orgID,
+				Time:  time.Now(),
+			})
 			n++
 		}
 	}
@@ -97,6 +110,15 @@ func (r *Router) find(ctx context.Context, input InputEvent) (map[int64][]*model
 		result[m.OrgID] = append(result[m.OrgID], m.Link)
 	}
 	return result, nil
+}
+
+func (r *Router) publish(ctx context.Context, n model.Notification) {
+	if r.Publisher == nil {
+		return
+	}
+	if err := r.Publisher.Publish(ctx, n); err != nil {
+		r.Log.Warn("failed to publish notification", "error", err)
+	}
 }
 
 // attach associates an event with a task, starts the task, and logs the action.
