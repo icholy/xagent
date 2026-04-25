@@ -32,6 +32,7 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.2
+	nhooyr.io/websocket v1.8.17
 )
 
 require (
@@ -166,7 +167,6 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.38.2 // indirect
-	nhooyr.io/websocket v1.8.17 // indirect
 	pluginrpc.com/pluginrpc v0.5.0 // indirect
 )
 

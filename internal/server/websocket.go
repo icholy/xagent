@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/apiauth"
+	"github.com/icholy/xagent/internal/pubsub"
 	"nhooyr.io/websocket"
 )
 
@@ -31,6 +32,16 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer cancel()
+
+	// Send a ready frame so clients know the subscription is live and any
+	// notifications published from this point forward will be delivered.
+	ready, err := json.Marshal(pubsub.Notification{Type: "ready", OrgID: caller.OrgID})
+	if err != nil {
+		return
+	}
+	if err := conn.Write(r.Context(), websocket.MessageText, ready); err != nil {
+		return
+	}
 
 	// Start ping loop
 	ctx := r.Context()

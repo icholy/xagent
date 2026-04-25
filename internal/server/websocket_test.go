@@ -43,6 +43,10 @@ func TestWebSocket(t *testing.T) {
 	assert.NilError(t, err)
 	defer conn.CloseNow()
 
+	// Read the server's ready frame to ensure Subscribe has registered
+	// before we publish.
+	readReady(t, ctx, conn)
+
 	// Publish a notification
 	want := pubsub.Notification{
 		Type:     "created",
@@ -107,6 +111,7 @@ func TestWebSocket_OrgIsolation(t *testing.T) {
 	connB, _, err := websocket.Dial(ctx, baseURL+"/?org=b", nil)
 	assert.NilError(t, err)
 	defer connB.CloseNow()
+	readReady(t, ctx, connB)
 
 	// Publish to org A only
 	err = ps.Publish(ctx, orgA.OrgID, pubsub.Notification{
@@ -122,4 +127,15 @@ func TestWebSocket_OrgIsolation(t *testing.T) {
 	defer cancel()
 	_, _, err = connB.Read(readCtx)
 	assert.Assert(t, err != nil, "expected read to fail for wrong org")
+}
+
+func readReady(t *testing.T, ctx context.Context, conn *websocket.Conn) {
+	t.Helper()
+	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_, data, err := conn.Read(readCtx)
+	assert.NilError(t, err)
+	var n pubsub.Notification
+	assert.NilError(t, json.Unmarshal(data, &n))
+	assert.Equal(t, n.Type, "ready")
 }
