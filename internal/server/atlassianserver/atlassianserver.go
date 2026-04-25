@@ -14,6 +14,7 @@ import (
 	"github.com/icholy/xagent/internal/x/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/auth/oauthlink"
+	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server/webhookserver"
 	"github.com/icholy/xagent/internal/store"
 	"golang.org/x/oauth2"
@@ -26,6 +27,7 @@ type Server struct {
 	baseURL      string
 	clientID     string
 	clientSecret string
+	publisher    pubsub.Publisher
 }
 
 // Options configures a Server.
@@ -35,6 +37,7 @@ type Options struct {
 	BaseURL      string
 	ClientID     string
 	ClientSecret string
+	Publisher    pubsub.Publisher
 }
 
 // New returns a new Server.
@@ -49,6 +52,7 @@ func New(opts Options) *Server {
 		baseURL:      opts.BaseURL,
 		clientID:     opts.ClientID,
 		clientSecret: opts.ClientSecret,
+		publisher:    opts.Publisher,
 	}
 }
 
@@ -99,7 +103,7 @@ func (s *Server) OAuthHandler() http.Handler {
 // WebhookHandler returns the HTTP handler for Atlassian/Jira webhook events.
 func (s *Server) WebhookHandler() http.Handler {
 	return &webhookserver.AtlassianHandler{
-		Router: &eventrouter.Router{Log: s.log, Store: s.store},
+		Router: &eventrouter.Router{Log: s.log, Store: s.store, Publisher: s.publisher},
 		Store:  s.store,
 	}
 }

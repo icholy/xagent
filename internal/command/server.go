@@ -216,8 +216,9 @@ var ServerCommand = &cli.Command{
 		}
 		if ghClientID := cmd.String("github-client-id"); ghClientID != "" {
 			opts.GitHub = githubserver.New(githubserver.Options{
-				Store:   st,
-				BaseURL: baseURL,
+				Store:     st,
+				BaseURL:   baseURL,
+				Publisher: ps,
 				Config: &githubserver.Config{
 					AppID:         cmd.String("github-app-id"),
 					AppSlug:       cmd.String("github-app-slug"),
@@ -231,6 +232,7 @@ var ServerCommand = &cli.Command{
 			opts.Atlassian = atlassianserver.New(atlassianserver.Options{
 				Store:        st,
 				BaseURL:      baseURL,
+				Publisher:    ps,
 				ClientID:     atlassianClientID,
 				ClientSecret: cmd.String("atlassian-client-secret"),
 			})
