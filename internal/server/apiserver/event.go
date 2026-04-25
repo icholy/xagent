@@ -49,9 +49,9 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 	s.publish(model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "created", Type: "event", ID: event.ID}},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
-		Time:   time.Now(),
+		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
+		Time:      time.Now(),
 	})
 	return &xagentv1.CreateEventResponse{
 		Event: event.Proto(),
@@ -81,9 +81,9 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 	s.publish(model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "deleted", Type: "event", ID: req.Id}},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
-		Time:   time.Now(),
+		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
+		Time:      time.Now(),
 	})
 	return &xagentv1.DeleteEventResponse{}, nil
 }

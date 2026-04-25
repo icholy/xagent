@@ -139,8 +139,8 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
-		OrgID:  org.OrgID,
-		UserID: org.UserID,
+		OrgID:     org.OrgID,
+		UserID:    org.UserID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }
 

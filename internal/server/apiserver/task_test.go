@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"google.golang.org/protobuf/testing/protocmp"
 	"github.com/icholy/xagent/internal/store/teststore"
+	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 )
 
