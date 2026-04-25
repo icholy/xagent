@@ -116,8 +116,9 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 			{Action: "updated", Type: "task", ID: req.TaskId},
 			{Action: "updated", Type: "event", ID: req.EventId},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.AddEventTaskResponse{}, nil
 }
@@ -150,8 +151,9 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 			{Action: "updated", Type: "task", ID: req.TaskId},
 			{Action: "updated", Type: "event", ID: req.EventId},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.RemoveEventTaskResponse{}, nil
 }
