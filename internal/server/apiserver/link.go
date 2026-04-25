@@ -33,14 +33,15 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
-	s.publish(caller.ID, model.Notification{
+	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "created", Type: "task_links", ID: req.TaskId},
 			{Action: "created", Type: "link", ID: link.ID},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.CreateLinkResponse{
 		Link: link.Proto(),

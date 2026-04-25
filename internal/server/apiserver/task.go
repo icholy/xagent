@@ -114,14 +114,15 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
-	s.publish(caller.ID, model.Notification{
+	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "created", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(s.baseURL),
@@ -211,14 +212,15 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task updated", "id", req.Id, "name", req.Name, "start", req.Start, "instructions_added", len(req.AddInstructions))
-	s.publish(caller.ID, model.Notification{
+	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
@@ -252,14 +254,15 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task archived", "id", req.Id)
-	s.publish(caller.ID, model.Notification{
+	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "archived", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.ArchiveTaskResponse{}, nil
 }
@@ -293,14 +296,15 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task unarchived", "id", req.Id)
-	s.publish(caller.ID, model.Notification{
+	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "unarchived", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.UnarchiveTaskResponse{}, nil
 }
@@ -334,14 +338,15 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task cancelled", "id", req.Id)
-	s.publish(caller.ID, model.Notification{
+	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "cancelled", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.CancelTaskResponse{}, nil
 }
@@ -375,14 +380,15 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task restarted", "id", req.Id)
-	s.publish(caller.ID, model.Notification{
+	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "restarted", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID: caller.OrgID,
-		Time:  time.Now(),
+		OrgID:  caller.OrgID,
+		UserID: caller.ID,
+		Time:   time.Now(),
 	})
 	return &xagentv1.RestartTaskResponse{}, nil
 }
