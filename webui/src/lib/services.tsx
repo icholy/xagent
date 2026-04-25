@@ -1,10 +1,10 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { AuthTransport } from "./transport";
-import type { NotificationWebSocket } from "./notification-websocket";
+import type { NotificationSSE } from "./notification-sse";
 
 export interface Services {
   auth: AuthTransport;
-  ws: NotificationWebSocket;
+  notifications: NotificationSSE;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -31,10 +31,10 @@ export function useAuthTransport(): AuthTransport {
   return s.auth;
 }
 
-export function useNotificationWebSocket(): NotificationWebSocket {
+export function useNotificationSSE(): NotificationSSE {
   const s = useContext(ServicesContext);
   if (!s) {
-    throw new Error("useNotificationWebSocket must be used within ServicesProvider");
+    throw new Error("useNotificationSSE must be used within ServicesProvider");
   }
-  return s.ws;
+  return s.notifications;
 }

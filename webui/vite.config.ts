@@ -29,9 +29,9 @@ export default defineConfig({
         target: "http://localhost:6464",
         changeOrigin: true,
       },
-      "/ws": {
-        target: "ws://localhost:6464",
-        ws: true,
+      "/events": {
+        target: "http://localhost:6464",
+        changeOrigin: true,
       },
     },
   },

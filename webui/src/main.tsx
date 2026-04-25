@@ -6,16 +6,16 @@ import { TransportProvider } from '@connectrpc/connect-query'
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { routeTree } from './routeTree.gen'
 import { AuthTransport } from './lib/transport'
-import { NotificationWebSocket } from './lib/notification-websocket'
+import { NotificationSSE } from './lib/notification-sse'
 import { ServicesProvider } from './lib/services'
 import './index.css'
 
 const auth = new AuthTransport()
 const transport = createConnectTransport({ baseUrl: '/', fetch: auth.fetch })
-const ws = new NotificationWebSocket()
+const notifications = new NotificationSSE()
 
-ws.setOrgId(auth.getOrgId())
-auth.onOrgChange((orgId) => ws.setOrgId(orgId))
+notifications.setOrgId(auth.getOrgId())
+auth.onOrgChange((orgId) => notifications.setOrgId(orgId))
 
 const queryClient = new QueryClient()
 
@@ -41,7 +41,7 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
     <StrictMode>
-      <ServicesProvider services={{ auth, ws }}>
+      <ServicesProvider services={{ auth, notifications }}>
         <TransportProvider transport={transport}>
           <QueryClientProvider client={queryClient}>
             <RouterProvider router={router} />
