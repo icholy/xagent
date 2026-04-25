@@ -5,7 +5,7 @@ import { QueryClient, useQueryClient } from '@tanstack/react-query'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import xagentIcon from '@/assets/icon.png'
-import { authTransport } from '@/lib/transport'
+import { useAuthTransport } from '@/lib/services'
 import { useOrgId } from '@/hooks/use-org-id'
 import {
   Select,
@@ -44,6 +44,7 @@ export const Route = createRootRouteWithContext<{
 function RootComponent() {
   const { data: profileData } = useQuery(getProfile, {})
   const queryClient = useQueryClient()
+  const auth = useAuthTransport()
 
   const orgs = profileData?.orgs ?? []
   const currentOrgId = useOrgId()
@@ -51,7 +52,7 @@ function RootComponent() {
   const navigate = useNavigate()
   const route = useMatches().at(-1)
   const handleOrgSwitch = async (orgId: string) => {
-    await authTransport.fetchToken(orgId)
+    await auth.fetchToken(orgId)
     const redirect = route?.staticData.orgSwitchRedirect
     if (redirect) {
       queryClient.removeQueries()
@@ -130,7 +131,7 @@ function RootComponent() {
               href="/auth/logout"
               className="text-muted-foreground hover:text-foreground transition-colors text-sm flex items-center gap-1.5"
               title="Logout"
-              onClick={() => authTransport.clearToken()}
+              onClick={() => auth.clearToken()}
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden md:inline">Logout</span>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { authTransport } from '@/lib/transport'
+import { useAuthTransport } from '@/lib/services'
 import { OAuthAuthorization } from '@/lib/oauth'
 import { useOrgId } from '@/hooks/use-org-id'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,6 +18,7 @@ function OAuthAuthorizePage() {
   const { data: profileData, isLoading } = useQuery(getProfile, {})
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const auth = useAuthTransport()
 
   const profile = profileData?.profile
   const orgs = profileData?.orgs ?? []
@@ -28,7 +29,7 @@ function OAuthAuthorizePage() {
     setError(null)
     setSubmitting(true)
     try {
-      const token = await authTransport.fetchToken()
+      const token = await auth.fetchToken()
       window.location.href = await authz.approve(token)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')

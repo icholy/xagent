@@ -7,7 +7,7 @@ import {
   getProfile,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { OrgMember } from '@/gen/xagent/v1/xagent_pb'
-import { authTransport } from '@/lib/transport'
+import { useOrgId } from '@/hooks/use-org-id'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import {
   Table,
@@ -33,7 +33,7 @@ function MembersPage() {
     refetchInterval: 6000,
   })
 
-  const orgId = authTransport.getOrgId()
+  const orgId = useOrgId()
   const isOwner = profileData?.orgs.some((org) => String(org.id) === orgId && org.owner === profileData.profile?.id) ?? false
 
   if (isLoading) {

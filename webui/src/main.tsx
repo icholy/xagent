@@ -3,19 +3,18 @@ import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TransportProvider } from '@connectrpc/connect-query'
+import { createConnectTransport } from '@connectrpc/connect-web'
 import { routeTree } from './routeTree.gen'
-import { transport, authTransport } from './lib/transport'
-import { notificationWebSocket } from './lib/notification-websocket'
+import { AuthTransport } from './lib/transport'
+import { NotificationWebSocket } from './lib/notification-websocket'
+import { ServicesProvider } from './lib/services'
 import './index.css'
 
-let lastOrgId = authTransport.getOrgId()
-authTransport.subscribe(() => {
-  const next = authTransport.getOrgId()
-  if (next !== lastOrgId) {
-    lastOrgId = next
-    notificationWebSocket.reconnect()
-  }
-})
+const auth = new AuthTransport()
+const transport = createConnectTransport({ baseUrl: '/', fetch: auth.fetch })
+const ws = new NotificationWebSocket()
+
+auth.onOrgChange(() => ws.reconnect())
 
 const queryClient = new QueryClient()
 
@@ -41,11 +40,13 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
     <StrictMode>
-      <TransportProvider transport={transport}>
-        <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
-      </TransportProvider>
+      <ServicesProvider services={{ auth, ws }}>
+        <TransportProvider transport={transport}>
+          <QueryClientProvider client={queryClient}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        </TransportProvider>
+      </ServicesProvider>
     </StrictMode>
   )
 }

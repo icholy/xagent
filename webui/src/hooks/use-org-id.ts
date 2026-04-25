@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from 'react'
-import { authTransport } from '@/lib/transport'
+import { useAuthTransport } from '@/lib/services'
 
 /** Returns the current org ID, re-rendering when it changes. */
 export function useOrgId(): string {
+  const auth = useAuthTransport()
   return useSyncExternalStore(
-    (cb) => authTransport.subscribe(cb),
-    () => authTransport.getOrgId(),
+    (cb) => auth.onOrgChange(cb),
+    () => auth.getOrgId(),
   )
 }

@@ -1,15 +1,18 @@
-import { createConnectTransport } from "@connectrpc/connect-web";
-
 const TOKEN_KEY = "xagent_token";
 const ORG_ID_KEY = "xagent_org_id";
 
-class AuthTransport {
+export class AuthTransport {
   private refreshPromise: Promise<string> | null = null;
   private events = new EventTarget();
+  private lastOrgId: string;
 
-  subscribe(listener: () => void): () => void {
-    this.events.addEventListener("change", listener);
-    return () => this.events.removeEventListener("change", listener);
+  constructor() {
+    this.lastOrgId = this.getOrgId();
+  }
+
+  onOrgChange(listener: () => void): () => void {
+    this.events.addEventListener("orgchange", listener);
+    return () => this.events.removeEventListener("orgchange", listener);
   }
 
   getToken(): string | null {
@@ -20,16 +23,23 @@ class AuthTransport {
     return localStorage.getItem(ORG_ID_KEY) ?? "0";
   }
 
+  private notifyOrgChange(): void {
+    const next = this.getOrgId();
+    if (next === this.lastOrgId) return;
+    this.lastOrgId = next;
+    this.events.dispatchEvent(new Event("orgchange"));
+  }
+
   private storeToken(token: string, orgId: string): void {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(ORG_ID_KEY, orgId);
-    this.events.dispatchEvent(new Event("change"));
+    this.notifyOrgChange();
   }
 
   clearToken(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ORG_ID_KEY);
-    this.events.dispatchEvent(new Event("change"));
+    this.notifyOrgChange();
   }
 
   async fetchToken(orgId?: string): Promise<string> {
@@ -84,10 +94,3 @@ class AuthTransport {
   };
 }
 
-export const authTransport = new AuthTransport();
-
-// API base URL - uses root path since webui proxies to the backend
-export const transport = createConnectTransport({
-  baseUrl: "/",
-  fetch: authTransport.fetch,
-});
