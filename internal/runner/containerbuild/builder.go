@@ -9,7 +9,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
-	"github.com/icholy/xagent/internal/workspace"
+	"github.com/icholy/xagent/internal/runner/workspace"
 )
 
 // File is a file to copy into the container.
