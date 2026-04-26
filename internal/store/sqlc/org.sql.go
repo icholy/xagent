@@ -16,7 +16,6 @@ import (
 const addOrgMember = `-- name: AddOrgMember :exec
 INSERT INTO org_members (org_id, user_id, role, created_at)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (org_id, user_id) DO NOTHING
 `
 
 type AddOrgMemberParams struct {

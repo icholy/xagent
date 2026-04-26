@@ -121,6 +121,31 @@ func TestAddAndListOrgMembers(t *testing.T) {
 	assert.Equal(t, len(listResp.Members), 2)
 }
 
+func TestAddOrgMember_Duplicate(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	ownerOrg := teststore.CreateOrg(t, srv.store, nil)
+	owner := createCtx(t, ownerOrg)
+	memberOrg := teststore.CreateOrg(t, srv.store, nil)
+	member := createCtx(t, memberOrg)
+	memberEmail := apiauth.Caller(member).ID + "@test.com"
+
+	// Act
+	_, err := srv.AddOrgMember(owner, &xagentv1.AddOrgMemberRequest{
+		Email: memberEmail,
+	})
+	assert.NilError(t, err)
+
+	// Add the same member again
+	_, err = srv.AddOrgMember(owner, &xagentv1.AddOrgMemberRequest{
+		Email: memberEmail,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "already a member")
+}
+
 func TestDeleteOrg_WithTasks(t *testing.T) {
 	t.Parallel()
 	// Arrange

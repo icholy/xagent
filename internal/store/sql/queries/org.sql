@@ -26,8 +26,7 @@ UPDATE orgs SET archived = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
 
 -- name: AddOrgMember :exec
 INSERT INTO org_members (org_id, user_id, role, created_at)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (org_id, user_id) DO NOTHING;
+VALUES ($1, $2, $3, $4);
 
 -- name: RemoveOrgMember :exec
 DELETE FROM org_members

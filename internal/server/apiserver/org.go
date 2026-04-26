@@ -11,6 +11,7 @@ import (
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/lib/pq"
 )
 
 func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {
@@ -102,6 +103,10 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 		Role:   "member",
 	}
 	if err := s.store.AddOrgMember(ctx, nil, member); err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("user %q is already a member of this org", req.Email))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("org member added", "org_id", caller.OrgID, "user_id", user.ID, "email", req.Email)
