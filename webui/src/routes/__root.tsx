@@ -121,7 +121,9 @@ function RootComponent() {
                 </Select>
               </div>
             )}
-            <ConnectionIndicator />
+            <span className="hidden md:inline-flex">
+              <ConnectionIndicator />
+            </span>
             <Link
               to="/settings"
               search={{ tab: 'account' }}
@@ -142,9 +144,9 @@ function RootComponent() {
             </a>
           </div>
           {orgs.length > 0 && (
-            <div className="basis-full md:hidden">
+            <div className="basis-full md:hidden flex items-center gap-3">
               <Select value={currentOrgId} onValueChange={handleOrgSwitch}>
-                <SelectTrigger className="w-full h-8 text-sm">
+                <SelectTrigger className="flex-1 h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -155,6 +157,7 @@ function RootComponent() {
                   ))}
                 </SelectContent>
               </Select>
+              <ConnectionIndicator />
             </div>
           )}
         </div>
