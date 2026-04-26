@@ -76,7 +76,7 @@ func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp := &xagentv1.GetProfileResponse{
+	return &xagentv1.GetProfileResponse{
 		Profile: &xagentv1.Profile{
 			Id:    u.ID,
 			Email: u.Email,
@@ -85,10 +85,6 @@ func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest
 		DefaultOrgId:     user.DefaultOrgID,
 		GithubAccount:    user.GitHubAccountProto(),
 		AtlassianAccount: user.AtlassianAccountProto(),
-	}
-	resp.Orgs = make([]*xagentv1.Org, len(orgs))
-	for i, o := range orgs {
-		resp.Orgs[i] = o.Proto()
-	}
-	return resp, nil
+		Orgs:             model.MapProtos(orgs),
+	}, nil
 }
