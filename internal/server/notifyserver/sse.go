@@ -28,6 +28,26 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.streamSSE(w, r, orgID, func(n model.Notification) bool {
+		return n.UserID != caller.ID
+	})
+}
+
+func (s *Server) handleRunnerSSE(w http.ResponseWriter, r *http.Request) {
+	caller := apiauth.MustCaller(r.Context())
+	orgID := caller.OrgID
+
+	s.streamSSE(w, r, orgID, func(n model.Notification) bool {
+		for _, r := range n.Resources {
+			if r.Type == "task" {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func (s *Server) streamSSE(w http.ResponseWriter, r *http.Request, orgID int64, filter func(model.Notification) bool) {
 	ch, cancel, err := s.subscriber.Subscribe(r.Context(), orgID)
 	if err != nil {
 		http.Error(w, "subscribe failed", http.StatusInternalServerError)
@@ -66,7 +86,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case n := <-ch:
-			if n.UserID == caller.ID {
+			if !filter(n) {
 				continue
 			}
 			seq++

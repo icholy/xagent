@@ -100,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	// SSE endpoint (protected)
 	if s.notify != nil {
 		mux.Handle("/events", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.Handler()))
+		mux.Handle("/events/runner", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.RunnerHandler()))
 	}
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {

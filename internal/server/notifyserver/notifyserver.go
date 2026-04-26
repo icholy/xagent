@@ -51,3 +51,9 @@ func New(opts Options) *Server {
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(s.handleSSE)
 }
+
+// RunnerHandler returns an SSE handler for runners. Unlike Handler, it does
+// not filter out self-notifications and only forwards task-related changes.
+func (s *Server) RunnerHandler() http.Handler {
+	return http.HandlerFunc(s.handleRunnerSSE)
+}

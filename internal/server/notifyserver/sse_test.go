@@ -149,6 +149,172 @@ func TestSSE_SelfNotificationFiltered(t *testing.T) {
 	assert.DeepEqual(t, got, want)
 }
 
+func TestRunnerSSE(t *testing.T) {
+	t.Parallel()
+
+	ps := pubsub.NewLocalPubSub()
+	const orgID int64 = 1
+	srv := New(Options{
+		Subscriber:  ps,
+		OrgResolver: allowOrgResolver("u", orgID),
+	})
+
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.RunnerHandler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", ts.URL, nil)
+	assert.NilError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	assert.NilError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
+	assert.Equal(t, resp.Header.Get("Content-Type"), "text/event-stream")
+
+	r := sse.NewReader(resp.Body)
+
+	// Read the ready event.
+	ev, err := r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "ready")
+
+	// Publish a task notification.
+	want := model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 42}},
+		OrgID:     orgID,
+		Time:      time.Now().Truncate(time.Second),
+	}
+	err = ps.Publish(ctx, want)
+	assert.NilError(t, err)
+
+	// Read the change event.
+	ev, err = r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "change")
+
+	var got model.Notification
+	err = json.Unmarshal(ev.Data, &got)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, got, want)
+}
+
+func TestRunnerSSE_FiltersNonTaskNotifications(t *testing.T) {
+	t.Parallel()
+
+	ps := pubsub.NewLocalPubSub()
+	const orgID int64 = 1
+	srv := New(Options{
+		Subscriber:  ps,
+		OrgResolver: allowOrgResolver("u", orgID),
+	})
+
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.RunnerHandler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", ts.URL, nil)
+	assert.NilError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	assert.NilError(t, err)
+	defer resp.Body.Close()
+
+	r := sse.NewReader(resp.Body)
+
+	// Read the ready event.
+	ev, err := r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "ready")
+
+	// Publish a non-task notification (keys) — should be filtered.
+	err = ps.Publish(ctx, model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "keys"}},
+		OrgID:     orgID,
+	})
+	assert.NilError(t, err)
+
+	// Publish a task notification — should be delivered.
+	want := model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: 7}},
+		OrgID:     orgID,
+		Time:      time.Now().Truncate(time.Second),
+	}
+	err = ps.Publish(ctx, want)
+	assert.NilError(t, err)
+
+	// Should only receive the task notification.
+	ev, err = r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "change")
+	assert.Equal(t, ev.ID, "1")
+
+	var got model.Notification
+	err = json.Unmarshal(ev.Data, &got)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, got, want)
+}
+
+func TestRunnerSSE_SelfNotificationNotFiltered(t *testing.T) {
+	t.Parallel()
+
+	ps := pubsub.NewLocalPubSub()
+	const orgID int64 = 1
+	srv := New(Options{
+		Subscriber:  ps,
+		OrgResolver: allowOrgResolver("u", orgID),
+	})
+
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.RunnerHandler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", ts.URL, nil)
+	assert.NilError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	assert.NilError(t, err)
+	defer resp.Body.Close()
+
+	r := sse.NewReader(resp.Body)
+
+	// Read the ready event.
+	ev, err := r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "ready")
+
+	// Publish a task notification from the same user — should NOT be filtered
+	// (unlike the regular SSE endpoint).
+	want := model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: 1}},
+		OrgID:     orgID,
+		UserID:    "u",
+		Time:      time.Now().Truncate(time.Second),
+	}
+	err = ps.Publish(ctx, want)
+	assert.NilError(t, err)
+
+	ev, err = r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "change")
+
+	var got model.Notification
+	err = json.Unmarshal(ev.Data, &got)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, got, want)
+}
+
 func TestSSE_OrgIsolation(t *testing.T) {
 	t.Parallel()
 
