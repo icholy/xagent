@@ -89,7 +89,7 @@ func TestSSE(t *testing.T) {
 	assert.DeepEqual(t, got, want)
 }
 
-func TestSSE_SelfNotificationFiltered(t *testing.T) {
+func TestSSE_SelfNotificationDelivered(t *testing.T) {
 	t.Parallel()
 
 	ps := pubsub.NewLocalPubSub()
@@ -118,27 +118,19 @@ func TestSSE_SelfNotificationFiltered(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, ev.Event, "ready")
 
-	// Publish a notification from the same user — should be filtered.
-	err = ps.Publish(t.Context(), model.Notification{
+	// Publish a notification from the same user — server delivers all
+	// notifications; client-side filtering handles deduplication.
+	want := model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 1}},
 		OrgID:     orgID,
 		UserID:    "u",
-	})
-	assert.NilError(t, err)
-
-	// Publish a notification from a different user — should be delivered.
-	want := model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: 2}},
-		OrgID:     orgID,
-		UserID:    "other",
 		Time:      time.Now().Truncate(time.Second),
 	}
 	err = ps.Publish(t.Context(), want)
 	assert.NilError(t, err)
 
-	// Should only receive the notification from the other user.
+	// Should receive the notification even though it's from the same user.
 	ev, err = r.Read()
 	assert.NilError(t, err)
 	assert.Equal(t, ev.Event, "change")
