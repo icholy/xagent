@@ -62,11 +62,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
-	// EventSource cannot send custom headers, so the client ID arrives as
-	// a query parameter. Set it on the caller so the skip logic below can
-	// use caller.ClientID consistently.
-	if cid := r.URL.Query().Get("client_id"); cid != "" {
-		caller.ClientID = cid
+	// EventSource cannot send custom headers, so the client ID may arrive
+	// as a query parameter. Only set it if not already populated from the header.
+	if caller.ClientID == "" {
+		caller.ClientID = r.URL.Query().Get("client_id")
 	}
 
 	ctx := r.Context()
