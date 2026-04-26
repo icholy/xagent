@@ -7,11 +7,13 @@ const ORG_ID_KEY = "xagent_org_id";
 export const NO_ORG = "0";
 
 export class AuthTransport {
+  readonly clientId: string;
   private refreshPromise: Promise<string> | null = null;
   private events = new EventTarget();
   private lastOrgId: string;
 
-  constructor() {
+  constructor(clientId: string) {
+    this.clientId = clientId;
     this.lastOrgId = this.getOrgId();
   }
 
@@ -84,6 +86,7 @@ export class AuthTransport {
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Bearer ${token}`);
     headers.set("X-Auth-Type", "app");
+    headers.set("X-Client-ID", this.clientId);
 
     let resp = await fetch(input, { ...init, headers });
 

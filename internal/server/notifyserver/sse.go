@@ -66,9 +66,6 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case n := <-ch:
-			if n.UserID == caller.ID {
-				continue
-			}
 			seq++
 			data, err := json.Marshal(n)
 			if err != nil {

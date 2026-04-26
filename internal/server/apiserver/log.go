@@ -33,6 +33,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: req.TaskId}},
 		OrgID:     caller.OrgID,
 		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
 		Time:      time.Now(),
 	})
 	return &xagentv1.UploadLogsResponse{}, nil

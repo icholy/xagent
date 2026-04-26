@@ -9,6 +9,7 @@ type Notification struct {
 	Resources []NotificationResource `json:"resources,omitempty"`
 	OrgID     int64                  `json:"org_id"`
 	UserID    string                 `json:"user_id,omitempty"`
+	ClientID  string                 `json:"client_id,omitempty"`
 	Time      time.Time              `json:"timestamp"`
 }
 

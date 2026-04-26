@@ -11,6 +11,7 @@ export interface Notification {
   resources?: NotificationResource[];
   org_id: number;
   user_id?: string;
+  client_id?: string;
   timestamp: string;
 }
 
@@ -25,8 +26,10 @@ export class NotificationSSE {
   private state: ConnectionState = "idle";
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
+  private clientId: string;
 
-  constructor() {
+  constructor(clientId: string) {
+    this.clientId = clientId;
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this.handleVisibilityChange);
     }
@@ -148,6 +151,8 @@ export class NotificationSSE {
         console.warn("NotificationSSE: failed to parse message", event.data);
         return;
       }
+      // Skip notifications originating from this tab
+      if (n.client_id === this.clientId) return;
       this.events.dispatchEvent(
         new CustomEvent("notification", { detail: n }),
       );

@@ -11,14 +11,14 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
+	httphelper "github.com/zitadel/oidc/v3/pkg/http"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authentication"
 	openid "github.com/zitadel/zitadel-go/v3/pkg/authentication/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authorization"
 	"github.com/zitadel/zitadel-go/v3/pkg/authorization/oauth"
 	"github.com/zitadel/zitadel-go/v3/pkg/http/middleware"
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
-	httphelper "github.com/zitadel/oidc/v3/pkg/http"
-	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
 // Auth type constants matching X-Auth-Type header values.
@@ -31,11 +31,12 @@ const (
 
 // UserInfo contains authenticated user information.
 type UserInfo struct {
-	ID    string
-	Email string
-	Name  string
-	OrgID int64
-	Type  string // Auth type: one of AuthType* constants
+	ID       string
+	Email    string
+	Name     string
+	OrgID    int64
+	Type     string // Auth type: one of AuthType* constants
+	ClientID string // Per-tab client identifier from X-Client-ID header
 }
 
 // DisplayName returns the best available display name for the user.
@@ -222,7 +223,11 @@ func (a *Auth) validateKey(r *http.Request) (*UserInfo, error) {
 	if !ok {
 		return nil, errors.New("missing Bearer token")
 	}
-	return a.validator.ValidateKey(r.Context(), HashKey(raw))
+	user, err := a.validator.ValidateKey(r.Context(), HashKey(raw))
+	if user != nil {
+		user.ClientID = r.Header.Get("X-Client-ID")
+	}
+	return user, err
 }
 
 // validateAppToken extracts and validates an app JWT from the Authorization header.
@@ -236,11 +241,12 @@ func (a *Auth) validateAppToken(r *http.Request) (*UserInfo, error) {
 		return nil, err
 	}
 	return &UserInfo{
-		ID:    claims.Subject,
-		Email: claims.Email,
-		Name:  claims.Name,
-		OrgID: claims.OrgID,
-		Type:  AuthTypeApp,
+		ID:       claims.Subject,
+		Email:    claims.Email,
+		Name:     claims.Name,
+		OrgID:    claims.OrgID,
+		Type:     AuthTypeApp,
+		ClientID: r.Header.Get("X-Client-ID"),
 	}, nil
 }
 
@@ -409,10 +415,11 @@ func (a *Auth) cookieUser(r *http.Request) *UserInfo {
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{
-			ID:    ctx.UserInfo.Subject,
-			Email: ctx.UserInfo.Email,
-			Name:  ctx.UserInfo.Name,
-			Type:  AuthTypeCookie,
+			ID:       ctx.UserInfo.Subject,
+			Email:    ctx.UserInfo.Email,
+			Name:     ctx.UserInfo.Name,
+			Type:     AuthTypeCookie,
+			ClientID: r.Header.Get("X-Client-ID"),
 		}
 	}
 	return nil
@@ -434,10 +441,11 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 	case AuthTypeBearer:
 		if ctx := a.bearer.Context(r.Context()); ctx != nil {
 			return &UserInfo{
-				ID:    ctx.Subject,
-				Email: ctx.Email,
-				Name:  ctx.Name,
-				Type:  AuthTypeBearer,
+				ID:       ctx.Subject,
+				Email:    ctx.Email,
+				Name:     ctx.Name,
+				Type:     AuthTypeBearer,
+				ClientID: r.Header.Get("X-Client-ID"),
 			}
 		}
 		return nil
@@ -447,10 +455,11 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{
-			ID:    ctx.UserInfo.Subject,
-			Email: ctx.UserInfo.Email,
-			Name:  ctx.UserInfo.Name,
-			Type:  AuthTypeCookie,
+			ID:       ctx.UserInfo.Subject,
+			Email:    ctx.UserInfo.Email,
+			Name:     ctx.UserInfo.Name,
+			Type:     AuthTypeCookie,
+			ClientID: r.Header.Get("X-Client-ID"),
 		}
 	}
 	return nil

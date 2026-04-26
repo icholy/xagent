@@ -110,6 +110,7 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 		Resources: []model.NotificationResource{{Action: "added", Type: "org_members"}},
 		OrgID:     caller.OrgID,
 		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
 		Time:      time.Now(),
 	})
 	return &xagentv1.AddOrgMemberResponse{
@@ -144,6 +145,7 @@ func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMem
 		Resources: []model.NotificationResource{{Action: "removed", Type: "org_members"}},
 		OrgID:     caller.OrgID,
 		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
 		Time:      time.Now(),
 	})
 	return &xagentv1.RemoveOrgMemberResponse{}, nil

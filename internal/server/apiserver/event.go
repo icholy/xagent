@@ -47,6 +47,7 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 		Resources: []model.NotificationResource{{Action: "created", Type: "event", ID: event.ID}},
 		OrgID:     caller.OrgID,
 		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
 		Time:      time.Now(),
 	})
 	return &xagentv1.CreateEventResponse{
@@ -79,6 +80,7 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 		Resources: []model.NotificationResource{{Action: "deleted", Type: "event", ID: req.Id}},
 		OrgID:     caller.OrgID,
 		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
 		Time:      time.Now(),
 	})
 	return &xagentv1.DeleteEventResponse{}, nil
@@ -112,9 +114,10 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 			{Action: "updated", Type: "task", ID: req.TaskId},
 			{Action: "updated", Type: "event", ID: req.EventId},
 		},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
-		Time:   time.Now(),
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Time:     time.Now(),
 	})
 	return &xagentv1.AddEventTaskResponse{}, nil
 }
@@ -147,9 +150,10 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 			{Action: "updated", Type: "task", ID: req.TaskId},
 			{Action: "updated", Type: "event", ID: req.EventId},
 		},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
-		Time:   time.Now(),
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Time:     time.Now(),
 	})
 	return &xagentv1.RemoveEventTaskResponse{}, nil
 }
