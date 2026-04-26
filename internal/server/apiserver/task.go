@@ -158,8 +158,8 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 	resp := &xagentv1.GetTaskDetailsResponse{
 		Task:     task.Proto(s.baseURL),
 		Children: make([]*xagentv1.Task, len(children)),
-		Events:   model.MapProtos(events),
-		Links:    model.MapProtos(links),
+		Events:   model.ProtoMap(events),
+		Links:    model.ProtoMap(links),
 	}
 	for i, c := range children {
 		resp.Children[i] = c.Proto(s.baseURL)

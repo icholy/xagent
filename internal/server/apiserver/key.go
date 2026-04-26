@@ -53,7 +53,7 @@ func (s *Server) ListKeys(ctx context.Context, req *xagentv1.ListKeysRequest) (*
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.ListKeysResponse{
-		Keys: model.MapProtos(keys),
+		Keys: model.ProtoMap(keys),
 	}, nil
 }
 

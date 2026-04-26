@@ -45,6 +45,6 @@ func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.ListLogsResponse{
-		Entries: model.MapProtos(logs),
+		Entries: model.ProtoMap(logs),
 	}, nil
 }

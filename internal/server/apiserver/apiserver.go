@@ -85,6 +85,6 @@ func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest
 		DefaultOrgId:     user.DefaultOrgID,
 		GithubAccount:    user.GitHubAccountProto(),
 		AtlassianAccount: user.AtlassianAccountProto(),
-		Orgs:             model.MapProtos(orgs),
+		Orgs:             model.ProtoMap(orgs),
 	}, nil
 }

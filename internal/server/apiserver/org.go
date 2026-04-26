@@ -48,7 +48,7 @@ func (s *Server) ListOrgs(ctx context.Context, req *xagentv1.ListOrgsRequest) (*
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return &xagentv1.ListOrgsResponse{Orgs: model.MapProtos(orgs)}, nil
+	return &xagentv1.ListOrgsResponse{Orgs: model.ProtoMap(orgs)}, nil
 }
 
 func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error) {
@@ -155,7 +155,7 @@ func (s *Server) ListOrgMembers(ctx context.Context, req *xagentv1.ListOrgMember
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return &xagentv1.ListOrgMembersResponse{Members: model.MapProtos(members)}, nil
+	return &xagentv1.ListOrgMembersResponse{Members: model.ProtoMap(members)}, nil
 }
 
 func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error) {

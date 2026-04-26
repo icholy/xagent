@@ -55,7 +55,7 @@ func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.ListLinksResponse{
-		Links: model.MapProtos(links),
+		Links: model.ProtoMap(links),
 	}, nil
 }
 
@@ -66,6 +66,6 @@ func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByUR
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.FindLinksByURLResponse{
-		Links: model.MapProtos(links),
+		Links: model.ProtoMap(links),
 	}, nil
 }

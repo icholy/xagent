@@ -26,7 +26,7 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.ListEventsResponse{
-		Events: model.MapProtos(events),
+		Events: model.ProtoMap(events),
 	}, nil
 }
 
@@ -170,6 +170,6 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.ListEventsByTaskResponse{
-		Events: model.MapProtos(events),
+		Events: model.ProtoMap(events),
 	}, nil
 }
