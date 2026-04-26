@@ -70,41 +70,34 @@ type Notification struct {
 
 This is an in-memory struct (not persisted to the database), so no migration is needed. The pubsub layer (`internal/pubsub/`) requires no changes — `ClientID` is just another field on the struct that flows through the existing channels.
 
-### 5. Extracting Client ID from Requests (Backend)
+### 5. Adding Client ID to UserInfo (Backend)
 
-Add a context helper in `internal/auth/apiauth/` (or a new small package) to extract and store the client ID:
+Add a `ClientID` field to the existing `apiauth.UserInfo` struct (`internal/auth/apiauth/apiauth.go`):
 
 ```go
-type clientIDKey struct{}
-
-func WithClientID(ctx context.Context, clientID string) context.Context {
-    return context.WithValue(ctx, clientIDKey{}, clientID)
-}
-
-func ClientID(ctx context.Context) string {
-    v, _ := ctx.Value(clientIDKey{}).(string)
-    return v
+type UserInfo struct {
+    ID       string
+    Email    string
+    Name     string
+    OrgID    int64
+    Type     string
+    ClientID string  // new: per-tab client identifier from X-Client-ID header
 }
 ```
 
-**Middleware approach:** Add a lightweight middleware (or extend existing `RequireAuth`) that reads `X-Client-ID` from the request header and injects it into the context:
+In `RequireAuth` middleware, after resolving the user, read the header and set it on the struct:
 
 ```go
-func ClientIDMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        if clientID := r.Header.Get("X-Client-ID"); clientID != "" {
-            r = r.WithContext(WithClientID(r.Context(), clientID))
-        }
-        next.ServeHTTP(w, r)
-    })
-}
+user.ClientID = r.Header.Get("X-Client-ID")
 ```
 
-This is a separate middleware rather than embedded in `RequireAuth` because client ID is orthogonal to authentication — CLI and server-internal callers may not send it, and that's fine.
+This is the simplest approach because every publish site already accesses the caller via `apiauth.MustCaller(ctx)` and uses `caller.ID` and `caller.OrgID`. Adding `ClientID` to the same struct means publish sites just use `caller.ClientID` — no separate context key, no extra middleware, no changes to the function signatures.
+
+The field is empty for callers that don't send the header (CLI, server-internal), which is fine — the SSE skip logic handles that case via the `UserID` fallback.
 
 ### 6. Stamping Client ID on Published Notifications (Backend)
 
-In `internal/server/apiserver/`, wherever notifications are published, add the `ClientID` field:
+In `internal/server/apiserver/`, wherever notifications are published, use `caller.ClientID`:
 
 ```go
 s.publish(ctx, model.Notification{
@@ -112,12 +105,12 @@ s.publish(ctx, model.Notification{
     Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: id}},
     OrgID:    caller.OrgID,
     UserID:   caller.ID,
-    ClientID: apiauth.ClientID(ctx),  // new
+    ClientID: caller.ClientID,  // new
     Time:     time.Now(),
 })
 ```
 
-The same pattern applies to `event.go` and any other publishers.
+This follows the same pattern as the existing `UserID: caller.ID` — no new context helpers needed.
 
 ### 7. SSE Skip Logic Change (Backend)
 
@@ -155,9 +148,8 @@ if clientID != "" && n.ClientID != "" {
 | `webui/src/lib/transport.ts` | Add `getClientId()` helper, send `X-Client-ID` header in `fetch()` |
 | `webui/src/lib/notification-sse.ts` | Add `client_id` query param to EventSource URL |
 | `internal/model/notification.go` | Add `ClientID string` field to `Notification` |
-| `internal/auth/apiauth/` | Add `WithClientID`/`ClientID` context helpers and `ClientIDMiddleware` |
-| `internal/server/` (router setup) | Wire `ClientIDMiddleware` into the HTTP handler chain |
-| `internal/server/apiserver/apiserver.go` | Add `ClientID: apiauth.ClientID(ctx)` to all `publish()` calls |
+| `internal/auth/apiauth/apiauth.go` | Add `ClientID` field to `UserInfo`; read `X-Client-ID` header in `RequireAuth` |
+| `internal/server/apiserver/apiserver.go` | Add `ClientID: caller.ClientID` to all `publish()` calls |
 | `internal/server/apiserver/event.go` | Same as above |
 | `internal/server/notifyserver/sse.go` | Read `client_id` query param; replace skip logic with client-ID-first, user-ID-fallback |
 
