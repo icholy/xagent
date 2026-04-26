@@ -23,6 +23,30 @@ export class NotificationSSE {
   private events = new EventTarget();
   private orgId: string = NO_ORG;
   private state: ConnectionState = "idle";
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+
+  constructor() {
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    }
+  }
+
+  private handleVisibilityChange = () => {
+    if (this.closed || this.orgId === NO_ORG) return;
+    if (document.visibilityState === "visible") {
+      // Coming back to the foreground: reconnect immediately.
+      this.reconnectAttempts = 0;
+      this.connect();
+    } else {
+      // Backgrounded: proactively close. The native EventSource often gets
+      // stuck in a half-dead state on mobile when the tab is hidden, and the
+      // browser's built-in reconnect doesn't recover. Closing here means we
+      // always re-establish a fresh connection on visibilitychange → visible.
+      this.disconnect();
+      this.setState("idle");
+    }
+  };
 
   addNotificationListener(listener: NotificationListener): () => void {
     const handler = (e: Event) => {
@@ -64,6 +88,7 @@ export class NotificationSSE {
     if (orgId === this.orgId) return;
     this.orgId = orgId;
     this.disconnect();
+    this.reconnectAttempts = 0;
     if (orgId === NO_ORG) {
       this.setState("idle");
     } else {
@@ -74,6 +99,9 @@ export class NotificationSSE {
   close() {
     this.closed = true;
     this.disconnect();
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    }
     this.setState("idle");
   }
 
@@ -82,15 +110,32 @@ export class NotificationSSE {
       this.es.close();
       this.es = null;
     }
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private scheduleReconnect() {
+    if (this.closed || this.orgId === NO_ORG) return;
+    if (this.reconnectTimer !== null) return;
+    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30_000);
+    this.reconnectAttempts += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
   }
 
   private connect() {
     if (this.closed || this.orgId === NO_ORG) return;
+    this.disconnect();
 
     this.setState("connecting");
     this.es = new EventSource(`/events?org_id=${this.orgId}`);
 
     this.es.addEventListener("ready", () => {
+      this.reconnectAttempts = 0;
       this.setState("open");
       this.events.dispatchEvent(new Event("reconnect"));
     });
@@ -111,6 +156,13 @@ export class NotificationSSE {
     this.es.onerror = () => {
       this.setState("closed");
       this.events.dispatchEvent(new Event("error"));
+      // Browser EventSource auto-reconnect is unreliable on mobile (especially
+      // after the tab is backgrounded). Tear down and reconnect ourselves.
+      if (this.es) {
+        this.es.close();
+        this.es = null;
+      }
+      this.scheduleReconnect();
     };
   }
 }
