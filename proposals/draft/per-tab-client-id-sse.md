@@ -1,0 +1,185 @@
+# Per-Tab Client ID for SSE Notifications
+
+Issue: https://github.com/icholy/xagent/issues/529
+
+## Problem
+
+The SSE notification system skips notifications for the user who originated the change (`sse.go:69`: `if n.UserID == caller.ID { continue }`). This prevents the originating tab from double-refreshing, but also suppresses notifications to all other tabs of the same user, breaking multi-tab sync.
+
+We need to identify the specific browser tab (not just the user) that originated a change, and skip only that tab's SSE stream.
+
+## Design
+
+### 1. Client ID Generation (Frontend)
+
+Each tab generates a unique client ID using `crypto.randomUUID()` and stores it in `sessionStorage` under the key `xagent_client_id`.
+
+**Why `sessionStorage` over in-memory:**
+- `sessionStorage` is scoped to a single tab and survives page refreshes within that tab.
+- An in-memory variable would be lost on hard refresh, causing the tab to receive its own pending notification during the brief window between refresh and reconnect.
+- `sessionStorage` is not shared across tabs (unlike `localStorage`), so each tab naturally gets its own ID.
+- "Duplicate tab" in browsers creates a new `sessionStorage` context, so duplicated tabs get new IDs — correct behavior since a duplicated tab did not originate the in-flight mutation.
+
+**Implementation in `webui/src/lib/transport.ts`:**
+
+```typescript
+function getClientId(): string {
+  let clientId = sessionStorage.getItem("xagent_client_id");
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    sessionStorage.setItem("xagent_client_id", clientId);
+  }
+  return clientId;
+}
+```
+
+### 2. Sending Client ID on Mutations (Frontend)
+
+In `AuthTransport.fetch()` (`webui/src/lib/transport.ts:78`), add the `X-Client-ID` header alongside the existing `Authorization` and `X-Auth-Type` headers:
+
+```typescript
+headers.set("X-Client-ID", getClientId());
+```
+
+This covers all Connect RPC mutations since `AuthTransport` is the single fetch chokepoint.
+
+### 3. Sending Client ID on SSE Connection (Frontend)
+
+In `NotificationSSE.connect()` (`webui/src/lib/notification-sse.ts:135`), append the client ID as a query parameter:
+
+```typescript
+const url = `/events?org_id=${orgId}&client_id=${getClientId()}`;
+```
+
+`EventSource` cannot send custom headers, so a query parameter is the only option. This is not sensitive data (it's a random UUID used only for deduplication), so a query param is acceptable.
+
+### 4. Notification Model Change (Backend)
+
+Add a `ClientID` field to `model.Notification`:
+
+```go
+type Notification struct {
+    Type      string
+    Resources []NotificationResource
+    OrgID     int64
+    UserID    string
+    ClientID  string  // new: originating tab's client ID
+    Time      time.Time
+}
+```
+
+This is an in-memory struct (not persisted to the database), so no migration is needed. The pubsub layer (`internal/pubsub/`) requires no changes — `ClientID` is just another field on the struct that flows through the existing channels.
+
+### 5. Extracting Client ID from Requests (Backend)
+
+Add a context helper in `internal/auth/apiauth/` (or a new small package) to extract and store the client ID:
+
+```go
+type clientIDKey struct{}
+
+func WithClientID(ctx context.Context, clientID string) context.Context {
+    return context.WithValue(ctx, clientIDKey{}, clientID)
+}
+
+func ClientID(ctx context.Context) string {
+    v, _ := ctx.Value(clientIDKey{}).(string)
+    return v
+}
+```
+
+**Middleware approach:** Add a lightweight middleware (or extend existing `RequireAuth`) that reads `X-Client-ID` from the request header and injects it into the context:
+
+```go
+func ClientIDMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if clientID := r.Header.Get("X-Client-ID"); clientID != "" {
+            r = r.WithContext(WithClientID(r.Context(), clientID))
+        }
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+This is a separate middleware rather than embedded in `RequireAuth` because client ID is orthogonal to authentication — CLI and server-internal callers may not send it, and that's fine.
+
+### 6. Stamping Client ID on Published Notifications (Backend)
+
+In `internal/server/apiserver/`, wherever notifications are published, add the `ClientID` field:
+
+```go
+s.publish(ctx, model.Notification{
+    Type:     "change",
+    Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: id}},
+    OrgID:    caller.OrgID,
+    UserID:   caller.ID,
+    ClientID: apiauth.ClientID(ctx),  // new
+    Time:     time.Now(),
+})
+```
+
+The same pattern applies to `event.go` and any other publishers.
+
+### 7. SSE Skip Logic Change (Backend)
+
+In `internal/server/notifyserver/sse.go`, the SSE handler needs to:
+
+1. Read `client_id` from the query parameters when the connection is established.
+2. Replace the skip logic to filter on client ID when available, falling back to user ID.
+
+```go
+clientID := r.URL.Query().Get("client_id")
+
+// In the notification loop:
+if clientID != "" && n.ClientID != "" {
+    // Both sides have client IDs — skip only the originating tab
+    if n.ClientID == clientID {
+        continue
+    }
+} else if n.UserID == caller.ID {
+    // Fallback: no client ID available (CLI, server-internal, old clients)
+    // Keep the existing user-level skip to avoid double-refresh
+    continue
+}
+```
+
+**Rationale for the fallback:**
+- CLI callers (`xagent task update`) and server-internal notifications don't send `X-Client-ID`.
+- Old frontend versions during a rolling deploy won't send it either.
+- For these cases, the current `UserID`-based skip is the correct conservative behavior — better to suppress across all tabs than to double-refresh.
+- Once all clients send client IDs, the `UserID` fallback only applies to non-browser callers, which typically don't have SSE connections anyway.
+
+### 8. Summary of Changes by File
+
+| File | Change |
+|------|--------|
+| `webui/src/lib/transport.ts` | Add `getClientId()` helper, send `X-Client-ID` header in `fetch()` |
+| `webui/src/lib/notification-sse.ts` | Add `client_id` query param to EventSource URL |
+| `internal/model/notification.go` | Add `ClientID string` field to `Notification` |
+| `internal/auth/apiauth/` | Add `WithClientID`/`ClientID` context helpers and `ClientIDMiddleware` |
+| `internal/server/` (router setup) | Wire `ClientIDMiddleware` into the HTTP handler chain |
+| `internal/server/apiserver/apiserver.go` | Add `ClientID: apiauth.ClientID(ctx)` to all `publish()` calls |
+| `internal/server/apiserver/event.go` | Same as above |
+| `internal/server/notifyserver/sse.go` | Read `client_id` query param; replace skip logic with client-ID-first, user-ID-fallback |
+
+## Trade-offs
+
+### Alternative 1: Skip filter purely on client ID (no user ID fallback)
+
+If we removed the `UserID` skip entirely and relied only on `ClientID`, then any caller without a client ID (CLI, server-internal) would never be filtered — all tabs would get notifications for their own CLI-initiated changes. This is actually fine behavior (the CLI doesn't have an SSE stream to double-refresh), but during a rolling deploy where old frontend code doesn't send `X-Client-ID`, the originating tab *would* double-refresh. The fallback avoids this transitional issue and is low-cost to keep permanently.
+
+### Alternative 2: Use a cookie instead of header + query param
+
+A cookie could carry the client ID on both the `EventSource` request and mutation requests without needing a custom header or query param. However:
+- Cookies are shared across all tabs for the same origin, so a per-tab cookie would need a unique name per tab, adding complexity.
+- Cookies are automatically sent on all requests (including static assets, images, etc.), adding unnecessary overhead.
+- The header + query param approach is explicit and scoped.
+
+### Alternative 3: In-memory client ID (no `sessionStorage`)
+
+Simpler, but a hard refresh generates a new client ID. If a mutation response is in-flight during the refresh, the new tab (with a new client ID) would receive the SSE notification for its own mutation — a minor double-refresh. Using `sessionStorage` avoids this edge case at negligible complexity cost.
+
+## Open Questions
+
+1. **Client ID validation/length limit:** Should the backend validate that `X-Client-ID` is a reasonable UUID format, or treat it as an opaque string? Validation adds safety against abuse (e.g., extremely long values) but UUID format checking is probably overkill — a max-length check (e.g., 64 chars) may suffice.
+
+2. **Logging/observability:** Should the client ID be included in request logs? It could help debug multi-tab issues but adds noise. Recommendation: include it at debug log level only.
