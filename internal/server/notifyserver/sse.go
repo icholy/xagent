@@ -62,12 +62,18 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
-	clientID := r.URL.Query().Get("client_id")
+	// EventSource cannot send custom headers, so the client ID arrives as
+	// a query parameter. Set it on the caller so the skip logic below can
+	// use caller.ClientID consistently.
+	if cid := r.URL.Query().Get("client_id"); cid != "" {
+		caller.ClientID = cid
+	}
+
 	ctx := r.Context()
 	for {
 		select {
 		case n := <-ch:
-			if clientID != "" && n.ClientID == clientID {
+			if caller.ClientID != "" && n.ClientID == caller.ClientID {
 				continue
 			}
 			seq++
