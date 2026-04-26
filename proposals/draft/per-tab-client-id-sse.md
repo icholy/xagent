@@ -117,29 +117,21 @@ This follows the same pattern as the existing `UserID: caller.ID` — no new con
 In `internal/server/notifyserver/sse.go`, the SSE handler needs to:
 
 1. Read `client_id` from the query parameters when the connection is established.
-2. Replace the skip logic to filter on client ID when available, falling back to user ID.
+2. Replace the existing `UserID`-based skip with a purely `ClientID`-based skip.
 
 ```go
 clientID := r.URL.Query().Get("client_id")
 
-// In the notification loop:
-if clientID != "" && n.ClientID != "" {
-    // Both sides have client IDs — skip only the originating tab
-    if n.ClientID == clientID {
-        continue
-    }
-} else if n.UserID == caller.ID {
-    // Fallback: no client ID available (CLI, server-internal, old clients)
-    // Keep the existing user-level skip to avoid double-refresh
+// In the notification loop (replaces the old UserID check):
+if clientID != "" && n.ClientID == clientID {
     continue
 }
 ```
 
-**Rationale for the fallback:**
-- CLI callers (`xagent task update`) and server-internal notifications don't send `X-Client-ID`.
-- Old frontend versions during a rolling deploy won't send it either.
-- For these cases, the current `UserID`-based skip is the correct conservative behavior — better to suppress across all tabs than to double-refresh.
-- Once all clients send client IDs, the `UserID` fallback only applies to non-browser callers, which typically don't have SSE connections anyway.
+The old `if n.UserID == caller.ID { continue }` check is removed entirely. This means:
+- Callers without a client ID (CLI, server-internal) don't get filtered — which is correct since they don't have SSE connections.
+- During a rolling deploy, an old frontend tab without `X-Client-ID` may briefly double-refresh on its own mutations — a non-issue.
+- The logic is simpler: one field, one comparison, no fallback branches.
 
 ### 8. Summary of Changes by File
 
@@ -151,13 +143,13 @@ if clientID != "" && n.ClientID != "" {
 | `internal/auth/apiauth/apiauth.go` | Add `ClientID` field to `UserInfo`; read `X-Client-ID` header in `RequireAuth` |
 | `internal/server/apiserver/apiserver.go` | Add `ClientID: caller.ClientID` to all `publish()` calls |
 | `internal/server/apiserver/event.go` | Same as above |
-| `internal/server/notifyserver/sse.go` | Read `client_id` query param; replace skip logic with client-ID-first, user-ID-fallback |
+| `internal/server/notifyserver/sse.go` | Read `client_id` query param; replace `UserID` skip with `ClientID`-only skip |
 
 ## Trade-offs
 
-### Alternative 1: Skip filter purely on client ID (no user ID fallback)
+### Alternative 1: Keep UserID fallback alongside ClientID skip
 
-If we removed the `UserID` skip entirely and relied only on `ClientID`, then any caller without a client ID (CLI, server-internal) would never be filtered — all tabs would get notifications for their own CLI-initiated changes. This is actually fine behavior (the CLI doesn't have an SSE stream to double-refresh), but during a rolling deploy where old frontend code doesn't send `X-Client-ID`, the originating tab *would* double-refresh. The fallback avoids this transitional issue and is low-cost to keep permanently.
+We could keep the old `UserID`-based skip as a fallback for callers that don't send a client ID. However, the only callers without a client ID are CLI and server-internal — neither has SSE connections to double-refresh. During a rolling deploy, an old frontend tab briefly double-refreshing is a non-issue. The extra fallback branch adds complexity for no real benefit.
 
 ### Alternative 2: Use a cookie instead of header + query param
 
