@@ -44,11 +44,7 @@ func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp := &xagentv1.ListLogsResponse{
-		Entries: make([]*xagentv1.LogEntry, len(logs)),
-	}
-	for i, l := range logs {
-		resp.Entries[i] = l.Proto()
-	}
-	return resp, nil
+	return &xagentv1.ListLogsResponse{
+		Entries: model.MapProtos(logs),
+	}, nil
 }

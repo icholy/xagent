@@ -52,13 +52,9 @@ func (s *Server) ListKeys(ctx context.Context, req *xagentv1.ListKeysRequest) (*
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp := &xagentv1.ListKeysResponse{
-		Keys: make([]*xagentv1.Key, len(keys)),
-	}
-	for i, k := range keys {
-		resp.Keys[i] = k.Proto()
-	}
-	return resp, nil
+	return &xagentv1.ListKeysResponse{
+		Keys: model.MapProtos(keys),
+	}, nil
 }
 
 func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) (*xagentv1.DeleteKeyResponse, error) {
