@@ -158,17 +158,11 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 	resp := &xagentv1.GetTaskDetailsResponse{
 		Task:     task.Proto(s.baseURL),
 		Children: make([]*xagentv1.Task, len(children)),
-		Events:   make([]*xagentv1.Event, len(events)),
-		Links:    make([]*xagentv1.TaskLink, len(links)),
+		Events:   model.MapProtos(events),
+		Links:    model.MapProtos(links),
 	}
 	for i, c := range children {
 		resp.Children[i] = c.Proto(s.baseURL)
-	}
-	for i, e := range events {
-		resp.Events[i] = e.Proto()
-	}
-	for i, l := range links {
-		resp.Links[i] = l.Proto()
 	}
 	return resp, nil
 }

@@ -54,13 +54,9 @@ func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) 
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp := &xagentv1.ListLinksResponse{
-		Links: make([]*xagentv1.TaskLink, len(links)),
-	}
-	for i, l := range links {
-		resp.Links[i] = l.Proto()
-	}
-	return resp, nil
+	return &xagentv1.ListLinksResponse{
+		Links: model.MapProtos(links),
+	}, nil
 }
 
 func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
@@ -69,11 +65,7 @@ func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByUR
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp := &xagentv1.FindLinksByURLResponse{
-		Links: make([]*xagentv1.TaskLink, len(links)),
-	}
-	for i, l := range links {
-		resp.Links[i] = l.Proto()
-	}
-	return resp, nil
+	return &xagentv1.FindLinksByURLResponse{
+		Links: model.MapProtos(links),
+	}, nil
 }

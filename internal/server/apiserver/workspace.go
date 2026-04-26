@@ -44,11 +44,7 @@ func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspace
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	result := make([]*xagentv1.RegisteredWorkspace, len(workspaces))
-	for i, ws := range workspaces {
-		result[i] = ws.Proto()
-	}
-	return &xagentv1.ListWorkspacesResponse{Workspaces: result}, nil
+	return &xagentv1.ListWorkspacesResponse{Workspaces: model.MapProtos(workspaces)}, nil
 }
 
 func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error) {

@@ -25,13 +25,9 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp := &xagentv1.ListEventsResponse{
-		Events: make([]*xagentv1.Event, len(events)),
-	}
-	for i, e := range events {
-		resp.Events[i] = e.Proto()
-	}
-	return resp, nil
+	return &xagentv1.ListEventsResponse{
+		Events: model.MapProtos(events),
+	}, nil
 }
 
 func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
@@ -173,11 +169,7 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp := &xagentv1.ListEventsByTaskResponse{
-		Events: make([]*xagentv1.Event, len(events)),
-	}
-	for i, e := range events {
-		resp.Events[i] = e.Proto()
-	}
-	return resp, nil
+	return &xagentv1.ListEventsByTaskResponse{
+		Events: model.MapProtos(events),
+	}, nil
 }
