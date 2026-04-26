@@ -10,9 +10,10 @@ import { NotificationSSE } from './lib/notification-sse'
 import { ServicesProvider } from './lib/services'
 import './index.css'
 
-const auth = new AuthTransport()
+const clientId = crypto.randomUUID()
+const auth = new AuthTransport(clientId)
 const transport = createConnectTransport({ baseUrl: '/', fetch: auth.fetch })
-const notifications = new NotificationSSE(auth.clientId)
+const notifications = new NotificationSSE(clientId)
 
 notifications.setOrgId(auth.getOrgId())
 auth.onOrgChange((orgId) => notifications.setOrgId(orgId))

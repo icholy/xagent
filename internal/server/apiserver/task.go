@@ -120,10 +120,10 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 			{Action: "created", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
 		ClientID: caller.ClientID,
-		Time:   time.Now(),
+		Time:     time.Now(),
 	})
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(s.baseURL),
@@ -213,10 +213,10 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			{Action: "updated", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
 		ClientID: caller.ClientID,
-		Time:   time.Now(),
+		Time:     time.Now(),
 	})
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
@@ -256,10 +256,10 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 			{Action: "archived", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
 		ClientID: caller.ClientID,
-		Time:   time.Now(),
+		Time:     time.Now(),
 	})
 	return &xagentv1.ArchiveTaskResponse{}, nil
 }
@@ -299,10 +299,10 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 			{Action: "unarchived", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
 		ClientID: caller.ClientID,
-		Time:   time.Now(),
+		Time:     time.Now(),
 	})
 	return &xagentv1.UnarchiveTaskResponse{}, nil
 }
@@ -342,10 +342,10 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 			{Action: "cancelled", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
 		ClientID: caller.ClientID,
-		Time:   time.Now(),
+		Time:     time.Now(),
 	})
 	return &xagentv1.CancelTaskResponse{}, nil
 }
@@ -385,10 +385,10 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 			{Action: "restarted", Type: "task", ID: req.Id},
 			{Action: "appended", Type: "task_logs", ID: req.Id},
 		},
-		OrgID:  caller.OrgID,
-		UserID: caller.ID,
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
 		ClientID: caller.ClientID,
-		Time:   time.Now(),
+		Time:     time.Now(),
 	})
 	return &xagentv1.RestartTaskResponse{}, nil
 }

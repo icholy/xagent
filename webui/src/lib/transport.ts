@@ -7,12 +7,13 @@ const ORG_ID_KEY = "xagent_org_id";
 export const NO_ORG = "0";
 
 export class AuthTransport {
-  readonly clientId = crypto.randomUUID();
+  readonly clientId: string;
   private refreshPromise: Promise<string> | null = null;
   private events = new EventTarget();
   private lastOrgId: string;
 
-  constructor() {
+  constructor(clientId: string) {
+    this.clientId = clientId;
     this.lastOrgId = this.getOrgId();
   }
 
