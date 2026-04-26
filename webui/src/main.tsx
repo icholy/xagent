@@ -12,7 +12,7 @@ import './index.css'
 
 const auth = new AuthTransport()
 const transport = createConnectTransport({ baseUrl: '/', fetch: auth.fetch })
-const notifications = new NotificationSSE()
+const notifications = new NotificationSSE(auth.clientId)
 
 notifications.setOrgId(auth.getOrgId())
 auth.onOrgChange((orgId) => notifications.setOrgId(orgId))

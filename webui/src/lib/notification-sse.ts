@@ -1,4 +1,4 @@
-import { NO_ORG, getClientId } from "./transport";
+import { NO_ORG } from "./transport";
 
 export interface NotificationResource {
   action: string;
@@ -25,8 +25,10 @@ export class NotificationSSE {
   private state: ConnectionState = "idle";
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
+  private clientId: string;
 
-  constructor() {
+  constructor(clientId: string) {
+    this.clientId = clientId;
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this.handleVisibilityChange);
     }
@@ -132,7 +134,7 @@ export class NotificationSSE {
     this.disconnect();
 
     this.setState("connecting");
-    this.es = new EventSource(`/events?org_id=${this.orgId}&client_id=${getClientId()}`);
+    this.es = new EventSource(`/events?org_id=${this.orgId}&client_id=${this.clientId}`);
 
     this.es.addEventListener("ready", () => {
       this.reconnectAttempts = 0;
