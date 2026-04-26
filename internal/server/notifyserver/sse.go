@@ -62,16 +62,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
-	// EventSource cannot send custom headers, so the client ID arrives as a query parameter.
-	clientID := r.URL.Query().Get("client_id")
-
 	ctx := r.Context()
 	for {
 		select {
 		case n := <-ch:
-			if clientID != "" && n.ClientID == clientID {
-				continue
-			}
 			seq++
 			data, err := json.Marshal(n)
 			if err != nil {

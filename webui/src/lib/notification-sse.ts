@@ -11,6 +11,7 @@ export interface Notification {
   resources?: NotificationResource[];
   org_id: number;
   user_id?: string;
+  client_id?: string;
   timestamp: string;
 }
 
@@ -134,7 +135,7 @@ export class NotificationSSE {
     this.disconnect();
 
     this.setState("connecting");
-    this.es = new EventSource(`/events?org_id=${this.orgId}&client_id=${this.clientId}`);
+    this.es = new EventSource(`/events?org_id=${this.orgId}`);
 
     this.es.addEventListener("ready", () => {
       this.reconnectAttempts = 0;
@@ -150,6 +151,8 @@ export class NotificationSSE {
         console.warn("NotificationSSE: failed to parse message", event.data);
         return;
       }
+      // Skip notifications originating from this tab
+      if (n.client_id === this.clientId) return;
       this.events.dispatchEvent(
         new CustomEvent("notification", { detail: n }),
       );
