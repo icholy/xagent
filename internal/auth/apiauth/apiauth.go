@@ -223,7 +223,11 @@ func (a *Auth) validateKey(r *http.Request) (*UserInfo, error) {
 	if !ok {
 		return nil, errors.New("missing Bearer token")
 	}
-	return a.validator.ValidateKey(r.Context(), HashKey(raw))
+	user, err := a.validator.ValidateKey(r.Context(), HashKey(raw))
+	if user != nil {
+		user.ClientID = r.Header.Get("X-Client-ID")
+	}
+	return user, err
 }
 
 // validateAppToken extracts and validates an app JWT from the Authorization header.
@@ -237,11 +241,12 @@ func (a *Auth) validateAppToken(r *http.Request) (*UserInfo, error) {
 		return nil, err
 	}
 	return &UserInfo{
-		ID:    claims.Subject,
-		Email: claims.Email,
-		Name:  claims.Name,
-		OrgID: claims.OrgID,
-		Type:  AuthTypeApp,
+		ID:       claims.Subject,
+		Email:    claims.Email,
+		Name:     claims.Name,
+		OrgID:    claims.OrgID,
+		Type:     AuthTypeApp,
+		ClientID: r.Header.Get("X-Client-ID"),
 	}, nil
 }
 
@@ -348,7 +353,6 @@ func (a *Auth) AttachUserInfo() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if user := a.User(r); user != nil {
-				user.ClientID = r.Header.Get("X-Client-ID")
 				r = r.WithContext(WithUser(r.Context(), user))
 			}
 			next.ServeHTTP(w, r)
@@ -411,10 +415,11 @@ func (a *Auth) cookieUser(r *http.Request) *UserInfo {
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{
-			ID:    ctx.UserInfo.Subject,
-			Email: ctx.UserInfo.Email,
-			Name:  ctx.UserInfo.Name,
-			Type:  AuthTypeCookie,
+			ID:       ctx.UserInfo.Subject,
+			Email:    ctx.UserInfo.Email,
+			Name:     ctx.UserInfo.Name,
+			Type:     AuthTypeCookie,
+			ClientID: r.Header.Get("X-Client-ID"),
 		}
 	}
 	return nil
@@ -436,10 +441,11 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 	case AuthTypeBearer:
 		if ctx := a.bearer.Context(r.Context()); ctx != nil {
 			return &UserInfo{
-				ID:    ctx.Subject,
-				Email: ctx.Email,
-				Name:  ctx.Name,
-				Type:  AuthTypeBearer,
+				ID:       ctx.Subject,
+				Email:    ctx.Email,
+				Name:     ctx.Name,
+				Type:     AuthTypeBearer,
+				ClientID: r.Header.Get("X-Client-ID"),
 			}
 		}
 		return nil
@@ -449,10 +455,11 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{
-			ID:    ctx.UserInfo.Subject,
-			Email: ctx.UserInfo.Email,
-			Name:  ctx.UserInfo.Name,
-			Type:  AuthTypeCookie,
+			ID:       ctx.UserInfo.Subject,
+			Email:    ctx.UserInfo.Email,
+			Name:     ctx.UserInfo.Name,
+			Type:     AuthTypeCookie,
+			ClientID: r.Header.Get("X-Client-ID"),
 		}
 	}
 	return nil
