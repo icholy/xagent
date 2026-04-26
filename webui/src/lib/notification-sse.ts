@@ -1,4 +1,4 @@
-import { NO_ORG } from "./transport";
+import { NO_ORG, getClientId } from "./transport";
 
 export interface NotificationResource {
   action: string;
@@ -132,7 +132,7 @@ export class NotificationSSE {
     this.disconnect();
 
     this.setState("connecting");
-    this.es = new EventSource(`/events?org_id=${this.orgId}`);
+    this.es = new EventSource(`/events?org_id=${this.orgId}&client_id=${getClientId()}`);
 
     this.es.addEventListener("ready", () => {
       this.reconnectAttempts = 0;

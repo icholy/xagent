@@ -41,6 +41,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		},
 		OrgID:  caller.OrgID,
 		UserID: caller.ID,
+		ClientID: caller.ClientID,
 		Time:   time.Now(),
 	})
 	return &xagentv1.CreateLinkResponse{

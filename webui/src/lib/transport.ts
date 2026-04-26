@@ -1,5 +1,15 @@
 const TOKEN_KEY = "xagent_token";
 const ORG_ID_KEY = "xagent_org_id";
+const CLIENT_ID_KEY = "xagent_client_id";
+
+export function getClientId(): string {
+  let clientId = sessionStorage.getItem(CLIENT_ID_KEY);
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    sessionStorage.setItem(CLIENT_ID_KEY, clientId);
+  }
+  return clientId;
+}
 
 // Sentinel returned by getOrgId() when no org is selected (pre-login or
 // after clearToken). The backend's ResolveOrg treats org_id=0 as "use
@@ -84,6 +94,7 @@ export class AuthTransport {
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Bearer ${token}`);
     headers.set("X-Auth-Type", "app");
+    headers.set("X-Client-ID", getClientId());
 
     let resp = await fetch(input, { ...init, headers });
 

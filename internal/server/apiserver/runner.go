@@ -61,6 +61,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				},
 				OrgID:  caller.OrgID,
 				UserID: caller.ID,
+				ClientID: caller.ClientID,
 				Time:   time.Now(),
 			})
 		}

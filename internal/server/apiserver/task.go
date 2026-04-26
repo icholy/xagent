@@ -122,6 +122,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		},
 		OrgID:  caller.OrgID,
 		UserID: caller.ID,
+		ClientID: caller.ClientID,
 		Time:   time.Now(),
 	})
 	return &xagentv1.CreateTaskResponse{
@@ -214,6 +215,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		},
 		OrgID:  caller.OrgID,
 		UserID: caller.ID,
+		ClientID: caller.ClientID,
 		Time:   time.Now(),
 	})
 	return &xagentv1.UpdateTaskResponse{}, nil
@@ -256,6 +258,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		},
 		OrgID:  caller.OrgID,
 		UserID: caller.ID,
+		ClientID: caller.ClientID,
 		Time:   time.Now(),
 	})
 	return &xagentv1.ArchiveTaskResponse{}, nil
@@ -298,6 +301,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		},
 		OrgID:  caller.OrgID,
 		UserID: caller.ID,
+		ClientID: caller.ClientID,
 		Time:   time.Now(),
 	})
 	return &xagentv1.UnarchiveTaskResponse{}, nil
@@ -340,6 +344,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		},
 		OrgID:  caller.OrgID,
 		UserID: caller.ID,
+		ClientID: caller.ClientID,
 		Time:   time.Now(),
 	})
 	return &xagentv1.CancelTaskResponse{}, nil
@@ -382,6 +387,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		},
 		OrgID:  caller.OrgID,
 		UserID: caller.ID,
+		ClientID: caller.ClientID,
 		Time:   time.Now(),
 	})
 	return &xagentv1.RestartTaskResponse{}, nil

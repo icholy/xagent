@@ -62,11 +62,12 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
+	clientID := r.URL.Query().Get("client_id")
 	ctx := r.Context()
 	for {
 		select {
 		case n := <-ch:
-			if n.UserID == caller.ID {
+			if clientID != "" && n.ClientID == clientID {
 				continue
 			}
 			seq++

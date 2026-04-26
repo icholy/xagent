@@ -31,11 +31,12 @@ const (
 
 // UserInfo contains authenticated user information.
 type UserInfo struct {
-	ID    string
-	Email string
-	Name  string
-	OrgID int64
-	Type  string // Auth type: one of AuthType* constants
+	ID       string
+	Email    string
+	Name     string
+	OrgID    int64
+	Type     string // Auth type: one of AuthType* constants
+	ClientID string // Per-tab client identifier from X-Client-ID header
 }
 
 // DisplayName returns the best available display name for the user.
@@ -347,6 +348,7 @@ func (a *Auth) AttachUserInfo() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if user := a.User(r); user != nil {
+				user.ClientID = r.Header.Get("X-Client-ID")
 				r = r.WithContext(WithUser(r.Context(), user))
 			}
 			next.ServeHTTP(w, r)
