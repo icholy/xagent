@@ -15,7 +15,7 @@ func TestMuxSetsHTTPRoute(t *testing.T) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
 	tracer := tp.Tracer("test")
 
-	mux := NewMux()
+	mux := NewMux("test")
 	mux.HandleFunc("GET /foo/{id}", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
