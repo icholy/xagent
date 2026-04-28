@@ -285,7 +285,7 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 			case AuthTypeBearer:
 				if !a.useDevUser(w, r, next) {
-					a.bearer.RequireAuthorization()(next).ServeHTTP(w, r)
+					a.bearer.RequireAuthorization()(a.attachUserInfo(next)).ServeHTTP(w, r)
 				}
 			default:
 				if !a.useDevUser(w, r, next) {
@@ -298,7 +298,7 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 						next.ServeHTTP(w, r)
 						return
 					}
-					a.cookie.RequireAuthentication()(next).ServeHTTP(w, r)
+					a.cookie.RequireAuthentication()(a.attachUserInfo(next)).ServeHTTP(w, r)
 				}
 			}
 		})
@@ -325,11 +325,11 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 			case AuthTypeBearer:
 				if !a.useDevUser(w, r, next) {
-					a.bearer.CheckAuthorization()(next).ServeHTTP(w, r)
+					a.bearer.CheckAuthorization()(a.attachUserInfo(next)).ServeHTTP(w, r)
 				}
 			default:
 				if !a.useDevUser(w, r, next) {
-					a.cookie.CheckAuthentication()(next).ServeHTTP(w, r)
+					a.cookie.CheckAuthentication()(a.attachUserInfo(next)).ServeHTTP(w, r)
 				}
 			}
 		})
@@ -348,16 +348,15 @@ func RequireUserInterceptor() connect.UnaryInterceptorFunc {
 	}
 }
 
-// AttachUserInfo extracts user info from auth context and attaches it to the request context.
-func (a *Auth) AttachUserInfo() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if user := a.User(r); user != nil {
-				r = r.WithContext(WithUser(r.Context(), user))
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
+// attachUserInfo wraps a handler to extract user info from the zitadel auth
+// context and attach it to the request context before calling the inner handler.
+func (a *Auth) attachUserInfo(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if user := a.User(r); user != nil {
+			r = r.WithContext(WithUser(r.Context(), user))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // HandleToken returns an HTTP handler for GET /auth/token that issues app JWTs.

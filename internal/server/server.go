@@ -96,23 +96,23 @@ func (s *Server) Handler() http.Handler {
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s.api,
 		connect.WithInterceptors(otelInterceptor, apiauth.RequireUserInterceptor()),
 	)
-	mux.Handle(path, alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(handler))
+	mux.Handle(path, alice.New(s.auth.CheckAuth()).Then(handler))
 	// SSE endpoint (protected)
 	if s.notify != nil {
-		mux.Handle("/events", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).Then(s.notify.Handler()))
+		mux.Handle("/events", alice.New(s.auth.CheckAuth()).Then(s.notify.Handler()))
 	}
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
 		link := s.github.OAuthLink()
-		mux.Handle("/github/login", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).ThenFunc(link.HandleLogin))
-		mux.Handle("/github/callback", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).ThenFunc(link.HandleCallback))
+		mux.Handle("/github/login", alice.New(s.auth.RequireAuth()).ThenFunc(link.HandleLogin))
+		mux.Handle("/github/callback", alice.New(s.auth.RequireAuth()).ThenFunc(link.HandleCallback))
 		mux.Handle("/webhook/github", s.github.WebhookHandler())
 	}
 	// Atlassian OAuth routes (conditionally registered)
 	if s.atlassian != nil {
 		link := s.atlassian.OAuthLink()
-		mux.Handle("/atlassian/login", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).ThenFunc(link.HandleLogin))
-		mux.Handle("/atlassian/callback", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).ThenFunc(link.HandleCallback))
+		mux.Handle("/atlassian/login", alice.New(s.auth.RequireAuth()).ThenFunc(link.HandleLogin))
+		mux.Handle("/atlassian/callback", alice.New(s.auth.RequireAuth()).ThenFunc(link.HandleCallback))
 		mux.Handle("/webhook/atlassian", s.atlassian.WebhookHandler())
 	}
 	// OAuth 2.1 endpoints (public, conditionally registered)
@@ -124,7 +124,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/oauth/token", s.oauth.HandleToken)
 	}
 	// MCP endpoint (protected by auth middleware)
-	mux.Handle("/mcp", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(mcpserver.New(s.api, s.baseURL).Handler()))
+	mux.Handle("/mcp", alice.New(s.auth.RequireAuth()).Then(mcpserver.New(s.api, s.baseURL).Handler()))
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
