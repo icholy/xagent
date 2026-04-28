@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"gotest.tools/v3/assert"
 )
 
 func TestMuxSetsHTTPRoute(t *testing.T) {
@@ -28,22 +29,10 @@ func TestMuxSetsHTTPRoute(t *testing.T) {
 	span.End()
 
 	spans := recorder.Ended()
-	if len(spans) != 1 {
-		t.Fatalf("expected 1 span, got %d", len(spans))
-	}
+	assert.Equal(t, len(spans), 1)
 	s := spans[0]
-	if got := s.Name(); got != "GET /foo/{id}" {
-		t.Errorf("span name = %q, want %q", got, "GET /foo/{id}")
-	}
-	var found bool
-	for _, attr := range s.Attributes() {
-		if attr.Key == "http.route" && attr.Value == attribute.StringValue("GET /foo/{id}") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("http.route attribute not found, attrs = %v", s.Attributes())
-	}
+	assert.Equal(t, s.Name(), "GET /foo/{id}")
+	assertAttribute(t, s.Attributes(), "http.route", "GET /foo/{id}")
 }
 
 func TestMuxSetsHTTPRouteWithoutVerb(t *testing.T) {
@@ -64,11 +53,17 @@ func TestMuxSetsHTTPRouteWithoutVerb(t *testing.T) {
 	span.End()
 
 	spans := recorder.Ended()
-	if len(spans) != 1 {
-		t.Fatalf("expected 1 span, got %d", len(spans))
+	assert.Equal(t, len(spans), 1)
+	assert.Equal(t, spans[0].Name(), "POST /bar/{id}")
+}
+
+func assertAttribute(t *testing.T, attrs []attribute.KeyValue, key, want string) {
+	t.Helper()
+	for _, attr := range attrs {
+		if string(attr.Key) == key {
+			assert.Equal(t, attr.Value.AsString(), want)
+			return
+		}
 	}
-	s := spans[0]
-	if got := s.Name(); got != "POST /bar/{id}" {
-		t.Errorf("span name = %q, want %q", got, "POST /bar/{id}")
-	}
+	t.Errorf("attribute %q not found in %v", key, attrs)
 }
