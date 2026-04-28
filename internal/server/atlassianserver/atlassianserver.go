@@ -28,7 +28,6 @@ type Server struct {
 	clientID     string
 	clientSecret string
 	publisher    pubsub.Publisher
-	oauth        *oauthlink.Handler
 }
 
 // Options configures a Server.
@@ -54,50 +53,49 @@ func New(opts Options) *Server {
 		clientID:     opts.ClientID,
 		clientSecret: opts.ClientSecret,
 		publisher:    opts.Publisher,
-		oauth: oauthlink.New(oauthlink.Config{
-			Provider:     "atlassian",
-			ClientID:     opts.ClientID,
-			ClientSecret: opts.ClientSecret,
-			RedirectURL:  opts.BaseURL + "/atlassian/callback",
-			Endpoint: oauth2.Endpoint{
-				AuthURL:  "https://auth.atlassian.com/authorize",
-				TokenURL: "https://auth.atlassian.com/oauth/token",
-			},
-			Scopes: []string{"read:me"},
-			AuthParams: []oauth2.AuthCodeOption{
-				oauth2.SetAuthURLParam("audience", "api.atlassian.com"),
-				oauth2.SetAuthURLParam("prompt", "consent"),
-			},
-			Log: log,
-			OnSuccess: func(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
-				caller := apiauth.Caller(r.Context())
-				if caller == nil {
-					http.Error(w, "not authenticated", http.StatusUnauthorized)
-					return
-				}
-				if caller.ID == "" {
-					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
-					return
-				}
-				me, err := atlassian.FetchMe(r.Context(), token.AccessToken)
-				if err != nil {
-					log.Error("failed to fetch Atlassian user", "error", err)
-					http.Error(w, "failed to fetch Atlassian user", http.StatusInternalServerError)
-					return
-				}
-				if err := opts.Store.LinkAtlassianAccount(r.Context(), nil, caller.ID, me.AccountID, me.Name); err != nil {
-					http.Error(w, "failed to link Atlassian account", http.StatusInternalServerError)
-					return
-				}
-				http.Redirect(w, r, "/ui/settings", http.StatusFound)
-			},
-		}),
 	}
 }
 
 // OAuthLink returns the OAuth link handler for Atlassian account linking.
 func (s *Server) OAuthLink() *oauthlink.Handler {
-	return s.oauth
+	return oauthlink.New(oauthlink.Config{
+		Provider:     "atlassian",
+		ClientID:     s.clientID,
+		ClientSecret: s.clientSecret,
+		RedirectURL:  s.baseURL + "/atlassian/callback",
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://auth.atlassian.com/authorize",
+			TokenURL: "https://auth.atlassian.com/oauth/token",
+		},
+		Scopes: []string{"read:me"},
+		AuthParams: []oauth2.AuthCodeOption{
+			oauth2.SetAuthURLParam("audience", "api.atlassian.com"),
+			oauth2.SetAuthURLParam("prompt", "consent"),
+		},
+		Log: s.log,
+		OnSuccess: func(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
+			caller := apiauth.Caller(r.Context())
+			if caller == nil {
+				http.Error(w, "not authenticated", http.StatusUnauthorized)
+				return
+			}
+			if caller.ID == "" {
+				http.Error(w, "this operation requires a user identity", http.StatusForbidden)
+				return
+			}
+			me, err := atlassian.FetchMe(r.Context(), token.AccessToken)
+			if err != nil {
+				s.log.Error("failed to fetch Atlassian user", "error", err)
+				http.Error(w, "failed to fetch Atlassian user", http.StatusInternalServerError)
+				return
+			}
+			if err := s.store.LinkAtlassianAccount(r.Context(), nil, caller.ID, me.AccountID, me.Name); err != nil {
+				http.Error(w, "failed to link Atlassian account", http.StatusInternalServerError)
+				return
+			}
+			http.Redirect(w, r, "/ui/settings", http.StatusFound)
+		},
+	})
 }
 
 // WebhookHandler returns the HTTP handler for Atlassian/Jira webhook events.

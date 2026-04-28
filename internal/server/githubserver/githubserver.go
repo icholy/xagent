@@ -34,7 +34,6 @@ type Server struct {
 	store     *store.Store
 	baseURL   string
 	publisher pubsub.Publisher
-	oauth     *oauthlink.Handler
 }
 
 // Options configures a Server.
@@ -58,38 +57,6 @@ func New(opts Options) *Server {
 		store:     opts.Store,
 		baseURL:   opts.BaseURL,
 		publisher: opts.Publisher,
-		oauth: oauthlink.New(oauthlink.Config{
-			Provider:     "github",
-			ClientID:     opts.Config.ClientID,
-			ClientSecret: opts.Config.ClientSecret,
-			RedirectURL:  opts.BaseURL + "/github/callback",
-			Endpoint:     oauth2github.Endpoint,
-			Scopes:       []string{"read:user"},
-			Log:          log,
-			OnSuccess: func(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
-				caller := apiauth.Caller(r.Context())
-				if caller == nil {
-					http.Error(w, "not authenticated", http.StatusUnauthorized)
-					return
-				}
-				if caller.ID == "" {
-					http.Error(w, "this operation requires a user identity", http.StatusForbidden)
-					return
-				}
-				ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
-				ghUser, _, err := ghClient.Users.Get(r.Context(), "")
-				if err != nil {
-					log.Error("failed to fetch GitHub user", "error", err)
-					http.Error(w, "failed to fetch GitHub user", http.StatusInternalServerError)
-					return
-				}
-				if err := opts.Store.LinkGitHubAccount(r.Context(), nil, caller.ID, ghUser.GetID(), ghUser.GetLogin()); err != nil {
-					http.Error(w, "failed to link GitHub account", http.StatusInternalServerError)
-					return
-				}
-				http.Redirect(w, r, "/ui/settings", http.StatusFound)
-			},
-		}),
 	}
 }
 
@@ -104,7 +71,38 @@ func (s *Server) AppInstallURL() string {
 
 // OAuthLink returns the OAuth link handler for GitHub account linking.
 func (s *Server) OAuthLink() *oauthlink.Handler {
-	return s.oauth
+	return oauthlink.New(oauthlink.Config{
+		Provider:     "github",
+		ClientID:     s.config.ClientID,
+		ClientSecret: s.config.ClientSecret,
+		RedirectURL:  s.baseURL + "/github/callback",
+		Endpoint:     oauth2github.Endpoint,
+		Scopes:       []string{"read:user"},
+		Log:          s.log,
+		OnSuccess: func(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
+			caller := apiauth.Caller(r.Context())
+			if caller == nil {
+				http.Error(w, "not authenticated", http.StatusUnauthorized)
+				return
+			}
+			if caller.ID == "" {
+				http.Error(w, "this operation requires a user identity", http.StatusForbidden)
+				return
+			}
+			ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
+			ghUser, _, err := ghClient.Users.Get(r.Context(), "")
+			if err != nil {
+				s.log.Error("failed to fetch GitHub user", "error", err)
+				http.Error(w, "failed to fetch GitHub user", http.StatusInternalServerError)
+				return
+			}
+			if err := s.store.LinkGitHubAccount(r.Context(), nil, caller.ID, ghUser.GetID(), ghUser.GetLogin()); err != nil {
+				http.Error(w, "failed to link GitHub account", http.StatusInternalServerError)
+				return
+			}
+			http.Redirect(w, r, "/ui/settings", http.StatusFound)
+		},
+	})
 }
 
 // WebhookHandler returns the HTTP handler for GitHub App webhook events.
