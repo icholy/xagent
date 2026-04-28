@@ -102,14 +102,9 @@ func (s *Server) AppInstallURL() string {
 	return fmt.Sprintf("https://github.com/apps/%s/installations/new", s.config.AppSlug)
 }
 
-// HandleLogin is the HTTP handler for initiating GitHub OAuth login.
-func (s *Server) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	s.oauth.HandleLogin(w, r)
-}
-
-// HandleCallback is the HTTP handler for the GitHub OAuth callback.
-func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
-	s.oauth.HandleCallback(w, r)
+// OAuthLink returns the OAuth link handler for GitHub account linking.
+func (s *Server) OAuthLink() *oauthlink.Handler {
+	return s.oauth
 }
 
 // WebhookHandler returns the HTTP handler for GitHub App webhook events.

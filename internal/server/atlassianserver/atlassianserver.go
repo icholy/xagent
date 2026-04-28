@@ -95,14 +95,9 @@ func New(opts Options) *Server {
 	}
 }
 
-// HandleLogin is the HTTP handler for initiating Atlassian OAuth login.
-func (s *Server) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	s.oauth.HandleLogin(w, r)
-}
-
-// HandleCallback is the HTTP handler for the Atlassian OAuth callback.
-func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
-	s.oauth.HandleCallback(w, r)
+// OAuthLink returns the OAuth link handler for Atlassian account linking.
+func (s *Server) OAuthLink() *oauthlink.Handler {
+	return s.oauth
 }
 
 // WebhookHandler returns the HTTP handler for Atlassian/Jira webhook events.
