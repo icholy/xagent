@@ -33,6 +33,26 @@ func allowOrgResolver(userID string, allow ...int64) *OrgResolverMock {
 	}
 }
 
+func TestSSE_Unauthenticated(t *testing.T) {
+	t.Parallel()
+
+	ps := pubsub.NewLocalPubSub()
+	srv := New(Options{
+		Subscriber:  ps,
+		OrgResolver: allowOrgResolver("u", 1),
+	})
+
+	// No user in context — bare handler without WithTestUser.
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/events")
+	assert.NilError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, resp.StatusCode, http.StatusUnauthorized)
+}
+
 func TestSSE(t *testing.T) {
 	t.Parallel()
 
