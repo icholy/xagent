@@ -55,16 +55,6 @@ func New(cfg Config) *Handler {
 	}
 }
 
-// HandleLogin returns an http.HandlerFunc that initiates the OAuth2 flow.
-func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	h.handleLogin(w, r)
-}
-
-// HandleCallback returns an http.HandlerFunc that handles the OAuth2 callback.
-func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
-	h.handleCallback(w, r)
-}
-
 func (h *Handler) cookieName() string {
 	return fmt.Sprintf("xagent_%s_state", h.provider)
 }
@@ -73,7 +63,8 @@ func (h *Handler) cookiePath() string {
 	return fmt.Sprintf("/%s/callback", h.provider)
 }
 
-func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
+// HandleLogin initiates the OAuth2 authorization flow.
+func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := generateRandomState()
 	if err != nil {
 		h.log.Error("failed to generate state", "error", err)
@@ -92,7 +83,8 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.oauth.AuthCodeURL(state, h.authParams...), http.StatusFound)
 }
 
-func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
+// HandleCallback handles the OAuth2 callback.
+func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(h.cookieName())
 	if err != nil {
 		http.Error(w, "missing state cookie", http.StatusBadRequest)
