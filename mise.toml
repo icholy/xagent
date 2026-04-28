@@ -4,7 +4,7 @@ pin=true
 [tools]
 node = "25.5.0"
 go = "1.26.1"
-sops = "3.11.0"
+sops = "3.12.2"
 age = "1.3.1"
 pnpm = "10.28.2"
 flyctl = "0.4.6"
