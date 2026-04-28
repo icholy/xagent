@@ -103,12 +103,16 @@ func (s *Server) Handler() http.Handler {
 	}
 	// GitHub App routes (conditionally registered)
 	if s.github != nil {
-		mux.Handle("/github/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/github", s.github.OAuthHandler())))
+		githubAuth := alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo())
+		mux.Handle("/github/login", githubAuth.ThenFunc(s.github.HandleLogin))
+		mux.Handle("/github/callback", githubAuth.ThenFunc(s.github.HandleCallback))
 		mux.Handle("/webhook/github", s.github.WebhookHandler())
 	}
 	// Atlassian OAuth routes (conditionally registered)
 	if s.atlassian != nil {
-		mux.Handle("/atlassian/", alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo()).Then(http.StripPrefix("/atlassian", s.atlassian.OAuthHandler())))
+		atlassianAuth := alice.New(s.auth.RequireAuth(), s.auth.AttachUserInfo())
+		mux.Handle("/atlassian/login", atlassianAuth.ThenFunc(s.atlassian.HandleLogin))
+		mux.Handle("/atlassian/callback", atlassianAuth.ThenFunc(s.atlassian.HandleCallback))
 		mux.Handle("/webhook/atlassian", s.atlassian.WebhookHandler())
 	}
 	// OAuth 2.1 endpoints (public, conditionally registered)

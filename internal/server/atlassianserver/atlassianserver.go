@@ -28,6 +28,7 @@ type Server struct {
 	clientID     string
 	clientSecret string
 	publisher    pubsub.Publisher
+	oauth        *oauthlink.Handler
 }
 
 // Options configures a Server.
@@ -46,7 +47,7 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{
+	s := &Server{
 		log:          log,
 		store:        opts.Store,
 		baseURL:      opts.BaseURL,
@@ -54,13 +55,7 @@ func New(opts Options) *Server {
 		clientSecret: opts.ClientSecret,
 		publisher:    opts.Publisher,
 	}
-}
-
-// OAuthHandler returns the HTTP handler for the Atlassian OAuth account
-// linking flow. The caller is responsible for wrapping it with
-// authentication middleware.
-func (s *Server) OAuthHandler() http.Handler {
-	return oauthlink.New(oauthlink.Config{
+	s.oauth = oauthlink.New(oauthlink.Config{
 		Provider:     "atlassian",
 		ClientID:     s.clientID,
 		ClientSecret: s.clientSecret,
@@ -98,6 +93,17 @@ func (s *Server) OAuthHandler() http.Handler {
 			http.Redirect(w, r, "/ui/settings", http.StatusFound)
 		},
 	})
+	return s
+}
+
+// HandleLogin is the HTTP handler for initiating Atlassian OAuth login.
+func (s *Server) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	s.oauth.HandleLogin(w, r)
+}
+
+// HandleCallback is the HTTP handler for the Atlassian OAuth callback.
+func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
+	s.oauth.HandleCallback(w, r)
 }
 
 // WebhookHandler returns the HTTP handler for Atlassian/Jira webhook events.

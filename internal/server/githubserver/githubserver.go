@@ -34,6 +34,7 @@ type Server struct {
 	store     *store.Store
 	baseURL   string
 	publisher pubsub.Publisher
+	oauth     *oauthlink.Handler
 }
 
 // Options configures a Server.
@@ -51,28 +52,14 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{
+	s := &Server{
 		log:       log,
 		config:    opts.Config,
 		store:     opts.Store,
 		baseURL:   opts.BaseURL,
 		publisher: opts.Publisher,
 	}
-}
-
-// AppInstallURL returns the GitHub App installation URL, or empty string
-// if no app slug is configured.
-func (s *Server) AppInstallURL() string {
-	if s.config.AppSlug == "" {
-		return ""
-	}
-	return fmt.Sprintf("https://github.com/apps/%s/installations/new", s.config.AppSlug)
-}
-
-// OAuthHandler returns the HTTP handler for GitHub OAuth account linking.
-// The caller is responsible for wrapping it with authentication middleware.
-func (s *Server) OAuthHandler() http.Handler {
-	return oauthlink.New(oauthlink.Config{
+	s.oauth = oauthlink.New(oauthlink.Config{
 		Provider:     "github",
 		ClientID:     s.config.ClientID,
 		ClientSecret: s.config.ClientSecret,
@@ -104,6 +91,26 @@ func (s *Server) OAuthHandler() http.Handler {
 			http.Redirect(w, r, "/ui/settings", http.StatusFound)
 		},
 	})
+	return s
+}
+
+// AppInstallURL returns the GitHub App installation URL, or empty string
+// if no app slug is configured.
+func (s *Server) AppInstallURL() string {
+	if s.config.AppSlug == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://github.com/apps/%s/installations/new", s.config.AppSlug)
+}
+
+// HandleLogin is the HTTP handler for initiating GitHub OAuth login.
+func (s *Server) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	s.oauth.HandleLogin(w, r)
+}
+
+// HandleCallback is the HTTP handler for the GitHub OAuth callback.
+func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
+	s.oauth.HandleCallback(w, r)
 }
 
 // WebhookHandler returns the HTTP handler for GitHub App webhook events.

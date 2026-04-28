@@ -26,16 +26,13 @@ type Config struct {
 	OnSuccess    func(w http.ResponseWriter, r *http.Request, token *oauth2.Token)
 }
 
-// Handler implements http.Handler for OAuth2 login/callback.
-// Mount it with http.StripPrefix so that "/login" and "/callback" are
-// routed correctly.
+// Handler provides HTTP handlers for OAuth2 login/callback.
 type Handler struct {
 	oauth      *oauth2.Config
 	log        *slog.Logger
 	provider   string
 	authParams []oauth2.AuthCodeOption
 	onSuccess  func(w http.ResponseWriter, r *http.Request, token *oauth2.Token)
-	mux        *http.ServeMux
 }
 
 func New(cfg Config) *Handler {
@@ -43,7 +40,7 @@ func New(cfg Config) *Handler {
 	if log == nil {
 		log = slog.Default()
 	}
-	h := &Handler{
+	return &Handler{
 		oauth: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -55,15 +52,17 @@ func New(cfg Config) *Handler {
 		provider:   cfg.Provider,
 		authParams: cfg.AuthParams,
 		onSuccess:  cfg.OnSuccess,
-		mux:        http.NewServeMux(),
 	}
-	h.mux.HandleFunc("/login", h.handleLogin)
-	h.mux.HandleFunc("/callback", h.handleCallback)
-	return h
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.mux.ServeHTTP(w, r)
+// HandleLogin returns an http.HandlerFunc that initiates the OAuth2 flow.
+func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	h.handleLogin(w, r)
+}
+
+// HandleCallback returns an http.HandlerFunc that handles the OAuth2 callback.
+func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
+	h.handleCallback(w, r)
 }
 
 func (h *Handler) cookieName() string {
