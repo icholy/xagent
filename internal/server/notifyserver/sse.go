@@ -11,7 +11,11 @@ import (
 )
 
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
-	caller := apiauth.MustCaller(r.Context())
+	caller := apiauth.Caller(r.Context())
+	if caller == nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
 
 	var orgID int64
 	if raw := r.URL.Query().Get("org_id"); raw != "" {
