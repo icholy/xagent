@@ -20,7 +20,6 @@ import (
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/justinas/alice"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type Server struct {
@@ -79,7 +78,7 @@ func New(opts Options) *Server {
 }
 
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
+	mux := otelx.NewMux("xagent")
 	// Device flow discovery endpoint (public)
 	mux.HandleFunc(deviceauth.DiscoveryPath, s.handleDeviceConfig)
 	// App JWT token endpoint (cookie-authenticated)
@@ -128,7 +127,7 @@ func (s *Server) Handler() http.Handler {
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
-	return otelhttp.NewHandler(otelx.TraceResponseHeader(s.handleCORS(mux)), "xagent")
+	return mux.Handler(s.handleCORS)
 }
 
 // handleCORS adds permissive CORS headers to all responses when CORS is enabled.
