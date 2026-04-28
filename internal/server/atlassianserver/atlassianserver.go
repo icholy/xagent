@@ -56,10 +56,8 @@ func New(opts Options) *Server {
 	}
 }
 
-// OAuthHandler returns the HTTP handler for the Atlassian OAuth account
-// linking flow. The caller is responsible for wrapping it with
-// authentication middleware.
-func (s *Server) OAuthHandler() http.Handler {
+// OAuthLink returns the OAuth link handler for Atlassian account linking.
+func (s *Server) OAuthLink() *oauthlink.Handler {
 	return oauthlink.New(oauthlink.Config{
 		Provider:     "atlassian",
 		ClientID:     s.clientID,

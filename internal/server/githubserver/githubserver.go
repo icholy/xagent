@@ -69,9 +69,8 @@ func (s *Server) AppInstallURL() string {
 	return fmt.Sprintf("https://github.com/apps/%s/installations/new", s.config.AppSlug)
 }
 
-// OAuthHandler returns the HTTP handler for GitHub OAuth account linking.
-// The caller is responsible for wrapping it with authentication middleware.
-func (s *Server) OAuthHandler() http.Handler {
+// OAuthLink returns the OAuth link handler for GitHub account linking.
+func (s *Server) OAuthLink() *oauthlink.Handler {
 	return oauthlink.New(oauthlink.Config{
 		Provider:     "github",
 		ClientID:     s.config.ClientID,

@@ -26,16 +26,13 @@ type Config struct {
 	OnSuccess    func(w http.ResponseWriter, r *http.Request, token *oauth2.Token)
 }
 
-// Handler implements http.Handler for OAuth2 login/callback.
-// Mount it with http.StripPrefix so that "/login" and "/callback" are
-// routed correctly.
+// Handler provides HTTP handlers for OAuth2 login/callback.
 type Handler struct {
 	oauth      *oauth2.Config
 	log        *slog.Logger
 	provider   string
 	authParams []oauth2.AuthCodeOption
 	onSuccess  func(w http.ResponseWriter, r *http.Request, token *oauth2.Token)
-	mux        *http.ServeMux
 }
 
 func New(cfg Config) *Handler {
@@ -43,7 +40,7 @@ func New(cfg Config) *Handler {
 	if log == nil {
 		log = slog.Default()
 	}
-	h := &Handler{
+	return &Handler{
 		oauth: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -55,15 +52,7 @@ func New(cfg Config) *Handler {
 		provider:   cfg.Provider,
 		authParams: cfg.AuthParams,
 		onSuccess:  cfg.OnSuccess,
-		mux:        http.NewServeMux(),
 	}
-	h.mux.HandleFunc("/login", h.handleLogin)
-	h.mux.HandleFunc("/callback", h.handleCallback)
-	return h
-}
-
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.mux.ServeHTTP(w, r)
 }
 
 func (h *Handler) cookieName() string {
@@ -74,7 +63,8 @@ func (h *Handler) cookiePath() string {
 	return fmt.Sprintf("/%s/callback", h.provider)
 }
 
-func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
+// HandleLogin initiates the OAuth2 authorization flow.
+func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := generateRandomState()
 	if err != nil {
 		h.log.Error("failed to generate state", "error", err)
@@ -93,7 +83,8 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.oauth.AuthCodeURL(state, h.authParams...), http.StatusFound)
 }
 
-func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
+// HandleCallback handles the OAuth2 callback.
+func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(h.cookieName())
 	if err != nil {
 		http.Error(w, "missing state cookie", http.StatusBadRequest)
