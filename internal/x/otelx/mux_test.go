@@ -32,8 +32,8 @@ func TestMuxSetsHTTPRoute(t *testing.T) {
 		t.Fatalf("expected 1 span, got %d", len(spans))
 	}
 	s := spans[0]
-	if got := s.Name(); got != "GET GET /foo/{id}" {
-		t.Errorf("span name = %q, want %q", got, "GET GET /foo/{id}")
+	if got := s.Name(); got != "GET /foo/{id}" {
+		t.Errorf("span name = %q, want %q", got, "GET /foo/{id}")
 	}
 	var found bool
 	for _, attr := range s.Attributes() {
@@ -43,5 +43,32 @@ func TestMuxSetsHTTPRoute(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("http.route attribute not found, attrs = %v", s.Attributes())
+	}
+}
+
+func TestMuxSetsHTTPRouteWithoutVerb(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	tracer := tp.Tracer("test")
+
+	mux := NewMux("test")
+	mux.HandleFunc("/bar/{id}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("POST", "/bar/456", nil)
+	ctx, span := tracer.Start(req.Context(), "initial")
+	req = req.WithContext(ctx)
+
+	mux.ServeHTTP(httptest.NewRecorder(), req)
+	span.End()
+
+	spans := recorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("expected 1 span, got %d", len(spans))
+	}
+	s := spans[0]
+	if got := s.Name(); got != "POST /bar/{id}" {
+		t.Errorf("span name = %q, want %q", got, "POST /bar/{id}")
 	}
 }

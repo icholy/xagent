@@ -2,6 +2,7 @@ package otelx
 
 import (
 	"net/http"
+	"strings"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
@@ -26,7 +27,12 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Pattern != "" {
 		span := trace.SpanFromContext(r.Context())
 		span.SetAttributes(attribute.String("http.route", r.Pattern))
-		span.SetName(r.Method + " " + r.Pattern)
+		// r.Pattern may already include the method (e.g. "GET /foo/{id}")
+		if strings.HasPrefix(r.Pattern, r.Method+" ") {
+			span.SetName(r.Pattern)
+		} else {
+			span.SetName(r.Method + " " + r.Pattern)
+		}
 	}
 }
 
