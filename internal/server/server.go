@@ -79,7 +79,7 @@ func New(opts Options) *Server {
 }
 
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
+	mux := otelx.NewMux()
 	// Device flow discovery endpoint (public)
 	mux.HandleFunc(deviceauth.DiscoveryPath, s.handleDeviceConfig)
 	// App JWT token endpoint (cookie-authenticated)
