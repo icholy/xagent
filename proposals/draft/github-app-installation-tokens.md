@@ -42,8 +42,7 @@ Add a new RPC to the `XAgentService`:
 rpc CreateGitHubToken(CreateGitHubTokenRequest) returns (CreateGitHubTokenResponse);
 
 message CreateGitHubTokenRequest {
-  // GitHub App installation ID. Required.
-  int64 installation_id = 1;
+  // Empty — installation ID is resolved from the caller's org.
 }
 
 message CreateGitHubTokenResponse {
@@ -56,11 +55,12 @@ message CreateGitHubTokenResponse {
 
 The handler:
 
-1. Uses the GitHub App private key to sign a JWT (using `golang-jwt` with RS256, which is already an indirect dependency via `go-github`).
-2. Calls the GitHub API `POST /app/installations/{installation_id}/access_tokens` with the JWT.
-3. Returns the installation token and its expiry.
+1. Resolves the GitHub App installation ID from the caller's org (stored via webhook — see below).
+2. Uses the GitHub App private key to sign a JWT (using `golang-jwt` with RS256, which is already an indirect dependency via `go-github`).
+3. Calls the GitHub API `POST /app/installations/{installation_id}/access_tokens` with the JWT.
+4. Returns the installation token and its expiry.
 
-Authentication: This endpoint requires a valid xagent API key or session (same as other RPCs). The caller must know the installation ID.
+Authentication: This endpoint requires a valid xagent API key or session (same as other RPCs). Tokens use the full installation permissions — no additional scoping for now.
 
 ### Implementation
 
@@ -72,12 +72,17 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
     if s.githubAppKey == nil {
         return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("GitHub App private key not configured"))
     }
-    if req.InstallationId == 0 {
-        return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("installation_id is required"))
+    caller := apiauth.Caller(ctx)
+    org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
+    if err != nil {
+        return nil, connect.NewError(connect.CodeInternal, err)
+    }
+    if org.GitHubInstallationID == 0 {
+        return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no GitHub App installation linked to this org"))
     }
 
     // Create JWT signed with app private key
-    transport, err := ghinstallation.New(http.DefaultTransport, s.githubAppID, req.InstallationId, s.githubAppKey)
+    transport, err := ghinstallation.New(http.DefaultTransport, s.githubAppID, org.GitHubInstallationID, s.githubAppKey)
     if err != nil {
         return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create transport: %w", err))
     }
@@ -95,38 +100,95 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 
 ### Agent MCP Tool: `get_github_token`
 
-Add a new tool to the agent MCP server (`internal/agentmcp/xmcp.go`) so agents running inside containers can request tokens:
+Add a new tool to the agent MCP server (`internal/agentmcp/xmcp.go`) so agents running inside containers can request fresh tokens when the injected `GITHUB_TOKEN` expires:
 
 ```go
-type getGitHubTokenInput struct {
-    InstallationID int64 `json:"installation_id" jsonschema:"GitHub App installation ID"`
+type getGitHubTokenInput struct{}
+```
+
+This calls `CreateGitHubToken` on the server via the existing Unix socket proxy. The installation ID is resolved server-side from the org. The agent can use the returned token to update its git credentials or make GitHub API calls.
+
+### Runner-Side Token Injection
+
+The runner calls `CreateGitHubToken` before starting the container and injects the result as `GITHUB_TOKEN` in the container environment. This gives the agent a working token from the start — no workspace config changes needed for git clones or GitHub API calls.
+
+In `internal/runner/runner.go`, after building the agent config and before creating the container:
+
+```go
+// Fetch GitHub installation token for the task's org
+if r.githubEnabled {
+    tokenResp, err := r.client.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
+    if err != nil {
+        r.log.Warn("failed to get GitHub token", "error", err)
+    } else {
+        b.Env = append(b.Env, "GITHUB_TOKEN="+tokenResp.Token)
+    }
 }
 ```
 
-This calls `CreateGitHubToken` on the server via the existing Unix socket proxy. The agent can then use the returned token for git operations and GitHub API calls.
+The token starts its 1-hour expiry clock at container creation time. For long-running tasks, the agent can call `get_github_token` via the MCP tool to get a fresh token.
 
-### Workspace Configuration
+### Installation ID Discovery via Webhook
 
-With this API, workspaces no longer need to inject personal tokens. Instead, agents can call `get_github_token` to get credentials on demand. A workspace that currently does:
+When the GitHub App is installed on a GitHub organization or user account, GitHub sends an `installation` webhook event containing the installation ID and the account it was installed on. The server captures this and stores the installation ID on the xagent org.
 
-```yaml
-commands:
-  - git clone https://x-access-token:${sh:gh auth token}@github.com/org/repo.git
+#### Database Migration
+
+New migration `internal/store/sql/migrations/NNN_github_installation.sql`:
+
+```sql
+ALTER TABLE orgs ADD COLUMN github_installation_id BIGINT;
 ```
 
-Would instead have the agent use the MCP tool to get a token, then configure git credentials. The workspace prompt can instruct the agent to call `get_github_token` before cloning.
+#### Store Methods
 
-Alternatively, the runner could call `CreateGitHubToken` itself and inject the token as an environment variable (`GITHUB_TOKEN`) before starting the container. This is simpler for the agent but means the token starts its 1-hour expiry clock at container creation time.
+```go
+// internal/store/user.go (or a new github.go)
+func (s *Store) SetOrgGitHubInstallation(ctx context.Context, tx *sql.Tx, orgID int64, installationID int64) error
+func (s *Store) GetOrgByGitHubInstallation(ctx context.Context, tx *sql.Tx, installationID int64) (*model.Org, error)
+```
 
-### Installation ID Discovery
+#### Webhook Handler
 
-The caller needs to know the installation ID. There are several options:
+Extend `extractGitHubWebhookEvent` in `internal/server/webhookserver/github.go` to handle `InstallationEvent`:
 
-1. **Workspace config**: Add an `installation_id` field to the workspace definition. The admin sets this when configuring the workspace.
-2. **Webhook capture**: When the GitHub App is installed, GitHub sends an `installation` webhook event. The server could store this mapping (org/repos → installation ID) and expose a lookup API.
-3. **API lookup**: The server could expose a `ListGitHubInstallations` RPC that lists all installations for the app (using the app JWT), letting callers find the right one.
+```go
+case *github.InstallationEvent:
+    if event.GetAction() != "created" {
+        return nil
+    }
+    installationID := event.GetInstallation().GetID()
+    accountLogin := event.GetInstallation().GetAccount().GetLogin()
+    // Store mapping: find org by GitHub account login, set installation ID
+```
 
-Option 1 is simplest and sufficient for an initial implementation. Options 2 and 3 could be added later.
+The webhook handler looks up the xagent org that corresponds to the GitHub account where the app was installed (via the linked GitHub user who owns the org) and stores the `github_installation_id` on that org.
+
+When the app is uninstalled (`action: "deleted"`), the handler clears the installation ID from the org.
+
+#### Token Request Flow
+
+With the installation ID stored on the org, `CreateGitHubToken` no longer requires the caller to pass an installation ID. The server resolves it from the authenticated caller's org context:
+
+```protobuf
+message CreateGitHubTokenRequest {
+  // Empty — installation ID resolved from the caller's org.
+}
+```
+
+```go
+func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+    caller := apiauth.Caller(ctx)
+    org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
+    if err != nil {
+        return nil, connect.NewError(connect.CodeInternal, err)
+    }
+    if org.GitHubInstallationID == 0 {
+        return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no GitHub App installation linked to this org"))
+    }
+    // ... generate token using org.GitHubInstallationID
+}
+```
 
 ## Trade-offs
 
@@ -136,10 +198,9 @@ Option 1 is simplest and sufficient for an initial implementation. Options 2 and
 
 **`ghinstallation` library vs. manual JWT**: The `ghinstallation` library handles JWT signing, token caching, and the API call. It's widely used and maintained. Implementing manually is ~30 lines but loses the caching. Either approach works.
 
-**MCP tool vs. environment variable injection**: Exposing `get_github_token` as an MCP tool lets the agent request tokens on demand and handle token refresh for long-running tasks. Injecting via env var is simpler but the token may expire during long tasks. Both approaches could be supported.
+**Both injection and MCP tool**: The runner injects `GITHUB_TOKEN` at container start for immediate use. The agent MCP tool `get_github_token` provides refresh capability for long-running tasks where the initial token (1-hour TTL) may expire.
 
 ## Open Questions
 
-1. **Installation ID source**: Should the initial implementation require `installation_id` in the workspace config, or should the server store installation mappings from webhook events?
-2. **Token scoping**: GitHub's installation token API supports narrowing permissions and restricting to specific repositories. Should `CreateGitHubToken` accept optional scope/repository filters, or always use the full installation permissions?
-3. **Runner-side injection**: Should the runner automatically call `CreateGitHubToken` and inject `GITHUB_TOKEN` into the container environment, or should this be agent-driven via the MCP tool?
+1. **Org-to-installation mapping**: When the `installation` webhook fires, how do we determine which xagent org to associate it with? One approach: match the GitHub account login from the installation event to a user's linked GitHub account, then use that user's default org. Another: require manual mapping via a UI or CLI command.
+2. **Multiple installations per org**: Should an org support multiple GitHub App installations (e.g. installed on multiple GitHub orgs)? The current design stores a single `github_installation_id` per org. Multiple installations would require a separate table.
