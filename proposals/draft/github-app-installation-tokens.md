@@ -128,38 +128,65 @@ if r.githubEnabled {
 
 The token starts its 1-hour expiry clock at container creation time. For long-running tasks, the agent can call `get_github_token` via the MCP tool to get a fresh token.
 
-### Installation ID Discovery via Setup Callback
+### Installation ID Discovery via Setup Page
 
-When a user installs the GitHub App, GitHub redirects them to the app's **setup URL** with the `installation_id` as a query parameter. Since the user is already authenticated in xagent, the server knows their current org and can store the mapping directly — no ambiguity about which org to associate with.
+When a user installs the GitHub App, GitHub redirects them to the app's **setup URL** with the `installation_id` as a query parameter. The setup URL points to a frontend page where the user can choose which xagent org to associate the installation with.
 
-GitHub Apps support a `setup_url` configuration (set in the GitHub App settings). Configure it to point to the xagent server:
+GitHub Apps support a `setup_url` configuration (set in the GitHub App settings). Configure it to point to the frontend:
 
 ```
-Setup URL: https://xagent.example.com/github/setup
+Setup URL: https://xagent.example.com/ui/github/setup
 ```
 
-#### Setup Handler
+#### Frontend Route
 
-Add a new route in `githubserver`:
+New React route at `webui/src/routes/github.setup.tsx` (maps to `/ui/github/setup`), following the same pattern as the MCP OAuth authorize page (`webui/src/routes/oauth.authorize.tsx`):
 
-```go
-// GET /github/setup?installation_id=12345
-func (s *Server) HandleSetup(w http.ResponseWriter, r *http.Request) {
-    caller := apiauth.Caller(r.Context())
-    installationID, _ := strconv.ParseInt(r.URL.Query().Get("installation_id"), 10, 64)
-    if installationID == 0 {
-        http.Error(w, "missing installation_id", http.StatusBadRequest)
-        return
-    }
-    if err := s.store.SetOrgGitHubInstallation(r.Context(), nil, caller.OrgID, installationID); err != nil {
-        http.Error(w, "failed to save installation", http.StatusInternalServerError)
-        return
-    }
-    http.Redirect(w, r, "/ui/settings", http.StatusFound)
+- Reads `installation_id` from the URL query params
+- Shows the user's available orgs (from `getProfile`)
+- Lets the user select which org to associate the installation with
+- On confirm, calls a new `LinkGitHubInstallation` RPC with the installation ID and selected org ID
+- Redirects to `/ui/settings` on success
+
+```tsx
+// webui/src/routes/github.setup.tsx
+export const Route = createFileRoute('/github/setup')({
+  component: GitHubSetupPage,
+})
+
+function GitHubSetupPage() {
+  const installationId = new URLSearchParams(window.location.search).get('installation_id')
+  const { data: profileData } = useQuery(getProfile, {})
+  const orgs = profileData?.orgs ?? []
+  // ... org selector + confirm button
 }
 ```
 
-This endpoint requires authentication (same middleware as `/github/login`). The user's current org context determines where the installation ID is stored.
+#### Backend RPC
+
+New RPC to store the installation mapping:
+
+```protobuf
+rpc LinkGitHubInstallation(LinkGitHubInstallationRequest) returns (LinkGitHubInstallationResponse);
+
+message LinkGitHubInstallationRequest {
+  int64 installation_id = 1;
+}
+
+message LinkGitHubInstallationResponse {}
+```
+
+The handler uses the caller's org from auth context:
+
+```go
+func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
+    caller := apiauth.Caller(ctx)
+    if err := s.store.SetOrgGitHubInstallation(ctx, nil, caller.OrgID, req.InstallationId); err != nil {
+        return nil, connect.NewError(connect.CodeInternal, err)
+    }
+    return &xagentv1.LinkGitHubInstallationResponse{}, nil
+}
+```
 
 #### Webhook Handler for Uninstalls
 
