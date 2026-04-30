@@ -64,7 +64,7 @@ Authentication: This endpoint requires a valid xagent API key or session (same a
 
 ### Implementation
 
-Use the `github.com/bradleyfalzon/ghinstallation/v2` library (or implement directly — it's ~30 lines):
+Use the `github.com/bradleyfalzon/ghinstallation/v2` library for app authentication and token generation:
 
 ```go
 // internal/server/apiserver/github.go
@@ -245,10 +245,10 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 
 **Token generation on server vs. runner**: Generating tokens on the server keeps the private key centralized — the runner never sees it. The runner already communicates with the server, so this adds no new trust boundary. If the runner generated tokens itself, the private key would need to be distributed to every runner.
 
-**`ghinstallation` library vs. manual JWT**: The `ghinstallation` library handles JWT signing, token caching, and the API call. It's widely used and maintained. Implementing manually is ~30 lines but loses the caching. Either approach works.
+**`ghinstallation` library**: Use `github.com/bradleyfalzon/ghinstallation/v2` for JWT signing, token caching, and the GitHub API call. It handles the complexity of app authentication and is widely used.
 
 **Both injection and MCP tool**: The runner injects `GITHUB_TOKEN` at container start for immediate use. The agent MCP tool `get_github_token` provides refresh capability for long-running tasks where the initial token (1-hour TTL) may expire.
 
 ## Open Questions
 
-1. **Multiple installations per org**: Should an org support multiple GitHub App installations (e.g. installed on multiple GitHub orgs)? The current design stores a single `github_installation_id` per org. Multiple installations would require a separate table.
+None — all decisions resolved during review.
