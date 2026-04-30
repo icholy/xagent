@@ -6,8 +6,11 @@
   "prConcurrentLimit": 5,
   "packageRules": [
     {
-      "matchPackagePatterns": ["^go.opentelemetry.io/", "^@opentelemetry/"],
-      "groupName": "opentelemetry"
+      "groupName": "opentelemetry",
+      "matchPackageNames": [
+        "/^go.opentelemetry.io//",
+        "/^@opentelemetry//"
+      ]
     },
     {
       "matchUpdateTypes": ["patch"],
