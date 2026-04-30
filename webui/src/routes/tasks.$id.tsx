@@ -1,3 +1,4 @@
+import Markdown from 'react-markdown'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
@@ -295,8 +296,8 @@ function TaskDetail() {
 function InstructionCard({ text, url }: { text: string; url: string }) {
   return (
     <div className="bg-muted/50 border rounded-lg p-4">
-      <div className="whitespace-pre-wrap break-words text-foreground">
-        {text}
+      <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
+        <Markdown>{text}</Markdown>
       </div>
       {url && (
         <a
