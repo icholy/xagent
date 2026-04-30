@@ -128,9 +128,50 @@ if r.githubEnabled {
 
 The token starts its 1-hour expiry clock at container creation time. For long-running tasks, the agent can call `get_github_token` via the MCP tool to get a fresh token.
 
-### Installation ID Discovery via Webhook
+### Installation ID Discovery via Setup Callback
 
-When the GitHub App is installed on a GitHub organization or user account, GitHub sends an `installation` webhook event containing the installation ID and the account it was installed on. The server captures this and stores the installation ID on the xagent org.
+When a user installs the GitHub App, GitHub redirects them to the app's **setup URL** with the `installation_id` as a query parameter. Since the user is already authenticated in xagent, the server knows their current org and can store the mapping directly — no ambiguity about which org to associate with.
+
+GitHub Apps support a `setup_url` configuration (set in the GitHub App settings). Configure it to point to the xagent server:
+
+```
+Setup URL: https://xagent.example.com/github/setup
+```
+
+#### Setup Handler
+
+Add a new route in `githubserver`:
+
+```go
+// GET /github/setup?installation_id=12345
+func (s *Server) HandleSetup(w http.ResponseWriter, r *http.Request) {
+    caller := apiauth.Caller(r.Context())
+    installationID, _ := strconv.ParseInt(r.URL.Query().Get("installation_id"), 10, 64)
+    if installationID == 0 {
+        http.Error(w, "missing installation_id", http.StatusBadRequest)
+        return
+    }
+    if err := s.store.SetOrgGitHubInstallation(r.Context(), nil, caller.OrgID, installationID); err != nil {
+        http.Error(w, "failed to save installation", http.StatusInternalServerError)
+        return
+    }
+    http.Redirect(w, r, "/ui/settings", http.StatusFound)
+}
+```
+
+This endpoint requires authentication (same middleware as `/github/login`). The user's current org context determines where the installation ID is stored.
+
+#### Webhook Handler for Uninstalls
+
+Handle `InstallationEvent` with `action: "deleted"` to clear the installation ID when the app is uninstalled:
+
+```go
+case *github.InstallationEvent:
+    if event.GetAction() == "deleted" {
+        installationID := event.GetInstallation().GetID()
+        s.store.ClearGitHubInstallation(ctx, nil, installationID)
+    }
+```
 
 #### Database Migration
 
@@ -143,28 +184,9 @@ ALTER TABLE orgs ADD COLUMN github_installation_id BIGINT;
 #### Store Methods
 
 ```go
-// internal/store/user.go (or a new github.go)
 func (s *Store) SetOrgGitHubInstallation(ctx context.Context, tx *sql.Tx, orgID int64, installationID int64) error
-func (s *Store) GetOrgByGitHubInstallation(ctx context.Context, tx *sql.Tx, installationID int64) (*model.Org, error)
+func (s *Store) ClearGitHubInstallation(ctx context.Context, tx *sql.Tx, installationID int64) error
 ```
-
-#### Webhook Handler
-
-Extend `extractGitHubWebhookEvent` in `internal/server/webhookserver/github.go` to handle `InstallationEvent`:
-
-```go
-case *github.InstallationEvent:
-    if event.GetAction() != "created" {
-        return nil
-    }
-    installationID := event.GetInstallation().GetID()
-    accountLogin := event.GetInstallation().GetAccount().GetLogin()
-    // Store mapping: find org by GitHub account login, set installation ID
-```
-
-The webhook handler looks up the xagent org that corresponds to the GitHub account where the app was installed (via the linked GitHub user who owns the org) and stores the `github_installation_id` on that org.
-
-When the app is uninstalled (`action: "deleted"`), the handler clears the installation ID from the org.
 
 #### Token Request Flow
 
@@ -202,5 +224,4 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 
 ## Open Questions
 
-1. **Org-to-installation mapping**: When the `installation` webhook fires, how do we determine which xagent org to associate it with? One approach: match the GitHub account login from the installation event to a user's linked GitHub account, then use that user's default org. Another: require manual mapping via a UI or CLI command.
-2. **Multiple installations per org**: Should an org support multiple GitHub App installations (e.g. installed on multiple GitHub orgs)? The current design stores a single `github_installation_id` per org. Multiple installations would require a separate table.
+1. **Multiple installations per org**: Should an org support multiple GitHub App installations (e.g. installed on multiple GitHub orgs)? The current design stores a single `github_installation_id` per org. Multiple installations would require a separate table.
