@@ -6,7 +6,7 @@
   "license": "MIT",
   "main": "dist/nodes/Xagent/Xagent.node.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp nodes/Xagent/xagent.svg dist/nodes/Xagent/xagent.svg",
     "lint": "eslint . --ext .ts",
     "prepublishOnly": "npm run build"
   },
