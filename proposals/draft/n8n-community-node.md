@@ -102,8 +102,8 @@ The node is task-focused with a single **Operation** dropdown:
 | Create and Wait  | CreateTask + GetTaskDetails + ListLogs | Create a task, poll until done, return details |
 | Create           | CreateTask                 | Create a task (fire-and-forget)                  |
 | Get Details      | GetTaskDetails + ListLogs  | Get full task details including logs             |
+| Update           | UpdateTask                 | Add instructions to a task and optionally start  |
 | Cancel           | CancelTask                 | Cancel a running task                            |
-| Restart          | RestartTask                | Restart a task                                   |
 
 ### Connect RPC HTTP Mapping
 
@@ -167,8 +167,8 @@ export class Xagent implements INodeType {
           { name: 'Create and Wait', value: 'createAndWait', action: 'Create a task and wait for completion' },
           { name: 'Create', value: 'create', action: 'Create a task (fire and forget)' },
           { name: 'Get Details', value: 'getDetails', action: 'Get task details' },
+          { name: 'Update', value: 'update', action: 'Add instructions and start a task' },
           { name: 'Cancel', value: 'cancel', action: 'Cancel a task' },
-          { name: 'Restart', value: 'restart', action: 'Restart a task' },
         ],
         default: 'createAndWait',
       },
@@ -225,14 +225,33 @@ export class Xagent implements INodeType {
         displayOptions: { show: { operation: ['createAndWait'] } },
         description: 'Maximum time to wait before failing (0 = no timeout)',
       },
-      // Task ID field (shared by getDetails, cancel, restart)
+      // Task ID field (shared by getDetails, update, cancel)
       {
         displayName: 'Task ID',
         name: 'taskId',
         type: 'number',
         default: 0,
         required: true,
-        displayOptions: { show: { operation: ['getDetails', 'cancel', 'restart'] } },
+        displayOptions: { show: { operation: ['getDetails', 'update', 'cancel'] } },
+      },
+      // Update operation fields
+      {
+        displayName: 'Instruction',
+        name: 'updateInstruction',
+        type: 'string',
+        typeOptions: { rows: 4 },
+        default: '',
+        required: true,
+        displayOptions: { show: { operation: ['update'] } },
+        description: 'Instruction to add to the task',
+      },
+      {
+        displayName: 'Start',
+        name: 'start',
+        type: 'boolean',
+        default: true,
+        displayOptions: { show: { operation: ['update'] } },
+        description: 'Start the task after adding instructions (non-interrupting, waits for current run to finish)',
       },
     ],
   };
@@ -317,11 +336,16 @@ export class Xagent implements INodeType {
         const resp = await rpc('GetTaskDetails', { id: this.getNodeParameter('taskId', i) });
         const logsResp = await rpc('ListLogs', { task_id: this.getNodeParameter('taskId', i) });
         returnData.push({ json: { ...resp, logs: logsResp.entries || [] }, pairedItem: { item: i } });
+      } else if (operation === 'update') {
+        const body: Record<string, unknown> = {
+          id: this.getNodeParameter('taskId', i),
+          add_instructions: [{ text: this.getNodeParameter('updateInstruction', i) as string }],
+          start: this.getNodeParameter('start', i) as boolean,
+        };
+        const resp = await rpc('UpdateTask', body);
+        returnData.push({ json: resp, pairedItem: { item: i } });
       } else if (operation === 'cancel') {
         const resp = await rpc('CancelTask', { id: this.getNodeParameter('taskId', i) });
-        returnData.push({ json: resp, pairedItem: { item: i } });
-      } else if (operation === 'restart') {
-        const resp = await rpc('RestartTask', { id: this.getNodeParameter('taskId', i) });
         returnData.push({ json: resp, pairedItem: { item: i } });
       }
     }
