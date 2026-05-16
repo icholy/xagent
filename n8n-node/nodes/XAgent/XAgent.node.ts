@@ -46,6 +46,11 @@ export class XAgent implements INodeType {
 						value: 'cancel',
 						action: 'Cancel a task',
 					},
+					{
+						name: 'Archive',
+						value: 'archive',
+						action: 'Archive a task',
+					},
 				],
 				default: 'create',
 			},
@@ -86,14 +91,14 @@ export class XAgent implements INodeType {
 				displayOptions: { show: { operation: ['create'] } },
 				description: 'Optional name for the task',
 			},
-			// Task ID field (shared by getDetails, update, cancel)
+			// Task ID field (shared by getDetails, update, cancel, archive)
 			{
 				displayName: 'Task ID',
 				name: 'taskId',
 				type: 'number',
 				default: 0,
 				required: true,
-				displayOptions: { show: { operation: ['getDetails', 'update', 'cancel'] } },
+				displayOptions: { show: { operation: ['getDetails', 'update', 'cancel', 'archive'] } },
 				description: 'The task ID to operate on',
 			},
 			// Update operation fields
@@ -116,13 +121,13 @@ export class XAgent implements INodeType {
 				description:
 					'Whether to start the task after adding instructions (non-interrupting, waits for current run to finish)',
 			},
-			// Wait fields (shared by create and update)
+			// Wait fields (shared by create, update, archive)
 			{
 				displayName: 'Wait for Completion',
 				name: 'waitForCompletion',
 				type: 'boolean',
 				default: true,
-				displayOptions: { show: { operation: ['create', 'update'] } },
+				displayOptions: { show: { operation: ['create', 'update', 'archive'] } },
 				description: 'Whether to poll the task until it reaches a terminal status before returning',
 			},
 			{
@@ -130,7 +135,9 @@ export class XAgent implements INodeType {
 				name: 'pollInterval',
 				type: 'number',
 				default: 10,
-				displayOptions: { show: { operation: ['create', 'update'], waitForCompletion: [true] } },
+				displayOptions: {
+					show: { operation: ['create', 'update', 'archive'], waitForCompletion: [true] },
+				},
 				description: 'How often to check task status',
 			},
 			{
@@ -138,7 +145,9 @@ export class XAgent implements INodeType {
 				name: 'timeout',
 				type: 'number',
 				default: 3600,
-				displayOptions: { show: { operation: ['create', 'update'], waitForCompletion: [true] } },
+				displayOptions: {
+					show: { operation: ['create', 'update', 'archive'], waitForCompletion: [true] },
+				},
 				description: 'Maximum time to wait before failing (0 = no timeout)',
 			},
 		],

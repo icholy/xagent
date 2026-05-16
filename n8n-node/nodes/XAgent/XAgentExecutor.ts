@@ -14,6 +14,7 @@ import {
 	ListLogsResponseSchema,
 	UpdateTaskResponseSchema,
 	CancelTaskResponseSchema,
+	ArchiveTaskResponseSchema,
 	TaskStatus,
 } from '../../gen/xagent/v1/xagent_pb';
 
@@ -55,6 +56,9 @@ export class XAgentExecutor {
 						break;
 					case 'cancel':
 						returnData.push(await this.cancel(i));
+						break;
+					case 'archive':
+						returnData.push(await this.archive(i));
 						break;
 				}
 			} catch (err) {
@@ -245,6 +249,22 @@ export class XAgentExecutor {
 		const resp = await this.client.cancelTask({ id: taskId });
 		return {
 			json: this.toJson(CancelTaskResponseSchema, resp),
+			pairedItem: { item: i },
+		};
+	}
+
+	private async archive(i: number): Promise<INodeExecutionData> {
+		const taskId = BigInt(this.getNumberParameter('taskId', i));
+
+		if (this.getBooleanParameter('waitForCompletion', i)) {
+			const pollInterval = this.getNumberParameter('pollInterval', i);
+			const timeout = this.getNumberParameter('timeout', i);
+			await this.waitFor(taskId, pollInterval, timeout, i);
+		}
+
+		const resp = await this.client.archiveTask({ id: taskId });
+		return {
+			json: this.toJson(ArchiveTaskResponseSchema, resp),
 			pairedItem: { item: i },
 		};
 	}
