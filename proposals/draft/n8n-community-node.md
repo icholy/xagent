@@ -10,6 +10,41 @@ There is no way to integrate xagent with n8n workflows. Users who automate proce
 
 A community node package (`n8n-nodes-xagent`) that exposes xagent's Connect RPC API as n8n node operations. The package uses the **programmatic style** (execute method) since xagent uses Connect RPC (JSON-over-HTTP POST) rather than a traditional REST API with distinct HTTP methods/paths per resource.
 
+### Primary Use Case: Create Task and Wait for Completion
+
+The core workflow is: create a task, poll until it reaches a terminal status, and output the full task details (including links and logs). This is implemented as a single "Create and Wait" operation that blocks the n8n workflow execution until the task finishes:
+
+```
+[Trigger] → [xagent: Create and Wait] → [Process Results]
+```
+
+The node creates the task, then polls `GetTaskDetails` at a configurable interval until the task reaches a terminal status (COMPLETED, FAILED, or CANCELLED). The output includes the full task details: task metadata, child tasks, links (PRs, issues created by the agent), and events.
+
+**Output schema:**
+
+```json
+{
+  "task": {
+    "id": 123,
+    "name": "Deploy staging",
+    "status": "COMPLETED",
+    "workspace": "default",
+    "createdAt": "2026-05-16T10:00:00Z",
+    "updatedAt": "2026-05-16T10:05:00Z"
+  },
+  "children": [...],
+  "links": [
+    { "title": "PR: fix bug", "url": "https://github.com/...", "relevance": "..." }
+  ],
+  "events": [...],
+  "logs": [
+    { "type": "report", "content": "Deployed successfully", "createdAt": "..." }
+  ]
+}
+```
+
+This lets downstream n8n nodes access task outputs — e.g., extract PR URLs from links, parse log messages, or branch on success/failure.
+
 ### Package Structure
 
 ```
@@ -108,7 +143,7 @@ Content-Type: application/json
 
 ### Execute Method Implementation
 
-The core execute logic dispatches based on resource/operation and calls the Connect RPC endpoint:
+The core operation is "Create and Wait" which creates a task and polls until completion. The node also supports fire-and-forget "Create" and individual operations (Get, Cancel, etc.) for advanced workflows.
 
 ```typescript
 import {
@@ -126,7 +161,7 @@ export class Xagent implements INodeType {
     group: ['transform'],
     version: 1,
     subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-    description: 'Interact with xagent tasks and workflows',
+    description: 'Create and run xagent tasks',
     defaults: { name: 'xagent' },
     inputs: ['main'],
     outputs: ['main'],
@@ -157,27 +192,25 @@ export class Xagent implements INodeType {
         noDataExpression: true,
         displayOptions: { show: { resource: ['task'] } },
         options: [
-          { name: 'Create', value: 'create', action: 'Create a task' },
-          { name: 'Get', value: 'get', action: 'Get a task' },
+          { name: 'Create and Wait', value: 'createAndWait', action: 'Create a task and wait for completion' },
+          { name: 'Create', value: 'create', action: 'Create a task (fire and forget)' },
           { name: 'Get Details', value: 'getDetails', action: 'Get task details' },
           { name: 'List', value: 'list', action: 'List tasks' },
-          { name: 'List Children', value: 'listChildren', action: 'List child tasks' },
           { name: 'Update', value: 'update', action: 'Update a task' },
           { name: 'Cancel', value: 'cancel', action: 'Cancel a task' },
           { name: 'Restart', value: 'restart', action: 'Restart a task' },
-          { name: 'Archive', value: 'archive', action: 'Archive a task' },
         ],
-        default: 'create',
+        default: 'createAndWait',
       },
       // ... additional operation selectors for other resources ...
-      // Task Create fields
+      // Task Create fields (shown for both create and createAndWait)
       {
         displayName: 'Workspace',
         name: 'workspace',
         type: 'string',
         default: '',
         required: true,
-        displayOptions: { show: { resource: ['task'], operation: ['create'] } },
+        displayOptions: { show: { resource: ['task'], operation: ['create', 'createAndWait'] } },
         description: 'Workspace to run the task in',
       },
       {
@@ -187,7 +220,7 @@ export class Xagent implements INodeType {
         typeOptions: { rows: 4 },
         default: '',
         required: true,
-        displayOptions: { show: { resource: ['task'], operation: ['create'] } },
+        displayOptions: { show: { resource: ['task'], operation: ['create', 'createAndWait'] } },
         description: 'The instruction text for the task',
       },
       {
@@ -195,7 +228,7 @@ export class Xagent implements INodeType {
         name: 'taskName',
         type: 'string',
         default: '',
-        displayOptions: { show: { resource: ['task'], operation: ['create'] } },
+        displayOptions: { show: { resource: ['task'], operation: ['create', 'createAndWait'] } },
         description: 'Optional name for the task',
       },
       {
@@ -203,10 +236,27 @@ export class Xagent implements INodeType {
         name: 'parentId',
         type: 'number',
         default: 0,
-        displayOptions: { show: { resource: ['task'], operation: ['create'] } },
+        displayOptions: { show: { resource: ['task'], operation: ['create', 'createAndWait'] } },
         description: 'Optional parent task ID',
       },
-      // Task ID field (shared by get, cancel, restart, archive, etc.)
+      // Polling config for createAndWait
+      {
+        displayName: 'Poll Interval (seconds)',
+        name: 'pollInterval',
+        type: 'number',
+        default: 10,
+        displayOptions: { show: { resource: ['task'], operation: ['createAndWait'] } },
+        description: 'How often to check task status',
+      },
+      {
+        displayName: 'Timeout (seconds)',
+        name: 'timeout',
+        type: 'number',
+        default: 3600,
+        displayOptions: { show: { resource: ['task'], operation: ['createAndWait'] } },
+        description: 'Maximum time to wait before failing (0 = no timeout)',
+      },
+      // Task ID field (shared by get, cancel, restart, etc.)
       {
         displayName: 'Task ID',
         name: 'taskId',
@@ -216,7 +266,7 @@ export class Xagent implements INodeType {
         displayOptions: {
           show: {
             resource: ['task'],
-            operation: ['get', 'getDetails', 'cancel', 'restart', 'archive', 'update', 'listChildren'],
+            operation: ['getDetails', 'cancel', 'restart', 'update'],
           },
         },
       },
@@ -230,58 +280,8 @@ export class Xagent implements INodeType {
     const credentials = await this.getCredentials('xagentApi');
     const serverUrl = (credentials.serverUrl as string).replace(/\/$/, '');
 
-    for (let i = 0; i < items.length; i++) {
-      const resource = this.getNodeParameter('resource', i) as string;
-      const operation = this.getNodeParameter('operation', i) as string;
-
-      let method: string;
-      let body: Record<string, unknown> = {};
-
-      if (resource === 'task') {
-        switch (operation) {
-          case 'create':
-            method = 'CreateTask';
-            body = {
-              name: this.getNodeParameter('taskName', i) as string,
-              workspace: this.getNodeParameter('workspace', i) as string,
-              instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
-            };
-            const parentId = this.getNodeParameter('parentId', i) as number;
-            if (parentId) body.parent = parentId;
-            break;
-          case 'get':
-            method = 'GetTask';
-            body = { id: this.getNodeParameter('taskId', i) };
-            break;
-          case 'getDetails':
-            method = 'GetTaskDetails';
-            body = { id: this.getNodeParameter('taskId', i) };
-            break;
-          case 'list':
-            method = 'ListTasks';
-            break;
-          case 'listChildren':
-            method = 'ListChildTasks';
-            body = { parent_id: this.getNodeParameter('taskId', i) };
-            break;
-          case 'cancel':
-            method = 'CancelTask';
-            body = { id: this.getNodeParameter('taskId', i) };
-            break;
-          case 'restart':
-            method = 'RestartTask';
-            body = { id: this.getNodeParameter('taskId', i) };
-            break;
-          case 'archive':
-            method = 'ArchiveTask';
-            body = { id: this.getNodeParameter('taskId', i) };
-            break;
-          // ... update, etc.
-        }
-      }
-      // ... other resources follow same pattern ...
-
-      const response = await this.helpers.httpRequest({
+    const rpc = async (method: string, body: Record<string, unknown> = {}) => {
+      return this.helpers.httpRequest({
         method: 'POST',
         url: `${serverUrl}/xagent.v1.XAgentService/${method}`,
         headers: {
@@ -292,14 +292,81 @@ export class Xagent implements INodeType {
         body,
         json: true,
       });
+    };
 
-      returnData.push({ json: response, pairedItem: { item: i } });
+    const TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'CANCELLED'];
+
+    for (let i = 0; i < items.length; i++) {
+      const resource = this.getNodeParameter('resource', i) as string;
+      const operation = this.getNodeParameter('operation', i) as string;
+
+      if (resource === 'task' && operation === 'createAndWait') {
+        // Create the task
+        const createBody: Record<string, unknown> = {
+          name: this.getNodeParameter('taskName', i) as string,
+          workspace: this.getNodeParameter('workspace', i) as string,
+          instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
+        };
+        const parentId = this.getNodeParameter('parentId', i) as number;
+        if (parentId) createBody.parent = parentId;
+
+        const createResp = await rpc('CreateTask', createBody);
+        const taskId = createResp.task.id;
+
+        // Poll until terminal status
+        const pollInterval = this.getNodeParameter('pollInterval', i) as number;
+        const timeout = this.getNodeParameter('timeout', i) as number;
+        const startTime = Date.now();
+
+        let details: Record<string, unknown>;
+        while (true) {
+          await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
+
+          if (timeout > 0 && Date.now() - startTime > timeout * 1000) {
+            throw new Error(`Task ${taskId} did not complete within ${timeout}s`);
+          }
+
+          details = await rpc('GetTaskDetails', { id: taskId });
+          if (TERMINAL_STATUSES.includes(details.task.status)) {
+            break;
+          }
+        }
+
+        // Fetch logs to include in output
+        const logsResp = await rpc('ListLogs', { task_id: taskId });
+
+        returnData.push({
+          json: { ...details, logs: logsResp.entries || [] },
+          pairedItem: { item: i },
+        });
+      } else if (resource === 'task' && operation === 'create') {
+        // Fire-and-forget: just create and return immediately
+        const body: Record<string, unknown> = {
+          name: this.getNodeParameter('taskName', i) as string,
+          workspace: this.getNodeParameter('workspace', i) as string,
+          instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
+        };
+        const parentId = this.getNodeParameter('parentId', i) as number;
+        if (parentId) body.parent = parentId;
+
+        const resp = await rpc('CreateTask', body);
+        returnData.push({ json: resp, pairedItem: { item: i } });
+      } else if (resource === 'task' && operation === 'getDetails') {
+        const resp = await rpc('GetTaskDetails', { id: this.getNodeParameter('taskId', i) });
+        const logsResp = await rpc('ListLogs', { task_id: this.getNodeParameter('taskId', i) });
+        returnData.push({ json: { ...resp, logs: logsResp.entries || [] }, pairedItem: { item: i } });
+      } else {
+        // Other operations: direct RPC call
+        // ... dispatch based on resource/operation ...
+      }
     }
 
     return [returnData];
   }
 }
 ```
+
+The "Create and Wait" operation is the default and handles the most common workflow: dispatch work to an agent and continue the n8n workflow once the agent finishes. The output includes task details, links (PRs/issues the agent created), child tasks, events, and logs — giving downstream nodes full access to the agent's work products.
 
 ### Trigger Node (Polling)
 
