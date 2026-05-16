@@ -202,6 +202,13 @@ export class Xagent implements INodeType {
 				}
 
 				const logsResp = await rpc('ListLogs', { task_id: taskId });
+				if (details.task.status === 'FAILED') {
+					throw new NodeOperationError(
+						this.getNode(),
+						`Task ${taskId} ended with status FAILED`,
+						{ itemIndex: i },
+					);
+				}
 				returnData.push({
 					json: { ...details, logs: logsResp.entries || [] },
 					pairedItem: { item: i },
