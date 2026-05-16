@@ -16,6 +16,11 @@ import {
 	CancelTaskResponseSchema,
 } from '../../gen/xagent/v1/xagent_pb';
 
+interface XAgentApiCredentials {
+	serverUrl: string;
+	apiKey: string;
+}
+
 const TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'CANCELLED'];
 
 export class XAgentExecutor {
@@ -51,9 +56,9 @@ export class XAgentExecutor {
 	}
 
 	private async buildClient(): Promise<void> {
-		const credentials = await this.ctx.getCredentials('XAgentApi');
-		const serverUrl = (credentials.serverUrl as string).replace(/\/$/, '');
-		const apiKey = credentials.apiKey as string;
+		const credentials = await this.ctx.getCredentials<XAgentApiCredentials>('XAgentApi');
+		const serverUrl = credentials.serverUrl.replace(/\/$/, '');
+		const apiKey = credentials.apiKey;
 		const authInterceptor: Interceptor = (next) => async (req) => {
 			req.header.set('Authorization', `Bearer ${apiKey}`);
 			req.header.set('X-Auth-Type', 'key');
