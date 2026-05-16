@@ -1,4 +1,4 @@
-import { ICredentialTestRequest, ICredentialType, INodeProperties } from 'n8n-workflow';
+import { ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class XAgentApi implements ICredentialType {
 	name = 'XAgentApi';
@@ -22,20 +22,4 @@ export class XAgentApi implements ICredentialType {
 			required: true,
 		},
 	];
-
-	test: ICredentialTestRequest = {
-		request: {
-			baseURL: '={{$credentials.serverUrl}}',
-			url: '/xagent.v1.XAgentService/Ping',
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: '=Bearer {{$credentials.apiKey}}',
-				'X-Auth-Type': 'key',
-				'Connect-Protocol-Version': '1',
-			},
-			body: {},
-			json: true,
-		},
-	};
 }

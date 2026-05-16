@@ -1,6 +1,9 @@
 import {
+	ICredentialsDecrypted,
+	ICredentialTestFunctions,
 	IExecuteFunctions,
 	ILoadOptionsFunctions,
+	INodeCredentialTestResult,
 	INodeExecutionData,
 	INodePropertyOptions,
 	INodeType,
@@ -20,7 +23,7 @@ export class XAgent implements INodeType {
 		defaults: { name: 'xagent' },
 		inputs: ['main'],
 		outputs: ['main'],
-		credentials: [{ name: 'XAgentApi', required: true }],
+		credentials: [{ name: 'XAgentApi', required: true, testedBy: 'ping' }],
 		properties: [
 			{
 				displayName: 'Resource',
@@ -170,6 +173,23 @@ export class XAgent implements INodeType {
 	};
 
 	methods = {
+		credentialTest: {
+			async ping(
+				this: ICredentialTestFunctions,
+				credential: ICredentialsDecrypted,
+			): Promise<INodeCredentialTestResult> {
+				try {
+					const client = buildXAgentClient(credential.data as unknown as XAgentApiCredentials);
+					await client.ping({});
+					return { status: 'OK', message: 'Connected' };
+				} catch (err) {
+					if (err instanceof Error) {
+						return { status: 'Error', message: err.message };
+					}
+					return { status: 'Error', message: 'Failed to connect to xagent server' };
+				}
+			},
+		},
 		loadOptions: {
 			async listRunners(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				const credentials = await this.getCredentials<XAgentApiCredentials>('XAgentApi');
