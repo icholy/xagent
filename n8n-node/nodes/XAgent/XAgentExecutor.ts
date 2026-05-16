@@ -11,6 +11,7 @@ import {
 	XAgentService,
 	CreateTaskResponseSchema,
 	GetTaskDetailsResponseSchema,
+	GetTaskResponseSchema,
 	ListLogsResponseSchema,
 	UpdateTaskResponseSchema,
 	CancelTaskResponseSchema,
@@ -146,29 +147,13 @@ export class XAgentExecutor {
 		const taskId = createResp.task!.id;
 		const pollInterval = this.getNumberParameter('pollInterval', i);
 		const timeout = this.getNumberParameter('timeout', i);
-		const startTime = Date.now();
 
-		let detailsJson: any;
-		while (true) {
-			await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
+		await this.waitFor(taskId, pollInterval, timeout, i);
 
-			if (timeout > 0 && Date.now() - startTime > timeout * 1000) {
-				throw new NodeOperationError(
-					this.ctx.getNode(),
-					`Task ${taskId} did not complete within ${timeout}s`,
-					{ itemIndex: i },
-				);
-			}
-
-			const detailsResp = await this.rpc('GetTaskDetails', () =>
-				this.client.getTaskDetails({ id: taskId }),
-			);
-			detailsJson = toJson(GetTaskDetailsResponseSchema, detailsResp) as any;
-			if (TERMINAL_STATUSES.includes(detailsJson.task.status)) {
-				break;
-			}
-		}
-
+		const detailsResp = await this.rpc('GetTaskDetails', () =>
+			this.client.getTaskDetails({ id: taskId }),
+		);
+		const detailsJson = toJson(GetTaskDetailsResponseSchema, detailsResp) as any;
 		const logsResp = await this.rpc('ListLogs', () =>
 			this.client.listLogs({ taskId }),
 		);
@@ -184,6 +169,34 @@ export class XAgentExecutor {
 			json: { ...detailsJson, logs: logsJson.entries || [] },
 			pairedItem: { item: i },
 		};
+	}
+
+	private async waitFor(
+		taskId: bigint,
+		pollInterval: number,
+		timeout: number,
+		i: number,
+	): Promise<void> {
+		const startTime = Date.now();
+		while (true) {
+			await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
+
+			if (timeout > 0 && Date.now() - startTime > timeout * 1000) {
+				throw new NodeOperationError(
+					this.ctx.getNode(),
+					`Task ${taskId} did not complete within ${timeout}s`,
+					{ itemIndex: i },
+				);
+			}
+
+			const resp = await this.rpc('GetTask', () =>
+				this.client.getTask({ id: taskId }),
+			);
+			const json = toJson(GetTaskResponseSchema, resp) as any;
+			if (TERMINAL_STATUSES.includes(json.task.status)) {
+				return;
+			}
+		}
 	}
 
 	private async getDetails(i: number): Promise<INodeExecutionData> {
