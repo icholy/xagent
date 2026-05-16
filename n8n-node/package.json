@@ -1,0 +1,29 @@
+{
+  "name": "n8n-nodes-xagent",
+  "version": "0.1.0",
+  "description": "n8n community node for xagent task orchestration",
+  "keywords": ["n8n-community-node-package"],
+  "license": "MIT",
+  "main": "dist/nodes/Xagent/Xagent.node.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint . --ext .ts",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": ["dist/credentials/XagentApi.credentials.js"],
+    "nodes": ["dist/nodes/Xagent/Xagent.node.js"]
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "n8n-workflow": "*",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
