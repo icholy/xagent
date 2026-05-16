@@ -45,6 +45,11 @@ func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error
 }
 
 func Open(dsn string, doMigrate bool) (*sql.DB, error) {
+	if doMigrate {
+		if err := migrate(dsn); err != nil {
+			return nil, err
+		}
+	}
 	db, err := otelsql.Open("pgx", dsn,
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 		otelsql.WithSpanOptions(otelsql.SpanOptions{
@@ -53,12 +58,6 @@ func Open(dsn string, doMigrate bool) (*sql.DB, error) {
 	)
 	if err != nil {
 		return nil, err
-	}
-	if doMigrate {
-		if err := migrate(db); err != nil {
-			db.Close()
-			return nil, err
-		}
 	}
 	return db, nil
 }

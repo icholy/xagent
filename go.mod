@@ -6,6 +6,7 @@ require (
 	connectrpc.com/connect v1.19.2
 	connectrpc.com/otelconnect v0.9.0
 	github.com/XSAM/otelsql v0.41.0
+	github.com/amacneil/dbmate/v2 v2.33.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.2.0+incompatible
@@ -153,7 +154,6 @@ require (
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/term v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260427160629-7cedc36a6bc4 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
