@@ -29,27 +29,27 @@ export class XAgent implements INodeType {
 					{
 						name: 'Create',
 						value: 'create',
-						action: 'Create a task',
+						action: 'Create Task',
 					},
 					{
 						name: 'Get Details',
 						value: 'getDetails',
-						action: 'Get task details',
+						action: 'Get Task Details',
 					},
 					{
 						name: 'Update',
 						value: 'update',
-						action: 'Add instructions and start a task',
+						action: 'Update Task',
 					},
 					{
 						name: 'Cancel',
 						value: 'cancel',
-						action: 'Cancel a task',
+						action: 'Cancel Task',
 					},
 					{
 						name: 'Archive',
 						value: 'archive',
-						action: 'Archive a task',
+						action: 'Archive Task',
 					},
 				],
 				default: 'create',
