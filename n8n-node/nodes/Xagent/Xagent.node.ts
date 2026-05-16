@@ -30,11 +30,6 @@ export class Xagent implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'Create and Wait',
-						value: 'createAndWait',
-						action: 'Create a task and wait for completion',
-					},
-					{
 						name: 'Create',
 						value: 'create',
 						action: 'Create a task',
@@ -55,16 +50,16 @@ export class Xagent implements INodeType {
 						action: 'Cancel a task',
 					},
 				],
-				default: 'createAndWait',
+				default: 'create',
 			},
-			// Create fields (shared by create and createAndWait)
+			// Create fields
 			{
 				displayName: 'Runner',
 				name: 'runner',
 				type: 'string',
 				default: '',
 				required: true,
-				displayOptions: { show: { operation: ['create', 'createAndWait'] } },
+				displayOptions: { show: { operation: ['create'] } },
 				description: 'Runner ID that should handle this task',
 			},
 			{
@@ -73,7 +68,7 @@ export class Xagent implements INodeType {
 				type: 'string',
 				default: '',
 				required: true,
-				displayOptions: { show: { operation: ['create', 'createAndWait'] } },
+				displayOptions: { show: { operation: ['create'] } },
 				description: 'Workspace to run the task in',
 			},
 			{
@@ -83,7 +78,7 @@ export class Xagent implements INodeType {
 				typeOptions: { rows: 4 },
 				default: '',
 				required: true,
-				displayOptions: { show: { operation: ['create', 'createAndWait'] } },
+				displayOptions: { show: { operation: ['create'] } },
 				description: 'The instruction text for the task',
 			},
 			{
@@ -91,7 +86,7 @@ export class Xagent implements INodeType {
 				name: 'taskName',
 				type: 'string',
 				default: '',
-				displayOptions: { show: { operation: ['create', 'createAndWait'] } },
+				displayOptions: { show: { operation: ['create'] } },
 				description: 'Optional name for the task',
 			},
 			{
@@ -99,16 +94,23 @@ export class Xagent implements INodeType {
 				name: 'parentId',
 				type: 'number',
 				default: 0,
-				displayOptions: { show: { operation: ['create', 'createAndWait'] } },
+				displayOptions: { show: { operation: ['create'] } },
 				description: 'Optional parent task ID',
 			},
-			// Polling config for createAndWait
+			{
+				displayName: 'Wait for Completion',
+				name: 'waitForCompletion',
+				type: 'boolean',
+				default: true,
+				displayOptions: { show: { operation: ['create'] } },
+				description: 'Whether to poll the task until it reaches a terminal status before returning',
+			},
 			{
 				displayName: 'Poll Interval (Seconds)',
 				name: 'pollInterval',
 				type: 'number',
 				default: 10,
-				displayOptions: { show: { operation: ['createAndWait'] } },
+				displayOptions: { show: { operation: ['create'], waitForCompletion: [true] } },
 				description: 'How often to check task status',
 			},
 			{
@@ -116,7 +118,7 @@ export class Xagent implements INodeType {
 				name: 'timeout',
 				type: 'number',
 				default: 3600,
-				displayOptions: { show: { operation: ['createAndWait'] } },
+				displayOptions: { show: { operation: ['create'], waitForCompletion: [true] } },
 				description: 'Maximum time to wait before failing (0 = no timeout)',
 			},
 			// Task ID field (shared by getDetails, update, cancel)
@@ -185,7 +187,7 @@ export class Xagent implements INodeType {
 		for (let i = 0; i < items.length; i++) {
 			const operation = this.getNodeParameter('operation', i) as string;
 
-			if (operation === 'createAndWait') {
+			if (operation === 'create') {
 				const createBody: Record<string, unknown> = {
 					runner: this.getNodeParameter('runner', i) as string,
 					workspace: this.getNodeParameter('workspace', i) as string,
@@ -197,8 +199,14 @@ export class Xagent implements INodeType {
 				if (parentId) createBody.parent = parentId;
 
 				const createResp = await rpc('CreateTask', createBody);
-				const taskId = createResp.task.id;
 
+				const waitForCompletion = this.getNodeParameter('waitForCompletion', i) as boolean;
+				if (!waitForCompletion) {
+					returnData.push({ json: createResp, pairedItem: { item: i } });
+					continue;
+				}
+
+				const taskId = createResp.task.id;
 				const pollInterval = this.getNodeParameter('pollInterval', i) as number;
 				const timeout = this.getNodeParameter('timeout', i) as number;
 				const startTime = Date.now();
@@ -233,19 +241,6 @@ export class Xagent implements INodeType {
 					json: { ...details, logs: logsResp.entries || [] },
 					pairedItem: { item: i },
 				});
-			} else if (operation === 'create') {
-				const body: Record<string, unknown> = {
-					runner: this.getNodeParameter('runner', i) as string,
-					workspace: this.getNodeParameter('workspace', i) as string,
-					instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
-				};
-				const taskName = this.getNodeParameter('taskName', i) as string;
-				if (taskName) body.name = taskName;
-				const parentId = this.getNodeParameter('parentId', i) as number;
-				if (parentId) body.parent = parentId;
-
-				const resp = await rpc('CreateTask', body);
-				returnData.push({ json: resp, pairedItem: { item: i } });
 			} else if (operation === 'getDetails') {
 				const taskId = this.getNodeParameter('taskId', i) as number;
 				const details = await rpc('GetTaskDetails', { id: taskId });
