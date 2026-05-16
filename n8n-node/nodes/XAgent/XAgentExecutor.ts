@@ -2,7 +2,6 @@ import {
 	IDataObject,
 	IExecuteFunctions,
 	INodeExecutionData,
-	NodeApiError,
 	NodeOperationError,
 } from 'n8n-workflow';
 import { createClient, ConnectError, type Client, type Interceptor } from '@connectrpc/connect';
@@ -43,19 +42,28 @@ export class XAgentExecutor {
 		const returnData: INodeExecutionData[] = [];
 		for (let i = 0; i < items.length; i++) {
 			const operation = this.getStringParameter('operation', i);
-			switch (operation) {
-				case 'create':
-					returnData.push(await this.create(i));
-					break;
-				case 'getDetails':
-					returnData.push(await this.getDetails(i));
-					break;
-				case 'update':
-					returnData.push(await this.update(i));
-					break;
-				case 'cancel':
-					returnData.push(await this.cancel(i));
-					break;
+			try {
+				switch (operation) {
+					case 'create':
+						returnData.push(await this.create(i));
+						break;
+					case 'getDetails':
+						returnData.push(await this.getDetails(i));
+						break;
+					case 'update':
+						returnData.push(await this.update(i));
+						break;
+					case 'cancel':
+						returnData.push(await this.cancel(i));
+						break;
+				}
+			} catch (err) {
+				if (err instanceof ConnectError) {
+					throw new NodeOperationError(this.ctx.getNode(), err, {
+						itemIndex: i,
+					});
+				}
+				throw err;
 			}
 		}
 		return [returnData];
@@ -117,33 +125,18 @@ export class XAgentExecutor {
 		return toJson(schema, msg) as IDataObject;
 	}
 
-	private async rpc<T>(method: string, fn: () => Promise<T>): Promise<T> {
-		try {
-			return await fn();
-		} catch (err) {
-			if (err instanceof ConnectError) {
-				throw new NodeApiError(this.ctx.getNode(), {}, {
-					message: `${method}: ${err.message}`,
-				});
-			}
-			throw err;
-		}
-	}
-
 	private async create(i: number): Promise<INodeExecutionData> {
 		const runner = this.getStringParameter('runner', i);
 		const workspace = this.getStringParameter('workspace', i);
 		const instruction = this.getStringParameter('instruction', i);
 		const taskName = this.getStringParameter('taskName', i);
 
-		const createResp = await this.rpc('CreateTask', () =>
-			this.client.createTask({
-				runner,
-				workspace,
-				instructions: [{ text: instruction }],
-				name: taskName || undefined,
-			}),
-		);
+		const createResp = await this.client.createTask({
+			runner,
+			workspace,
+			instructions: [{ text: instruction }],
+			name: taskName || undefined,
+		});
 
 		const waitForCompletion = this.getBooleanParameter('waitForCompletion', i);
 		if (!waitForCompletion) {
@@ -159,12 +152,8 @@ export class XAgentExecutor {
 
 		await this.waitFor(taskId, pollInterval, timeout, i);
 
-		const detailsResp = await this.rpc('GetTaskDetails', () =>
-			this.client.getTaskDetails({ id: taskId }),
-		);
-		const logsResp = await this.rpc('ListLogs', () =>
-			this.client.listLogs({ taskId }),
-		);
+		const detailsResp = await this.client.getTaskDetails({ id: taskId });
+		const logsResp = await this.client.listLogs({ taskId });
 		return {
 			json: {
 				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
@@ -192,9 +181,7 @@ export class XAgentExecutor {
 				);
 			}
 
-			const resp = await this.rpc('GetTask', () =>
-				this.client.getTask({ id: taskId }),
-			);
+			const resp = await this.client.getTask({ id: taskId });
 			const status = resp.task!.status;
 			if (status === TaskStatus.FAILED) {
 				throw new NodeOperationError(
@@ -211,12 +198,8 @@ export class XAgentExecutor {
 
 	private async getDetails(i: number): Promise<INodeExecutionData> {
 		const taskId = BigInt(this.getNumberParameter('taskId', i));
-		const detailsResp = await this.rpc('GetTaskDetails', () =>
-			this.client.getTaskDetails({ id: taskId }),
-		);
-		const logsResp = await this.rpc('ListLogs', () =>
-			this.client.listLogs({ taskId }),
-		);
+		const detailsResp = await this.client.getTaskDetails({ id: taskId });
+		const logsResp = await this.client.listLogs({ taskId });
 		return {
 			json: {
 				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
@@ -228,13 +211,11 @@ export class XAgentExecutor {
 
 	private async update(i: number): Promise<INodeExecutionData> {
 		const taskId = BigInt(this.getNumberParameter('taskId', i));
-		const updateResp = await this.rpc('UpdateTask', () =>
-			this.client.updateTask({
-				id: taskId,
-				addInstructions: [{ text: this.getStringParameter('updateInstruction', i) }],
-				start: this.getBooleanParameter('start', i),
-			}),
-		);
+		const updateResp = await this.client.updateTask({
+			id: taskId,
+			addInstructions: [{ text: this.getStringParameter('updateInstruction', i) }],
+			start: this.getBooleanParameter('start', i),
+		});
 
 		const waitForCompletion = this.getBooleanParameter('waitForCompletion', i);
 		if (!waitForCompletion) {
@@ -248,12 +229,8 @@ export class XAgentExecutor {
 		const timeout = this.getNumberParameter('timeout', i);
 		await this.waitFor(taskId, pollInterval, timeout, i);
 
-		const detailsResp = await this.rpc('GetTaskDetails', () =>
-			this.client.getTaskDetails({ id: taskId }),
-		);
-		const logsResp = await this.rpc('ListLogs', () =>
-			this.client.listLogs({ taskId }),
-		);
+		const detailsResp = await this.client.getTaskDetails({ id: taskId });
+		const logsResp = await this.client.listLogs({ taskId });
 		return {
 			json: {
 				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
@@ -265,9 +242,7 @@ export class XAgentExecutor {
 
 	private async cancel(i: number): Promise<INodeExecutionData> {
 		const taskId = BigInt(this.getNumberParameter('taskId', i));
-		const resp = await this.rpc('CancelTask', () =>
-			this.client.cancelTask({ id: taskId }),
-		);
+		const resp = await this.client.cancelTask({ id: taskId });
 		return {
 			json: this.toJson(CancelTaskResponseSchema, resp),
 			pairedItem: { item: i },
