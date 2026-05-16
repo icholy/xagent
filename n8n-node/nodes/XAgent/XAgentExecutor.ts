@@ -139,11 +139,7 @@ export class XAgentExecutor {
 
 		const taskId = resp.task!.id;
 
-		if (this.getBooleanParameter('waitForCompletion', i)) {
-			const pollInterval = this.getNumberParameter('pollInterval', i);
-			const timeout = this.getNumberParameter('timeout', i);
-			await this.waitFor(taskId, pollInterval, timeout, i);
-		}
+		await this.wait(taskId, i);
 
 		const details = await this.client.getTaskDetails({ id: taskId });
 		const logs = await this.client.listLogs({ taskId });
@@ -156,12 +152,12 @@ export class XAgentExecutor {
 		};
 	}
 
-	private async waitFor(
-		taskId: bigint,
-		pollInterval: number,
-		timeout: number,
-		i: number,
-	): Promise<void> {
+	private async wait(taskId: bigint, i: number): Promise<void> {
+		if (!this.getBooleanParameter('waitForCompletion', i)) {
+			return;
+		}
+		const pollInterval = this.getNumberParameter('pollInterval', i);
+		const timeout = this.getNumberParameter('timeout', i);
 		const started = Date.now();
 		while (true) {
 			await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
@@ -211,12 +207,7 @@ export class XAgentExecutor {
 			start: this.getBooleanParameter('start', i),
 		});
 
-		if (this.getBooleanParameter('waitForCompletion', i)) {
-			const pollInterval = this.getNumberParameter('pollInterval', i);
-			const timeout = this.getNumberParameter('timeout', i);
-			await this.waitFor(taskId, pollInterval, timeout, i);
-		}
-
+		await this.wait(taskId, i);
 
 		const details = await this.client.getTaskDetails({ id: taskId });
 		const logs = await this.client.listLogs({ taskId });
@@ -241,11 +232,7 @@ export class XAgentExecutor {
 	private async archive(i: number): Promise<INodeExecutionData> {
 		const taskId = BigInt(this.getNumberParameter('taskId', i));
 
-		if (this.getBooleanParameter('waitForCompletion', i)) {
-			const pollInterval = this.getNumberParameter('pollInterval', i);
-			const timeout = this.getNumberParameter('timeout', i);
-			await this.waitFor(taskId, pollInterval, timeout, i);
-		}
+		await this.wait(taskId, i);
 
 		const resp = await this.client.archiveTask({ id: taskId });
 		return {
