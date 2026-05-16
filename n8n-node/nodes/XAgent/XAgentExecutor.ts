@@ -162,13 +162,6 @@ export class XAgentExecutor {
 		const detailsResp = await this.rpc('GetTaskDetails', () =>
 			this.client.getTaskDetails({ id: taskId }),
 		);
-		if (detailsResp.task!.status === TaskStatus.FAILED) {
-			throw new NodeOperationError(
-				this.ctx.getNode(),
-				`Task ${taskId} ended with status FAILED`,
-				{ itemIndex: i },
-			);
-		}
 		const logsResp = await this.rpc('ListLogs', () =>
 			this.client.listLogs({ taskId }),
 		);
@@ -202,7 +195,15 @@ export class XAgentExecutor {
 			const resp = await this.rpc('GetTask', () =>
 				this.client.getTask({ id: taskId }),
 			);
-			if (TERMINAL_STATUSES.includes(resp.task!.status)) {
+			const status = resp.task!.status;
+			if (status === TaskStatus.FAILED) {
+				throw new NodeOperationError(
+					this.ctx.getNode(),
+					`Task ${taskId} ended with status FAILED`,
+					{ itemIndex: i },
+				);
+			}
+			if (TERMINAL_STATUSES.includes(status)) {
 				return;
 			}
 		}
