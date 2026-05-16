@@ -36,7 +36,7 @@ export class XAgentExecutor {
 		const items = this.ctx.getInputData();
 		const returnData: INodeExecutionData[] = [];
 		for (let i = 0; i < items.length; i++) {
-			const operation = this.ctx.getNodeParameter('operation', i) as string;
+			const operation = this.getStringParameter('operation', i);
 			switch (operation) {
 				case 'create':
 					returnData.push(await this.create(i));
@@ -71,6 +71,42 @@ export class XAgentExecutor {
 		this.client = createClient(XAgentService, transport);
 	}
 
+	private getStringParameter(name: string, i: number): string {
+		const v = this.ctx.getNodeParameter(name, i);
+		if (typeof v !== 'string') {
+			throw new NodeOperationError(
+				this.ctx.getNode(),
+				`Parameter "${name}" must be a string, got ${typeof v}`,
+				{ itemIndex: i },
+			);
+		}
+		return v;
+	}
+
+	private getNumberParameter(name: string, i: number): number {
+		const v = this.ctx.getNodeParameter(name, i);
+		if (typeof v !== 'number') {
+			throw new NodeOperationError(
+				this.ctx.getNode(),
+				`Parameter "${name}" must be a number, got ${typeof v}`,
+				{ itemIndex: i },
+			);
+		}
+		return v;
+	}
+
+	private getBooleanParameter(name: string, i: number): boolean {
+		const v = this.ctx.getNodeParameter(name, i);
+		if (typeof v !== 'boolean') {
+			throw new NodeOperationError(
+				this.ctx.getNode(),
+				`Parameter "${name}" must be a boolean, got ${typeof v}`,
+				{ itemIndex: i },
+			);
+		}
+		return v;
+	}
+
 	private async rpc<T>(method: string, fn: () => Promise<T>): Promise<T> {
 		try {
 			return await fn();
@@ -85,10 +121,10 @@ export class XAgentExecutor {
 	}
 
 	private async create(i: number): Promise<INodeExecutionData> {
-		const runner = this.ctx.getNodeParameter('runner', i) as string;
-		const workspace = this.ctx.getNodeParameter('workspace', i) as string;
-		const instruction = this.ctx.getNodeParameter('instruction', i) as string;
-		const taskName = this.ctx.getNodeParameter('taskName', i) as string;
+		const runner = this.getStringParameter('runner', i);
+		const workspace = this.getStringParameter('workspace', i);
+		const instruction = this.getStringParameter('instruction', i);
+		const taskName = this.getStringParameter('taskName', i);
 
 		const createResp = await this.rpc('CreateTask', () =>
 			this.client.createTask({
@@ -99,7 +135,7 @@ export class XAgentExecutor {
 			}),
 		);
 
-		const waitForCompletion = this.ctx.getNodeParameter('waitForCompletion', i) as boolean;
+		const waitForCompletion = this.getBooleanParameter('waitForCompletion', i);
 		if (!waitForCompletion) {
 			return {
 				json: toJson(CreateTaskResponseSchema, createResp) as any,
@@ -108,8 +144,8 @@ export class XAgentExecutor {
 		}
 
 		const taskId = createResp.task!.id;
-		const pollInterval = this.ctx.getNodeParameter('pollInterval', i) as number;
-		const timeout = this.ctx.getNodeParameter('timeout', i) as number;
+		const pollInterval = this.getNumberParameter('pollInterval', i);
+		const timeout = this.getNumberParameter('timeout', i);
 		const startTime = Date.now();
 
 		let detailsJson: any;
@@ -151,7 +187,7 @@ export class XAgentExecutor {
 	}
 
 	private async getDetails(i: number): Promise<INodeExecutionData> {
-		const taskId = BigInt(this.ctx.getNodeParameter('taskId', i) as number);
+		const taskId = BigInt(this.getNumberParameter('taskId', i));
 		const detailsResp = await this.rpc('GetTaskDetails', () =>
 			this.client.getTaskDetails({ id: taskId }),
 		);
@@ -169,11 +205,9 @@ export class XAgentExecutor {
 	private async update(i: number): Promise<INodeExecutionData> {
 		const resp = await this.rpc('UpdateTask', () =>
 			this.client.updateTask({
-				id: BigInt(this.ctx.getNodeParameter('taskId', i) as number),
-				addInstructions: [
-					{ text: this.ctx.getNodeParameter('updateInstruction', i) as string },
-				],
-				start: this.ctx.getNodeParameter('start', i) as boolean,
+				id: BigInt(this.getNumberParameter('taskId', i)),
+				addInstructions: [{ text: this.getStringParameter('updateInstruction', i) }],
+				start: this.getBooleanParameter('start', i),
 			}),
 		);
 		return {
@@ -183,7 +217,7 @@ export class XAgentExecutor {
 	}
 
 	private async cancel(i: number): Promise<INodeExecutionData> {
-		const taskId = BigInt(this.ctx.getNodeParameter('taskId', i) as number);
+		const taskId = BigInt(this.getNumberParameter('taskId', i));
 		const resp = await this.rpc('CancelTask', () =>
 			this.client.cancelTask({ id: taskId }),
 		);
