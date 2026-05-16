@@ -1,0 +1,3 @@
+[dbmate]
+migrations-dir = "internal/store/sql/migrations"
+no-dump-schema = true

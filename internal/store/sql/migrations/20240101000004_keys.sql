@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 CREATE TABLE keys (
     id         UUID PRIMARY KEY,
     name       TEXT NOT NULL DEFAULT '',
@@ -10,5 +10,5 @@ CREATE TABLE keys (
 CREATE INDEX idx_keys_owner ON keys(owner);
 CREATE UNIQUE INDEX idx_keys_token_hash ON keys(token_hash);
 
--- +goose Down
+-- migrate:down
 DROP TABLE keys;

@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 ALTER TABLE tasks ALTER COLUMN status TYPE INTEGER USING (
     CASE status
         WHEN 'pending' THEN 1
@@ -22,7 +22,7 @@ ALTER TABLE tasks ALTER COLUMN command TYPE INTEGER USING (
 );
 ALTER TABLE tasks ALTER COLUMN command SET DEFAULT 0;
 
--- +goose Down
+-- migrate:down
 ALTER TABLE tasks ALTER COLUMN status TYPE TEXT USING (
     CASE status
         WHEN 1 THEN 'pending'

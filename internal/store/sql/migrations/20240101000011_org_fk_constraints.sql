@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 
 ALTER TABLE tasks ADD CONSTRAINT fk_tasks_org_id FOREIGN KEY (org_id) REFERENCES orgs(id);
 ALTER TABLE events ADD CONSTRAINT fk_events_org_id FOREIGN KEY (org_id) REFERENCES orgs(id);
@@ -7,7 +7,7 @@ ALTER TABLE keys ADD CONSTRAINT fk_keys_org_id FOREIGN KEY (org_id) REFERENCES o
 ALTER TABLE org_members DROP CONSTRAINT org_members_org_id_fkey;
 ALTER TABLE org_members ADD CONSTRAINT org_members_org_id_fkey FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE;
 
--- +goose Down
+-- migrate:down
 
 ALTER TABLE org_members DROP CONSTRAINT org_members_org_id_fkey;
 ALTER TABLE org_members ADD CONSTRAINT org_members_org_id_fkey FOREIGN KEY (org_id) REFERENCES orgs(id);

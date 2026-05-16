@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 
 CREATE TABLE tasks (
     id            BIGSERIAL PRIMARY KEY,
@@ -72,7 +72,7 @@ CREATE TABLE workspaces (
 CREATE INDEX idx_workspaces_runner_id ON workspaces(runner_id);
 CREATE INDEX idx_workspaces_owner ON workspaces(owner);
 
--- +goose Down
+-- migrate:down
 
 DROP TABLE event_tasks;
 DROP TABLE events;

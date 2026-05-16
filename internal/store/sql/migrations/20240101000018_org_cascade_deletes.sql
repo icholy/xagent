@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 
 -- Add ON DELETE CASCADE to all foreign keys referencing orgs(id)
 -- so that deleting an org removes all associated data.
@@ -42,7 +42,7 @@ ALTER TABLE event_tasks ADD CONSTRAINT event_tasks_task_id_fkey FOREIGN KEY (tas
 ALTER TABLE event_tasks DROP CONSTRAINT event_tasks_event_id_fkey;
 ALTER TABLE event_tasks ADD CONSTRAINT event_tasks_event_id_fkey FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE;
 
--- +goose Down
+-- migrate:down
 
 ALTER TABLE event_tasks DROP CONSTRAINT event_tasks_event_id_fkey;
 ALTER TABLE event_tasks ADD CONSTRAINT event_tasks_event_id_fkey FOREIGN KEY (event_id) REFERENCES events(id);

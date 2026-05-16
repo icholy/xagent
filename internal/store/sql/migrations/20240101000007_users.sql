@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 CREATE TABLE users (
     id              TEXT PRIMARY KEY,
     email           TEXT NOT NULL,
@@ -23,7 +23,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 DROP TABLE github_accounts;
 
--- +goose Down
+-- migrate:down
 CREATE TABLE github_accounts (
     id              BIGSERIAL PRIMARY KEY,
     owner           TEXT NOT NULL,

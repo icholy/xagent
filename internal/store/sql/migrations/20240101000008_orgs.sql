@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 
 CREATE TABLE orgs (
     id         BIGSERIAL PRIMARY KEY,
@@ -54,7 +54,7 @@ FROM users u WHERE workspaces.owner = u.id;
 UPDATE keys SET owner = u.default_org_id::TEXT
 FROM users u WHERE keys.owner = u.id;
 
--- +goose Down
+-- migrate:down
 
 -- Reverse owner migration (org ID back to user ID).
 UPDATE keys SET owner = om.user_id

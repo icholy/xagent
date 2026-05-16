@@ -1,7 +1,7 @@
--- +goose Up
+-- migrate:up
 
 ALTER TABLE orgs ADD COLUMN archived BOOLEAN NOT NULL DEFAULT FALSE;
 
--- +goose Down
+-- migrate:down
 
 ALTER TABLE orgs DROP COLUMN archived;

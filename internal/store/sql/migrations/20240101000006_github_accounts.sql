@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 CREATE TABLE github_accounts (
     id              BIGSERIAL PRIMARY KEY,
     owner           TEXT NOT NULL,
@@ -9,5 +9,5 @@ CREATE TABLE github_accounts (
 CREATE UNIQUE INDEX idx_github_accounts_owner ON github_accounts(owner);
 CREATE UNIQUE INDEX idx_github_accounts_github_user_id ON github_accounts(github_user_id);
 
--- +goose Down
+-- migrate:down
 DROP TABLE github_accounts;

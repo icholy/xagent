@@ -1,4 +1,4 @@
--- +goose Up
+-- migrate:up
 
 -- tasks: rename owner to org_id, change type to BIGINT
 ALTER TABLE tasks ADD COLUMN org_id BIGINT;
@@ -38,7 +38,7 @@ CREATE INDEX idx_keys_org_id ON keys(org_id);
 UPDATE orgs SET owner = om.user_id
 FROM org_members om WHERE om.org_id = orgs.id AND om.role = 'owner';
 
--- +goose Down
+-- migrate:down
 
 -- orgs: revert owner back to stringified org ID
 UPDATE orgs SET owner = id::TEXT;
