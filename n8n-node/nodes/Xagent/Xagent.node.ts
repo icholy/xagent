@@ -6,6 +6,17 @@ import {
 	NodeApiError,
 	NodeOperationError,
 } from 'n8n-workflow';
+import { createClient, ConnectError, type Interceptor } from '@connectrpc/connect';
+import { createConnectTransport } from '@connectrpc/connect-web';
+import { toJson } from '@bufbuild/protobuf';
+import {
+	XAgentService,
+	CreateTaskResponseSchema,
+	GetTaskDetailsResponseSchema,
+	ListLogsResponseSchema,
+	UpdateTaskResponseSchema,
+	CancelTaskResponseSchema,
+} from '../../gen/xagent/v1/xagent_pb';
 
 const TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'CANCELLED'];
 
@@ -159,59 +170,68 @@ export class Xagent implements INodeType {
 		const returnData: INodeExecutionData[] = [];
 		const credentials = await this.getCredentials('xagentApi');
 		const serverUrl = (credentials.serverUrl as string).replace(/\/$/, '');
+		const apiKey = credentials.apiKey as string;
 
-		const rpc = async (method: string, body: Record<string, unknown> = {}) => {
-			const resp = await this.helpers.httpRequest({
-				method: 'POST',
-				url: `${serverUrl}/xagent.v1.XAgentService/${method}`,
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${credentials.apiKey}`,
-					'X-Auth-Type': 'key',
-					'Connect-Protocol-Version': '1',
-				},
-				body,
-				json: true,
-				returnFullResponse: true,
-				ignoreHttpStatusErrors: true,
-			});
-			if (resp.statusCode >= 400) {
-				const b = resp.body as any;
-				throw new NodeApiError(this.getNode(), b, {
-					message: `${method}: ${b?.message ?? `HTTP ${resp.statusCode}`}`,
-				});
+		const authInterceptor: Interceptor = (next) => async (req) => {
+			req.header.set('Authorization', `Bearer ${apiKey}`);
+			req.header.set('X-Auth-Type', 'key');
+			return next(req);
+		};
+
+		const transport = createConnectTransport({
+			baseUrl: serverUrl,
+			interceptors: [authInterceptor],
+		});
+
+		const client = createClient(XAgentService, transport);
+
+		const rpc = async <T>(method: string, fn: () => Promise<T>): Promise<T> => {
+			try {
+				return await fn();
+			} catch (err) {
+				if (err instanceof ConnectError) {
+					throw new NodeApiError(this.getNode(), {}, {
+						message: `${method}: ${err.message}`,
+					});
+				}
+				throw err;
 			}
-			return resp.body;
 		};
 
 		for (let i = 0; i < items.length; i++) {
 			const operation = this.getNodeParameter('operation', i) as string;
 
 			if (operation === 'create') {
-				const createBody: Record<string, unknown> = {
-					runner: this.getNodeParameter('runner', i) as string,
-					workspace: this.getNodeParameter('workspace', i) as string,
-					instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
-				};
+				const runner = this.getNodeParameter('runner', i) as string;
+				const workspace = this.getNodeParameter('workspace', i) as string;
+				const instruction = this.getNodeParameter('instruction', i) as string;
 				const taskName = this.getNodeParameter('taskName', i) as string;
-				if (taskName) createBody.name = taskName;
 				const parentId = this.getNodeParameter('parentId', i) as number;
-				if (parentId) createBody.parent = parentId;
 
-				const createResp = await rpc('CreateTask', createBody);
+				const createResp = await rpc('CreateTask', () =>
+					client.createTask({
+						runner,
+						workspace,
+						instructions: [{ text: instruction }],
+						name: taskName || undefined,
+						parent: parentId ? BigInt(parentId) : undefined,
+					}),
+				);
+				const createJson = toJson(CreateTaskResponseSchema, createResp) as any;
 
 				const waitForCompletion = this.getNodeParameter('waitForCompletion', i) as boolean;
 				if (!waitForCompletion) {
-					returnData.push({ json: createResp, pairedItem: { item: i } });
+					returnData.push({ json: createJson, pairedItem: { item: i } });
 					continue;
 				}
 
-				const taskId = createResp.task.id;
+				const taskId = createResp.task!.id;
 				const pollInterval = this.getNodeParameter('pollInterval', i) as number;
 				const timeout = this.getNodeParameter('timeout', i) as number;
 				const startTime = Date.now();
 
-				let details: any;
+				let detailsJson: any;
+				let detailsResp: any;
 				while (true) {
 					await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
 
@@ -223,14 +243,20 @@ export class Xagent implements INodeType {
 						);
 					}
 
-					details = await rpc('GetTaskDetails', { id: taskId });
-					if (TERMINAL_STATUSES.includes(details.task.status)) {
+					detailsResp = await rpc('GetTaskDetails', () =>
+						client.getTaskDetails({ id: taskId }),
+					);
+					detailsJson = toJson(GetTaskDetailsResponseSchema, detailsResp) as any;
+					if (TERMINAL_STATUSES.includes(detailsJson.task.status)) {
 						break;
 					}
 				}
 
-				const logsResp = await rpc('ListLogs', { task_id: taskId });
-				if (details.task.status === 'FAILED') {
+				const logsResp = await rpc('ListLogs', () =>
+					client.listLogs({ taskId }),
+				);
+				const logsJson = toJson(ListLogsResponseSchema, logsResp) as any;
+				if (detailsJson.task.status === 'FAILED') {
 					throw new NodeOperationError(
 						this.getNode(),
 						`Task ${taskId} ended with status FAILED`,
@@ -238,31 +264,42 @@ export class Xagent implements INodeType {
 					);
 				}
 				returnData.push({
-					json: { ...details, logs: logsResp.entries || [] },
+					json: { ...detailsJson, logs: logsJson.entries || [] },
 					pairedItem: { item: i },
 				});
 			} else if (operation === 'getDetails') {
 				const taskId = this.getNodeParameter('taskId', i) as number;
-				const details = await rpc('GetTaskDetails', { id: taskId });
-				const logsResp = await rpc('ListLogs', { task_id: taskId });
+				const detailsResp = await rpc('GetTaskDetails', () =>
+					client.getTaskDetails({ id: BigInt(taskId) }),
+				);
+				const detailsJson = toJson(GetTaskDetailsResponseSchema, detailsResp) as any;
+				const logsResp = await rpc('ListLogs', () =>
+					client.listLogs({ taskId: BigInt(taskId) }),
+				);
+				const logsJson = toJson(ListLogsResponseSchema, logsResp) as any;
 				returnData.push({
-					json: { ...details, logs: logsResp.entries || [] },
+					json: { ...detailsJson, logs: logsJson.entries || [] },
 					pairedItem: { item: i },
 				});
 			} else if (operation === 'update') {
-				const body: Record<string, unknown> = {
-					id: this.getNodeParameter('taskId', i) as number,
-					add_instructions: [
-						{ text: this.getNodeParameter('updateInstruction', i) as string },
-					],
-					start: this.getNodeParameter('start', i) as boolean,
-				};
-				const resp = await rpc('UpdateTask', body);
-				returnData.push({ json: resp, pairedItem: { item: i } });
+				const resp = await rpc('UpdateTask', () =>
+					client.updateTask({
+						id: BigInt(this.getNodeParameter('taskId', i) as number),
+						addInstructions: [
+							{ text: this.getNodeParameter('updateInstruction', i) as string },
+						],
+						start: this.getNodeParameter('start', i) as boolean,
+					}),
+				);
+				const json = toJson(UpdateTaskResponseSchema, resp) as any;
+				returnData.push({ json, pairedItem: { item: i } });
 			} else if (operation === 'cancel') {
 				const taskId = this.getNodeParameter('taskId', i) as number;
-				const resp = await rpc('CancelTask', { id: taskId });
-				returnData.push({ json: resp, pairedItem: { item: i } });
+				const resp = await rpc('CancelTask', () =>
+					client.cancelTask({ id: BigInt(taskId) }),
+				);
+				const json = toJson(CancelTaskResponseSchema, resp) as any;
+				returnData.push({ json, pairedItem: { item: i } });
 			}
 		}
 
