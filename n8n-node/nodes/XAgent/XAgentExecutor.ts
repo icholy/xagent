@@ -89,7 +89,6 @@ export class XAgentExecutor {
 		const workspace = this.ctx.getNodeParameter('workspace', i) as string;
 		const instruction = this.ctx.getNodeParameter('instruction', i) as string;
 		const taskName = this.ctx.getNodeParameter('taskName', i) as string;
-		const parentId = this.ctx.getNodeParameter('parentId', i) as number;
 
 		const createResp = await this.rpc('CreateTask', () =>
 			this.client.createTask({
@@ -97,7 +96,6 @@ export class XAgentExecutor {
 				workspace,
 				instructions: [{ text: instruction }],
 				name: taskName || undefined,
-				parent: parentId ? BigInt(parentId) : undefined,
 			}),
 		);
 

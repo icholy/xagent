@@ -87,14 +87,6 @@ export class XAgent implements INodeType {
 				description: 'Optional name for the task',
 			},
 			{
-				displayName: 'Parent Task ID',
-				name: 'parentId',
-				type: 'number',
-				default: 0,
-				displayOptions: { show: { operation: ['create'] } },
-				description: 'Optional parent task ID',
-			},
-			{
 				displayName: 'Wait for Completion',
 				name: 'waitForCompletion',
 				type: 'boolean',
