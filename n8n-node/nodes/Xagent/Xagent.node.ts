@@ -58,6 +58,15 @@ export class Xagent implements INodeType {
 			},
 			// Create fields (shared by create and createAndWait)
 			{
+				displayName: 'Runner',
+				name: 'runner',
+				type: 'string',
+				default: '',
+				required: true,
+				displayOptions: { show: { operation: ['create', 'createAndWait'] } },
+				description: 'Runner ID that should handle this task',
+			},
+			{
 				displayName: 'Workspace',
 				name: 'workspace',
 				type: 'string',
@@ -168,6 +177,7 @@ export class Xagent implements INodeType {
 
 			if (operation === 'createAndWait') {
 				const createBody: Record<string, unknown> = {
+					runner: this.getNodeParameter('runner', i) as string,
 					workspace: this.getNodeParameter('workspace', i) as string,
 					instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
 				};
@@ -215,6 +225,7 @@ export class Xagent implements INodeType {
 				});
 			} else if (operation === 'create') {
 				const body: Record<string, unknown> = {
+					runner: this.getNodeParameter('runner', i) as string,
 					workspace: this.getNodeParameter('workspace', i) as string,
 					instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
 				};
