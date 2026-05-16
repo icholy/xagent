@@ -4,10 +4,10 @@
   "description": "n8n community node for xagent task orchestration",
   "keywords": ["n8n-community-node-package"],
   "license": "MIT",
-  "main": "dist/nodes/Xagent/Xagent.node.js",
+  "main": "dist/nodes/XAgent/XAgent.node.js",
   "scripts": {
     "generate": "buf generate",
-    "build": "tsc && cp nodes/Xagent/xagent.png dist/nodes/Xagent/xagent.png",
+    "build": "tsc && cp nodes/XAgent/xagent.png dist/nodes/XAgent/xagent.png",
     "lint": "eslint . --ext .ts",
     "prepublishOnly": "npm run build"
   },
@@ -16,8 +16,8 @@
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
-    "credentials": ["dist/credentials/XagentApi.credentials.js"],
-    "nodes": ["dist/nodes/Xagent/Xagent.node.js"]
+    "credentials": ["dist/credentials/XAgentApi.credentials.js"],
+    "nodes": ["dist/nodes/XAgent/XAgent.node.js"]
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.10.2",

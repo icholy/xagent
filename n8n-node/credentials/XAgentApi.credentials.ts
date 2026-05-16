@@ -1,8 +1,8 @@
 import { ICredentialType, INodeProperties } from 'n8n-workflow';
 
-export class XagentApi implements ICredentialType {
-	name = 'xagentApi';
-	displayName = 'xagent API';
+export class XAgentApi implements ICredentialType {
+	name = 'XAgentApi';
+	displayName = 'XAgent API';
 	documentationUrl = 'https://github.com/icholy/xagent';
 	properties: INodeProperties[] = [
 		{

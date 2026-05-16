@@ -20,9 +20,9 @@ import {
 
 const TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'CANCELLED'];
 
-export class Xagent implements INodeType {
+export class XAgent implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'xagent',
+		displayName: 'XAgent',
 		name: 'xagent',
 		icon: 'file:xagent.png',
 		group: ['transform'],
@@ -32,7 +32,7 @@ export class Xagent implements INodeType {
 		defaults: { name: 'xagent' },
 		inputs: ['main'],
 		outputs: ['main'],
-		credentials: [{ name: 'xagentApi', required: true }],
+		credentials: [{ name: 'XAgentApi', required: true }],
 		properties: [
 			{
 				displayName: 'Operation',
