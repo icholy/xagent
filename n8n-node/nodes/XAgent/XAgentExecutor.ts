@@ -1,4 +1,5 @@
 import {
+	IDataObject,
 	IExecuteFunctions,
 	INodeExecutionData,
 	NodeApiError,
@@ -6,15 +7,15 @@ import {
 } from 'n8n-workflow';
 import { createClient, ConnectError, type Client, type Interceptor } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
-import { toJson } from '@bufbuild/protobuf';
+import { toJson, type DescMessage, type MessageShape } from '@bufbuild/protobuf';
 import {
 	XAgentService,
 	CreateTaskResponseSchema,
 	GetTaskDetailsResponseSchema,
-	GetTaskResponseSchema,
 	ListLogsResponseSchema,
 	UpdateTaskResponseSchema,
 	CancelTaskResponseSchema,
+	TaskStatus,
 } from '../../gen/xagent/v1/xagent_pb';
 
 interface XAgentApiCredentials {
@@ -22,7 +23,11 @@ interface XAgentApiCredentials {
 	apiKey: string;
 }
 
-const TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'CANCELLED'];
+const TERMINAL_STATUSES: TaskStatus[] = [
+	TaskStatus.COMPLETED,
+	TaskStatus.FAILED,
+	TaskStatus.CANCELLED,
+];
 
 export class XAgentExecutor {
 	private ctx: IExecuteFunctions;
@@ -108,6 +113,10 @@ export class XAgentExecutor {
 		return v;
 	}
 
+	private toJson<Desc extends DescMessage>(schema: Desc, msg: MessageShape<Desc>): IDataObject {
+		return toJson(schema, msg) as IDataObject;
+	}
+
 	private async rpc<T>(method: string, fn: () => Promise<T>): Promise<T> {
 		try {
 			return await fn();
@@ -139,7 +148,7 @@ export class XAgentExecutor {
 		const waitForCompletion = this.getBooleanParameter('waitForCompletion', i);
 		if (!waitForCompletion) {
 			return {
-				json: toJson(CreateTaskResponseSchema, createResp) as any,
+				json: this.toJson(CreateTaskResponseSchema, createResp),
 				pairedItem: { item: i },
 			};
 		}
@@ -153,20 +162,21 @@ export class XAgentExecutor {
 		const detailsResp = await this.rpc('GetTaskDetails', () =>
 			this.client.getTaskDetails({ id: taskId }),
 		);
-		const detailsJson = toJson(GetTaskDetailsResponseSchema, detailsResp) as any;
-		const logsResp = await this.rpc('ListLogs', () =>
-			this.client.listLogs({ taskId }),
-		);
-		const logsJson = toJson(ListLogsResponseSchema, logsResp) as any;
-		if (detailsJson.task.status === 'FAILED') {
+		if (detailsResp.task!.status === TaskStatus.FAILED) {
 			throw new NodeOperationError(
 				this.ctx.getNode(),
 				`Task ${taskId} ended with status FAILED`,
 				{ itemIndex: i },
 			);
 		}
+		const logsResp = await this.rpc('ListLogs', () =>
+			this.client.listLogs({ taskId }),
+		);
 		return {
-			json: { ...detailsJson, logs: logsJson.entries || [] },
+			json: {
+				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
+				logs: this.toJson(ListLogsResponseSchema, logsResp).entries ?? [],
+			},
 			pairedItem: { item: i },
 		};
 	}
@@ -192,8 +202,7 @@ export class XAgentExecutor {
 			const resp = await this.rpc('GetTask', () =>
 				this.client.getTask({ id: taskId }),
 			);
-			const json = toJson(GetTaskResponseSchema, resp) as any;
-			if (TERMINAL_STATUSES.includes(json.task.status)) {
+			if (TERMINAL_STATUSES.includes(resp.task!.status)) {
 				return;
 			}
 		}
@@ -204,13 +213,14 @@ export class XAgentExecutor {
 		const detailsResp = await this.rpc('GetTaskDetails', () =>
 			this.client.getTaskDetails({ id: taskId }),
 		);
-		const detailsJson = toJson(GetTaskDetailsResponseSchema, detailsResp) as any;
 		const logsResp = await this.rpc('ListLogs', () =>
 			this.client.listLogs({ taskId }),
 		);
-		const logsJson = toJson(ListLogsResponseSchema, logsResp) as any;
 		return {
-			json: { ...detailsJson, logs: logsJson.entries || [] },
+			json: {
+				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
+				logs: this.toJson(ListLogsResponseSchema, logsResp).entries ?? [],
+			},
 			pairedItem: { item: i },
 		};
 	}
@@ -224,7 +234,7 @@ export class XAgentExecutor {
 			}),
 		);
 		return {
-			json: toJson(UpdateTaskResponseSchema, resp) as any,
+			json: this.toJson(UpdateTaskResponseSchema, resp),
 			pairedItem: { item: i },
 		};
 	}
@@ -235,7 +245,7 @@ export class XAgentExecutor {
 			this.client.cancelTask({ id: taskId }),
 		);
 		return {
-			json: toJson(CancelTaskResponseSchema, resp) as any,
+			json: this.toJson(CancelTaskResponseSchema, resp),
 			pairedItem: { item: i },
 		};
 	}
