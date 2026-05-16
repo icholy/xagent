@@ -12,7 +12,7 @@ export class Xagent implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'xagent',
 		name: 'xagent',
-		icon: 'file:xagent.svg',
+		icon: 'file:xagent.png',
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
