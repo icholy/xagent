@@ -22,15 +22,13 @@ export interface XAgentApiCredentials {
 }
 
 export function buildXAgentClient(credentials: XAgentApiCredentials): Client<typeof XAgentService> {
-	const serverUrl = credentials.serverUrl.replace(/\/$/, '');
-	const apiKey = credentials.apiKey;
 	const authInterceptor: Interceptor = (next) => async (req) => {
-		req.header.set('Authorization', `Bearer ${apiKey}`);
+		req.header.set('Authorization', `Bearer ${credentials.apiKey}`);
 		req.header.set('X-Auth-Type', 'key');
 		return next(req);
 	};
 	const transport = createConnectTransport({
-		baseUrl: serverUrl,
+		baseUrl: credentials.serverUrl,
 		interceptors: [authInterceptor],
 	});
 	return createClient(XAgentService, transport);

@@ -25,7 +25,7 @@ export class XAgentApi implements ICredentialType {
 
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: '={{$credentials.serverUrl.replace(/\\/$/, "")}}',
+			baseURL: '={{$credentials.serverUrl}}',
 			url: '/xagent.v1.XAgentService/Ping',
 			method: 'POST',
 			headers: {
@@ -35,6 +35,7 @@ export class XAgentApi implements ICredentialType {
 				'Connect-Protocol-Version': '1',
 			},
 			body: {},
+			json: true,
 		},
 	};
 }
