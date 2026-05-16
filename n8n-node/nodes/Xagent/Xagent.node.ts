@@ -164,82 +164,102 @@ export class Xagent implements INodeType {
 		};
 
 		for (let i = 0; i < items.length; i++) {
-			const operation = this.getNodeParameter('operation', i) as string;
+			try {
+				const operation = this.getNodeParameter('operation', i) as string;
 
-			if (operation === 'createAndWait') {
-				const createBody: Record<string, unknown> = {
-					workspace: this.getNodeParameter('workspace', i) as string,
-					instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
-				};
-				const taskName = this.getNodeParameter('taskName', i) as string;
-				if (taskName) createBody.name = taskName;
-				const parentId = this.getNodeParameter('parentId', i) as number;
-				if (parentId) createBody.parent = parentId;
+				if (operation === 'createAndWait') {
+					const createBody: Record<string, unknown> = {
+						workspace: this.getNodeParameter('workspace', i) as string,
+						instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
+					};
+					const taskName = this.getNodeParameter('taskName', i) as string;
+					if (taskName) createBody.name = taskName;
+					const parentId = this.getNodeParameter('parentId', i) as number;
+					if (parentId) createBody.parent = parentId;
 
-				const createResp = await rpc('CreateTask', createBody);
-				const taskId = createResp.task.id;
+					const createResp = await rpc('CreateTask', createBody);
+					const taskId = createResp.task.id;
 
-				const pollInterval = this.getNodeParameter('pollInterval', i) as number;
-				const timeout = this.getNodeParameter('timeout', i) as number;
-				const startTime = Date.now();
+					const pollInterval = this.getNodeParameter('pollInterval', i) as number;
+					const timeout = this.getNodeParameter('timeout', i) as number;
+					const startTime = Date.now();
 
-				let details: any;
-				while (true) {
-					await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
+					let details: any;
+					while (true) {
+						await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
 
-					if (timeout > 0 && Date.now() - startTime > timeout * 1000) {
+						if (timeout > 0 && Date.now() - startTime > timeout * 1000) {
+							throw new NodeOperationError(
+								this.getNode(),
+								`Task ${taskId} did not complete within ${timeout}s`,
+								{ itemIndex: i },
+							);
+						}
+
+						details = await rpc('GetTaskDetails', { id: taskId });
+						if (TERMINAL_STATUSES.includes(details.task.status)) {
+							break;
+						}
+					}
+
+					const logsResp = await rpc('ListLogs', { task_id: taskId });
+
+					if (details.task.status === 'FAILED') {
 						throw new NodeOperationError(
 							this.getNode(),
-							`Task ${taskId} did not complete within ${timeout}s`,
+							`Task ${taskId} ended with status FAILED`,
 							{ itemIndex: i },
 						);
 					}
 
-					details = await rpc('GetTaskDetails', { id: taskId });
-					if (TERMINAL_STATUSES.includes(details.task.status)) {
-						break;
-					}
+					returnData.push({
+						json: { ...details, logs: logsResp.entries || [] },
+						pairedItem: { item: i },
+					});
+				} else if (operation === 'create') {
+					const body: Record<string, unknown> = {
+						workspace: this.getNodeParameter('workspace', i) as string,
+						instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
+					};
+					const taskName = this.getNodeParameter('taskName', i) as string;
+					if (taskName) body.name = taskName;
+					const parentId = this.getNodeParameter('parentId', i) as number;
+					if (parentId) body.parent = parentId;
+
+					const resp = await rpc('CreateTask', body);
+					returnData.push({ json: resp, pairedItem: { item: i } });
+				} else if (operation === 'getDetails') {
+					const taskId = this.getNodeParameter('taskId', i) as number;
+					const details = await rpc('GetTaskDetails', { id: taskId });
+					const logsResp = await rpc('ListLogs', { task_id: taskId });
+					returnData.push({
+						json: { ...details, logs: logsResp.entries || [] },
+						pairedItem: { item: i },
+					});
+				} else if (operation === 'update') {
+					const body: Record<string, unknown> = {
+						id: this.getNodeParameter('taskId', i) as number,
+						add_instructions: [
+							{ text: this.getNodeParameter('updateInstruction', i) as string },
+						],
+						start: this.getNodeParameter('start', i) as boolean,
+					};
+					const resp = await rpc('UpdateTask', body);
+					returnData.push({ json: resp, pairedItem: { item: i } });
+				} else if (operation === 'cancel') {
+					const taskId = this.getNodeParameter('taskId', i) as number;
+					const resp = await rpc('CancelTask', { id: taskId });
+					returnData.push({ json: resp, pairedItem: { item: i } });
 				}
-
-				const logsResp = await rpc('ListLogs', { task_id: taskId });
-				returnData.push({
-					json: { ...details, logs: logsResp.entries || [] },
-					pairedItem: { item: i },
-				});
-			} else if (operation === 'create') {
-				const body: Record<string, unknown> = {
-					workspace: this.getNodeParameter('workspace', i) as string,
-					instructions: [{ text: this.getNodeParameter('instruction', i) as string }],
-				};
-				const taskName = this.getNodeParameter('taskName', i) as string;
-				if (taskName) body.name = taskName;
-				const parentId = this.getNodeParameter('parentId', i) as number;
-				if (parentId) body.parent = parentId;
-
-				const resp = await rpc('CreateTask', body);
-				returnData.push({ json: resp, pairedItem: { item: i } });
-			} else if (operation === 'getDetails') {
-				const taskId = this.getNodeParameter('taskId', i) as number;
-				const details = await rpc('GetTaskDetails', { id: taskId });
-				const logsResp = await rpc('ListLogs', { task_id: taskId });
-				returnData.push({
-					json: { ...details, logs: logsResp.entries || [] },
-					pairedItem: { item: i },
-				});
-			} else if (operation === 'update') {
-				const body: Record<string, unknown> = {
-					id: this.getNodeParameter('taskId', i) as number,
-					add_instructions: [
-						{ text: this.getNodeParameter('updateInstruction', i) as string },
-					],
-					start: this.getNodeParameter('start', i) as boolean,
-				};
-				const resp = await rpc('UpdateTask', body);
-				returnData.push({ json: resp, pairedItem: { item: i } });
-			} else if (operation === 'cancel') {
-				const taskId = this.getNodeParameter('taskId', i) as number;
-				const resp = await rpc('CancelTask', { id: taskId });
-				returnData.push({ json: resp, pairedItem: { item: i } });
+			} catch (err) {
+				if (this.continueOnFail()) {
+					returnData.push({
+						json: { error: (err as Error).message },
+						pairedItem: { item: i },
+					});
+					continue;
+				}
+				throw err;
 			}
 		}
 
