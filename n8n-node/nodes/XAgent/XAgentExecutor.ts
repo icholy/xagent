@@ -9,10 +9,8 @@ import { createConnectTransport } from '@connectrpc/connect-web';
 import { toJson, type DescMessage, type MessageShape } from '@bufbuild/protobuf';
 import {
 	XAgentService,
-	CreateTaskResponseSchema,
 	GetTaskDetailsResponseSchema,
 	ListLogsResponseSchema,
-	UpdateTaskResponseSchema,
 	CancelTaskResponseSchema,
 	ArchiveTaskResponseSchema,
 	TaskStatus,
@@ -130,38 +128,29 @@ export class XAgentExecutor {
 	}
 
 	private async create(i: number): Promise<INodeExecutionData> {
-		const runner = this.getStringParameter('runner', i);
-		const workspace = this.getStringParameter('workspace', i);
-		const instruction = this.getStringParameter('instruction', i);
-		const taskName = this.getStringParameter('taskName', i);
-
-		const createResp = await this.client.createTask({
-			runner,
-			workspace,
-			instructions: [{ text: instruction }],
-			name: taskName || undefined,
+		const resp = await this.client.createTask({
+			runner: this.getStringParameter('runner', i),
+			workspace: this.getStringParameter('workspace', i),
+			instructions: [{
+				text: this.getStringParameter('instruction', i)
+			}],
+			name: this.getStringParameter('taskName', i) || undefined,
 		});
 
-		const waitForCompletion = this.getBooleanParameter('waitForCompletion', i);
-		if (!waitForCompletion) {
-			return {
-				json: this.toJson(CreateTaskResponseSchema, createResp),
-				pairedItem: { item: i },
-			};
+		const taskId = resp.task!.id;
+
+		if (this.getBooleanParameter('waitForCompletion', i)) {
+			const pollInterval = this.getNumberParameter('pollInterval', i);
+			const timeout = this.getNumberParameter('timeout', i);
+			await this.waitFor(taskId, pollInterval, timeout, i);
 		}
 
-		const taskId = createResp.task!.id;
-		const pollInterval = this.getNumberParameter('pollInterval', i);
-		const timeout = this.getNumberParameter('timeout', i);
-
-		await this.waitFor(taskId, pollInterval, timeout, i);
-
-		const detailsResp = await this.client.getTaskDetails({ id: taskId });
-		const logsResp = await this.client.listLogs({ taskId });
+		const details = await this.client.getTaskDetails({ id: taskId });
+		const logs = await this.client.listLogs({ taskId });
 		return {
 			json: {
-				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
-				logs: this.toJson(ListLogsResponseSchema, logsResp).entries ?? [],
+				...this.toJson(GetTaskDetailsResponseSchema, details),
+				logs: this.toJson(ListLogsResponseSchema, logs).entries ?? [],
 			},
 			pairedItem: { item: i },
 		};
@@ -173,11 +162,11 @@ export class XAgentExecutor {
 		timeout: number,
 		i: number,
 	): Promise<void> {
-		const startTime = Date.now();
+		const started = Date.now();
 		while (true) {
 			await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
 
-			if (timeout > 0 && Date.now() - startTime > timeout * 1000) {
+			if (timeout > 0 && Date.now() - started > timeout * 1000) {
 				throw new NodeOperationError(
 					this.ctx.getNode(),
 					`Task ${taskId} did not complete within ${timeout}s`,
@@ -202,12 +191,12 @@ export class XAgentExecutor {
 
 	private async getDetails(i: number): Promise<INodeExecutionData> {
 		const taskId = BigInt(this.getNumberParameter('taskId', i));
-		const detailsResp = await this.client.getTaskDetails({ id: taskId });
-		const logsResp = await this.client.listLogs({ taskId });
+		const details = await this.client.getTaskDetails({ id: taskId });
+		const logs = await this.client.listLogs({ taskId });
 		return {
 			json: {
-				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
-				logs: this.toJson(ListLogsResponseSchema, logsResp).entries ?? [],
+				...this.toJson(GetTaskDetailsResponseSchema, details),
+				logs: this.toJson(ListLogsResponseSchema, logs).entries ?? [],
 			},
 			pairedItem: { item: i },
 		};
@@ -215,30 +204,26 @@ export class XAgentExecutor {
 
 	private async update(i: number): Promise<INodeExecutionData> {
 		const taskId = BigInt(this.getNumberParameter('taskId', i));
-		const updateResp = await this.client.updateTask({
+
+		await this.client.updateTask({
 			id: taskId,
 			addInstructions: [{ text: this.getStringParameter('updateInstruction', i) }],
 			start: this.getBooleanParameter('start', i),
 		});
 
-		const waitForCompletion = this.getBooleanParameter('waitForCompletion', i);
-		if (!waitForCompletion) {
-			return {
-				json: this.toJson(UpdateTaskResponseSchema, updateResp),
-				pairedItem: { item: i },
-			};
+		if (this.getBooleanParameter('waitForCompletion', i)) {
+			const pollInterval = this.getNumberParameter('pollInterval', i);
+			const timeout = this.getNumberParameter('timeout', i);
+			await this.waitFor(taskId, pollInterval, timeout, i);
 		}
 
-		const pollInterval = this.getNumberParameter('pollInterval', i);
-		const timeout = this.getNumberParameter('timeout', i);
-		await this.waitFor(taskId, pollInterval, timeout, i);
 
-		const detailsResp = await this.client.getTaskDetails({ id: taskId });
-		const logsResp = await this.client.listLogs({ taskId });
+		const details = await this.client.getTaskDetails({ id: taskId });
+		const logs = await this.client.listLogs({ taskId });
 		return {
 			json: {
-				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
-				logs: this.toJson(ListLogsResponseSchema, logsResp).entries ?? [],
+				...this.toJson(GetTaskDetailsResponseSchema, details),
+				logs: this.toJson(ListLogsResponseSchema, logs).entries ?? [],
 			},
 			pairedItem: { item: i },
 		};
