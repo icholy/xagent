@@ -1,10 +1,12 @@
 import {
 	IExecuteFunctions,
+	ILoadOptionsFunctions,
 	INodeExecutionData,
+	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
-import { XAgentExecutor } from './XAgentExecutor';
+import { XAgentExecutor, buildXAgentClient, type XAgentApiCredentials } from './XAgentExecutor';
 
 export class XAgent implements INodeType {
 	description: INodeTypeDescription = {
@@ -67,7 +69,8 @@ export class XAgent implements INodeType {
 			{
 				displayName: 'Runner',
 				name: 'runner',
-				type: 'string',
+				type: 'options',
+				typeOptions: { loadOptionsMethod: 'listRunners' },
 				default: '',
 				required: true,
 				displayOptions: { show: { operation: ['create'] } },
@@ -76,7 +79,11 @@ export class XAgent implements INodeType {
 			{
 				displayName: 'Workspace',
 				name: 'workspace',
-				type: 'string',
+				type: 'options',
+				typeOptions: {
+					loadOptionsMethod: 'listWorkspaces',
+					loadOptionsDependsOn: ['runner'],
+				},
 				default: '',
 				required: true,
 				displayOptions: { show: { operation: ['create'] } },
@@ -160,6 +167,31 @@ export class XAgent implements INodeType {
 				description: 'Maximum time to wait before failing (0 = no timeout)',
 			},
 		],
+	};
+
+	methods = {
+		loadOptions: {
+			async listRunners(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				const credentials = await this.getCredentials<XAgentApiCredentials>('XAgentApi');
+				const client = buildXAgentClient(credentials);
+				const resp = await client.listWorkspaces({});
+				const runners = [...new Set(resp.workspaces.map((w) => w.runnerId))].sort();
+				return runners.map((r) => ({ name: r, value: r }));
+			},
+			async listWorkspaces(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				const credentials = await this.getCredentials<XAgentApiCredentials>('XAgentApi');
+				const runner = this.getCurrentNodeParameter('runner') as string;
+				const client = buildXAgentClient(credentials);
+				const resp = await client.listWorkspaces({});
+				return resp.workspaces
+					.filter((w) => !runner || w.runnerId === runner)
+					.map((w) => ({
+						name: w.name,
+						value: w.name,
+						description: w.description,
+					}));
+			},
+		},
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {

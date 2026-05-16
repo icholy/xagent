@@ -16,9 +16,24 @@ import {
 	TaskStatus,
 } from '../../gen/xagent/v1/xagent_pb';
 
-interface XAgentApiCredentials {
+export interface XAgentApiCredentials {
 	serverUrl: string;
 	apiKey: string;
+}
+
+export function buildXAgentClient(credentials: XAgentApiCredentials): Client<typeof XAgentService> {
+	const serverUrl = credentials.serverUrl.replace(/\/$/, '');
+	const apiKey = credentials.apiKey;
+	const authInterceptor: Interceptor = (next) => async (req) => {
+		req.header.set('Authorization', `Bearer ${apiKey}`);
+		req.header.set('X-Auth-Type', 'key');
+		return next(req);
+	};
+	const transport = createConnectTransport({
+		baseUrl: serverUrl,
+		interceptors: [authInterceptor],
+	});
+	return createClient(XAgentService, transport);
 }
 
 const TERMINAL_STATUSES: TaskStatus[] = [
@@ -73,18 +88,7 @@ export class XAgentExecutor {
 
 	private async buildClient(): Promise<void> {
 		const credentials = await this.ctx.getCredentials<XAgentApiCredentials>('XAgentApi');
-		const serverUrl = credentials.serverUrl.replace(/\/$/, '');
-		const apiKey = credentials.apiKey;
-		const authInterceptor: Interceptor = (next) => async (req) => {
-			req.header.set('Authorization', `Bearer ${apiKey}`);
-			req.header.set('X-Auth-Type', 'key');
-			return next(req);
-		};
-		const transport = createConnectTransport({
-			baseUrl: serverUrl,
-			interceptors: [authInterceptor],
-		});
-		this.client = createClient(XAgentService, transport);
+		this.client = buildXAgentClient(credentials);
 	}
 
 	private getStringParameter(name: string, i: number): string {
