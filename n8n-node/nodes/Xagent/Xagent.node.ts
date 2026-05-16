@@ -3,6 +3,7 @@ import {
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
+	NodeApiError,
 	NodeOperationError,
 } from 'n8n-workflow';
 
@@ -158,7 +159,7 @@ export class Xagent implements INodeType {
 		const serverUrl = (credentials.serverUrl as string).replace(/\/$/, '');
 
 		const rpc = async (method: string, body: Record<string, unknown> = {}) => {
-			return this.helpers.httpRequest({
+			const resp = await this.helpers.httpRequest({
 				method: 'POST',
 				url: `${serverUrl}/xagent.v1.XAgentService/${method}`,
 				headers: {
@@ -169,7 +170,16 @@ export class Xagent implements INodeType {
 				},
 				body,
 				json: true,
+				returnFullResponse: true,
+				ignoreHttpStatusErrors: true,
 			});
+			if (resp.statusCode >= 400) {
+				const b = resp.body as any;
+				throw new NodeApiError(this.getNode(), b, {
+					message: `${method}: ${b?.message ?? `HTTP ${resp.statusCode}`}`,
+				});
+			}
+			return resp.body;
 		};
 
 		for (let i = 0; i < items.length; i++) {
