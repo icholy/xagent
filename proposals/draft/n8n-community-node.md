@@ -93,28 +93,17 @@ export class XagentApi implements ICredentialType {
 
 The node sends requests with `Authorization: Bearer <apiKey>` header, matching xagent's existing key auth.
 
-### Node Resources and Operations
+### Node Operations
 
-The node exposes a **Resource** dropdown (Task, Link, Event, Workspace, Log) and an **Operation** dropdown per resource:
+The node is task-focused with a single **Operation** dropdown:
 
-| Resource  | Operation        | RPC Method       | Description                        |
-|-----------|------------------|------------------|------------------------------------|
-| Task      | Create           | CreateTask       | Create a new task                  |
-| Task      | Get              | GetTask          | Get a task by ID                   |
-| Task      | Get Details      | GetTaskDetails   | Get task with children/events/links|
-| Task      | List             | ListTasks        | List all tasks                     |
-| Task      | List Children    | ListChildTasks   | List child tasks of a parent       |
-| Task      | Update           | UpdateTask       | Update name or add instructions    |
-| Task      | Cancel           | CancelTask       | Cancel a running task              |
-| Task      | Restart          | RestartTask      | Restart a task                     |
-| Task      | Archive          | ArchiveTask      | Archive a task                     |
-| Link      | Create           | CreateLink       | Create a link on a task            |
-| Link      | List             | ListLinks        | List links for a task              |
-| Event     | Create           | CreateEvent      | Create an event                    |
-| Event     | List             | ListEvents       | List recent events                 |
-| Event     | List By Task     | ListEventsByTask | List events for a task             |
-| Workspace | List             | ListWorkspaces   | List available workspaces          |
-| Log       | List             | ListLogs         | List logs for a task               |
+| Operation        | RPC Method(s)              | Description                                      |
+|------------------|----------------------------|--------------------------------------------------|
+| Create and Wait  | CreateTask + GetTaskDetails + ListLogs | Create a task, poll until done, return details |
+| Create           | CreateTask                 | Create a task (fire-and-forget)                  |
+| Get Details      | GetTaskDetails + ListLogs  | Get full task details including logs             |
+| Cancel           | CancelTask                 | Cancel a running task                            |
+| Restart          | RestartTask                | Restart a task                                   |
 
 ### Connect RPC HTTP Mapping
 
@@ -169,40 +158,20 @@ export class Xagent implements INodeType {
       { name: 'xagentApi', required: true },
     ],
     properties: [
-      // Resource selector
-      {
-        displayName: 'Resource',
-        name: 'resource',
-        type: 'options',
-        noDataExpression: true,
-        options: [
-          { name: 'Task', value: 'task' },
-          { name: 'Link', value: 'link' },
-          { name: 'Event', value: 'event' },
-          { name: 'Workspace', value: 'workspace' },
-          { name: 'Log', value: 'log' },
-        ],
-        default: 'task',
-      },
-      // Task operations
       {
         displayName: 'Operation',
         name: 'operation',
         type: 'options',
         noDataExpression: true,
-        displayOptions: { show: { resource: ['task'] } },
         options: [
           { name: 'Create and Wait', value: 'createAndWait', action: 'Create a task and wait for completion' },
           { name: 'Create', value: 'create', action: 'Create a task (fire and forget)' },
           { name: 'Get Details', value: 'getDetails', action: 'Get task details' },
-          { name: 'List', value: 'list', action: 'List tasks' },
-          { name: 'Update', value: 'update', action: 'Update a task' },
           { name: 'Cancel', value: 'cancel', action: 'Cancel a task' },
           { name: 'Restart', value: 'restart', action: 'Restart a task' },
         ],
         default: 'createAndWait',
       },
-      // ... additional operation selectors for other resources ...
       // Task Create fields (shown for both create and createAndWait)
       {
         displayName: 'Workspace',
@@ -210,7 +179,7 @@ export class Xagent implements INodeType {
         type: 'string',
         default: '',
         required: true,
-        displayOptions: { show: { resource: ['task'], operation: ['create', 'createAndWait'] } },
+        displayOptions: { show: { operation: ['create', 'createAndWait'] } },
         description: 'Workspace to run the task in',
       },
       {
@@ -220,7 +189,7 @@ export class Xagent implements INodeType {
         typeOptions: { rows: 4 },
         default: '',
         required: true,
-        displayOptions: { show: { resource: ['task'], operation: ['create', 'createAndWait'] } },
+        displayOptions: { show: { operation: ['create', 'createAndWait'] } },
         description: 'The instruction text for the task',
       },
       {
@@ -228,7 +197,7 @@ export class Xagent implements INodeType {
         name: 'taskName',
         type: 'string',
         default: '',
-        displayOptions: { show: { resource: ['task'], operation: ['create', 'createAndWait'] } },
+        displayOptions: { show: { operation: ['create', 'createAndWait'] } },
         description: 'Optional name for the task',
       },
       {
@@ -236,7 +205,7 @@ export class Xagent implements INodeType {
         name: 'parentId',
         type: 'number',
         default: 0,
-        displayOptions: { show: { resource: ['task'], operation: ['create', 'createAndWait'] } },
+        displayOptions: { show: { operation: ['create', 'createAndWait'] } },
         description: 'Optional parent task ID',
       },
       // Polling config for createAndWait
@@ -245,7 +214,7 @@ export class Xagent implements INodeType {
         name: 'pollInterval',
         type: 'number',
         default: 10,
-        displayOptions: { show: { resource: ['task'], operation: ['createAndWait'] } },
+        displayOptions: { show: { operation: ['createAndWait'] } },
         description: 'How often to check task status',
       },
       {
@@ -253,24 +222,18 @@ export class Xagent implements INodeType {
         name: 'timeout',
         type: 'number',
         default: 3600,
-        displayOptions: { show: { resource: ['task'], operation: ['createAndWait'] } },
+        displayOptions: { show: { operation: ['createAndWait'] } },
         description: 'Maximum time to wait before failing (0 = no timeout)',
       },
-      // Task ID field (shared by get, cancel, restart, etc.)
+      // Task ID field (shared by getDetails, cancel, restart)
       {
         displayName: 'Task ID',
         name: 'taskId',
         type: 'number',
         default: 0,
         required: true,
-        displayOptions: {
-          show: {
-            resource: ['task'],
-            operation: ['getDetails', 'cancel', 'restart', 'update'],
-          },
-        },
+        displayOptions: { show: { operation: ['getDetails', 'cancel', 'restart'] } },
       },
-      // ... additional fields for other operations ...
     ],
   };
 
@@ -297,10 +260,9 @@ export class Xagent implements INodeType {
     const TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'CANCELLED'];
 
     for (let i = 0; i < items.length; i++) {
-      const resource = this.getNodeParameter('resource', i) as string;
       const operation = this.getNodeParameter('operation', i) as string;
 
-      if (resource === 'task' && operation === 'createAndWait') {
+      if (operation === 'createAndWait') {
         // Create the task
         const createBody: Record<string, unknown> = {
           name: this.getNodeParameter('taskName', i) as string,
@@ -339,7 +301,7 @@ export class Xagent implements INodeType {
           json: { ...details, logs: logsResp.entries || [] },
           pairedItem: { item: i },
         });
-      } else if (resource === 'task' && operation === 'create') {
+      } else if (operation === 'create') {
         // Fire-and-forget: just create and return immediately
         const body: Record<string, unknown> = {
           name: this.getNodeParameter('taskName', i) as string,
@@ -351,13 +313,16 @@ export class Xagent implements INodeType {
 
         const resp = await rpc('CreateTask', body);
         returnData.push({ json: resp, pairedItem: { item: i } });
-      } else if (resource === 'task' && operation === 'getDetails') {
+      } else if (operation === 'getDetails') {
         const resp = await rpc('GetTaskDetails', { id: this.getNodeParameter('taskId', i) });
         const logsResp = await rpc('ListLogs', { task_id: this.getNodeParameter('taskId', i) });
         returnData.push({ json: { ...resp, logs: logsResp.entries || [] }, pairedItem: { item: i } });
-      } else {
-        // Other operations: direct RPC call
-        // ... dispatch based on resource/operation ...
+      } else if (operation === 'cancel') {
+        const resp = await rpc('CancelTask', { id: this.getNodeParameter('taskId', i) });
+        returnData.push({ json: resp, pairedItem: { item: i } });
+      } else if (operation === 'restart') {
+        const resp = await rpc('RestartTask', { id: this.getNodeParameter('taskId', i) });
+        returnData.push({ json: resp, pairedItem: { item: i } });
       }
     }
 
@@ -368,64 +333,9 @@ export class Xagent implements INodeType {
 
 The "Create and Wait" operation is the default and handles the most common workflow: dispatch work to an agent and continue the n8n workflow once the agent finishes. The output includes task details, links (PRs/issues the agent created), child tasks, events, and logs — giving downstream nodes full access to the agent's work products.
 
-### Trigger Node (Polling)
+### Future: Trigger Node
 
-A separate **trigger node** (`XagentTrigger`) enables workflows to start when a task reaches a specific status. Since xagent doesn't have outbound webhooks to arbitrary URLs, the trigger uses polling:
-
-```typescript
-export class XagentTrigger implements INodeType {
-  description: INodeTypeDescription = {
-    displayName: 'xagent Trigger',
-    name: 'xagentTrigger',
-    icon: 'file:xagent.svg',
-    group: ['trigger'],
-    version: 1,
-    polling: true,
-    description: 'Triggers when a task changes status',
-    defaults: { name: 'xagent Trigger' },
-    inputs: [],
-    outputs: ['main'],
-    credentials: [{ name: 'xagentApi', required: true }],
-    properties: [
-      {
-        displayName: 'Task ID',
-        name: 'taskId',
-        type: 'number',
-        default: 0,
-        required: true,
-        description: 'Task to monitor',
-      },
-      {
-        displayName: 'Trigger On Status',
-        name: 'triggerStatus',
-        type: 'options',
-        options: [
-          { name: 'Completed', value: 'COMPLETED' },
-          { name: 'Failed', value: 'FAILED' },
-          { name: 'Cancelled', value: 'CANCELLED' },
-          { name: 'Any Terminal', value: 'ANY_TERMINAL' },
-        ],
-        default: 'COMPLETED',
-      },
-    ],
-  };
-
-  async poll(this: IExecuteFunctions): Promise<INodeExecutionData[][] | null> {
-    // Poll GetTask, compare status against triggerStatus
-    // Return data when matched, null otherwise
-  }
-}
-```
-
-### Alternative: Webhook Trigger via xagent Events
-
-Instead of polling, a more advanced approach would add a generic webhook endpoint to xagent that creates events when hit. The n8n trigger would:
-
-1. On activation: register a webhook URL as an event source in xagent
-2. Receive POST callbacks when task status changes
-3. On deactivation: unregister the webhook
-
-This would require server-side changes (a new `RegisterWebhook` RPC) and is out of scope for the initial version.
+A polling trigger node could be added later to start workflows when external tasks reach a terminal status. For now, the "Create and Wait" operation covers the primary use case of dispatching work and waiting for results within a single workflow execution.
 
 ### Package Metadata
 
@@ -440,8 +350,7 @@ This would require server-side changes (a new `RegisterWebhook` RPC) and is out 
     "n8nNodesApiVersion": 1,
     "credentials": ["dist/credentials/XagentApi.credentials.js"],
     "nodes": [
-      "dist/nodes/Xagent/Xagent.node.js",
-      "dist/nodes/Xagent/XagentTrigger.node.js"
+      "dist/nodes/Xagent/Xagent.node.js"
     ]
   }
 }
@@ -455,18 +364,16 @@ The node lives in a separate repository (`icholy/n8n-nodes-xagent`) since it's a
 
 **Programmatic vs. Declarative style**: Chose programmatic because Connect RPC uses a single URL pattern (`POST /service/Method`) with method-specific JSON bodies. The declarative style works best with REST APIs that use distinct HTTP methods and URL paths per operation.
 
-**Polling trigger vs. Webhook trigger**: Chose polling for the initial version because it requires no server-side changes. The downside is latency (bounded by poll interval, default 1 minute in n8n). A webhook-based trigger would be more efficient but requires adding webhook registration to the xagent server.
+**Polling for "Create and Wait"**: The node polls `GetTaskDetails` at a configurable interval (default 10s). This is simple and requires no server-side changes. A future optimization could use SSE to avoid polling overhead, but the Connect RPC API doesn't currently expose a task status stream.
 
 **Separate repo vs. monorepo**: The n8n node is a TypeScript/npm package with no shared code with the Go server. Keeping it separate avoids polluting the Go module and lets it follow npm publishing conventions independently.
 
-**Flat operations vs. sub-nodes**: n8n supports "sub-nodes" for complex integrations, but a single node with resource/operation dropdowns is simpler, well-understood by n8n users, and sufficient for xagent's API surface.
+**Minimal surface area**: Rather than exposing every RPC method (Links, Events, Workspaces, Logs), the node focuses on the core task lifecycle. The "Create and Wait" output already includes links, events, and logs from `GetTaskDetails` + `ListLogs`, so separate operations for those aren't needed. More operations can be added later if there's demand.
 
 ## Open Questions
 
-1. **Should the trigger node support watching multiple tasks?** A "List Tasks" poll mode that triggers on any new terminal task could be more useful for general-purpose automation than watching a single task ID.
+1. **Timeout behavior**: Should a timed-out "Create and Wait" cancel the task, or leave it running and just error the n8n execution? Currently it throws an error without cancelling.
 
-2. **Should we add a webhook endpoint to xagent?** A generic `/api/webhooks` endpoint that fires on task status changes would enable real-time n8n triggers without polling. This would benefit other integrations beyond n8n.
+2. **Verified node submission**: n8n requires zero runtime dependencies for verified nodes. Since the node only uses `this.helpers.httpRequest()` (built-in), this constraint is satisfied. Should we pursue verification?
 
-3. **SSE-based trigger**: xagent already has SSE for the web UI. Could the n8n trigger use SSE instead of polling? n8n's trigger model expects poll-or-webhook, so this would require a custom approach.
-
-4. **Verified node submission**: n8n requires zero runtime dependencies for verified nodes. Since the node only uses `this.helpers.httpRequest()` (built-in), this constraint is satisfied. Should we pursue verification?
+3. **Error on failure**: Should "Create and Wait" throw an error (failing the n8n execution) when the task status is FAILED/CANCELLED, or should it always output the result and let downstream nodes decide?
