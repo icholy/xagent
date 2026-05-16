@@ -44,9 +44,9 @@ func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error
 	return f(tx)
 }
 
-func Open(dsn string, doMigrate bool) (*sql.DB, error) {
-	if doMigrate {
-		if err := migrate(dsn); err != nil {
+func Open(dsn string, migrate bool) (*sql.DB, error) {
+	if migrate {
+		if err := Migrate(dsn); err != nil {
 			return nil, err
 		}
 	}

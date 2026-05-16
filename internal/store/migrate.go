@@ -7,7 +7,7 @@ import (
 	_ "github.com/amacneil/dbmate/v2/pkg/driver/postgres"
 )
 
-func migrate(databaseURL string) error {
+func Migrate(databaseURL string) error {
 	u, err := url.Parse(databaseURL)
 	if err != nil {
 		return err
