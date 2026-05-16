@@ -155,6 +155,7 @@ export class Xagent implements INodeType {
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${credentials.apiKey}`,
+					'X-Auth-Type': 'key',
 					'Connect-Protocol-Version': '1',
 				},
 				body,
