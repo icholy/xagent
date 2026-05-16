@@ -21,10 +21,19 @@ export class XAgent implements INodeType {
 		credentials: [{ name: 'XAgentApi', required: true }],
 		properties: [
 			{
+				displayName: 'Resource',
+				name: 'resource',
+				type: 'hidden',
+				noDataExpression: true,
+				default: 'task',
+				options: [{ name: 'Task', value: 'task' }],
+			},
+			{
 				displayName: 'Operation',
 				name: 'operation',
 				type: 'options',
 				noDataExpression: true,
+				displayOptions: { show: { resource: ['task'] } },
 				options: [
 					{
 						name: 'Create',
