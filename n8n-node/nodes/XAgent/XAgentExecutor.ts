@@ -113,6 +113,28 @@ export class XAgentExecutor {
 		return v;
 	}
 
+	private getBigIntParameter(name: string, i: number): bigint {
+		const v = this.ctx.getNodeParameter(name, i);
+		if (typeof v === 'bigint') return v;
+		if (typeof v === 'number') return BigInt(v);
+		if (typeof v === 'string') {
+			try {
+				return BigInt(v);
+			} catch {
+				throw new NodeOperationError(
+					this.ctx.getNode(),
+					`Parameter "${name}" is not a valid integer: "${v}"`,
+					{ itemIndex: i },
+				);
+			}
+		}
+		throw new NodeOperationError(
+			this.ctx.getNode(),
+			`Parameter "${name}" must be a number or string, got ${typeof v}`,
+			{ itemIndex: i },
+		);
+	}
+
 	private getBooleanParameter(name: string, i: number): boolean {
 		const v = this.ctx.getNodeParameter(name, i);
 		if (typeof v !== 'boolean') {
@@ -188,7 +210,7 @@ export class XAgentExecutor {
 	}
 
 	private async getDetails(i: number): Promise<INodeExecutionData> {
-		const taskId = BigInt(this.getNumberParameter('taskId', i));
+		const taskId = this.getBigIntParameter('taskId', i);
 		const details = await this.client.getTaskDetails({ id: taskId });
 		const logs = await this.client.listLogs({ taskId });
 		return {
@@ -201,7 +223,7 @@ export class XAgentExecutor {
 	}
 
 	private async update(i: number): Promise<INodeExecutionData> {
-		const taskId = BigInt(this.getNumberParameter('taskId', i));
+		const taskId = this.getBigIntParameter('taskId', i);
 
 		await this.client.updateTask({
 			id: taskId,
@@ -223,7 +245,7 @@ export class XAgentExecutor {
 	}
 
 	private async cancel(i: number): Promise<INodeExecutionData> {
-		const taskId = BigInt(this.getNumberParameter('taskId', i));
+		const taskId = this.getBigIntParameter('taskId', i);
 		const resp = await this.client.cancelTask({ id: taskId });
 		return {
 			json: this.toJson(CancelTaskResponseSchema, resp),
@@ -232,7 +254,7 @@ export class XAgentExecutor {
 	}
 
 	private async archive(i: number): Promise<INodeExecutionData> {
-		const taskId = BigInt(this.getNumberParameter('taskId', i));
+		const taskId = this.getBigIntParameter('taskId', i);
 
 		await this.wait(taskId, i);
 
