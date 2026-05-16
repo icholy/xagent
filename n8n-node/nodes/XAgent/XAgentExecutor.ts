@@ -227,15 +227,38 @@ export class XAgentExecutor {
 	}
 
 	private async update(i: number): Promise<INodeExecutionData> {
-		const resp = await this.rpc('UpdateTask', () =>
+		const taskId = BigInt(this.getNumberParameter('taskId', i));
+		const updateResp = await this.rpc('UpdateTask', () =>
 			this.client.updateTask({
-				id: BigInt(this.getNumberParameter('taskId', i)),
+				id: taskId,
 				addInstructions: [{ text: this.getStringParameter('updateInstruction', i) }],
 				start: this.getBooleanParameter('start', i),
 			}),
 		);
+
+		const waitForCompletion = this.getBooleanParameter('waitForCompletion', i);
+		if (!waitForCompletion) {
+			return {
+				json: this.toJson(UpdateTaskResponseSchema, updateResp),
+				pairedItem: { item: i },
+			};
+		}
+
+		const pollInterval = this.getNumberParameter('pollInterval', i);
+		const timeout = this.getNumberParameter('timeout', i);
+		await this.waitFor(taskId, pollInterval, timeout, i);
+
+		const detailsResp = await this.rpc('GetTaskDetails', () =>
+			this.client.getTaskDetails({ id: taskId }),
+		);
+		const logsResp = await this.rpc('ListLogs', () =>
+			this.client.listLogs({ taskId }),
+		);
 		return {
-			json: this.toJson(UpdateTaskResponseSchema, resp),
+			json: {
+				...this.toJson(GetTaskDetailsResponseSchema, detailsResp),
+				logs: this.toJson(ListLogsResponseSchema, logsResp).entries ?? [],
+			},
 			pairedItem: { item: i },
 		};
 	}

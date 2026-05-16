@@ -86,30 +86,6 @@ export class XAgent implements INodeType {
 				displayOptions: { show: { operation: ['create'] } },
 				description: 'Optional name for the task',
 			},
-			{
-				displayName: 'Wait for Completion',
-				name: 'waitForCompletion',
-				type: 'boolean',
-				default: true,
-				displayOptions: { show: { operation: ['create'] } },
-				description: 'Whether to poll the task until it reaches a terminal status before returning',
-			},
-			{
-				displayName: 'Poll Interval (Seconds)',
-				name: 'pollInterval',
-				type: 'number',
-				default: 10,
-				displayOptions: { show: { operation: ['create'], waitForCompletion: [true] } },
-				description: 'How often to check task status',
-			},
-			{
-				displayName: 'Timeout (Seconds)',
-				name: 'timeout',
-				type: 'number',
-				default: 3600,
-				displayOptions: { show: { operation: ['create'], waitForCompletion: [true] } },
-				description: 'Maximum time to wait before failing (0 = no timeout)',
-			},
 			// Task ID field (shared by getDetails, update, cancel)
 			{
 				displayName: 'Task ID',
@@ -139,6 +115,31 @@ export class XAgent implements INodeType {
 				displayOptions: { show: { operation: ['update'] } },
 				description:
 					'Whether to start the task after adding instructions (non-interrupting, waits for current run to finish)',
+			},
+			// Wait fields (shared by create and update)
+			{
+				displayName: 'Wait for Completion',
+				name: 'waitForCompletion',
+				type: 'boolean',
+				default: true,
+				displayOptions: { show: { operation: ['create', 'update'] } },
+				description: 'Whether to poll the task until it reaches a terminal status before returning',
+			},
+			{
+				displayName: 'Poll Interval (Seconds)',
+				name: 'pollInterval',
+				type: 'number',
+				default: 10,
+				displayOptions: { show: { operation: ['create', 'update'], waitForCompletion: [true] } },
+				description: 'How often to check task status',
+			},
+			{
+				displayName: 'Timeout (Seconds)',
+				name: 'timeout',
+				type: 'number',
+				default: 3600,
+				displayOptions: { show: { operation: ['create', 'update'], waitForCompletion: [true] } },
+				description: 'Maximum time to wait before failing (0 = no timeout)',
 			},
 		],
 	};
