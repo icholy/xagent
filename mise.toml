@@ -73,7 +73,7 @@ run = "docker compose -f docker-compose.test.yml up -d --wait postgres"
 [tasks.migrate]
 description = "Run database migrations"
 env = { DATABASE_URL = "postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable" }
-run = "dbmate --migrations-dir internal/store/sql/migrations --no-dump-schema up"
+run = "dbmate up"
 
 [tasks.test]
 description = "Run tests"
