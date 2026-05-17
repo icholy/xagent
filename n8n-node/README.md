@@ -4,13 +4,15 @@ n8n community node for [xagent](https://github.com/icholy/xagent) task orchestra
 
 ## Operations
 
-| Operation       | Description                                          |
-|-----------------|------------------------------------------------------|
-| Create and Wait | Create a task, poll until completion, return details  |
-| Create          | Create a task (fire-and-forget)                       |
-| Get Details     | Get full task details including logs                  |
-| Update          | Add instructions to a task and optionally start it    |
-| Cancel          | Cancel a running task                                 |
+| Operation   | Description                                        |
+|-------------|----------------------------------------------------|
+| Create      | Create a task in a workspace                       |
+| Get Details | Get full task details including logs               |
+| Update      | Add instructions to a task and optionally start it |
+| Cancel      | Cancel a running task                              |
+| Archive     | Archive a task                                     |
+
+Create, Update, and Archive support an optional **Wait for Completion** toggle that polls the task until it reaches a terminal status before returning.
 
 ## Credentials
 
@@ -23,14 +25,14 @@ Configure the credential with:
 ## Development
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 To test locally, link the package into your n8n installation:
 
 ```bash
-npm link
+pnpm link --global
 cd /path/to/n8n
-npm link n8n-nodes-xagent
+pnpm link --global n8n-nodes-xagent
 ```
