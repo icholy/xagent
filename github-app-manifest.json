@@ -12,7 +12,6 @@
   "redirect_url": "https://xagent.choly.ca/github/callback",
   "setup_url": "https://xagent.choly.ca/ui/github/setup",
   "default_events": [
-    "installation",
     "issue_comment",
     "pull_request_review",
     "pull_request_review_comment"
