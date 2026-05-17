@@ -57,5 +57,11 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.3.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@bufbuild/buf",
+      "esbuild"
+    ]
   }
 }

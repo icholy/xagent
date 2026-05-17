@@ -1,7 +1,7 @@
 # Build webui
 FROM --platform=$BUILDPLATFORM node:23-alpine AS webui
 WORKDIR /app/webui
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10.28.2
 COPY webui/package.json webui/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY webui/ ./
