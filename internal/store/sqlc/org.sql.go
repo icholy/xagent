@@ -93,19 +93,20 @@ func (q *Queries) DestroyOrg(ctx context.Context, id int64) error {
 }
 
 const getOrg = `-- name: GetOrg :one
-SELECT id, name, owner, created_at, updated_at, archived, github_installation_id
+SELECT id, name, owner, created_at, updated_at, archived, github_installation_id, atlassian_webhook_secret
 FROM orgs
 WHERE id = $1
 `
 
 type GetOrgRow struct {
-	ID                   int64         `json:"id"`
-	Name                 string        `json:"name"`
-	Owner                string        `json:"owner"`
-	CreatedAt            time.Time     `json:"created_at"`
-	UpdatedAt            time.Time     `json:"updated_at"`
-	Archived             bool          `json:"archived"`
-	GithubInstallationID sql.NullInt64 `json:"github_installation_id"`
+	ID                      int64         `json:"id"`
+	Name                    string        `json:"name"`
+	Owner                   string        `json:"owner"`
+	CreatedAt               time.Time     `json:"created_at"`
+	UpdatedAt               time.Time     `json:"updated_at"`
+	Archived                bool          `json:"archived"`
+	GithubInstallationID    sql.NullInt64 `json:"github_installation_id"`
+	AtlassianWebhookSecret  string        `json:"atlassian_webhook_secret"`
 }
 
 func (q *Queries) GetOrg(ctx context.Context, id int64) (GetOrgRow, error) {
@@ -119,6 +120,7 @@ func (q *Queries) GetOrg(ctx context.Context, id int64) (GetOrgRow, error) {
 		&i.UpdatedAt,
 		&i.Archived,
 		&i.GithubInstallationID,
+		&i.AtlassianWebhookSecret,
 	)
 	return i, err
 }

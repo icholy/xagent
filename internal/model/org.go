@@ -9,13 +9,14 @@ import (
 
 // Org represents an organisation that owns resources.
 type Org struct {
-	ID                   int64     `json:"id"`
-	Name                 string    `json:"name"`
-	Owner                string    `json:"owner"`
-	Archived             bool      `json:"archived"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
-	GitHubInstallationID int64     `json:"github_installation_id"`
+	ID                      int64     `json:"id"`
+	Name                    string    `json:"name"`
+	Owner                   string    `json:"owner"`
+	Archived                bool      `json:"archived"`
+	CreatedAt               time.Time `json:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at"`
+	GitHubInstallationID    int64     `json:"github_installation_id"`
+	AtlassianWebhookSecret  string    `json:"atlassian_webhook_secret"`
 }
 
 // Proto converts an Org to its protobuf representation.
