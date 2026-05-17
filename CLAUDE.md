@@ -93,6 +93,18 @@ xagent github     # GitHub integration
 
 Service definitions in `proto/xagent/v1/xagent.proto`, generated code goes to `internal/proto/` (gitignored).
 
+## Pull Request Labels
+
+Release notes are generated from PR titles and grouped by label (see `.github/release.yml`). When creating a PR, apply one of these labels so it lands in the right section:
+
+- `breaking` - Breaking Changes
+- `feature` / `enhancement` - Features
+- `bug` / `fix` - Bug Fixes
+- `dependencies` - Dependencies (auto-applied by Renovate)
+- `skip-changelog` - excluded from release notes entirely (use for proposals, internal-only chores, doc-only changes)
+
+PRs with no matching label fall into "Other Changes".
+
 ## Web UI
 
 The web interface is a React-based UI in `webui/` using TanStack Router, TanStack Query, and shadcn/ui components.

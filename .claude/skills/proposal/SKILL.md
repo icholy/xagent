@@ -54,5 +54,6 @@ Unresolved decisions that need input.
 - Link to the issue in the proposal body.
 - The PR title should be: `proposal: <short description>`.
 - The PR body should reference the issue with `Closes #NNN` or `Related to #NNN` as appropriate.
+- Apply the `skip-changelog` label so the proposal PR is excluded from generated release notes (e.g. `gh pr create --label skip-changelog ...`).
 - Keep the design grounded in the existing codebase. Reference actual types, tables, and patterns.
 - Do not implement anything. The proposal is a document, not code.
