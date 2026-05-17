@@ -115,7 +115,7 @@ var ServerCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "github-private-key",
 			Usage:   "GitHub App private key (PEM content or file path)",
-			Sources: cli.EnvVars("XAGENT_GITHUB_PRIVATE_KEY"),
+			Sources: cli.EnvVars("XAGENT_GITHUB_APP_PRIVATE_KEY"),
 		},
 		&cli.StringFlag{
 			Name:    "atlassian-client-id",
