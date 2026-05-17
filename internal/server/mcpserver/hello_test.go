@@ -12,9 +12,8 @@ import (
 func TestHelloMiddleware(t *testing.T) {
 	t.Parallel()
 
-	const nextStatus = http.StatusTeapot
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(nextStatus)
+		w.WriteHeader(http.StatusTeapot)
 	})
 
 	tests := []struct {
@@ -55,7 +54,7 @@ func TestHelloMiddleware(t *testing.T) {
 				assert.Equal(t, rec.Code, http.StatusOK)
 				assert.Assert(t, strings.Contains(rec.Body.String(), "xagent MCP server"))
 			} else {
-				assert.Equal(t, rec.Code, nextStatus)
+				assert.Equal(t, rec.Code, http.StatusTeapot)
 			}
 		})
 	}
