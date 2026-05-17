@@ -15,8 +15,8 @@ import (
 	"github.com/icholy/xagent/internal/server/apiserver"
 	"github.com/icholy/xagent/internal/server/atlassianserver"
 	"github.com/icholy/xagent/internal/server/githubserver"
-	"github.com/icholy/xagent/internal/server/notifyserver"
 	"github.com/icholy/xagent/internal/server/mcpserver"
+	"github.com/icholy/xagent/internal/server/notifyserver"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/justinas/alice"
@@ -122,8 +122,10 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/oauth/authorize", s.oauth.HandleAuthorize)
 		mux.HandleFunc("/oauth/token", s.oauth.HandleToken)
 	}
-	// MCP endpoint (protected by auth middleware)
-	mux.Handle("/mcp", alice.New(s.auth.RequireAuth()).Then(mcpserver.New(s.api, s.baseURL).Handler()))
+	// MCP endpoint (protected by auth middleware). HelloMiddleware runs
+	// before auth so browser navigations get a helpful HTML page instead
+	// of a 401, which users tend to misread as the server being broken.
+	mux.Handle("/mcp", mcpserver.HelloMiddleware(alice.New(s.auth.RequireAuth()).Then(mcpserver.New(s.api, s.baseURL).Handler())))
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
