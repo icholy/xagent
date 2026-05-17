@@ -34,13 +34,14 @@ func (s *Store) GetOrg(ctx context.Context, tx *sql.Tx, id int64) (*model.Org, e
 		return nil, err
 	}
 	return &model.Org{
-		ID:                   row.ID,
-		Name:                 row.Name,
-		Owner:                row.Owner,
-		Archived:             row.Archived,
-		CreatedAt:            row.CreatedAt,
-		UpdatedAt:            row.UpdatedAt,
-		GitHubInstallationID: row.GithubInstallationID.Int64,
+		ID:                      row.ID,
+		Name:                    row.Name,
+		Owner:                   row.Owner,
+		Archived:                row.Archived,
+		CreatedAt:               row.CreatedAt,
+		UpdatedAt:               row.UpdatedAt,
+		GitHubInstallationID:    row.GithubInstallationID.Int64,
+		AtlassianWebhookSecret:  row.AtlassianWebhookSecret,
 	}, nil
 }
 

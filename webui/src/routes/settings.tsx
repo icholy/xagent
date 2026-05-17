@@ -169,16 +169,35 @@ function OrgSettings() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <a
-              href={data.githubAppUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="outline">
-                <ExternalLink className="h-4 w-4" />
-                Install GitHub App
-              </Button>
-            </a>
+            {data.githubInstallationId ? (
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Check className="h-5 w-5 text-green-500" />
+                  <span className="font-medium">GitHub App installed</span>
+                </div>
+                <a
+                  href={`https://github.com/settings/installations/${data.githubInstallationId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="outline" size="sm">
+                    <ExternalLink className="h-4 w-4" />
+                    Manage
+                  </Button>
+                </a>
+              </div>
+            ) : (
+              <a
+                href={data.githubAppUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="outline">
+                  <ExternalLink className="h-4 w-4" />
+                  Install GitHub App
+                </Button>
+              </a>
+            )}
           </CardContent>
         </Card>
       )}

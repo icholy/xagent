@@ -4,7 +4,7 @@ VALUES ($1, $2, $3, $4)
 RETURNING id;
 
 -- name: GetOrg :one
-SELECT id, name, owner, created_at, updated_at, archived, github_installation_id
+SELECT id, name, owner, created_at, updated_at, archived, github_installation_id, atlassian_webhook_secret
 FROM orgs
 WHERE id = $1;
 
