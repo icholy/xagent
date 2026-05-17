@@ -16,6 +16,7 @@ type Config struct {
 	Type       string               `json:"type,omitempty"`
 	Cwd        string               `json:"cwd,omitempty"`
 	Prompt     string               `json:"prompt,omitempty"`
+	Verbose    bool                 `json:"verbose,omitempty"`
 	McpServers map[string]McpServer `json:"mcp_servers,omitempty"`
 	Commands   []string             `json:"commands,omitempty"`
 	Claude     *ClaudeOptions       `json:"claude,omitempty"`

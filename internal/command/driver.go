@@ -95,6 +95,7 @@ var DriverCommand = &cli.Command{
 		a, err := agent.NewAgent(agent.Options{
 			Type:       cfg.Type,
 			Cwd:        os.ExpandEnv(cfg.Cwd),
+			Verbose:    cfg.Verbose,
 			McpServers: cfg.McpServers,
 			Claude:     cfg.Claude,
 			Codex:      cfg.Codex,

@@ -10,6 +10,7 @@ workspaces:
     agent:
       type: claude
       cwd: /root/pets-workshop
+      # verbose: true  # stream raw CLI output instead of parsed events
       mcp_servers: {}
       prompt: |
         This is an example github repository.

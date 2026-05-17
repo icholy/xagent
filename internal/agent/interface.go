@@ -47,6 +47,7 @@ type Options struct {
 	Type       string
 	Cwd        string
 	Log        *slog.Logger
+	Verbose    bool
 	McpServers map[string]McpServer
 	Claude     *ClaudeOptions
 	Codex      *CodexOptions
@@ -112,6 +113,7 @@ func NewAgent(opts Options) (Agent, error) {
 		return &ClaudeAgent{
 			log:        log,
 			cwd:        cmp.Or(opts.Cwd, "."),
+			verbose:    opts.Verbose,
 			mcpServers: opts.McpServers,
 			options:    opts.Claude,
 		}, nil
@@ -119,6 +121,7 @@ func NewAgent(opts Options) (Agent, error) {
 		return &CodexAgent{
 			log:        log,
 			cwd:        cmp.Or(opts.Cwd, "."),
+			verbose:    opts.Verbose,
 			mcpServers: opts.McpServers,
 			options:    opts.Codex,
 		}, nil
@@ -133,6 +136,7 @@ func NewAgent(opts Options) (Agent, error) {
 		return &CursorAgent{
 			log:        log,
 			cwd:        cmp.Or(opts.Cwd, "."),
+			verbose:    opts.Verbose,
 			mcpServers: opts.McpServers,
 			options:    opts.Cursor,
 		}, nil

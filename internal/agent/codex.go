@@ -18,6 +18,7 @@ import (
 type CodexAgent struct {
 	log        *slog.Logger
 	cwd        string
+	verbose    bool
 	mcpServers map[string]McpServer
 	options    *CodexOptions
 }
@@ -98,6 +99,10 @@ func (a *CodexAgent) run(ctx context.Context, bin string, args []string) error {
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Bytes()
+		if a.verbose {
+			a.log.Info("output", "line", string(line))
+			continue
+		}
 		if !a.handleStreamEvent(line) {
 			a.log.Info("output", "line", string(line))
 		}
