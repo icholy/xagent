@@ -18,21 +18,25 @@ import (
 
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
-	log       *slog.Logger
-	store     *store.Store
-	baseURL   string
-	publisher pubsub.Publisher
-	atlassian *atlassianserver.Server
-	github    *githubserver.Server
+	log              *slog.Logger
+	store            *store.Store
+	baseURL          string
+	publisher        pubsub.Publisher
+	atlassian        *atlassianserver.Server
+	github           *githubserver.Server
+	githubAppID      string
+	githubPrivateKey []byte
 }
 
 type Options struct {
-	Log       *slog.Logger
-	Store     *store.Store
-	BaseURL   string
-	Publisher pubsub.Publisher
-	Atlassian *atlassianserver.Server
-	GitHub    *githubserver.Server
+	Log              *slog.Logger
+	Store            *store.Store
+	BaseURL          string
+	Publisher        pubsub.Publisher
+	Atlassian        *atlassianserver.Server
+	GitHub           *githubserver.Server
+	GitHubAppID      string
+	GitHubPrivateKey []byte
 }
 
 func New(opts Options) *Server {
@@ -41,12 +45,14 @@ func New(opts Options) *Server {
 		log = slog.Default()
 	}
 	return &Server{
-		log:       log,
-		store:     opts.Store,
-		baseURL:   opts.BaseURL,
-		publisher: opts.Publisher,
-		atlassian: opts.Atlassian,
-		github:    opts.GitHub,
+		log:              log,
+		store:            opts.Store,
+		baseURL:          opts.BaseURL,
+		publisher:        opts.Publisher,
+		atlassian:        opts.Atlassian,
+		github:           opts.GitHub,
+		githubAppID:      opts.GitHubAppID,
+		githubPrivateKey: opts.GitHubPrivateKey,
 	}
 }
 

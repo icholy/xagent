@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -110,6 +111,11 @@ var ServerCommand = &cli.Command{
 			Name:    "github-webhook-secret",
 			Usage:   "GitHub App webhook secret",
 			Sources: cli.EnvVars("XAGENT_GITHUB_WEBHOOK_SECRET"),
+		},
+		&cli.StringFlag{
+			Name:    "github-private-key",
+			Usage:   "GitHub App private key (PEM content or file path)",
+			Sources: cli.EnvVars("XAGENT_GITHUB_PRIVATE_KEY"),
 		},
 		&cli.StringFlag{
 			Name:    "atlassian-client-id",
@@ -215,18 +221,32 @@ var ServerCommand = &cli.Command{
 			},
 		}
 		if cmd.IsSet("github-client-id") {
+			ghConfig := &githubserver.Config{
+				AppID:         cmd.String("github-app-id"),
+				AppSlug:       cmd.String("github-app-slug"),
+				ClientID:      cmd.String("github-client-id"),
+				ClientSecret:  cmd.String("github-client-secret"),
+				WebhookSecret: cmd.String("github-webhook-secret"),
+			}
+			if pk := cmd.String("github-private-key"); pk != "" {
+				if strings.Contains(pk, "-----BEGIN") {
+					ghConfig.PrivateKey = []byte(pk)
+				} else {
+					data, err := os.ReadFile(pk)
+					if err != nil {
+						return fmt.Errorf("failed to read GitHub private key file: %w", err)
+					}
+					ghConfig.PrivateKey = data
+				}
+			}
 			opts.GitHub = githubserver.New(githubserver.Options{
 				Store:     st,
 				BaseURL:   baseURL,
 				Publisher: ps,
-				Config: &githubserver.Config{
-					AppID:         cmd.String("github-app-id"),
-					AppSlug:       cmd.String("github-app-slug"),
-					ClientID:      cmd.String("github-client-id"),
-					ClientSecret:  cmd.String("github-client-secret"),
-					WebhookSecret: cmd.String("github-webhook-secret"),
-				},
+				Config:    ghConfig,
 			})
+			opts.GitHubAppID = ghConfig.AppID
+			opts.GitHubPrivateKey = ghConfig.PrivateKey
 		}
 		if cmd.IsSet("atlassian-client-id") {
 			opts.Atlassian = atlassianserver.New(atlassianserver.Options{

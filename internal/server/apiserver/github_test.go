@@ -134,6 +134,43 @@ func TestLinkGitHubInstallation_SenderMismatch(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
+func TestCreateGitHubToken_Unauthenticated(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{
+		Store:            teststore.New(t),
+		GitHubAppID:      "12345",
+		GitHubPrivateKey: []byte("fake-key"),
+	})
+	_, err := srv.CreateGitHubToken(context.Background(), &xagentv1.CreateGitHubTokenRequest{})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeUnauthenticated)
+}
+
+func TestCreateGitHubToken_NoPrivateKey(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
+
+	_, err := srv.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
+	assert.ErrorContains(t, err, "private key")
+}
+
+func TestCreateGitHubToken_NoInstallation(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{
+		Store:            teststore.New(t),
+		GitHubAppID:      "12345",
+		GitHubPrivateKey: []byte("fake-key"),
+	})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
+
+	_, err := srv.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
+	assert.ErrorContains(t, err, "no GitHub App installation")
+}
+
 // Sanity check: the store's clear method removes a previously set installation.
 func TestStoreClearGitHubInstallation(t *testing.T) {
 	t.Parallel()

@@ -37,6 +37,9 @@ var _ Client = &ClientMock{}
 //			CreateEventFunc: func(contextMoqParam context.Context, createEventRequest *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
 //				panic("mock out the CreateEvent method")
 //			},
+//			CreateGitHubTokenFunc: func(contextMoqParam context.Context, createGitHubTokenRequest *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+//				panic("mock out the CreateGitHubToken method")
+//			},
 //			CreateKeyFunc: func(contextMoqParam context.Context, createKeyRequest *xagentv1.CreateKeyRequest) (*xagentv1.CreateKeyResponse, error) {
 //				panic("mock out the CreateKey method")
 //			},
@@ -181,6 +184,9 @@ type ClientMock struct {
 
 	// CreateEventFunc mocks the CreateEvent method.
 	CreateEventFunc func(contextMoqParam context.Context, createEventRequest *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error)
+
+	// CreateGitHubTokenFunc mocks the CreateGitHubToken method.
+	CreateGitHubTokenFunc func(contextMoqParam context.Context, createGitHubTokenRequest *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error)
 
 	// CreateKeyFunc mocks the CreateKey method.
 	CreateKeyFunc func(contextMoqParam context.Context, createKeyRequest *xagentv1.CreateKeyRequest) (*xagentv1.CreateKeyResponse, error)
@@ -345,6 +351,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// CreateEventRequest is the createEventRequest argument value.
 			CreateEventRequest *xagentv1.CreateEventRequest
+		}
+		// CreateGitHubToken holds details about calls to the CreateGitHubToken method.
+		CreateGitHubToken []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// CreateGitHubTokenRequest is the createGitHubTokenRequest argument value.
+			CreateGitHubTokenRequest *xagentv1.CreateGitHubTokenRequest
 		}
 		// CreateKey holds details about calls to the CreateKey method.
 		CreateKey []struct {
@@ -633,6 +646,7 @@ type ClientMock struct {
 	lockCancelTask                     sync.RWMutex
 	lockClearWorkspaces                sync.RWMutex
 	lockCreateEvent                    sync.RWMutex
+	lockCreateGitHubToken              sync.RWMutex
 	lockCreateKey                      sync.RWMutex
 	lockCreateLink                     sync.RWMutex
 	lockCreateOrg                      sync.RWMutex
@@ -888,6 +902,42 @@ func (mock *ClientMock) CreateEventCalls() []struct {
 	mock.lockCreateEvent.RLock()
 	calls = mock.calls.CreateEvent
 	mock.lockCreateEvent.RUnlock()
+	return calls
+}
+
+// CreateGitHubToken calls CreateGitHubTokenFunc.
+func (mock *ClientMock) CreateGitHubToken(contextMoqParam context.Context, createGitHubTokenRequest *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+	if mock.CreateGitHubTokenFunc == nil {
+		panic("ClientMock.CreateGitHubTokenFunc: method is nil but Client.CreateGitHubToken was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam          context.Context
+		CreateGitHubTokenRequest *xagentv1.CreateGitHubTokenRequest
+	}{
+		ContextMoqParam:          contextMoqParam,
+		CreateGitHubTokenRequest: createGitHubTokenRequest,
+	}
+	mock.lockCreateGitHubToken.Lock()
+	mock.calls.CreateGitHubToken = append(mock.calls.CreateGitHubToken, callInfo)
+	mock.lockCreateGitHubToken.Unlock()
+	return mock.CreateGitHubTokenFunc(contextMoqParam, createGitHubTokenRequest)
+}
+
+// CreateGitHubTokenCalls gets all the calls that were made to CreateGitHubToken.
+// Check the length with:
+//
+//	len(mockedClient.CreateGitHubTokenCalls())
+func (mock *ClientMock) CreateGitHubTokenCalls() []struct {
+	ContextMoqParam          context.Context
+	CreateGitHubTokenRequest *xagentv1.CreateGitHubTokenRequest
+} {
+	var calls []struct {
+		ContextMoqParam          context.Context
+		CreateGitHubTokenRequest *xagentv1.CreateGitHubTokenRequest
+	}
+	mock.lockCreateGitHubToken.RLock()
+	calls = mock.calls.CreateGitHubToken
+	mock.lockCreateGitHubToken.RUnlock()
 	return calls
 }
 

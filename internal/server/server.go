@@ -36,18 +36,20 @@ type Server struct {
 }
 
 type Options struct {
-	Log           *slog.Logger
-	Store         *store.Store
-	Auth          *apiauth.Auth
-	Discovery     deviceauth.DiscoveryConfig
-	GitHub        *githubserver.Server
-	Atlassian     *atlassianserver.Server
-	BaseURL       string
-	EncryptionKey []byte
-	OAuth         *oauthflow.Auth
-	CORS          bool
-	Publisher     pubsub.Publisher
-	Notify        *notifyserver.Server
+	Log              *slog.Logger
+	Store            *store.Store
+	Auth             *apiauth.Auth
+	Discovery        deviceauth.DiscoveryConfig
+	GitHub           *githubserver.Server
+	Atlassian        *atlassianserver.Server
+	BaseURL          string
+	EncryptionKey    []byte
+	OAuth            *oauthflow.Auth
+	CORS             bool
+	Publisher        pubsub.Publisher
+	Notify           *notifyserver.Server
+	GitHubAppID      string
+	GitHubPrivateKey []byte
 }
 
 func New(opts Options) *Server {
@@ -56,12 +58,14 @@ func New(opts Options) *Server {
 		log = slog.Default()
 	}
 	api := apiserver.New(apiserver.Options{
-		Log:       log,
-		Store:     opts.Store,
-		BaseURL:   opts.BaseURL,
-		Publisher: opts.Publisher,
-		Atlassian: opts.Atlassian,
-		GitHub:    opts.GitHub,
+		Log:              log,
+		Store:            opts.Store,
+		BaseURL:          opts.BaseURL,
+		Publisher:        opts.Publisher,
+		Atlassian:        opts.Atlassian,
+		GitHub:           opts.GitHub,
+		GitHubAppID:      opts.GitHubAppID,
+		GitHubPrivateKey: opts.GitHubPrivateKey,
 	})
 	return &Server{
 		log:       log,

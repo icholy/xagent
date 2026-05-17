@@ -25,6 +25,7 @@ type Config struct {
 	ClientID      string
 	ClientSecret  string
 	WebhookSecret string
+	PrivateKey    []byte
 }
 
 // Server handles GitHub OAuth and webhook routes.

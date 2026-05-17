@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"connectrpc.com/connect"
+	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
@@ -65,4 +68,41 @@ func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkG
 		"installation_id", req.InstallationId,
 		"user_id", caller.ID)
 	return &xagentv1.LinkGitHubInstallationResponse{}, nil
+}
+
+func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+	caller := apiauth.Caller(ctx)
+	if caller == nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
+	}
+	if len(s.githubPrivateKey) == 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("GitHub App private key is not configured"))
+	}
+	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if org.GitHubInstallationID == 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no GitHub App installation linked to this organization"))
+	}
+	appID, err := strconv.ParseInt(s.githubAppID, 10, 64)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid GitHub App ID: %w", err))
+	}
+	transport, err := ghinstallation.New(http.DefaultTransport, appID, org.GitHubInstallationID, s.githubPrivateKey)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create GitHub App transport: %w", err))
+	}
+	token, err := transport.Token(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create GitHub installation token: %w", err))
+	}
+	expiresAt, _, err := transport.Expiry()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get token expiry: %w", err))
+	}
+	return &xagentv1.CreateGitHubTokenResponse{
+		Token:     token,
+		ExpiresAt: timestamppb.New(expiresAt),
+	}, nil
 }
