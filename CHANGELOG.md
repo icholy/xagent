@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.2](https://github.com/icholy/xagent/compare/v0.13.1...v0.13.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* bump dockerfile go to 1.26 and node to 25 ([c915954](https://github.com/icholy/xagent/commit/c9159541ea5f66acbb6e1c65f9eeaf19d2ba3b30))
+
 ## [0.13.1](https://github.com/icholy/xagent/compare/v0.13.0...v0.13.1) (2026-05-17)
 
 
