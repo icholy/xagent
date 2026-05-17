@@ -2,15 +2,19 @@ package oauthflow
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/model"
 )
 
 // HandleMetadata serves the OAuth 2.1 authorization server metadata.
@@ -46,7 +50,7 @@ func (a *Auth) HandleResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleRegister is a stub DCR endpoint per RFC 7591.
+// HandleRegister implements OAuth Dynamic Client Registration (RFC 7591).
 // POST /oauth/register
 func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -61,10 +65,25 @@ func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+	clientID := uuid.New().String()
+	pending := &model.PendingIntegration{
+		Type:       model.PendingIntegrationTypeMCP,
+		ExternalID: clientID,
+		Options: model.PendingIntegrationOptions{
+			MCP: &model.MCPPendingIntegration{
+				ClientName:   req.ClientName,
+				RedirectURIs: req.RedirectURIs,
+			},
+		},
+	}
+	if err := a.store.UpsertPendingIntegration(r.Context(), nil, pending); err != nil {
+		http.Error(w, "failed to register client", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
-		"client_id":     uuid.New().String(),
+		"client_id":     clientID,
 		"client_name":   req.ClientName,
 		"redirect_uris": req.RedirectURIs,
 	})
@@ -99,6 +118,22 @@ func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	if codeChallengeMethod != "S256" {
 		http.Error(w, "unsupported code_challenge_method", http.StatusBadRequest)
+		return
+	}
+
+	// Verify the client was registered via DCR and the redirect_uri is one it
+	// declared. Without this, any caller could fabricate a client_id.
+	pending, err := a.store.GetPendingIntegration(r.Context(), nil, model.PendingIntegrationTypeMCP, clientID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "unknown client_id", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "failed to lookup client", http.StatusInternalServerError)
+		return
+	}
+	if pending.Options.MCP == nil || !slices.Contains(pending.Options.MCP.RedirectURIs, redirectURI) {
+		http.Error(w, "redirect_uri not registered for client_id", http.StatusBadRequest)
 		return
 	}
 

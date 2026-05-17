@@ -15,8 +15,8 @@ type Event struct {
 	Description string    `json:"description"`
 	Data        string    `json:"data"`
 	Url         string    `json:"url"`
-	CreatedAt   time.Time `json:"created_at"`
 	OrgID       int64     `json:"org_id"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type EventTask struct {
@@ -28,9 +28,9 @@ type Key struct {
 	ID        string       `json:"id"`
 	Name      string       `json:"name"`
 	TokenHash string       `json:"token_hash"`
+	OrgID     int64        `json:"org_id"`
 	ExpiresAt sql.NullTime `json:"expires_at"`
 	CreatedAt time.Time    `json:"created_at"`
-	OrgID     int64        `json:"org_id"`
 }
 
 type Log struct {
@@ -45,11 +45,11 @@ type Org struct {
 	ID                     int64           `json:"id"`
 	Name                   string          `json:"name"`
 	Owner                  string          `json:"owner"`
-	CreatedAt              time.Time       `json:"created_at"`
-	UpdatedAt              time.Time       `json:"updated_at"`
 	Archived               bool            `json:"archived"`
 	AtlassianWebhookSecret string          `json:"atlassian_webhook_secret"`
 	RoutingRules           json.RawMessage `json:"routing_rules"`
+	CreatedAt              time.Time       `json:"created_at"`
+	UpdatedAt              time.Time       `json:"updated_at"`
 }
 
 type OrgMember struct {
@@ -57,6 +57,17 @@ type OrgMember struct {
 	UserID    string    `json:"user_id"`
 	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type PendingIntegration struct {
+	Type       string          `json:"type"`
+	ExternalID string          `json:"external_id"`
+	Options    json.RawMessage `json:"options"`
+	CreatedAt  time.Time       `json:"created_at"`
+}
+
+type SchemaMigration struct {
+	Version string `json:"version"`
 }
 
 type Task struct {
@@ -69,10 +80,10 @@ type Task struct {
 	Status       int32     `json:"status"`
 	Command      int32     `json:"command"`
 	Version      int64     `json:"version"`
+	OrgID        int64     `json:"org_id"`
+	Archived     bool      `json:"archived"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
-	Archived     bool      `json:"archived"`
-	OrgID        int64     `json:"org_id"`
 }
 
 type TaskLink struct {
@@ -91,18 +102,18 @@ type User struct {
 	Name               string         `json:"name"`
 	GithubUserID       sql.NullInt64  `json:"github_user_id"`
 	GithubUsername     sql.NullString `json:"github_username"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
-	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
 	AtlassianAccountID sql.NullString `json:"atlassian_account_id"`
 	AtlassianUsername  string         `json:"atlassian_username"`
+	DefaultOrgID       sql.NullInt64  `json:"default_org_id"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
 }
 
 type Workspace struct {
 	ID          int64     `json:"id"`
 	RunnerID    string    `json:"runner_id"`
 	Name        string    `json:"name"`
-	UpdatedAt   time.Time `json:"updated_at"`
 	OrgID       int64     `json:"org_id"`
 	Description string    `json:"description"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }

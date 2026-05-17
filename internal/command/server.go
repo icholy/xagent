@@ -190,6 +190,7 @@ var ServerCommand = &cli.Command{
 		oauth, err := oauthflow.New(oauthflow.Options{
 			AppKey:  appKey,
 			BaseURL: baseURL,
+			Store:   st,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize oauth: %w", err)
