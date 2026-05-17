@@ -180,6 +180,13 @@ func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	redirectURL.RawQuery = q.Encode()
 
+	// Consume the pending registration so a fabricated retry can't reuse the
+	// client_id after the user has consented.
+	if err := a.store.DeletePendingIntegration(r.Context(), nil, model.PendingIntegrationTypeMCP, clientID); err != nil {
+		http.Error(w, "failed to consume client registration", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"redirect_uri": redirectURL.String(),

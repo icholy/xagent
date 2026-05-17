@@ -1,6 +1,7 @@
 package oauthflow_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -141,6 +142,24 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 	newToken, err := cfg.TokenSource(ctx, expiredToken).Token()
 	assert.NilError(t, err)
 	assert.Assert(t, newToken.AccessToken != "")
+}
+
+func TestAuthorizeConsumesPendingRegistration(t *testing.T) {
+	ts, key := testSetup(t)
+	st := teststore.New(t)
+
+	redirectURI := "http://localhost/callback"
+	clientID := register(t, ts, "consume-client", []string{redirectURI})
+
+	resp := authorize(t, ts, key, clientID, redirectURI)
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
+
+	_, err := st.GetPendingIntegration(t.Context(), nil, model.PendingIntegrationTypeMCP, clientID)
+	assert.ErrorIs(t, err, sql.ErrNoRows)
+
+	// A second authorize with the same client_id is now rejected.
+	resp2 := authorize(t, ts, key, clientID, redirectURI)
+	assert.Equal(t, resp2.StatusCode, http.StatusBadRequest)
 }
 
 func TestRegisterPersistsClient(t *testing.T) {

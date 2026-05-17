@@ -17,6 +17,7 @@ import (
 type Store interface {
 	UpsertPendingIntegration(ctx context.Context, tx *sql.Tx, p *model.PendingIntegration) error
 	GetPendingIntegration(ctx context.Context, tx *sql.Tx, typ model.PendingIntegrationType, externalID string) (*model.PendingIntegration, error)
+	DeletePendingIntegration(ctx context.Context, tx *sql.Tx, typ model.PendingIntegrationType, externalID string) error
 }
 
 // Options configures the OAuth 2.1 authorization flow.
