@@ -49,6 +49,7 @@ jobs:
           env: production
           ref: ${{ needs.check.outputs.tag }}
           desc: Deploying ${{ needs.check.outputs.tag }} to Fly.io
+          auto_inactive: false
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
