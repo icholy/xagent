@@ -10,6 +10,7 @@ pnpm = "10.28.2"
 flyctl = "0.4.49"
 dbmate = "2.24.0"
 "github:caarlos0/svu" = "3.4.1"
+"aqua:siderolabs/conform" = "0.1.0-alpha.31"
 
 [tasks.build]
 description = "Build xagent binaries for all architectures"
@@ -126,3 +127,7 @@ run = [
 [tasks.localhost_run]
 description = "Use localhost.run to expose the vite proxy to the web"
 run = "ssh -R 80:localhost:5173 nokey@localhost.run"
+
+[tasks."install:hooks"]
+description = "Install git hooks (commit-msg via conform)"
+run = "git config core.hooksPath .githooks"

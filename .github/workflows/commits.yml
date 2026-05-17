@@ -1,0 +1,18 @@
+name: Commits
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  conform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: jdx/mise-action@v2
+
+      - name: Validate commit messages
+        run: conform enforce --base-branch=origin/${{ github.base_ref }}

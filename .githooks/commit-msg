@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Validate commit message against .conform.yaml.
+# Install via: mise run install:hooks
+exec mise exec -- conform enforce --commit-msg-file="$1"
