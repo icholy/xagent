@@ -52,8 +52,7 @@ Unresolved decisions that need input.
 - To change a proposal's status, move the file to the appropriate directory.
 - Use kebab-case for filenames: `proposals/draft/my-feature.md`.
 - Link to the issue in the proposal body.
-- The PR title should be: `proposal: <short description>`.
+- The PR title should be: `proposal: <short description>`. This is a valid conventional commit type (per `.conform.yaml`) and is hidden from the generated CHANGELOG.
 - The PR body should reference the issue with `Closes #NNN` or `Related to #NNN` as appropriate.
-- Apply the `skip-changelog` label so the proposal PR is excluded from generated release notes (e.g. `gh pr create --label skip-changelog ...`).
 - Keep the design grounded in the existing codebase. Reference actual types, tables, and patterns.
 - Do not implement anything. The proposal is a document, not code.

@@ -9,7 +9,6 @@ age = "1.3.1"
 pnpm = "10.28.2"
 flyctl = "0.4.49"
 dbmate = "2.24.0"
-"github:caarlos0/svu" = "3.4.1"
 "aqua:siderolabs/conform" = "0.1.0-alpha.31"
 
 [tasks.build]
@@ -90,21 +89,6 @@ run = "go test ./..."
 [tasks.deploy]
 description = "Build and deploy to Fly.io"
 run = "fly deploy"
-
-[tasks.release]
-description = "Tag and push the next release (patch|minor|major)"
-usage = '''
-arg "[level]" help="Version bump level" {
-	default "minor"
-	choices "patch" "minor" "major"
-}
-'''
-run = """
-tag=$(svu "$usage_level")
-git tag -a "$tag" -m "release $tag"
-git push origin "$tag"
-echo "Released $tag"
-"""
 
 [tasks.update_secrets]
 run = "sops -d --output-type dotenv sops.env.yml | fly secrets import"

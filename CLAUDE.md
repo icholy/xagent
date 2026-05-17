@@ -93,17 +93,23 @@ xagent github     # GitHub integration
 
 Service definitions in `proto/xagent/v1/xagent.proto`, generated code goes to `internal/proto/` (gitignored).
 
-## Pull Request Labels
+## Conventional Commits & Releases
 
-Release notes are generated from PR titles and grouped by label (see `.github/release.yml`). When creating a PR, apply one of these labels so it lands in the right section:
+Commit messages and PR titles must follow the [Conventional Commits](https://www.conventionalcommits.org/) spec. The format is enforced by `conform` (see `.conform.yaml`):
 
-- `breaking` - Breaking Changes
-- `feature` / `enhancement` - Features
-- `bug` / `fix` - Bug Fixes
-- `dependencies` - Dependencies (auto-applied by Renovate)
-- `skip-changelog` - excluded from release notes entirely (use for proposals, internal-only chores, doc-only changes)
+```
+<type>(<optional scope>): <subject>
+```
 
-PRs with no matching label fall into "Other Changes".
+Allowed types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `build`, `revert`, `proposal`. Breaking changes use `!` after the type (e.g. `feat!: ...`) or a `BREAKING CHANGE:` footer.
+
+Validation runs in CI on every PR via `siderolabs/conform`. To validate locally on each commit, install the opt-in hook once: `mise run install:hooks`.
+
+Releases are driven by [release-please](https://github.com/googleapis/release-please) — `.github/workflows/release-please.yml` continuously opens a "Release PR" against master based on the conventional commits since the last release. Merging that PR creates the version tag, which triggers `release.yml` to build binaries, publish images to GHCR, and deploy to Fly.
+
+- `feat`, `fix`, `perf`, `revert` → visible in the generated CHANGELOG.md
+- All other types → hidden from the changelog
+- `feat:` → minor bump; `fix:` → patch bump; `feat!:` or `BREAKING CHANGE:` → major bump
 
 ## Web UI
 
