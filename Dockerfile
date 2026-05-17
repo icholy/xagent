@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 ./cmd/xag
 RUN CGO_ENABLED=0 GOARCH=arm64 go build -o prebuilt/xagent-linux-arm64 ./cmd/xagent
 
 # Server image
-FROM alpine:3.21 AS server
+FROM alpine:3.23 AS server
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /app/xagent .
@@ -28,7 +28,7 @@ EXPOSE 6464
 CMD ["./xagent", "server"]
 
 # Runner image
-FROM alpine:3.21 AS runner
+FROM alpine:3.23 AS runner
 RUN apk add --no-cache ca-certificates docker-cli
 WORKDIR /app
 COPY --from=builder /app/xagent .
