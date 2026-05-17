@@ -3,8 +3,14 @@ name: Tests
 on:
   push:
     branches: [ master ]
+    paths-ignore:
+      - '**.md'
+      - '.release-please-manifest.json'
   pull_request:
     branches: [ master ]
+    paths-ignore:
+      - '**.md'
+      - '.release-please-manifest.json'
 
 jobs:
   test:
