@@ -12,7 +12,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jdx/mise-action@v2
-
-      - name: Validate commit messages
-        run: conform enforce --base-branch=origin/${{ github.base_ref }}
+      - uses: siderolabs/conform@v0.1.0-alpha.31
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
