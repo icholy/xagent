@@ -6,11 +6,15 @@ on:
     paths-ignore:
       - '**.md'
       - '.release-please-manifest.json'
+      - 'images/**'
+      - 'n8n-node/**'
   pull_request:
     branches: [ master ]
     paths-ignore:
       - '**.md'
       - '.release-please-manifest.json'
+      - 'images/**'
+      - 'n8n-node/**'
 
 jobs:
   test:
@@ -57,24 +61,3 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
         run: go test -v ./...
-
-  webui:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-          cache-dependency-path: webui/pnpm-lock.yaml
-
-      - name: Build webui
-        run: pnpm install --frozen-lockfile && pnpm run build
-        working-directory: webui
