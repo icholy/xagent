@@ -41,6 +41,7 @@ service XAgentService {
   rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
   rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse);
   rpc UnlinkGitHubAccount(UnlinkGitHubAccountRequest) returns (UnlinkGitHubAccountResponse);
+  rpc LinkGitHubInstallation(LinkGitHubInstallationRequest) returns (LinkGitHubInstallationResponse);
   rpc UnlinkAtlassianAccount(UnlinkAtlassianAccountRequest) returns (UnlinkAtlassianAccountResponse);
   rpc CreateOrg(CreateOrgRequest) returns (CreateOrgResponse);
   rpc ListOrgs(ListOrgsRequest) returns (ListOrgsResponse);
@@ -423,6 +424,12 @@ message GitHubAccount {
 message UnlinkGitHubAccountRequest {}
 
 message UnlinkGitHubAccountResponse {}
+
+message LinkGitHubInstallationRequest {
+  int64 installation_id = 1;
+}
+
+message LinkGitHubInstallationResponse {}
 
 message AtlassianAccount {
   string atlassian_account_id = 1;

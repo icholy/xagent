@@ -34,12 +34,13 @@ func (s *Store) GetOrg(ctx context.Context, tx *sql.Tx, id int64) (*model.Org, e
 		return nil, err
 	}
 	return &model.Org{
-		ID:        row.ID,
-		Name:      row.Name,
-		Owner:     row.Owner,
-		Archived:  row.Archived,
-		CreatedAt: row.CreatedAt,
-		UpdatedAt: row.UpdatedAt,
+		ID:                   row.ID,
+		Name:                 row.Name,
+		Owner:                row.Owner,
+		Archived:             row.Archived,
+		CreatedAt:            row.CreatedAt,
+		UpdatedAt:            row.UpdatedAt,
+		GitHubInstallationID: row.GithubInstallationID.Int64,
 	}, nil
 }
 
@@ -51,12 +52,13 @@ func (s *Store) ListOrgsByMember(ctx context.Context, tx *sql.Tx, userID string)
 	orgs := make([]*model.Org, len(rows))
 	for i, row := range rows {
 		orgs[i] = &model.Org{
-			ID:        row.ID,
-			Name:      row.Name,
-			Owner:     row.Owner,
-			Archived:  row.Archived,
-			CreatedAt: row.CreatedAt,
-			UpdatedAt: row.UpdatedAt,
+			ID:                   row.ID,
+			Name:                 row.Name,
+			Owner:                row.Owner,
+			Archived:             row.Archived,
+			CreatedAt:            row.CreatedAt,
+			UpdatedAt:            row.UpdatedAt,
+			GitHubInstallationID: row.GithubInstallationID.Int64,
 		}
 	}
 	return orgs, nil
@@ -163,6 +165,17 @@ func (s *Store) SetOrgAtlassianWebhookSecret(ctx context.Context, tx *sql.Tx, or
 		ID:                     orgID,
 		AtlassianWebhookSecret: secret,
 	})
+}
+
+func (s *Store) SetOrgGitHubInstallation(ctx context.Context, tx *sql.Tx, orgID, installationID int64) error {
+	return s.q(tx).SetOrgGitHubInstallation(ctx, sqlc.SetOrgGitHubInstallationParams{
+		ID:                   orgID,
+		GithubInstallationID: installationID,
+	})
+}
+
+func (s *Store) ClearGitHubInstallation(ctx context.Context, tx *sql.Tx, installationID int64) error {
+	return s.q(tx).ClearGitHubInstallation(ctx, installationID)
 }
 
 func toModelOrgMember(row sqlc.OrgMember) *model.OrgMember {

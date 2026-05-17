@@ -20,6 +20,12 @@ var _ Store = &StoreMock{}
 //
 //		// make and configure a mocked Store
 //		mockedStore := &StoreMock{
+//			ClearGitHubInstallationFunc: func(ctx context.Context, tx *sql.Tx, installationID int64) error {
+//				panic("mock out the ClearGitHubInstallation method")
+//			},
+//			DeletePendingIntegrationFunc: func(ctx context.Context, tx *sql.Tx, typ model.PendingIntegrationType, externalID string) error {
+//				panic("mock out the DeletePendingIntegration method")
+//			},
 //			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
 //				panic("mock out the GetOrgAtlassianWebhookSecret method")
 //			},
@@ -32,6 +38,9 @@ var _ Store = &StoreMock{}
 //			UpdateGitHubUsernameFunc: func(ctx context.Context, tx *sql.Tx, githubUserID int64, username string) error {
 //				panic("mock out the UpdateGitHubUsername method")
 //			},
+//			UpsertPendingIntegrationFunc: func(ctx context.Context, tx *sql.Tx, p *model.PendingIntegration) error {
+//				panic("mock out the UpsertPendingIntegration method")
+//			},
 //		}
 //
 //		// use mockedStore in code that requires Store
@@ -39,6 +48,12 @@ var _ Store = &StoreMock{}
 //
 //	}
 type StoreMock struct {
+	// ClearGitHubInstallationFunc mocks the ClearGitHubInstallation method.
+	ClearGitHubInstallationFunc func(ctx context.Context, tx *sql.Tx, installationID int64) error
+
+	// DeletePendingIntegrationFunc mocks the DeletePendingIntegration method.
+	DeletePendingIntegrationFunc func(ctx context.Context, tx *sql.Tx, typ model.PendingIntegrationType, externalID string) error
+
 	// GetOrgAtlassianWebhookSecretFunc mocks the GetOrgAtlassianWebhookSecret method.
 	GetOrgAtlassianWebhookSecretFunc func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error)
 
@@ -51,8 +66,31 @@ type StoreMock struct {
 	// UpdateGitHubUsernameFunc mocks the UpdateGitHubUsername method.
 	UpdateGitHubUsernameFunc func(ctx context.Context, tx *sql.Tx, githubUserID int64, username string) error
 
+	// UpsertPendingIntegrationFunc mocks the UpsertPendingIntegration method.
+	UpsertPendingIntegrationFunc func(ctx context.Context, tx *sql.Tx, p *model.PendingIntegration) error
+
 	// calls tracks calls to the methods.
 	calls struct {
+		// ClearGitHubInstallation holds details about calls to the ClearGitHubInstallation method.
+		ClearGitHubInstallation []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Tx is the tx argument value.
+			Tx *sql.Tx
+			// InstallationID is the installationID argument value.
+			InstallationID int64
+		}
+		// DeletePendingIntegration holds details about calls to the DeletePendingIntegration method.
+		DeletePendingIntegration []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Tx is the tx argument value.
+			Tx *sql.Tx
+			// Typ is the typ argument value.
+			Typ model.PendingIntegrationType
+			// ExternalID is the externalID argument value.
+			ExternalID string
+		}
 		// GetOrgAtlassianWebhookSecret holds details about calls to the GetOrgAtlassianWebhookSecret method.
 		GetOrgAtlassianWebhookSecret []struct {
 			// Ctx is the ctx argument value.
@@ -91,11 +129,107 @@ type StoreMock struct {
 			// Username is the username argument value.
 			Username string
 		}
+		// UpsertPendingIntegration holds details about calls to the UpsertPendingIntegration method.
+		UpsertPendingIntegration []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Tx is the tx argument value.
+			Tx *sql.Tx
+			// P is the p argument value.
+			P *model.PendingIntegration
+		}
 	}
+	lockClearGitHubInstallation      sync.RWMutex
+	lockDeletePendingIntegration     sync.RWMutex
 	lockGetOrgAtlassianWebhookSecret sync.RWMutex
 	lockGetUserByAtlassianAccountID  sync.RWMutex
 	lockGetUserByGitHubUserID        sync.RWMutex
 	lockUpdateGitHubUsername         sync.RWMutex
+	lockUpsertPendingIntegration     sync.RWMutex
+}
+
+// ClearGitHubInstallation calls ClearGitHubInstallationFunc.
+func (mock *StoreMock) ClearGitHubInstallation(ctx context.Context, tx *sql.Tx, installationID int64) error {
+	if mock.ClearGitHubInstallationFunc == nil {
+		panic("StoreMock.ClearGitHubInstallationFunc: method is nil but Store.ClearGitHubInstallation was just called")
+	}
+	callInfo := struct {
+		Ctx            context.Context
+		Tx             *sql.Tx
+		InstallationID int64
+	}{
+		Ctx:            ctx,
+		Tx:             tx,
+		InstallationID: installationID,
+	}
+	mock.lockClearGitHubInstallation.Lock()
+	mock.calls.ClearGitHubInstallation = append(mock.calls.ClearGitHubInstallation, callInfo)
+	mock.lockClearGitHubInstallation.Unlock()
+	return mock.ClearGitHubInstallationFunc(ctx, tx, installationID)
+}
+
+// ClearGitHubInstallationCalls gets all the calls that were made to ClearGitHubInstallation.
+// Check the length with:
+//
+//	len(mockedStore.ClearGitHubInstallationCalls())
+func (mock *StoreMock) ClearGitHubInstallationCalls() []struct {
+	Ctx            context.Context
+	Tx             *sql.Tx
+	InstallationID int64
+} {
+	var calls []struct {
+		Ctx            context.Context
+		Tx             *sql.Tx
+		InstallationID int64
+	}
+	mock.lockClearGitHubInstallation.RLock()
+	calls = mock.calls.ClearGitHubInstallation
+	mock.lockClearGitHubInstallation.RUnlock()
+	return calls
+}
+
+// DeletePendingIntegration calls DeletePendingIntegrationFunc.
+func (mock *StoreMock) DeletePendingIntegration(ctx context.Context, tx *sql.Tx, typ model.PendingIntegrationType, externalID string) error {
+	if mock.DeletePendingIntegrationFunc == nil {
+		panic("StoreMock.DeletePendingIntegrationFunc: method is nil but Store.DeletePendingIntegration was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Tx         *sql.Tx
+		Typ        model.PendingIntegrationType
+		ExternalID string
+	}{
+		Ctx:        ctx,
+		Tx:         tx,
+		Typ:        typ,
+		ExternalID: externalID,
+	}
+	mock.lockDeletePendingIntegration.Lock()
+	mock.calls.DeletePendingIntegration = append(mock.calls.DeletePendingIntegration, callInfo)
+	mock.lockDeletePendingIntegration.Unlock()
+	return mock.DeletePendingIntegrationFunc(ctx, tx, typ, externalID)
+}
+
+// DeletePendingIntegrationCalls gets all the calls that were made to DeletePendingIntegration.
+// Check the length with:
+//
+//	len(mockedStore.DeletePendingIntegrationCalls())
+func (mock *StoreMock) DeletePendingIntegrationCalls() []struct {
+	Ctx        context.Context
+	Tx         *sql.Tx
+	Typ        model.PendingIntegrationType
+	ExternalID string
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Tx         *sql.Tx
+		Typ        model.PendingIntegrationType
+		ExternalID string
+	}
+	mock.lockDeletePendingIntegration.RLock()
+	calls = mock.calls.DeletePendingIntegration
+	mock.lockDeletePendingIntegration.RUnlock()
+	return calls
 }
 
 // GetOrgAtlassianWebhookSecret calls GetOrgAtlassianWebhookSecretFunc.
@@ -259,5 +393,45 @@ func (mock *StoreMock) UpdateGitHubUsernameCalls() []struct {
 	mock.lockUpdateGitHubUsername.RLock()
 	calls = mock.calls.UpdateGitHubUsername
 	mock.lockUpdateGitHubUsername.RUnlock()
+	return calls
+}
+
+// UpsertPendingIntegration calls UpsertPendingIntegrationFunc.
+func (mock *StoreMock) UpsertPendingIntegration(ctx context.Context, tx *sql.Tx, p *model.PendingIntegration) error {
+	if mock.UpsertPendingIntegrationFunc == nil {
+		panic("StoreMock.UpsertPendingIntegrationFunc: method is nil but Store.UpsertPendingIntegration was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		Tx  *sql.Tx
+		P   *model.PendingIntegration
+	}{
+		Ctx: ctx,
+		Tx:  tx,
+		P:   p,
+	}
+	mock.lockUpsertPendingIntegration.Lock()
+	mock.calls.UpsertPendingIntegration = append(mock.calls.UpsertPendingIntegration, callInfo)
+	mock.lockUpsertPendingIntegration.Unlock()
+	return mock.UpsertPendingIntegrationFunc(ctx, tx, p)
+}
+
+// UpsertPendingIntegrationCalls gets all the calls that were made to UpsertPendingIntegration.
+// Check the length with:
+//
+//	len(mockedStore.UpsertPendingIntegrationCalls())
+func (mock *StoreMock) UpsertPendingIntegrationCalls() []struct {
+	Ctx context.Context
+	Tx  *sql.Tx
+	P   *model.PendingIntegration
+} {
+	var calls []struct {
+		Ctx context.Context
+		Tx  *sql.Tx
+		P   *model.PendingIntegration
+	}
+	mock.lockUpsertPendingIntegration.RLock()
+	calls = mock.calls.UpsertPendingIntegration
+	mock.lockUpsertPendingIntegration.RUnlock()
 	return calls
 }

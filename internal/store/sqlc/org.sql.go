@@ -7,6 +7,7 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -45,6 +46,18 @@ func (q *Queries) ArchiveOrg(ctx context.Context, id int64) error {
 	return err
 }
 
+const clearGitHubInstallation = `-- name: ClearGitHubInstallation :exec
+UPDATE orgs SET
+    github_installation_id = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE github_installation_id = $1::BIGINT
+`
+
+func (q *Queries) ClearGitHubInstallation(ctx context.Context, githubInstallationID int64) error {
+	_, err := q.db.ExecContext(ctx, clearGitHubInstallation, githubInstallationID)
+	return err
+}
+
 const createOrg = `-- name: CreateOrg :one
 INSERT INTO orgs (name, owner, created_at, updated_at)
 VALUES ($1, $2, $3, $4)
@@ -80,18 +93,19 @@ func (q *Queries) DestroyOrg(ctx context.Context, id int64) error {
 }
 
 const getOrg = `-- name: GetOrg :one
-SELECT id, name, owner, created_at, updated_at, archived
+SELECT id, name, owner, created_at, updated_at, archived, github_installation_id
 FROM orgs
 WHERE id = $1
 `
 
 type GetOrgRow struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Owner     string    `json:"owner"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Archived  bool      `json:"archived"`
+	ID                   int64         `json:"id"`
+	Name                 string        `json:"name"`
+	Owner                string        `json:"owner"`
+	CreatedAt            time.Time     `json:"created_at"`
+	UpdatedAt            time.Time     `json:"updated_at"`
+	Archived             bool          `json:"archived"`
+	GithubInstallationID sql.NullInt64 `json:"github_installation_id"`
 }
 
 func (q *Queries) GetOrg(ctx context.Context, id int64) (GetOrgRow, error) {
@@ -104,6 +118,7 @@ func (q *Queries) GetOrg(ctx context.Context, id int64) (GetOrgRow, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Archived,
+		&i.GithubInstallationID,
 	)
 	return i, err
 }
@@ -265,7 +280,7 @@ func (q *Queries) ListOrgMembersWithUsers(ctx context.Context, orgID int64) ([]L
 }
 
 const listOrgsByMember = `-- name: ListOrgsByMember :many
-SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived
+SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived, o.github_installation_id
 FROM orgs o
 JOIN org_members om ON o.id = om.org_id
 WHERE om.user_id = $1 AND o.archived = FALSE
@@ -273,12 +288,13 @@ ORDER BY o.name
 `
 
 type ListOrgsByMemberRow struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Owner     string    `json:"owner"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Archived  bool      `json:"archived"`
+	ID                   int64         `json:"id"`
+	Name                 string        `json:"name"`
+	Owner                string        `json:"owner"`
+	CreatedAt            time.Time     `json:"created_at"`
+	UpdatedAt            time.Time     `json:"updated_at"`
+	Archived             bool          `json:"archived"`
+	GithubInstallationID sql.NullInt64 `json:"github_installation_id"`
 }
 
 func (q *Queries) ListOrgsByMember(ctx context.Context, userID string) ([]ListOrgsByMemberRow, error) {
@@ -297,6 +313,7 @@ func (q *Queries) ListOrgsByMember(ctx context.Context, userID string) ([]ListOr
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Archived,
+			&i.GithubInstallationID,
 		); err != nil {
 			return nil, err
 		}
@@ -337,6 +354,23 @@ type SetOrgAtlassianWebhookSecretParams struct {
 
 func (q *Queries) SetOrgAtlassianWebhookSecret(ctx context.Context, arg SetOrgAtlassianWebhookSecretParams) error {
 	_, err := q.db.ExecContext(ctx, setOrgAtlassianWebhookSecret, arg.ID, arg.AtlassianWebhookSecret)
+	return err
+}
+
+const setOrgGitHubInstallation = `-- name: SetOrgGitHubInstallation :exec
+UPDATE orgs SET
+    github_installation_id = $1::BIGINT,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $2
+`
+
+type SetOrgGitHubInstallationParams struct {
+	GithubInstallationID int64 `json:"github_installation_id"`
+	ID                   int64 `json:"id"`
+}
+
+func (q *Queries) SetOrgGitHubInstallation(ctx context.Context, arg SetOrgGitHubInstallationParams) error {
+	_, err := q.db.ExecContext(ctx, setOrgGitHubInstallation, arg.GithubInstallationID, arg.ID)
 	return err
 }
 

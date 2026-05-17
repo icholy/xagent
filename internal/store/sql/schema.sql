@@ -132,7 +132,8 @@ CREATE TABLE public.orgs (
     atlassian_webhook_secret text DEFAULT ''::text NOT NULL,
     routing_rules jsonb DEFAULT '[]'::jsonb NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    github_installation_id bigint
 );
 
 
@@ -153,6 +154,18 @@ CREATE SEQUENCE public.orgs_id_seq
 --
 
 ALTER SEQUENCE public.orgs_id_seq OWNED BY public.orgs.id;
+
+
+--
+-- Name: pending_integrations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pending_integrations (
+    type text NOT NULL,
+    external_id text NOT NULL,
+    options jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
 
 
 --
@@ -380,6 +393,14 @@ ALTER TABLE ONLY public.orgs
 
 
 --
+-- Name: pending_integrations pending_integrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pending_integrations
+    ADD CONSTRAINT pending_integrations_pkey PRIMARY KEY (type, external_id);
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -466,6 +487,13 @@ CREATE INDEX idx_logs_task_id ON public.logs USING btree (task_id);
 --
 
 CREATE INDEX idx_org_members_user_id ON public.org_members USING btree (user_id);
+
+
+--
+-- Name: idx_orgs_github_installation_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_orgs_github_installation_id ON public.orgs USING btree (github_installation_id);
 
 
 --
@@ -667,4 +695,6 @@ ALTER TABLE ONLY public.task_links
 --
 
 INSERT INTO public.schema_migrations (version) VALUES
-    ('20240101000001');
+    ('20240101000001'),
+    ('20260517000001'),
+    ('20260517174647');

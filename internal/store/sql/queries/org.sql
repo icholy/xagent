@@ -4,12 +4,12 @@ VALUES ($1, $2, $3, $4)
 RETURNING id;
 
 -- name: GetOrg :one
-SELECT id, name, owner, created_at, updated_at, archived
+SELECT id, name, owner, created_at, updated_at, archived, github_installation_id
 FROM orgs
 WHERE id = $1;
 
 -- name: ListOrgsByMember :many
-SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived
+SELECT o.id, o.name, o.owner, o.created_at, o.updated_at, o.archived, o.github_installation_id
 FROM orgs o
 JOIN org_members om ON o.id = om.org_id
 WHERE om.user_id = $1 AND o.archived = FALSE
@@ -51,6 +51,18 @@ SELECT atlassian_webhook_secret FROM orgs WHERE id = $1;
 
 -- name: SetOrgAtlassianWebhookSecret :exec
 UPDATE orgs SET atlassian_webhook_secret = $2 WHERE id = $1;
+
+-- name: SetOrgGitHubInstallation :exec
+UPDATE orgs SET
+    github_installation_id = sqlc.arg(github_installation_id)::BIGINT,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id);
+
+-- name: ClearGitHubInstallation :exec
+UPDATE orgs SET
+    github_installation_id = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE github_installation_id = sqlc.arg(github_installation_id)::BIGINT;
 
 -- name: DestroyOrg :exec
 DELETE FROM orgs WHERE id = $1;

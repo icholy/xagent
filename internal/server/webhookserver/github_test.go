@@ -336,6 +336,100 @@ func TestHandleGitHubWebhookIgnoredEventType(t *testing.T) {
 	assert.Equal(t, rec.Body.String(), "ignored")
 }
 
+func TestHandleGitHubWebhookInstallationCreated(t *testing.T) {
+	store := &StoreMock{
+		UpsertPendingIntegrationFunc: func(ctx context.Context, tx *sql.Tx, p *model.PendingIntegration) error {
+			return nil
+		},
+	}
+	h := &GitHubHandler{Store: store}
+
+	payload := github.InstallationEvent{
+		Action: github.Ptr("created"),
+		Installation: &github.Installation{
+			ID: github.Ptr[int64](42),
+			Account: &github.User{
+				Login: github.Ptr("acme"),
+				Type:  github.Ptr("Organization"),
+			},
+		},
+		Sender: &github.User{
+			ID: github.Ptr[int64](777),
+		},
+	}
+	req := makeWebhookRequest(t, "installation", payload)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	assert.Equal(t, rec.Code, http.StatusOK)
+	assert.Equal(t, rec.Body.String(), "pending")
+	calls := store.UpsertPendingIntegrationCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].P, &model.PendingIntegration{
+		Type:       model.PendingIntegrationTypeGitHub,
+		ExternalID: "42",
+		Options: model.PendingIntegrationOptions{
+			GitHub: &model.GitHubPendingIntegration{
+				SenderGitHubUserID: 777,
+				AccountLogin:       "acme",
+				AccountType:        "Organization",
+			},
+		},
+	})
+}
+
+func TestHandleGitHubWebhookInstallationDeleted(t *testing.T) {
+	store := &StoreMock{
+		ClearGitHubInstallationFunc: func(ctx context.Context, tx *sql.Tx, installationID int64) error {
+			return nil
+		},
+		DeletePendingIntegrationFunc: func(ctx context.Context, tx *sql.Tx, typ model.PendingIntegrationType, externalID string) error {
+			return nil
+		},
+	}
+	h := &GitHubHandler{Store: store}
+
+	payload := github.InstallationEvent{
+		Action: github.Ptr("deleted"),
+		Installation: &github.Installation{
+			ID: github.Ptr[int64](42),
+		},
+	}
+	req := makeWebhookRequest(t, "installation", payload)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	assert.Equal(t, rec.Code, http.StatusOK)
+	assert.Equal(t, rec.Body.String(), "cleared")
+	clears := store.ClearGitHubInstallationCalls()
+	assert.Equal(t, len(clears), 1)
+	assert.Equal(t, clears[0].InstallationID, int64(42))
+	pendings := store.DeletePendingIntegrationCalls()
+	assert.Equal(t, len(pendings), 1)
+	assert.Equal(t, pendings[0].Typ, model.PendingIntegrationTypeGitHub)
+	assert.Equal(t, pendings[0].ExternalID, "42")
+}
+
+func TestHandleGitHubWebhookInstallationOtherAction(t *testing.T) {
+	store := &StoreMock{}
+	h := &GitHubHandler{Store: store}
+
+	payload := github.InstallationEvent{
+		Action: github.Ptr("suspend"),
+		Installation: &github.Installation{
+			ID: github.Ptr[int64](42),
+		},
+	}
+	req := makeWebhookRequest(t, "installation", payload)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	assert.Equal(t, rec.Code, http.StatusOK)
+	assert.Equal(t, rec.Body.String(), "ignored")
+	assert.Equal(t, len(store.UpsertPendingIntegrationCalls()), 0)
+	assert.Equal(t, len(store.ClearGitHubInstallationCalls()), 0)
+}
+
 func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {
 	h := &GitHubHandler{
 		Store: &StoreMock{

@@ -126,6 +126,9 @@ const (
 	// XAgentServiceUnlinkGitHubAccountProcedure is the fully-qualified name of the XAgentService's
 	// UnlinkGitHubAccount RPC.
 	XAgentServiceUnlinkGitHubAccountProcedure = "/xagent.v1.XAgentService/UnlinkGitHubAccount"
+	// XAgentServiceLinkGitHubInstallationProcedure is the fully-qualified name of the XAgentService's
+	// LinkGitHubInstallation RPC.
+	XAgentServiceLinkGitHubInstallationProcedure = "/xagent.v1.XAgentService/LinkGitHubInstallation"
 	// XAgentServiceUnlinkAtlassianAccountProcedure is the fully-qualified name of the XAgentService's
 	// UnlinkAtlassianAccount RPC.
 	XAgentServiceUnlinkAtlassianAccountProcedure = "/xagent.v1.XAgentService/UnlinkAtlassianAccount"
@@ -194,6 +197,7 @@ type XAgentServiceClient interface {
 	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
+	LinkGitHubInstallation(context.Context, *v1.LinkGitHubInstallationRequest) (*v1.LinkGitHubInstallationResponse, error)
 	UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
@@ -422,6 +426,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
 			connect.WithClientOptions(opts...),
 		),
+		linkGitHubInstallation: connect.NewClient[v1.LinkGitHubInstallationRequest, v1.LinkGitHubInstallationResponse](
+			httpClient,
+			baseURL+XAgentServiceLinkGitHubInstallationProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("LinkGitHubInstallation")),
+			connect.WithClientOptions(opts...),
+		),
 		unlinkAtlassianAccount: connect.NewClient[v1.UnlinkAtlassianAccountRequest, v1.UnlinkAtlassianAccountResponse](
 			httpClient,
 			baseURL+XAgentServiceUnlinkAtlassianAccountProcedure,
@@ -527,6 +537,7 @@ type xAgentServiceClient struct {
 	listKeys                       *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
 	deleteKey                      *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
 	unlinkGitHubAccount            *connect.Client[v1.UnlinkGitHubAccountRequest, v1.UnlinkGitHubAccountResponse]
+	linkGitHubInstallation         *connect.Client[v1.LinkGitHubInstallationRequest, v1.LinkGitHubInstallationResponse]
 	unlinkAtlassianAccount         *connect.Client[v1.UnlinkAtlassianAccountRequest, v1.UnlinkAtlassianAccountResponse]
 	createOrg                      *connect.Client[v1.CreateOrgRequest, v1.CreateOrgResponse]
 	listOrgs                       *connect.Client[v1.ListOrgsRequest, v1.ListOrgsResponse]
@@ -846,6 +857,15 @@ func (c *xAgentServiceClient) UnlinkGitHubAccount(ctx context.Context, req *v1.U
 	return nil, err
 }
 
+// LinkGitHubInstallation calls xagent.v1.XAgentService.LinkGitHubInstallation.
+func (c *xAgentServiceClient) LinkGitHubInstallation(ctx context.Context, req *v1.LinkGitHubInstallationRequest) (*v1.LinkGitHubInstallationResponse, error) {
+	response, err := c.linkGitHubInstallation.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // UnlinkAtlassianAccount calls xagent.v1.XAgentService.UnlinkAtlassianAccount.
 func (c *xAgentServiceClient) UnlinkAtlassianAccount(ctx context.Context, req *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error) {
 	response, err := c.unlinkAtlassianAccount.CallUnary(ctx, connect.NewRequest(req))
@@ -981,6 +1001,7 @@ type XAgentServiceHandler interface {
 	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
 	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error)
+	LinkGitHubInstallation(context.Context, *v1.LinkGitHubInstallationRequest) (*v1.LinkGitHubInstallationResponse, error)
 	UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error)
 	CreateOrg(context.Context, *v1.CreateOrgRequest) (*v1.CreateOrgResponse, error)
 	ListOrgs(context.Context, *v1.ListOrgsRequest) (*v1.ListOrgsResponse, error)
@@ -1205,6 +1226,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("UnlinkGitHubAccount")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceLinkGitHubInstallationHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceLinkGitHubInstallationProcedure,
+		svc.LinkGitHubInstallation,
+		connect.WithSchema(xAgentServiceMethods.ByName("LinkGitHubInstallation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	xAgentServiceUnlinkAtlassianAccountHandler := connect.NewUnaryHandlerSimple(
 		XAgentServiceUnlinkAtlassianAccountProcedure,
 		svc.UnlinkAtlassianAccount,
@@ -1341,6 +1368,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceDeleteKeyHandler.ServeHTTP(w, r)
 		case XAgentServiceUnlinkGitHubAccountProcedure:
 			xAgentServiceUnlinkGitHubAccountHandler.ServeHTTP(w, r)
+		case XAgentServiceLinkGitHubInstallationProcedure:
+			xAgentServiceLinkGitHubInstallationHandler.ServeHTTP(w, r)
 		case XAgentServiceUnlinkAtlassianAccountProcedure:
 			xAgentServiceUnlinkAtlassianAccountHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateOrgProcedure:
@@ -1506,6 +1535,10 @@ func (UnimplementedXAgentServiceHandler) DeleteKey(context.Context, *v1.DeleteKe
 
 func (UnimplementedXAgentServiceHandler) UnlinkGitHubAccount(context.Context, *v1.UnlinkGitHubAccountRequest) (*v1.UnlinkGitHubAccountResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UnlinkGitHubAccount is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) LinkGitHubInstallation(context.Context, *v1.LinkGitHubInstallationRequest) (*v1.LinkGitHubInstallationResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.LinkGitHubInstallation is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) UnlinkAtlassianAccount(context.Context, *v1.UnlinkAtlassianAccountRequest) (*v1.UnlinkAtlassianAccountResponse, error) {
