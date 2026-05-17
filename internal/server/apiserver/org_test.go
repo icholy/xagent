@@ -158,6 +158,41 @@ func TestDeleteOrg_WithTasks(t *testing.T) {
 	}
 }
 
+func TestGetOrgSettings_GitHubInstallationID(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	installationID := newInstallationID()
+	org := setupGitHubLinkable(t, srv, installationID, 0)
+	ctx := createCtx(t, org)
+	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
+		InstallationId: installationID,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	resp, err := srv.GetOrgSettings(ctx, &xagentv1.GetOrgSettingsRequest{})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, resp.GithubInstallationId, installationID)
+}
+
+func TestGetOrgSettings_NoGitHubInstallation(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
+
+	// Act
+	resp, err := srv.GetOrgSettings(ctx, &xagentv1.GetOrgSettingsRequest{})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, resp.GithubInstallationId, int64(0))
+}
+
 func TestRemoveOrgMember(t *testing.T) {
 	t.Parallel()
 	// Arrange

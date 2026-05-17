@@ -162,8 +162,13 @@ func (s *Server) ListOrgMembers(ctx context.Context, req *xagentv1.ListOrgMember
 
 func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
+	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 	resp := &xagentv1.GetOrgSettingsResponse{
-		McpUrl: s.baseURL + "/mcp",
+		McpUrl:               s.baseURL + "/mcp",
+		GithubInstallationId: org.GitHubInstallationID,
 	}
 	if s.atlassian != nil {
 		secret, err := s.atlassian.GetWebhookSecret(ctx, caller.OrgID)

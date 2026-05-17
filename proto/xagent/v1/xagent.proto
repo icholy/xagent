@@ -505,6 +505,7 @@ message GetOrgSettingsResponse {
   string atlassian_webhook_url = 2;
   string github_app_url = 3;
   string mcp_url = 4;
+  int64 github_installation_id = 5;  // 0 if not linked
 }
 
 message GenerateAtlassianWebhookSecretRequest {}
