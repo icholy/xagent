@@ -125,7 +125,7 @@ func (s *Server) Handler() http.Handler {
 	// MCP endpoint (protected by auth middleware). HelloMiddleware runs
 	// before auth so browser navigations get a helpful HTML page instead
 	// of a 401, which users tend to misread as the server being broken.
-	mux.Handle("/mcp", mcpserver.HelloMiddleware(alice.New(s.auth.RequireAuth()).Then(mcpserver.New(s.api, s.baseURL).Handler())))
+	mux.Handle("/mcp", alice.New(mcpserver.HelloMiddleware, s.auth.RequireAuth()).Then(mcpserver.New(s.api, s.baseURL).Handler()))
 	// React UI (SPA with client-side routing, protected by cookie auth)
 	mux.Handle("/ui/", http.StripPrefix("/ui", s.auth.RequireAuth()(WebUI())))
 	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusFound))
