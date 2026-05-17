@@ -59,6 +59,19 @@ func (p *AgentFilter) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRe
 	return p.client.UploadLogs(ctx, req)
 }
 
+func (p *AgentFilter) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+	claims, err := p.claims(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, ev := range req.Events {
+		if ev.TaskId != claims.TaskID {
+			return nil, errPermissionDenied("can only submit events for own task")
+		}
+	}
+	return p.client.SubmitRunnerEvents(ctx, req)
+}
+
 func (p *AgentFilter) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	claims, err := p.claims(ctx)
 	if err != nil {
