@@ -18,6 +18,17 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 
 VOLUME /var/lib/docker
 
+# https://www.postgresql.org/download/linux/debian/
+# Install postgresql-client-17 from PGDG to match the Postgres 17 server.
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /etc/apt/keyrings/postgresql.asc \
+    && chmod a+r /etc/apt/keyrings/postgresql.asc \
+    && echo "deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get -y --no-install-recommends install postgresql-client-17 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
