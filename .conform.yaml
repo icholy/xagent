@@ -19,4 +19,6 @@ policies:
           - build
           - revert
           - proposal
+        scopes:
+          - .*
         descriptionLength: 72
