@@ -165,6 +165,11 @@ func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSetting
 	resp := &xagentv1.GetOrgSettingsResponse{
 		McpUrl: s.baseURL + "/mcp",
 	}
+	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	resp.GithubInstallationId = org.GitHubInstallationID
 	if s.atlassian != nil {
 		secret, err := s.atlassian.GetWebhookSecret(ctx, caller.OrgID)
 		if err != nil {
