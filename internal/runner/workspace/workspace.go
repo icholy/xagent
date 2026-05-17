@@ -89,6 +89,7 @@ type Agent struct {
 	Type       string                     `yaml:"type"`
 	Cwd        string                     `yaml:"cwd"`
 	Prompt     string                     `yaml:"prompt"`
+	Verbose    bool                       `yaml:"verbose"`
 	McpServers map[string]agent.McpServer `yaml:"mcp_servers"`
 	Claude     *ClaudeConfig              `yaml:"claude,omitempty"`
 	Codex      *CodexConfig               `yaml:"codex,omitempty"`
@@ -293,6 +294,7 @@ func (w *Workspace) AgentConfig() agent.Config {
 		Type:       w.Agent.Type,
 		Cwd:        w.Agent.Cwd,
 		Prompt:     w.Agent.Prompt,
+		Verbose:    w.Agent.Verbose,
 		McpServers: make(map[string]agent.McpServer),
 		Commands:   w.Commands,
 	}

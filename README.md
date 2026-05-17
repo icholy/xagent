@@ -72,6 +72,16 @@ View container logs:
 xagent logs -f <taskid>
 ```
 
+Set `verbose: true` on a workspace's agent to bypass the CLI output parser and
+log every raw line. Useful when the parser is hiding details (errors,
+intermediate output, tool-use payloads) you want to inspect via `xagent logs`.
+
+```yaml
+agent:
+  type: claude
+  verbose: true
+```
+
 Get a shell to a task container:
 
 ```bash
