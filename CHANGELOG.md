@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.14.0](https://github.com/icholy/xagent/compare/v0.13.2...v0.14.0) (2026-05-17)
+
+
+### Features
+
+* show GitHub App install state in org settings ([#593](https://github.com/icholy/xagent/issues/593)) ([1489532](https://github.com/icholy/xagent/commit/148953258282b1ea28f54841be1d0f7517b73321))
+
+
+### Bug Fixes
+
+* check out tag in deploy job so flyctl sees fly.toml ([28abffb](https://github.com/icholy/xagent/commit/28abffbadfb29230cc3ddbb4861589099057b8a0))
+
+
+### Miscellaneous
+
+* **deps:** update dependency @bufbuild/protobuf to v2.12.0 ([#591](https://github.com/icholy/xagent/issues/591)) ([4209bad](https://github.com/icholy/xagent/commit/4209bad2cb810337cfb4e15765466c46e7ddd401))
+* extract driver logic into agent package ([#590](https://github.com/icholy/xagent/issues/590)) ([68d6b37](https://github.com/icholy/xagent/commit/68d6b37f1299b559d7541a3a77e25f645dcb3e27))
+* keep failed deploys visible as failures in deployment history ([2f12982](https://github.com/icholy/xagent/commit/2f12982e0251a95ec867b6532909eaba48ebf2f3))
+* simplify github setup confirmation screen ([62e58ed](https://github.com/icholy/xagent/commit/62e58edbbf96088485b99a1246c0e55e2f8ea170))
+
 ## [0.13.2](https://github.com/icholy/xagent/compare/v0.13.1...v0.13.2) (2026-05-17)
 
 
