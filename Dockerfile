@@ -1,5 +1,5 @@
 # Build webui
-FROM --platform=$BUILDPLATFORM node:23-alpine AS webui
+FROM --platform=$BUILDPLATFORM node:25-alpine AS webui
 WORKDIR /app/webui
 RUN npm install -g pnpm@10.28.2
 COPY webui/package.json webui/pnpm-lock.yaml ./
@@ -8,7 +8,7 @@ COPY webui/ ./
 RUN pnpm exec vite build
 
 # Build Go binaries
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 ARG TARGETARCH
 WORKDIR /app
 COPY go.mod go.sum ./
