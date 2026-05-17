@@ -2,18 +2,35 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [ master ]
 
 permissions:
   contents: write
+  pull-requests: write
   packages: write
 
 jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release-please.outputs.release_created }}
+      tag_name: ${{ steps.release-please.outputs.tag_name }}
+    steps:
+      - id: release-please
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: master
+
   release:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -53,14 +70,19 @@ jobs:
       - name: Attach binaries to Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
             xagent-linux-amd64
             xagent-linux-arm64
 
   docker:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -81,9 +103,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}-server
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
 
       - name: Runner meta
         id: runner-meta
@@ -91,9 +113,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}-runner
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
 
       - name: Build and push server
         uses: docker/build-push-action@v6
@@ -120,9 +142,13 @@ jobs:
           cache-to: type=gha,mode=max
 
   workspace-debian:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -143,9 +169,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}-workspace-debian
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -160,10 +186,13 @@ jobs:
           cache-to: type=gha,mode=max,scope=workspace-debian
 
   workspace-mise:
+    needs: [release-please, workspace-debian]
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
-    needs: workspace-debian
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -184,9 +213,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}-workspace-mise
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -200,16 +229,3 @@ jobs:
           build-contexts: xagent-workspace-debian=docker-image://ghcr.io/${{ github.repository }}-workspace-debian:${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=workspace-mise
           cache-to: type=gha,mode=max,scope=workspace-mise
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: docker
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Deploy to Fly.io
-        run: flyctl deploy --image ghcr.io/${{ github.repository }}-server:${GITHUB_REF_NAME#v}
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
