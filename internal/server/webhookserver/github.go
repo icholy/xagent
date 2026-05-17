@@ -7,10 +7,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/eventrouter"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/githubx"
 )
 
@@ -32,6 +34,10 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("failed to parse GitHub webhook", "error", err)
 		http.Error(w, "invalid webhook", http.StatusBadRequest)
+		return
+	}
+	if event, ok := webhookEvent.(*github.InstallationEvent); ok {
+		h.handleInstallationEvent(w, r, event)
 		return
 	}
 	extracted := extractGitHubWebhookEvent(webhookEvent)
@@ -80,6 +86,52 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("GitHub webhook processed", "url", extracted.url, "tasks_routed", totalRouted)
 	fmt.Fprintf(w, "processed")
+}
+
+func (h *GitHubHandler) handleInstallationEvent(w http.ResponseWriter, r *http.Request, event *github.InstallationEvent) {
+	installation := event.GetInstallation()
+	installationID := installation.GetID()
+	action := event.GetAction()
+	switch action {
+	case "created":
+		pending := &model.PendingIntegration{
+			Type:       model.PendingIntegrationTypeGitHub,
+			ExternalID: strconv.FormatInt(installationID, 10),
+			Options: model.PendingIntegrationOptions{
+				GitHub: &model.GitHubPendingIntegration{
+					SenderGitHubUserID: event.GetSender().GetID(),
+					AccountLogin:       installation.GetAccount().GetLogin(),
+					AccountType:        installation.GetAccount().GetType(),
+				},
+			},
+		}
+		if err := h.Store.UpsertPendingIntegration(r.Context(), nil, pending); err != nil {
+			slog.Error("failed to upsert pending github installation", "error", err, "installation_id", installationID)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		slog.Info("github installation pending",
+			"installation_id", installationID,
+			"sender_id", event.GetSender().GetID(),
+			"account", installation.GetAccount().GetLogin())
+		fmt.Fprintf(w, "pending")
+	case "deleted":
+		if err := h.Store.DeletePendingIntegration(r.Context(), nil, model.PendingIntegrationTypeGitHub, strconv.FormatInt(installationID, 10)); err != nil {
+			slog.Error("failed to delete pending github installation", "error", err, "installation_id", installationID)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if err := h.Store.ClearGitHubInstallation(r.Context(), nil, installationID); err != nil {
+			slog.Error("failed to clear github installation", "error", err, "installation_id", installationID)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		slog.Info("github installation cleared", "installation_id", installationID)
+		fmt.Fprintf(w, "cleared")
+	default:
+		slog.Info("github installation event", "action", action, "installation_id", installationID)
+		fmt.Fprintf(w, "ignored")
+	}
 }
 
 type githubWebhookEvent struct {

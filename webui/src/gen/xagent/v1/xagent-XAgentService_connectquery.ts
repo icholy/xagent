@@ -175,6 +175,11 @@ export const deleteKey = XAgentService.method.deleteKey;
 export const unlinkGitHubAccount = XAgentService.method.unlinkGitHubAccount;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.LinkGitHubInstallation
+ */
+export const linkGitHubInstallation = XAgentService.method.linkGitHubInstallation;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.UnlinkAtlassianAccount
  */
 export const unlinkAtlassianAccount = XAgentService.method.unlinkAtlassianAccount;

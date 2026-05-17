@@ -82,6 +82,9 @@ var _ Client = &ClientMock{}
 //			GetTaskDetailsFunc: func(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 //				panic("mock out the GetTaskDetails method")
 //			},
+//			LinkGitHubInstallationFunc: func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
+//				panic("mock out the LinkGitHubInstallation method")
+//			},
 //			ListChildTasksFunc: func(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
 //				panic("mock out the ListChildTasks method")
 //			},
@@ -223,6 +226,9 @@ type ClientMock struct {
 
 	// GetTaskDetailsFunc mocks the GetTaskDetails method.
 	GetTaskDetailsFunc func(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error)
+
+	// LinkGitHubInstallationFunc mocks the LinkGitHubInstallation method.
+	LinkGitHubInstallationFunc func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error)
 
 	// ListChildTasksFunc mocks the ListChildTasks method.
 	ListChildTasksFunc func(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error)
@@ -445,6 +451,13 @@ type ClientMock struct {
 			// GetTaskDetailsRequest is the getTaskDetailsRequest argument value.
 			GetTaskDetailsRequest *xagentv1.GetTaskDetailsRequest
 		}
+		// LinkGitHubInstallation holds details about calls to the LinkGitHubInstallation method.
+		LinkGitHubInstallation []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// LinkGitHubInstallationRequest is the linkGitHubInstallationRequest argument value.
+			LinkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest
+		}
 		// ListChildTasks holds details about calls to the ListChildTasks method.
 		ListChildTasks []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -635,6 +648,7 @@ type ClientMock struct {
 	lockGetRoutingRules                sync.RWMutex
 	lockGetTask                        sync.RWMutex
 	lockGetTaskDetails                 sync.RWMutex
+	lockLinkGitHubInstallation         sync.RWMutex
 	lockListChildTasks                 sync.RWMutex
 	lockListEventTasks                 sync.RWMutex
 	lockListEvents                     sync.RWMutex
@@ -1414,6 +1428,42 @@ func (mock *ClientMock) GetTaskDetailsCalls() []struct {
 	mock.lockGetTaskDetails.RLock()
 	calls = mock.calls.GetTaskDetails
 	mock.lockGetTaskDetails.RUnlock()
+	return calls
+}
+
+// LinkGitHubInstallation calls LinkGitHubInstallationFunc.
+func (mock *ClientMock) LinkGitHubInstallation(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
+	if mock.LinkGitHubInstallationFunc == nil {
+		panic("ClientMock.LinkGitHubInstallationFunc: method is nil but Client.LinkGitHubInstallation was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam               context.Context
+		LinkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest
+	}{
+		ContextMoqParam:               contextMoqParam,
+		LinkGitHubInstallationRequest: linkGitHubInstallationRequest,
+	}
+	mock.lockLinkGitHubInstallation.Lock()
+	mock.calls.LinkGitHubInstallation = append(mock.calls.LinkGitHubInstallation, callInfo)
+	mock.lockLinkGitHubInstallation.Unlock()
+	return mock.LinkGitHubInstallationFunc(contextMoqParam, linkGitHubInstallationRequest)
+}
+
+// LinkGitHubInstallationCalls gets all the calls that were made to LinkGitHubInstallation.
+// Check the length with:
+//
+//	len(mockedClient.LinkGitHubInstallationCalls())
+func (mock *ClientMock) LinkGitHubInstallationCalls() []struct {
+	ContextMoqParam               context.Context
+	LinkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest
+} {
+	var calls []struct {
+		ContextMoqParam               context.Context
+		LinkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest
+	}
+	mock.lockLinkGitHubInstallation.RLock()
+	calls = mock.calls.LinkGitHubInstallation
+	mock.lockLinkGitHubInstallation.RUnlock()
 	return calls
 }
 

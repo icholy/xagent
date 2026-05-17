@@ -4074,6 +4074,86 @@ func (*UnlinkGitHubAccountResponse) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{79}
 }
 
+type LinkGitHubInstallationRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	InstallationId int64                  `protobuf:"varint,1,opt,name=installation_id,json=installationId,proto3" json:"installation_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *LinkGitHubInstallationRequest) Reset() {
+	*x = LinkGitHubInstallationRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkGitHubInstallationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkGitHubInstallationRequest) ProtoMessage() {}
+
+func (x *LinkGitHubInstallationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkGitHubInstallationRequest.ProtoReflect.Descriptor instead.
+func (*LinkGitHubInstallationRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{80}
+}
+
+func (x *LinkGitHubInstallationRequest) GetInstallationId() int64 {
+	if x != nil {
+		return x.InstallationId
+	}
+	return 0
+}
+
+type LinkGitHubInstallationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkGitHubInstallationResponse) Reset() {
+	*x = LinkGitHubInstallationResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkGitHubInstallationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkGitHubInstallationResponse) ProtoMessage() {}
+
+func (x *LinkGitHubInstallationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkGitHubInstallationResponse.ProtoReflect.Descriptor instead.
+func (*LinkGitHubInstallationResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{81}
+}
+
 type AtlassianAccount struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	AtlassianAccountId string                 `protobuf:"bytes,1,opt,name=atlassian_account_id,json=atlassianAccountId,proto3" json:"atlassian_account_id,omitempty"`
@@ -4085,7 +4165,7 @@ type AtlassianAccount struct {
 
 func (x *AtlassianAccount) Reset() {
 	*x = AtlassianAccount{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[80]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4097,7 +4177,7 @@ func (x *AtlassianAccount) String() string {
 func (*AtlassianAccount) ProtoMessage() {}
 
 func (x *AtlassianAccount) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[80]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4110,7 +4190,7 @@ func (x *AtlassianAccount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AtlassianAccount.ProtoReflect.Descriptor instead.
 func (*AtlassianAccount) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{80}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *AtlassianAccount) GetAtlassianAccountId() string {
@@ -4142,7 +4222,7 @@ type UnlinkAtlassianAccountRequest struct {
 
 func (x *UnlinkAtlassianAccountRequest) Reset() {
 	*x = UnlinkAtlassianAccountRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[81]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4154,7 +4234,7 @@ func (x *UnlinkAtlassianAccountRequest) String() string {
 func (*UnlinkAtlassianAccountRequest) ProtoMessage() {}
 
 func (x *UnlinkAtlassianAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[81]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4167,7 +4247,7 @@ func (x *UnlinkAtlassianAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkAtlassianAccountRequest.ProtoReflect.Descriptor instead.
 func (*UnlinkAtlassianAccountRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{81}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{83}
 }
 
 type UnlinkAtlassianAccountResponse struct {
@@ -4178,7 +4258,7 @@ type UnlinkAtlassianAccountResponse struct {
 
 func (x *UnlinkAtlassianAccountResponse) Reset() {
 	*x = UnlinkAtlassianAccountResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[82]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4190,7 +4270,7 @@ func (x *UnlinkAtlassianAccountResponse) String() string {
 func (*UnlinkAtlassianAccountResponse) ProtoMessage() {}
 
 func (x *UnlinkAtlassianAccountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[82]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4203,7 +4283,7 @@ func (x *UnlinkAtlassianAccountResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkAtlassianAccountResponse.ProtoReflect.Descriptor instead.
 func (*UnlinkAtlassianAccountResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{82}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{84}
 }
 
 type Org struct {
@@ -4219,7 +4299,7 @@ type Org struct {
 
 func (x *Org) Reset() {
 	*x = Org{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[83]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4231,7 +4311,7 @@ func (x *Org) String() string {
 func (*Org) ProtoMessage() {}
 
 func (x *Org) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[83]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4244,7 +4324,7 @@ func (x *Org) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Org.ProtoReflect.Descriptor instead.
 func (*Org) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{83}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *Org) GetId() int64 {
@@ -4296,7 +4376,7 @@ type OrgMember struct {
 
 func (x *OrgMember) Reset() {
 	*x = OrgMember{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[84]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4308,7 +4388,7 @@ func (x *OrgMember) String() string {
 func (*OrgMember) ProtoMessage() {}
 
 func (x *OrgMember) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[84]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4321,7 +4401,7 @@ func (x *OrgMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrgMember.ProtoReflect.Descriptor instead.
 func (*OrgMember) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{84}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *OrgMember) GetOrgId() int64 {
@@ -4375,7 +4455,7 @@ type CreateOrgRequest struct {
 
 func (x *CreateOrgRequest) Reset() {
 	*x = CreateOrgRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[85]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4387,7 +4467,7 @@ func (x *CreateOrgRequest) String() string {
 func (*CreateOrgRequest) ProtoMessage() {}
 
 func (x *CreateOrgRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[85]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4400,7 +4480,7 @@ func (x *CreateOrgRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrgRequest.ProtoReflect.Descriptor instead.
 func (*CreateOrgRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{85}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *CreateOrgRequest) GetName() string {
@@ -4419,7 +4499,7 @@ type CreateOrgResponse struct {
 
 func (x *CreateOrgResponse) Reset() {
 	*x = CreateOrgResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[86]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4431,7 +4511,7 @@ func (x *CreateOrgResponse) String() string {
 func (*CreateOrgResponse) ProtoMessage() {}
 
 func (x *CreateOrgResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[86]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4444,7 +4524,7 @@ func (x *CreateOrgResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrgResponse.ProtoReflect.Descriptor instead.
 func (*CreateOrgResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{86}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *CreateOrgResponse) GetOrg() *Org {
@@ -4462,7 +4542,7 @@ type ListOrgsRequest struct {
 
 func (x *ListOrgsRequest) Reset() {
 	*x = ListOrgsRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[87]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4474,7 +4554,7 @@ func (x *ListOrgsRequest) String() string {
 func (*ListOrgsRequest) ProtoMessage() {}
 
 func (x *ListOrgsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[87]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4487,7 +4567,7 @@ func (x *ListOrgsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOrgsRequest.ProtoReflect.Descriptor instead.
 func (*ListOrgsRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{87}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{89}
 }
 
 type ListOrgsResponse struct {
@@ -4499,7 +4579,7 @@ type ListOrgsResponse struct {
 
 func (x *ListOrgsResponse) Reset() {
 	*x = ListOrgsResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[88]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4511,7 +4591,7 @@ func (x *ListOrgsResponse) String() string {
 func (*ListOrgsResponse) ProtoMessage() {}
 
 func (x *ListOrgsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[88]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4524,7 +4604,7 @@ func (x *ListOrgsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOrgsResponse.ProtoReflect.Descriptor instead.
 func (*ListOrgsResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{88}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *ListOrgsResponse) GetOrgs() []*Org {
@@ -4543,7 +4623,7 @@ type DeleteOrgRequest struct {
 
 func (x *DeleteOrgRequest) Reset() {
 	*x = DeleteOrgRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[89]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4555,7 +4635,7 @@ func (x *DeleteOrgRequest) String() string {
 func (*DeleteOrgRequest) ProtoMessage() {}
 
 func (x *DeleteOrgRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[89]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4568,7 +4648,7 @@ func (x *DeleteOrgRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteOrgRequest.ProtoReflect.Descriptor instead.
 func (*DeleteOrgRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{89}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *DeleteOrgRequest) GetId() int64 {
@@ -4586,7 +4666,7 @@ type DeleteOrgResponse struct {
 
 func (x *DeleteOrgResponse) Reset() {
 	*x = DeleteOrgResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[90]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4598,7 +4678,7 @@ func (x *DeleteOrgResponse) String() string {
 func (*DeleteOrgResponse) ProtoMessage() {}
 
 func (x *DeleteOrgResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[90]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4611,7 +4691,7 @@ func (x *DeleteOrgResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteOrgResponse.ProtoReflect.Descriptor instead.
 func (*DeleteOrgResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{90}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{92}
 }
 
 type AddOrgMemberRequest struct {
@@ -4623,7 +4703,7 @@ type AddOrgMemberRequest struct {
 
 func (x *AddOrgMemberRequest) Reset() {
 	*x = AddOrgMemberRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[91]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4635,7 +4715,7 @@ func (x *AddOrgMemberRequest) String() string {
 func (*AddOrgMemberRequest) ProtoMessage() {}
 
 func (x *AddOrgMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[91]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4648,7 +4728,7 @@ func (x *AddOrgMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddOrgMemberRequest.ProtoReflect.Descriptor instead.
 func (*AddOrgMemberRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{91}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *AddOrgMemberRequest) GetEmail() string {
@@ -4667,7 +4747,7 @@ type AddOrgMemberResponse struct {
 
 func (x *AddOrgMemberResponse) Reset() {
 	*x = AddOrgMemberResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[92]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4679,7 +4759,7 @@ func (x *AddOrgMemberResponse) String() string {
 func (*AddOrgMemberResponse) ProtoMessage() {}
 
 func (x *AddOrgMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[92]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4692,7 +4772,7 @@ func (x *AddOrgMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddOrgMemberResponse.ProtoReflect.Descriptor instead.
 func (*AddOrgMemberResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{92}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *AddOrgMemberResponse) GetMember() *OrgMember {
@@ -4711,7 +4791,7 @@ type RemoveOrgMemberRequest struct {
 
 func (x *RemoveOrgMemberRequest) Reset() {
 	*x = RemoveOrgMemberRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[93]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4723,7 +4803,7 @@ func (x *RemoveOrgMemberRequest) String() string {
 func (*RemoveOrgMemberRequest) ProtoMessage() {}
 
 func (x *RemoveOrgMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[93]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4736,7 +4816,7 @@ func (x *RemoveOrgMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveOrgMemberRequest.ProtoReflect.Descriptor instead.
 func (*RemoveOrgMemberRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{93}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *RemoveOrgMemberRequest) GetUserId() string {
@@ -4754,7 +4834,7 @@ type RemoveOrgMemberResponse struct {
 
 func (x *RemoveOrgMemberResponse) Reset() {
 	*x = RemoveOrgMemberResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[94]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4766,7 +4846,7 @@ func (x *RemoveOrgMemberResponse) String() string {
 func (*RemoveOrgMemberResponse) ProtoMessage() {}
 
 func (x *RemoveOrgMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[94]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4779,7 +4859,7 @@ func (x *RemoveOrgMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveOrgMemberResponse.ProtoReflect.Descriptor instead.
 func (*RemoveOrgMemberResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{94}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{96}
 }
 
 type ListOrgMembersRequest struct {
@@ -4790,7 +4870,7 @@ type ListOrgMembersRequest struct {
 
 func (x *ListOrgMembersRequest) Reset() {
 	*x = ListOrgMembersRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[95]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4802,7 +4882,7 @@ func (x *ListOrgMembersRequest) String() string {
 func (*ListOrgMembersRequest) ProtoMessage() {}
 
 func (x *ListOrgMembersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[95]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4815,7 +4895,7 @@ func (x *ListOrgMembersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOrgMembersRequest.ProtoReflect.Descriptor instead.
 func (*ListOrgMembersRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{95}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{97}
 }
 
 type ListOrgMembersResponse struct {
@@ -4827,7 +4907,7 @@ type ListOrgMembersResponse struct {
 
 func (x *ListOrgMembersResponse) Reset() {
 	*x = ListOrgMembersResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[96]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4839,7 +4919,7 @@ func (x *ListOrgMembersResponse) String() string {
 func (*ListOrgMembersResponse) ProtoMessage() {}
 
 func (x *ListOrgMembersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[96]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4852,7 +4932,7 @@ func (x *ListOrgMembersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOrgMembersResponse.ProtoReflect.Descriptor instead.
 func (*ListOrgMembersResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{96}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *ListOrgMembersResponse) GetMembers() []*OrgMember {
@@ -4870,7 +4950,7 @@ type GetOrgSettingsRequest struct {
 
 func (x *GetOrgSettingsRequest) Reset() {
 	*x = GetOrgSettingsRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[97]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4882,7 +4962,7 @@ func (x *GetOrgSettingsRequest) String() string {
 func (*GetOrgSettingsRequest) ProtoMessage() {}
 
 func (x *GetOrgSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[97]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4895,7 +4975,7 @@ func (x *GetOrgSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrgSettingsRequest.ProtoReflect.Descriptor instead.
 func (*GetOrgSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{97}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{99}
 }
 
 type GetOrgSettingsResponse struct {
@@ -4910,7 +4990,7 @@ type GetOrgSettingsResponse struct {
 
 func (x *GetOrgSettingsResponse) Reset() {
 	*x = GetOrgSettingsResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[98]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4922,7 +5002,7 @@ func (x *GetOrgSettingsResponse) String() string {
 func (*GetOrgSettingsResponse) ProtoMessage() {}
 
 func (x *GetOrgSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[98]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4935,7 +5015,7 @@ func (x *GetOrgSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrgSettingsResponse.ProtoReflect.Descriptor instead.
 func (*GetOrgSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{98}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *GetOrgSettingsResponse) GetAtlassianWebhookSecret() string {
@@ -4974,7 +5054,7 @@ type GenerateAtlassianWebhookSecretRequest struct {
 
 func (x *GenerateAtlassianWebhookSecretRequest) Reset() {
 	*x = GenerateAtlassianWebhookSecretRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[99]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4986,7 +5066,7 @@ func (x *GenerateAtlassianWebhookSecretRequest) String() string {
 func (*GenerateAtlassianWebhookSecretRequest) ProtoMessage() {}
 
 func (x *GenerateAtlassianWebhookSecretRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[99]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4999,7 +5079,7 @@ func (x *GenerateAtlassianWebhookSecretRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use GenerateAtlassianWebhookSecretRequest.ProtoReflect.Descriptor instead.
 func (*GenerateAtlassianWebhookSecretRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{99}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{101}
 }
 
 type GenerateAtlassianWebhookSecretResponse struct {
@@ -5012,7 +5092,7 @@ type GenerateAtlassianWebhookSecretResponse struct {
 
 func (x *GenerateAtlassianWebhookSecretResponse) Reset() {
 	*x = GenerateAtlassianWebhookSecretResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[100]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5024,7 +5104,7 @@ func (x *GenerateAtlassianWebhookSecretResponse) String() string {
 func (*GenerateAtlassianWebhookSecretResponse) ProtoMessage() {}
 
 func (x *GenerateAtlassianWebhookSecretResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[100]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5037,7 +5117,7 @@ func (x *GenerateAtlassianWebhookSecretResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use GenerateAtlassianWebhookSecretResponse.ProtoReflect.Descriptor instead.
 func (*GenerateAtlassianWebhookSecretResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{100}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *GenerateAtlassianWebhookSecretResponse) GetSecret() string {
@@ -5066,7 +5146,7 @@ type RoutingRule struct {
 
 func (x *RoutingRule) Reset() {
 	*x = RoutingRule{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[101]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5078,7 +5158,7 @@ func (x *RoutingRule) String() string {
 func (*RoutingRule) ProtoMessage() {}
 
 func (x *RoutingRule) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[101]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5091,7 +5171,7 @@ func (x *RoutingRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoutingRule.ProtoReflect.Descriptor instead.
 func (*RoutingRule) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{101}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *RoutingRule) GetSource() string {
@@ -5130,7 +5210,7 @@ type GetRoutingRulesRequest struct {
 
 func (x *GetRoutingRulesRequest) Reset() {
 	*x = GetRoutingRulesRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[102]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5142,7 +5222,7 @@ func (x *GetRoutingRulesRequest) String() string {
 func (*GetRoutingRulesRequest) ProtoMessage() {}
 
 func (x *GetRoutingRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[102]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5155,7 +5235,7 @@ func (x *GetRoutingRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoutingRulesRequest.ProtoReflect.Descriptor instead.
 func (*GetRoutingRulesRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{102}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{104}
 }
 
 type GetRoutingRulesResponse struct {
@@ -5167,7 +5247,7 @@ type GetRoutingRulesResponse struct {
 
 func (x *GetRoutingRulesResponse) Reset() {
 	*x = GetRoutingRulesResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[103]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5179,7 +5259,7 @@ func (x *GetRoutingRulesResponse) String() string {
 func (*GetRoutingRulesResponse) ProtoMessage() {}
 
 func (x *GetRoutingRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[103]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5192,7 +5272,7 @@ func (x *GetRoutingRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoutingRulesResponse.ProtoReflect.Descriptor instead.
 func (*GetRoutingRulesResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{103}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *GetRoutingRulesResponse) GetRules() []*RoutingRule {
@@ -5211,7 +5291,7 @@ type SetRoutingRulesRequest struct {
 
 func (x *SetRoutingRulesRequest) Reset() {
 	*x = SetRoutingRulesRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[104]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5223,7 +5303,7 @@ func (x *SetRoutingRulesRequest) String() string {
 func (*SetRoutingRulesRequest) ProtoMessage() {}
 
 func (x *SetRoutingRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[104]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5236,7 +5316,7 @@ func (x *SetRoutingRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRoutingRulesRequest.ProtoReflect.Descriptor instead.
 func (*SetRoutingRulesRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{104}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *SetRoutingRulesRequest) GetRules() []*RoutingRule {
@@ -5255,7 +5335,7 @@ type SetRoutingRulesResponse struct {
 
 func (x *SetRoutingRulesResponse) Reset() {
 	*x = SetRoutingRulesResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[105]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5267,7 +5347,7 @@ func (x *SetRoutingRulesResponse) String() string {
 func (*SetRoutingRulesResponse) ProtoMessage() {}
 
 func (x *SetRoutingRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[105]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5280,7 +5360,7 @@ func (x *SetRoutingRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRoutingRulesResponse.ProtoReflect.Descriptor instead.
 func (*SetRoutingRulesResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{105}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *SetRoutingRulesResponse) GetRules() []*RoutingRule {
@@ -5524,7 +5604,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x1c\n" +
 	"\x1aUnlinkGitHubAccountRequest\"\x1d\n" +
-	"\x1bUnlinkGitHubAccountResponse\"\xae\x01\n" +
+	"\x1bUnlinkGitHubAccountResponse\"H\n" +
+	"\x1dLinkGitHubInstallationRequest\x12'\n" +
+	"\x0finstallation_id\x18\x01 \x01(\x03R\x0einstallationId\" \n" +
+	"\x1eLinkGitHubInstallationResponse\"\xae\x01\n" +
 	"\x10AtlassianAccount\x120\n" +
 	"\x14atlassian_account_id\x18\x01 \x01(\tR\x12atlassianAccountId\x12-\n" +
 	"\x12atlassian_username\x18\x03 \x01(\tR\x11atlassianUsername\x129\n" +
@@ -5608,7 +5691,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04NONE\x10\x00\x12\v\n" +
 	"\aRESTART\x10\x01\x12\b\n" +
 	"\x04STOP\x10\x02\x12\t\n" +
-	"\x05START\x10\x032\x86\x1d\n" +
+	"\x05START\x10\x032\xf5\x1d\n" +
 	"\rXAgentService\x127\n" +
 	"\x04Ping\x12\x16.xagent.v1.PingRequest\x1a\x17.xagent.v1.PingResponse\x12I\n" +
 	"\n" +
@@ -5651,6 +5734,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\bListKeys\x12\x1a.xagent.v1.ListKeysRequest\x1a\x1b.xagent.v1.ListKeysResponse\x12F\n" +
 	"\tDeleteKey\x12\x1b.xagent.v1.DeleteKeyRequest\x1a\x1c.xagent.v1.DeleteKeyResponse\x12d\n" +
 	"\x13UnlinkGitHubAccount\x12%.xagent.v1.UnlinkGitHubAccountRequest\x1a&.xagent.v1.UnlinkGitHubAccountResponse\x12m\n" +
+	"\x16LinkGitHubInstallation\x12(.xagent.v1.LinkGitHubInstallationRequest\x1a).xagent.v1.LinkGitHubInstallationResponse\x12m\n" +
 	"\x16UnlinkAtlassianAccount\x12(.xagent.v1.UnlinkAtlassianAccountRequest\x1a).xagent.v1.UnlinkAtlassianAccountResponse\x12F\n" +
 	"\tCreateOrg\x12\x1b.xagent.v1.CreateOrgRequest\x1a\x1c.xagent.v1.CreateOrgResponse\x12C\n" +
 	"\bListOrgs\x12\x1a.xagent.v1.ListOrgsRequest\x1a\x1b.xagent.v1.ListOrgsResponse\x12F\n" +
@@ -5676,7 +5760,7 @@ func file_xagent_v1_xagent_proto_rawDescGZIP() []byte {
 }
 
 var file_xagent_v1_xagent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 107)
+var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 109)
 var file_xagent_v1_xagent_proto_goTypes = []any{
 	(TaskStatus)(0),                                // 0: xagent.v1.TaskStatus
 	(TaskCommand)(0),                               // 1: xagent.v1.TaskCommand
@@ -5760,47 +5844,49 @@ var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*GitHubAccount)(nil),                          // 79: xagent.v1.GitHubAccount
 	(*UnlinkGitHubAccountRequest)(nil),             // 80: xagent.v1.UnlinkGitHubAccountRequest
 	(*UnlinkGitHubAccountResponse)(nil),            // 81: xagent.v1.UnlinkGitHubAccountResponse
-	(*AtlassianAccount)(nil),                       // 82: xagent.v1.AtlassianAccount
-	(*UnlinkAtlassianAccountRequest)(nil),          // 83: xagent.v1.UnlinkAtlassianAccountRequest
-	(*UnlinkAtlassianAccountResponse)(nil),         // 84: xagent.v1.UnlinkAtlassianAccountResponse
-	(*Org)(nil),                                    // 85: xagent.v1.Org
-	(*OrgMember)(nil),                              // 86: xagent.v1.OrgMember
-	(*CreateOrgRequest)(nil),                       // 87: xagent.v1.CreateOrgRequest
-	(*CreateOrgResponse)(nil),                      // 88: xagent.v1.CreateOrgResponse
-	(*ListOrgsRequest)(nil),                        // 89: xagent.v1.ListOrgsRequest
-	(*ListOrgsResponse)(nil),                       // 90: xagent.v1.ListOrgsResponse
-	(*DeleteOrgRequest)(nil),                       // 91: xagent.v1.DeleteOrgRequest
-	(*DeleteOrgResponse)(nil),                      // 92: xagent.v1.DeleteOrgResponse
-	(*AddOrgMemberRequest)(nil),                    // 93: xagent.v1.AddOrgMemberRequest
-	(*AddOrgMemberResponse)(nil),                   // 94: xagent.v1.AddOrgMemberResponse
-	(*RemoveOrgMemberRequest)(nil),                 // 95: xagent.v1.RemoveOrgMemberRequest
-	(*RemoveOrgMemberResponse)(nil),                // 96: xagent.v1.RemoveOrgMemberResponse
-	(*ListOrgMembersRequest)(nil),                  // 97: xagent.v1.ListOrgMembersRequest
-	(*ListOrgMembersResponse)(nil),                 // 98: xagent.v1.ListOrgMembersResponse
-	(*GetOrgSettingsRequest)(nil),                  // 99: xagent.v1.GetOrgSettingsRequest
-	(*GetOrgSettingsResponse)(nil),                 // 100: xagent.v1.GetOrgSettingsResponse
-	(*GenerateAtlassianWebhookSecretRequest)(nil),  // 101: xagent.v1.GenerateAtlassianWebhookSecretRequest
-	(*GenerateAtlassianWebhookSecretResponse)(nil), // 102: xagent.v1.GenerateAtlassianWebhookSecretResponse
-	(*RoutingRule)(nil),                            // 103: xagent.v1.RoutingRule
-	(*GetRoutingRulesRequest)(nil),                 // 104: xagent.v1.GetRoutingRulesRequest
-	(*GetRoutingRulesResponse)(nil),                // 105: xagent.v1.GetRoutingRulesResponse
-	(*SetRoutingRulesRequest)(nil),                 // 106: xagent.v1.SetRoutingRulesRequest
-	(*SetRoutingRulesResponse)(nil),                // 107: xagent.v1.SetRoutingRulesResponse
-	nil,                                            // 108: xagent.v1.McpServer.EnvEntry
-	(*timestamppb.Timestamp)(nil),                  // 109: google.protobuf.Timestamp
+	(*LinkGitHubInstallationRequest)(nil),          // 82: xagent.v1.LinkGitHubInstallationRequest
+	(*LinkGitHubInstallationResponse)(nil),         // 83: xagent.v1.LinkGitHubInstallationResponse
+	(*AtlassianAccount)(nil),                       // 84: xagent.v1.AtlassianAccount
+	(*UnlinkAtlassianAccountRequest)(nil),          // 85: xagent.v1.UnlinkAtlassianAccountRequest
+	(*UnlinkAtlassianAccountResponse)(nil),         // 86: xagent.v1.UnlinkAtlassianAccountResponse
+	(*Org)(nil),                                    // 87: xagent.v1.Org
+	(*OrgMember)(nil),                              // 88: xagent.v1.OrgMember
+	(*CreateOrgRequest)(nil),                       // 89: xagent.v1.CreateOrgRequest
+	(*CreateOrgResponse)(nil),                      // 90: xagent.v1.CreateOrgResponse
+	(*ListOrgsRequest)(nil),                        // 91: xagent.v1.ListOrgsRequest
+	(*ListOrgsResponse)(nil),                       // 92: xagent.v1.ListOrgsResponse
+	(*DeleteOrgRequest)(nil),                       // 93: xagent.v1.DeleteOrgRequest
+	(*DeleteOrgResponse)(nil),                      // 94: xagent.v1.DeleteOrgResponse
+	(*AddOrgMemberRequest)(nil),                    // 95: xagent.v1.AddOrgMemberRequest
+	(*AddOrgMemberResponse)(nil),                   // 96: xagent.v1.AddOrgMemberResponse
+	(*RemoveOrgMemberRequest)(nil),                 // 97: xagent.v1.RemoveOrgMemberRequest
+	(*RemoveOrgMemberResponse)(nil),                // 98: xagent.v1.RemoveOrgMemberResponse
+	(*ListOrgMembersRequest)(nil),                  // 99: xagent.v1.ListOrgMembersRequest
+	(*ListOrgMembersResponse)(nil),                 // 100: xagent.v1.ListOrgMembersResponse
+	(*GetOrgSettingsRequest)(nil),                  // 101: xagent.v1.GetOrgSettingsRequest
+	(*GetOrgSettingsResponse)(nil),                 // 102: xagent.v1.GetOrgSettingsResponse
+	(*GenerateAtlassianWebhookSecretRequest)(nil),  // 103: xagent.v1.GenerateAtlassianWebhookSecretRequest
+	(*GenerateAtlassianWebhookSecretResponse)(nil), // 104: xagent.v1.GenerateAtlassianWebhookSecretResponse
+	(*RoutingRule)(nil),                            // 105: xagent.v1.RoutingRule
+	(*GetRoutingRulesRequest)(nil),                 // 106: xagent.v1.GetRoutingRulesRequest
+	(*GetRoutingRulesResponse)(nil),                // 107: xagent.v1.GetRoutingRulesResponse
+	(*SetRoutingRulesRequest)(nil),                 // 108: xagent.v1.SetRoutingRulesRequest
+	(*SetRoutingRulesResponse)(nil),                // 109: xagent.v1.SetRoutingRulesResponse
+	nil,                                            // 110: xagent.v1.McpServer.EnvEntry
+	(*timestamppb.Timestamp)(nil),                  // 111: google.protobuf.Timestamp
 }
 var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	4,   // 0: xagent.v1.Task.instructions:type_name -> xagent.v1.Instruction
 	0,   // 1: xagent.v1.Task.status:type_name -> xagent.v1.TaskStatus
-	109, // 2: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
-	109, // 3: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	111, // 2: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	111, // 3: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 4: xagent.v1.Task.command:type_name -> xagent.v1.TaskCommand
 	5,   // 5: xagent.v1.Task.actions:type_name -> xagent.v1.TaskActions
-	108, // 6: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
+	110, // 6: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
 	8,   // 7: xagent.v1.GetProfileResponse.profile:type_name -> xagent.v1.Profile
-	85,  // 8: xagent.v1.GetProfileResponse.orgs:type_name -> xagent.v1.Org
+	87,  // 8: xagent.v1.GetProfileResponse.orgs:type_name -> xagent.v1.Org
 	79,  // 9: xagent.v1.GetProfileResponse.github_account:type_name -> xagent.v1.GitHubAccount
-	82,  // 10: xagent.v1.GetProfileResponse.atlassian_account:type_name -> xagent.v1.AtlassianAccount
+	84,  // 10: xagent.v1.GetProfileResponse.atlassian_account:type_name -> xagent.v1.AtlassianAccount
 	6,   // 11: xagent.v1.ListTasksResponse.tasks:type_name -> xagent.v1.Task
 	6,   // 12: xagent.v1.ListRunnerTasksResponse.tasks:type_name -> xagent.v1.Task
 	6,   // 13: xagent.v1.ListChildTasksResponse.tasks:type_name -> xagent.v1.Task
@@ -5812,39 +5898,39 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	45,  // 19: xagent.v1.GetTaskDetailsResponse.events:type_name -> xagent.v1.Event
 	38,  // 20: xagent.v1.GetTaskDetailsResponse.links:type_name -> xagent.v1.TaskLink
 	4,   // 21: xagent.v1.UpdateTaskRequest.add_instructions:type_name -> xagent.v1.Instruction
-	109, // 22: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
+	111, // 22: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
 	33,  // 23: xagent.v1.UploadLogsRequest.entries:type_name -> xagent.v1.LogEntry
 	33,  // 24: xagent.v1.ListLogsResponse.entries:type_name -> xagent.v1.LogEntry
-	109, // 25: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
+	111, // 25: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
 	38,  // 26: xagent.v1.CreateLinkResponse.link:type_name -> xagent.v1.TaskLink
 	38,  // 27: xagent.v1.ListLinksResponse.links:type_name -> xagent.v1.TaskLink
 	38,  // 28: xagent.v1.FindLinksByURLResponse.links:type_name -> xagent.v1.TaskLink
-	109, // 29: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
+	111, // 29: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
 	45,  // 30: xagent.v1.ListEventsResponse.events:type_name -> xagent.v1.Event
 	45,  // 31: xagent.v1.CreateEventResponse.event:type_name -> xagent.v1.Event
 	45,  // 32: xagent.v1.GetEventResponse.event:type_name -> xagent.v1.Event
 	45,  // 33: xagent.v1.ListEventsByTaskResponse.events:type_name -> xagent.v1.Event
 	62,  // 34: xagent.v1.SubmitRunnerEventsRequest.events:type_name -> xagent.v1.RunnerEvent
-	109, // 35: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
+	111, // 35: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
 	65,  // 36: xagent.v1.RegisterWorkspacesRequest.workspaces:type_name -> xagent.v1.RegisteredWorkspace
 	65,  // 37: xagent.v1.ListWorkspacesResponse.workspaces:type_name -> xagent.v1.RegisteredWorkspace
-	109, // 38: xagent.v1.Key.expires_at:type_name -> google.protobuf.Timestamp
-	109, // 39: xagent.v1.Key.created_at:type_name -> google.protobuf.Timestamp
-	109, // 40: xagent.v1.CreateKeyRequest.expires_at:type_name -> google.protobuf.Timestamp
+	111, // 38: xagent.v1.Key.expires_at:type_name -> google.protobuf.Timestamp
+	111, // 39: xagent.v1.Key.created_at:type_name -> google.protobuf.Timestamp
+	111, // 40: xagent.v1.CreateKeyRequest.expires_at:type_name -> google.protobuf.Timestamp
 	72,  // 41: xagent.v1.CreateKeyResponse.key:type_name -> xagent.v1.Key
 	72,  // 42: xagent.v1.ListKeysResponse.keys:type_name -> xagent.v1.Key
-	109, // 43: xagent.v1.GitHubAccount.created_at:type_name -> google.protobuf.Timestamp
-	109, // 44: xagent.v1.AtlassianAccount.created_at:type_name -> google.protobuf.Timestamp
-	109, // 45: xagent.v1.Org.created_at:type_name -> google.protobuf.Timestamp
-	109, // 46: xagent.v1.Org.updated_at:type_name -> google.protobuf.Timestamp
-	109, // 47: xagent.v1.OrgMember.created_at:type_name -> google.protobuf.Timestamp
-	85,  // 48: xagent.v1.CreateOrgResponse.org:type_name -> xagent.v1.Org
-	85,  // 49: xagent.v1.ListOrgsResponse.orgs:type_name -> xagent.v1.Org
-	86,  // 50: xagent.v1.AddOrgMemberResponse.member:type_name -> xagent.v1.OrgMember
-	86,  // 51: xagent.v1.ListOrgMembersResponse.members:type_name -> xagent.v1.OrgMember
-	103, // 52: xagent.v1.GetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
-	103, // 53: xagent.v1.SetRoutingRulesRequest.rules:type_name -> xagent.v1.RoutingRule
-	103, // 54: xagent.v1.SetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
+	111, // 43: xagent.v1.GitHubAccount.created_at:type_name -> google.protobuf.Timestamp
+	111, // 44: xagent.v1.AtlassianAccount.created_at:type_name -> google.protobuf.Timestamp
+	111, // 45: xagent.v1.Org.created_at:type_name -> google.protobuf.Timestamp
+	111, // 46: xagent.v1.Org.updated_at:type_name -> google.protobuf.Timestamp
+	111, // 47: xagent.v1.OrgMember.created_at:type_name -> google.protobuf.Timestamp
+	87,  // 48: xagent.v1.CreateOrgResponse.org:type_name -> xagent.v1.Org
+	87,  // 49: xagent.v1.ListOrgsResponse.orgs:type_name -> xagent.v1.Org
+	88,  // 50: xagent.v1.AddOrgMemberResponse.member:type_name -> xagent.v1.OrgMember
+	88,  // 51: xagent.v1.ListOrgMembersResponse.members:type_name -> xagent.v1.OrgMember
+	105, // 52: xagent.v1.GetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
+	105, // 53: xagent.v1.SetRoutingRulesRequest.rules:type_name -> xagent.v1.RoutingRule
+	105, // 54: xagent.v1.SetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
 	2,   // 55: xagent.v1.XAgentService.Ping:input_type -> xagent.v1.PingRequest
 	9,   // 56: xagent.v1.XAgentService.GetProfile:input_type -> xagent.v1.GetProfileRequest
 	11,  // 57: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
@@ -5879,64 +5965,66 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	75,  // 86: xagent.v1.XAgentService.ListKeys:input_type -> xagent.v1.ListKeysRequest
 	77,  // 87: xagent.v1.XAgentService.DeleteKey:input_type -> xagent.v1.DeleteKeyRequest
 	80,  // 88: xagent.v1.XAgentService.UnlinkGitHubAccount:input_type -> xagent.v1.UnlinkGitHubAccountRequest
-	83,  // 89: xagent.v1.XAgentService.UnlinkAtlassianAccount:input_type -> xagent.v1.UnlinkAtlassianAccountRequest
-	87,  // 90: xagent.v1.XAgentService.CreateOrg:input_type -> xagent.v1.CreateOrgRequest
-	89,  // 91: xagent.v1.XAgentService.ListOrgs:input_type -> xagent.v1.ListOrgsRequest
-	91,  // 92: xagent.v1.XAgentService.DeleteOrg:input_type -> xagent.v1.DeleteOrgRequest
-	93,  // 93: xagent.v1.XAgentService.AddOrgMember:input_type -> xagent.v1.AddOrgMemberRequest
-	95,  // 94: xagent.v1.XAgentService.RemoveOrgMember:input_type -> xagent.v1.RemoveOrgMemberRequest
-	97,  // 95: xagent.v1.XAgentService.ListOrgMembers:input_type -> xagent.v1.ListOrgMembersRequest
-	99,  // 96: xagent.v1.XAgentService.GetOrgSettings:input_type -> xagent.v1.GetOrgSettingsRequest
-	101, // 97: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:input_type -> xagent.v1.GenerateAtlassianWebhookSecretRequest
-	104, // 98: xagent.v1.XAgentService.GetRoutingRules:input_type -> xagent.v1.GetRoutingRulesRequest
-	106, // 99: xagent.v1.XAgentService.SetRoutingRules:input_type -> xagent.v1.SetRoutingRulesRequest
-	3,   // 100: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
-	10,  // 101: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
-	12,  // 102: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
-	14,  // 103: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
-	16,  // 104: xagent.v1.XAgentService.ListChildTasks:output_type -> xagent.v1.ListChildTasksResponse
-	18,  // 105: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
-	20,  // 106: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
-	22,  // 107: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
-	24,  // 108: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
-	26,  // 109: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
-	28,  // 110: xagent.v1.XAgentService.UnarchiveTask:output_type -> xagent.v1.UnarchiveTaskResponse
-	30,  // 111: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
-	32,  // 112: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
-	35,  // 113: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
-	37,  // 114: xagent.v1.XAgentService.ListLogs:output_type -> xagent.v1.ListLogsResponse
-	40,  // 115: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
-	42,  // 116: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
-	44,  // 117: xagent.v1.XAgentService.FindLinksByURL:output_type -> xagent.v1.FindLinksByURLResponse
-	47,  // 118: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
-	49,  // 119: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
-	51,  // 120: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
-	53,  // 121: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
-	55,  // 122: xagent.v1.XAgentService.AddEventTask:output_type -> xagent.v1.AddEventTaskResponse
-	57,  // 123: xagent.v1.XAgentService.RemoveEventTask:output_type -> xagent.v1.RemoveEventTaskResponse
-	59,  // 124: xagent.v1.XAgentService.ListEventTasks:output_type -> xagent.v1.ListEventTasksResponse
-	61,  // 125: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
-	64,  // 126: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
-	67,  // 127: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
-	69,  // 128: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
-	71,  // 129: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
-	74,  // 130: xagent.v1.XAgentService.CreateKey:output_type -> xagent.v1.CreateKeyResponse
-	76,  // 131: xagent.v1.XAgentService.ListKeys:output_type -> xagent.v1.ListKeysResponse
-	78,  // 132: xagent.v1.XAgentService.DeleteKey:output_type -> xagent.v1.DeleteKeyResponse
-	81,  // 133: xagent.v1.XAgentService.UnlinkGitHubAccount:output_type -> xagent.v1.UnlinkGitHubAccountResponse
-	84,  // 134: xagent.v1.XAgentService.UnlinkAtlassianAccount:output_type -> xagent.v1.UnlinkAtlassianAccountResponse
-	88,  // 135: xagent.v1.XAgentService.CreateOrg:output_type -> xagent.v1.CreateOrgResponse
-	90,  // 136: xagent.v1.XAgentService.ListOrgs:output_type -> xagent.v1.ListOrgsResponse
-	92,  // 137: xagent.v1.XAgentService.DeleteOrg:output_type -> xagent.v1.DeleteOrgResponse
-	94,  // 138: xagent.v1.XAgentService.AddOrgMember:output_type -> xagent.v1.AddOrgMemberResponse
-	96,  // 139: xagent.v1.XAgentService.RemoveOrgMember:output_type -> xagent.v1.RemoveOrgMemberResponse
-	98,  // 140: xagent.v1.XAgentService.ListOrgMembers:output_type -> xagent.v1.ListOrgMembersResponse
-	100, // 141: xagent.v1.XAgentService.GetOrgSettings:output_type -> xagent.v1.GetOrgSettingsResponse
-	102, // 142: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:output_type -> xagent.v1.GenerateAtlassianWebhookSecretResponse
-	105, // 143: xagent.v1.XAgentService.GetRoutingRules:output_type -> xagent.v1.GetRoutingRulesResponse
-	107, // 144: xagent.v1.XAgentService.SetRoutingRules:output_type -> xagent.v1.SetRoutingRulesResponse
-	100, // [100:145] is the sub-list for method output_type
-	55,  // [55:100] is the sub-list for method input_type
+	82,  // 89: xagent.v1.XAgentService.LinkGitHubInstallation:input_type -> xagent.v1.LinkGitHubInstallationRequest
+	85,  // 90: xagent.v1.XAgentService.UnlinkAtlassianAccount:input_type -> xagent.v1.UnlinkAtlassianAccountRequest
+	89,  // 91: xagent.v1.XAgentService.CreateOrg:input_type -> xagent.v1.CreateOrgRequest
+	91,  // 92: xagent.v1.XAgentService.ListOrgs:input_type -> xagent.v1.ListOrgsRequest
+	93,  // 93: xagent.v1.XAgentService.DeleteOrg:input_type -> xagent.v1.DeleteOrgRequest
+	95,  // 94: xagent.v1.XAgentService.AddOrgMember:input_type -> xagent.v1.AddOrgMemberRequest
+	97,  // 95: xagent.v1.XAgentService.RemoveOrgMember:input_type -> xagent.v1.RemoveOrgMemberRequest
+	99,  // 96: xagent.v1.XAgentService.ListOrgMembers:input_type -> xagent.v1.ListOrgMembersRequest
+	101, // 97: xagent.v1.XAgentService.GetOrgSettings:input_type -> xagent.v1.GetOrgSettingsRequest
+	103, // 98: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:input_type -> xagent.v1.GenerateAtlassianWebhookSecretRequest
+	106, // 99: xagent.v1.XAgentService.GetRoutingRules:input_type -> xagent.v1.GetRoutingRulesRequest
+	108, // 100: xagent.v1.XAgentService.SetRoutingRules:input_type -> xagent.v1.SetRoutingRulesRequest
+	3,   // 101: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
+	10,  // 102: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
+	12,  // 103: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
+	14,  // 104: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
+	16,  // 105: xagent.v1.XAgentService.ListChildTasks:output_type -> xagent.v1.ListChildTasksResponse
+	18,  // 106: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
+	20,  // 107: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
+	22,  // 108: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
+	24,  // 109: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
+	26,  // 110: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
+	28,  // 111: xagent.v1.XAgentService.UnarchiveTask:output_type -> xagent.v1.UnarchiveTaskResponse
+	30,  // 112: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
+	32,  // 113: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
+	35,  // 114: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
+	37,  // 115: xagent.v1.XAgentService.ListLogs:output_type -> xagent.v1.ListLogsResponse
+	40,  // 116: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
+	42,  // 117: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
+	44,  // 118: xagent.v1.XAgentService.FindLinksByURL:output_type -> xagent.v1.FindLinksByURLResponse
+	47,  // 119: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
+	49,  // 120: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
+	51,  // 121: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
+	53,  // 122: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
+	55,  // 123: xagent.v1.XAgentService.AddEventTask:output_type -> xagent.v1.AddEventTaskResponse
+	57,  // 124: xagent.v1.XAgentService.RemoveEventTask:output_type -> xagent.v1.RemoveEventTaskResponse
+	59,  // 125: xagent.v1.XAgentService.ListEventTasks:output_type -> xagent.v1.ListEventTasksResponse
+	61,  // 126: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
+	64,  // 127: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
+	67,  // 128: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
+	69,  // 129: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
+	71,  // 130: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
+	74,  // 131: xagent.v1.XAgentService.CreateKey:output_type -> xagent.v1.CreateKeyResponse
+	76,  // 132: xagent.v1.XAgentService.ListKeys:output_type -> xagent.v1.ListKeysResponse
+	78,  // 133: xagent.v1.XAgentService.DeleteKey:output_type -> xagent.v1.DeleteKeyResponse
+	81,  // 134: xagent.v1.XAgentService.UnlinkGitHubAccount:output_type -> xagent.v1.UnlinkGitHubAccountResponse
+	83,  // 135: xagent.v1.XAgentService.LinkGitHubInstallation:output_type -> xagent.v1.LinkGitHubInstallationResponse
+	86,  // 136: xagent.v1.XAgentService.UnlinkAtlassianAccount:output_type -> xagent.v1.UnlinkAtlassianAccountResponse
+	90,  // 137: xagent.v1.XAgentService.CreateOrg:output_type -> xagent.v1.CreateOrgResponse
+	92,  // 138: xagent.v1.XAgentService.ListOrgs:output_type -> xagent.v1.ListOrgsResponse
+	94,  // 139: xagent.v1.XAgentService.DeleteOrg:output_type -> xagent.v1.DeleteOrgResponse
+	96,  // 140: xagent.v1.XAgentService.AddOrgMember:output_type -> xagent.v1.AddOrgMemberResponse
+	98,  // 141: xagent.v1.XAgentService.RemoveOrgMember:output_type -> xagent.v1.RemoveOrgMemberResponse
+	100, // 142: xagent.v1.XAgentService.ListOrgMembers:output_type -> xagent.v1.ListOrgMembersResponse
+	102, // 143: xagent.v1.XAgentService.GetOrgSettings:output_type -> xagent.v1.GetOrgSettingsResponse
+	104, // 144: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:output_type -> xagent.v1.GenerateAtlassianWebhookSecretResponse
+	107, // 145: xagent.v1.XAgentService.GetRoutingRules:output_type -> xagent.v1.GetRoutingRulesResponse
+	109, // 146: xagent.v1.XAgentService.SetRoutingRules:output_type -> xagent.v1.SetRoutingRulesResponse
+	101, // [101:147] is the sub-list for method output_type
+	55,  // [55:101] is the sub-list for method input_type
 	55,  // [55:55] is the sub-list for extension type_name
 	55,  // [55:55] is the sub-list for extension extendee
 	0,   // [0:55] is the sub-list for field type_name
@@ -5953,7 +6041,7 @@ func file_xagent_v1_xagent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_xagent_v1_xagent_proto_rawDesc), len(file_xagent_v1_xagent_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   107,
+			NumMessages:   109,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

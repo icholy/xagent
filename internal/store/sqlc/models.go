@@ -50,6 +50,7 @@ type Org struct {
 	Archived               bool            `json:"archived"`
 	AtlassianWebhookSecret string          `json:"atlassian_webhook_secret"`
 	RoutingRules           json.RawMessage `json:"routing_rules"`
+	GithubInstallationID   sql.NullInt64   `json:"github_installation_id"`
 }
 
 type OrgMember struct {
@@ -57,6 +58,13 @@ type OrgMember struct {
 	UserID    string    `json:"user_id"`
 	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type PendingIntegration struct {
+	Type       string          `json:"type"`
+	ExternalID string          `json:"external_id"`
+	Options    json.RawMessage `json:"options"`
+	CreatedAt  time.Time       `json:"created_at"`
 }
 
 type Task struct {
