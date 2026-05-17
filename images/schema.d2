@@ -93,6 +93,7 @@ orgs: {
   name: TEXT {constraint: unique}
   owner: TEXT
   atlassian_webhook_secret: TEXT
+  routing_rules: JSONB
   created_at: TIMESTAMP
   updated_at: TIMESTAMP
   archived: BOOLEAN
