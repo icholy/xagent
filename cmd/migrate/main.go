@@ -13,10 +13,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "DATABASE_URL is required")
 		os.Exit(1)
 	}
-	db, err := store.Open(dsn, true)
-	if err != nil {
+	if err := store.Migrate(dsn); err != nil {
 		fmt.Fprintf(os.Stderr, "migration failed: %v\n", err)
 		os.Exit(1)
 	}
-	db.Close()
 }

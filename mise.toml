@@ -8,6 +8,7 @@ sops = "3.12.2"
 age = "1.3.1"
 pnpm = "10.28.2"
 flyctl = "0.4.49"
+dbmate = "2.24.0"
 
 [tasks.build]
 description = "Build xagent binaries for all architectures"
@@ -72,7 +73,7 @@ run = "docker compose -f docker-compose.test.yml up -d --wait postgres"
 [tasks.migrate]
 description = "Run database migrations"
 env = { DATABASE_URL = "postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable" }
-run = "go run ./cmd/migrate"
+run = "dbmate up"
 
 [tasks.test]
 description = "Run tests"

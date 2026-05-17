@@ -8,20 +8,11 @@ import (
 	"github.com/XSAM/otelsql"
 	"github.com/icholy/xagent/internal/store/sqlc"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 //go:embed sql/migrations/*.sql
 var migrations embed.FS
-
-func init() {
-	goose.SetBaseFS(migrations)
-	if err := goose.SetDialect("postgres"); err != nil {
-		panic(err)
-	}
-	goose.SetLogger(goose.NopLogger())
-}
 
 // Store provides access to all database operations.
 type Store struct {
@@ -54,6 +45,11 @@ func (s *Store) WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error
 }
 
 func Open(dsn string, migrate bool) (*sql.DB, error) {
+	if migrate {
+		if err := Migrate(dsn); err != nil {
+			return nil, err
+		}
+	}
 	db, err := otelsql.Open("pgx", dsn,
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 		otelsql.WithSpanOptions(otelsql.SpanOptions{
@@ -62,12 +58,6 @@ func Open(dsn string, migrate bool) (*sql.DB, error) {
 	)
 	if err != nil {
 		return nil, err
-	}
-	if migrate {
-		if err := goose.Up(db, "sql/migrations"); err != nil {
-			db.Close()
-			return nil, err
-		}
 	}
 	return db, nil
 }
