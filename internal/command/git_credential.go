@@ -12,8 +12,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const defaultSocketURL = "unix:///var/run/xagent.sock"
-
 // GitCredentialCommand implements a git credential helper that fetches
 // GitHub App installation tokens from the xagent server.
 var GitCredentialCommand = &cli.Command{
@@ -24,7 +22,7 @@ var GitCredentialCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:  "server",
 			Usage: "C2 server URL",
-			Value: defaultSocketURL,
+			Value: "unix:///var/run/xagent.sock",
 		},
 		&cli.StringFlag{
 			Name:  "token",
