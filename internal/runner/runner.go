@@ -436,7 +436,8 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		},
 		Env: []string{
 			fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID),
-			fmt.Sprintf("XAGENT_AGENT_TOKEN=%s", token),
+			fmt.Sprintf("XAGENT_TOKEN=%s", token),
+			"XAGENT_SERVER=unix:///var/run/xagent.sock",
 		},
 		Binds: []string{
 			r.proxy.SocketPath() + ":/var/run/xagent.sock",
