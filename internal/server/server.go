@@ -48,7 +48,6 @@ type Options struct {
 	CORS          bool
 	Publisher     pubsub.Publisher
 	Notify        *notifyserver.Server
-	GitHubApp     *githubserver.App
 }
 
 func New(opts Options) *Server {
@@ -63,7 +62,6 @@ func New(opts Options) *Server {
 		Publisher: opts.Publisher,
 		Atlassian: opts.Atlassian,
 		GitHub:    opts.GitHub,
-		GitHubApp: opts.GitHubApp,
 	})
 	return &Server{
 		log:       log,

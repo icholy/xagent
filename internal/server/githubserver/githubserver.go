@@ -3,10 +3,14 @@
 package githubserver
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
+	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/eventrouter"
@@ -26,12 +30,6 @@ type Config struct {
 	ClientSecret  string
 	WebhookSecret string
 	PrivateKey    []byte
-}
-
-// App holds the GitHub App identity needed for creating installation tokens.
-type App struct {
-	ID         string
-	PrivateKey []byte
 }
 
 // Server handles GitHub OAuth and webhook routes.
@@ -65,6 +63,36 @@ func New(opts Options) *Server {
 		baseURL:   opts.BaseURL,
 		publisher: opts.Publisher,
 	}
+}
+
+// InstallationToken is a short-lived GitHub App installation access token.
+type InstallationToken struct {
+	Token     string
+	ExpiresAt time.Time
+}
+
+// CreateInstallationToken creates a GitHub App installation access token.
+func (s *Server) CreateInstallationToken(ctx context.Context, installationID int64) (*InstallationToken, error) {
+	if len(s.config.PrivateKey) == 0 {
+		return nil, fmt.Errorf("GitHub App private key is not configured")
+	}
+	appID, err := strconv.ParseInt(s.config.AppID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid GitHub App ID: %w", err)
+	}
+	transport, err := ghinstallation.New(http.DefaultTransport, appID, installationID, s.config.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub App transport: %w", err)
+	}
+	token, err := transport.Token(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub installation token: %w", err)
+	}
+	expiresAt, _, err := transport.Expiry()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get token expiry: %w", err)
+	}
+	return &InstallationToken{Token: token, ExpiresAt: expiresAt}, nil
 }
 
 // AppInstallURL returns the GitHub App installation URL, or empty string

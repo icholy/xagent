@@ -138,29 +138,18 @@ func TestLinkGitHubInstallation_SenderMismatch(t *testing.T) {
 func TestCreateGitHubToken_Unauthenticated(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{
-		Store:     teststore.New(t),
-		GitHubApp: &githubserver.App{ID: "12345", PrivateKey: []byte("fake-key")},
+		Store:  teststore.New(t),
+		GitHub: githubserver.New(githubserver.Options{Config: &githubserver.Config{AppID: "12345", PrivateKey: []byte("fake-key")}}),
 	})
 	_, err := srv.CreateGitHubToken(context.Background(), &xagentv1.CreateGitHubTokenRequest{})
 	assert.Equal(t, connect.CodeOf(err), connect.CodeUnauthenticated)
 }
 
-func TestCreateGitHubToken_NoPrivateKey(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
-	ctx := createCtx(t, org)
-
-	_, err := srv.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
-	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
-	assert.ErrorContains(t, err, "private key")
-}
-
 func TestCreateGitHubToken_NoInstallation(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{
-		Store:     teststore.New(t),
-		GitHubApp: &githubserver.App{ID: "12345", PrivateKey: []byte("fake-key")},
+		Store:  teststore.New(t),
+		GitHub: githubserver.New(githubserver.Options{Config: &githubserver.Config{AppID: "12345", PrivateKey: []byte("fake-key")}}),
 	})
 	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)

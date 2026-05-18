@@ -5,11 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 
 	"connectrpc.com/connect"
-	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -75,9 +73,6 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 	if caller == nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
 	}
-	if s.githubApp == nil || len(s.githubApp.PrivateKey) == 0 {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("GitHub App private key is not configured"))
-	}
 	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -85,24 +80,12 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 	if org.GitHubInstallationID == 0 {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no GitHub App installation linked to this organization"))
 	}
-	appID, err := strconv.ParseInt(s.githubApp.ID, 10, 64)
+	tok, err := s.github.CreateInstallationToken(ctx, org.GitHubInstallationID)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid GitHub App ID: %w", err))
-	}
-	transport, err := ghinstallation.New(http.DefaultTransport, appID, org.GitHubInstallationID, s.githubApp.PrivateKey)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create GitHub App transport: %w", err))
-	}
-	token, err := transport.Token(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create GitHub installation token: %w", err))
-	}
-	expiresAt, _, err := transport.Expiry()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get token expiry: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return &xagentv1.CreateGitHubTokenResponse{
-		Token:     token,
-		ExpiresAt: timestamppb.New(expiresAt),
+		Token:     tok.Token,
+		ExpiresAt: timestamppb.New(tok.ExpiresAt),
 	}, nil
 }

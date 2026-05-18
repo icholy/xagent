@@ -220,28 +220,19 @@ var ServerCommand = &cli.Command{
 			},
 		}
 		if cmd.IsSet("github-client-id") {
-			ghConfig := &githubserver.Config{
-				AppID:         cmd.String("github-app-id"),
-				AppSlug:       cmd.String("github-app-slug"),
-				ClientID:      cmd.String("github-client-id"),
-				ClientSecret:  cmd.String("github-client-secret"),
-				WebhookSecret: cmd.String("github-webhook-secret"),
-			}
-			if pk := cmd.String("github-private-key"); pk != "" {
-				ghConfig.PrivateKey = []byte(pk)
-			}
 			opts.GitHub = githubserver.New(githubserver.Options{
 				Store:     st,
 				BaseURL:   baseURL,
 				Publisher: ps,
-				Config:    ghConfig,
+				Config: &githubserver.Config{
+					AppID:         cmd.String("github-app-id"),
+					AppSlug:       cmd.String("github-app-slug"),
+					ClientID:      cmd.String("github-client-id"),
+					ClientSecret:  cmd.String("github-client-secret"),
+					WebhookSecret: cmd.String("github-webhook-secret"),
+					PrivateKey:    []byte(cmd.String("github-private-key")),
+				},
 			})
-			if len(ghConfig.PrivateKey) > 0 {
-				opts.GitHubApp = &githubserver.App{
-					ID:         ghConfig.AppID,
-					PrivateKey: ghConfig.PrivateKey,
-				}
-			}
 		}
 		if cmd.IsSet("atlassian-client-id") {
 			opts.Atlassian = atlassianserver.New(atlassianserver.Options{

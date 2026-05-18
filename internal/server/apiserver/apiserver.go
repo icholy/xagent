@@ -24,7 +24,6 @@ type Server struct {
 	publisher pubsub.Publisher
 	atlassian *atlassianserver.Server
 	github    *githubserver.Server
-	githubApp *githubserver.App
 }
 
 type Options struct {
@@ -34,7 +33,6 @@ type Options struct {
 	Publisher pubsub.Publisher
 	Atlassian *atlassianserver.Server
 	GitHub    *githubserver.Server
-	GitHubApp *githubserver.App
 }
 
 func New(opts Options) *Server {
@@ -49,7 +47,6 @@ func New(opts Options) *Server {
 		publisher: opts.Publisher,
 		atlassian: opts.Atlassian,
 		github:    opts.GitHub,
-		githubApp: opts.GitHubApp,
 	}
 }
 
