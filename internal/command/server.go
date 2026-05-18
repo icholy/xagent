@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -229,15 +228,7 @@ var ServerCommand = &cli.Command{
 				WebhookSecret: cmd.String("github-webhook-secret"),
 			}
 			if pk := cmd.String("github-private-key"); pk != "" {
-				if strings.Contains(pk, "-----BEGIN") {
-					ghConfig.PrivateKey = []byte(pk)
-				} else {
-					data, err := os.ReadFile(pk)
-					if err != nil {
-						return fmt.Errorf("failed to read GitHub private key file: %w", err)
-					}
-					ghConfig.PrivateKey = data
-				}
+				ghConfig.PrivateKey = []byte(pk)
 			}
 			opts.GitHub = githubserver.New(githubserver.Options{
 				Store:     st,
