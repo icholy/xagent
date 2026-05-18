@@ -75,7 +75,7 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 	if caller == nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
 	}
-	if len(s.githubPrivateKey) == 0 {
+	if s.githubApp == nil || len(s.githubApp.PrivateKey) == 0 {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("GitHub App private key is not configured"))
 	}
 	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
@@ -85,11 +85,11 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 	if org.GitHubInstallationID == 0 {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no GitHub App installation linked to this organization"))
 	}
-	appID, err := strconv.ParseInt(s.githubAppID, 10, 64)
+	appID, err := strconv.ParseInt(s.githubApp.ID, 10, 64)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid GitHub App ID: %w", err))
 	}
-	transport, err := ghinstallation.New(http.DefaultTransport, appID, org.GitHubInstallationID, s.githubPrivateKey)
+	transport, err := ghinstallation.New(http.DefaultTransport, appID, org.GitHubInstallationID, s.githubApp.PrivateKey)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create GitHub App transport: %w", err))
 	}

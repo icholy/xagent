@@ -28,6 +28,12 @@ type Config struct {
 	PrivateKey    []byte
 }
 
+// App holds the GitHub App identity needed for creating installation tokens.
+type App struct {
+	ID         string
+	PrivateKey []byte
+}
+
 // Server handles GitHub OAuth and webhook routes.
 type Server struct {
 	log       *slog.Logger

@@ -245,8 +245,12 @@ var ServerCommand = &cli.Command{
 				Publisher: ps,
 				Config:    ghConfig,
 			})
-			opts.GitHubAppID = ghConfig.AppID
-			opts.GitHubPrivateKey = ghConfig.PrivateKey
+			if len(ghConfig.PrivateKey) > 0 {
+				opts.GitHubApp = &githubserver.App{
+					ID:         ghConfig.AppID,
+					PrivateKey: ghConfig.PrivateKey,
+				}
+			}
 		}
 		if cmd.IsSet("atlassian-client-id") {
 			opts.Atlassian = atlassianserver.New(atlassianserver.Options{
