@@ -159,6 +159,9 @@ const (
 	// XAgentServiceSetRoutingRulesProcedure is the fully-qualified name of the XAgentService's
 	// SetRoutingRules RPC.
 	XAgentServiceSetRoutingRulesProcedure = "/xagent.v1.XAgentService/SetRoutingRules"
+	// XAgentServiceCreateGitHubTokenProcedure is the fully-qualified name of the XAgentService's
+	// CreateGitHubToken RPC.
+	XAgentServiceCreateGitHubTokenProcedure = "/xagent.v1.XAgentService/CreateGitHubToken"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -209,6 +212,7 @@ type XAgentServiceClient interface {
 	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
 	GetRoutingRules(context.Context, *v1.GetRoutingRulesRequest) (*v1.GetRoutingRulesResponse, error)
 	SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error)
+	CreateGitHubToken(context.Context, *v1.CreateGitHubTokenRequest) (*v1.CreateGitHubTokenResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -498,6 +502,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("SetRoutingRules")),
 			connect.WithClientOptions(opts...),
 		),
+		createGitHubToken: connect.NewClient[v1.CreateGitHubTokenRequest, v1.CreateGitHubTokenResponse](
+			httpClient,
+			baseURL+XAgentServiceCreateGitHubTokenProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("CreateGitHubToken")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -549,6 +559,7 @@ type xAgentServiceClient struct {
 	generateAtlassianWebhookSecret *connect.Client[v1.GenerateAtlassianWebhookSecretRequest, v1.GenerateAtlassianWebhookSecretResponse]
 	getRoutingRules                *connect.Client[v1.GetRoutingRulesRequest, v1.GetRoutingRulesResponse]
 	setRoutingRules                *connect.Client[v1.SetRoutingRulesRequest, v1.SetRoutingRulesResponse]
+	createGitHubToken              *connect.Client[v1.CreateGitHubTokenRequest, v1.CreateGitHubTokenResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -965,6 +976,15 @@ func (c *xAgentServiceClient) SetRoutingRules(ctx context.Context, req *v1.SetRo
 	return nil, err
 }
 
+// CreateGitHubToken calls xagent.v1.XAgentService.CreateGitHubToken.
+func (c *xAgentServiceClient) CreateGitHubToken(ctx context.Context, req *v1.CreateGitHubTokenRequest) (*v1.CreateGitHubTokenResponse, error) {
+	response, err := c.createGitHubToken.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -1013,6 +1033,7 @@ type XAgentServiceHandler interface {
 	GenerateAtlassianWebhookSecret(context.Context, *v1.GenerateAtlassianWebhookSecretRequest) (*v1.GenerateAtlassianWebhookSecretResponse, error)
 	GetRoutingRules(context.Context, *v1.GetRoutingRulesRequest) (*v1.GetRoutingRulesResponse, error)
 	SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error)
+	CreateGitHubToken(context.Context, *v1.CreateGitHubTokenRequest) (*v1.CreateGitHubTokenResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1298,6 +1319,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("SetRoutingRules")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceCreateGitHubTokenHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceCreateGitHubTokenProcedure,
+		svc.CreateGitHubToken,
+		connect.WithSchema(xAgentServiceMethods.ByName("CreateGitHubToken")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1392,6 +1419,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetRoutingRulesHandler.ServeHTTP(w, r)
 		case XAgentServiceSetRoutingRulesProcedure:
 			xAgentServiceSetRoutingRulesHandler.ServeHTTP(w, r)
+		case XAgentServiceCreateGitHubTokenProcedure:
+			xAgentServiceCreateGitHubTokenHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1583,4 +1612,8 @@ func (UnimplementedXAgentServiceHandler) GetRoutingRules(context.Context, *v1.Ge
 
 func (UnimplementedXAgentServiceHandler) SetRoutingRules(context.Context, *v1.SetRoutingRulesRequest) (*v1.SetRoutingRulesResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SetRoutingRules is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) CreateGitHubToken(context.Context, *v1.CreateGitHubTokenRequest) (*v1.CreateGitHubTokenResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateGitHubToken is not implemented"))
 }

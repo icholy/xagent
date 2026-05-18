@@ -7,6 +7,7 @@ require (
 	connectrpc.com/otelconnect v0.9.0
 	github.com/XSAM/otelsql v0.41.0
 	github.com/amacneil/dbmate/v2 v2.33.0
+	github.com/bradleyfalzon/ghinstallation/v2 v2.18.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.2.0+incompatible
@@ -82,6 +83,7 @@ require (
 	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/google/cel-go v0.26.1 // indirect
 	github.com/google/go-containerregistry v0.20.7 // indirect
+	github.com/google/go-github/v84 v84.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect

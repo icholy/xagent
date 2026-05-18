@@ -11,6 +11,7 @@ import (
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
@@ -65,4 +66,26 @@ func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkG
 		"installation_id", req.InstallationId,
 		"user_id", caller.ID)
 	return &xagentv1.LinkGitHubInstallationResponse{}, nil
+}
+
+func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+	caller := apiauth.Caller(ctx)
+	if caller == nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
+	}
+	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if org.GitHubInstallationID == 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no GitHub App installation linked to this organization"))
+	}
+	tok, err := s.github.CreateInstallationToken(ctx, org.GitHubInstallationID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return &xagentv1.CreateGitHubTokenResponse{
+		Token:     tok.Token,
+		ExpiresAt: timestamppb.New(tok.ExpiresAt),
+	}, nil
 }

@@ -112,6 +112,11 @@ var ServerCommand = &cli.Command{
 			Sources: cli.EnvVars("XAGENT_GITHUB_WEBHOOK_SECRET"),
 		},
 		&cli.StringFlag{
+			Name:    "github-private-key",
+			Usage:   "GitHub App private key (PEM content or file path)",
+			Sources: cli.EnvVars("XAGENT_GITHUB_APP_PRIVATE_KEY"),
+		},
+		&cli.StringFlag{
 			Name:    "atlassian-client-id",
 			Usage:   "Atlassian OAuth client ID (for account linking)",
 			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_ID"),
@@ -225,6 +230,7 @@ var ServerCommand = &cli.Command{
 					ClientID:      cmd.String("github-client-id"),
 					ClientSecret:  cmd.String("github-client-secret"),
 					WebhookSecret: cmd.String("github-webhook-secret"),
+					PrivateKey:    []byte(cmd.String("github-private-key")),
 				},
 			})
 		}

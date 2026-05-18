@@ -53,6 +53,7 @@ service XAgentService {
   rpc GenerateAtlassianWebhookSecret(GenerateAtlassianWebhookSecretRequest) returns (GenerateAtlassianWebhookSecretResponse);
   rpc GetRoutingRules(GetRoutingRulesRequest) returns (GetRoutingRulesResponse);
   rpc SetRoutingRules(SetRoutingRulesRequest) returns (SetRoutingRulesResponse);
+  rpc CreateGitHubToken(CreateGitHubTokenRequest) returns (CreateGitHubTokenResponse);
 }
 
 message PingRequest {}
@@ -534,4 +535,11 @@ message SetRoutingRulesRequest {
 
 message SetRoutingRulesResponse {
   repeated RoutingRule rules = 1;
+}
+
+message CreateGitHubTokenRequest {}
+
+message CreateGitHubTokenResponse {
+  string token = 1;
+  google.protobuf.Timestamp expires_at = 2;
 }
