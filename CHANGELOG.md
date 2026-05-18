@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.15.0](https://github.com/icholy/xagent/compare/v0.14.1...v0.15.0) (2026-05-18)
+
+
+### Features
+
+* add CreateGitHubToken RPC for GitHub App installation tokens ([#594](https://github.com/icholy/xagent/issues/594)) ([b8b9c3d](https://github.com/icholy/xagent/commit/b8b9c3dda544f080f09b3dfc734a146111fe148a))
+* add git-credential subcommand for GitHub App installation tokens ([#603](https://github.com/icholy/xagent/issues/603)) ([2e0fc6a](https://github.com/icholy/xagent/commit/2e0fc6abb51484e96488f25a210205b836bc922f))
+
+
+### Bug Fixes
+
+* wire git-credential helper through agent filter and env token ([#605](https://github.com/icholy/xagent/issues/605)) ([dc3369e](https://github.com/icholy/xagent/commit/dc3369e2ef05ebe7eac6932261b79968a9464cc3))
+
+
+### Miscellaneous
+
+* **deps:** update dependency @vitejs/plugin-react to v5.2.0 ([#599](https://github.com/icholy/xagent/issues/599)) ([595fb8d](https://github.com/icholy/xagent/commit/595fb8d324431324e7e27f0d80ff1cca0ba73e6d))
+* **deps:** update dependency eslint-plugin-react-refresh to ^0.5.0 ([#604](https://github.com/icholy/xagent/issues/604)) ([8e6e05e](https://github.com/icholy/xagent/commit/8e6e05e6551fdc16fe68ff484667e7d5a879e792))
+
 ## [0.14.1](https://github.com/icholy/xagent/compare/v0.14.0...v0.14.1) (2026-05-18)
 
 
