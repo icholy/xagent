@@ -168,6 +168,13 @@ func (p *AgentFilter) ListLogs(ctx context.Context, req *xagentv1.ListLogsReques
 	return p.client.ListLogs(ctx, req)
 }
 
+func (p *AgentFilter) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+	if _, err := p.claims(ctx); err != nil {
+		return nil, err
+	}
+	return p.client.CreateGitHubToken(ctx, req)
+}
+
 func errPermissionDenied(msg string) error {
 	return connect.NewError(connect.CodePermissionDenied, errors.New(msg))
 }

@@ -19,8 +19,9 @@ var GitCredentialCommand = &cli.Command{
 			Value: "unix:///var/run/xagent.sock",
 		},
 		&cli.StringFlag{
-			Name:  "token",
-			Usage: "Authentication token",
+			Name:    "token",
+			Usage:   "Authentication token",
+			Sources: cli.EnvVars("XAGENT_AGENT_TOKEN"),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
