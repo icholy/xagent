@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.14.1](https://github.com/icholy/xagent/compare/v0.14.0...v0.14.1) (2026-05-18)
+
+
+### Bug Fixes
+
+* change GitHub App install label to 'Installed' in org settings ([#598](https://github.com/icholy/xagent/issues/598)) ([8d09553](https://github.com/icholy/xagent/commit/8d09553e4daf99691336b9ffbc43b090520db4c5))
+
+
+### Miscellaneous
+
+* **deps:** update dependency @bufbuild/protoc-gen-es to v2.12.0 ([#592](https://github.com/icholy/xagent/issues/592)) ([021651c](https://github.com/icholy/xagent/commit/021651c28ff811cc198ff5e3efd11876d65a923c))
+* **deps:** update dependency @types/node to v24.12.3 ([#595](https://github.com/icholy/xagent/issues/595)) ([f2625ab](https://github.com/icholy/xagent/commit/f2625abd89b62eefece80971a00eeaf102bb02a2))
+* **deps:** update dependency @typescript/native-preview to v7.0.0-dev.20260511.1 ([#596](https://github.com/icholy/xagent/issues/596)) ([98d7caf](https://github.com/icholy/xagent/commit/98d7caf14af37e4e86c1e9c6055e88ead7b47671))
+
 ## [0.14.0](https://github.com/icholy/xagent/compare/v0.13.2...v0.14.0) (2026-05-17)
 
 
