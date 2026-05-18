@@ -1,4 +1,4 @@
-package command
+package gitcredential
 
 import (
 	"bytes"
@@ -11,9 +11,9 @@ import (
 	"github.com/icholy/xagent/internal/xagentclient"
 )
 
-func TestParseGitCredentialInput(t *testing.T) {
+func TestParseInput(t *testing.T) {
 	input := "protocol=https\nhost=github.com\npath=icholy/xagent.git\n\n"
-	fields := parseGitCredentialInput(strings.NewReader(input))
+	fields := ParseInput(strings.NewReader(input))
 
 	if fields["protocol"] != "https" {
 		t.Errorf("expected protocol=https, got %q", fields["protocol"])
@@ -26,9 +26,9 @@ func TestParseGitCredentialInput(t *testing.T) {
 	}
 }
 
-func TestFormatGitCredentialOutput(t *testing.T) {
+func TestFormatOutput(t *testing.T) {
 	var buf bytes.Buffer
-	if err := formatGitCredentialOutput(&buf, "ghs_abc123"); err != nil {
+	if err := FormatOutput(&buf, "ghs_abc123"); err != nil {
 		t.Fatal(err)
 	}
 	want := "username=x-access-token\npassword=ghs_abc123\n\n"
@@ -37,7 +37,7 @@ func TestFormatGitCredentialOutput(t *testing.T) {
 	}
 }
 
-func TestGitCredentialGet(t *testing.T) {
+func TestRunGet(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(_ context.Context, _ *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
 			return &xagentv1.CreateGitHubTokenResponse{Token: "ghs_test_token"}, nil
@@ -46,7 +46,7 @@ func TestGitCredentialGet(t *testing.T) {
 
 	input := "protocol=https\nhost=github.com\n\n"
 	var output bytes.Buffer
-	err := runGitCredential(context.Background(), "get", strings.NewReader(input), &output, client)
+	err := Run(context.Background(), "get", strings.NewReader(input), &output, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestGitCredentialGet(t *testing.T) {
 	}
 }
 
-func TestGitCredentialGetNonGitHub(t *testing.T) {
+func TestRunGetNonGitHub(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(_ context.Context, _ *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
 			t.Fatal("CreateGitHubToken should not be called for non-GitHub hosts")
@@ -67,7 +67,7 @@ func TestGitCredentialGetNonGitHub(t *testing.T) {
 
 	input := "protocol=https\nhost=gitlab.com\n\n"
 	var output bytes.Buffer
-	err := runGitCredential(context.Background(), "get", strings.NewReader(input), &output, client)
+	err := Run(context.Background(), "get", strings.NewReader(input), &output, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestGitCredentialGetNonGitHub(t *testing.T) {
 	}
 }
 
-func TestGitCredentialGetNonHTTPS(t *testing.T) {
+func TestRunGetNonHTTPS(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(_ context.Context, _ *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
 			t.Fatal("CreateGitHubToken should not be called for non-HTTPS protocol")
@@ -87,7 +87,7 @@ func TestGitCredentialGetNonHTTPS(t *testing.T) {
 
 	input := "protocol=http\nhost=github.com\n\n"
 	var output bytes.Buffer
-	err := runGitCredential(context.Background(), "get", strings.NewReader(input), &output, client)
+	err := Run(context.Background(), "get", strings.NewReader(input), &output, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,9 +97,9 @@ func TestGitCredentialGetNonHTTPS(t *testing.T) {
 	}
 }
 
-func TestGitCredentialStoreNoop(t *testing.T) {
+func TestRunStoreNoop(t *testing.T) {
 	var output bytes.Buffer
-	err := runGitCredential(context.Background(), "store", strings.NewReader("protocol=https\nhost=github.com\n\n"), &output, nil)
+	err := Run(context.Background(), "store", strings.NewReader("protocol=https\nhost=github.com\n\n"), &output, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +108,9 @@ func TestGitCredentialStoreNoop(t *testing.T) {
 	}
 }
 
-func TestGitCredentialEraseNoop(t *testing.T) {
+func TestRunEraseNoop(t *testing.T) {
 	var output bytes.Buffer
-	err := runGitCredential(context.Background(), "erase", strings.NewReader("protocol=https\nhost=github.com\n\n"), &output, nil)
+	err := Run(context.Background(), "erase", strings.NewReader("protocol=https\nhost=github.com\n\n"), &output, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,9 +119,9 @@ func TestGitCredentialEraseNoop(t *testing.T) {
 	}
 }
 
-func TestGitCredentialUnknownAction(t *testing.T) {
+func TestRunUnknownAction(t *testing.T) {
 	var output bytes.Buffer
-	err := runGitCredential(context.Background(), "unknown", strings.NewReader(""), &output, nil)
+	err := Run(context.Background(), "unknown", strings.NewReader(""), &output, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestGitCredentialUnknownAction(t *testing.T) {
 	}
 }
 
-func TestGitCredentialRPCError(t *testing.T) {
+func TestRunRPCError(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(_ context.Context, _ *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
 			return nil, fmt.Errorf("no GitHub App installation linked to this org")
@@ -139,7 +139,7 @@ func TestGitCredentialRPCError(t *testing.T) {
 
 	input := "protocol=https\nhost=github.com\n\n"
 	var output bytes.Buffer
-	err := runGitCredential(context.Background(), "get", strings.NewReader(input), &output, client)
+	err := Run(context.Background(), "get", strings.NewReader(input), &output, client)
 	if err == nil {
 		t.Fatal("expected error from RPC failure")
 	}
