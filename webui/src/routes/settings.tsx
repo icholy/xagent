@@ -173,7 +173,7 @@ function OrgSettings() {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Check className="h-5 w-5 text-green-500" />
-                  <span className="font-medium">GitHub App installed</span>
+                  <span className="font-medium">Installed</span>
                 </div>
                 <a
                   href={`https://github.com/settings/installations/${data.githubInstallationId}`}
