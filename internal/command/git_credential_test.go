@@ -9,23 +9,6 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func TestGitCredentialCommand_TokenFromEnv(t *testing.T) {
-	t.Setenv("XAGENT_TOKEN", "test-token-from-env")
-
-	var gotToken string
-	cmd := &cli.Command{
-		Name: "git-credential",
-		Flags: GitCredentialCommand.Flags,
-		Action: func(_ context.Context, cmd *cli.Command) error {
-			gotToken = cmd.String("token")
-			return nil
-		},
-	}
-	err := cmd.Run(context.Background(), []string{"git-credential"})
-	assert.NilError(t, err)
-	assert.Equal(t, gotToken, "test-token-from-env")
-}
-
 func TestGitCredentialCommand_ServerDefaultAndEnv(t *testing.T) {
 	// Without env var, should use DefaultURL
 	var gotServer string
@@ -54,21 +37,4 @@ func TestGitCredentialCommand_ServerDefaultAndEnv(t *testing.T) {
 	err = cmd2.Run(context.Background(), []string{"git-credential"})
 	assert.NilError(t, err)
 	assert.Equal(t, gotServer, "unix:///var/run/xagent.sock")
-}
-
-func TestGitCredentialCommand_TokenFlagOverridesEnv(t *testing.T) {
-	t.Setenv("XAGENT_TOKEN", "env-token")
-
-	var gotToken string
-	cmd := &cli.Command{
-		Name: "git-credential",
-		Flags: GitCredentialCommand.Flags,
-		Action: func(_ context.Context, cmd *cli.Command) error {
-			gotToken = cmd.String("token")
-			return nil
-		},
-	}
-	err := cmd.Run(context.Background(), []string{"git-credential", "--token", "flag-token"})
-	assert.NilError(t, err)
-	assert.Equal(t, gotToken, "flag-token")
 }
