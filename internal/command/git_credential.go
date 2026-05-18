@@ -14,13 +14,15 @@ var GitCredentialCommand = &cli.Command{
 	Hidden: true,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:  "server",
-			Usage: "C2 server URL",
-			Value: "unix:///var/run/xagent.sock",
+			Name:    "server",
+			Usage:   "C2 server URL",
+			Value:   xagentclient.DefaultURL,
+			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
 		&cli.StringFlag{
-			Name:  "token",
-			Usage: "Authentication token",
+			Name:    "token",
+			Usage:   "Authentication token",
+			Sources: cli.EnvVars("XAGENT_TOKEN"),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
