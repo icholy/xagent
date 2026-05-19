@@ -1,6 +1,6 @@
 module github.com/icholy/xagent
 
-go 1.25.0
+go 1.25.6
 
 require (
 	connectrpc.com/connect v1.19.2
@@ -10,7 +10,7 @@ require (
 	github.com/bradleyfalzon/ghinstallation/v2 v2.18.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.2.0+incompatible
+	github.com/docker/cli v29.4.1+incompatible
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/go-cmp v0.7.0
@@ -38,38 +38,38 @@ require (
 require (
 	buf.build/gen/go/bufbuild/bufplugin/protocolbuffers/go v1.36.11-20250718181942-e35f9b667443.1 // indirect
 	buf.build/gen/go/bufbuild/protodescriptor/protocolbuffers/go v1.36.11-20250109164928-1da0de137947.1 // indirect
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20251209175733-2a1774d88802.1 // indirect
-	buf.build/gen/go/bufbuild/registry/connectrpc/go v1.19.1-20251202164234-62b14f0b533c.2 // indirect
-	buf.build/gen/go/bufbuild/registry/protocolbuffers/go v1.36.11-20251202164234-62b14f0b533c.1 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1 // indirect
+	buf.build/gen/go/bufbuild/registry/connectrpc/go v1.19.2-20260126144947-819582968857.1 // indirect
+	buf.build/gen/go/bufbuild/registry/protocolbuffers/go v1.36.11-20260126144947-819582968857.1 // indirect
 	buf.build/gen/go/pluginrpc/pluginrpc/protocolbuffers/go v1.36.11-20241007202033-cf42259fcbfc.1 // indirect
-	buf.build/go/app v0.2.0 // indirect
-	buf.build/go/bufplugin v0.9.0 // indirect
+	buf.build/go/app v0.2.1-0.20260407195847-833f8f978cda // indirect
+	buf.build/go/bufplugin v0.10.0 // indirect
 	buf.build/go/bufprivateusage v0.1.0 // indirect
 	buf.build/go/interrupt v1.1.0 // indirect
-	buf.build/go/protovalidate v1.1.0 // indirect
+	buf.build/go/protovalidate v1.2.0 // indirect
 	buf.build/go/protoyaml v0.6.0 // indirect
 	buf.build/go/spdx v0.2.0 // indirect
-	buf.build/go/standard v0.1.0 // indirect
+	buf.build/go/standard v0.1.1-0.20260325175353-2b287e071df5 // indirect
 	cel.dev/expr v0.25.1 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
-	github.com/bufbuild/buf v1.62.1 // indirect
-	github.com/bufbuild/protocompile v0.14.2-0.20251223142729-db46c1b9d34e // indirect
-	github.com/bufbuild/protoplugin v0.0.0-20250218205857-750e09ce93e1 // indirect
+	github.com/bufbuild/buf v1.69.0 // indirect
+	github.com/bufbuild/protocompile v0.14.2-0.20260429155904-12ef1ef2ce91 // indirect
+	github.com/bufbuild/protoplugin v0.0.0-20260414125817-25d1d281b46b // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cli/browser v1.3.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
-	github.com/containerd/stargz-snapshotter/estargz v0.18.1 // indirect
+	github.com/containerd/stargz-snapshotter/estargz v0.18.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/cubicdaiya/gonp v1.0.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
-	github.com/docker/docker-credential-helpers v0.9.4 // indirect
-	github.com/docker/go-connections v0.6.0 // indirect
+	github.com/docker/docker-credential-helpers v0.9.6 // indirect
+	github.com/docker/go-connections v0.7.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
@@ -81,8 +81,8 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
 	github.com/gofrs/flock v0.13.0 // indirect
-	github.com/google/cel-go v0.26.1 // indirect
-	github.com/google/go-containerregistry v0.20.7 // indirect
+	github.com/google/cel-go v0.28.0 // indirect
+	github.com/google/go-containerregistry v0.21.5 // indirect
 	github.com/google/go-github/v84 v84.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
@@ -98,7 +98,7 @@ require (
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/matryer/moq v0.6.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/term v0.5.2 // indirect
@@ -108,7 +108,7 @@ require (
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/petermattis/goid v0.0.0-20251121121749-a11dd1a45f9a // indirect
+	github.com/petermattis/goid v0.0.0-20260330135022-df67b199bc81 // indirect
 	github.com/pganalyze/pg_query_go/v6 v6.1.0 // indirect
 	github.com/pingcap/errors v0.11.5-0.20240311024730-e056997136bb // indirect
 	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86 // indirect
@@ -116,7 +116,7 @@ require (
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20250324122243-d51e00e5bbf0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.58.0 // indirect
+	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/riza-io/grpc-go v0.2.0 // indirect
@@ -131,7 +131,7 @@ require (
 	github.com/stoewer/go-strcase v1.3.1 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/tidwall/btree v1.8.1 // indirect
-	github.com/vbatts/tar-split v0.12.2 // indirect
+	github.com/vbatts/tar-split v0.12.3 // indirect
 	github.com/wasilibs/go-pgquery v0.0.0-20250409022910-10ac41983c07 // indirect
 	github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
