@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.3](https://github.com/icholy/xagent/compare/v0.15.2...v0.15.3) (2026-05-20)
+
+
+### Bug Fixes
+
+* remove MCP hello middleware that broke n8n clients ([#619](https://github.com/icholy/xagent/issues/619)) ([359bd77](https://github.com/icholy/xagent/commit/359bd77a9ceeea8148840c42c811eaf2469d35fe))
+* remove nested code tags from MCP landing page pre blocks ([#617](https://github.com/icholy/xagent/issues/617)) ([bf9c49b](https://github.com/icholy/xagent/commit/bf9c49ba6a54a3225fde8184a3fd9cbb2aabc713))
+
 ## [0.15.2](https://github.com/icholy/xagent/compare/v0.15.1...v0.15.2) (2026-05-20)
 
 
