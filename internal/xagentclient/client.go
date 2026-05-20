@@ -19,6 +19,12 @@ const DefaultTimeout = 30 * time.Second
 // DefaultURL is the default xagent server URL.
 const DefaultURL = "https://xagent.choly.ca"
 
+// AgentSocketPath is the path of the proxy unix socket inside agent containers.
+const AgentSocketPath = "/xagent.sock"
+
+// AgentSocketURL is the unix-socket URL agents use to reach the proxy.
+const AgentSocketURL = "unix://" + AgentSocketPath
+
 type Client = xagentv1connect.XAgentServiceClient
 
 // Options configures the xagent client.
