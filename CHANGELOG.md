@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.15.1](https://github.com/icholy/xagent/compare/v0.15.0...v0.15.1) (2026-05-20)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/docker/cli to v29.4.3+incompatible ([#611](https://github.com/icholy/xagent/issues/611)) ([7f8c513](https://github.com/icholy/xagent/commit/7f8c513c5d83060a9cfeee6c871e9b886b331e70))
+* move agent unix socket to /xagent.sock ([#614](https://github.com/icholy/xagent/issues/614)) ([f90ad22](https://github.com/icholy/xagent/commit/f90ad22df40db5146855d0de47814288f8b79d20))
+
+
+### Miscellaneous
+
+* **deps:** update dependency @types/node to v24.12.4 ([#609](https://github.com/icholy/xagent/issues/609)) ([236f973](https://github.com/icholy/xagent/commit/236f97305dea3da404a9fa9be37b52ebe833d87e))
+* **deps:** update dependency @typescript/native-preview to v7.0.0-dev.20260512.1 ([#612](https://github.com/icholy/xagent/issues/612)) ([5762cc5](https://github.com/icholy/xagent/commit/5762cc56ffd4d8a9cee583fb7883f84d7216977b))
+* **deps:** update dependency @typescript/native-preview to v7.0.0-dev.20260513.1 ([#613](https://github.com/icholy/xagent/issues/613)) ([00d81b1](https://github.com/icholy/xagent/commit/00d81b11b77a744f14e775195f9b52afcf7354d0))
+* **deps:** update dependency tailwind-merge to v3.6.0 ([#606](https://github.com/icholy/xagent/issues/606)) ([58ba3f4](https://github.com/icholy/xagent/commit/58ba3f43e6f73418cd1cccc9a461df72932fb5e9))
+* **deps:** update dependency typescript-eslint to v8.59.3 ([#608](https://github.com/icholy/xagent/issues/608)) ([e6cbdfe](https://github.com/icholy/xagent/commit/e6cbdfe17752ce14610554f997519985d7d55798))
+* **deps:** update module github.com/bufbuild/buf to v1.69.0 ([#610](https://github.com/icholy/xagent/issues/610)) ([1f0160f](https://github.com/icholy/xagent/commit/1f0160f24a3d25a5901222793eca5f464f581fd9))
+
 ## [0.15.0](https://github.com/icholy/xagent/compare/v0.14.1...v0.15.0) (2026-05-18)
 
 
