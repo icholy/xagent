@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.2](https://github.com/icholy/xagent/compare/v0.15.1...v0.15.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* scope runner docker operations by runner id ([#615](https://github.com/icholy/xagent/issues/615)) ([63b0f28](https://github.com/icholy/xagent/commit/63b0f289f860d1e296a1ffbae59ceb966ef77945))
+
 ## [0.15.1](https://github.com/icholy/xagent/compare/v0.15.0...v0.15.1) (2026-05-20)
 
 
