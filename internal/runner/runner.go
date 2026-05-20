@@ -231,6 +231,7 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	runningContainers, err := r.docker.ContainerList(ctx, container.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("label", "xagent=true"),
+			filters.Arg("label", "xagent.runner="+r.runnerID),
 			filters.Arg("status", "running"),
 		),
 	})
@@ -244,8 +245,12 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 
 	// Find all exited xagent containers
 	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
-		All:     true,
-		Filters: filters.NewArgs(filters.Arg("label", "xagent=true"), filters.Arg("status", "exited")),
+		All: true,
+		Filters: filters.NewArgs(
+			filters.Arg("label", "xagent=true"),
+			filters.Arg("label", "xagent.runner="+r.runnerID),
+			filters.Arg("status", "exited"),
+		),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -425,8 +430,9 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		Name:      fmt.Sprintf("xagent-%d", task.ID),
 		Workspace: ws,
 		Labels: map[string]string{
-			"xagent":      "true",
-			"xagent.task": fmt.Sprint(task.ID),
+			"xagent":        "true",
+			"xagent.task":   fmt.Sprint(task.ID),
+			"xagent.runner": r.runnerID,
 		},
 		Cmd: []string{
 			"/usr/local/bin/xagent", "driver",
@@ -484,6 +490,7 @@ func (r *Runner) Monitor(ctx context.Context) error {
 			filters.Arg("event", "start"),
 			filters.Arg("event", "die"),
 			filters.Arg("label", "xagent=true"),
+			filters.Arg("label", "xagent.runner="+r.runnerID),
 		),
 	})
 
@@ -540,6 +547,7 @@ func (r *Runner) Prune(ctx context.Context) error {
 		All: true,
 		Filters: filters.NewArgs(
 			filters.Arg("label", "xagent=true"),
+			filters.Arg("label", "xagent.runner="+r.runnerID),
 			filters.Arg("status", "exited"),
 		),
 	})
