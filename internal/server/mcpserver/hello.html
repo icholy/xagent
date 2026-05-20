@@ -39,11 +39,11 @@
   <p>Copy the full URL of this page and paste it into your MCP client's "add server" flow as the server URL. You'll also need an API key or OAuth credentials from your xagent account.</p>
 
   <h2>Example: Claude Code</h2>
-  <pre><code>claude mcp add --transport http xagent &lt;this-url&gt; \
-    --header "Authorization: Bearer &lt;your-api-key&gt;"</code></pre>
+  <pre>claude mcp add --transport http xagent &lt;this-url&gt; \
+    --header "Authorization: Bearer &lt;your-api-key&gt;"</pre>
 
   <h2>Example: client config file</h2>
-  <pre><code>{
+  <pre>{
   "mcpServers": {
     "xagent": {
       "type": "http",
@@ -51,7 +51,7 @@
       "headers": { "Authorization": "Bearer &lt;your-api-key&gt;" }
     }
   }
-}</code></pre>
+}</pre>
 
   <hr>
   <footer>
