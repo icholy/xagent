@@ -402,7 +402,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		Command: "/usr/local/bin/xagent",
 		Args: []string{
 			"mcp",
-			"--server", "unix:///var/run/xagent.sock",
+			"--server", xagentclient.AgentSocketURL,
 			"--task", fmt.Sprint(task.ID),
 			"--runner", task.Runner,
 			"--workspace", task.Workspace,
@@ -430,17 +430,17 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		},
 		Cmd: []string{
 			"/usr/local/bin/xagent", "driver",
-			"--server", "unix:///var/run/xagent.sock",
+			"--server", xagentclient.AgentSocketURL,
 			"--task", fmt.Sprint(task.ID),
 			"--token", token,
 		},
 		Env: []string{
 			fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID),
 			fmt.Sprintf("XAGENT_TOKEN=%s", token),
-			"XAGENT_SERVER=unix:///var/run/xagent.sock",
+			"XAGENT_SERVER=" + xagentclient.AgentSocketURL,
 		},
 		Binds: []string{
-			r.proxy.SocketPath() + ":/var/run/xagent.sock",
+			r.proxy.SocketPath() + ":" + xagentclient.AgentSocketPath,
 		},
 		Files: []containerbuild.File{
 			{Path: "/usr/local/bin/xagent", Data: binData, Mode: 0755},
