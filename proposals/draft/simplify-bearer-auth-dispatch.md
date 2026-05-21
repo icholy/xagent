@@ -63,21 +63,18 @@ Delete:
 
 After this, nothing in the codebase sends `X-Auth-Type: bearer`. `/auth/token` still exists for the web UI (which calls it via cookie auth — see `webui/src/lib/transport.ts:57`), and that is handled in Phase 3. `xagentclient/token.go` likewise stays alive in Phase 2 since the web UI's flow has its own pathway, but the function `GetToken` becomes unused from Go and can be removed in this phase (it has no callers once `setup.go` is gone).
 
-**Replacement bootstrap path.** New users today need a way to put an API key into `~/.config/xagent/config.yaml` without running `xagent setup`. The proposed replacement, in order of preference:
+**Replacement bootstrap path.** No new CLI command. Users mint an API key in the Web UI (`webui/src/routes/keys.new.tsx`, which already calls the `CreateKey` RPC) and put it into `~/.config/xagent/config.yaml` manually. The README is updated to describe this:
 
-1. **Web-UI-driven first-login bootstrap.** The web UI already has `webui/src/routes/keys.new.tsx`, which calls the `CreateKey` RPC. Add a small "Quick start: CLI" panel on this page (or as a one-time post-login banner) that:
-   - Generates a key (calls `CreateKey` like today)
-   - Shows a copy-pasteable `xagent login <key>` command
-   - Optionally offers a download of a pre-filled `config.yaml`
-2. **New `xagent login <key>` command** (replaces `xagent setup`). It does only what `setup` does after the device flow: generate the private key if missing, write the key into `configfile`, create the default `workspaces.yaml`. No OIDC, no device flow, no token exchange. Implementation is ~30 lines, all already factored out in `internal/configfile` and `internal/runner/workspace`.
+1. Log into the Web UI
+2. Go to **Keys → New** and create a key
+3. Copy the returned `xat_…` value into `~/.config/xagent/config.yaml` under `token:`
 
-   ```
-   xagent login --server https://xagent.example.com xat_abcd1234…
-   ```
+The two other things `xagent setup` does today — generating the agent private key and scaffolding `workspaces.yaml` — already have working defaults without `setup`:
 
-   The flag-driven form means the key can also be piped in from the web UI's "copy to clipboard" button without a follow-up paste.
+- The runner generates an ephemeral Ed25519 private key on startup if one isn't configured (`internal/command/runner.go:115-122`), with a warning about reconnect-on-restart. Users who want a persistent key can use the existing `--private-key` flag or set one in the config file directly. No change needed.
+- `workspaces.yaml` is loaded if present (`workspace.LoadConfig` in `internal/runner/workspace/`); the README mentions creating one. The `workspace.CreateDefault` helper currently only runs from `setup.go` and is the one piece of `setup` we lose. Either inline the same scaffolding into the runner's first-run path or, simpler, leave it to the user to create the file (the runner already handles a missing file).
 
-The current `xagent setup` does three things: SSO login, API key issuance, default config scaffolding. SSO login is no longer needed in the CLI (we have a key); key issuance moves to the UI; config scaffolding stays in `xagent login`.
+Net result of Phase 2: one less command, no new code, README gains a "Getting started" section that says "make an API key in the Web UI, put it in `~/.config/xagent/config.yaml`".
 
 ### Phase 3 — Remove the zitadel bearer middleware
 
@@ -134,7 +131,7 @@ Delete:
 
 **Keep `/auth/token` vs. delete it.** An earlier draft of this proposal had Phase 3 deleting `/auth/token` and migrating the web UI to cookie-only auth with an `X-Org-ID` header. That conflated two separate concerns: removing the zitadel OIDC bearer dispatch (genuinely dead code after Phase 2) and replacing the web UI's token mechanism (no good reason to touch). `/auth/token` is a perfectly fine cookie-authenticated endpoint that mints scoped app JWTs; the only thing leaving Phase 3 is the OIDC-bearer arrival path into it.
 
-**Removing `xagent setup` vs. keeping a CLI-driven login.** Removing it is the simpler outcome: no device flow, no OIDC dance, no token exchange round-trip in the CLI. The cost is that first-time users have to copy a key out of the web UI instead of running one command in their terminal. The `xagent login <key>` command preserves the "one CLI command does everything else" UX (config file, private key, workspaces.yaml), it just delegates the *credential acquisition* to the UI. This matches how most modern CLIs (`gh`, `fly`, `vercel`) work for first-time login.
+**Just delete `xagent setup` vs. introducing a replacement command.** A previous draft proposed an `xagent login <key>` command that would write the key to config and scaffold defaults. We're not doing that: `xagent setup` is removed and the README documents creating an API key in the Web UI and copying it to `~/.config/xagent/config.yaml` by hand. The CLI gains no new bootstrap surface area. This trades one-command first-run UX for less code to maintain.
 
 **OIDC token introspection vs. local app JWT validation.** The zitadel bearer middleware was doing token introspection against the zitadel JWKS. Once removed, the only "is this caller authenticated?" check on Bearer headers is local: `Ed25519.Verify` on app JWTs and a DB lookup on `xat_` keys. This is strictly less infrastructure dependency on zitadel for API calls. SSO login (`/auth/login` → `/auth/callback`) still goes through zitadel since the cookie middleware stays.
 
