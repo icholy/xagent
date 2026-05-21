@@ -79,35 +79,25 @@ After this, nothing in the codebase sends `X-Auth-Type: bearer`. `/auth/token` s
 
 The current `xagent setup` does three things: SSO login, API key issuance, default config scaffolding. SSO login is no longer needed in the CLI (we have a key); key issuance moves to the UI; config scaffolding stays in `xagent login`.
 
-### Phase 3 — Remove the zitadel bearer middleware and `/auth/token`
+### Phase 3 — Remove the zitadel bearer middleware
 
-Now that nothing sends `X-Auth-Type: bearer`, the middleware and the exchange endpoint can go.
+Now that nothing sends `X-Auth-Type: bearer`, the zitadel OIDC bearer middleware is dead code. `/auth/token` is *not* dead code — it's an endpoint that exchanges whatever auth you arrive with for a short-lived app JWT, and the web UI still uses it via cookie auth. After Phase 2 the only thing that goes is the zitadel bearer path; `/auth/token` becomes cookie-only and otherwise behaves identically.
 
 Delete:
 
-- The `bearer` field on `Auth` and the `middleware.New(authZ)` initialization in `internal/auth/apiauth/apiauth.go` (`apiauth.go:130`, `apiauth.go:208`)
+- The `bearer` field on `Auth` (`apiauth.go:130`) and the `middleware.New(authZ)` initialization in `New()` (`apiauth.go:208`)
 - The `authorization.New(...)` block in `New()` (`apiauth.go:200-206`) and the `authorization`/`oauth` imports
 - The `AuthTypeBearer` switch cases in `RequireAuth`, `CheckAuth`, and `User`
-- `HandleToken` (`apiauth.go:362-408`)
-- The `/auth/token` route registration in `internal/server/server.go:85`
-- `internal/xagentclient/token.go`
+- `internal/xagentclient/token.go` (no consumers left after Phase 2)
 
-What stays in `apiauth`:
+What stays:
 
-- `authentication.Middleware` / `a.cookie` — still serves the web UI's cookie session
-- `validateAppToken` and `validateKey` — both still needed for `Authorization: Bearer …` requests
-- The OAuth 2.1 flow in `internal/auth/oauthflow/` and its own `/oauth/token` endpoint (this is a different endpoint, used by Claude.ai-style external clients; see `proposals/accepted/mcp-oauth.md`). It is unaffected by this change.
+- `/auth/token` and `HandleToken` — still used by the web UI to mint app JWTs from a cookie session
+- `authentication.Middleware` / `a.cookie` — still serves the web UI's cookie session, including the cookie path through `HandleToken`
+- `validateAppToken` and `validateKey` — both still needed for `Authorization: Bearer …` requests on non-`/auth/token` routes
+- The OAuth 2.1 flow in `internal/auth/oauthflow/` and its own `/oauth/token` endpoint (a separate endpoint used by Claude.ai-style external clients; see `proposals/accepted/mcp-oauth.md`)
 
-**Web UI migration.** The web UI currently uses `/auth/token` to swap its cookie session for a short-lived app JWT, then sends that JWT with `X-Auth-Type: app` (`webui/src/lib/transport.ts:55-69, 88`). Once `/auth/token` is gone, the UI cannot do that exchange. Two viable options:
-
-1. **(Recommended) Use cookie auth directly for all API calls.** Drop the `fetchToken`/`refreshToken` plumbing in `AuthTransport`. Send requests with cookie auth and no `Authorization` header. The orgID — currently carried in the app JWT — needs another channel; either:
-   - **(Recommended)** A `X-Org-ID` header, resolved server-side by `UserResolver.ResolveOrg` (the same helper `HandleToken` uses today, `apiauth.go:387`). Cookie-authenticated handlers attach the resolved org to `UserInfo.OrgID` exactly as the JWT path does today. The `org_id` query param hack in `transport.ts:57` becomes a header on every request.
-   - Or persist the user's selected org in the cookie session itself (the zitadel session supports custom claims, but this couples session shape to xagent state — not worth it).
-2. **Issue the app JWT via the OAuth 2.1 endpoints** that already exist (`/oauth/authorize` → `/oauth/token`). This works but is heavier than necessary — the web UI doesn't need PKCE, the consent screen, refresh tokens, etc.
-
-Option 1 is recommended: it removes the dual-token system entirely from the browser, the per-request token refresh in `AuthTransport.fetch`, and the implicit 5-minute reauth that the JWT TTL forced. The UI's existing org-selection UX (`webui/src/routes/__root.tsx` and friends) writes the selected org to `localStorage`; the `X-Org-ID` header is sent from there.
-
-Note: this changes how cookie-authenticated requests determine OrgID. Currently `cookieUser` (`apiauth.go:411-425`) returns `OrgID: 0` and downstream handlers rely on the app-JWT path to populate it. Phase 3 must make `cookieUser` resolve OrgID from `X-Org-ID` via `UserResolver`, otherwise every cookie-auth call hits handlers with `OrgID=0` and fails authorization.
+The web UI's existing flow is unchanged: cookie session → `GET /auth/token` → app JWT → API calls with `Authorization: Bearer <jwt>`. The dual-token system in `webui/src/lib/transport.ts` stays. The only thing the UI loses is the OIDC-bearer arrival path at `/auth/token`, which it never used.
 
 ### Phase 4 — Drop the `X-Auth-Type` header
 
@@ -120,7 +110,7 @@ Delete:
 - The `AuthType` field on `xagentclient.Options` (`internal/xagentclient/client.go:39`) and its propagation in `New()` (`client.go:61`).
 - The `AuthType: "app"` literal in `internal/command/setup.go:87` is already removed in Phase 2.
 - The `X-Auth-Type: key` set in `n8n-node/nodes/XAgent/XAgentExecutor.ts:27` (this is the in-repo n8n node; the published `n8n-nodes-xagent` package proposed in `proposals/draft/n8n-community-node.md` does not set this header in its sample code, so the proposal there is already consistent).
-- The `X-Auth-Type: app` set in `webui/src/lib/transport.ts:88` (already gone if the web UI moved to cookie auth in Phase 3; otherwise just delete the line).
+- The `X-Auth-Type: app` set in `webui/src/lib/transport.ts:88`. The server detects app JWTs by shape, so the UI just drops this one header line and otherwise behaves identically.
 - All `switch r.Header.Get(AuthTypeHeader)` blocks in `RequireAuth`, `CheckAuth`, and `User`. Replace with a single helper, conceptually:
 
   ```go
@@ -140,9 +130,9 @@ Delete:
 
 ## Trade-offs
 
-**Phased rollout vs. one big PR.** Each phase is independently shippable. Phase 1 is already live. Phase 2 is a server-only change with no impact on existing API key holders. Phase 3 changes the web UI's network shape — most risk concentrates here, and it lands separately from anything affecting external clients. Phase 4 is the only phase that breaks any client still sending `X-Auth-Type: key`; by then we know there are none in our own tree, and any external integration that survived without sending it (the new n8n community node, Claude.ai via OAuth, any direct API key user) is unaffected. The cost of phasing is two extra PRs; the benefit is that no single change touches both server middleware and the web UI's auth model.
+**Phased rollout vs. one big PR.** Each phase is independently shippable. Phase 1 is already live. Phase 2 is a server-only change with no impact on existing API key holders. Phase 3 deletes dead zitadel-bearer code with no behavioral change for any current caller (the web UI keeps using `/auth/token` via cookie auth). Phase 4 is the only phase that touches client wire formats: any external caller still sending `X-Auth-Type: key` keeps working because dispatch is by token shape now, and `xat_…` is the shape for keys. The cost of phasing is extra PRs; the benefit is that no single change couples server middleware removal to client behavior changes.
 
-**`X-Org-ID` header vs. server-managed selected-org.** The header is stateless and matches the existing `org_id=` query parameter pattern at `/auth/token`. The alternative — a server-side "currently selected org" stored per-user — adds a database column and a new RPC, which is overbuilt for "the dropdown in the top right". The org dropdown still drives selection; the header is the wire format.
+**Keep `/auth/token` vs. delete it.** An earlier draft of this proposal had Phase 3 deleting `/auth/token` and migrating the web UI to cookie-only auth with an `X-Org-ID` header. That conflated two separate concerns: removing the zitadel OIDC bearer dispatch (genuinely dead code after Phase 2) and replacing the web UI's token mechanism (no good reason to touch). `/auth/token` is a perfectly fine cookie-authenticated endpoint that mints scoped app JWTs; the only thing leaving Phase 3 is the OIDC-bearer arrival path into it.
 
 **Removing `xagent setup` vs. keeping a CLI-driven login.** Removing it is the simpler outcome: no device flow, no OIDC dance, no token exchange round-trip in the CLI. The cost is that first-time users have to copy a key out of the web UI instead of running one command in their terminal. The `xagent login <key>` command preserves the "one CLI command does everything else" UX (config file, private key, workspaces.yaml), it just delegates the *credential acquisition* to the UI. This matches how most modern CLIs (`gh`, `fly`, `vercel`) work for first-time login.
 
@@ -154,6 +144,4 @@ Delete:
 
 2. **Backwards compatibility for `X-Auth-Type: key` callers outside this repo.** As long as Phase 4 lands last, the server happily ignores the header through Phases 1–3 (since `case AuthTypeKey:` still routes them to `validateKey`). Phase 4 silently drops the switch; an external caller that sets the header but uses a valid key still works because the dispatch is by token shape now, and `xat_…` is the shape for keys. The only breakage would be a caller sending `X-Auth-Type: bearer` with a zitadel access token *after* Phase 3, which goes to `validateAppToken`, fails, and gets a `401`. We don't believe any such caller exists outside the repo, but the changelog for the release containing Phase 3 should call this out.
 
-3. **App JWT TTL.** Out of scope here — `AppTokenTTL = 5 * time.Minute` in `internal/auth/apiauth/jwt.go:23` stays as-is. Phase 1 already fixed the n8n bug independent of the TTL, and Phase 3 (web UI cookie auth) removes the only place where a 5-minute TTL was user-visible. The TTL still matters for OAuth-issued app JWTs (Claude.ai), but that's governed by the OAuth proposal, not this one.
-
-4. **OrgID resolution on every request.** Once cookie-authenticated calls resolve OrgID via `X-Org-ID` + `UserResolver.ResolveOrg`, every request does a membership lookup in the DB. Today the app JWT carries `OrgID` and avoids the lookup. If this lookup turns out to be hot enough to matter, it can be cached on the cookie session (zitadel session is in the cookie, but adjacent server-side storage like an LRU keyed by `(user_id, org_id)` would do). Flagged as a follow-up rather than blocking.
+3. **App JWT TTL.** Out of scope here — `AppTokenTTL = 5 * time.Minute` in `internal/auth/apiauth/jwt.go:23` stays as-is. Phase 1 already fixed the n8n bug independent of the TTL. The TTL still matters for OAuth-issued app JWTs (Claude.ai) and for the web UI's `/auth/token` refresh cadence, but tuning it is a separate consideration.
