@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.4](https://github.com/icholy/xagent/compare/v0.15.3...v0.15.4) (2026-05-21)
+
+
+### Bug Fixes
+
+* return 401 for invalid Bearer tokens ([#624](https://github.com/icholy/xagent/issues/624)) ([de01986](https://github.com/icholy/xagent/commit/de019863e56d5a73da3f44d0b192f991238ab593))
+
+
+### Miscellaneous
+
+* **deps:** update dependency @typescript/native-preview to v7.0.0-dev.20260514.1 ([#620](https://github.com/icholy/xagent/issues/620)) ([98e6611](https://github.com/icholy/xagent/commit/98e6611ba0965ba347843725e165939a348d8014))
+
 ## [0.15.3](https://github.com/icholy/xagent/compare/v0.15.2...v0.15.3) (2026-05-20)
 
 
