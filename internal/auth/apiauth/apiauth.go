@@ -298,6 +298,13 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 						next.ServeHTTP(w, r)
 						return
 					}
+					// If a Bearer token was supplied but invalid/expired, return 401
+					// rather than falling through to cookie auth (which would return a
+					// redirect). OAuth clients like n8n only refresh on a 401 response.
+					if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+						http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+						return
+					}
 					a.cookie.RequireAuthentication()(a.attachUserInfo(next)).ServeHTTP(w, r)
 				}
 			}
