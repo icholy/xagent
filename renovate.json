@@ -12,6 +12,11 @@
       ]
     },
     {
+      "groupName": "typescript native preview",
+      "matchPackageNames": ["@typescript/native-preview"],
+      "schedule": ["before 5am on monday"]
+    },
+    {
       "matchUpdateTypes": ["patch"],
       "automerge": true
     }
