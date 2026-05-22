@@ -15,7 +15,7 @@ The only workaround today is to manually switch orgs in the navbar, by which poi
 
 ## Design
 
-Add a single `?org=<id>` query parameter to **every** route. The URL becomes the source of truth for the active org. A single route guard on the root route compares the URL's `org` against the active token, swaps tokens via the existing `/auth/token?org_id=…` endpoint on mismatch, and clears the React Query cache. Server URLs that point at a resource get the `org` query param appended at construction time.
+Add a single `?org=<id>` query parameter to **every** route. The URL becomes the source of truth for the active org. A single root-level route guard compares the URL's `org` against the active token and *clears* the token on mismatch — it does not fetch a new token itself. The existing on-demand refresh in `transport.fetch()` issues the new token the next time an API call is made, reading the desired org from the URL via `getOrgId()`. A single root-level effect listens for token-org changes via `transport.onOrgChange` and invalidates the React Query cache; that one listener handles both manual switcher clicks and guard-driven swaps. Server URLs that point at a resource get the `org` query param appended at construction time.
 
 ### Why every route (not just resource detail routes)
 
@@ -57,74 +57,103 @@ Child routes inherit the `org` search param via `useSearch({ from: '/' })` and d
 
 ```ts
 // webui/src/lib/ensure-org.ts
-import { redirect } from '@tanstack/react-router'
 import type { AuthTransport } from '@/lib/transport'
-import type { QueryClient } from '@tanstack/react-query'
 
-export async function ensureOrg({
+export function ensureOrg({
   search,
-  context: { auth, queryClient },
-  location,
+  context: { auth },
 }: {
   search: { org?: string }
-  context: { auth: AuthTransport; queryClient: QueryClient }
-  location: { pathname: string }
+  context: { auth: AuthTransport }
 }) {
   const wanted = search.org
   if (!wanted) return
-  if (wanted === auth.getOrgId()) return
-
-  try {
-    await auth.fetchToken(wanted)
-  } catch {
-    // Not a member of that org — strip the param and let the route render
-    // whatever it would normally render under the existing token.
-    throw redirect({
-      to: location.pathname,
-      search: (prev) => ({ ...prev, org: undefined }),
-    })
-  }
-  queryClient.removeQueries()
+  if (wanted === auth.tokenOrgId()) return
+  auth.clearToken()
 }
 ```
 
-Key points:
-- Common case (URL `org` matches active token) is a no-op early return.
-- `auth.fetchToken(wanted)` already validates membership server-side via `ResolveOrg` (`internal/command/server.go:335`); a 403 throws here.
-- A successful swap clears the React Query cache so stale data from the previous org is never displayed.
-- `auth` and `queryClient` are injected via `createRootRouteWithContext`, which is the same pattern already used for `queryClient` — no module-level singletons.
+The guard does **two** things in the mismatch case: read the URL, drop the stale token. That's it. No `await`, no `fetchToken`, no `queryClient.removeQueries`. Three reasons:
 
-### Org switcher in `__root.tsx`
+1. **`transport.fetch()` already refreshes on demand.** When the next API call runs, `getToken()` returns `null` (we just cleared it), `refreshToken()` fires, and `fetchToken()` issues a new token. Calling `fetchToken` with no arg uses `getOrgId()`, which under this proposal reads from the URL (see "Source of truth" below) — so the freshly issued token is for the right org without the guard having to pass anything explicitly.
+2. **Membership validation happens inside `ResolveOrg` server-side**, on the refresh call. If the user isn't a member, that refresh returns 403 (or 401), which the existing `transport.fetch` code path surfaces as it does today (redirect to `/auth/login`). No need for the guard to anticipate it.
+3. **Cache invalidation isn't the guard's problem.** It's a side effect of the token's org actually changing, which is a property of `transport.fetchToken` — see the next section.
 
-The current switcher (`handleOrgSwitch`) writes to localStorage, calls `fetchToken`, and either redirects to a fallback list page (`staticData.orgSwitchRedirect`) or invalidates queries. After this proposal it just navigates:
+The common case (URL `org` matches the active token) is a single comparison and an early return. The mismatch case is a single `clearToken()` call.
+
+`auth` is injected via `createRootRouteWithContext`, the same pattern already used for `queryClient` — no module-level singletons.
+
+### Single canonical cache-invalidation listener
+
+`AuthTransport` already exposes an `onOrgChange` event, fired from `notifyOrgChange()` inside `storeToken`. Today this is just a re-export of "localStorage org id changed." Under this proposal it becomes "the org embedded in the active token just changed" — which is the *actual* event we care about for cache invalidation.
+
+A single effect at the root listens once:
+
+```ts
+// webui/src/routes/__root.tsx (inside RootComponent)
+useEffect(
+  () => auth.onOrgChange(() => queryClient.removeQueries()),
+  [auth, queryClient],
+)
+```
+
+That's the *only* place cache invalidation lives. Both code paths funnel through it:
+
+- **Guard-driven swap**: URL changes → guard clears token → next API call refreshes → new token issued with different org claim → `onOrgChange` fires → `removeQueries()`.
+- **Switcher-driven swap**: user picks org from the dropdown → switcher navigates to new `?org=…` → guard clears token → … same path as above.
+
+So `handleOrgSwitch` in `__root.tsx` no longer contains any cache-invalidation logic. It collapses to a single navigation:
 
 ```ts
 const handleOrgSwitch = (orgId: string) => {
   const redirect = route?.staticData.orgSwitchRedirect
-  if (redirect) {
-    navigate({ to: redirect, search: { org: orgId } })
-  } else {
-    navigate({
-      to: '.',
-      search: (prev) => ({ ...prev, org: orgId }),
-      replace: true,
-    })
-  }
+  navigate(
+    redirect
+      ? { to: redirect, search: { org: orgId } }
+      : { to: '.', search: (prev) => ({ ...prev, org: orgId }), replace: true },
+  )
 }
 ```
 
-The `ensureOrg` guard runs after the navigation, fetches the new token, and clears the cache. `staticData.orgSwitchRedirect` stays — it's still useful when switching org from `/tasks/$id`, because task `$id` won't exist in the new org.
+### Source of truth for "what org should the next token be issued for"
+
+`AuthTransport.fetchToken()` calls `getOrgId()` to decide which org to request. Today that reads `localStorage[xagent_org_id]`. Under this proposal it reads the URL's `?org` instead:
+
+```ts
+// webui/src/lib/transport.ts (simplified)
+getOrgId(): string {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('org') ?? NO_ORG
+}
+```
+
+Reading from `window.location` directly (rather than threading the router into transport) keeps the dependency direction one-way: the router holds the URL; the transport reads from the URL when it needs to. The guard never has to *push* the new org into the transport — when `fetchToken` runs, the URL already reflects the desired org because the navigation that put it there is what triggered the guard in the first place.
+
+`NO_ORG` ("0") is still the fallback when `?org` is absent — `ResolveOrg` interprets it as the user's default org.
+
+Additionally, `AuthTransport` gains a small helper used by the guard:
+
+```ts
+// Returns the org id baked into the current token (decoded from JWT claims),
+// or null when there is no token. Distinct from getOrgId() which reads the
+// URL — they're equal on the happy path, divergent when the URL changed
+// faster than the token was refreshed.
+tokenOrgId(): string | null { ... }
+```
+
+The decode is a single base64-decode of the middle JWT segment plus a `claims.org_id` read; no crypto, no network.
 
 ### Removing the localStorage org id
 
-`xagent_org_id` is no longer the source of truth, so `transport.ts` simplifies:
+`xagent_org_id` is no longer needed as a storage slot — the URL drives `getOrgId()`, and the token itself carries the org id in its claims for any code that needs to know "what org is the *current session* actually scoped to" (the `onOrgChange` listener, the `useOrgId` hook for display purposes, `useOrgLocalStorage`'s per-org key suffix). Concretely in `transport.ts`:
 
-- `getOrgId()` reads the JWT claims (decoded once per token swap) instead of localStorage.
-- `storeToken()` no longer writes `ORG_ID_KEY`.
-- The `orgchange` `EventTarget` machinery and `useSyncExternalStore` in `useOrgId` go away — `useOrgId()` becomes `useSearch({ from: '/' }).org ?? <decoded-from-token>`.
-- `useOrgLocalStorage` continues to scope per-org keys using the same `useOrgId()` result, so existing call sites (`tasks.new.tsx`) keep working.
+- `ORG_ID_KEY` and all `localStorage.setItem(ORG_ID_KEY, …)` / `localStorage.removeItem(ORG_ID_KEY)` calls go away.
+- `getOrgId()` reads from `window.location.search` as shown above.
+- `tokenOrgId()` (new) decodes the JWT for the guard.
+- `notifyOrgChange()` still exists, but is fired by `storeToken` when the *token claims* org changes between the previous and the new token (compute the diff against `tokenOrgId()` before assignment).
+- `useOrgId()` and `useOrgLocalStorage` continue to read via `useSyncExternalStore` subscribing to `onOrgChange`, so existing call sites (`tasks.new.tsx`) keep working without changes.
 
-Bootstrap: when there's no `?org` in the URL (e.g. fresh load on `/`), the existing `fetchToken()` with no arg already resolves to the user's default org (see `ResolveOrg` line `335` — `orgID == 0` → default org). The first paint can then read the org from the freshly-issued token.
+Bootstrap: on a fresh load with no `?org` and no token, `transport.fetch()` triggers `refreshToken()` → `fetchToken()` with no arg → `getOrgId()` returns `NO_ORG` → `ResolveOrg` picks the user's default org (`internal/command/server.go:335`). After the token returns, `notifyOrgChange` fires, and `useOrgId()` re-renders with the new value.
 
 ### Server-generated URLs include `?org`
 
@@ -154,10 +183,10 @@ Event URLs follow the same pattern when they're materialised in `eventserver`/`a
 
 ### Web UI changes summary
 
-- `webui/src/routes/__root.tsx`: declare `validateSearch` + `beforeLoad: ensureOrg`, simplify `handleOrgSwitch` to a single `navigate` call, pass `auth` via root context.
-- `webui/src/lib/ensure-org.ts`: new guard (above).
-- `webui/src/lib/transport.ts`: drop `ORG_ID_KEY`, `orgchange` event, `notifyOrgChange`, and the `lastOrgId` tracking. `getOrgId()` reads from token claims.
-- `webui/src/hooks/use-org-id.ts`: read from root search params instead of `useSyncExternalStore`.
+- `webui/src/routes/__root.tsx`: declare `validateSearch` + `beforeLoad: ensureOrg`, simplify `handleOrgSwitch` to a single `navigate` call, mount the single `auth.onOrgChange(() => queryClient.removeQueries())` effect, pass `auth` via root context.
+- `webui/src/lib/ensure-org.ts`: new guard — three lines of real logic (above).
+- `webui/src/lib/transport.ts`: `getOrgId()` reads from URL search; drop `ORG_ID_KEY` storage; add `tokenOrgId()` (JWT claim decode); fire `notifyOrgChange` based on token-claim diff rather than localStorage diff.
+- `webui/src/hooks/use-org-id.ts`: unchanged structurally (still `useSyncExternalStore` + `onOrgChange`); semantics shift to "current token's org" rather than "stored org id."
 - `webui/src/main.tsx` (or wherever `createRouter` runs): inject `auth` into the router context alongside `queryClient`.
 
 ### Backwards compatibility
@@ -172,7 +201,9 @@ URLs without `?org` keep working: the guard's early-return covers them and the u
 
 **Auto-switch vs. prompt-to-switch**: We could detect the mismatch and show a "This task belongs to org X — switch?" dialog. That's friendlier in the abstract but adds an extra click to every cross-org link and complicates the "click and go" experience that motivates this proposal. Auto-switch matches what users intuitively expect when they click a link.
 
-**Route guard vs. component-level effect**: Doing the switch in `beforeLoad` rather than a `useEffect` inside the component avoids a flash of "wrong org" data and prevents queries firing with the wrong token. The cost is coupling to TanStack Router internals; that coupling already exists for `staticData.orgSwitchRedirect`.
+**Route guard vs. component-level effect**: Doing the swap in `beforeLoad` rather than a `useEffect` inside the component avoids a flash of "wrong org" data and prevents queries firing with the stale token. The cost is coupling to TanStack Router internals; that coupling already exists for `staticData.orgSwitchRedirect`.
+
+**Active fetch in guard vs. clear-and-let-refresh**: An earlier draft had the guard `await auth.fetchToken(wanted)` and then `queryClient.removeQueries()`. That works, but it duplicates the token-refresh path (now there's the guard *and* the 401 handler in `transport.fetch`, each capable of swapping the token) and forces the guard to own cache invalidation. The chosen design has the guard just clear the stale token; refresh happens via the existing on-demand path; invalidation happens via the existing `onOrgChange` event with a single listener at the root. Net: fewer code paths, less duplication, and the guard does not have to be async.
 
 **Drop localStorage vs. keep as fallback**: Universal `?org` makes `xagent_org_id` redundant, since every URL carries the org and `ResolveOrg` already picks the user's default when org id is absent. Keeping localStorage would mean two sources of truth that can drift. Dropping it is simpler.
 
