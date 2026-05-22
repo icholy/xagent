@@ -14,9 +14,9 @@ We need a per-task auto-archive timeout that lets the system reclaim these conta
 
 ### Overview
 
-Add an `archive_after` interval to each task. After the task enters a terminal status, a server-side background worker archives it once `updated_at + archive_after < NOW()`. The existing `Prune()` loop on the runner then removes the container as it already does today. No runner changes are required.
+Add an `archive_after` interval to each task. Treat "archived" as a value computed at read time: a task is effectively archived if either the persisted `archived` column is `TRUE`, **or** it's in a terminal status past its `archive_after` deadline.
 
-Per-task configuration lets transient automated tasks be archived in minutes, while interactive or human-followed tasks can opt out (or be kept for days).
+No background worker, no scheduled writes. Every place that currently reads `archived` (the runner's `Prune()`, list/get queries, the API) sees the effective value and behaves exactly as it does today when a human archives a task — including the runner reaping the container.
 
 ### Database schema
 
@@ -26,22 +26,34 @@ New migration `20260522000001_task_archive_after.sql`:
 ALTER TABLE tasks
     ADD COLUMN archive_after interval;
 
--- Index supports the auto-archive worker query: scan small set of candidates
--- without table-scanning every archived row.
-CREATE INDEX idx_tasks_auto_archive ON tasks (updated_at)
-    WHERE archived = FALSE
-      AND archive_after IS NOT NULL
-      AND status IN (5, 6, 7); -- COMPLETED, FAILED, CANCELLED
+-- Helper function: is this task effectively archived right now?
+CREATE OR REPLACE FUNCTION task_effective_archived(
+    archived boolean,
+    status integer,
+    command integer,
+    updated_at timestamp,
+    archive_after interval
+) RETURNS boolean AS $$
+    SELECT archived
+        OR (
+            archive_after IS NOT NULL
+            AND status IN (5, 6, 7)  -- COMPLETED, FAILED, CANCELLED
+            AND command = 0          -- no pending command
+            AND updated_at + archive_after < NOW()
+        );
+$$ LANGUAGE SQL STABLE;
 ```
 
 `archive_after` is a nullable `interval`:
 
 - `NULL` — never auto-archive (current behaviour; explicit opt-out for tasks a human is following)
-- non-null — archive once `updated_at + archive_after < NOW()` and `status IN (COMPLETED, FAILED, CANCELLED)`
+- non-null — once `updated_at + archive_after < NOW()` and `status IN (COMPLETED, FAILED, CANCELLED)` with no pending command, queries report the task as archived
 
 `updated_at` is already maintained by every status transition and is the right anchor: it advances on each restart, so a re-run extends the deadline naturally. `interval` (rather than e.g. `archive_at` timestamp) is chosen because the deadline is a property of *how long the task should linger after finishing*, not a fixed wall-clock instant — restarts and command transitions reset the clock for free.
 
-If a client doesn't specify `archive_after` at creation time, the task is created with `NULL` (never auto-archive). Callers that want auto-archive opt in per task. This keeps the surface area small and avoids encoding a global policy in the server — the integrations and tools that create workflow tasks are the right place to express "these tasks are ephemeral."
+If a client doesn't specify `archive_after` at creation time, the task is created with `NULL` (never auto-archive). Callers that want auto-archive opt in per task.
+
+`task_effective_archived` is a `STABLE` SQL function. It can't be used in a generated column (because `NOW()` isn't `IMMUTABLE`), but it can be inlined by the planner and is cheap to call. Defining it once keeps every query site consistent — no chance of one place forgetting to apply the predicate.
 
 ### Proto changes
 
@@ -70,6 +82,8 @@ message UpdateTaskRequest {
 }
 ```
 
+The proto `Task.archived` field continues to carry the **effective** archived value, so clients (Web UI, CLI, runner) don't need to be aware that some tasks are archived implicitly. A separate `archive_after` field exposes the configured interval for display and edit.
+
 ### Model changes
 
 In `internal/model/task.go`:
@@ -81,91 +95,52 @@ type Task struct {
 }
 ```
 
-A helper on `Task` decides eligibility for auto-archive (kept next to `CanArchive`):
+`Task.Archived` continues to carry the effective value (populated by the SELECT). The existing helpers (`CanArchive`, `CanUnarchive`, `applyRunnerEventStarted` which cancels an archived task that tries to start, etc.) all keep working as-is — they read `t.Archived` and never need to know whether it came from the column or the predicate.
 
-```go
-func (t *Task) ShouldAutoArchive(now time.Time) bool {
-    if !t.CanArchive() || t.ArchiveAfter == nil {
-        return false
-    }
-    return now.After(t.UpdatedAt.Add(*t.ArchiveAfter))
-}
-```
-
-`ShouldAutoArchive` reuses `CanArchive()` so it can never violate the existing state-machine rules (e.g. it won't archive a task that still has a pending `command`).
+`ArchiveTask` (manual archive) writes `archived = TRUE` to the column as today. `UnarchiveTask` writes `archived = FALSE` and, to avoid the predicate immediately re-archiving the task, clears `archive_after` as part of the same update. (Captured in Open Questions — there are alternatives.)
 
 ### Store changes
 
-New query in `internal/store/sql/queries/task.sql`:
+Each existing query that reads `archived` is updated to read `task_effective_archived(...) AS archived` instead. Each query that filters on `archived` is updated to filter on the function.
 
 ```sql
--- name: ListAutoArchiveCandidates :many
+-- name: GetTask :one
 SELECT id, name, parent, runner, workspace, instructions, status, command,
-       version, created_at, updated_at, archived, org_id, archive_after
+       version, created_at, updated_at,
+       task_effective_archived(archived, status, command, updated_at, archive_after) AS archived,
+       org_id, archive_after
 FROM tasks
-WHERE archived = FALSE
-  AND archive_after IS NOT NULL
-  AND status IN (5, 6, 7)
-  AND command = 0
-  AND updated_at + archive_after < NOW()
-ORDER BY updated_at
-LIMIT $1;
+WHERE id = $1 AND org_id = $2;
+
+-- name: ListTasks :many
+SELECT id, name, parent, runner, workspace, instructions, status, command,
+       version, created_at, updated_at,
+       task_effective_archived(archived, status, command, updated_at, archive_after) AS archived,
+       org_id, archive_after
+FROM tasks
+WHERE org_id = $1
+  AND NOT task_effective_archived(archived, status, command, updated_at, archive_after)
+ORDER BY created_at DESC;
 ```
 
-`LIMIT` keeps the worker tick bounded; the index above makes this an index-only-friendly scan over the active candidate set.
+`ListTasksForRunner` gets the same treatment (and keeps its `command != 0` predicate, which is mutually exclusive with the auto-archive predicate).
 
-`CreateTask` / `UpdateTask` SQL is extended to include `archive_after`.
+`GetTaskForUpdate` is used inside the manual archive/unarchive transactions and **does not** apply the function — those code paths need to read the persisted `archived` column to know whether a manual archive has happened. This is the one place where the raw value matters; everywhere else uses the effective value.
 
-### Background worker
+For Postgres planner support, add an index that helps the `ListTasks`/`ListTasksForRunner` filter prune the implicit-archived rows efficiently:
 
-A new package `internal/server/archiver/` runs alongside the API server, started from `internal/command/server.go`. It exposes a single goroutine driven by a `time.Ticker`:
-
-```go
-type Archiver struct {
-    log       *slog.Logger
-    store     *store.Store
-    publisher pubsub.Publisher
-    interval  time.Duration // tick interval, e.g. 1 minute
-    batch     int           // max tasks archived per tick, e.g. 100
-}
-
-func (a *Archiver) Run(ctx context.Context) error {
-    t := time.NewTicker(a.interval)
-    defer t.Stop()
-    for {
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        case <-t.C:
-            if err := a.tick(ctx); err != nil {
-                a.log.Error("auto-archive tick failed", "error", err)
-            }
-        }
-    }
-}
+```sql
+CREATE INDEX idx_tasks_active_org_created
+    ON tasks (org_id, created_at DESC)
+    WHERE NOT archived;
 ```
 
-Each tick:
+The implicit-archive predicate is then evaluated only on the (small) set of unarchived terminal tasks with a non-null `archive_after`, which is bounded by recent activity.
 
-1. Fetches up to `batch` candidates via `ListAutoArchiveCandidates`.
-2. For each candidate, opens a transaction, re-reads with `GetTaskForUpdate`, re-checks `ShouldAutoArchive` (defends against races with concurrent restarts), calls `task.Archive()`, persists, writes an audit log row (`Type: "audit"`, `Content: "auto-archived after <duration>"`), commits.
-3. Publishes a `change` notification per archived task using the existing `pubsub.Publisher`, so the Web UI's SSE stream updates in real time exactly as if a human clicked Archive.
+### Manual archive / unarchive
 
-The audit log entry keeps the existing UI surface honest — users browsing a task's log can see why it disappeared from their list.
-
-The candidate query uses a partial index, so even with a high tick rate the worker is cheap. A 1-minute interval is plenty given that the smallest sensible timeout is on the order of minutes; faster ticks add load without helping.
-
-Server runs as a single process today, so no leader election is needed. If we ever scale to multiple server replicas, the worker can be gated by a Postgres advisory lock (`pg_try_advisory_lock`) — noted under Open Questions.
-
-### Server CLI flag
-
-`xagent server` gets a flag to control the worker — primarily for tuning, not for end users:
-
-```
---archive-tick duration   How often to scan for auto-archive candidates (default 1m)
-```
-
-Disabling the worker entirely is done by setting the flag to `0`. Users control behaviour via the per-task setting; this flag is operator-only.
+- **ArchiveTask** sets `archived = TRUE` as today. Idempotent regardless of whether the task was already implicitly archived.
+- **UnarchiveTask** sets `archived = FALSE` and clears `archive_after`. Without clearing the timeout, the task would flip back to implicitly archived on the next read — confusing. Clearing it explicitly says "I want this task back as an active item; don't auto-archive it again."
 
 ### CLI changes
 
@@ -185,25 +160,32 @@ The xagent MCP server's `create_child_task` tool gets an `archive_after` paramet
 
 The `update_my_task` tool also gets `archive_after`, so an agent that knows it's wrapping up can set a short timeout itself.
 
+### Container cleanup
+
+The runner's `Prune()` loop is **unchanged**. It already iterates Docker containers, looks each one up via `GetTask`, and removes stopped containers whose task is archived. Because `GetTask` now returns the effective archived value, expired tasks naturally trigger pruning on the next prune tick (every `--poll` interval — default 5s).
+
+This is the whole point of the design: piggyback on existing machinery instead of adding a parallel writer.
+
 ## Trade-offs
 
 | Approach | Pros | Cons |
 |----------|------|------|
-| **Per-task `archive_after` + server worker** (proposed) | Fine-grained control, no runner changes, fits existing archive semantics | New background worker; one more column to migrate |
+| **Per-task `archive_after` + read-time predicate** (proposed) | No background worker, no scheduling, no race conditions; eventually consistent for free; runner unchanged | Every read query touching `archived` must use the helper function; UI doesn't get a real-time SSE notification at the moment the deadline passes |
+| **Per-task `archive_after` + server worker** (earlier version) | Real-time SSE notification at archive time; per-task audit log entry | New background process to operate; possible duplicate writes under multi-replica server |
 | **Runner-side cleanup of unarchived tasks** | No server changes | Conflates "archived" with "cleaned up"; runner reaches into task lifecycle decisions it doesn't own; multiple runners would each need the same policy |
 | **Auto-archive on terminal transition (immediately)** | Trivial implementation | Defeats the purpose of `archived = false` as a UI inbox; humans can't review failures before they vanish |
 | **Hard-delete instead of archive** | Reclaims disk faster (logs, links, events go too) | Loses audit trail and breaks `parent` references from child tasks; archived rows are cheap to keep |
 
-The proposed design keeps the existing archive semantics intact and only adds an automated trigger for the same operation a human does today. The runner doesn't change at all — its `Prune()` already does the right thing for archived tasks.
+Choosing the read-time predicate over a worker trades a small loss (no live SSE event when the deadline crosses) for a much simpler operational story: nothing to schedule, nothing to monitor, no race against manual archive/unarchive. The Web UI already refetches on focus and on every poll tick from the runner-driven `change` notifications; users rarely notice the missing edge transition.
 
 `interval` rather than `archive_at` timestamp means restarts and updates extend the deadline naturally (because `updated_at` advances), which matches the intent: "X time after the task is actually done."
 
 ## Open Questions
 
-1. **Should child tasks inherit `archive_after` from their parent?** Right now a parent must pass it explicitly to `create_child_task`. Inheriting would mean a workflow only needs to set the timeout once at the top, which is convenient but introduces non-obvious behaviour. Likely answer: don't inherit; require explicit value, since the callers creating child tasks know their own intent.
+1. **Unarchive semantics.** Proposed: `UnarchiveTask` also clears `archive_after` so the task doesn't flip back to implicitly archived. Alternative: leave `archive_after` alone but reset `updated_at` (so the timer restarts). Or: introduce a second column `archive_after_disabled bool` that the unarchive call sets. The proposed behaviour is simplest; the unarchive flow is rare enough that "you must re-set the timeout if you still want it" feels acceptable.
 
-2. **What about archived tasks with unarchived children?** A parent archived by the worker might still have running or terminal-but-unarchived children. The current archive operation doesn't cascade. Most likely we leave this alone (children get archived independently when their own timer fires), but should confirm there's no UI assumption that an archived parent implies archived descendants.
+2. **Should child tasks inherit `archive_after` from their parent?** Right now a parent must pass it explicitly to `create_child_task`. Inheriting would mean a workflow only needs to set the timeout once at the top, which is convenient but introduces non-obvious behaviour. Likely answer: don't inherit; require explicit value, since the callers creating child tasks know their own intent.
 
-3. **Multi-replica server.** Today the server is a single process. If we ever run multiple replicas, two workers will both try to archive the same task. The transactional `GetTaskForUpdate` + `ShouldAutoArchive` re-check makes this correct (one wins, the other no-ops), but wastes work. Gating with `pg_try_advisory_lock` is cheap and could be added at that point.
+3. **What about archived tasks with unarchived children?** A parent archived (manually or implicitly) might still have running or terminal-but-unarchived children. The current archive operation doesn't cascade. Most likely we leave this alone (children get archived independently when their own deadline passes), but should confirm there's no UI assumption that an archived parent implies archived descendants.
 
-4. **Surfacing auto-archived tasks.** Once a task is archived it falls out of `ListTasks` (which filters `archived = FALSE`). Users investigating "why did my container disappear" need a way to find these — the existing unarchived task views already support this, but discoverability could be improved (e.g. a dedicated "Recently auto-archived" filter). Out of scope for this proposal but worth noting.
+4. **Surfacing auto-archived tasks.** Once a task is effectively archived it falls out of `ListTasks`. Users investigating "why did my container disappear" need a way to find these. The persisted `archived` flag is still `FALSE` for implicitly-archived tasks, which is a useful signal — a future "show implicitly archived" filter could query `archive_after IS NOT NULL AND NOT archived AND status IN (...) AND updated_at + archive_after < NOW()`. Out of scope for this proposal but worth noting.
