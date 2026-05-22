@@ -1,6 +1,6 @@
 module github.com/icholy/xagent
 
-go 1.25.6
+go 1.26
 
 require (
 	connectrpc.com/connect v1.19.2
@@ -96,7 +96,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
-	github.com/matryer/moq v0.6.0 // indirect
+	github.com/matryer/moq v0.7.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
