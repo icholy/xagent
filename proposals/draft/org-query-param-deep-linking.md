@@ -15,70 +15,70 @@ The only workaround today is to manually switch orgs in the navbar, by which poi
 
 ## Design
 
-Add an optional `?org=<id>` query parameter to deep-linkable routes. When a route loads, if the URL's `org` does not match the currently scoped org, the UI fetches a new token for that org and re-renders. Server URLs that point at a resource get the `org` query param appended at construction time.
+Add a single `?org=<id>` query parameter to **every** route. The URL becomes the source of truth for the active org. A single route guard on the root route compares the URL's `org` against the active token, swaps tokens via the existing `/auth/token?org_id=…` endpoint on mismatch, and clears the React Query cache. Server URLs that point at a resource get the `org` query param appended at construction time.
 
-### Routes that take `?org`
+### Why every route (not just resource detail routes)
 
-The org param applies to any route that displays an org-scoped resource:
+The earlier draft of this proposal opted in route-by-route (`/tasks/$id`, `/events/$id`, etc.) and left "cosmetic" routes (`/settings`, `/tasks/new`) alone. Doing it universally simplifies several things:
 
-| Route              | Notes                            |
-|--------------------|----------------------------------|
-| `/tasks/$id`       | task detail                      |
-| `/events/$id`      | event detail                     |
-| `/tasks`           | list — pinning org for share     |
-| `/events`          | list                             |
-| `/workspaces`      | list                             |
-| `/members`         | list                             |
-| `/keys`            | list                             |
+1. **Single registration point.** `validateSearch` and `beforeLoad` live on `__root.tsx`, not duplicated on every route. New routes inherit org-awareness automatically.
+2. **URL is the source of truth.** Every page the user can be on carries the active org in the URL, which means refreshes, back-button, copy-paste, and screenshot-for-a-teammate all preserve the org context.
+3. **`xagent_org_id` localStorage can go away.** It's only needed today because the URL doesn't carry the org. With universal `?org`, localStorage degrades to a tiny bootstrap hint for the first navigation after login, and even that can be replaced by "let `ResolveOrg` pick the user's default org" (the existing behaviour when `org_id=0`).
+4. **Org switcher is trivial.** It just calls `navigate({ search: { ...prev, org: newId } })`. The root-level guard does the token swap. No more `staticData.orgSwitchRedirect`/`removeQueries`/`invalidateQueries` branching inside the switcher itself — the guard owns that logic.
+5. **No "is this route org-scoped?" judgement call.** Today `/settings` doesn't depend on org for *content*, but the user's *token* still does. Keeping the param on `/settings` means the active org is unambiguous everywhere.
 
-Routes that have no org-scoped content (`/settings`, `/tasks/new`, `/events/new`) do not need it.
+The cost is ~10 characters of URL on every page and a search-param on routes that don't strictly need one. That's cheap relative to the duplication we avoid.
 
-### TanStack Router search schema
+### TanStack Router setup
 
-Each route that opts in declares an `org` search param via the existing TanStack Router search-validation API:
+Single declaration on the root route:
 
 ```ts
-// webui/src/routes/tasks.$id.tsx
+// webui/src/routes/__root.tsx
 import { z } from 'zod'
 
 const search = z.object({
   org: z.string().optional(),
 })
 
-export const Route = createFileRoute('/tasks/$id')({
-  staticData: { orgSwitchRedirect: '/tasks' },
+export const Route = createRootRouteWithContext<{
+  queryClient: QueryClient
+  auth: AuthTransport
+}>()({
   validateSearch: search,
   beforeLoad: ensureOrg,
-  component: TaskDetail,
+  component: RootComponent,
 })
 ```
 
-`beforeLoad` runs before any route data fetching. Putting the org-switch there means the route's queries only ever fire against the correct token.
+Child routes inherit the `org` search param via `useSearch({ from: '/' })` and don't need to declare it themselves. `beforeLoad` on the root runs before any child route's loaders, so child queries only ever fire against the correct token.
 
-### `ensureOrg` route guard
-
-A shared helper in `webui/src/lib/ensure-org.ts`:
+### `ensureOrg` guard
 
 ```ts
+// webui/src/lib/ensure-org.ts
 import { redirect } from '@tanstack/react-router'
-import { authTransport } from '@/lib/services'
-import { queryClient } from '@/lib/services'
+import type { AuthTransport } from '@/lib/transport'
+import type { QueryClient } from '@tanstack/react-query'
 
 export async function ensureOrg({
   search,
+  context: { auth, queryClient },
+  location,
 }: {
   search: { org?: string }
+  context: { auth: AuthTransport; queryClient: QueryClient }
+  location: { pathname: string }
 }) {
   const wanted = search.org
   if (!wanted) return
-  if (wanted === authTransport.getOrgId()) return
+  if (wanted === auth.getOrgId()) return
 
   try {
-    await authTransport.fetchToken(wanted)
-  } catch (err) {
-    // User is not a member of that org — strip the param and continue
-    // with the existing token. Backend will return NotFound and the
-    // route renders its "not found" view.
+    await auth.fetchToken(wanted)
+  } catch {
+    // Not a member of that org — strip the param and let the route render
+    // whatever it would normally render under the existing token.
     throw redirect({
       to: location.pathname,
       search: (prev) => ({ ...prev, org: undefined }),
@@ -89,54 +89,49 @@ export async function ensureOrg({
 ```
 
 Key points:
-- The guard is a no-op when the URL's `org` already matches the active one — the common case (user clicks a link in their own org).
-- A successful org switch invalidates the entire React Query cache so stale data from the previous org is not displayed.
-- The `fetchToken` call already validates org membership server-side via `ResolveOrg` (`internal/command/server.go:335`). If the user is not a member of the requested org, the backend returns 403, the guard strips the bogus `org` param, and the user sees the existing "Task not found" view in their actual org.
-- The `org` param is honoured for one navigation: after the switch the param is preserved in the URL so a refresh or copy-paste still routes correctly.
+- Common case (URL `org` matches active token) is a no-op early return.
+- `auth.fetchToken(wanted)` already validates membership server-side via `ResolveOrg` (`internal/command/server.go:335`); a 403 throws here.
+- A successful swap clears the React Query cache so stale data from the previous org is never displayed.
+- `auth` and `queryClient` are injected via `createRootRouteWithContext`, which is the same pattern already used for `queryClient` — no module-level singletons.
 
-### Sync with org switcher
+### Org switcher in `__root.tsx`
 
-The `__root.tsx` org switcher (`handleOrgSwitch`) currently writes the new org to localStorage and either redirects to a fallback list page or invalidates queries. After this proposal it also updates the URL:
+The current switcher (`handleOrgSwitch`) writes to localStorage, calls `fetchToken`, and either redirects to a fallback list page (`staticData.orgSwitchRedirect`) or invalidates queries. After this proposal it just navigates:
 
 ```ts
-const handleOrgSwitch = async (orgId: string) => {
-  await auth.fetchToken(orgId)
+const handleOrgSwitch = (orgId: string) => {
   const redirect = route?.staticData.orgSwitchRedirect
   if (redirect) {
-    queryClient.removeQueries()
-    await navigate({ to: redirect, search: { org: orgId } })
+    navigate({ to: redirect, search: { org: orgId } })
   } else {
-    await navigate({
+    navigate({
       to: '.',
       search: (prev) => ({ ...prev, org: orgId }),
       replace: true,
     })
-    await queryClient.invalidateQueries()
   }
 }
 ```
 
-Keeping the URL and `localStorage` in sync makes the URL the source of truth while the user is on the page; localStorage remains the fallback for routes that don't declare `org` (the landing case after a fresh login).
+The `ensureOrg` guard runs after the navigation, fetches the new token, and clears the cache. `staticData.orgSwitchRedirect` stays — it's still useful when switching org from `/tasks/$id`, because task `$id` won't exist in the new org.
+
+### Removing the localStorage org id
+
+`xagent_org_id` is no longer the source of truth, so `transport.ts` simplifies:
+
+- `getOrgId()` reads the JWT claims (decoded once per token swap) instead of localStorage.
+- `storeToken()` no longer writes `ORG_ID_KEY`.
+- The `orgchange` `EventTarget` machinery and `useSyncExternalStore` in `useOrgId` go away — `useOrgId()` becomes `useSearch({ from: '/' }).org ?? <decoded-from-token>`.
+- `useOrgLocalStorage` continues to scope per-org keys using the same `useOrgId()` result, so existing call sites (`tasks.new.tsx`) keep working.
+
+Bootstrap: when there's no `?org` in the URL (e.g. fresh load on `/`), the existing `fetchToken()` with no arg already resolves to the user's default org (see `ResolveOrg` line `335` — `orgID == 0` → default org). The first paint can then read the org from the freshly-issued token.
 
 ### Server-generated URLs include `?org`
 
-URLs constructed server-side gain the org param so they survive being pasted into a different browser or shared with a teammate who has access:
+URLs constructed server-side gain the org param so they survive being pasted into a different browser or shared with a teammate who has access to multiple orgs:
 
 ```go
-// internal/model/task.go
-func (t *Task) Proto(baseURL string) *xagentv1.Task {
-    var url string
-    if baseURL != "" {
-        url = fmt.Sprintf("%s/tasks/%d?org=%d", baseURL, t.ID, t.OrgID)
-    }
-    // ...
-}
-```
-
-The same change applies to the four `mcpserver.go` sites that build `%s/ui/tasks/%d`. A small helper avoids duplication:
-
-```go
-// internal/model/url.go
+// internal/model/url.go (new)
 func TaskURL(baseURL string, taskID, orgID int64) string {
     if baseURL == "" {
         return ""
@@ -145,35 +140,41 @@ func TaskURL(baseURL string, taskID, orgID int64) string {
 }
 ```
 
-(There is also an MCP base URL with a `/ui` prefix — keep that prefix in the MCP helper variant.)
+Call sites:
+- `internal/model/task.go:85` — `Task.Proto`.
+- `internal/server/mcpserver/mcpserver.go:145,203,264,304` — `report`, link/child creation responses. The MCP base URL has a `/ui` prefix, so the helper variant for MCP is `TaskUIURL`.
 
-Event URLs follow the same pattern when they're materialised in `eventserver`/`apiserver` (currently events don't carry a UI URL through proto, so this is a no-op until that surfaces).
+Event URLs follow the same pattern when they're materialised in `eventserver`/`apiserver`; today events don't carry a UI URL through proto, so this is a no-op until that surfaces.
 
 ### No backend protocol changes
 
-This proposal does not change the wire protocol or the JWT issuance flow:
 - The token is still scoped to one org at a time.
-- `/auth/token?org_id=…` already exists and is the mechanism the guard uses.
+- `/auth/token?org_id=…` already exists and is the only mechanism used.
 - No new RPCs, no DB migrations.
 
 ### Web UI changes summary
 
-- New file `webui/src/lib/ensure-org.ts` (the guard).
-- `webui/src/routes/tasks.$id.tsx`, `events.$id.tsx`, `tasks.index.tsx`, `events.index.tsx`, `workspaces.tsx`, `members.tsx`, `keys.tsx`: add `validateSearch` and `beforeLoad: ensureOrg`.
-- `webui/src/routes/__root.tsx`: org switcher also updates URL `org` param.
-- `webui/src/lib/services.ts`: export `authTransport` and `queryClient` so the guard can use them outside React (alternatively pass via `createRootRouteWithContext` — see Open Questions).
+- `webui/src/routes/__root.tsx`: declare `validateSearch` + `beforeLoad: ensureOrg`, simplify `handleOrgSwitch` to a single `navigate` call, pass `auth` via root context.
+- `webui/src/lib/ensure-org.ts`: new guard (above).
+- `webui/src/lib/transport.ts`: drop `ORG_ID_KEY`, `orgchange` event, `notifyOrgChange`, and the `lastOrgId` tracking. `getOrgId()` reads from token claims.
+- `webui/src/hooks/use-org-id.ts`: read from root search params instead of `useSyncExternalStore`.
+- `webui/src/main.tsx` (or wherever `createRouter` runs): inject `auth` into the router context alongside `queryClient`.
 
 ### Backwards compatibility
 
-URLs without `?org` keep working exactly as today: the guard returns immediately and the route loads against the user's current token. Old bookmarks, old Slack messages, and old PR comments are unaffected. The new param is purely additive.
+URLs without `?org` keep working: the guard's early-return covers them and the user lands in their default-org token. Old bookmarks, Slack messages, and PR comments are unaffected. The new param is purely additive on read; the change to server-generated URLs only affects URLs *minted after* the change ships.
 
 ## Trade-offs
 
-**Query param vs. path segment (`/o/:org/tasks/:id`)**: A path-based org scope is more "RESTful" and surfaces the org in URLs without ambiguity, but it requires re-keying every route and every server-generated URL, breaks every existing bookmark, and forces the org into routes where it's irrelevant (e.g. `/settings`). A query param is additive, optional, and ignorable — much cheaper to roll out and easier to revert.
+**Universal vs. selective `?org`**: This proposal applies `?org` to every route. The selective alternative — declaring it only on resource detail routes — has the appeal of "param only where it matters," but every route's active org is already implicit in the user's token, so making it explicit in the URL is *more* honest, not less. Universal placement also eliminates the per-route opt-in and the "did we remember to add it?" failure mode for new routes.
+
+**Query param vs. path segment (`/o/:org/tasks/:id`)**: A path-based org scope is more "RESTful" and surfaces the org in URLs without ambiguity, but it requires re-keying every route and every server-generated URL, breaks every existing bookmark, and pushes the org into routes where it's a content-irrelevant prefix. A query param is additive, ignorable when absent, and easy to revert.
 
 **Auto-switch vs. prompt-to-switch**: We could detect the mismatch and show a "This task belongs to org X — switch?" dialog. That's friendlier in the abstract but adds an extra click to every cross-org link and complicates the "click and go" experience that motivates this proposal. Auto-switch matches what users intuitively expect when they click a link.
 
 **Route guard vs. component-level effect**: Doing the switch in `beforeLoad` rather than a `useEffect` inside the component avoids a flash of "wrong org" data and prevents queries firing with the wrong token. The cost is coupling to TanStack Router internals; that coupling already exists for `staticData.orgSwitchRedirect`.
+
+**Drop localStorage vs. keep as fallback**: Universal `?org` makes `xagent_org_id` redundant, since every URL carries the org and `ResolveOrg` already picks the user's default when org id is absent. Keeping localStorage would mean two sources of truth that can drift. Dropping it is simpler.
 
 **Inline org in JWT vs. per-request org header**: Refactoring the API so the org is a per-request value (header or path) would eliminate the token-swap entirely and let the same token serve any org the user belongs to. That's a much larger change and is out of scope here; the query-param approach is forward-compatible — if we move to per-request orgs later, the URLs already carry the org id.
 
@@ -181,9 +182,6 @@ URLs without `?org` keep working exactly as today: the guard returns immediately
 
 ## Open Questions
 
-- **Where to expose `authTransport` and `queryClient` to the route guard.** Two options:
-  1. Export them as module-level singletons from `webui/src/lib/services.ts` and import directly.
-  2. Pass them via `createRootRouteWithContext` (already used for `queryClient`) and read from the route context inside `beforeLoad`. Slightly more boilerplate but plays nicer with tests.
-- **Should the org switcher also strip the `org` param when switching to "no redirect" routes?** The proposed implementation keeps the param synced; an alternative is to leave it stale on those routes and let `ensureOrg` re-apply it next time. Keeping it synced is less surprising.
-- **Do we want a one-time toast when the guard auto-switches orgs?** ("Switched to org X to open this task.") Useful for users with many orgs who might otherwise wonder why the org dropdown changed. Easy to add later if needed.
-- **Truncated org in URL when not a member.** The guard strips `?org` if the token fetch fails. An alternative is to leave it and let the user see a clearer "you don't have access to org X" page. The simpler behaviour is fine for now since 403 from the token endpoint is rare.
+- **Do we want a one-time toast when the guard auto-switches orgs?** ("Switched to org X to open this task.") Useful for users with many orgs who might otherwise wonder why the org dropdown changed. Easy to add later.
+- **Strip vs. preserve a 403'd `?org`.** The guard strips `?org` if the token fetch fails (user is not a member of that org). An alternative is to leave it in the URL and render a dedicated "you don't have access to org X" page. Stripping is the simpler default and matches the existing "Task not found" UX for cross-org clicks today.
+- **Org switching from a route with `orgSwitchRedirect`**: today the switcher branches between "redirect to fallback list" and "stay on current route." Should the redirect itself preserve other search params (filters, pagination) when the resource-detail page falls back to a list? Probably yes, but worth confirming.
