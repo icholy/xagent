@@ -6,6 +6,7 @@
 package githubmcp
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -56,22 +57,13 @@ type Server struct {
 
 // New returns a Server configured from cfg.
 func New(cfg Config) *Server {
-	if cfg.URL == "" {
-		cfg.URL = DefaultURL
-	}
-	if cfg.RefreshMargin == 0 {
-		cfg.RefreshMargin = DefaultRefreshMargin
-	}
-	if cfg.Logger == nil {
-		cfg.Logger = slog.Default()
-	}
 	s := &Server{
 		client:        cfg.Client,
-		url:           cfg.URL,
-		refreshMargin: cfg.RefreshMargin,
-		logger:        cfg.Logger,
+		url:           cmp.Or(cfg.URL, DefaultURL),
+		refreshMargin: cmp.Or(cfg.RefreshMargin, DefaultRefreshMargin),
+		logger:        cmp.Or(cfg.Logger, slog.Default()),
 	}
-	s.upstream.SetLogger(cfg.Logger)
+	s.upstream.SetLogger(s.logger)
 	return s
 }
 
