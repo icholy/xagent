@@ -111,11 +111,12 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	// Wrap client with AgentFilter to enforce authorization
 	filter := NewAgentFilter(client)
 	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
-	srv := NewServer(filter, task, nil)
+	srv := NewServer(filter, task, []string{agentauth.ScopeChildTasks})
 	session := setupTestSession(t, srv, &agentauth.TaskClaims{
 		TaskID:    parentTaskID,
 		Workspace: "test-workspace",
 		Runner:    "test-runner",
+		Scopes:    []string{agentauth.ScopeChildTasks},
 	})
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -181,6 +182,26 @@ func TestGetGitHubToken_Error(t *testing.T) {
 	text, ok := result.Content[0].(*mcp.TextContent)
 	assert.Assert(t, ok, "expected TextContent")
 	assert.Assert(t, strings.Contains(text.Text, "no installation linked"), "expected error message, got: %s", text.Text)
+}
+
+func TestChildTaskTools_NotRegisteredWithoutScope(t *testing.T) {
+	client := &xagentclient.ClientMock{}
+
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, nil)
+	session := setupTestSession(t, srv, nil)
+
+	tools, err := session.ListTools(t.Context(), nil)
+	assert.NilError(t, err)
+
+	gated := map[string]bool{
+		"create_child_task":    true,
+		"list_child_tasks":     true,
+		"update_child_task":    true,
+		"list_child_task_logs": true,
+	}
+	for _, tool := range tools.Tools {
+		assert.Assert(t, !gated[tool.Name], "%s should not be registered without child_tasks scope", tool.Name)
+	}
 }
 
 func TestGetGitHubToken_NotRegisteredWithoutScope(t *testing.T) {
