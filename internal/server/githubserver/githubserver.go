@@ -18,6 +18,7 @@ import (
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server/webhookserver"
 	"github.com/icholy/xagent/internal/store"
+	"github.com/icholy/xagent/internal/x/githubx"
 	"golang.org/x/oauth2"
 	oauth2github "golang.org/x/oauth2/github"
 )
@@ -34,12 +35,12 @@ type Config struct {
 
 // Server handles GitHub OAuth and webhook routes.
 type Server struct {
-	log           *slog.Logger
-	config        *Config
-	store         *store.Store
-	baseURL       string
-	publisher     pubsub.Publisher
-	appsTransport *ghinstallation.AppsTransport
+	log       *slog.Logger
+	config    *Config
+	store     *store.Store
+	baseURL   string
+	publisher pubsub.Publisher
+	app       *ghinstallation.AppsTransport
 }
 
 // Options configures a Server.
@@ -51,33 +52,33 @@ type Options struct {
 	Publisher pubsub.Publisher
 }
 
-// New returns a new Server. If the config contains a GitHub App ID and
-// private key, they are parsed up-front so configuration errors surface at
-// startup rather than the first token request.
+// New returns a new Server. The GitHub App ID and private key are parsed
+// up-front so configuration errors surface at startup rather than the first
+// token request.
 func New(opts Options) (*Server, error) {
 	log := opts.Log
 	if log == nil {
 		log = slog.Default()
 	}
-	s := &Server{
+	if opts.Config == nil {
+		return nil, fmt.Errorf("config is required")
+	}
+	appID, err := strconv.ParseInt(opts.Config.AppID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid GitHub App ID: %w", err)
+	}
+	key, err := githubx.ParsePrivateKey(opts.Config.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse GitHub App private key: %w", err)
+	}
+	return &Server{
 		log:       log,
 		config:    opts.Config,
 		store:     opts.Store,
 		baseURL:   opts.BaseURL,
 		publisher: opts.Publisher,
-	}
-	if opts.Config != nil && len(opts.Config.PrivateKey) > 0 {
-		appID, err := strconv.ParseInt(opts.Config.AppID, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid GitHub App ID: %w", err)
-		}
-		atr, err := ghinstallation.NewAppsTransport(http.DefaultTransport, appID, opts.Config.PrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse GitHub App private key: %w", err)
-		}
-		s.appsTransport = atr
-	}
-	return s, nil
+		app:       ghinstallation.NewAppsTransportFromPrivateKey(http.DefaultTransport, appID, key),
+	}, nil
 }
 
 // InstallationToken is a short-lived GitHub App installation access token.
@@ -88,10 +89,7 @@ type InstallationToken struct {
 
 // CreateInstallationToken creates a GitHub App installation access token.
 func (s *Server) CreateInstallationToken(ctx context.Context, installationID int64) (*InstallationToken, error) {
-	if s.appsTransport == nil {
-		return nil, fmt.Errorf("GitHub App private key is not configured")
-	}
-	transport := ghinstallation.NewFromAppsTransport(s.appsTransport, installationID)
+	transport := ghinstallation.NewFromAppsTransport(s.app, installationID)
 	token, err := transport.Token(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GitHub installation token: %w", err)
