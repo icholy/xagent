@@ -146,7 +146,7 @@ type createChildTaskInput struct {
 }
 
 func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
-	req := &xagentv1.CreateTaskRequest{
+	resp, err := s.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:         input.Name,
 		Parent:       s.task.ID,
 		Runner:       s.task.Runner,
@@ -155,8 +155,7 @@ func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, in
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
 		},
-	}
-	resp, err := s.client.CreateTask(ctx, req)
+	})
 	if err != nil {
 		return errorResult("failed to create task: %v", err), nil, nil
 	}
@@ -171,14 +170,15 @@ type updateMyTaskInput struct {
 }
 
 func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
-	req := &xagentv1.UpdateTaskRequest{
-		Id:   s.task.ID,
-		Name: input.Name,
-	}
+	var archiveAfter *durationpb.Duration
 	if input.ArchiveAfter != nil {
-		req.ArchiveAfter = durationpb.New(time.Duration(*input.ArchiveAfter) * time.Second)
+		archiveAfter = durationpb.New(time.Duration(*input.ArchiveAfter) * time.Second)
 	}
-	if _, err := s.client.UpdateTask(ctx, req); err != nil {
+	if _, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:           s.task.ID,
+		Name:         input.Name,
+		ArchiveAfter: archiveAfter,
+	}); err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
 

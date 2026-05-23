@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -262,8 +261,11 @@ var ServerCommand = &cli.Command{
 			Handler: srv.Handler(),
 		}
 
-		archCtx, archCancel := context.WithCancel(ctx)
-		defer archCancel()
+		// signal.NotifyContext cancels ctx on SIGINT/SIGTERM. Both the archiver
+		// goroutine and the HTTP server shutdown watcher key off the same ctx.
+		ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+
 		if archivePoll := cmd.Duration("archive-poll"); archivePoll > 0 {
 			arch := archiver.New(archiver.Options{
 				Store:     st,
@@ -273,7 +275,7 @@ var ServerCommand = &cli.Command{
 				Log:       slog.With("component", "archiver"),
 			})
 			go func() {
-				if err := arch.Run(archCtx); err != nil && !errors.Is(err, context.Canceled) {
+				if err := arch.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					slog.Error("archiver exited with error", "err", err)
 				}
 			}()
@@ -281,19 +283,11 @@ var ServerCommand = &cli.Command{
 			slog.Info("auto-archive disabled (--archive-poll=0)")
 		}
 
-		// Set up signal handler for graceful shutdown
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
 		go func() {
-			sig := <-sigCh
-			slog.Info("received signal, shutting down", "signal", sig)
-			archCancel()
-
-			// Give active requests time to complete
+			<-ctx.Done()
+			slog.Info("shutdown signal received")
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-
 			if err := httpServer.Shutdown(shutdownCtx); err != nil {
 				slog.Error("shutdown error", "error", err)
 			}

@@ -68,16 +68,13 @@ var TaskCreateCommand = &cli.Command{
 			instructions[i] = &xagentv1.Instruction{Text: text}
 		}
 
-		req := &xagentv1.CreateTaskRequest{
+		resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 			Name:         cmd.String("name"),
 			Runner:       cmd.String("runner"),
 			Workspace:    cmd.String("workspace"),
 			Instructions: instructions,
-		}
-		if cmd.IsSet("archive-after") {
-			req.ArchiveAfter = durationpb.New(cmd.Duration("archive-after"))
-		}
-		resp, err := client.CreateTask(ctx, req)
+			ArchiveAfter: durationpb.New(cmd.Duration("archive-after")),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to create task: %w", err)
 		}

@@ -57,9 +57,8 @@ var TaskUpdateCommand = &cli.Command{
 		name := cmd.String("name")
 		start := cmd.Bool("start")
 		texts := cmd.StringSlice("add-instruction")
-		archiveAfterSet := cmd.IsSet("archive-after")
 
-		if name == "" && !start && len(texts) == 0 && !archiveAfterSet {
+		if name == "" && !start && len(texts) == 0 && !cmd.IsSet("archive-after") {
 			return fmt.Errorf("nothing to update")
 		}
 
@@ -76,17 +75,18 @@ var TaskUpdateCommand = &cli.Command{
 		if cfg.Token == "" {
 			return fmt.Errorf("not authenticated, run setup first")
 		}
+		var archiveAfter *durationpb.Duration
+		if cmd.IsSet("archive-after") {
+			archiveAfter = durationpb.New(cmd.Duration("archive-after"))
+		}
 		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Token: cfg.Token})
-		updateReq := &xagentv1.UpdateTaskRequest{
+		if _, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 			Id:              taskID,
 			Name:            name,
 			Start:           start,
 			AddInstructions: instructions,
-		}
-		if archiveAfterSet {
-			updateReq.ArchiveAfter = durationpb.New(cmd.Duration("archive-after"))
-		}
-		if _, err := client.UpdateTask(ctx, updateReq); err != nil {
+			ArchiveAfter:    archiveAfter,
+		}); err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
 		}
 
