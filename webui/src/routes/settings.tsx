@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { create } from '@bufbuild/protobuf'
 import {
   getProfile,
+  ping,
   unlinkGitHubAccount,
   unlinkAtlassianAccount,
   createOrg,
@@ -89,6 +90,17 @@ function SettingsPage() {
           <OrgSettings />
         </TabsContent>
       </Tabs>
+      <VersionFooter />
+    </div>
+  )
+}
+
+function VersionFooter() {
+  const { data } = useQuery(ping, {}, { staleTime: Infinity })
+  if (!data?.version) return null
+  return (
+    <div className="mt-6 text-right text-xs text-muted-foreground">
+      {data.version}
     </div>
   )
 }

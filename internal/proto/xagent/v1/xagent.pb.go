@@ -176,6 +176,7 @@ func (*PingRequest) Descriptor() ([]byte, []int) {
 
 type PingResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -208,6 +209,13 @@ func (x *PingResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
 func (*PingResponse) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *PingResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
 }
 
 type Instruction struct {
@@ -5471,8 +5479,9 @@ var File_xagent_v1_xagent_proto protoreflect.FileDescriptor
 const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\n" +
 	"\x16xagent/v1/xagent.proto\x12\txagent.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\r\n" +
-	"\vPingRequest\"\x0e\n" +
-	"\fPingResponse\"3\n" +
+	"\vPingRequest\"(\n" +
+	"\fPingResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\"3\n" +
 	"\vInstruction\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\"\x8d\x01\n" +

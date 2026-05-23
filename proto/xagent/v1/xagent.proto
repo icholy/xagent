@@ -58,7 +58,9 @@ service XAgentService {
 
 message PingRequest {}
 
-message PingResponse {}
+message PingResponse {
+  string version = 1;
+}
 
 message Instruction {
   string text = 1;

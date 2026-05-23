@@ -14,6 +14,7 @@ import (
 	"github.com/icholy/xagent/internal/server/atlassianserver"
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/store"
+	"github.com/icholy/xagent/internal/version"
 )
 
 type Server struct {
@@ -60,7 +61,9 @@ func (s *Server) publish(n model.Notification) {
 }
 
 func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
-	return &xagentv1.PingResponse{}, nil
+	return &xagentv1.PingResponse{
+		Version: version.String(),
+	}, nil
 }
 
 func (s *Server) GetProfile(ctx context.Context, req *xagentv1.GetProfileRequest) (*xagentv1.GetProfileResponse, error) {
