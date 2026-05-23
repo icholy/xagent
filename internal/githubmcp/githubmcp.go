@@ -22,9 +22,10 @@ import (
 // DefaultURL is the default upstream GitHub MCP endpoint.
 const DefaultURL = "https://api.githubcopilot.com/mcp/"
 
-// DefaultRefreshMargin is the default time before token expiry at which
-// the upstream session is rotated.
-const DefaultRefreshMargin = 5 * time.Minute
+// DefaultMinTTL is the default minimum remaining lifetime on the active
+// installation token; the upstream session is rotated when the token's
+// remaining time drops below this.
+const DefaultMinTTL = 5 * time.Minute
 
 // retryBackoff is how long to wait before retrying a failed token swap.
 // The previous session keeps serving requests while we retry.
@@ -37,9 +38,10 @@ type Config struct {
 	Client xagentclient.Client
 	// URL is the upstream GitHub MCP endpoint. Defaults to DefaultURL.
 	URL string
-	// RefreshMargin is how long before expires_at to rotate the upstream
-	// session. Defaults to DefaultRefreshMargin.
-	RefreshMargin time.Duration
+	// MinTTL is the minimum remaining lifetime on the active installation
+	// token; the upstream session is rotated when the token has less than
+	// this much time left. Defaults to DefaultMinTTL.
+	MinTTL time.Duration
 	// Logger is used for lifecycle events. Defaults to slog.Default().
 	// It must not write to stdout — stdout is the MCP stdio channel.
 	Logger *slog.Logger
@@ -48,20 +50,20 @@ type Config struct {
 // Server fronts the GitHub MCP server over stdio, hot-swapping its
 // upstream session as the GitHub App installation token rotates.
 type Server struct {
-	client        xagentclient.Client
-	url           string
-	refreshMargin time.Duration
-	logger        *slog.Logger
-	upstream      mcpswap.Upstream
+	client   xagentclient.Client
+	url      string
+	minTTL   time.Duration
+	logger   *slog.Logger
+	upstream mcpswap.Upstream
 }
 
 // New returns a Server configured from cfg.
 func New(cfg Config) *Server {
 	s := &Server{
-		client:        cfg.Client,
-		url:           cmp.Or(cfg.URL, DefaultURL),
-		refreshMargin: cmp.Or(cfg.RefreshMargin, DefaultRefreshMargin),
-		logger:        cmp.Or(cfg.Logger, slog.Default()),
+		client: cfg.Client,
+		url:    cmp.Or(cfg.URL, DefaultURL),
+		minTTL: cmp.Or(cfg.MinTTL, DefaultMinTTL),
+		logger: cmp.Or(cfg.Logger, slog.Default()),
 	}
 	s.upstream.SetLogger(s.logger)
 	return s
@@ -122,7 +124,7 @@ func (s *Server) swap(ctx context.Context) (time.Time, error) {
 // error). Returns when ctx is done.
 func (s *Server) rotate(ctx context.Context, expiresAt time.Time) {
 	for {
-		wait := time.Until(expiresAt.Add(-s.refreshMargin))
+		wait := time.Until(expiresAt.Add(-s.minTTL))
 		if wait < 0 {
 			wait = 0
 		}
@@ -139,7 +141,7 @@ func (s *Server) rotate(ctx context.Context, expiresAt time.Time) {
 				return
 			}
 			s.logger.Error("github-mcp: token rotation failed; retrying", "err", err, "backoff", retryBackoff)
-			expiresAt = time.Now().Add(retryBackoff + s.refreshMargin)
+			expiresAt = time.Now().Add(retryBackoff + s.minTTL)
 			continue
 		}
 		expiresAt = next

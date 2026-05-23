@@ -31,9 +31,9 @@ var GitHubMCPCommand = &cli.Command{
 			Value: githubmcp.DefaultURL,
 		},
 		&cli.DurationFlag{
-			Name:  "refresh-margin",
-			Usage: "How long before expiry to rotate the upstream session",
-			Value: githubmcp.DefaultRefreshMargin,
+			Name:  "min-ttl",
+			Usage: "Rotate the upstream session when the active token has less than this much time left",
+			Value: githubmcp.DefaultMinTTL,
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -42,9 +42,9 @@ var GitHubMCPCommand = &cli.Command{
 				BaseURL: cmd.String("server"),
 				Token:   cmd.String("token"),
 			}),
-			URL:           cmd.String("url"),
-			RefreshMargin: cmd.Duration("refresh-margin"),
-			Logger:        slog.New(slog.NewTextHandler(os.Stderr, nil)),
+			URL:    cmd.String("url"),
+			MinTTL: cmd.Duration("min-ttl"),
+			Logger: slog.New(slog.NewTextHandler(os.Stderr, nil)),
 		}).Run(ctx)
 	},
 }
