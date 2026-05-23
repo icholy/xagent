@@ -77,12 +77,14 @@ func (p *AgentProxy) Start() error {
 	return nil
 }
 
-// TaskToken creates a signed JWT for the given task.
-func (p *AgentProxy) TaskToken(task *model.Task) (string, error) {
+// TaskToken creates a signed JWT for the given task. scopes grant the task
+// additional capabilities (see agentauth scope constants).
+func (p *AgentProxy) TaskToken(task *model.Task, scopes []string) (string, error) {
 	return agentauth.SignToken(p.privateKey, &agentauth.TaskClaims{
 		TaskID:    task.ID,
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
+		Scopes:    scopes,
 	})
 }
 

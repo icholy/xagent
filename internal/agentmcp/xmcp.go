@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -19,13 +21,19 @@ import (
 type Server struct {
 	client xagentclient.Client
 	task   *model.Task
+	scopes []string
 }
 
-func NewServer(client xagentclient.Client, task *model.Task) *Server {
+func NewServer(client xagentclient.Client, task *model.Task, scopes []string) *Server {
 	return &Server{
 		client: client,
 		task:   task,
+		scopes: scopes,
 	}
+}
+
+func (s *Server) hasScope(scope string) bool {
+	return slices.Contains(s.scopes, scope)
 }
 
 func (s *Server) log(ctx context.Context, format string, args ...any) {
@@ -81,11 +89,12 @@ func (s *Server) AddTools(server *mcp.Server) {
 		Description: "List logs for a child task",
 	}, s.listChildTaskLogs)
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_github_token",
-		Description: "Get a short-lived GitHub App installation token for the current org. Fallback for shell-outs (e.g. a one-off `gh` invocation) that need a raw GITHUB_TOKEN — primary GitHub access goes through git (credential helper) and the github MCP server.",
-	}, s.getGitHubToken)
-
+	if s.hasScope(agentauth.ScopeGitHubToken) {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "get_github_token",
+			Description: "Get a short-lived GitHub App installation token for the current org. Fallback for shell-outs (e.g. a one-off `gh` invocation) that need a raw GITHUB_TOKEN — primary GitHub access goes through git (credential helper) and the github MCP server.",
+		}, s.getGitHubToken)
+	}
 }
 
 type createLinkInput struct {

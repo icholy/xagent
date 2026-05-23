@@ -77,6 +77,35 @@ func TestAgentFilter_SubmitRunnerEvents_BatchMismatchAllOrNothing(t *testing.T) 
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
+func TestAgentFilter_CreateGitHubToken_Allowed(t *testing.T) {
+	client := &xagentclient.ClientMock{
+		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+			return &xagentv1.CreateGitHubTokenResponse{Token: "ghs_token"}, nil
+		},
+	}
+	filter := NewAgentFilter(client)
+
+	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42, Scopes: []string{agentauth.ScopeGitHubToken}})
+	resp, err := filter.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
+	assert.NilError(t, err)
+	assert.Equal(t, resp.Token, "ghs_token")
+	assert.Equal(t, len(client.CreateGitHubTokenCalls()), 1)
+}
+
+func TestAgentFilter_CreateGitHubToken_Denied(t *testing.T) {
+	client := &xagentclient.ClientMock{
+		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+			t.Fatal("underlying client must not be called when github token is disabled")
+			return nil, nil
+		},
+	}
+	filter := NewAgentFilter(client)
+
+	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	_, err := filter.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
+	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
+}
+
 func TestAgentFilter_SubmitRunnerEvents_MissingClaims(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		SubmitRunnerEventsFunc: func(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {

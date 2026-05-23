@@ -65,7 +65,7 @@ func TestGetMyTask(t *testing.T) {
 		ID:        123,
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
-	})
+	}, nil)
 	session := setupTestSession(t, srv, nil)
 
 	// Call the tool through the MCP framework
@@ -111,7 +111,7 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	// Wrap client with AgentFilter to enforce authorization
 	filter := NewAgentFilter(client)
 	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
-	srv := NewServer(filter, task)
+	srv := NewServer(filter, task, nil)
 	session := setupTestSession(t, srv, &agentauth.TaskClaims{
 		TaskID:    parentTaskID,
 		Workspace: "test-workspace",
@@ -144,7 +144,7 @@ func TestGetGitHubToken(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"})
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.ScopeGitHubToken})
 	session := setupTestSession(t, srv, nil)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -168,7 +168,7 @@ func TestGetGitHubToken_Error(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"})
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.ScopeGitHubToken})
 	session := setupTestSession(t, srv, nil)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -181,6 +181,24 @@ func TestGetGitHubToken_Error(t *testing.T) {
 	text, ok := result.Content[0].(*mcp.TextContent)
 	assert.Assert(t, ok, "expected TextContent")
 	assert.Assert(t, strings.Contains(text.Text, "no installation linked"), "expected error message, got: %s", text.Text)
+}
+
+func TestGetGitHubToken_NotRegisteredWithoutScope(t *testing.T) {
+	client := &xagentclient.ClientMock{
+		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+			t.Fatal("tool must not be callable when scope is absent")
+			return nil, nil
+		},
+	}
+
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, nil)
+	session := setupTestSession(t, srv, nil)
+
+	tools, err := session.ListTools(t.Context(), nil)
+	assert.NilError(t, err)
+	for _, tool := range tools.Tools {
+		assert.Assert(t, tool.Name != "get_github_token", "get_github_token should not be registered without scope")
+	}
 }
 
 func assertTextResult(t *testing.T, result *mcp.CallToolResult, want map[string]any) {

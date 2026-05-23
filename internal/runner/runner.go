@@ -375,7 +375,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	}
 
 	// Generate JWT for this task
-	token, err := r.proxy.TaskToken(task)
+	token, err := r.proxy.TaskToken(task, ws.Scopes)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -402,17 +402,21 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 
 	// Build agent config
 	cfg := ws.AgentConfig()
+	mcpArgs := []string{
+		"mcp",
+		"--server", xagentclient.AgentSocketURL,
+		"--task", fmt.Sprint(task.ID),
+		"--runner", task.Runner,
+		"--workspace", task.Workspace,
+		"--token", token,
+	}
+	for _, scope := range ws.Scopes {
+		mcpArgs = append(mcpArgs, "--scope", scope)
+	}
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
 		Command: "/usr/local/bin/xagent",
-		Args: []string{
-			"mcp",
-			"--server", xagentclient.AgentSocketURL,
-			"--task", fmt.Sprint(task.ID),
-			"--runner", task.Runner,
-			"--workspace", task.Workspace,
-			"--token", token,
-		},
+		Args:    mcpArgs,
 	}
 	cfgData, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

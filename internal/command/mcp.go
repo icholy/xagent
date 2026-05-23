@@ -43,6 +43,10 @@ var McpCommand = &cli.Command{
 			Usage:    "Authentication token",
 			Required: true,
 		},
+		&cli.StringSliceFlag{
+			Name:  "scope",
+			Usage: "Capability scope granted to the task (repeatable)",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		server := mcp.NewServer(&mcp.Implementation{
@@ -56,7 +60,7 @@ var McpCommand = &cli.Command{
 			Runner:    cmd.String("runner"),
 			Workspace: cmd.String("workspace"),
 		}
-		agentmcp.NewServer(client, task).AddTools(server)
+		agentmcp.NewServer(client, task, cmd.StringSlice("scope")).AddTools(server)
 
 		return server.Run(ctx, &mcp.StdioTransport{})
 	},

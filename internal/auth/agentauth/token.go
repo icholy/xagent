@@ -4,16 +4,40 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	"slices"
 
 	"github.com/golang-jwt/jwt/v4"
 )
 
+// Scopes grant tasks additional capabilities beyond their own task data.
+const (
+	// ScopeGitHubToken allows issuing GitHub App installation tokens via the
+	// CreateGitHubToken RPC.
+	ScopeGitHubToken = "github_token"
+)
+
+// ValidScope reports whether scope is a recognized capability scope.
+func ValidScope(scope string) bool {
+	switch scope {
+	case ScopeGitHubToken:
+		return true
+	default:
+		return false
+	}
+}
+
 // TaskClaims contains the JWT claims for a task's identity.
 type TaskClaims struct {
 	jwt.RegisteredClaims
-	TaskID    int64  `json:"task_id"`
-	Workspace string `json:"workspace"`
-	Runner    string `json:"runner"`
+	TaskID    int64    `json:"task_id"`
+	Workspace string   `json:"workspace"`
+	Runner    string   `json:"runner"`
+	Scopes    []string `json:"scopes,omitempty"`
+}
+
+// HasScope reports whether the claims include the given capability scope.
+func (c *TaskClaims) HasScope(scope string) bool {
+	return slices.Contains(c.Scopes, scope)
 }
 
 // CreatePrivateKey generates a new Ed25519 private key.

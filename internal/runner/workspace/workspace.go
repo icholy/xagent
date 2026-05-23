@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/icholy/xagent/internal/agent"
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/x/expandvar"
 	"gopkg.in/yaml.v3"
@@ -83,6 +84,10 @@ type Workspace struct {
 	Container   Container `yaml:"container"`
 	Agent       Agent     `yaml:"agent"`
 	Commands    []string  `yaml:"commands"`
+	// Scopes grant agents in this workspace additional capabilities, such as
+	// "github_token" to issue GitHub App installation tokens. No scopes are
+	// granted unless explicitly listed.
+	Scopes []string `yaml:"scopes"`
 }
 
 type Agent struct {
@@ -144,6 +149,11 @@ func (w *Workspace) Validate() error {
 	}
 	if err := w.Agent.Validate(); err != nil {
 		return fmt.Errorf("agent: %w", err)
+	}
+	for _, scope := range w.Scopes {
+		if !agentauth.ValidScope(scope) {
+			return fmt.Errorf("unknown scope %q", scope)
+		}
 	}
 	return nil
 }
