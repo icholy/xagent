@@ -26,13 +26,13 @@ Download the pre-built binaries (if needed):
 xagent download
 ```
 
-Authenticate your local client:
+Create an API key in the Web UI (https://xagent.choly.ca/ui/keys/new) and copy the returned `xat_…` value into `~/.config/xagent/config.yaml`:
 
-```bash
-xagent setup
+```yaml
+token: xat_...
 ```
 
-Update the `workspaces.yml` file (see examples below):
+Create a `workspaces.yaml` file (see examples below):
 
 ```bash
 vim ~/.config/xagent/workspaces.yaml

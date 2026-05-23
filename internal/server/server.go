@@ -1,14 +1,12 @@
 package server
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/auth/deviceauth"
 	"github.com/icholy/xagent/internal/auth/oauthflow"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/pubsub"
@@ -26,7 +24,6 @@ type Server struct {
 	log       *slog.Logger
 	api       *apiserver.Server
 	auth      *apiauth.Auth
-	discovery deviceauth.DiscoveryConfig
 	github    *githubserver.Server
 	atlassian *atlassianserver.Server
 	baseURL   string
@@ -39,7 +36,6 @@ type Options struct {
 	Log           *slog.Logger
 	Store         *store.Store
 	Auth          *apiauth.Auth
-	Discovery     deviceauth.DiscoveryConfig
 	GitHub        *githubserver.Server
 	Atlassian     *atlassianserver.Server
 	BaseURL       string
@@ -67,7 +63,6 @@ func New(opts Options) *Server {
 		log:       log,
 		api:       api,
 		auth:      opts.Auth,
-		discovery: opts.Discovery,
 		github:    opts.GitHub,
 		atlassian: opts.Atlassian,
 		baseURL:   opts.BaseURL,
@@ -79,8 +74,6 @@ func New(opts Options) *Server {
 
 func (s *Server) Handler() http.Handler {
 	mux := otelx.NewMux("xagent")
-	// Device flow discovery endpoint (public)
-	mux.HandleFunc(deviceauth.DiscoveryPath, s.handleDeviceConfig)
 	// App JWT token endpoint (cookie-authenticated)
 	mux.Handle("/auth/token", alice.New(s.auth.CheckAuth()).Then(s.auth.HandleToken()))
 	// Auth routes (login, callback, logout)
@@ -145,9 +138,4 @@ func (s *Server) handleCORS(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (s *Server) handleDeviceConfig(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.discovery)
 }
