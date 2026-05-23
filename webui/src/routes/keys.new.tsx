@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@connectrpc/connect-query'
 import { createKey } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { CreateKeyResponse } from '@/gen/xagent/v1/xagent_pb'
+import { useOrgId } from '@/hooks/use-org-id'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/keys/new')({
 
 function NewKeyPage() {
   const navigate = useNavigate()
+  const orgId = useOrgId()
   const [name, setName] = useState('')
   const [created, setCreated] = useState<CreateKeyResponse | null>(null)
   const [copied, setCopied] = useState(false)
@@ -71,7 +73,9 @@ function NewKeyPage() {
             </div>
 
             <div className="pt-2">
-              <Button onClick={() => navigate({ to: '/keys' })}>Done</Button>
+              <Button onClick={() => navigate({ to: '/keys', search: { org: orgId } })}>
+                Done
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -105,7 +109,11 @@ function NewKeyPage() {
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Creating...' : 'Create Key'}
               </Button>
-              <Button type="button" variant="outline" onClick={() => navigate({ to: '/keys' })}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate({ to: '/keys', search: { org: orgId } })}
+              >
                 Cancel
               </Button>
             </div>
