@@ -145,8 +145,8 @@ type createChildTaskInput struct {
 	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Optional Go duration (e.g. 1h, 24h) after which the task auto-archives once terminal. Omit for never."`
 }
 
-func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
-	createReq := &xagentv1.CreateTaskRequest{
+func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
+	req := &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Parent:    s.task.ID,
 		Runner:    s.task.Runner,
@@ -160,9 +160,9 @@ func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 		if err != nil {
 			return errorResult("invalid archive_after: %v", err), nil, nil
 		}
-		createReq.ArchiveAfter = durationpb.New(d)
+		req.ArchiveAfter = durationpb.New(d)
 	}
-	resp, err := s.client.CreateTask(ctx, createReq)
+	resp, err := s.client.CreateTask(ctx, req)
 	if err != nil {
 		return errorResult("failed to create task: %v", err), nil, nil
 	}
@@ -176,8 +176,8 @@ type updateMyTaskInput struct {
 	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Set the auto-archive timeout as a Go duration (e.g. 1h). Pass \"0\" to clear (never auto-archive)."`
 }
 
-func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
-	updateReq := &xagentv1.UpdateTaskRequest{
+func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
+	req := &xagentv1.UpdateTaskRequest{
 		Id:   s.task.ID,
 		Name: input.Name,
 	}
@@ -186,9 +186,9 @@ func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, inp
 		if err != nil {
 			return errorResult("invalid archive_after: %v", err), nil, nil
 		}
-		updateReq.ArchiveAfter = durationpb.New(d)
+		req.ArchiveAfter = durationpb.New(d)
 	}
-	if _, err := s.client.UpdateTask(ctx, updateReq); err != nil {
+	if _, err := s.client.UpdateTask(ctx, req); err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
 
