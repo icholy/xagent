@@ -1,11 +1,12 @@
 import { Outlet, createRootRouteWithContext, Link, useNavigate, useMatches } from '@tanstack/react-router'
 import { LogOut, Settings } from 'lucide-react'
-import { lazy, Suspense } from 'react'
-import { QueryClient, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense, useEffect } from 'react'
+import { QueryClient } from '@tanstack/react-query'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import xagentIcon from '@/assets/icon.png'
 import { useAuthTransport } from '@/lib/services'
+import { NO_ORG, type AuthTransport } from '@/lib/transport'
 import { useOrgId } from '@/hooks/use-org-id'
 import { useOrgSSE } from '@/hooks/use-org-sse'
 import { ConnectionIndicator } from '@/components/connection-indicator'
@@ -37,31 +38,68 @@ const ReactQueryDevtools = import.meta.env.DEV
     )
   : () => null
 
+type RootSearch = { org?: string }
+
+function validateSearch(search: Record<string, unknown>): RootSearch {
+  return { org: typeof search.org === 'string' ? search.org : undefined }
+}
+
+async function beforeLoad({
+  search,
+  context: { auth, queryClient },
+}: {
+  search: RootSearch
+  context: { auth: AuthTransport; queryClient: QueryClient }
+}): Promise<void> {
+  if (search.org && search.org !== auth.getOrgId()) {
+    await auth.fetchToken(search.org)
+    queryClient.removeQueries()
+  }
+}
+
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
+  auth: AuthTransport
 }>()({
+  validateSearch,
+  beforeLoad,
   component: RootComponent,
 })
 
 function RootComponent() {
   useOrgSSE()
   const { data: profileData } = useQuery(getProfile, {})
-  const queryClient = useQueryClient()
   const auth = useAuthTransport()
 
   const orgs = profileData?.orgs ?? []
   const currentOrgId = useOrgId()
+  const searchOrg = Route.useSearch({ select: (s) => s.org })
 
   const navigate = useNavigate()
   const route = useMatches().at(-1)
+
+  // Keep ?org= in the URL in sync with the active org. Covers cold loads
+  // and silent recoveries (e.g. fetchToken falling back from a stale org).
+  useEffect(() => {
+    if (currentOrgId === NO_ORG) return
+    if (searchOrg === currentOrgId) return
+    navigate({
+      to: '.',
+      search: (prev) => ({ ...prev, org: currentOrgId }),
+      replace: true,
+    })
+  }, [currentOrgId, searchOrg, navigate])
+
   const handleOrgSwitch = async (orgId: string) => {
-    await auth.fetchToken(orgId)
     const redirect = route?.staticData.orgSwitchRedirect
     if (redirect) {
-      queryClient.removeQueries()
-      await navigate({ to: redirect })
+      await navigate({ to: redirect, search: { org: orgId } })
     } else {
-      await queryClient.invalidateQueries()
+      await navigate({
+        to: '.',
+        search: (prev) => ({ ...prev, org: orgId }),
+        replace: true,
+      })
     }
   }
 

@@ -105,11 +105,11 @@ export interface FileRoutesByFullPath {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
-  '/events': typeof EventsIndexRoute
-  '/keys': typeof KeysIndexRoute
-  '/members': typeof MembersIndexRoute
-  '/tasks': typeof TasksIndexRoute
-  '/workspaces': typeof WorkspacesIndexRoute
+  '/events/': typeof EventsIndexRoute
+  '/keys/': typeof KeysIndexRoute
+  '/members/': typeof MembersIndexRoute
+  '/tasks/': typeof TasksIndexRoute
+  '/workspaces/': typeof WorkspacesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -156,11 +156,11 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/tasks/$id'
     | '/tasks/new'
-    | '/events'
-    | '/keys'
-    | '/members'
-    | '/tasks'
-    | '/workspaces'
+    | '/events/'
+    | '/keys/'
+    | '/members/'
+    | '/tasks/'
+    | '/workspaces/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -231,35 +231,35 @@ declare module '@tanstack/react-router' {
     '/workspaces/': {
       id: '/workspaces/'
       path: '/workspaces'
-      fullPath: '/workspaces'
+      fullPath: '/workspaces/'
       preLoaderRoute: typeof WorkspacesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks/': {
       id: '/tasks/'
       path: '/tasks'
-      fullPath: '/tasks'
+      fullPath: '/tasks/'
       preLoaderRoute: typeof TasksIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/members/': {
       id: '/members/'
       path: '/members'
-      fullPath: '/members'
+      fullPath: '/members/'
       preLoaderRoute: typeof MembersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/keys/': {
       id: '/keys/'
       path: '/keys'
-      fullPath: '/keys'
+      fullPath: '/keys/'
       preLoaderRoute: typeof KeysIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/events/': {
       id: '/events/'
       path: '/events'
-      fullPath: '/events'
+      fullPath: '/events/'
       preLoaderRoute: typeof EventsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
