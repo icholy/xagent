@@ -142,25 +142,19 @@ type createChildTaskInput struct {
 	Name         string `json:"name" jsonschema:"A short name for the task"`
 	Instruction  string `json:"instruction" jsonschema:"The instruction text for the task"`
 	URL          string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue Jira ticket)"`
-	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Optional Go duration controlling auto-archive once the task reaches a terminal status. Omit or pass 0 to never auto-archive; negative (e.g. -1s) archives immediately; positive (e.g. 1h, 24h) delays."`
+	ArchiveAfter int64  `json:"archive_after_seconds,omitempty" jsonschema:"Auto-archive the task this many seconds after it reaches a terminal status. 0 (default) = never; negative = archive immediately; positive = delay."`
 }
 
 func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
 	req := &xagentv1.CreateTaskRequest{
-		Name:      input.Name,
-		Parent:    s.task.ID,
-		Runner:    s.task.Runner,
-		Workspace: s.task.Workspace,
+		Name:         input.Name,
+		Parent:       s.task.ID,
+		Runner:       s.task.Runner,
+		Workspace:    s.task.Workspace,
+		ArchiveAfter: durationpb.New(time.Duration(input.ArchiveAfter) * time.Second),
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
 		},
-	}
-	if input.ArchiveAfter != "" {
-		d, err := time.ParseDuration(input.ArchiveAfter)
-		if err != nil {
-			return errorResult("invalid archive_after: %v", err), nil, nil
-		}
-		req.ArchiveAfter = durationpb.New(d)
 	}
 	resp, err := s.client.CreateTask(ctx, req)
 	if err != nil {
@@ -173,7 +167,7 @@ func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, in
 
 type updateMyTaskInput struct {
 	Name         string `json:"name,omitempty" jsonschema:"The new name for the task"`
-	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Set the auto-archive timeout as a Go duration. 0 = never; negative (e.g. -1s) = archive immediately; positive (e.g. 1h) = delay."`
+	ArchiveAfter *int64 `json:"archive_after_seconds,omitempty" jsonschema:"Set the auto-archive timeout in seconds. Omit to leave it alone; 0 = never auto-archive; negative = archive immediately; positive = delay."`
 }
 
 func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
@@ -181,12 +175,8 @@ func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input
 		Id:   s.task.ID,
 		Name: input.Name,
 	}
-	if input.ArchiveAfter != "" {
-		d, err := time.ParseDuration(input.ArchiveAfter)
-		if err != nil {
-			return errorResult("invalid archive_after: %v", err), nil, nil
-		}
-		req.ArchiveAfter = durationpb.New(d)
+	if input.ArchiveAfter != nil {
+		req.ArchiveAfter = durationpb.New(time.Duration(*input.ArchiveAfter) * time.Second)
 	}
 	if _, err := s.client.UpdateTask(ctx, req); err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil

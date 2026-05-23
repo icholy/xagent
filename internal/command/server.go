@@ -129,8 +129,7 @@ var ServerCommand = &cli.Command{
 		},
 		&cli.DurationFlag{
 			Name:    "archive-poll",
-			Usage:   "How often to scan for tasks past their auto-archive deadline",
-			Value:   archiver.DefaultInterval,
+			Usage:   "How often to scan for tasks past their auto-archive deadline. 0 (default) disables the archiver.",
 			Sources: cli.EnvVars("XAGENT_ARCHIVE_POLL"),
 		},
 		&cli.IntFlag{
@@ -263,20 +262,24 @@ var ServerCommand = &cli.Command{
 			Handler: srv.Handler(),
 		}
 
-		arch := archiver.New(archiver.Options{
-			Store:     st,
-			Publisher: ps,
-			Interval:  cmd.Duration("archive-poll"),
-			BatchSize: cmd.Int("archive-batch"),
-			Log:       slog.With("component", "archiver"),
-		})
 		archCtx, archCancel := context.WithCancel(ctx)
 		defer archCancel()
-		go func() {
-			if err := arch.Run(archCtx); err != nil && !errors.Is(err, context.Canceled) {
-				slog.Error("archiver exited with error", "err", err)
-			}
-		}()
+		if archivePoll := cmd.Duration("archive-poll"); archivePoll > 0 {
+			arch := archiver.New(archiver.Options{
+				Store:     st,
+				Publisher: ps,
+				Interval:  archivePoll,
+				BatchSize: cmd.Int("archive-batch"),
+				Log:       slog.With("component", "archiver"),
+			})
+			go func() {
+				if err := arch.Run(archCtx); err != nil && !errors.Is(err, context.Canceled) {
+					slog.Error("archiver exited with error", "err", err)
+				}
+			}()
+		} else {
+			slog.Info("auto-archive disabled (--archive-poll=0)")
+		}
 
 		// Set up signal handler for graceful shutdown
 		sigCh := make(chan os.Signal, 1)
