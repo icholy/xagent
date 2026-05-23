@@ -8,6 +8,7 @@
 package archiver
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -48,23 +49,13 @@ type Options struct {
 // SSE notifications are emitted if nil). Interval and BatchSize fall back to
 // DefaultInterval / DefaultBatchSize when unset.
 func New(opts Options) *Archiver {
-	a := &Archiver{
+	return &Archiver{
 		store:     opts.Store,
 		publisher: opts.Publisher,
-		interval:  opts.Interval,
-		batchSize: opts.BatchSize,
-		log:       opts.Log,
+		interval:  cmp.Or(opts.Interval, DefaultInterval),
+		batchSize: cmp.Or(opts.BatchSize, DefaultBatchSize),
+		log:       cmp.Or(opts.Log, slog.Default()),
 	}
-	if a.interval <= 0 {
-		a.interval = DefaultInterval
-	}
-	if a.batchSize <= 0 {
-		a.batchSize = DefaultBatchSize
-	}
-	if a.log == nil {
-		a.log = slog.Default()
-	}
-	return a
 }
 
 // Run blocks until ctx is cancelled, calling Tick at the configured interval.

@@ -492,6 +492,16 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 	assert.Assert(t, getResp.Task.ArchiveAfter != nil)
 	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), want)
 
+	// Omitting ArchiveAfter on Update leaves the existing value untouched.
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:   createResp.Task.Id,
+		Name: "just a rename",
+	})
+	assert.NilError(t, err)
+	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), want, "omitted ArchiveAfter preserves existing value")
+
 	// Setting to zero reverts to "never auto-archive" (omitted on the wire).
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:           createResp.Task.Id,
