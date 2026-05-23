@@ -1,4 +1,10 @@
-import { Outlet, createRootRouteWithContext, Link, useNavigate, useMatches } from '@tanstack/react-router'
+import {
+  Outlet,
+  createRootRouteWithContext,
+  Link,
+  useNavigate,
+  useMatches,
+} from '@tanstack/react-router'
 import { LogOut, Settings } from 'lucide-react'
 import { lazy, Suspense, useEffect } from 'react'
 import { QueryClient } from '@tanstack/react-query'
@@ -26,7 +32,7 @@ const TanStackRouterDevtools = import.meta.env.DEV
   ? lazy(() =>
       import('@tanstack/router-devtools').then((res) => ({
         default: res.TanStackRouterDevtools,
-      }))
+      })),
     )
   : () => null
 
@@ -34,7 +40,7 @@ const ReactQueryDevtools = import.meta.env.DEV
   ? lazy(() =>
       import('@tanstack/react-query-devtools').then((res) => ({
         default: res.ReactQueryDevtools,
-      }))
+      })),
     )
   : () => null
 

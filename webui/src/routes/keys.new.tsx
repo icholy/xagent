@@ -71,9 +71,7 @@ function NewKeyPage() {
             </div>
 
             <div className="pt-2">
-              <Button onClick={() => navigate({ to: '/keys' })}>
-                Done
-              </Button>
+              <Button onClick={() => navigate({ to: '/keys' })}>Done</Button>
             </div>
           </CardContent>
         </Card>
@@ -100,20 +98,14 @@ function NewKeyPage() {
             </div>
 
             {mutation.error && (
-              <div className="text-destructive text-sm">
-                Error: {mutation.error.message}
-              </div>
+              <div className="text-destructive text-sm">Error: {mutation.error.message}</div>
             )}
 
             <div className="flex gap-2">
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Creating...' : 'Create Key'}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate({ to: '/keys' })}
-              >
+              <Button type="button" variant="outline" onClick={() => navigate({ to: '/keys' })}>
                 Cancel
               </Button>
             </div>

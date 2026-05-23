@@ -30,9 +30,13 @@ const ALL_RUNNERS = '\x00'
 
 function WorkspacesPage() {
   const [selectedRunner, setSelectedRunner] = useState(ALL_RUNNERS)
-  const { data, isLoading, error, refetch } = useQuery(listWorkspaces, {}, {
-    refetchInterval: 6000,
-  })
+  const { data, isLoading, error, refetch } = useQuery(
+    listWorkspaces,
+    {},
+    {
+      refetchInterval: 6000,
+    },
+  )
   const clearMutation = useMutation(clearWorkspaces, { onSuccess: () => refetch() })
 
   const handleClear = async () => {
@@ -60,7 +64,9 @@ function WorkspacesPage() {
 
   const allWorkspaces = data?.workspaces ?? []
   const runners = [...new Set(allWorkspaces.map((w) => w.runnerId).filter(Boolean))]
-  const workspaces = allWorkspaces.filter((w) => selectedRunner === ALL_RUNNERS || w.runnerId === selectedRunner)
+  const workspaces = allWorkspaces.filter(
+    (w) => selectedRunner === ALL_RUNNERS || w.runnerId === selectedRunner,
+  )
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -85,15 +91,17 @@ function WorkspacesPage() {
             onClick={handleClear}
             disabled={clearMutation.isPending || allWorkspaces.length === 0}
           >
-            {clearMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            {clearMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
             Clear
           </Button>
         </div>
       </div>
       {workspaces.length === 0 ? (
-        <div className="text-muted-foreground text-center py-8">
-          No workspaces registered
-        </div>
+        <div className="text-muted-foreground text-center py-8">No workspaces registered</div>
       ) : (
         <Table>
           <TableHeader>

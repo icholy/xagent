@@ -1,9 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
-import {
-  listKeys,
-  deleteKey,
-} from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { listKeys, deleteKey } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Key } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import {
@@ -23,9 +20,13 @@ export const Route = createFileRoute('/keys/')({
 })
 
 function KeysPage() {
-  const { data, isLoading, error, refetch } = useQuery(listKeys, {}, {
-    refetchInterval: 6000,
-  })
+  const { data, isLoading, error, refetch } = useQuery(
+    listKeys,
+    {},
+    {
+      refetchInterval: 6000,
+    },
+  )
 
   if (isLoading) {
     return (
@@ -57,9 +58,7 @@ function KeysPage() {
         </Link>
       </div>
       {keys.length === 0 ? (
-        <div className="text-muted-foreground text-center py-8">
-          No API keys found
-        </div>
+        <div className="text-muted-foreground text-center py-8">No API keys found</div>
       ) : (
         <Table>
           <TableHeader>
@@ -72,11 +71,7 @@ function KeysPage() {
           </TableHeader>
           <TableBody>
             {keys.map((key) => (
-              <KeyRow
-                key={key.id}
-                apiKey={key}
-                onDelete={refetch}
-              />
+              <KeyRow key={key.id} apiKey={key} onDelete={refetch} />
             ))}
           </TableBody>
         </Table>
@@ -85,13 +80,7 @@ function KeysPage() {
   )
 }
 
-function KeyRow({
-  apiKey,
-  onDelete,
-}: {
-  apiKey: Key
-  onDelete: () => void
-}) {
+function KeyRow({ apiKey, onDelete }: { apiKey: Key; onDelete: () => void }) {
   const deleteMutation = useMutation(deleteKey, {
     onSuccess: () => onDelete(),
   })
@@ -116,11 +105,7 @@ function KeyRow({
         )}
       </TableCell>
       <TableCell className="text-muted-foreground">
-        {apiKey.createdAt ? (
-          <RelativeTime date={timestampDate(apiKey.createdAt)} />
-        ) : (
-          '-'
-        )}
+        {apiKey.createdAt ? <RelativeTime date={timestampDate(apiKey.createdAt)} /> : '-'}
       </TableCell>
       <TableCell>
         <Button

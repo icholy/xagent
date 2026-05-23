@@ -1,12 +1,7 @@
 import { formatDistanceToNow } from 'date-fns'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export function RelativeTime({ date }: { date: Date }) {
-
   const absoluteText = date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -21,9 +16,7 @@ export function RelativeTime({ date }: { date: Date }) {
       <TooltipTrigger className="cursor-default">
         {formatDistanceToNow(date, { addSuffix: true })}
       </TooltipTrigger>
-      <TooltipContent>
-        {absoluteText}
-      </TooltipContent>
+      <TooltipContent>{absoluteText}</TooltipContent>
     </Tooltip>
   )
 }

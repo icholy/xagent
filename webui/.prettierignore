@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-ssr
+build
+coverage
+pnpm-lock.yaml
+src/gen

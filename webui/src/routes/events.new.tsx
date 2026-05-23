@@ -79,19 +79,13 @@ function CreateEventPage() {
               />
             </div>
 
-            {error && (
-              <div className="text-destructive text-sm">{error}</div>
-            )}
+            {error && <div className="text-destructive text-sm">{error}</div>}
 
             <div className="flex gap-2">
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Creating...' : 'Create Event'}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate({ to: '/events' })}
-              >
+              <Button type="button" variant="outline" onClick={() => navigate({ to: '/events' })}>
                 Cancel
               </Button>
             </div>

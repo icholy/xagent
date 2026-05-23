@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { ConnectError, Code } from '@connectrpc/connect'
-import { getProfile, linkGitHubInstallation } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import {
+  getProfile,
+  linkGitHubInstallation,
+} from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { useOrgId } from '@/hooks/use-org-id'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -103,7 +106,9 @@ function GitHubSetupPage() {
                 You need to link your GitHub account before completing this step.
               </p>
               <a href="/github/login" className="inline-block">
-                <Button variant="outline" size="sm">Link GitHub Account</Button>
+                <Button variant="outline" size="sm">
+                  Link GitHub Account
+                </Button>
               </a>
             </div>
           )}

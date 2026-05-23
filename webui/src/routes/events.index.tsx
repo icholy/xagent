@@ -29,9 +29,13 @@ export const Route = createFileRoute('/events/')({
 
 function EventsPage() {
   const [limit, setLimit] = useState(25)
-  const { data, isLoading, error } = useQuery(listEvents, { limit }, {
-    refetchInterval: 60000,
-  })
+  const { data, isLoading, error } = useQuery(
+    listEvents,
+    { limit },
+    {
+      refetchInterval: 60000,
+    },
+  )
 
   if (isLoading) {
     return (
@@ -79,9 +83,7 @@ function EventsPage() {
         </div>
       </div>
       {events.length === 0 ? (
-        <div className="text-muted-foreground text-center py-8">
-          No events found
-        </div>
+        <div className="text-muted-foreground text-center py-8">No events found</div>
       ) : (
         <Table>
           <TableHeader>
@@ -139,4 +141,3 @@ function EventRow({ event }: { event: Event }) {
     </TableRow>
   )
 }
-
