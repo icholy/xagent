@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log/slog"
 	"os"
@@ -9,7 +10,9 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"text/template"
 
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
@@ -88,33 +91,9 @@ func (d *Driver) Run(ctx context.Context) error {
 	defer a.Close()
 
 	// Bootstrap prompt
-	var prompt string
-	if cfg.Started {
-		prompt = "The task was updated. Check xagent:get_my_task and continue."
-	} else {
-		prompt = strings.Join([]string{
-			"Use xagent:get_my_task to fetch your task instructions and execute them.",
-			"If the task does not have a name, use xagent:update_my_task to set one.",
-			"",
-			"Each instruction has a 'text' field with the task and an optional 'url' field with the source URL.",
-			"If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.",
-			"When responding on external platforms, always suffix your message with (task {id}) with your task id.",
-			"",
-			"The task may have linked events. Events provide additional context such as GitHub webhooks or external triggers.",
-			"Events are routed to tasks that have a link with subscribe=true matching the event URL.",
-			"When creating links with xagent:create_link, ALWAYS set subscribe=true for resources you create (PRs, issues, comments), even if the task is complete. Others may respond and you'll need to handle those responses. Only use subscribe=false for reference links to external resources you didn't create.",
-			"Use xagent:update_child_task to delegate work to child tasks.",
-			"",
-			"When done, use xagent:create_link for any URLs you created (PRs, issues, etc).",
-			"Always use web URLs that users can visit, not API URLs.",
-			"Use xagent:report to log important observations.",
-			"Only use xagent:create_child_task when explicitly instructed to create a new task.",
-			"",
-			"Your text responses are NOT visible to users - only tool calls matter.",
-		}, "\n")
-	}
-	if cfg.Prompt != "" {
-		prompt = prompt + "\n\n" + cfg.Prompt
+	prompt, err := cfg.prompt()
+	if err != nil {
+		return fmt.Errorf("failed to build prompt: %w", err)
 	}
 
 	if err := a.Prompt(ctx, prompt, cfg.Started); err != nil {
@@ -133,4 +112,27 @@ func (d *Driver) Run(ctx context.Context) error {
 
 	d.Log.Info("Task completed successfully.")
 	return nil
+}
+
+//go:embed PROMPT.md
+var promptText string
+
+var promptTemplate = template.Must(template.New("prompt").Parse(promptText))
+
+// prompt builds the bootstrap prompt sent to the agent.
+func (c *Config) prompt() (string, error) {
+	var b strings.Builder
+	err := promptTemplate.Execute(&b, struct {
+		Started            bool
+		HasChildTasksScope bool
+		Prompt             string
+	}{
+		Started:            c.Started,
+		HasChildTasksScope: c.hasScope(agentauth.ScopeChildTasks),
+		Prompt:             c.Prompt,
+	})
+	if err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }
