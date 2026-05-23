@@ -113,7 +113,7 @@ var ServerCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "github-private-key",
-			Usage:   "GitHub App private key (PEM content or file path)",
+			Usage:   "GitHub App private key (PEM content)",
 			Sources: cli.EnvVars("XAGENT_GITHUB_APP_PRIVATE_KEY"),
 		},
 		&cli.StringFlag{
