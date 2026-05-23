@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server"
+	"github.com/icholy/xagent/internal/server/archiver"
 	"github.com/icholy/xagent/internal/server/atlassianserver"
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
@@ -125,6 +125,17 @@ var ServerCommand = &cli.Command{
 			Name:    "atlassian-client-secret",
 			Usage:   "Atlassian OAuth client secret",
 			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_SECRET"),
+		},
+		&cli.DurationFlag{
+			Name:    "archive-poll",
+			Usage:   "How often to scan for tasks past their auto-archive deadline. 0 (default) disables the archiver.",
+			Sources: cli.EnvVars("XAGENT_ARCHIVE_POLL"),
+		},
+		&cli.IntFlag{
+			Name:    "archive-batch",
+			Usage:   "Maximum number of tasks the archiver will archive per tick",
+			Value:   archiver.DefaultBatchSize,
+			Sources: cli.EnvVars("XAGENT_ARCHIVE_BATCH"),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -250,18 +261,33 @@ var ServerCommand = &cli.Command{
 			Handler: srv.Handler(),
 		}
 
-		// Set up signal handler for graceful shutdown
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		// signal.NotifyContext cancels ctx on SIGINT/SIGTERM. Both the archiver
+		// goroutine and the HTTP server shutdown watcher key off the same ctx.
+		ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+
+		if interval := cmd.Duration("archive-poll"); interval > 0 {
+			arch := archiver.New(archiver.Options{
+				Store:     st,
+				Publisher: ps,
+				Interval:  interval,
+				BatchSize: cmd.Int("archive-batch"),
+				Log:       slog.With("component", "archiver"),
+			})
+			go func() {
+				if err := arch.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					slog.Error("archiver exited with error", "err", err)
+				}
+			}()
+		} else {
+			slog.Info("auto-archive disabled (--archive-poll=0)")
+		}
 
 		go func() {
-			sig := <-sigCh
-			slog.Info("received signal, shutting down", "signal", sig)
-
-			// Give active requests time to complete
+			<-ctx.Done()
+			slog.Info("shutdown signal received")
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-
 			if err := httpServer.Shutdown(shutdownCtx); err != nil {
 				slog.Error("shutdown error", "error", err)
 			}

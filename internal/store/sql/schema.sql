@@ -228,7 +228,8 @@ CREATE TABLE public.tasks (
     org_id bigint NOT NULL,
     archived boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    archive_after bigint DEFAULT 0 NOT NULL
 );
 
 
@@ -525,6 +526,13 @@ CREATE INDEX idx_tasks_archived ON public.tasks USING btree (archived);
 
 
 --
+-- Name: idx_tasks_archive_due; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_archive_due ON public.tasks USING btree (updated_at) WHERE ((archived = false) AND (archive_after <> 0));
+
+
+--
 -- Name: idx_tasks_org_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -697,4 +705,5 @@ ALTER TABLE ONLY public.task_links
 INSERT INTO public.schema_migrations (version) VALUES
     ('20240101000001'),
     ('20260517000001'),
-    ('20260517174647');
+    ('20260517174647'),
+    ('20260523000001');

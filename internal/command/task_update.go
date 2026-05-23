@@ -9,6 +9,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 var TaskUpdateCommand = &cli.Command{
@@ -38,6 +39,11 @@ var TaskUpdateCommand = &cli.Command{
 			Aliases: []string{"i"},
 			Usage:   "Add instruction to task (can be specified multiple times)",
 		},
+		&cli.DurationFlag{
+			Name:  "archive-after",
+			Value: 0,
+			Usage: "Set the auto-archive timeout. 0 = never (default); negative = archive immediately; positive = delay.",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		taskIDStr := cmd.Args().First()
@@ -53,7 +59,7 @@ var TaskUpdateCommand = &cli.Command{
 		start := cmd.Bool("start")
 		texts := cmd.StringSlice("add-instruction")
 
-		if name == "" && !start && len(texts) == 0 {
+		if name == "" && !start && len(texts) == 0 && !cmd.IsSet("archive-after") {
 			return fmt.Errorf("nothing to update")
 		}
 
@@ -76,6 +82,7 @@ var TaskUpdateCommand = &cli.Command{
 			Name:            name,
 			Start:           start,
 			AddInstructions: instructions,
+			ArchiveAfter:    durationpb.New(cmd.Duration("archive-after")),
 		}); err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
 		}

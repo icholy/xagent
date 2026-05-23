@@ -4,7 +4,7 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING id;
 
 -- name: GetEvent :one
-SELECT id, description, data, url, created_at, org_id
+SELECT id, description, data, url, org_id, created_at
 FROM events
 WHERE id = $1 AND org_id = $2;
 
@@ -12,14 +12,14 @@ WHERE id = $1 AND org_id = $2;
 SELECT EXISTS(SELECT 1 FROM events WHERE id = $1 AND org_id = $2);
 
 -- name: ListEvents :many
-SELECT id, description, data, url, created_at, org_id
+SELECT id, description, data, url, org_id, created_at
 FROM events
 WHERE org_id = $1
 ORDER BY created_at DESC
 LIMIT $2;
 
 -- name: FindEventsByURL :many
-SELECT id, description, data, url, created_at, org_id
+SELECT id, description, data, url, org_id, created_at
 FROM events
 WHERE url = $1
 ORDER BY created_at DESC;
@@ -44,7 +44,7 @@ JOIN tasks t ON et.task_id = t.id
 WHERE et.event_id = $1 AND t.org_id = $2;
 
 -- name: ListEventsByTask :many
-SELECT e.id, e.description, e.data, e.url, e.created_at, e.org_id
+SELECT e.id, e.description, e.data, e.url, e.org_id, e.created_at
 FROM events e
 JOIN event_tasks et ON e.id = et.event_id
 JOIN tasks t ON et.task_id = t.id

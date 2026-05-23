@@ -15,10 +15,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type { Duration } from '@bufbuild/protobuf/wkt'
 
 export const Route = createFileRoute('/tasks/new')({
   component: NewTaskPage,
 })
+
+// durationFromHours parses an integer string number of hours and returns a protobuf
+// Duration, or undefined for empty / "never".
+function durationFromHours(value: string): Duration | undefined {
+  if (!value || value === 'never') return undefined
+  const hours = Number.parseInt(value, 10)
+  if (!Number.isFinite(hours) || hours <= 0) return undefined
+  return { seconds: BigInt(hours * 3600), nanos: 0, $typeName: 'google.protobuf.Duration' }
+}
 
 function NewTaskPage() {
   const navigate = useNavigate()
@@ -27,6 +37,7 @@ function NewTaskPage() {
   const [runner, setRunner] = useOrgLocalStorage('xagent-last-runner', '')
   const [workspace, setWorkspace] = useOrgLocalStorage('xagent-last-workspace', '')
   const [instruction, setInstruction] = useState('')
+  const [archiveAfter, setArchiveAfter] = useState<string>('') // empty = never
 
   const { data: workspacesData } = useQuery(listWorkspaces, {})
 
@@ -61,6 +72,7 @@ function NewTaskPage() {
       workspace: workspace.trim(),
       parent: 0n,
       instructions: [{ text: instruction.trim(), url: '' }],
+      archiveAfter: durationFromHours(archiveAfter),
     })
   }
 
@@ -128,6 +140,25 @@ function NewTaskPage() {
                 rows={4}
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="archive-after">Auto-archive after (optional)</Label>
+              <Select value={archiveAfter} onValueChange={setArchiveAfter}>
+                <SelectTrigger id="archive-after">
+                  <SelectValue placeholder="Never (default)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="never">Never</SelectItem>
+                  <SelectItem value="1">1 hour</SelectItem>
+                  <SelectItem value="24">24 hours</SelectItem>
+                  <SelectItem value="168">7 days</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs">
+                Once the task reaches a terminal status (completed, failed, cancelled), the server
+                will archive it after this delay so the container is reclaimed.
+              </p>
             </div>
 
             {mutation.error && (
