@@ -58,11 +58,6 @@ func InstructionFromProto(pb *xagentv1.Instruction) Instruction {
 }
 
 // Task represents a task in the system.
-//
-// ArchiveAfter is a sentinel-valued duration:
-//   - 0  never auto-archive (default)
-//   - <0 archive immediately once the task is in a terminal status
-//   - >0 archive that long after the task reaches a terminal status
 type Task struct {
 	ID           int64         `json:"id"`
 	Name         string        `json:"name"`
@@ -77,6 +72,8 @@ type Task struct {
 	Archived     bool          `json:"archived"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
+	// ArchiveAfter controls auto-archive after the task reaches a terminal
+	// status. 0 = never (default); <0 = archive immediately; >0 = delay.
 	ArchiveAfter time.Duration `json:"archive_after,omitempty"`
 }
 
