@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 var ConfigDir = "/tmp/xagent"
@@ -19,6 +20,7 @@ type Config struct {
 	Verbose    bool                 `json:"verbose,omitempty"`
 	McpServers map[string]McpServer `json:"mcp_servers,omitempty"`
 	Commands   []string             `json:"commands,omitempty"`
+	Scopes     []string             `json:"scopes,omitempty"`
 	Claude     *ClaudeOptions       `json:"claude,omitempty"`
 	Codex      *CodexOptions        `json:"codex,omitempty"`
 	Copilot    *CopilotOptions      `json:"copilot,omitempty"`
@@ -57,6 +59,10 @@ func (m *McpServer) Validate() error {
 		return fmt.Errorf("unknown type: %s", m.Type)
 	}
 	return nil
+}
+
+func (c *Config) hasScope(scope string) bool {
+	return slices.Contains(c.Scopes, scope)
 }
 
 func ConfigPath(taskID int64) string {

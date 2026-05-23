@@ -307,6 +307,7 @@ func (w *Workspace) AgentConfig() agent.Config {
 		Verbose:    w.Agent.Verbose,
 		McpServers: make(map[string]agent.McpServer),
 		Commands:   w.Commands,
+		Scopes:     w.Scopes,
 	}
 	if w.Agent.Claude != nil {
 		cfg.Claude = &agent.ClaudeOptions{
