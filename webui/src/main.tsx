@@ -28,6 +28,22 @@ const router = createRouter({
   defaultPreloadStaleTime: 0,
 })
 
+auth.onOrgChange((orgId, internal) => {
+  // Any org change invalidates cached data so it refetches against the new
+  // org-scoped token.
+  queryClient.invalidateQueries()
+  // An internal change (a token fetch that resolved the default org or fell
+  // back after a 403) has no caller updating the URL, so reflect it here.
+  // Explicit setOrgId callers (the dropdown, beforeLoad) own their navigation.
+  if (internal) {
+    router.navigate({
+      to: '.',
+      search: (prev) => ({ ...prev, org: orgId }),
+      replace: true,
+    })
+  }
+})
+
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router

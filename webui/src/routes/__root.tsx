@@ -2,11 +2,12 @@ import {
   Outlet,
   createRootRouteWithContext,
   Link,
+  redirect,
   useNavigate,
   useMatches,
 } from '@tanstack/react-router'
 import { LogOut, Settings } from 'lucide-react'
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense } from 'react'
 import { QueryClient } from '@tanstack/react-query'
 import { useQuery } from '@connectrpc/connect-query'
 import { getProfile } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
@@ -50,16 +51,26 @@ function validateSearch(search: Record<string, unknown>): RootSearch {
   return { org: typeof search.org === 'string' ? search.org : undefined }
 }
 
-async function beforeLoad({
+function beforeLoad({
   search,
-  context: { auth, queryClient },
+  context: { auth },
 }: {
   search: RootSearch
-  context: { auth: AuthTransport; queryClient: QueryClient }
-}): Promise<void> {
-  if (search.org && search.org !== auth.getOrgId()) {
-    await auth.fetchToken(search.org)
-    queryClient.removeQueries()
+  context: { auth: AuthTransport }
+}): void {
+  console.log('[orgswitch] beforeLoad', { searchOrg: search.org, current: auth.getOrgId() })
+  // ?org present: adopt it. setOrgId is a no-op when unchanged; the org-change
+  // listener invalidates the cache and the new token is fetched lazily on the
+  // next request. ?org absent: stamp it from the active org so refresh /
+  // copy-paste / deep links carry the org. Done as a redirect (not a reactive
+  // effect) so there's no second controller to oscillate against.
+  if (search.org) {
+    auth.setOrgId(search.org)
+    return
+  }
+  const orgId = auth.getOrgId()
+  if (orgId !== NO_ORG) {
+    throw redirect({ search: (prev) => ({ ...prev, org: orgId }), replace: true })
   }
 }
 
@@ -79,24 +90,13 @@ function RootComponent() {
 
   const orgs = profileData?.orgs ?? []
   const currentOrgId = useOrgId()
-  const searchOrg = Route.useSearch({ select: (s) => s.org })
 
   const navigate = useNavigate()
   const route = useMatches().at(-1)
 
-  // Keep ?org= in the URL in sync with the active org. Covers cold loads
-  // and silent recoveries (e.g. fetchToken falling back from a stale org).
-  useEffect(() => {
-    if (currentOrgId === NO_ORG) return
-    if (searchOrg === currentOrgId) return
-    navigate({
-      to: '.',
-      search: (prev) => ({ ...prev, org: currentOrgId }),
-      replace: true,
-    })
-  }, [currentOrgId, searchOrg, navigate])
-
   const handleOrgSwitch = async (orgId: string) => {
+    console.log('[orgswitch] handleOrgSwitch', { orgId, current: auth.getOrgId() })
+    auth.setOrgId(orgId)
     const redirect = route?.staticData.orgSwitchRedirect
     if (redirect) {
       await navigate({ to: redirect, search: { org: orgId } })

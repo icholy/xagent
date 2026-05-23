@@ -17,9 +17,14 @@ export class AuthTransport {
     this.lastOrgId = this.getOrgId()
   }
 
-  onOrgChange(listener: (orgId: string) => void): () => void {
+  // The listener's `internal` arg is true when the org changed inside
+  // AuthTransport (a token fetch resolving the default or falling back), and
+  // false when it came from an explicit setOrgId. Internal changes have no
+  // caller updating the URL, so a listener may want to sync it.
+  onOrgChange(listener: (orgId: string, internal: boolean) => void): () => void {
     const handler = (e: Event) => {
-      listener((e as CustomEvent<string>).detail)
+      const detail = (e as CustomEvent<{ orgId: string; internal: boolean }>).detail
+      listener(detail.orgId, detail.internal)
     }
     this.events.addEventListener('orgchange', handler)
     return () => this.events.removeEventListener('orgchange', handler)
@@ -33,23 +38,35 @@ export class AuthTransport {
     return localStorage.getItem(ORG_ID_KEY) ?? NO_ORG
   }
 
-  private notifyOrgChange(): void {
+  // setOrgId selects the active org. It's a no-op when the org is unchanged.
+  // Otherwise it drops the current token (a fresh, org-scoped one is fetched
+  // lazily on the next request) and notifies listeners, which is what triggers
+  // query-cache invalidation.
+  setOrgId(orgId: string): void {
+    const current = this.getOrgId()
+    if (orgId === current) return
+    localStorage.setItem(ORG_ID_KEY, orgId)
+    localStorage.removeItem(TOKEN_KEY)
+    this.notifyOrgChange(false)
+  }
+
+  private notifyOrgChange(internal: boolean): void {
     const next = this.getOrgId()
     if (next === this.lastOrgId) return
     this.lastOrgId = next
-    this.events.dispatchEvent(new CustomEvent('orgchange', { detail: next }))
+    this.events.dispatchEvent(new CustomEvent('orgchange', { detail: { orgId: next, internal } }))
   }
 
   private storeToken(token: string, orgId: string): void {
     localStorage.setItem(TOKEN_KEY, token)
     localStorage.setItem(ORG_ID_KEY, orgId)
-    this.notifyOrgChange()
+    this.notifyOrgChange(true)
   }
 
   clearToken(): void {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(ORG_ID_KEY)
-    this.notifyOrgChange()
+    this.notifyOrgChange(false)
   }
 
   async fetchToken(orgId?: string): Promise<string> {
