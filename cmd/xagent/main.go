@@ -27,7 +27,7 @@ func main() {
 			command.SetupCommand,
 			command.DownloadCommand,
 			command.VersionCommand,
-			command.GitCredentialCommand,
+			command.ToolCommand,
 		},
 	}
 
