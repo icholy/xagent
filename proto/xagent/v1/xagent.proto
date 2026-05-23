@@ -110,7 +110,10 @@ message Task {
   bool archived = 13;
   string url = 14;
   // Auto-archive this task once it has been in a terminal status
-  // (COMPLETED, FAILED, CANCELLED) for this long. Unset = never auto-archive.
+  // (COMPLETED, FAILED, CANCELLED) for this long.
+  //   zero (or unset): never auto-archive (default)
+  //   negative:        archive immediately on terminal status
+  //   positive:        archive that long after reaching terminal status
   google.protobuf.Duration archive_after = 15;
 }
 
@@ -197,8 +200,8 @@ message UpdateTaskRequest {
   reserved 3;  // Previously: restart
   repeated Instruction add_instructions = 4;
   bool start = 5;    // Start after current run finishes (non-interrupting)
-  // Tri-state: unset = leave alone; zero duration = clear (never archive);
-  // positive = set new timeout.
+  // Unset = leave alone. See Task.archive_after for the value semantics
+  // (zero = never, negative = immediate, positive = delay).
   google.protobuf.Duration archive_after = 6;
 }
 

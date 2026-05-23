@@ -364,7 +364,11 @@ type Task struct {
 	Archived     bool                   `protobuf:"varint,13,opt,name=archived,proto3" json:"archived,omitempty"`
 	Url          string                 `protobuf:"bytes,14,opt,name=url,proto3" json:"url,omitempty"`
 	// Auto-archive this task once it has been in a terminal status
-	// (COMPLETED, FAILED, CANCELLED) for this long. Unset = never auto-archive.
+	// (COMPLETED, FAILED, CANCELLED) for this long.
+	//
+	//	zero (or unset): never auto-archive (default)
+	//	negative:        archive immediately on terminal status
+	//	positive:        archive that long after reaching terminal status
 	ArchiveAfter  *durationpb.Duration `protobuf:"bytes,15,opt,name=archive_after,json=archiveAfter,proto3" json:"archive_after,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1335,8 +1339,8 @@ type UpdateTaskRequest struct {
 	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	AddInstructions []*Instruction         `protobuf:"bytes,4,rep,name=add_instructions,json=addInstructions,proto3" json:"add_instructions,omitempty"`
 	Start           bool                   `protobuf:"varint,5,opt,name=start,proto3" json:"start,omitempty"` // Start after current run finishes (non-interrupting)
-	// Tri-state: unset = leave alone; zero duration = clear (never archive);
-	// positive = set new timeout.
+	// Unset = leave alone. See Task.archive_after for the value semantics
+	// (zero = never, negative = immediate, positive = delay).
 	ArchiveAfter  *durationpb.Duration `protobuf:"bytes,6,opt,name=archive_after,json=archiveAfter,proto3" json:"archive_after,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

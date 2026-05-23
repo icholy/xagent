@@ -98,10 +98,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		OrgID:        caller.OrgID,
 	}
 	if req.ArchiveAfter != nil {
-		d := req.ArchiveAfter.AsDuration()
-		if d > 0 {
-			task.ArchiveAfter = &d
-		}
+		task.ArchiveAfter = req.ArchiveAfter.AsDuration()
 	}
 	err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := s.store.CreateTask(ctx, tx, task); err != nil {
@@ -195,12 +192,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			changed = append(changed, "status")
 		}
 		if req.ArchiveAfter != nil {
-			d := req.ArchiveAfter.AsDuration()
-			if d > 0 {
-				task.ArchiveAfter = &d
-			} else {
-				task.ArchiveAfter = nil
-			}
+			task.ArchiveAfter = req.ArchiveAfter.AsDuration()
 			changed = append(changed, "archive_after")
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {

@@ -72,20 +72,20 @@ type SchemaMigration struct {
 }
 
 type Task struct {
-	ID           int64         `json:"id"`
-	Name         string        `json:"name"`
-	Parent       int64         `json:"parent"`
-	Runner       string        `json:"runner"`
-	Workspace    string        `json:"workspace"`
-	Instructions string        `json:"instructions"`
-	Status       int32         `json:"status"`
-	Command      int32         `json:"command"`
-	Version      int64         `json:"version"`
-	OrgID        int64         `json:"org_id"`
-	Archived     bool          `json:"archived"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
-	ArchiveAfter sql.NullInt64 `json:"archive_after"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Parent       int64     `json:"parent"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Instructions string    `json:"instructions"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
+	Version      int64     `json:"version"`
+	OrgID        int64     `json:"org_id"`
+	Archived     bool      `json:"archived"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	ArchiveAfter int64     `json:"archive_after"`
 }
 
 type TaskLink struct {

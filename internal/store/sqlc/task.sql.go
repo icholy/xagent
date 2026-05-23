@@ -7,7 +7,6 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
 	"time"
 )
 
@@ -18,19 +17,19 @@ RETURNING id
 `
 
 type CreateTaskParams struct {
-	Name         string        `json:"name"`
-	Parent       int64         `json:"parent"`
-	Runner       string        `json:"runner"`
-	Workspace    string        `json:"workspace"`
-	Instructions string        `json:"instructions"`
-	Status       int32         `json:"status"`
-	Command      int32         `json:"command"`
-	Version      int64         `json:"version"`
-	OrgID        int64         `json:"org_id"`
-	Archived     bool          `json:"archived"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
-	ArchiveAfter sql.NullInt64 `json:"archive_after"`
+	Name         string    `json:"name"`
+	Parent       int64     `json:"parent"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Instructions string    `json:"instructions"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
+	Version      int64     `json:"version"`
+	OrgID        int64     `json:"org_id"`
+	Archived     bool      `json:"archived"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	ArchiveAfter int64     `json:"archive_after"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, error) {
@@ -296,7 +295,7 @@ const listTasksDueForArchive = `-- name: ListTasksDueForArchive :many
 SELECT id, version, org_id
 FROM tasks
 WHERE archived = FALSE
-  AND archive_after IS NOT NULL
+  AND archive_after <> 0
   AND command = 0
   AND status IN (5, 6, 7)
   AND updated_at + (INTERVAL '1 microsecond' * archive_after) < NOW()
@@ -390,19 +389,19 @@ WHERE id = $12 AND org_id = $13
 `
 
 type UpdateTaskParams struct {
-	Name         string        `json:"name"`
-	Parent       int64         `json:"parent"`
-	Runner       string        `json:"runner"`
-	Workspace    string        `json:"workspace"`
-	Instructions string        `json:"instructions"`
-	Status       int32         `json:"status"`
-	Command      int32         `json:"command"`
-	Version      int64         `json:"version"`
-	UpdatedAt    time.Time     `json:"updated_at"`
-	Archived     bool          `json:"archived"`
-	ArchiveAfter sql.NullInt64 `json:"archive_after"`
-	ID           int64         `json:"id"`
-	OrgID        int64         `json:"org_id"`
+	Name         string    `json:"name"`
+	Parent       int64     `json:"parent"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Instructions string    `json:"instructions"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
+	Version      int64     `json:"version"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Archived     bool      `json:"archived"`
+	ArchiveAfter int64     `json:"archive_after"`
+	ID           int64     `json:"id"`
+	OrgID        int64     `json:"org_id"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {

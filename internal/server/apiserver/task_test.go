@@ -476,7 +476,7 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	assert.Assert(t, createResp.Task.ArchiveAfter == nil, "should not be set at create")
+	assert.Assert(t, createResp.Task.ArchiveAfter == nil, "zero (never) is omitted on the wire")
 
 	// Set a value via Update
 	want := 24 * time.Hour
@@ -490,7 +490,7 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 	assert.Assert(t, getResp.Task.ArchiveAfter != nil)
 	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), want)
 
-	// Clearing with a zero duration removes the timeout
+	// Setting to zero reverts to "never auto-archive" (omitted on the wire).
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:           createResp.Task.Id,
 		ArchiveAfter: durationpb.New(0),
@@ -498,7 +498,7 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 	assert.NilError(t, err)
 	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
-	assert.Assert(t, getResp.Task.ArchiveAfter == nil, "zero duration should clear ArchiveAfter")
+	assert.Assert(t, getResp.Task.ArchiveAfter == nil, "zero duration should mean never auto-archive")
 }
 
 func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
@@ -532,5 +532,5 @@ func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 	assert.Assert(t, !getResp.Task.Archived, "task should be unarchived")
-	assert.Assert(t, getResp.Task.ArchiveAfter == nil, "ArchiveAfter should be cleared on unarchive")
+	assert.Assert(t, getResp.Task.ArchiveAfter == nil, "ArchiveAfter should reset to 0 (never) on unarchive")
 }

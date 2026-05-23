@@ -48,7 +48,7 @@ var TaskCreateCommand = &cli.Command{
 		},
 		&cli.DurationFlag{
 			Name:  "archive-after",
-			Usage: "Auto-archive the task this long after it reaches a terminal status (e.g. 1h, 24h). Default: never.",
+			Usage: "Auto-archive the task this long after it reaches a terminal status. 0 = never (default), negative = archive immediately, positive = delay (e.g. 1h, 24h).",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {

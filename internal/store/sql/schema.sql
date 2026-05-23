@@ -229,7 +229,7 @@ CREATE TABLE public.tasks (
     archived boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    archive_after bigint
+    archive_after bigint DEFAULT 0 NOT NULL
 );
 
 
@@ -529,7 +529,7 @@ CREATE INDEX idx_tasks_archived ON public.tasks USING btree (archived);
 -- Name: idx_tasks_archive_due; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_tasks_archive_due ON public.tasks USING btree (updated_at) WHERE ((archived = false) AND (archive_after IS NOT NULL));
+CREATE INDEX idx_tasks_archive_due ON public.tasks USING btree (updated_at) WHERE ((archived = false) AND (archive_after <> 0));
 
 
 --

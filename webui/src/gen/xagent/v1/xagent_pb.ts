@@ -183,7 +183,10 @@ export type Task = Message<"xagent.v1.Task"> & {
 
   /**
    * Auto-archive this task once it has been in a terminal status
-   * (COMPLETED, FAILED, CANCELLED) for this long. Unset = never auto-archive.
+   * (COMPLETED, FAILED, CANCELLED) for this long.
+   *   zero (or unset): never auto-archive (default)
+   *   negative:        archive immediately on terminal status
+   *   positive:        archive that long after reaching terminal status
    *
    * @generated from field: google.protobuf.Duration archive_after = 15;
    */
@@ -577,8 +580,8 @@ export type UpdateTaskRequest = Message<"xagent.v1.UpdateTaskRequest"> & {
   start: boolean;
 
   /**
-   * Tri-state: unset = leave alone; zero duration = clear (never archive);
-   * positive = set new timeout.
+   * Unset = leave alone. See Task.archive_after for the value semantics
+   * (zero = never, negative = immediate, positive = delay).
    *
    * @generated from field: google.protobuf.Duration archive_after = 6;
    */

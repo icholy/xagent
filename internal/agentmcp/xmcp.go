@@ -142,7 +142,7 @@ type createChildTaskInput struct {
 	Name         string `json:"name" jsonschema:"A short name for the task"`
 	Instruction  string `json:"instruction" jsonschema:"The instruction text for the task"`
 	URL          string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue Jira ticket)"`
-	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Optional Go duration (e.g. 1h, 24h) after which the task auto-archives once terminal. Omit for never."`
+	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Optional Go duration controlling auto-archive once the task reaches a terminal status. Omit or pass 0 to never auto-archive; negative (e.g. -1s) archives immediately; positive (e.g. 1h, 24h) delays."`
 }
 
 func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
@@ -173,7 +173,7 @@ func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, in
 
 type updateMyTaskInput struct {
 	Name         string `json:"name,omitempty" jsonschema:"The new name for the task"`
-	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Set the auto-archive timeout as a Go duration (e.g. 1h). Pass \"0\" to clear (never auto-archive)."`
+	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Set the auto-archive timeout as a Go duration. 0 = never; negative (e.g. -1s) = archive immediately; positive (e.g. 1h) = delay."`
 }
 
 func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {

@@ -41,7 +41,7 @@ var TaskUpdateCommand = &cli.Command{
 		},
 		&cli.DurationFlag{
 			Name:  "archive-after",
-			Usage: "Set the auto-archive timeout. Pass 0 to clear (never auto-archive).",
+			Usage: "Set the auto-archive timeout. 0 = never; negative = archive immediately; positive = delay.",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {

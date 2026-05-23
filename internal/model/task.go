@@ -58,21 +58,26 @@ func InstructionFromProto(pb *xagentv1.Instruction) Instruction {
 }
 
 // Task represents a task in the system.
+//
+// ArchiveAfter is a sentinel-valued duration:
+//   - 0  never auto-archive (default)
+//   - <0 archive immediately once the task is in a terminal status
+//   - >0 archive that long after the task reaches a terminal status
 type Task struct {
-	ID           int64          `json:"id"`
-	Name         string         `json:"name"`
-	Parent       int64          `json:"parent"`
-	Runner       string         `json:"runner"`
-	Workspace    string         `json:"workspace"`
-	Instructions []Instruction  `json:"instructions"`
-	Status       TaskStatus     `json:"status"`
-	Command      TaskCommand    `json:"command"`
-	Version      int64          `json:"version"`
-	OrgID        int64          `json:"org_id"`
-	Archived     bool           `json:"archived"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	ArchiveAfter *time.Duration `json:"archive_after,omitempty"`
+	ID           int64         `json:"id"`
+	Name         string        `json:"name"`
+	Parent       int64         `json:"parent"`
+	Runner       string        `json:"runner"`
+	Workspace    string        `json:"workspace"`
+	Instructions []Instruction `json:"instructions"`
+	Status       TaskStatus    `json:"status"`
+	Command      TaskCommand   `json:"command"`
+	Version      int64         `json:"version"`
+	OrgID        int64         `json:"org_id"`
+	Archived     bool          `json:"archived"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	ArchiveAfter time.Duration `json:"archive_after,omitempty"`
 }
 
 // Proto converts a Task to its protobuf representation.
@@ -82,8 +87,8 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 		instructions[i] = inst.Proto()
 	}
 	var archiveAfter *durationpb.Duration
-	if t.ArchiveAfter != nil {
-		archiveAfter = durationpb.New(*t.ArchiveAfter)
+	if t.ArchiveAfter != 0 {
+		archiveAfter = durationpb.New(t.ArchiveAfter)
 	}
 	return &xagentv1.Task{
 		Id:           t.ID,
@@ -123,10 +128,9 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 	if pb.UpdatedAt != nil {
 		updatedAt = pb.UpdatedAt.AsTime()
 	}
-	var archiveAfter *time.Duration
+	var archiveAfter time.Duration
 	if pb.ArchiveAfter != nil {
-		d := pb.ArchiveAfter.AsDuration()
-		archiveAfter = &d
+		archiveAfter = pb.ArchiveAfter.AsDuration()
 	}
 	return &Task{
 		ID:           pb.Id,
@@ -307,15 +311,15 @@ func (t *Task) CanUnarchive() bool {
 }
 
 // Unarchive marks the task as no longer archived. Also clears any
-// archive_after timeout so the archiver worker doesn't immediately re-archive
-// the task on its next tick.
+// archive_after timeout (sets it to 0 = never) so the archiver worker doesn't
+// immediately re-archive the task on its next tick.
 // Returns true if the task was archived and is now unarchived.
 func (t *Task) Unarchive() bool {
 	if !t.CanUnarchive() {
 		return false
 	}
 	t.Archived = false
-	t.ArchiveAfter = nil
+	t.ArchiveAfter = 0
 	return true
 }
 

@@ -51,7 +51,7 @@ WHERE id = $12 AND org_id = $13;
 SELECT id, version, org_id
 FROM tasks
 WHERE archived = FALSE
-  AND archive_after IS NOT NULL
+  AND archive_after <> 0
   AND command = 0
   AND status IN (5, 6, 7)
   AND updated_at + (INTERVAL '1 microsecond' * archive_after) < NOW()
