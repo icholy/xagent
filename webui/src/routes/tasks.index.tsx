@@ -30,7 +30,7 @@ export const Route = createFileRoute('/tasks/')({
 })
 
 function TasksPage() {
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const [showChildTasks, setShowChildTasks] = useLocalStorage('showChildTasks', false)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -142,7 +142,7 @@ function TasksPage() {
 }
 
 function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
 
   const handleArchive = async () => {

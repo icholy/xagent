@@ -29,7 +29,7 @@ export const Route = createFileRoute('/events/')({
 })
 
 function EventsPage() {
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const [limit, setLimit] = useState(25)
   const { data, isLoading, error } = useQuery(
     listEvents,
@@ -108,7 +108,7 @@ function EventsPage() {
 }
 
 function EventRow({ event }: { event: Event }) {
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const dataContent = event.data || '-'
   const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
 

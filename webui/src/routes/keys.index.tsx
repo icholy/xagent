@@ -21,7 +21,7 @@ export const Route = createFileRoute('/keys/')({
 })
 
 function KeysPage() {
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const { data, isLoading, error, refetch } = useQuery(
     listKeys,
     {},

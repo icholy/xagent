@@ -52,7 +52,7 @@ const logTypeStyles: Record<string, string> = {
 }
 
 function TaskDetail() {
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const { id } = Route.useParams()
   const taskId = BigInt(id)
   const [instruction, setInstruction] = useState('')
@@ -364,7 +364,7 @@ function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => v
 }
 
 function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
 
   const handleArchive = async () => {
@@ -420,8 +420,7 @@ function EventsTable({
   onUnlink: (eventId: bigint) => void
   isUnlinking: boolean
 }) {
-
-  const orgId = useOrgId();
+  const orgId = useOrgId()
 
   return (
     <Table>

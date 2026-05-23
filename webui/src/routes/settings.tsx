@@ -66,7 +66,7 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
   const { tab } = Route.useSearch()
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const navigate = useNavigate()
 
   return (

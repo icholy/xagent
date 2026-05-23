@@ -11,7 +11,7 @@ export const Route = createFileRoute('/events/$id')({
 })
 
 function EventDetail() {
-  const orgId = useOrgId();
+  const orgId = useOrgId()
   const { id } = Route.useParams()
   const eventId = BigInt(id)
 
