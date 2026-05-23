@@ -41,7 +41,8 @@ var TaskUpdateCommand = &cli.Command{
 		},
 		&cli.DurationFlag{
 			Name:  "archive-after",
-			Usage: "Set the auto-archive timeout. 0 = never; negative = archive immediately; positive = delay.",
+			Value: 0,
+			Usage: "Set the auto-archive timeout. 0 = never (default); negative = archive immediately; positive = delay.",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -75,17 +76,13 @@ var TaskUpdateCommand = &cli.Command{
 		if cfg.Token == "" {
 			return fmt.Errorf("not authenticated, run setup first")
 		}
-		var archiveAfter *durationpb.Duration
-		if cmd.IsSet("archive-after") {
-			archiveAfter = durationpb.New(cmd.Duration("archive-after"))
-		}
 		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Token: cfg.Token})
 		if _, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 			Id:              taskID,
 			Name:            name,
 			Start:           start,
 			AddInstructions: instructions,
-			ArchiveAfter:    archiveAfter,
+			ArchiveAfter:    durationpb.New(cmd.Duration("archive-after")),
 		}); err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
 		}

@@ -166,18 +166,14 @@ func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, in
 
 type updateMyTaskInput struct {
 	Name         string `json:"name,omitempty" jsonschema:"The new name for the task"`
-	ArchiveAfter *int64 `json:"archive_after_seconds,omitempty" jsonschema:"Set the auto-archive timeout in seconds. Omit to leave it alone; 0 = never auto-archive; negative = archive immediately; positive = delay."`
+	ArchiveAfter int64  `json:"archive_after_seconds,omitempty" jsonschema:"Set the auto-archive timeout in seconds. 0 = never (default); negative = archive immediately; positive = delay."`
 }
 
 func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
-	var archiveAfter *durationpb.Duration
-	if input.ArchiveAfter != nil {
-		archiveAfter = durationpb.New(time.Duration(*input.ArchiveAfter) * time.Second)
-	}
 	if _, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:           s.task.ID,
 		Name:         input.Name,
-		ArchiveAfter: archiveAfter,
+		ArchiveAfter: durationpb.New(time.Duration(input.ArchiveAfter) * time.Second),
 	}); err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}

@@ -266,11 +266,11 @@ var ServerCommand = &cli.Command{
 		ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 
-		if archivePoll := cmd.Duration("archive-poll"); archivePoll > 0 {
+		if interval := cmd.Duration("archive-poll"); interval > 0 {
 			arch := archiver.New(archiver.Options{
 				Store:     st,
 				Publisher: ps,
-				Interval:  archivePoll,
+				Interval:  interval,
 				BatchSize: cmd.Int("archive-batch"),
 				Log:       slog.With("component", "archiver"),
 			})
