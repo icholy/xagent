@@ -3,14 +3,17 @@ package agentmcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gotest.tools/v3/assert"
 )
 
@@ -128,6 +131,56 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	text, ok := result.Content[0].(*mcp.TextContent)
 	assert.Assert(t, ok, "expected TextContent")
 	assert.Assert(t, strings.Contains(text.Text, "cannot update archived task"), "expected archived error message, got: %s", text.Text)
+}
+
+func TestGetGitHubToken(t *testing.T) {
+	expiresAt := time.Date(2026, 5, 23, 1, 0, 0, 0, time.UTC)
+	client := &xagentclient.ClientMock{
+		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+			return &xagentv1.CreateGitHubTokenResponse{
+				Token:     "ghs_test_token",
+				ExpiresAt: timestamppb.New(expiresAt),
+			}, nil
+		},
+	}
+
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"})
+	session := setupTestSession(t, srv, nil)
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "get_github_token",
+		Arguments: map[string]any{},
+	})
+	assert.NilError(t, err)
+
+	assertTextResult(t, result, map[string]any{
+		"token":     "ghs_test_token",
+		"expiresAt": "2026-05-23T01:00:00Z",
+	})
+
+	assert.Equal(t, len(client.CreateGitHubTokenCalls()), 1)
+}
+
+func TestGetGitHubToken_Error(t *testing.T) {
+	client := &xagentclient.ClientMock{
+		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
+			return nil, errors.New("no installation linked")
+		},
+	}
+
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"})
+	session := setupTestSession(t, srv, nil)
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "get_github_token",
+		Arguments: map[string]any{},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, result.IsError, "expected error result")
+
+	text, ok := result.Content[0].(*mcp.TextContent)
+	assert.Assert(t, ok, "expected TextContent")
+	assert.Assert(t, strings.Contains(text.Text, "no installation linked"), "expected error message, got: %s", text.Text)
 }
 
 func assertTextResult(t *testing.T, result *mcp.CallToolResult, want map[string]any) {

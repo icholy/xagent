@@ -79,6 +79,11 @@ func (s *Server) AddTools(server *mcp.Server) {
 		Description: "List logs for a child task",
 	}, s.listChildTaskLogs)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_github_token",
+		Description: "Get a short-lived GitHub App installation token for the current org. Fallback for shell-outs (e.g. a one-off `gh` invocation) that need a raw GITHUB_TOKEN — primary GitHub access goes through git (credential helper) and the github MCP server.",
+	}, s.getGitHubToken)
+
 }
 
 type createLinkInput struct {
@@ -226,6 +231,17 @@ func (s *Server) listChildTaskLogs(ctx context.Context, req *mcp.CallToolRequest
 	}
 
 	return protojsonResult(logsResp), nil, nil
+}
+
+type getGitHubTokenInput struct{}
+
+func (s *Server) getGitHubToken(ctx context.Context, req *mcp.CallToolRequest, input getGitHubTokenInput) (*mcp.CallToolResult, any, error) {
+	resp, err := s.client.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
+	if err != nil {
+		return errorResult("failed to create github token: %v", err), nil, nil
+	}
+
+	return protojsonResult(resp), nil, nil
 }
 
 func textResult(format string, args ...any) *mcp.CallToolResult {
