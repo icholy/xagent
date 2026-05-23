@@ -37,7 +37,7 @@ var GitHubMCPCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		return githubmcp.Run(ctx, githubmcp.Config{
+		return githubmcp.New(githubmcp.Config{
 			Client: xagentclient.New(xagentclient.Options{
 				BaseURL: cmd.String("server"),
 				Token:   cmd.String("token"),
@@ -45,6 +45,6 @@ var GitHubMCPCommand = &cli.Command{
 			URL:           cmd.String("url"),
 			RefreshMargin: cmd.Duration("refresh-margin"),
 			Logger:        slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		})
+		}).Run(ctx)
 	},
 }

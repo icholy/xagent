@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/icholy/xagent/internal/mcpswap"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -49,7 +48,7 @@ func startAuthedUpstream(t *testing.T, accepted map[string]bool, seen *atomic.Va
 	return ts.URL
 }
 
-func TestSwapUpstream_InjectsBearerToken(t *testing.T) {
+func TestServer_SwapInjectsBearerToken(t *testing.T) {
 	var seen atomic.Value
 	url := startAuthedUpstream(t, map[string]bool{"ghs_test_token": true}, &seen)
 
@@ -62,14 +61,15 @@ func TestSwapUpstream_InjectsBearerToken(t *testing.T) {
 		},
 	}
 
-	var up mcpswap.Upstream
-	t.Cleanup(up.Close)
-	expiresAt, err := swapUpstream(t.Context(), client, &up, url)
+	s := New(Config{Client: client, URL: url})
+	t.Cleanup(s.upstream.Close)
+
+	expiresAt, err := s.swap(t.Context())
 	assert.NilError(t, err)
 	assert.Assert(t, !expiresAt.IsZero(), "expiresAt should be set from the token response")
 	assert.Equal(t, len(client.CreateGitHubTokenCalls()), 1)
 
-	sess, err := up.Session()
+	sess, err := s.upstream.Session()
 	assert.NilError(t, err)
 	res, err := sess.CallTool(t.Context(), &mcp.CallToolParams{Name: "ping"})
 	assert.NilError(t, err)
@@ -79,14 +79,15 @@ func TestSwapUpstream_InjectsBearerToken(t *testing.T) {
 	assert.Equal(t, seen.Load(), "ghs_test_token")
 }
 
-func TestSwapUpstream_PropagatesTokenError(t *testing.T) {
+func TestServer_SwapPropagatesTokenError(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(_ context.Context, _ *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
 			return nil, errors.New("boom")
 		},
 	}
-	var up mcpswap.Upstream
-	t.Cleanup(up.Close)
-	_, err := swapUpstream(t.Context(), client, &up, "http://invalid.invalid")
+	s := New(Config{Client: client, URL: "http://invalid.invalid"})
+	t.Cleanup(s.upstream.Close)
+
+	_, err := s.swap(t.Context())
 	assert.ErrorContains(t, err, "create github token")
 }

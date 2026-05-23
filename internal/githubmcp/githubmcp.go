@@ -1,7 +1,7 @@
 // Package githubmcp adapts GitHub's MCP server for use with rotating
-// GitHub App installation tokens. It holds a single upstream session to
-// the GitHub MCP endpoint via internal/mcpswap and refreshes the
-// underlying installation token before each expiry so a long-running
+// GitHub App installation tokens. A Server holds a single upstream
+// session to the GitHub MCP endpoint via internal/mcpswap and refreshes
+// the underlying installation token before each expiry so a long-running
 // agent never sees the 1h TTL break its session.
 package githubmcp
 
@@ -29,7 +29,7 @@ const DefaultRefreshMargin = 5 * time.Minute
 // The previous session keeps serving requests while we retry.
 const retryBackoff = 30 * time.Second
 
-// Config configures Run.
+// Config configures a Server.
 type Config struct {
 	// Client is the xagent API client used to fetch GitHub App
 	// installation tokens via CreateGitHubToken.
@@ -44,39 +44,53 @@ type Config struct {
 	Logger *slog.Logger
 }
 
-// Run fetches an initial installation token, opens an upstream session to
-// the GitHub MCP server with it, and serves the proxied MCP server over
-// stdio. A background goroutine refreshes the token before each expiry;
-// swap failures are logged and retried while the previous session keeps
-// serving. Run blocks until ctx is done or the MCP server returns.
-//
-// The initial swap must succeed — without a valid token the agent has
-// nothing to forward to.
-func Run(ctx context.Context, cfg Config) error {
+// Server fronts the GitHub MCP server over stdio, hot-swapping its
+// upstream session as the GitHub App installation token rotates.
+type Server struct {
+	client        xagentclient.Client
+	url           string
+	refreshMargin time.Duration
+	logger        *slog.Logger
+	upstream      mcpswap.Upstream
+}
+
+// New returns a Server configured from cfg.
+func New(cfg Config) *Server {
 	if cfg.URL == "" {
 		cfg.URL = DefaultURL
 	}
 	if cfg.RefreshMargin == 0 {
 		cfg.RefreshMargin = DefaultRefreshMargin
 	}
-	logger := cfg.Logger
-	if logger == nil {
-		logger = slog.Default()
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
 	}
-
-	var up mcpswap.Upstream
-	up.SetLogger(logger)
-	defer up.Close()
-
-	swap := func(ctx context.Context) (time.Time, error) {
-		return swapUpstream(ctx, cfg.Client, &up, cfg.URL)
+	s := &Server{
+		client:        cfg.Client,
+		url:           cfg.URL,
+		refreshMargin: cfg.RefreshMargin,
+		logger:        cfg.Logger,
 	}
-	expiresAt, err := swap(ctx)
+	s.upstream.SetLogger(cfg.Logger)
+	return s
+}
+
+// Run fetches an initial installation token, opens an upstream session
+// with it, and serves the proxied MCP server over stdio. A background
+// goroutine refreshes the token before each expiry; swap failures are
+// logged and retried while the previous session keeps serving. Run
+// blocks until ctx is done or the MCP server returns.
+//
+// The initial swap must succeed — without a valid token the agent has
+// nothing to forward to.
+func (s *Server) Run(ctx context.Context) error {
+	defer s.upstream.Close()
+
+	expiresAt, err := s.swap(ctx)
 	if err != nil {
 		return err
 	}
-
-	go rotate(ctx, logger, swap, expiresAt, cfg.RefreshMargin)
+	go s.rotate(ctx, expiresAt)
 
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "xagent-github-mcp",
@@ -86,25 +100,25 @@ func Run(ctx context.Context, cfg Config) error {
 		HasPrompts:   true,
 		HasResources: true,
 	})
-	srv.AddReceivingMiddleware(up.Dispatch)
+	srv.AddReceivingMiddleware(s.upstream.Dispatch)
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }
 
-// swapUpstream mints a fresh installation token and replaces the active
+// swap mints a fresh installation token and replaces the active
 // upstream session with one connected using that token. Returns the new
 // token's expiry.
-func swapUpstream(ctx context.Context, client xagentclient.Client, up *mcpswap.Upstream, url string) (time.Time, error) {
-	resp, err := client.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
+func (s *Server) swap(ctx context.Context) (time.Time, error) {
+	resp, err := s.client.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
 	if err != nil {
 		return time.Time{}, fmt.Errorf("create github token: %w", err)
 	}
 	transport := &mcp.StreamableClientTransport{
-		Endpoint: url,
+		Endpoint: s.url,
 		HTTPClient: &http.Client{
 			Transport: &bearerTransport{token: resp.Token, base: http.DefaultTransport},
 		},
 	}
-	if err := up.Swap(ctx, transport); err != nil {
+	if err := s.upstream.Swap(ctx, transport); err != nil {
 		return time.Time{}, fmt.Errorf("swap upstream: %w", err)
 	}
 	return resp.GetExpiresAt().AsTime(), nil
@@ -114,9 +128,9 @@ func swapUpstream(ctx context.Context, client xagentclient.Client, up *mcpswap.U
 // failure it retries with a short backoff while the previous session
 // keeps serving requests (Swap leaves the active session intact on
 // error). Returns when ctx is done.
-func rotate(ctx context.Context, logger *slog.Logger, swap func(context.Context) (time.Time, error), expiresAt time.Time, margin time.Duration) {
+func (s *Server) rotate(ctx context.Context, expiresAt time.Time) {
 	for {
-		wait := time.Until(expiresAt.Add(-margin))
+		wait := time.Until(expiresAt.Add(-s.refreshMargin))
 		if wait < 0 {
 			wait = 0
 		}
@@ -127,13 +141,13 @@ func rotate(ctx context.Context, logger *slog.Logger, swap func(context.Context)
 			return
 		case <-timer.C:
 		}
-		next, err := swap(ctx)
+		next, err := s.swap(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				return
 			}
-			logger.Error("github-mcp: token rotation failed; retrying", "err", err, "backoff", retryBackoff)
-			expiresAt = time.Now().Add(retryBackoff + margin)
+			s.logger.Error("github-mcp: token rotation failed; retrying", "err", err, "backoff", retryBackoff)
+			expiresAt = time.Now().Add(retryBackoff + s.refreshMargin)
 			continue
 		}
 		expiresAt = next
