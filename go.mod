@@ -20,7 +20,7 @@ require (
 	github.com/justinas/alice v1.2.0
 	github.com/lib/pq v1.12.3
 	github.com/modelcontextprotocol/go-sdk v1.4.1
-	github.com/urfave/cli/v3 v3.6.1
+	github.com/urfave/cli/v3 v3.9.0
 	github.com/zitadel/oidc/v3 v3.45.5
 	github.com/zitadel/zitadel-go/v3 v3.29.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.68.0
