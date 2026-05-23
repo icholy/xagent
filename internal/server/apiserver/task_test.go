@@ -58,12 +58,13 @@ func TestGetTask(t *testing.T) {
 				Url:  "https://example.com/issue/2",
 			},
 		},
-		Status:    xagentv1.TaskStatus_PENDING,
-		Command:   xagentv1.TaskCommand_START,
-		Actions:   &xagentv1.TaskActions{Cancel: true},
-		Version:   1,
-		CreatedAt: getResp.Task.CreatedAt, // Copy timestamps since we can't predict them
-		UpdatedAt: getResp.Task.UpdatedAt,
+		Status:       xagentv1.TaskStatus_PENDING,
+		Command:      xagentv1.TaskCommand_START,
+		Actions:      &xagentv1.TaskActions{Cancel: true},
+		Version:      1,
+		CreatedAt:    getResp.Task.CreatedAt, // Copy timestamps since we can't predict them
+		UpdatedAt:    getResp.Task.UpdatedAt,
+		ArchiveAfter: durationpb.New(0),
 	}
 
 	assert.DeepEqual(t, getResp.Task, expected, protocmp.Transform())
@@ -151,12 +152,13 @@ func TestCreateTask(t *testing.T) {
 				Url:  "https://example.com/issue/1",
 			},
 		},
-		Status:    xagentv1.TaskStatus_PENDING,
-		Command:   xagentv1.TaskCommand_START,
-		Actions:   &xagentv1.TaskActions{Cancel: true},
-		Version:   1,
-		CreatedAt: resp.Task.CreatedAt,
-		UpdatedAt: resp.Task.UpdatedAt,
+		Status:       xagentv1.TaskStatus_PENDING,
+		Command:      xagentv1.TaskCommand_START,
+		Actions:      &xagentv1.TaskActions{Cancel: true},
+		Version:      1,
+		CreatedAt:    resp.Task.CreatedAt,
+		UpdatedAt:    resp.Task.UpdatedAt,
+		ArchiveAfter: durationpb.New(0),
 	}
 	assert.DeepEqual(t, resp.Task, expected, protocmp.Transform())
 }
@@ -476,7 +478,7 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	assert.Assert(t, createResp.Task.ArchiveAfter == nil, "zero (never) is omitted on the wire")
+	assert.Equal(t, createResp.Task.ArchiveAfter.AsDuration(), time.Duration(0), "unset means never auto-archive")
 
 	// Set a value via Update
 	want := 24 * time.Hour
@@ -498,7 +500,7 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 	assert.NilError(t, err)
 	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
-	assert.Assert(t, getResp.Task.ArchiveAfter == nil, "zero duration should mean never auto-archive")
+	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), time.Duration(0), "zero duration means never auto-archive")
 }
 
 func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
@@ -532,5 +534,5 @@ func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 	assert.Assert(t, !getResp.Task.Archived, "task should be unarchived")
-	assert.Assert(t, getResp.Task.ArchiveAfter == nil, "ArchiveAfter should reset to 0 (never) on unarchive")
+	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), time.Duration(0), "ArchiveAfter should reset to 0 (never) on unarchive")
 }

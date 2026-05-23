@@ -83,10 +83,6 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 	for i, inst := range t.Instructions {
 		instructions[i] = inst.Proto()
 	}
-	var archiveAfter *durationpb.Duration
-	if t.ArchiveAfter != 0 {
-		archiveAfter = durationpb.New(t.ArchiveAfter)
-	}
 	return &xagentv1.Task{
 		Id:           t.ID,
 		Name:         t.Name,
@@ -101,7 +97,7 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 		Url:          TaskURL(baseURL, t.ID, t.OrgID),
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
-		ArchiveAfter: archiveAfter,
+		ArchiveAfter: durationpb.New(t.ArchiveAfter),
 		Actions: &xagentv1.TaskActions{
 			Archive:   t.CanArchive(),
 			Unarchive: t.CanUnarchive(),
@@ -125,10 +121,6 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 	if pb.UpdatedAt != nil {
 		updatedAt = pb.UpdatedAt.AsTime()
 	}
-	var archiveAfter time.Duration
-	if pb.ArchiveAfter != nil {
-		archiveAfter = pb.ArchiveAfter.AsDuration()
-	}
 	return &Task{
 		ID:           pb.Id,
 		Name:         pb.Name,
@@ -142,7 +134,7 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		Archived:     pb.Archived,
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
-		ArchiveAfter: archiveAfter,
+		ArchiveAfter: pb.ArchiveAfter.AsDuration(),
 	}
 }
 
