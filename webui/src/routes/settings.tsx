@@ -98,11 +98,7 @@ function SettingsPage() {
 function VersionFooter() {
   const { data } = useQuery(ping, {}, { staleTime: Infinity })
   if (!data?.version) return null
-  return (
-    <div className="mt-6 text-right text-xs text-muted-foreground">
-      {data.version}
-    </div>
-  )
+  return <div className="mt-6 text-right text-xs text-muted-foreground">{data.version}</div>
 }
 
 function AccountSettings() {
