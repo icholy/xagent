@@ -31,11 +31,11 @@ export class AuthTransport {
   }
 
   getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY)
+    return this.getItem(TOKEN_KEY)
   }
 
   getOrgId(): string {
-    return localStorage.getItem(ORG_ID_KEY) ?? NO_ORG
+    return this.getItem(ORG_ID_KEY) ?? NO_ORG
   }
 
   // setOrgId selects the active org. It's a no-op when the org is unchanged.
@@ -45,9 +45,24 @@ export class AuthTransport {
   setOrgId(orgId: string): void {
     const current = this.getOrgId()
     if (orgId === current) return
-    localStorage.setItem(ORG_ID_KEY, orgId)
-    localStorage.removeItem(TOKEN_KEY)
+    this.setItem(ORG_ID_KEY, orgId)
+    this.removeItem(TOKEN_KEY)
     this.notifyOrgChange(false)
+  }
+
+  private setItem(key: string, value: string): void {
+    localStorage.setItem(key, value)
+    sessionStorage.setItem(key, value)
+  }
+
+  private getItem(key: string): string | null {
+    const value = sessionStorage.getItem(key)
+    return value ?? localStorage.getItem(key)
+  }
+
+  private removeItem(key: string): void {
+    localStorage.removeItem(key)
+    sessionStorage.removeItem(key)
   }
 
   private notifyOrgChange(internal: boolean): void {
@@ -58,14 +73,14 @@ export class AuthTransport {
   }
 
   private storeToken(token: string, orgId: string): void {
-    localStorage.setItem(TOKEN_KEY, token)
-    localStorage.setItem(ORG_ID_KEY, orgId)
+    this.setItem(TOKEN_KEY, token)
+    this.setItem(ORG_ID_KEY, orgId)
     this.notifyOrgChange(true)
   }
 
   clearToken(): void {
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(ORG_ID_KEY)
+    this.removeItem(TOKEN_KEY)
+    this.removeItem(ORG_ID_KEY)
     this.notifyOrgChange(false)
   }
 
@@ -80,7 +95,7 @@ export class AuthTransport {
     // 403 means the user isn't a member of the requested org (or has no
     // default). Drop the stale org and retry against the user's default.
     if (resp.status === 403 && id !== NO_ORG) {
-      localStorage.removeItem(ORG_ID_KEY)
+      this.removeItem(ORG_ID_KEY)
       return this.fetchToken()
     }
     if (!resp.ok) {
