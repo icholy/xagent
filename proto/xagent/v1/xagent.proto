@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package xagent.v1;
 
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1";
@@ -108,6 +109,9 @@ message Task {
   TaskActions actions = 12;
   bool archived = 13;
   string url = 14;
+  // Auto-archive this task once it has been in a terminal status
+  // (COMPLETED, FAILED, CANCELLED) for this long. Unset = never auto-archive.
+  google.protobuf.Duration archive_after = 15;
 }
 
 message McpServer {
@@ -161,6 +165,7 @@ message CreateTaskRequest {
   string workspace = 3;
   repeated Instruction instructions = 4;
   string runner = 5;  // Runner ID that should handle this task
+  google.protobuf.Duration archive_after = 6;
 }
 
 message CreateTaskResponse {
@@ -192,6 +197,9 @@ message UpdateTaskRequest {
   reserved 3;  // Previously: restart
   repeated Instruction add_instructions = 4;
   bool start = 5;    // Start after current run finishes (non-interrupting)
+  // Tri-state: unset = leave alone; zero duration = clear (never archive);
+  // positive = set new timeout.
+  google.protobuf.Duration archive_after = 6;
 }
 
 message UpdateTaskResponse {}

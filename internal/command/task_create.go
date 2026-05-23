@@ -10,6 +10,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 var TaskCreateCommand = &cli.Command{
@@ -45,6 +46,10 @@ var TaskCreateCommand = &cli.Command{
 			Aliases: []string{"i"},
 			Usage:   "Instruction to execute (can be specified multiple times)",
 		},
+		&cli.DurationFlag{
+			Name:  "archive-after",
+			Usage: "Auto-archive the task this long after it reaches a terminal status (e.g. 1h, 24h). Default: never.",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverURL := cmd.String("server")
@@ -63,12 +68,16 @@ var TaskCreateCommand = &cli.Command{
 			instructions[i] = &xagentv1.Instruction{Text: text}
 		}
 
-		resp, err := client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		req := &xagentv1.CreateTaskRequest{
 			Name:         cmd.String("name"),
 			Runner:       cmd.String("runner"),
 			Workspace:    cmd.String("workspace"),
 			Instructions: instructions,
-		})
+		}
+		if cmd.IsSet("archive-after") {
+			req.ArchiveAfter = durationpb.New(cmd.Duration("archive-after"))
+		}
+		resp, err := client.CreateTask(ctx, req)
 		if err != nil {
 			return fmt.Errorf("failed to create task: %w", err)
 		}

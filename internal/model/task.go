@@ -4,6 +4,7 @@ import (
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -58,19 +59,20 @@ func InstructionFromProto(pb *xagentv1.Instruction) Instruction {
 
 // Task represents a task in the system.
 type Task struct {
-	ID           int64         `json:"id"`
-	Name         string        `json:"name"`
-	Parent       int64         `json:"parent"`
-	Runner       string        `json:"runner"`
-	Workspace    string        `json:"workspace"`
-	Instructions []Instruction `json:"instructions"`
-	Status       TaskStatus    `json:"status"`
-	Command      TaskCommand   `json:"command"`
-	Version      int64         `json:"version"`
-	OrgID        int64         `json:"org_id"`
-	Archived     bool          `json:"archived"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
+	ID           int64          `json:"id"`
+	Name         string         `json:"name"`
+	Parent       int64          `json:"parent"`
+	Runner       string         `json:"runner"`
+	Workspace    string         `json:"workspace"`
+	Instructions []Instruction  `json:"instructions"`
+	Status       TaskStatus     `json:"status"`
+	Command      TaskCommand    `json:"command"`
+	Version      int64          `json:"version"`
+	OrgID        int64          `json:"org_id"`
+	Archived     bool           `json:"archived"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	ArchiveAfter *time.Duration `json:"archive_after,omitempty"`
 }
 
 // Proto converts a Task to its protobuf representation.
@@ -78,6 +80,10 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 	instructions := make([]*xagentv1.Instruction, len(t.Instructions))
 	for i, inst := range t.Instructions {
 		instructions[i] = inst.Proto()
+	}
+	var archiveAfter *durationpb.Duration
+	if t.ArchiveAfter != nil {
+		archiveAfter = durationpb.New(*t.ArchiveAfter)
 	}
 	return &xagentv1.Task{
 		Id:           t.ID,
@@ -93,6 +99,7 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 		Url:          TaskURL(baseURL, t.ID, t.OrgID),
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
+		ArchiveAfter: archiveAfter,
 		Actions: &xagentv1.TaskActions{
 			Archive:   t.CanArchive(),
 			Unarchive: t.CanUnarchive(),
@@ -116,6 +123,11 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 	if pb.UpdatedAt != nil {
 		updatedAt = pb.UpdatedAt.AsTime()
 	}
+	var archiveAfter *time.Duration
+	if pb.ArchiveAfter != nil {
+		d := pb.ArchiveAfter.AsDuration()
+		archiveAfter = &d
+	}
 	return &Task{
 		ID:           pb.Id,
 		Name:         pb.Name,
@@ -129,6 +141,7 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		Archived:     pb.Archived,
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
+		ArchiveAfter: archiveAfter,
 	}
 }
 
@@ -293,13 +306,16 @@ func (t *Task) CanUnarchive() bool {
 	return t.Archived
 }
 
-// Unarchive marks the task as no longer archived.
+// Unarchive marks the task as no longer archived. Also clears any
+// archive_after timeout so the archiver worker doesn't immediately re-archive
+// the task on its next tick.
 // Returns true if the task was archived and is now unarchived.
 func (t *Task) Unarchive() bool {
 	if !t.CanUnarchive() {
 		return false
 	}
 	t.Archived = false
+	t.ArchiveAfter = nil
 	return true
 }
 

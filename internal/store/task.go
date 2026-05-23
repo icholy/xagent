@@ -29,6 +29,7 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 		CreatedAt:    now,
 		UpdatedAt:    now,
 		Archived:     task.Archived,
+		ArchiveAfter: archiveAfterToSQL(task.ArchiveAfter),
 	})
 	if err != nil {
 		return err
@@ -123,9 +124,32 @@ func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 		Version:      task.Version,
 		UpdatedAt:    task.UpdatedAt,
 		Archived:     task.Archived,
+		ArchiveAfter: archiveAfterToSQL(task.ArchiveAfter),
 		ID:           task.ID,
 		OrgID:        task.OrgID,
 	})
+}
+
+// TaskDueForArchive identifies a task whose archive_after deadline has
+// elapsed. The version is for an optimistic concurrency check; org_id lets
+// the caller follow up with GetTaskForUpdate / UpdateTask without an extra
+// resolve step.
+type TaskDueForArchive struct {
+	ID      int64
+	Version int64
+	OrgID   int64
+}
+
+func (s *Store) ListTasksDueForArchive(ctx context.Context, tx *sql.Tx, limit int) ([]TaskDueForArchive, error) {
+	rows, err := s.q(tx).ListTasksDueForArchive(ctx, int32(limit))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TaskDueForArchive, len(rows))
+	for i, row := range rows {
+		out[i] = TaskDueForArchive{ID: row.ID, Version: row.Version, OrgID: row.OrgID}
+	}
+	return out, nil
 }
 
 func (s *Store) DeleteTask(ctx context.Context, tx *sql.Tx, id int64, orgID int64) error {
@@ -154,7 +178,24 @@ func toModelTask(row sqlc.Task) (*model.Task, error) {
 		Archived:     row.Archived,
 		CreatedAt:    row.CreatedAt,
 		UpdatedAt:    row.UpdatedAt,
+		ArchiveAfter: archiveAfterFromSQL(row.ArchiveAfter),
 	}, nil
+}
+
+// archive_after is stored as microseconds. NULL = never auto-archive.
+func archiveAfterToSQL(d *time.Duration) sql.NullInt64 {
+	if d == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: d.Microseconds(), Valid: true}
+}
+
+func archiveAfterFromSQL(n sql.NullInt64) *time.Duration {
+	if !n.Valid {
+		return nil
+	}
+	d := time.Duration(n.Int64) * time.Microsecond
+	return &d
 }
 
 func toModelTasks(rows []sqlc.Task) ([]*model.Task, error) {

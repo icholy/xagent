@@ -9,6 +9,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 var TaskUpdateCommand = &cli.Command{
@@ -38,6 +39,10 @@ var TaskUpdateCommand = &cli.Command{
 			Aliases: []string{"i"},
 			Usage:   "Add instruction to task (can be specified multiple times)",
 		},
+		&cli.DurationFlag{
+			Name:  "archive-after",
+			Usage: "Set the auto-archive timeout. Pass 0 to clear (never auto-archive).",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		taskIDStr := cmd.Args().First()
@@ -52,8 +57,9 @@ var TaskUpdateCommand = &cli.Command{
 		name := cmd.String("name")
 		start := cmd.Bool("start")
 		texts := cmd.StringSlice("add-instruction")
+		archiveAfterSet := cmd.IsSet("archive-after")
 
-		if name == "" && !start && len(texts) == 0 {
+		if name == "" && !start && len(texts) == 0 && !archiveAfterSet {
 			return fmt.Errorf("nothing to update")
 		}
 
@@ -71,12 +77,16 @@ var TaskUpdateCommand = &cli.Command{
 			return fmt.Errorf("not authenticated, run setup first")
 		}
 		client := xagentclient.New(xagentclient.Options{BaseURL: serverURL, Token: cfg.Token})
-		if _, err := client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		updateReq := &xagentv1.UpdateTaskRequest{
 			Id:              taskID,
 			Name:            name,
 			Start:           start,
 			AddInstructions: instructions,
-		}); err != nil {
+		}
+		if archiveAfterSet {
+			updateReq.ArchiveAfter = durationpb.New(cmd.Duration("archive-after"))
+		}
+		if _, err := client.UpdateTask(ctx, updateReq); err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
 		}
 

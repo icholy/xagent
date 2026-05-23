@@ -2,10 +2,12 @@ package apiserver
 
 import (
 	"testing"
+	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"gotest.tools/v3/assert"
 )
 
@@ -437,4 +439,98 @@ func TestRestartTask_Permissions(t *testing.T) {
 
 	// Assert
 	assert.ErrorContains(t, err, "not found")
+}
+
+func TestCreateTask_ArchiveAfter(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	want := 90 * time.Minute
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:         "With archive",
+		Runner:       "test-runner",
+		Workspace:    "test-workspace",
+		ArchiveAfter: durationpb.New(want),
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, resp.Task.ArchiveAfter != nil, "ArchiveAfter should be set on response")
+	assert.Equal(t, resp.Task.ArchiveAfter.AsDuration(), want)
+
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: resp.Task.Id})
+	assert.NilError(t, err)
+	assert.Assert(t, getResp.Task.ArchiveAfter != nil)
+	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), want)
+}
+
+func TestUpdateTask_ArchiveAfter(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "No archive",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, createResp.Task.ArchiveAfter == nil, "should not be set at create")
+
+	// Set a value via Update
+	want := 24 * time.Hour
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:           createResp.Task.Id,
+		ArchiveAfter: durationpb.New(want),
+	})
+	assert.NilError(t, err)
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
+	assert.Assert(t, getResp.Task.ArchiveAfter != nil)
+	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), want)
+
+	// Clearing with a zero duration removes the timeout
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:           createResp.Task.Id,
+		ArchiveAfter: durationpb.New(0),
+	})
+	assert.NilError(t, err)
+	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
+	assert.Assert(t, getResp.Task.ArchiveAfter == nil, "zero duration should clear ArchiveAfter")
+}
+
+func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:         "Auto-archive task",
+		Runner:       "test-runner",
+		Workspace:    "test-workspace",
+		ArchiveAfter: durationpb.New(time.Hour),
+	})
+	assert.NilError(t, err)
+
+	// Put the task in a terminal state, then archive it manually.
+	dbTask, err := srv.store.GetTask(ctx, nil, createResp.Task.Id, org.OrgID)
+	assert.NilError(t, err)
+	dbTask.Status = 5 // COMPLETED
+	dbTask.Command = 0
+	assert.NilError(t, srv.store.UpdateTask(ctx, nil, dbTask))
+
+	_, err = srv.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
+
+	// Unarchive should clear archive_after so the archiver doesn't immediately re-archive.
+	_, err = srv.UnarchiveTask(ctx, &xagentv1.UnarchiveTaskRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
+
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
+	assert.Assert(t, !getResp.Task.Archived, "task should be unarchived")
+	assert.Assert(t, getResp.Task.ArchiveAfter == nil, "ArchiveAfter should be cleared on unarchive")
 }

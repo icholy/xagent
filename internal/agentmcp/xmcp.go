@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -12,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 type Server struct {
@@ -137,13 +139,14 @@ func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input 
 }
 
 type createChildTaskInput struct {
-	Name        string `json:"name" jsonschema:"A short name for the task"`
-	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
-	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue Jira ticket)"`
+	Name         string `json:"name" jsonschema:"A short name for the task"`
+	Instruction  string `json:"instruction" jsonschema:"The instruction text for the task"`
+	URL          string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue Jira ticket)"`
+	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Optional Go duration (e.g. 1h, 24h) after which the task auto-archives once terminal. Omit for never."`
 }
 
 func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
-	resp, err := s.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	createReq := &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Parent:    s.task.ID,
 		Runner:    s.task.Runner,
@@ -151,7 +154,15 @@ func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
 		},
-	})
+	}
+	if input.ArchiveAfter != "" {
+		d, err := time.ParseDuration(input.ArchiveAfter)
+		if err != nil {
+			return errorResult("invalid archive_after: %v", err), nil, nil
+		}
+		createReq.ArchiveAfter = durationpb.New(d)
+	}
+	resp, err := s.client.CreateTask(ctx, createReq)
 	if err != nil {
 		return errorResult("failed to create task: %v", err), nil, nil
 	}
@@ -161,15 +172,23 @@ func (s *Server) createChildTask(ctx context.Context, req *mcp.CallToolRequest, 
 }
 
 type updateMyTaskInput struct {
-	Name string `json:"name" jsonschema:"The new name for the task"`
+	Name         string `json:"name,omitempty" jsonschema:"The new name for the task"`
+	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Set the auto-archive timeout as a Go duration (e.g. 1h). Pass \"0\" to clear (never auto-archive)."`
 }
 
 func (s *Server) updateMyTask(ctx context.Context, req *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
-	_, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+	updateReq := &xagentv1.UpdateTaskRequest{
 		Id:   s.task.ID,
 		Name: input.Name,
-	})
-	if err != nil {
+	}
+	if input.ArchiveAfter != "" {
+		d, err := time.ParseDuration(input.ArchiveAfter)
+		if err != nil {
+			return errorResult("invalid archive_after: %v", err), nil, nil
+		}
+		updateReq.ArchiveAfter = durationpb.New(d)
+	}
+	if _, err := s.client.UpdateTask(ctx, updateReq); err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
 

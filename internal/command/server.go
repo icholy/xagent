@@ -19,6 +19,7 @@ import (
 	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server"
+	"github.com/icholy/xagent/internal/server/archiver"
 	"github.com/icholy/xagent/internal/server/atlassianserver"
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
@@ -125,6 +126,18 @@ var ServerCommand = &cli.Command{
 			Name:    "atlassian-client-secret",
 			Usage:   "Atlassian OAuth client secret",
 			Sources: cli.EnvVars("XAGENT_ATLASSIAN_CLIENT_SECRET"),
+		},
+		&cli.DurationFlag{
+			Name:    "archive-poll",
+			Usage:   "How often to scan for tasks past their auto-archive deadline",
+			Value:   archiver.DefaultInterval,
+			Sources: cli.EnvVars("XAGENT_ARCHIVE_POLL"),
+		},
+		&cli.IntFlag{
+			Name:    "archive-batch",
+			Usage:   "Maximum number of tasks the archiver will archive per tick",
+			Value:   archiver.DefaultBatchSize,
+			Sources: cli.EnvVars("XAGENT_ARCHIVE_BATCH"),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -250,6 +263,21 @@ var ServerCommand = &cli.Command{
 			Handler: srv.Handler(),
 		}
 
+		arch := archiver.New(archiver.Options{
+			Store:     st,
+			Publisher: ps,
+			Interval:  cmd.Duration("archive-poll"),
+			BatchSize: cmd.Int("archive-batch"),
+			Log:       slog.With("component", "archiver"),
+		})
+		archCtx, archCancel := context.WithCancel(ctx)
+		defer archCancel()
+		go func() {
+			if err := arch.Run(archCtx); err != nil && !errors.Is(err, context.Canceled) {
+				slog.Error("archiver exited with error", "err", err)
+			}
+		}()
+
 		// Set up signal handler for graceful shutdown
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -257,6 +285,7 @@ var ServerCommand = &cli.Command{
 		go func() {
 			sig := <-sigCh
 			slog.Info("received signal, shutting down", "signal", sig)
+			archCancel()
 
 			// Give active requests time to complete
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
