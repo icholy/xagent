@@ -20,7 +20,7 @@ import (
 // startAuthedUpstream stands up an MCP server behind an Authorization
 // check. It records every Bearer token seen and rejects requests whose
 // token isn't one of the accepted ones.
-func startAuthedUpstream(t *testing.T, accepted map[string]bool, seen *atomic.Value) string {
+func startAuthedUpstream(t *testing.T, accepted map[string]bool, seen *atomic.Pointer[string]) string {
 	t.Helper()
 	srv := mcp.NewServer(&mcp.Implementation{Name: "fake-github-mcp", Version: "0"}, nil)
 	srv.AddTool(&mcp.Tool{
@@ -37,7 +37,7 @@ func startAuthedUpstream(t *testing.T, accepted map[string]bool, seen *atomic.Va
 			http.Error(w, "missing bearer", http.StatusUnauthorized)
 			return
 		}
-		seen.Store(token)
+		seen.Store(&token)
 		if !accepted[token] {
 			http.Error(w, "bad token", http.StatusUnauthorized)
 			return
@@ -49,7 +49,7 @@ func startAuthedUpstream(t *testing.T, accepted map[string]bool, seen *atomic.Va
 }
 
 func TestServer_SwapInjectsBearerToken(t *testing.T) {
-	var seen atomic.Value
+	var seen atomic.Pointer[string]
 	url := startAuthedUpstream(t, map[string]bool{"ghs_test_token": true}, &seen)
 
 	client := &xagentclient.ClientMock{
@@ -76,7 +76,7 @@ func TestServer_SwapInjectsBearerToken(t *testing.T) {
 	text, ok := res.Content[0].(*mcp.TextContent)
 	assert.Assert(t, ok)
 	assert.Equal(t, text.Text, "pong")
-	assert.Equal(t, seen.Load(), "ghs_test_token")
+	assert.Equal(t, *seen.Load(), "ghs_test_token")
 }
 
 func TestServer_SwapPropagatesTokenError(t *testing.T) {
