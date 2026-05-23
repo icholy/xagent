@@ -60,7 +60,6 @@ func TestAuthorizationCodeFlow(t *testing.T) {
 		Email: "test@example.com",
 		Name:  "Test User",
 		OrgID: 1,
-		Type:  apiauth.AuthTypeApp,
 	}
 	claims := apiauth.NewAppClaims(user)
 	appToken, err := apiauth.SignAppToken(key, claims)
