@@ -52,68 +52,64 @@ The proactive check is **not** combined with a reactive fallback. If the proacti
 
 ### Repair helper
 
-Two new helpers in `internal/x/dockerx/network.go`:
+One new helper in `internal/x/dockerx/network.go`. It detects drift and repairs it in a single pass, returning the names of the networks it actually touched so the caller can log a meaningful message:
 
 ```go
-// StaleNetworks returns the names of networks attached to the container whose
-// recorded endpoint ID no longer matches the live network ID of the same name.
+// RepairNetworks brings the container's attachment to each of the named
+// networks back in sync with the live Docker network registry. For each name,
+// it compares the endpoint ID pinned in the container's NetworkSettings
+// against the live network's ID, and — if they differ, or the endpoint is
+// missing entirely — force-disconnects and reconnects by name.
 //
-// Networks listed in `desired` that the container is not currently attached to
-// are also returned — those need a fresh connect after a compose recreate that
-// dropped the endpoint entirely.
+// Used to recover from stale endpoint IDs left behind after
+// `docker compose down && up` recreates the network under the same name with
+// a fresh ID.
 //
-// A returned error from NetworkInspect for a specific name (i.e. "network <name>
-// not found": the named network does not exist in the live registry) propagates
-// up; we cannot repair an attachment whose target does not exist.
-func StaleNetworks(ctx context.Context, c *client.Client, containerID string, desired []string) ([]string, error) {
+// Disconnect uses Force=true so endpoints pinned to a no-longer-existent
+// network ID can be dropped (a non-force disconnect would itself fail with
+// "network not found"). If the container isn't currently attached at all,
+// only the connect step runs.
+//
+// Returns the list of network names that were repaired (empty if everything
+// was already in sync). An error from NetworkInspect for a specific name
+// (i.e. the named network does not exist in the live registry) is returned
+// without attempting any partial repair — we cannot attach to a network
+// that doesn't exist.
+func RepairNetworks(ctx context.Context, c *client.Client, containerID string, networks []string) ([]string, error) {
+    if len(networks) == 0 {
+        return nil, nil
+    }
     info, err := c.ContainerInspect(ctx, containerID)
     if err != nil {
         return nil, fmt.Errorf("inspect container: %w", err)
     }
-    var stale []string
-    for _, name := range desired {
+    var repaired []string
+    for _, name := range networks {
         live, err := c.NetworkInspect(ctx, name, network.InspectOptions{})
         if err != nil {
-            return nil, fmt.Errorf("inspect network %q: %w", name, err)
+            return repaired, fmt.Errorf("inspect network %q: %w", name, err)
         }
         endpoint, attached := info.NetworkSettings.Networks[name]
-        if !attached || endpoint.NetworkID != live.ID {
-            stale = append(stale, name)
+        if attached && endpoint.NetworkID == live.ID {
+            continue
         }
-    }
-    return stale, nil
-}
-
-// ReattachNetworks force-disconnects each named network from the container and
-// reconnects it. Used to refresh a stale endpoint pin after `docker compose
-// down && up` recreates the network under the same name with a new ID.
-//
-// Disconnect uses Force=true so endpoints pinned to a no-longer-existent
-// network ID can be dropped (a non-force disconnect would itself fail with
-// "network not found"). If the container isn't currently attached to the
-// network at all (e.g. the compose recreate dropped the endpoint), the
-// disconnect "not connected" error is swallowed — we only care about ending
-// up connected.
-//
-// Disconnect/Connect are referenced by network NAME, which is what the
-// workspace config supplies and what the live Docker network registry is
-// keyed on after recreate.
-func ReattachNetworks(ctx context.Context, c *client.Client, containerID string, networks []string) error {
-    for _, name := range networks {
-        if err := c.NetworkDisconnect(ctx, name, containerID, true); err != nil {
-            if !isNotConnectedErr(err) {
-                return fmt.Errorf("disconnect %q: %w", name, err)
+        if attached {
+            if err := c.NetworkDisconnect(ctx, name, containerID, true); err != nil && !isNotConnectedErr(err) {
+                return repaired, fmt.Errorf("disconnect %q: %w", name, err)
             }
         }
         if err := c.NetworkConnect(ctx, name, containerID, nil); err != nil {
-            return fmt.Errorf("connect %q: %w", name, err)
+            return repaired, fmt.Errorf("connect %q: %w", name, err)
         }
+        repaired = append(repaired, name)
     }
-    return nil
+    return repaired, nil
 }
 ```
 
 `NetworkConnect`'s last argument is `*network.EndpointSettings`. Passing `nil` produces the same default endpoint we get today from `Container.NetworkingConfig()` (the workspace passes `&network.EndpointSettings{}` per network — no aliases, no fixed IP, no driver opts — so `nil` is equivalent).
+
+Returning the repaired list (rather than a boolean or nothing) keeps detection and repair fused in one round of inspect calls and lets the caller log exactly which networks were touched without re-inspecting.
 
 ### Wire-up in `Runner.Start`
 
@@ -131,10 +127,20 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
         r.log.Info("starting existing container", "task", task.ID, "name", fmt.Sprintf("xagent-%d", task.ID))
         containerID = c.ID
 
-        // Proactive repair: existing containers can have a stale network ID
-        // baked in after `docker compose down && up`. Refresh before start.
-        if err := r.repairStaleNetworks(ctx, task, containerID); err != nil {
+        // Existing containers can have a stale network ID baked in after
+        // `docker compose down && up`. Refresh any drifted attachments
+        // before starting.
+        ws, err := r.workspaces.Get(task.Workspace)
+        if err != nil {
+            return fmt.Errorf("get workspace: %w", err)
+        }
+        repaired, err := dockerx.RepairNetworks(ctx, r.docker, containerID, ws.Container.Networks)
+        if err != nil {
             return fmt.Errorf("failed to repair network attachment: %w", err)
+        }
+        if len(repaired) > 0 {
+            r.log.Warn("repaired stale network attachments",
+                "task", task.ID, "container", containerID, "networks", repaired)
         }
     } else {
         containerID, err = r.create(ctx, task)
@@ -147,29 +153,6 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
         return fmt.Errorf("failed to start container: %w", err)
     }
     return nil
-}
-
-// repairStaleNetworks reattaches the container to any of its configured
-// networks whose pinned endpoint ID has drifted from the live network ID.
-// No-op if the workspace declares no networks.
-func (r *Runner) repairStaleNetworks(ctx context.Context, task *model.Task, containerID string) error {
-    ws, err := r.workspaces.Get(task.Workspace)
-    if err != nil {
-        return fmt.Errorf("get workspace: %w", err)
-    }
-    if len(ws.Container.Networks) == 0 {
-        return nil
-    }
-    stale, err := dockerx.StaleNetworks(ctx, r.docker, containerID, ws.Container.Networks)
-    if err != nil {
-        return err
-    }
-    if len(stale) == 0 {
-        return nil
-    }
-    r.log.Warn("stale network attachment detected, repairing",
-        "task", task.ID, "container", containerID, "networks", stale)
-    return dockerx.ReattachNetworks(ctx, r.docker, containerID, stale)
 }
 ```
 
@@ -191,7 +174,7 @@ Once we've detected the drift, two repair strategies are possible. The proposal 
 | New JWT minted? | No — existing token still valid | Yes — `r.proxy.TaskToken(task)` runs again |
 | Image pull if registry changed | No | Yes (`dockerx.ImageEnsure`) |
 | Concurrency cost | One disconnect + one connect per stale network (typically 1) | Full create path (create + copy files + start) |
-| Code path | Two helpers + a 12-line method | Reuse existing `r.create()` |
+| Code path | One helper + an inline check in `Start` | Reuse existing `r.create()` |
 | Robustness if container itself is corrupt | Weaker — only repairs the network endpoint | Stronger — fresh container |
 | Idempotency on partial failure | Disconnect+Connect is naturally idempotent | Removal must succeed before recreate; partial removal is awkward |
 
@@ -201,7 +184,7 @@ If reattach itself fails (e.g. the network really is gone with no replacement) t
 
 ### Edge cases
 
-**Multiple networks.** `StaleNetworks` returns only the names whose IDs drifted (or that the container isn't attached to at all), so `ReattachNetworks` touches only those. Healthy networks are not perturbed.
+**Multiple networks.** `RepairNetworks` checks each declared network independently and reattaches only the ones whose endpoint ID drifted (or that the container isn't attached to at all). Healthy networks are not perturbed.
 
 **Container attached to networks not in `ws.Container.Networks`.** The proactive check only looks at networks declared by the workspace, so a manually-added network attachment (e.g. for debugging) is invisible to the check and left alone. If that manual network is itself stale the start will still fail; that's an acceptable boundary because the runner doesn't own those attachments.
 
@@ -211,23 +194,23 @@ If reattach itself fails (e.g. the network really is gone with no replacement) t
 
 **Concurrent starts on the same container.** `Runner.Start` for a given task can only be invoked once per poll cycle (the poll loop iterates tasks; the runner's `sem` slots are acquired before `Start`). Two simultaneous `Runner.Start` calls for the same task ID would already be a bug independent of this change. `NetworkDisconnect`/`NetworkConnect` themselves are serialised inside dockerd per container, so even in a race the worst case is one of the two repairs no-ops the other.
 
-**Container vanished between `find` and the inspect.** `ContainerInspect` returns "no such container", `StaleNetworks` returns the error, the wrapping `repairStaleNetworks` propagates it, and `Start` fails fast. This is no worse than the current behaviour where `ContainerStart` would have raised the same condition.
+**Container vanished between `find` and the inspect.** `ContainerInspect` returns "no such container", `RepairNetworks` returns the error, and `Start` fails fast. This is no worse than the current behaviour where `ContainerStart` would have raised the same condition.
 
-**Network truly gone with no replacement.** `NetworkInspect` returns "network not found", surfaces as an error from `StaleNetworks`, and `Start` fails before attempting `ContainerStart`. The error message names the missing network, so a human can investigate. This is strictly better than today's opaque "network &lt;id&gt; not found" failure.
+**Network truly gone with no replacement.** `NetworkInspect` returns "network not found", surfaces as an error from `RepairNetworks` (with any networks repaired up to that point in the returned slice), and `Start` fails before attempting `ContainerStart`. The error message names the missing network, so a human can investigate. This is strictly better than today's opaque "network &lt;id&gt; not found" failure.
 
-**Workspace config drift.** If `ws.Container.Networks` is edited after a container was created with the old set, the proactive check will see networks the container isn't attached to and reattach them (`!attached` branch in `StaleNetworks`). That's the correct behaviour — the user's edit should take effect on the next start. Removed networks are not detached (out of scope: we don't want a network repair pathway to start tearing down attachments).
+**Workspace config drift.** If `ws.Container.Networks` is edited after a container was created with the old set, `RepairNetworks` will see networks the container isn't attached to and connect them. That's the correct behaviour — the user's edit should take effect on the next start. Removed networks are not detached (out of scope: we don't want a network repair pathway to start tearing down attachments).
 
 ### Logging and observability
 
-- A `Warn` log on detection (`stale network attachment detected, repairing`) makes the repair visible in the runner logs without lifting it to `Error`. Should be rare in steady state; if it fires often it's an early signal of stack churn worth investigating.
-- No `Info` confirmation log on success — the existing "container started" event from `Monitor` already covers the happy path.
+- A `Warn` log when `RepairNetworks` returns a non-empty list (`repaired stale network attachments`) makes the repair visible in the runner logs without lifting it to `Error`. Should be rare in steady state; if it fires often it's an early signal of stack churn worth investigating.
+- No log on the happy path where `RepairNetworks` returns nothing.
 - No new metric is added in this proposal; if the repair turns out to fire often in production, adding a `xagent_runner_network_repairs_total` counter is a follow-up.
 
 ### Tests
 
-- Unit test for `StaleNetworks` using a fake Docker client that returns mismatched IDs / missing attachments.
+- Unit test for `RepairNetworks` using a fake Docker client that returns mismatched IDs / missing attachments. Assertions cover the returned `repaired` slice as well as the recorded Disconnect/Connect calls.
 - Integration test in `internal/runner` exercising the full repair path: create a network, create a container attached to it, remove the network, recreate it under the same name (new ID), call `Runner.Start`, assert the container is running and its `NetworkSettings.Networks[<name>].NetworkID` equals the new network's ID. Gated behind the existing test docker dependency.
-- Integration test for the no-op path: container with up-to-date attachments starts cleanly with no extra disconnect/connect calls (verified via a `slog` capture, since the helper logs on repair).
+- Integration test for the no-op path: container with up-to-date attachments starts cleanly, `RepairNetworks` returns an empty slice, no Disconnect/Connect calls are issued.
 
 ## Trade-offs
 
