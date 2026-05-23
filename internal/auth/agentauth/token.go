@@ -14,12 +14,15 @@ const (
 	// ScopeGitHubToken allows issuing GitHub App installation tokens via the
 	// CreateGitHubToken RPC.
 	ScopeGitHubToken = "github_token"
+	// ScopeChildTasks allows creating, listing, updating, and reading logs of
+	// child tasks.
+	ScopeChildTasks = "child_tasks"
 )
 
 // ValidScope reports whether scope is a recognized capability scope.
 func ValidScope(scope string) bool {
 	switch scope {
-	case ScopeGitHubToken:
+	case ScopeGitHubToken, ScopeChildTasks:
 		return true
 	default:
 		return false

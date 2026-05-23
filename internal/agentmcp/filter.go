@@ -77,6 +77,9 @@ func (p *AgentFilter) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRe
 	if err != nil {
 		return nil, err
 	}
+	if !claims.HasScope(agentauth.ScopeChildTasks) {
+		return nil, errPermissionDenied("child task operations are disabled for this workspace")
+	}
 	if req.Parent != claims.TaskID {
 		return nil, errPermissionDenied("can only create child tasks of own task")
 	}
@@ -94,6 +97,9 @@ func (p *AgentFilter) ListChildTasks(ctx context.Context, req *xagentv1.ListChil
 	if err != nil {
 		return nil, err
 	}
+	if !claims.HasScope(agentauth.ScopeChildTasks) {
+		return nil, errPermissionDenied("child task operations are disabled for this workspace")
+	}
 	if req.ParentId != claims.TaskID {
 		return nil, errPermissionDenied("can only list children of own task")
 	}
@@ -109,7 +115,13 @@ func (p *AgentFilter) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest)
 	if err != nil {
 		return nil, err
 	}
-	if resp.Task.Id == claims.TaskID || resp.Task.Parent == claims.TaskID {
+	if resp.Task.Id == claims.TaskID {
+		return resp, nil
+	}
+	if resp.Task.Parent == claims.TaskID {
+		if !claims.HasScope(agentauth.ScopeChildTasks) {
+			return nil, errPermissionDenied("child task operations are disabled for this workspace")
+		}
 		return resp, nil
 	}
 	return nil, errPermissionDenied("task is not a child of the current task")
@@ -130,6 +142,9 @@ func (p *AgentFilter) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskD
 	if details.Task.Parent != claims.TaskID {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
+	if !claims.HasScope(agentauth.ScopeChildTasks) {
+		return nil, errPermissionDenied("child task operations are disabled for this workspace")
+	}
 	return details, nil
 }
 
@@ -144,6 +159,9 @@ func (p *AgentFilter) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRe
 	}
 	if resp.Task.Id != claims.TaskID && resp.Task.Parent != claims.TaskID {
 		return nil, errPermissionDenied("task is not a child of the current task")
+	}
+	if resp.Task.Id != claims.TaskID && !claims.HasScope(agentauth.ScopeChildTasks) {
+		return nil, errPermissionDenied("child task operations are disabled for this workspace")
 	}
 	if resp.Task.Archived {
 		return nil, errPermissionDenied("cannot update archived task")
@@ -163,6 +181,9 @@ func (p *AgentFilter) ListLogs(ctx context.Context, req *xagentv1.ListLogsReques
 		}
 		if resp.Task.Parent != claims.TaskID {
 			return nil, errPermissionDenied("task is not a child of the current task")
+		}
+		if !claims.HasScope(agentauth.ScopeChildTasks) {
+			return nil, errPermissionDenied("child task operations are disabled for this workspace")
 		}
 	}
 	return p.client.ListLogs(ctx, req)

@@ -65,29 +65,31 @@ func (s *Server) AddTools(server *mcp.Server) {
 	}, s.getMyTask)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "create_child_task",
-		Description: "Create a child task of the current task",
-	}, s.createChildTask)
-
-	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_my_task",
 		Description: "Update the current task's name",
 	}, s.updateMyTask)
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_child_tasks",
-		Description: "Get details of child tasks spawned by the current task",
-	}, s.listChildTasks)
+	if s.hasScope(agentauth.ScopeChildTasks) {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "create_child_task",
+			Description: "Create a child task of the current task",
+		}, s.createChildTask)
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "update_child_task",
-		Description: "Update a child task by adding an instruction, then start it",
-	}, s.updateChildTask)
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "list_child_tasks",
+			Description: "Get details of child tasks spawned by the current task",
+		}, s.listChildTasks)
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_child_task_logs",
-		Description: "List logs for a child task",
-	}, s.listChildTaskLogs)
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "update_child_task",
+			Description: "Update a child task by adding an instruction, then start it",
+		}, s.updateChildTask)
+
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "list_child_task_logs",
+			Description: "List logs for a child task",
+		}, s.listChildTaskLogs)
+	}
 
 	if s.hasScope(agentauth.ScopeGitHubToken) {
 		mcp.AddTool(server, &mcp.Tool{
