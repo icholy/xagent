@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.18.0](https://github.com/icholy/xagent/compare/v0.17.0...v0.18.0) (2026-05-23)
+
+
+### Features
+
+* allow accessing different org in different tabs ([#658](https://github.com/icholy/xagent/issues/658)) ([e1ef73d](https://github.com/icholy/xagent/commit/e1ef73d513e59dd25009ee991d26f933f1e7af55))
+* auto-archive tasks after configurable timeout ([#655](https://github.com/icholy/xagent/issues/655)) ([93fc393](https://github.com/icholy/xagent/commit/93fc3934da035953e5717ed72c201a16e5931355))
+* **runner:** auto-repair stale container network attachments ([#666](https://github.com/icholy/xagent/issues/666)) ([6a894c4](https://github.com/icholy/xagent/commit/6a894c466c0bc83b42fccf9af2d4cc50fd10d79b))
+* **runner:** gate child task operations behind workspace scopes ([#672](https://github.com/icholy/xagent/issues/672)) ([204b5dc](https://github.com/icholy/xagent/commit/204b5dc071f10a921e80def79f718916923ae37c))
+* **runner:** gate github token issuance behind workspace scopes ([#669](https://github.com/icholy/xagent/issues/669)) ([38521f1](https://github.com/icholy/xagent/commit/38521f1f0a76ea9840a192368bf085d7a861ec54))
+
+
+### Bug Fixes
+
+* **agent:** only mention child task tools when scope is granted ([#674](https://github.com/icholy/xagent/issues/674)) ([9b1e086](https://github.com/icholy/xagent/commit/9b1e086c20b2252bbe4091d615f2502b02c8cef8))
+* explicitly pass org query parameter in all links ([4169031](https://github.com/icholy/xagent/commit/41690317537c2051e8839f85cb39cc965c441b49))
+* guard nil github server in CreateGitHubToken ([#667](https://github.com/icholy/xagent/issues/667)) ([a7183ec](https://github.com/icholy/xagent/commit/a7183ec0b3f2c1e5f78fda0e5812d8fdd2803b0c))
+* normalize escaped newlines in GitHub App private key ([#665](https://github.com/icholy/xagent/issues/665)) ([163015d](https://github.com/icholy/xagent/commit/163015def2a6dd932c54d01991f610ce9c9aea10))
+* parse github private key in githubserver.New ([#663](https://github.com/icholy/xagent/issues/663)) ([64ff92d](https://github.com/icholy/xagent/commit/64ff92d13f020486e158aad9357092389b231eab)), closes [#660](https://github.com/icholy/xagent/issues/660)
+* pass org query param in navigate/redirect calls ([#664](https://github.com/icholy/xagent/issues/664)) ([f9a645b](https://github.com/icholy/xagent/commit/f9a645b788940f759e75b1ce43e7b320c7c0db36))
+* replace dotenv output format with jq expression to fix newline issue ([0ab9366](https://github.com/icholy/xagent/commit/0ab936688a43632efc6b75eb2b23ba9164a6d589))
+
+
+### Miscellaneous
+
+* add playwrite mcp dir to .gitignore ([247ac84](https://github.com/icholy/xagent/commit/247ac842b173e4c7d8f70ba765568340353778bd))
+* **apiauth:** inline validateAppToken into authenticate ([#676](https://github.com/icholy/xagent/issues/676)) ([62d1b7f](https://github.com/icholy/xagent/commit/62d1b7f03420cbede1983e63557ca51469015050))
+* **deps:** update dependency @tanstack/router-vite-plugin to v1.167.5 ([#671](https://github.com/icholy/xagent/issues/671)) ([ff93dc8](https://github.com/icholy/xagent/commit/ff93dc8f825d45f9f7ad04655cfea00a4aa96d78))
+* **deps:** update tanstack-router monorepo ([#659](https://github.com/icholy/xagent/issues/659)) ([95324ca](https://github.com/icholy/xagent/commit/95324caadced5c382e817b691997c4b2e75d535b))
+* drop X-Auth-Type header dispatch ([#673](https://github.com/icholy/xagent/issues/673)) ([a5ba15e](https://github.com/icholy/xagent/commit/a5ba15ef55aa4aaae4f006e10f235f27b4ad654d))
+* move implemented proposals to accepted ([6efb5ab](https://github.com/icholy/xagent/commit/6efb5ab422a5f640ed9d2859f62e24f2292e7524))
+* move simplify-bearer-auth-dispatch proposal to accepted ([#675](https://github.com/icholy/xagent/issues/675)) ([0260c86](https://github.com/icholy/xagent/commit/0260c862775218fa935becd503f1fd98d517b595))
+* remove debug log ([1b2c72a](https://github.com/icholy/xagent/commit/1b2c72aa67306fabdf997991170016f9a0e184c4))
+* remove debug log ([cd8aabf](https://github.com/icholy/xagent/commit/cd8aabf60378417e27c24d14b0f3cce5b386b210))
+* remove xagent setup command and device flow ([#668](https://github.com/icholy/xagent/issues/668)) ([ec53ce2](https://github.com/icholy/xagent/commit/ec53ce2008ee06f8e85a28bf47eaeb706fc62e1c))
+* remove zitadel bearer middleware from apiauth ([#670](https://github.com/icholy/xagent/issues/670)) ([d4e6bea](https://github.com/icholy/xagent/commit/d4e6beae63feaa9e44f82d3adf2e21d551efdd75))
+* run formatter ([6efc665](https://github.com/icholy/xagent/commit/6efc6652cf62eb7f92712ae3393029b92af1cf3b))
+
 ## [0.17.0](https://github.com/icholy/xagent/compare/v0.16.0...v0.17.0) (2026-05-23)
 
 
