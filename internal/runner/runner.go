@@ -469,6 +469,21 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 	if ok {
 		r.log.Info("starting existing container", "task", task.ID, "name", fmt.Sprintf("xagent-%d", task.ID))
 		containerID = c.ID
+
+		// Refresh any network attachments whose endpoint ID has drifted
+		// from the live network — e.g. after `docker compose down && up`.
+		ws, err := r.workspaces.Get(task.Workspace)
+		if err != nil {
+			return fmt.Errorf("failed to get workspace: %w", err)
+		}
+		repaired, err := dockerx.RepairNetworks(ctx, r.docker, containerID, ws.Container.Networks)
+		if err != nil {
+			return fmt.Errorf("failed to repair network attachment: %w", err)
+		}
+		if len(repaired) > 0 {
+			r.log.Warn("repaired stale network attachments",
+				"task", task.ID, "container", containerID, "networks", repaired)
+		}
 	} else {
 		containerID, err = r.create(ctx, task)
 		if err != nil {
