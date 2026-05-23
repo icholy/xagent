@@ -32,9 +32,13 @@ function TasksPage() {
   const [showChildTasks, setShowChildTasks] = useLocalStorage('showChildTasks', false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const { data, isLoading, error, refetch } = useQuery(listTasks, {}, {
-    refetchInterval: 60000,
-  })
+  const { data, isLoading, error, refetch } = useQuery(
+    listTasks,
+    {},
+    {
+      refetchInterval: 60000,
+    },
+  )
 
   if (isLoading) {
     return (
@@ -71,7 +75,10 @@ function TasksPage() {
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <Label htmlFor="show-child-tasks" className="text-sm text-muted-foreground cursor-pointer">
+            <Label
+              htmlFor="show-child-tasks"
+              className="text-sm text-muted-foreground cursor-pointer"
+            >
               Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
             </Label>
             <Switch
@@ -108,9 +115,7 @@ function TasksPage() {
         </div>
       </div>
       {tasks.length === 0 ? (
-        <div className="text-muted-foreground text-center py-8">
-          No tasks found
-        </div>
+        <div className="text-muted-foreground text-center py-8">No tasks found</div>
       ) : (
         <Table>
           <TableHeader>
@@ -179,4 +184,3 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
     </TableRow>
   )
 }
-

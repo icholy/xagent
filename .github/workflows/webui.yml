@@ -40,6 +40,10 @@ jobs:
         run: pnpm run lint
         working-directory: webui
 
+      - name: Format check
+        run: pnpm run format:check
+        working-directory: webui
+
       - name: Build
         run: pnpm run build
         working-directory: webui

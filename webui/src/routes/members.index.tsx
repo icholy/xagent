@@ -29,12 +29,19 @@ export const Route = createFileRoute('/members/')({
 
 function MembersPage() {
   const { data: profileData } = useQuery(getProfile, {})
-  const { data, isLoading, error, refetch } = useQuery(listOrgMembers, {}, {
-    refetchInterval: 6000,
-  })
+  const { data, isLoading, error, refetch } = useQuery(
+    listOrgMembers,
+    {},
+    {
+      refetchInterval: 6000,
+    },
+  )
 
   const orgId = useOrgId()
-  const isOwner = profileData?.orgs.some((org) => String(org.id) === orgId && org.owner === profileData.profile?.id) ?? false
+  const isOwner =
+    profileData?.orgs.some(
+      (org) => String(org.id) === orgId && org.owner === profileData.profile?.id,
+    ) ?? false
 
   if (isLoading) {
     return (
@@ -61,9 +68,7 @@ function MembersPage() {
       </div>
       {isOwner && <AddMemberForm onAdd={refetch} />}
       {members.length === 0 ? (
-        <div className="text-muted-foreground text-center py-8">
-          No members found
-        </div>
+        <div className="text-muted-foreground text-center py-8">No members found</div>
       ) : (
         <Table>
           <TableHeader>
@@ -77,12 +82,7 @@ function MembersPage() {
           </TableHeader>
           <TableBody>
             {members.map((member) => (
-              <MemberRow
-                key={member.userId}
-                member={member}
-                onRemove={refetch}
-                isOwner={isOwner}
-              />
+              <MemberRow key={member.userId} member={member} onRemove={refetch} isOwner={isOwner} />
             ))}
           </TableBody>
         </Table>
@@ -124,9 +124,7 @@ function AddMemberForm({ onAdd }: { onAdd: () => void }) {
         Add Member
       </Button>
       {mutation.error && (
-        <span className="text-destructive text-sm self-center">
-          {mutation.error.message}
-        </span>
+        <span className="text-destructive text-sm self-center">{mutation.error.message}</span>
       )}
     </form>
   )
@@ -155,11 +153,7 @@ function MemberRow({
       <TableCell className="text-muted-foreground">{member.email}</TableCell>
       <TableCell className="text-muted-foreground">{member.role}</TableCell>
       <TableCell className="text-muted-foreground">
-        {member.createdAt ? (
-          <RelativeTime date={timestampDate(member.createdAt)} />
-        ) : (
-          '-'
-        )}
+        {member.createdAt ? <RelativeTime date={timestampDate(member.createdAt)} /> : '-'}
       </TableCell>
       <TableCell>
         {isOwner && (

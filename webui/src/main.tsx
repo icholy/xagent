@@ -49,6 +49,6 @@ if (!rootElement.innerHTML) {
           </QueryClientProvider>
         </TransportProvider>
       </ServicesProvider>
-    </StrictMode>
+    </StrictMode>,
   )
 }

@@ -36,7 +36,24 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RelativeTime } from '@/components/relative-time'
-import { Cable, Check, Copy, ExternalLink, Github, KeyRound, Loader2, Mail, Pencil, Plus, RefreshCw, Save, Trash2, Unlink, User, X } from 'lucide-react'
+import {
+  Cable,
+  Check,
+  Copy,
+  ExternalLink,
+  Github,
+  KeyRound,
+  Loader2,
+  Mail,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Save,
+  Trash2,
+  Unlink,
+  User,
+  X,
+} from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -52,7 +69,12 @@ function SettingsPage() {
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
-      <Tabs value={tab} onValueChange={(value) => navigate({ to: '/settings', search: { tab: value }, replace: true })}>
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          navigate({ to: '/settings', search: { tab: value }, replace: true })
+        }
+      >
         <div className="flex items-center mb-4">
           <ProfileCard />
           <TabsList className="ml-auto">
@@ -165,7 +187,8 @@ function OrgSettings() {
           <CardHeader>
             <CardTitle>GitHub App</CardTitle>
             <CardDescription>
-              Install the GitHub App to receive webhook notifications for pull requests on your tasks.
+              Install the GitHub App to receive webhook notifications for pull requests on your
+              tasks.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -187,11 +210,7 @@ function OrgSettings() {
                 </a>
               </div>
             ) : (
-              <a
-                href={data.githubAppUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={data.githubAppUrl} target="_blank" rel="noopener noreferrer">
                 <Button variant="outline">
                   <ExternalLink className="h-4 w-4" />
                   Install GitHub App
@@ -205,8 +224,8 @@ function OrgSettings() {
         <CardHeader>
           <CardTitle>Atlassian Webhook</CardTitle>
           <CardDescription>
-            Configure a webhook secret to receive Atlassian events (e.g. Jira issue comments) for your tasks.
-            Register this webhook URL in your Atlassian admin settings.
+            Configure a webhook secret to receive Atlassian events (e.g. Jira issue comments) for
+            your tasks. Register this webhook URL in your Atlassian admin settings.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -227,7 +246,11 @@ function OrgSettings() {
                         size="sm"
                         onClick={() => copyToClipboard(data.atlassianWebhookUrl, 'url')}
                       >
-                        {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        {copied === 'url' ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
                       </Button>
                     )}
                   </div>
@@ -238,14 +261,19 @@ function OrgSettings() {
                     {data?.atlassianWebhookSecret ? (
                       <>
                         <code className="text-sm bg-muted px-2 py-1 rounded flex-1 truncate">
-                          {data.atlassianWebhookSecret.slice(0, 8)}{'•'.repeat(24)}
+                          {data.atlassianWebhookSecret.slice(0, 8)}
+                          {'•'.repeat(24)}
                         </code>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => copyToClipboard(data.atlassianWebhookSecret, 'secret')}
                         >
-                          {copied === 'secret' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                          {copied === 'secret' ? (
+                            <Check className="h-4 w-4" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
                         </Button>
                       </>
                     ) : (
@@ -286,14 +314,23 @@ interface RuleFormState {
 }
 
 function RoutingRulesCard() {
-  const { data, isLoading, refetch } = useQuery(getRoutingRules, {}, {
-    refetchInterval: 6000,
-  })
+  const { data, isLoading, refetch } = useQuery(
+    getRoutingRules,
+    {},
+    {
+      refetchInterval: 6000,
+    },
+  )
   const saveMutation = useMutation(setRoutingRules, {
     onSuccess: () => refetch(),
   })
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const [editForm, setEditForm] = useState<RuleFormState>({ source: '', type: '', prefix: '', mention: '' })
+  const [editForm, setEditForm] = useState<RuleFormState>({
+    source: '',
+    type: '',
+    prefix: '',
+    mention: '',
+  })
 
   const rules = data?.rules ?? []
 
@@ -304,7 +341,12 @@ function RoutingRulesCard() {
 
   const handleStartEdit = (index: number) => {
     const rule = rules[index]
-    setEditForm({ source: rule.source, type: rule.type, prefix: rule.prefix, mention: rule.mention })
+    setEditForm({
+      source: rule.source,
+      type: rule.type,
+      prefix: rule.prefix,
+      mention: rule.mention,
+    })
     setEditingIndex(index)
   }
 
@@ -312,8 +354,13 @@ function RoutingRulesCard() {
     if (editingIndex === null) return
     const updated = rules.map((rule, i) =>
       i === editingIndex
-        ? create(RoutingRuleSchema, { source: editForm.source, type: editForm.type, prefix: editForm.prefix, mention: editForm.mention })
-        : rule
+        ? create(RoutingRuleSchema, {
+            source: editForm.source,
+            type: editForm.type,
+            prefix: editForm.prefix,
+            mention: editForm.mention,
+          })
+        : rule,
     )
     await saveMutation.mutateAsync({ rules: updated })
     setEditingIndex(null)
@@ -323,9 +370,7 @@ function RoutingRulesCard() {
     <Card>
       <CardHeader>
         <CardTitle>Routing Rules</CardTitle>
-        <CardDescription>
-          Configure how events get routed to tasks and workspaces.
-        </CardDescription>
+        <CardDescription>Configure how events get routed to tasks and workspaces.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
@@ -352,32 +397,65 @@ function RoutingRulesCard() {
                     editingIndex === index ? (
                       <TableRow key={index}>
                         <TableCell>
-                          <Select value={editForm.source} onValueChange={(v) => setEditForm({ ...editForm, source: v })}>
+                          <Select
+                            value={editForm.source}
+                            onValueChange={(v) => setEditForm({ ...editForm, source: v })}
+                          >
                             <SelectTrigger className="w-32">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               {ROUTING_SOURCES.map((s) => (
-                                <SelectItem key={s} value={s}>{s}</SelectItem>
+                                <SelectItem key={s} value={s}>
+                                  {s}
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Input value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })} placeholder="Type" className="w-32" />
+                          <Input
+                            value={editForm.type}
+                            onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
+                            placeholder="Type"
+                            className="w-32"
+                          />
                         </TableCell>
                         <TableCell>
-                          <Input value={editForm.prefix} onChange={(e) => setEditForm({ ...editForm, prefix: e.target.value })} placeholder="Prefix" className="w-48" />
+                          <Input
+                            value={editForm.prefix}
+                            onChange={(e) => setEditForm({ ...editForm, prefix: e.target.value })}
+                            placeholder="Prefix"
+                            className="w-48"
+                          />
                         </TableCell>
                         <TableCell>
-                          <Input value={editForm.mention} onChange={(e) => setEditForm({ ...editForm, mention: e.target.value })} placeholder="Mention" className="w-32" />
+                          <Input
+                            value={editForm.mention}
+                            onChange={(e) => setEditForm({ ...editForm, mention: e.target.value })}
+                            placeholder="Mention"
+                            className="w-32"
+                          />
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="outline" size="sm" onClick={handleSaveEdit} disabled={saveMutation.isPending || !editForm.source}>
-                              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleSaveEdit}
+                              disabled={saveMutation.isPending || !editForm.source}
+                            >
+                              {saveMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Save className="h-4 w-4" />
+                              )}
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => setEditingIndex(null)}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingIndex(null)}
+                            >
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
@@ -387,20 +465,38 @@ function RoutingRulesCard() {
                       <TableRow key={index}>
                         <TableCell className="font-medium">{rule.source}</TableCell>
                         <TableCell className="text-muted-foreground">{rule.type || '-'}</TableCell>
-                        <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
-                        <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {rule.prefix || '-'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {rule.mention || '-'}
+                        </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="outline" size="sm" onClick={() => handleStartEdit(index)} disabled={saveMutation.isPending}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleStartEdit(index)}
+                              disabled={saveMutation.isPending}
+                            >
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleDelete(index)} disabled={saveMutation.isPending}>
-                              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(index)}
+                              disabled={saveMutation.isPending}
+                            >
+                              {saveMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
                             </Button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    )
+                    ),
                   )}
                 </TableBody>
               </Table>
@@ -424,7 +520,12 @@ function AddRuleForm({ rules, onAdd }: { rules: RoutingRule[]; onAdd: () => void
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.source) return
-    const newRule = create(RoutingRuleSchema, { source: form.source, type: form.type, prefix: form.prefix, mention: form.mention })
+    const newRule = create(RoutingRuleSchema, {
+      source: form.source,
+      type: form.type,
+      prefix: form.prefix,
+      mention: form.mention,
+    })
     await saveMutation.mutateAsync({ rules: [...rules, newRule] })
   }
 
@@ -436,15 +537,36 @@ function AddRuleForm({ rules, onAdd }: { rules: RoutingRule[]; onAdd: () => void
         </SelectTrigger>
         <SelectContent>
           {ROUTING_SOURCES.map((s) => (
-            <SelectItem key={s} value={s}>{s}</SelectItem>
+            <SelectItem key={s} value={s}>
+              {s}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
-      <Input placeholder="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-32" />
-      <Input placeholder="Prefix" value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value })} className="w-48" />
-      <Input placeholder="Mention" value={form.mention} onChange={(e) => setForm({ ...form, mention: e.target.value })} className="w-32" />
+      <Input
+        placeholder="Type"
+        value={form.type}
+        onChange={(e) => setForm({ ...form, type: e.target.value })}
+        className="w-32"
+      />
+      <Input
+        placeholder="Prefix"
+        value={form.prefix}
+        onChange={(e) => setForm({ ...form, prefix: e.target.value })}
+        className="w-48"
+      />
+      <Input
+        placeholder="Mention"
+        value={form.mention}
+        onChange={(e) => setForm({ ...form, mention: e.target.value })}
+        className="w-32"
+      />
       <Button type="submit" disabled={saveMutation.isPending || !form.source}>
-        {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        {saveMutation.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Plus className="h-4 w-4" />
+        )}
         Add Rule
       </Button>
       {saveMutation.error && (
@@ -483,9 +605,7 @@ function OrgsCard() {
     <Card>
       <CardHeader>
         <CardTitle>My Organisations</CardTitle>
-        <CardDescription>
-          Create and manage your organisations.
-        </CardDescription>
+        <CardDescription>Create and manage your organisations.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <CreateOrgForm onCreate={refetch} />
@@ -501,7 +621,12 @@ function OrgsCard() {
             </TableHeader>
             <TableBody>
               {orgs.map((org) => (
-                <OrgRow key={String(org.id)} org={org} onDelete={refetch} isDefault={org.id === profileData?.defaultOrgId} />
+                <OrgRow
+                  key={String(org.id)}
+                  org={org}
+                  onDelete={refetch}
+                  isDefault={org.id === profileData?.defaultOrgId}
+                />
               ))}
             </TableBody>
           </Table>
@@ -544,15 +669,21 @@ function CreateOrgForm({ onCreate }: { onCreate: () => void }) {
         Create
       </Button>
       {mutation.error && (
-        <span className="text-destructive text-sm self-center">
-          {mutation.error.message}
-        </span>
+        <span className="text-destructive text-sm self-center">{mutation.error.message}</span>
       )}
     </form>
   )
 }
 
-function OrgRow({ org, onDelete, isDefault }: { org: Org; onDelete: () => void; isDefault: boolean }) {
+function OrgRow({
+  org,
+  onDelete,
+  isDefault,
+}: {
+  org: Org
+  onDelete: () => void
+  isDefault: boolean
+}) {
   const deleteMutation = useMutation(deleteOrg, {
     onSuccess: () => onDelete(),
   })
@@ -606,7 +737,9 @@ function AtlassianAccountCard() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <User className="h-5 w-5" />
-              <span className="font-medium">{account.atlassianUsername || account.atlassianAccountId}</span>
+              <span className="font-medium">
+                {account.atlassianUsername || account.atlassianAccountId}
+              </span>
             </div>
             <Button
               variant="outline"
@@ -634,4 +767,3 @@ function AtlassianAccountCard() {
     </Card>
   )
 }
-

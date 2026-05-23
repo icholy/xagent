@@ -34,9 +34,7 @@ function NewTaskPage() {
   const runners = [...new Set(workspacesData?.workspaces.map((ws) => ws.runnerId) ?? [])]
 
   // Filter workspaces by selected runner
-  const workspaces = workspacesData?.workspaces.filter(
-    (ws) => ws.runnerId === runner
-  ) ?? []
+  const workspaces = workspacesData?.workspaces.filter((ws) => ws.runnerId === runner) ?? []
 
   const handleRunnerChange = (newRunner: string) => {
     setRunner(newRunner)
@@ -101,14 +99,11 @@ function NewTaskPage() {
 
             <div className="space-y-2">
               <Label htmlFor="workspace">Workspace</Label>
-              <Select
-                value={workspace}
-                onValueChange={setWorkspace}
-                required
-                disabled={!runner}
-              >
+              <Select value={workspace} onValueChange={setWorkspace} required disabled={!runner}>
                 <SelectTrigger id="workspace">
-                  <SelectValue placeholder={runner ? "Select a workspace" : "Select a runner first"} />
+                  <SelectValue
+                    placeholder={runner ? 'Select a workspace' : 'Select a runner first'}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {workspaces.map((ws) => (
@@ -136,20 +131,14 @@ function NewTaskPage() {
             </div>
 
             {mutation.error && (
-              <div className="text-destructive text-sm">
-                Error: {mutation.error.message}
-              </div>
+              <div className="text-destructive text-sm">Error: {mutation.error.message}</div>
             )}
 
             <div className="flex gap-2">
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Creating...' : 'Create Task'}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate({ to: '/tasks' })}
-              >
+              <Button type="button" variant="outline" onClick={() => navigate({ to: '/tasks' })}>
                 Cancel
               </Button>
             </div>

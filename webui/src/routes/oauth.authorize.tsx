@@ -86,9 +86,7 @@ function OAuthAuthorizePage() {
             )}
           </div>
 
-          {error && (
-            <div className="text-destructive text-sm">{error}</div>
-          )}
+          {error && <div className="text-destructive text-sm">{error}</div>}
 
           <div className="flex gap-2 pt-2">
             <Button onClick={handleApprove} disabled={submitting}>

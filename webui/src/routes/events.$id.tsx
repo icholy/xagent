@@ -13,16 +13,16 @@ function EventDetail() {
   const { id } = Route.useParams()
   const eventId = BigInt(id)
 
-  const { data: eventData, isLoading: eventLoading, error: eventError } = useQuery(
-    getEvent,
-    { id: eventId },
-    { refetchInterval: 60000 }
-  )
+  const {
+    data: eventData,
+    isLoading: eventLoading,
+    error: eventError,
+  } = useQuery(getEvent, { id: eventId }, { refetchInterval: 60000 })
 
   const { data: tasksData, isLoading: tasksLoading } = useQuery(
     listEventTasks,
     { eventId },
-    { refetchInterval: 60000 }
+    { refetchInterval: 60000 },
   )
 
   if (eventLoading) {

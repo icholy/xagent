@@ -1,6 +1,6 @@
-import { useEffect } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { createConnectQueryKey } from "@connectrpc/connect-query";
+import { useEffect } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { createConnectQueryKey } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
   listTasks,
@@ -11,106 +11,106 @@ import {
   listWorkspaces,
   listOrgMembers,
   listKeys,
-} from "@/gen/xagent/v1/xagent-XAgentService_connectquery";
-import { useNotificationSSE } from "@/lib/services";
-import type { Notification, NotificationResource } from "@/lib/notification-sse";
+} from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { useNotificationSSE } from '@/lib/services'
+import type { Notification, NotificationResource } from '@/lib/notification-sse'
 
 function invalidateResource(qc: QueryClient, r: NotificationResource) {
-  console.debug("[sse] invalidate", r);
+  console.debug('[sse] invalidate', r)
   switch (r.type) {
-    case "task":
+    case 'task':
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
           schema: getTaskDetails,
           input: { id: BigInt(r.id) },
-          cardinality: "finite",
+          cardinality: 'finite',
         }),
-      });
+      })
       qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listTasks, cardinality: "finite" }),
-      });
-      break;
-    case "task_logs":
+        queryKey: createConnectQueryKey({ schema: listTasks, cardinality: 'finite' }),
+      })
+      break
+    case 'task_logs':
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
           schema: listLogs,
           input: { taskId: BigInt(r.id) },
-          cardinality: "finite",
+          cardinality: 'finite',
         }),
-      });
-      break;
-    case "task_links":
+      })
+      break
+    case 'task_links':
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
           schema: getTaskDetails,
           input: { id: BigInt(r.id) },
-          cardinality: "finite",
+          cardinality: 'finite',
         }),
-      });
-      break;
-    case "event":
+      })
+      break
+    case 'event':
       qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listEvents, cardinality: "finite" }),
-      });
+        queryKey: createConnectQueryKey({ schema: listEvents, cardinality: 'finite' }),
+      })
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
           schema: getEvent,
           input: { id: BigInt(r.id) },
-          cardinality: "finite",
+          cardinality: 'finite',
         }),
-      });
+      })
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
           schema: listEventTasks,
           input: { eventId: BigInt(r.id) },
-          cardinality: "finite",
+          cardinality: 'finite',
         }),
-      });
-      break;
-    case "workspaces":
+      })
+      break
+    case 'workspaces':
       qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listWorkspaces, cardinality: "finite" }),
-      });
-      break;
-    case "org_members":
+        queryKey: createConnectQueryKey({ schema: listWorkspaces, cardinality: 'finite' }),
+      })
+      break
+    case 'org_members':
       qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listOrgMembers, cardinality: "finite" }),
-      });
-      break;
-    case "keys":
+        queryKey: createConnectQueryKey({ schema: listOrgMembers, cardinality: 'finite' }),
+      })
+      break
+    case 'keys':
       qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listKeys, cardinality: "finite" }),
-      });
-      break;
+        queryKey: createConnectQueryKey({ schema: listKeys, cardinality: 'finite' }),
+      })
+      break
     default:
-      console.warn("[sse] unhandled resource type", r);
+      console.warn('[sse] unhandled resource type', r)
   }
 }
 
 function handleNotification(qc: QueryClient, n: Notification) {
-  console.debug("[sse] notification", n);
-  if (n.type === "ready") {
-    return;
+  console.debug('[sse] notification', n)
+  if (n.type === 'ready') {
+    return
   }
   for (const r of n.resources ?? []) {
-    invalidateResource(qc, r);
+    invalidateResource(qc, r)
   }
 }
 
 export function useOrgSSE() {
-  const queryClient = useQueryClient();
-  const sse = useNotificationSSE();
+  const queryClient = useQueryClient()
+  const sse = useNotificationSSE()
 
   useEffect(() => {
     const removeNotification = sse.addNotificationListener((n) => {
-      handleNotification(queryClient, n);
-    });
+      handleNotification(queryClient, n)
+    })
     const removeReconnect = sse.addReconnectListener(() => {
-      queryClient.invalidateQueries();
-    });
+      queryClient.invalidateQueries()
+    })
     return () => {
-      removeNotification();
-      removeReconnect();
-    };
-  }, [queryClient, sse]);
+      removeNotification()
+      removeReconnect()
+    }
+  }, [queryClient, sse])
 }

@@ -14,7 +14,13 @@ import {
 import type { Task, TaskLink, Event, LogEntry } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
-import { canArchiveTask, canUnarchiveTask, canCancelTask, canRestartTask, isArchivedTask } from '@/lib/task'
+import {
+  canArchiveTask,
+  canUnarchiveTask,
+  canCancelTask,
+  canRestartTask,
+  isArchivedTask,
+} from '@/lib/task'
 import { ArchivedBadge } from '@/components/archived-badge'
 import {
   Table,
@@ -44,7 +50,6 @@ const logTypeStyles: Record<string, string> = {
   audit: 'bg-yellow-100 text-yellow-800 border-yellow-200',
 }
 
-
 function TaskDetail() {
   const { id } = Route.useParams()
   const taskId = BigInt(id)
@@ -53,14 +58,10 @@ function TaskDetail() {
   const { data, isLoading, error, refetch } = useQuery(
     getTaskDetails,
     { id: taskId },
-    { refetchInterval: 60000 }
+    { refetchInterval: 60000 },
   )
 
-  const { data: logsData } = useQuery(
-    listLogs,
-    { taskId },
-    { refetchInterval: 60000 }
-  )
+  const { data: logsData } = useQuery(listLogs, { taskId }, { refetchInterval: 60000 })
 
   const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
   const removeEventMutation = useMutation(removeEventTask, { onSuccess: () => refetch() })
@@ -130,7 +131,11 @@ function TaskDetail() {
     )
   }
 
-  const isMutating = archiveMutation.isPending || unarchiveMutation.isPending || cancelMutation.isPending || restartMutation.isPending
+  const isMutating =
+    archiveMutation.isPending ||
+    unarchiveMutation.isPending ||
+    cancelMutation.isPending ||
+    restartMutation.isPending
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
@@ -138,45 +143,25 @@ function TaskDetail() {
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
         <div className="flex flex-wrap gap-2">
           {canCancelTask(task) && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleCancel}
-              disabled={isMutating}
-            >
+            <Button variant="destructive" size="sm" onClick={handleCancel} disabled={isMutating}>
               {cancelMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Cancel
             </Button>
           )}
           {canRestartTask(task) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRestart}
-              disabled={isMutating}
-            >
+            <Button variant="outline" size="sm" onClick={handleRestart} disabled={isMutating}>
               {restartMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Restart
             </Button>
           )}
           {canArchiveTask(task) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleArchive}
-              disabled={isMutating}
-            >
+            <Button variant="outline" size="sm" onClick={handleArchive} disabled={isMutating}>
               {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Archive
             </Button>
           )}
           {canUnarchiveTask(task) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleUnarchive}
-              disabled={isMutating}
-            >
+            <Button variant="outline" size="sm" onClick={handleUnarchive} disabled={isMutating}>
               {unarchiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Unarchive
             </Button>
@@ -215,12 +200,16 @@ function TaskDetail() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Created:</span>
-            <span>{task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}</span>
+            <span>
+              {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
+            </span>
           </div>
           {task.updatedAt && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">Updated:</span>
-              <span><RelativeTime date={timestampDate(task.updatedAt)} /></span>
+              <span>
+                <RelativeTime date={timestampDate(task.updatedAt)} />
+              </span>
             </div>
           )}
         </div>
@@ -256,7 +245,11 @@ function TaskDetail() {
             />
             <div className="flex justify-start">
               <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {updateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
                 Instruction
               </Button>
             </div>
@@ -337,9 +330,7 @@ function LinksSection({ links }: { links: TaskLink[] }) {
             )}
           </div>
           {link.relevance && (
-            <span className="text-sm text-muted-foreground">
-              {link.relevance}
-            </span>
+            <span className="text-sm text-muted-foreground">{link.relevance}</span>
           )}
         </li>
       ))}
@@ -438,7 +429,8 @@ function EventsTable({
       <TableBody>
         {events.map((event) => {
           const dataContent = event.data || '-'
-          const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
+          const truncatedData =
+            dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
 
           return (
             <TableRow key={String(event.id)}>
@@ -507,16 +499,12 @@ function LogsTable({ logs }: { logs: LogEntry[] }) {
             <TableCell>
               <Badge
                 variant="outline"
-                className={
-                  logTypeStyles[log.type] ?? 'bg-gray-100 text-gray-600'
-                }
+                className={logTypeStyles[log.type] ?? 'bg-gray-100 text-gray-600'}
               >
                 {log.type}
               </Badge>
             </TableCell>
-            <TableCell className="whitespace-pre-wrap break-words">
-              {log.content}
-            </TableCell>
+            <TableCell className="whitespace-pre-wrap break-words">{log.content}</TableCell>
             <TableCell className="text-muted-foreground">
               {log.createdAt ? <RelativeTime date={timestampDate(log.createdAt)} /> : '-'}
             </TableCell>
