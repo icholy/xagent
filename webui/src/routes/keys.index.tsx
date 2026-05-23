@@ -14,12 +14,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { RelativeTime } from '@/components/relative-time'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
+import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/keys/')({
   component: KeysPage,
 })
 
 function KeysPage() {
+  const orgId = useOrgId();
   const { data, isLoading, error, refetch } = useQuery(
     listKeys,
     {},
@@ -50,7 +52,7 @@ function KeysPage() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Keys</h1>
-        <Link to="/keys/new">
+        <Link to="/keys/new" search={{ org: orgId }}>
           <Button>
             <Plus className="h-4 w-4" />
             API Key

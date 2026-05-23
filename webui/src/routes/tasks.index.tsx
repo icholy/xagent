@@ -23,12 +23,14 @@ import { CommandBadge } from '@/components/command-badge'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { Plus, Search, Loader2, X } from 'lucide-react'
+import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
 })
 
 function TasksPage() {
+  const orgId = useOrgId();
   const [showChildTasks, setShowChildTasks] = useLocalStorage('showChildTasks', false)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -106,7 +108,7 @@ function TasksPage() {
               </button>
             )}
           </div>
-          <Link to="/tasks/new">
+          <Link to="/tasks/new" search={{ org: orgId }}>
             <Button>
               <Plus className="h-4 w-4" />
               Task
@@ -140,6 +142,7 @@ function TasksPage() {
 }
 
 function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
+  const orgId = useOrgId();
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
 
   const handleArchive = async () => {
@@ -151,6 +154,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
       <TableCell>
         <Link
           to="/tasks/$id"
+          search={{ org: orgId }}
           params={{ id: String(task.id) }}
           className="text-primary hover:underline"
         >

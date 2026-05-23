@@ -55,6 +55,7 @@ import {
   User,
   X,
 } from 'lucide-react'
+import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -65,6 +66,7 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
   const { tab } = Route.useSearch()
+  const orgId = useOrgId();
   const navigate = useNavigate()
 
   return (
@@ -73,7 +75,7 @@ function SettingsPage() {
       <Tabs
         value={tab}
         onValueChange={(value) =>
-          navigate({ to: '/settings', search: { tab: value }, replace: true })
+          navigate({ to: '/settings', search: { tab: value, org: orgId }, replace: true })
         }
       >
         <div className="flex items-center mb-4">

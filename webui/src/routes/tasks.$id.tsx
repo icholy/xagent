@@ -37,6 +37,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Plus, Loader2 } from 'lucide-react'
+import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -51,6 +52,7 @@ const logTypeStyles: Record<string, string> = {
 }
 
 function TaskDetail() {
+  const orgId = useOrgId();
   const { id } = Route.useParams()
   const taskId = BigInt(id)
   const [instruction, setInstruction] = useState('')
@@ -185,6 +187,7 @@ function TaskDetail() {
               <span className="text-muted-foreground">Parent:</span>
               <Link
                 to="/tasks/$id"
+                search={{ org: orgId }}
                 params={{ id: String(task.parent) }}
                 className="text-primary hover:underline"
               >
@@ -361,6 +364,7 @@ function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => v
 }
 
 function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
+  const orgId = useOrgId();
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
 
   const handleArchive = async () => {
@@ -372,6 +376,7 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
       <TableCell>
         <Link
           to="/tasks/$id"
+          search={{ org: orgId }}
           params={{ id: String(task.id) }}
           className="text-primary hover:underline"
         >
@@ -415,6 +420,9 @@ function EventsTable({
   onUnlink: (eventId: bigint) => void
   isUnlinking: boolean
 }) {
+
+  const orgId = useOrgId();
+
   return (
     <Table>
       <TableHeader>
@@ -438,6 +446,7 @@ function EventsTable({
               <TableCell>
                 <Link
                   to="/events/$id"
+                  search={{ org: orgId }}
                   params={{ id: String(event.id) }}
                   className="text-primary hover:underline"
                 >

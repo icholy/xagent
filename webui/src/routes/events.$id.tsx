@@ -3,6 +3,7 @@ import { useQuery } from '@connectrpc/connect-query'
 import { getEvent, listEventTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { RelativeTime } from '@/components/relative-time'
+import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/events/$id')({
   staticData: { orgSwitchRedirect: '/events' },
@@ -10,6 +11,7 @@ export const Route = createFileRoute('/events/$id')({
 })
 
 function EventDetail() {
+  const orgId = useOrgId();
   const { id } = Route.useParams()
   const eventId = BigInt(id)
 
@@ -111,6 +113,7 @@ function EventDetail() {
                 <li key={String(taskId)}>
                   <Link
                     to="/tasks/$id"
+                    search={{ org: orgId }}
                     params={{ id: String(taskId) }}
                     className="text-primary hover:underline"
                   >

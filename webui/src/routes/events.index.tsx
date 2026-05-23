@@ -22,12 +22,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Plus } from 'lucide-react'
+import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/events/')({
   component: EventsPage,
 })
 
 function EventsPage() {
+  const orgId = useOrgId();
   const [limit, setLimit] = useState(25)
   const { data, isLoading, error } = useQuery(
     listEvents,
@@ -74,7 +76,7 @@ function EventsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Link to="/events/new">
+          <Link to="/events/new" search={{ org: orgId }}>
             <Button>
               <Plus className="h-4 w-4" />
               Event
@@ -106,6 +108,7 @@ function EventsPage() {
 }
 
 function EventRow({ event }: { event: Event }) {
+  const orgId = useOrgId();
   const dataContent = event.data || '-'
   const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
 
@@ -115,6 +118,7 @@ function EventRow({ event }: { event: Event }) {
       <TableCell>
         <Link
           to="/events/$id"
+          search={{ org: orgId }}
           params={{ id: String(event.id) }}
           className="text-primary hover:underline"
         >

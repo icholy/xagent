@@ -112,36 +112,41 @@ function RootComponent() {
     <>
       <nav className="border-b">
         <div className="container mx-auto px-4 py-3 flex flex-wrap items-center gap-3 md:gap-6">
-          <Link to="/tasks/new" className="hidden md:block">
+          <Link to="/tasks/new" search={{ org: currentOrgId }} className="hidden md:block">
             <img src={xagentIcon} alt="XAgent" className="h-8 w-8" />
           </Link>
           <div className="flex gap-2 md:gap-4">
             <Link
               to="/tasks"
+              search={{ org: currentOrgId }}
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Tasks
             </Link>
             <Link
               to="/events"
+              search={{ org: currentOrgId }}
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Events
             </Link>
             <Link
               to="/workspaces"
+              search={{ org: currentOrgId }}
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Workspaces
             </Link>
             <Link
               to="/members"
+              search={{ org: currentOrgId }}
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Members
             </Link>
             <Link
               to="/keys"
+              search={{ org: currentOrgId }}
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
             >
               Keys
@@ -169,7 +174,7 @@ function RootComponent() {
             </span>
             <Link
               to="/settings"
-              search={{ tab: 'account' }}
+              search={{ tab: 'account', org: currentOrgId }}
               activeOptions={{ includeSearch: false }}
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
               title="Settings"
