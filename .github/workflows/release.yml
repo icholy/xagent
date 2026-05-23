@@ -58,14 +58,14 @@ jobs:
           CGO_ENABLED: '0'
           GOOS: linux
           GOARCH: amd64
-        run: go build -o xagent-linux-amd64 ./cmd/xagent
+        run: go build -ldflags "-X github.com/icholy/xagent/internal/version.Version=${{ needs.release-please.outputs.tag_name }}" -o xagent-linux-amd64 ./cmd/xagent
 
       - name: Build linux/arm64
         env:
           CGO_ENABLED: '0'
           GOOS: linux
           GOARCH: arm64
-        run: go build -o xagent-linux-arm64 ./cmd/xagent
+        run: go build -ldflags "-X github.com/icholy/xagent/internal/version.Version=${{ needs.release-please.outputs.tag_name }}" -o xagent-linux-arm64 ./cmd/xagent
 
       - name: Attach binaries to Release
         uses: softprops/action-gh-release@v2
@@ -124,6 +124,8 @@ jobs:
           target: server
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VERSION=${{ needs.release-please.outputs.tag_name }}
           tags: ${{ steps.server-meta.outputs.tags }}
           labels: ${{ steps.server-meta.outputs.labels }}
           cache-from: type=gha
@@ -136,6 +138,8 @@ jobs:
           target: runner
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VERSION=${{ needs.release-please.outputs.tag_name }}
           tags: ${{ steps.runner-meta.outputs.tags }}
           labels: ${{ steps.runner-meta.outputs.labels }}
           cache-from: type=gha

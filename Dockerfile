@@ -10,14 +10,16 @@ RUN pnpm exec vite build
 # Build Go binaries
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 ARG TARGETARCH
+ARG VERSION
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=webui /app/internal/server/webui ./internal/server/webui
-RUN CGO_ENABLED=0 GOARCH=$TARGETARCH go build -o xagent ./cmd/xagent
-RUN CGO_ENABLED=0 GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 ./cmd/xagent
-RUN CGO_ENABLED=0 GOARCH=arm64 go build -o prebuilt/xagent-linux-arm64 ./cmd/xagent
+ENV LDFLAGS="-X github.com/icholy/xagent/internal/version.Version=$VERSION"
+RUN CGO_ENABLED=0 GOARCH=$TARGETARCH go build -ldflags "$LDFLAGS" -o xagent ./cmd/xagent
+RUN CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "$LDFLAGS" -o prebuilt/xagent-linux-amd64 ./cmd/xagent
+RUN CGO_ENABLED=0 GOARCH=arm64 go build -ldflags "$LDFLAGS" -o prebuilt/xagent-linux-arm64 ./cmd/xagent
 
 # Server image
 FROM alpine:3.23 AS server
