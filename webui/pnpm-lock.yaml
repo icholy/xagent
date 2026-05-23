@@ -52,7 +52,7 @@ importers:
         version: 1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@tanstack/router-vite-plugin':
         specifier: ^1.149.0
-        version: 1.167.4(@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))
+        version: 1.167.5(@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1264,8 +1264,8 @@ packages:
     resolution: {integrity: sha512-l/u/AdJq4OPn7ejsOQS+DqER+ZQ4anZVFWJpVoqg1RHVtky844aLSnl4rcRM2BRYXZYBCtVyZBoJwsOEkSoinQ==}
     engines: {node: '>=20.19'}
 
-  '@tanstack/router-plugin@1.168.4':
-    resolution: {integrity: sha512-2yihAaGv7U/ZcTwiSk3FPoLmlhYIFVfa7IGYaE5HRRAk96qiW+DxGtbzolp7sVX3Bw1t8yyKj6qljqOSgKZ6RA==}
+  '@tanstack/router-plugin@1.168.5':
+    resolution: {integrity: sha512-QcDdBszaojGLaOdlIeFvfAjiLlQ9Njo8uR/tivkQuPUa1jmurZCuUqAX9twuMRxLrsWoo3gCppCXTIxtgRkBJQ==}
     engines: {node: '>=20.19'}
     peerDependencies:
       '@rsbuild/core': '>=1.0.2 || ^2.0.0'
@@ -1289,8 +1289,8 @@ packages:
     resolution: {integrity: sha512-c3GhqhBRCP636B41nf3TKvVz8EWzC5PTZ3I4J4LDH2tVjpxbyFNYsQKRtbNWiMFl+GTtgK4nCha346Wv7j4hcQ==}
     engines: {node: '>=20.19'}
 
-  '@tanstack/router-vite-plugin@1.167.4':
-    resolution: {integrity: sha512-FruJE3I8PzE3Q0SUSxQvZgu5UVZElcSgKBaNBpxzTqlkpamnUCKJEfNMWZY0hxcKfXhz7hbY5CVZw42jxuSDEw==}
+  '@tanstack/router-vite-plugin@1.167.5':
+    resolution: {integrity: sha512-lOwqY5K179esgoj/KLze+IZgEn4OcqaQsgo7SFRzb7IdI4hmOmRpsJHGHVqLtb1K6se2FCrqRitYqZd2eG99dw==}
     engines: {node: '>=20.19'}
 
   '@tanstack/store@0.9.3':
@@ -3482,7 +3482,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@tanstack/router-plugin@1.168.4(@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))':
+  '@tanstack/router-plugin@1.168.5(@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-syntax-jsx': 7.28.6(@babel/core@7.29.0)
@@ -3517,9 +3517,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@tanstack/router-vite-plugin@1.167.4(@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))':
+  '@tanstack/router-vite-plugin@1.167.5(@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))':
     dependencies:
-      '@tanstack/router-plugin': 1.168.4(@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))
+      '@tanstack/router-plugin': 1.168.5(@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0))
     transitivePeerDependencies:
       - '@rsbuild/core'
       - '@tanstack/react-router'
