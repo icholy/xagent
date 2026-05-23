@@ -64,35 +64,26 @@ func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1
 
 Update `internal/command/version.go` to use the shared function.
 
-### 3. Display version in the navbar
+### 3. Display version in the settings page
 
-The `ConnectionIndicator` component in `webui/src/components/connection-indicator.tsx` already sits in the navbar and communicates server connectivity status. Extend its tooltip to also show the server version:
+Show the version as small muted text in the bottom-right of the settings page (`webui/src/routes/settings.tsx`). It sits below the existing tab content and is unobtrusive.
 
-- Call the `ping` RPC once on mount (via `useQuery` with a long `staleTime`)
-- Show the version string in the tooltip alongside the connection state label (e.g. "Connected - v0.14.1")
-- The dot indicator itself stays unchanged
-
-This approach avoids adding new UI elements. The version is one hover away from any page.
+- Call the `ping` RPC via `useQuery` with a long `staleTime` (version doesn't change while the page is open)
+- Render the version in a small, muted footer aligned to the right of the settings container
 
 ```tsx
-export function ConnectionIndicator() {
-  const state = useConnectionState();
-  const { data } = useQuery(ping, {}, { staleTime: Infinity });
-  const { color, label, pulse } = styles[state];
-  const tooltip = data?.version ? `${label} (${data.version})` : label;
+function VersionFooter() {
+  const { data } = useQuery(ping, {}, { staleTime: Infinity })
+  if (!data?.version) return null
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          aria-label={label}
-          className={cn("inline-block h-2 w-2 rounded-full", color, pulse && "animate-pulse")}
-        />
-      </TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
-    </Tooltip>
-  );
+    <div className="mt-6 text-right text-xs text-muted-foreground">
+      v{data.version}
+    </div>
+  )
 }
 ```
+
+This is placed at the end of `SettingsPage`, after the `Tabs` block, so it appears in the bottom right of the settings page regardless of which tab is active.
 
 ### Files Changed
 
@@ -102,15 +93,14 @@ export function ConnectionIndicator() {
 | `internal/version/version.go` | New package with shared version resolution |
 | `internal/command/version.go` | Use `version.String()` |
 | `internal/server/apiserver/apiserver.go` | Return version in `Ping` |
-| `webui/src/components/connection-indicator.tsx` | Show version in tooltip |
+| `webui/src/routes/settings.tsx` | Show version in bottom-right footer |
 
 ## Trade-offs
 
 **Adding a dedicated `GetVersion` RPC vs. extending `PingResponse`**: A separate RPC would be more explicit, but `Ping` is already the lightweight health-check endpoint and adding a string field keeps things simple. If more build metadata is needed later (commit hash, build time), a dedicated `GetServerInfo` RPC can be introduced at that point.
 
-**Showing version in the tooltip vs. always visible in the navbar**: Always-visible text takes up navbar space on every page. A tooltip on the already-present connection dot is unobtrusive and discoverable. If more prominent placement is desired later, a footer or settings page "About" section can be added.
+**Settings page footer vs. always-visible navbar**: Putting the version in the navbar would make it visible on every page, but the version is reference information that users only look up occasionally (filing bugs, confirming deploys). The settings page is the natural home for "about this install" information and keeps it out of the way during normal use.
 
 ## Open Questions
 
-1. Should the version also be shown on the settings page for easier copy-paste (e.g. for bug reports)?
-2. Should additional build metadata (git commit, build time) be exposed alongside the version?
+1. Should additional build metadata (git commit, build time) be exposed alongside the version?
