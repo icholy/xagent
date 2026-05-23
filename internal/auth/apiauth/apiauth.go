@@ -15,9 +15,6 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authentication"
 	openid "github.com/zitadel/zitadel-go/v3/pkg/authentication/oidc"
-	"github.com/zitadel/zitadel-go/v3/pkg/authorization"
-	"github.com/zitadel/zitadel-go/v3/pkg/authorization/oauth"
-	"github.com/zitadel/zitadel-go/v3/pkg/http/middleware"
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 )
 
@@ -25,7 +22,6 @@ import (
 const (
 	AuthTypeKey    = "key"
 	AuthTypeApp    = "app"
-	AuthTypeBearer = "bearer"
 	AuthTypeCookie = "cookie"
 )
 
@@ -126,8 +122,6 @@ type Auth struct {
 	devUser *UserInfo
 	// cookie middleware
 	cookie *authentication.Interceptor[*openid.DefaultContext]
-	// bearer token middleware
-	bearer *middleware.Interceptor[*oauth.IntrospectionContext]
 	// validator validates xat_ API keys
 	validator KeyValidator
 	// resolver provisions users and resolves orgs on token issuance
@@ -195,18 +189,8 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Initialize Bearer token authorization (for API calls)
-	// Uses local JWT validation - tokens are validated by checking signature against JWKS
-	authZ, err := authorization.New(ctx,
-		zitadel.New(cfg.Domain),
-		oauth.DefaultJWTAuthorization(cfg.ClientID),
-	)
-	if err != nil {
-		return nil, err
-	}
 	return &Auth{
 		cookie:    authentication.Middleware(authN),
-		bearer:    middleware.New(authZ),
 		validator: cfg.KeyValidator,
 		resolver:  cfg.UserResolver,
 		handler:   authN,
@@ -283,10 +267,6 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 				}
 				r = r.WithContext(WithUser(r.Context(), user))
 				next.ServeHTTP(w, r)
-			case AuthTypeBearer:
-				if !a.useDevUser(w, r, next) {
-					a.bearer.RequireAuthorization()(a.attachUserInfo(next)).ServeHTTP(w, r)
-				}
 			default:
 				if !a.useDevUser(w, r, next) {
 					// Try app JWT from Bearer header before falling back to cookie auth.
@@ -330,10 +310,6 @@ func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 					r = r.WithContext(WithUser(r.Context(), user))
 				}
 				next.ServeHTTP(w, r)
-			case AuthTypeBearer:
-				if !a.useDevUser(w, r, next) {
-					a.bearer.CheckAuthorization()(a.attachUserInfo(next)).ServeHTTP(w, r)
-				}
 			default:
 				if !a.useDevUser(w, r, next) {
 					a.cookie.CheckAuthentication()(a.attachUserInfo(next)).ServeHTTP(w, r)
@@ -443,19 +419,7 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 	if user := Caller(r.Context()); user != nil {
 		return user
 	}
-	switch r.Header.Get(AuthTypeHeader) {
-	case AuthTypeBearer:
-		if ctx := a.bearer.Context(r.Context()); ctx != nil {
-			return &UserInfo{
-				ID:       ctx.Subject,
-				Email:    ctx.Email,
-				Name:     ctx.Name,
-				Type:     AuthTypeBearer,
-				ClientID: r.Header.Get("X-Client-ID"),
-			}
-		}
-		return nil
-	case AuthTypeApp:
+	if r.Header.Get(AuthTypeHeader) == AuthTypeApp {
 		// App tokens are validated and set in CheckAuth/RequireAuth
 		return nil
 	}
