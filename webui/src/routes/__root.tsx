@@ -94,7 +94,6 @@ function RootComponent() {
   const route = useMatches().at(-1)
 
   const handleOrgSwitch = async (orgId: string) => {
-    console.log('[orgswitch] handleOrgSwitch', { orgId, current: auth.getOrgId() })
     auth.setOrgId(orgId)
     const redirect = route?.staticData.orgSwitchRedirect
     if (redirect) {
