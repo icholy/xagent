@@ -24,7 +24,6 @@ export interface XAgentApiCredentials {
 export function buildXAgentClient(credentials: XAgentApiCredentials): Client<typeof XAgentService> {
 	const authInterceptor: Interceptor = (next) => async (req) => {
 		req.header.set('Authorization', `Bearer ${credentials.apiKey}`);
-		req.header.set('X-Auth-Type', 'key');
 		return next(req);
 	};
 	const transport = createConnectTransport({

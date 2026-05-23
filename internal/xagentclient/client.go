@@ -34,9 +34,6 @@ type Options struct {
 	// Token is the authentication token.
 	// If empty, no authentication is performed.
 	Token string
-	// AuthType is the value of the X-Auth-Type header.
-	// Defaults to "key" if empty.
-	AuthType string
 	// Timeout is the timeout for RPC calls.
 	// Defaults to DefaultTimeout if zero.
 	Timeout time.Duration
@@ -58,7 +55,6 @@ func New(opts Options) Client {
 		transport = &AuthTransport{
 			Transport: transport,
 			Token:     opts.Token,
-			AuthType:  opts.AuthType,
 		}
 	}
 	httpClient := &http.Client{Transport: transport, Timeout: cmp.Or(opts.Timeout, DefaultTimeout)}

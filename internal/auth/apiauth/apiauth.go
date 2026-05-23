@@ -18,7 +18,7 @@ import (
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 )
 
-// Auth type constants matching X-Auth-Type header values.
+// Auth type labels for UserInfo.Type.
 const (
 	AuthTypeKey    = "key"
 	AuthTypeApp    = "app"
@@ -198,20 +198,23 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 	}, nil
 }
 
-// AuthTypeHeader is the header CLI/device clients send to indicate bearer auth.
-const AuthTypeHeader = "X-Auth-Type"
-
-// validateKey extracts and validates an API key from the Authorization header.
-func (a *Auth) validateKey(r *http.Request) (*UserInfo, error) {
+// authenticate dispatches Bearer token validation by token shape.
+// Returns (nil, nil) when no Authorization header is present, signalling
+// callers to fall through to cookie middleware.
+func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok {
-		return nil, errors.New("missing Bearer token")
+		return nil, nil
 	}
-	user, err := a.validator.ValidateKey(r.Context(), HashKey(raw))
-	if user != nil {
+	if IsKey(raw) {
+		user, err := a.validator.ValidateKey(r.Context(), HashKey(raw))
+		if err != nil {
+			return nil, err
+		}
 		user.ClientID = r.Header.Get("X-Client-ID")
+		return user, nil
 	}
-	return user, err
+	return a.validateAppToken(r)
 }
 
 // validateAppToken extracts and validates an app JWT from the Authorization header.
@@ -250,43 +253,20 @@ func (a *Auth) useDevUser(w http.ResponseWriter, r *http.Request, next http.Hand
 func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Header.Get(AuthTypeHeader) {
-			case AuthTypeKey:
-				user, err := a.validateKey(r)
-				if err != nil || user == nil {
-					http.Error(w, "invalid API key", http.StatusUnauthorized)
-					return
-				}
-				r = r.WithContext(WithUser(r.Context(), user))
-				next.ServeHTTP(w, r)
-			case AuthTypeApp:
-				user, err := a.validateAppToken(r)
-				if err != nil || user == nil {
-					http.Error(w, "invalid app token", http.StatusUnauthorized)
-					return
-				}
-				r = r.WithContext(WithUser(r.Context(), user))
-				next.ServeHTTP(w, r)
-			default:
-				if !a.useDevUser(w, r, next) {
-					// Try app JWT from Bearer header before falling back to cookie auth.
-					// This is needed for OAuth clients (e.g. Claude.ai) that send
-					// app JWTs as Bearer tokens without the X-Auth-Type header.
-					// TODO: find a cleaner way to handle this.
-					if user, err := a.validateAppToken(r); err == nil && user != nil {
-						r = r.WithContext(WithUser(r.Context(), user))
-						next.ServeHTTP(w, r)
-						return
-					}
-					// If a Bearer token was supplied but invalid/expired, return 401
-					// rather than falling through to cookie auth (which would return a
-					// redirect). OAuth clients like n8n only refresh on a 401 response.
-					if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
-						http.Error(w, "invalid or expired token", http.StatusUnauthorized)
-						return
-					}
-					a.cookie.RequireAuthentication()(a.attachUserInfo(next)).ServeHTTP(w, r)
-				}
+			user, err := a.authenticate(r)
+			if err != nil {
+				// A Bearer token was supplied but invalid/expired. Return 401
+				// rather than falling through to cookie auth (which would
+				// redirect). OAuth clients like n8n only refresh on 401.
+				http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+				return
+			}
+			if user != nil {
+				next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), user)))
+				return
+			}
+			if !a.useDevUser(w, r, next) {
+				a.cookie.RequireAuthentication()(a.attachUserInfo(next)).ServeHTTP(w, r)
 			}
 		})
 	}
@@ -297,23 +277,19 @@ func (a *Auth) RequireAuth() func(http.Handler) http.Handler {
 func (a *Auth) CheckAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Header.Get(AuthTypeHeader) {
-			case AuthTypeKey:
-				user, err := a.validateKey(r)
-				if err == nil && user != nil {
-					r = r.WithContext(WithUser(r.Context(), user))
-				}
+			user, err := a.authenticate(r)
+			if err != nil {
+				// Bearer present but invalid — let the request through with
+				// no user attached.
 				next.ServeHTTP(w, r)
-			case AuthTypeApp:
-				user, err := a.validateAppToken(r)
-				if err == nil && user != nil {
-					r = r.WithContext(WithUser(r.Context(), user))
-				}
-				next.ServeHTTP(w, r)
-			default:
-				if !a.useDevUser(w, r, next) {
-					a.cookie.CheckAuthentication()(a.attachUserInfo(next)).ServeHTTP(w, r)
-				}
+				return
+			}
+			if user != nil {
+				next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), user)))
+				return
+			}
+			if !a.useDevUser(w, r, next) {
+				a.cookie.CheckAuthentication()(a.attachUserInfo(next)).ServeHTTP(w, r)
 			}
 		})
 	}
@@ -390,38 +366,17 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 	}
 }
 
-// cookieUser returns user info from the cookie session only.
-func (a *Auth) cookieUser(r *http.Request) *UserInfo {
-	if a.devUser != nil {
-		return a.devUser
-	}
-	if ctx := a.cookie.Context(r.Context()); ctx != nil {
-		return &UserInfo{
-			ID:       ctx.UserInfo.Subject,
-			Email:    ctx.UserInfo.Email,
-			Name:     ctx.UserInfo.Name,
-			Type:     AuthTypeCookie,
-			ClientID: r.Header.Get("X-Client-ID"),
-		}
-	}
-	return nil
-}
-
 // Handler returns the HTTP handler for auth routes (login, callback, logout).
 func (a *Auth) Handler() http.Handler {
 	return a.handler
 }
 
 // User returns the authenticated user's information.
-// Works with API keys, Bearer tokens, and cookie authentication.
+// Works with API keys, app JWTs, and cookie authentication.
 func (a *Auth) User(r *http.Request) *UserInfo {
 	// If UserInfo already set (e.g., by API key or app token in CheckAuth), return it
 	if user := Caller(r.Context()); user != nil {
 		return user
-	}
-	if r.Header.Get(AuthTypeHeader) == AuthTypeApp {
-		// App tokens are validated and set in CheckAuth/RequireAuth
-		return nil
 	}
 	if ctx := a.cookie.Context(r.Context()); ctx != nil {
 		return &UserInfo{

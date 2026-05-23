@@ -123,7 +123,6 @@ export class AuthTransport {
 
     const headers = new Headers(init?.headers)
     headers.set('Authorization', `Bearer ${token}`)
-    headers.set('X-Auth-Type', 'app')
     headers.set('X-Client-ID', this.clientId)
 
     let resp = await fetch(input, { ...init, headers })
