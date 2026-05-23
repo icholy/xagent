@@ -27,6 +27,15 @@ pnpm run dev  # Runs on http://localhost:5173
 
 The v2 UI runs independently on the Vite dev server and can be developed incrementally alongside the existing Go template UI.
 
+## Linting
+
+**Always run `pnpm lint` in `webui/` before finishing any task that touches frontend code.** CI runs ESLint on every webui PR and will fail otherwise. Fix all lint errors before opening a PR — do not push code with known lint failures.
+
+```bash
+cd webui
+pnpm lint
+```
+
 ## Routing (TanStack Router)
 
 **File-based routing** - Routes are defined as files in `src/routes/`. The TanStack Router Vite plugin auto-generates `routeTree.gen.ts` (gitignored).
