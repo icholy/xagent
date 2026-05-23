@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.17.0](https://github.com/icholy/xagent/compare/v0.16.0...v0.17.0) (2026-05-23)
+
+
+### Features
+
+* add get_github_token agent MCP tool ([#651](https://github.com/icholy/xagent/issues/651)) ([7f73c36](https://github.com/icholy/xagent/commit/7f73c365f72e8ba5c37c5da09d6bb904bfd658b7))
+* add xagent tool github-mcp subcommand ([#653](https://github.com/icholy/xagent/issues/653)) ([06a9d3a](https://github.com/icholy/xagent/commit/06a9d3a658af85b883f5ccd5aba94ab36fb35a27))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/urfave/cli/v3 to v3.9.0 ([#648](https://github.com/icholy/xagent/issues/648)) ([cc74fb9](https://github.com/icholy/xagent/commit/cc74fb9e06317d92ea4508096ddeaf7e5abaec91))
+* inject release tag as version at build time ([48df1dd](https://github.com/icholy/xagent/commit/48df1dd37f9aab1762bf00a1a77aa5f16ffce211))
+* use the transport onOrgChange to update the org query ([63596c2](https://github.com/icholy/xagent/commit/63596c27ea05eba62a30976a716dbd80c904150b))
+
+
+### Miscellaneous
+
+* **deps:** update tanstack-router monorepo ([#650](https://github.com/icholy/xagent/issues/650)) ([33959d7](https://github.com/icholy/xagent/commit/33959d7d4aecb862851bb7bbcaf81e0efc61dc79))
+* group in-container helpers under a tool namespace ([8d128d0](https://github.com/icholy/xagent/commit/8d128d0ae596ed5536ff5e12401ce40b57dbd25d))
+* use gotest.tools assert in mcpswap tests ([#652](https://github.com/icholy/xagent/issues/652)) ([5c4cea1](https://github.com/icholy/xagent/commit/5c4cea1cebff1aea3d67ff3d5f9c5d199c69b060))
+* vendor mcpswap single-upstream MCP adapter ([14b5be6](https://github.com/icholy/xagent/commit/14b5be6533b2797302918f7e269107465f63e480))
+
 ## [0.16.0](https://github.com/icholy/xagent/compare/v0.15.4...v0.16.0) (2026-05-23)
 
 
