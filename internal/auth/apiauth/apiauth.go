@@ -214,15 +214,6 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 		user.ClientID = r.Header.Get("X-Client-ID")
 		return user, nil
 	}
-	return a.validateAppToken(r)
-}
-
-// validateAppToken extracts and validates an app JWT from the Authorization header.
-func (a *Auth) validateAppToken(r *http.Request) (*UserInfo, error) {
-	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !ok {
-		return nil, errors.New("missing Bearer token")
-	}
 	claims, err := VerifyAppToken(a.appKey, raw)
 	if err != nil {
 		return nil, err
