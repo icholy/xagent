@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -119,6 +120,7 @@ type createTaskInput struct {
 }
 
 func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
+	caller := apiauth.MustCaller(ctx)
 	resp, err := s.service.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Workspace: input.Workspace,
@@ -142,7 +144,7 @@ func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input
 		Name:      resp.Task.Name,
 		Workspace: resp.Task.Workspace,
 		Status:    resp.Task.Status.String(),
-		URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, resp.Task.Id),
+		URL:       model.TaskURL(s.baseURL, resp.Task.Id, caller.OrgID),
 	}
 	return jsonResult(result), nil, nil
 }
@@ -152,6 +154,7 @@ type getTaskInput struct {
 }
 
 func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input getTaskInput) (*mcp.CallToolResult, any, error) {
+	caller := apiauth.MustCaller(ctx)
 	resp, err := s.service.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{
 		Id: input.ID,
 	})
@@ -200,7 +203,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
 		Status:    task.Status.String(),
-		URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, task.Id),
+		URL:       model.TaskURL(s.baseURL, task.Id, caller.OrgID),
 	}
 	for _, inst := range task.Instructions {
 		result.Instructions = append(result.Instructions, instruction{
@@ -243,6 +246,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 type listTasksInput struct{}
 
 func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input listTasksInput) (*mcp.CallToolResult, any, error) {
+	caller := apiauth.MustCaller(ctx)
 	resp, err := s.service.ListTasks(ctx, &xagentv1.ListTasksRequest{})
 	if err != nil {
 		return errorResult("failed to list tasks: %v", err), nil, nil
@@ -261,7 +265,7 @@ func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input 
 			Name:      t.Name,
 			Workspace: t.Workspace,
 			Status:    t.Status.String(),
-			URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, t.Id),
+			URL:       model.TaskURL(s.baseURL, t.Id, caller.OrgID),
 		}
 	}
 	return jsonResult(result), nil, nil
@@ -275,6 +279,7 @@ type updateTaskInput struct {
 }
 
 func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
+	caller := apiauth.MustCaller(ctx)
 	_, err := s.service.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:    input.ID,
 		Start: input.Start,
@@ -301,7 +306,7 @@ func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input
 		Name:      resp.Task.Name,
 		Workspace: resp.Task.Workspace,
 		Status:    resp.Task.Status.String(),
-		URL:       fmt.Sprintf("%s/ui/tasks/%d", s.baseURL, resp.Task.Id),
+		URL:       model.TaskURL(s.baseURL, resp.Task.Id, caller.OrgID),
 	}
 	return jsonResult(result), nil, nil
 }

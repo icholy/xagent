@@ -60,6 +60,12 @@ export class AuthTransport {
       window.location.href = "/auth/login";
       throw new Error("session expired");
     }
+    // 403 means the user isn't a member of the requested org (or has no
+    // default). Drop the stale org and retry against the user's default.
+    if (resp.status === 403 && id !== NO_ORG) {
+      localStorage.removeItem(ORG_ID_KEY);
+      return this.fetchToken();
+    }
     if (!resp.ok) {
       throw new Error(`failed to fetch token: ${resp.status}`);
     }
