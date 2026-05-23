@@ -58,7 +58,6 @@ function beforeLoad({
   search: RootSearch
   context: { auth: AuthTransport }
 }): void {
-  console.log('[orgswitch] beforeLoad', { searchOrg: search.org, current: auth.getOrgId() })
   // ?org present: adopt it. setOrgId is a no-op when unchanged; the org-change
   // listener invalidates the cache and the new token is fetched lazily on the
   // next request. ?org absent: stamp it from the active org so refresh /
