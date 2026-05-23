@@ -7,5 +7,6 @@ var ToolCommand = &cli.Command{
 	Usage: "In-container agent tools",
 	Commands: []*cli.Command{
 		GitCredentialCommand,
+		GitHubMCPCommand,
 	},
 }
