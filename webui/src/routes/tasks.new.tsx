@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import { createTask, listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { useOrgId } from '@/hooks/use-org-id'
 import { useOrgLocalStorage } from '@/hooks/use-org-local-storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,7 @@ export const Route = createFileRoute('/tasks/new')({
 
 function NewTaskPage() {
   const navigate = useNavigate()
+  const orgId = useOrgId()
 
   const [name, setName] = useState('')
   const [runner, setRunner] = useOrgLocalStorage('xagent-last-runner', '')
@@ -44,9 +46,13 @@ function NewTaskPage() {
   const mutation = useMutation(createTask, {
     onSuccess: (data) => {
       if (data.task) {
-        navigate({ to: '/tasks/$id', params: { id: String(data.task.id) } })
+        navigate({
+          to: '/tasks/$id',
+          params: { id: String(data.task.id) },
+          search: { org: orgId },
+        })
       } else {
-        navigate({ to: '/tasks' })
+        navigate({ to: '/tasks', search: { org: orgId } })
       }
     },
   })
@@ -138,7 +144,11 @@ function NewTaskPage() {
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Creating...' : 'Create Task'}
               </Button>
-              <Button type="button" variant="outline" onClick={() => navigate({ to: '/tasks' })}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate({ to: '/tasks', search: { org: orgId } })}
+              >
                 Cancel
               </Button>
             </div>

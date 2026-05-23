@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@connectrpc/connect-query'
 import { createEvent } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { useOrgId } from '@/hooks/use-org-id'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,7 @@ export const Route = createFileRoute('/events/new')({
 
 function CreateEventPage() {
   const navigate = useNavigate()
+  const orgId = useOrgId()
   const [description, setDescription] = useState('')
   const [url, setUrl] = useState('')
   const [data, setData] = useState('')
@@ -32,7 +34,11 @@ function CreateEventPage() {
         data,
       })
       if (response.event) {
-        navigate({ to: '/events/$id', params: { id: String(response.event.id) } })
+        navigate({
+          to: '/events/$id',
+          params: { id: String(response.event.id) },
+          search: { org: orgId },
+        })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create event')
@@ -85,7 +91,11 @@ function CreateEventPage() {
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Creating...' : 'Create Event'}
               </Button>
-              <Button type="button" variant="outline" onClick={() => navigate({ to: '/events' })}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate({ to: '/events', search: { org: orgId } })}
+              >
                 Cancel
               </Button>
             </div>
