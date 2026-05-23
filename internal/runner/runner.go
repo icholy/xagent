@@ -375,7 +375,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	}
 
 	// Generate JWT for this task
-	token, err := r.proxy.TaskToken(task)
+	token, err := r.proxy.TaskToken(task, ws.Scopes)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}

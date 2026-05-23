@@ -169,8 +169,12 @@ func (p *AgentFilter) ListLogs(ctx context.Context, req *xagentv1.ListLogsReques
 }
 
 func (p *AgentFilter) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
-	if _, err := p.claims(ctx); err != nil {
+	claims, err := p.claims(ctx)
+	if err != nil {
 		return nil, err
+	}
+	if !claims.HasScope(agentauth.ScopeGitHubToken) {
+		return nil, errPermissionDenied("github token issuance is disabled for this workspace")
 	}
 	return p.client.CreateGitHubToken(ctx, req)
 }
