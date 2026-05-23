@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.16.0](https://github.com/icholy/xagent/compare/v0.15.4...v0.16.0) (2026-05-23)
+
+
+### Features
+
+* add ?org= query param for deep-link org routing ([#643](https://github.com/icholy/xagent/issues/643)) ([8b1bb2a](https://github.com/icholy/xagent/commit/8b1bb2a1bbcce172a4793407cd07633336aa342d))
+* show server version in settings page footer ([#646](https://github.com/icholy/xagent/issues/646)) ([44eb88e](https://github.com/icholy/xagent/commit/44eb88ea39294b612492fa5d3bb592aeb2a71974))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/docker/cli to v29.5.0+incompatible ([#625](https://github.com/icholy/xagent/issues/625)) ([807045e](https://github.com/icholy/xagent/commit/807045eee8c68786d1c82214c87777c66bb504af))
+
+
+### Miscellaneous
+
+* **deps:** update module github.com/matryer/moq to v0.7.1 ([#630](https://github.com/icholy/xagent/issues/630)) ([de997e4](https://github.com/icholy/xagent/commit/de997e4c38f1476d58bfe9ae9d5431ef1b393ef6))
+* **deps:** update module github.com/sqlc-dev/sqlc to v1.31.1 ([#631](https://github.com/icholy/xagent/issues/631)) ([7c7b543](https://github.com/icholy/xagent/commit/7c7b543c05dcb9d5db7886f7ffa6fbf3fb55026e))
+* **deps:** update module golang.org/x/tools to v0.45.0 ([#632](https://github.com/icholy/xagent/issues/632)) ([d14c826](https://github.com/icholy/xagent/commit/d14c82696dde684c66886f257c7717c27ea4a0f4))
+* **deps:** update tailwindcss monorepo to v4.3.0 ([#640](https://github.com/icholy/xagent/issues/640)) ([fe3432d](https://github.com/icholy/xagent/commit/fe3432d1314ce3b6edf538d20d22eeca48fb051a))
+* **deps:** update tanstack-query monorepo to v5.100.10 ([#642](https://github.com/icholy/xagent/issues/642)) ([bfd5568](https://github.com/icholy/xagent/commit/bfd55687218a6439d6682c162098a4bd57a6dce4))
+* **deps:** update tanstack-router monorepo ([#644](https://github.com/icholy/xagent/issues/644)) ([607b2bf](https://github.com/icholy/xagent/commit/607b2bffed25dcd56873a1f27cbea14216fe6c8e))
+* fix linting errors ([08d90dd](https://github.com/icholy/xagent/commit/08d90dd6723a6214d339e6ebad185db3c8d0cbbf))
+* remind agents to run pnpm lint on webui changes ([7ec88e2](https://github.com/icholy/xagent/commit/7ec88e2d2c62034f853563ed287ad7e39ffde69a))
+* run eslint on webui PRs ([74d79bf](https://github.com/icholy/xagent/commit/74d79bf052b9d59262a2cc347f2018afdfa46812))
+* schedule docker/cli updates weekly ([#641](https://github.com/icholy/xagent/issues/641)) ([6bd5ad9](https://github.com/icholy/xagent/commit/6bd5ad92ba6249c90d99cb762734d6f9dd71a27f))
+* throttle @typescript/native-preview to weekly updates ([#628](https://github.com/icholy/xagent/issues/628)) ([f205845](https://github.com/icholy/xagent/commit/f20584523651067bcbfe878134a449df711db3ed))
+* **webui:** add prettier ([#645](https://github.com/icholy/xagent/issues/645)) ([08b3ab9](https://github.com/icholy/xagent/commit/08b3ab943e8689332e961eb5a172f1250f84a28a))
+
 ## [0.15.4](https://github.com/icholy/xagent/compare/v0.15.3...v0.15.4) (2026-05-21)
 
 
