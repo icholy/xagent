@@ -63,10 +63,6 @@ run = [
 	"cd webui && pnpm install --frozen-lockfile && pnpm run generate",
 ]
 
-[tasks.env]
-description = "Decrypt secrets.yml to .env"
-run = "sops -d --output-type dotenv sops.env.yml > .env"
-
 [tasks."up:test"]
 description = "Start postgres via docker compose"
 run = "docker compose -f docker-compose.test.yml up -d --wait postgres"
@@ -95,8 +91,15 @@ run = "go test ./..."
 description = "Build and deploy to Fly.io"
 run = "fly deploy"
 
+# The default sops dotenv output format doesn't handle newlines correctly
+# See: https://github.com/getsops/sops/issues/1435
+[tasks.env]
+description = "Decrypt secrets.yml to .env"
+run = "sops --output-type json -d sops.env.yml | jq -r 'to_entries[] | \"\\(.key)=\\(.value | tostring | tojson)\"' > .env"
+
 [tasks.update_secrets]
-run = "sops -d --output-type dotenv sops.env.yml | fly secrets import"
+depends = ["env"]
+run = "cat .env | fly secrets import"
 
 [tasks.psql]
 description = "Connect to the local database"
