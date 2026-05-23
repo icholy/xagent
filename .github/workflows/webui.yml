@@ -32,6 +32,14 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: webui/pnpm-lock.yaml
 
-      - name: Build webui
-        run: pnpm install --frozen-lockfile && pnpm run build
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: webui
+
+      - name: Lint
+        run: pnpm run lint
+        working-directory: webui
+
+      - name: Build
+        run: pnpm run build
         working-directory: webui
