@@ -4,4 +4,5 @@
 /internal/server/webui/
 /webui/node_modules/
 .pnpm-store/
+.playwright-mcp
 .env
