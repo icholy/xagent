@@ -220,7 +220,7 @@ var ServerCommand = &cli.Command{
 			},
 		}
 		if cmd.IsSet("github-client-id") {
-			opts.GitHub = githubserver.New(githubserver.Options{
+			gh, err := githubserver.New(githubserver.Options{
 				Store:     st,
 				BaseURL:   baseURL,
 				Publisher: ps,
@@ -233,6 +233,10 @@ var ServerCommand = &cli.Command{
 					PrivateKey:    []byte(cmd.String("github-private-key")),
 				},
 			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize github server: %w", err)
+			}
+			opts.GitHub = gh
 		}
 		if cmd.IsSet("atlassian-client-id") {
 			opts.Atlassian = atlassianserver.New(atlassianserver.Options{
