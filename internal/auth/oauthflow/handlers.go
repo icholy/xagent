@@ -238,6 +238,7 @@ func (a *Auth) issueTokens(w http.ResponseWriter, subject, email, name string, o
 		Email: email,
 		Name:  name,
 		OrgID: orgID,
+		Type:  apiauth.AuthTypeApp,
 	}
 
 	// Sign access token (app JWT, 5min TTL)

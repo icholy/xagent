@@ -18,13 +18,20 @@ import (
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 )
 
+// Auth type labels for UserInfo.Type.
+const (
+	AuthTypeKey    = "key"
+	AuthTypeApp    = "app"
+	AuthTypeCookie = "cookie"
+)
+
 // UserInfo contains authenticated user information.
 type UserInfo struct {
 	ID       string
 	Email    string
 	Name     string
 	OrgID    int64
-	IsAPIKey bool   // true when the caller authenticated with an xat_ API key
+	Type     string // Auth type: one of AuthType* constants
 	ClientID string // Per-tab client identifier from X-Client-ID header
 }
 
@@ -42,7 +49,7 @@ func (u *UserInfo) DisplayName() string {
 // AuditName returns the display name annotated with the auth type for audit logs.
 func (u *UserInfo) AuditName() string {
 	name := u.DisplayName()
-	if u.IsAPIKey {
+	if u.Type == AuthTypeKey {
 		return name + " (API key)"
 	}
 	return name
@@ -204,7 +211,6 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		user.IsAPIKey = true
 		user.ClientID = r.Header.Get("X-Client-ID")
 		return user, nil
 	}
@@ -226,6 +232,7 @@ func (a *Auth) validateAppToken(r *http.Request) (*UserInfo, error) {
 		Email:    claims.Email,
 		Name:     claims.Name,
 		OrgID:    claims.OrgID,
+		Type:     AuthTypeApp,
 		ClientID: r.Header.Get("X-Client-ID"),
 	}, nil
 }
@@ -376,6 +383,7 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 			ID:       ctx.UserInfo.Subject,
 			Email:    ctx.UserInfo.Email,
 			Name:     ctx.UserInfo.Name,
+			Type:     AuthTypeCookie,
 			ClientID: r.Header.Get("X-Client-ID"),
 		}
 	}
