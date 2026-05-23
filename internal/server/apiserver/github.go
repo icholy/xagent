@@ -73,6 +73,9 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 	if caller == nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
 	}
+	if s.github == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("GitHub integration is not configured on this server"))
+	}
 	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

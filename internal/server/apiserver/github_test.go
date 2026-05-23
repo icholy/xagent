@@ -149,6 +149,17 @@ func TestCreateGitHubToken_Unauthenticated(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodeUnauthenticated)
 }
 
+func TestCreateGitHubToken_GitHubNotConfigured(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
+
+	_, err := srv.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
+	assert.ErrorContains(t, err, "GitHub integration is not configured")
+}
+
 func TestCreateGitHubToken_NoInstallation(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{
