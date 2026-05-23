@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/auth/deviceauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/auth/oauthflow"
 	"github.com/icholy/xagent/internal/x/otelx"
@@ -61,11 +60,6 @@ var ServerCommand = &cli.Command{
 			Name:    "base-url",
 			Usage:   "Base URL for the server (e.g. https://xagent.example.com)",
 			Sources: cli.EnvVars("XAGENT_BASE_URL"),
-		},
-		&cli.StringFlag{
-			Name:    "auth-device-client-id",
-			Usage:   "ZITADEL client ID for device flow (native app)",
-			Sources: cli.EnvVars("XAGENT_AUTH_DEVICE_CLIENT_ID"),
 		},
 		&cli.StringFlag{
 			Name:    "auth-encryption-key",
@@ -224,11 +218,6 @@ var ServerCommand = &cli.Command{
 			CORS:          cmd.Bool("cors"),
 			Publisher:     ps,
 			Notify:        notify,
-			Discovery: deviceauth.DiscoveryConfig{
-				DeviceAuthorizationEndpoint: "https://" + domain + "/oauth/v2/device_authorization",
-				TokenEndpoint:               "https://" + domain + "/oauth/v2/token",
-				ClientID:                    cmd.String("auth-device-client-id"),
-			},
 		}
 		if cmd.IsSet("github-client-id") {
 			gh, err := githubserver.New(githubserver.Options{
