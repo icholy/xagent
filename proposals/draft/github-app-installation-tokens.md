@@ -102,11 +102,11 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 
 Git operations inside the container — the initial clone, plus any later `git fetch`/`push` from the agent — need a token. Injecting `GITHUB_TOKEN` into the container environment goes stale after 1h, breaking any git call made after that.
 
-Instead, add a `git-credential` subcommand to the xagent binary (already mounted in the container as the agent driver). The runner adds a `git config` line to the workspace's pre-clone setup commands, scoped to `github.com` so non-GitHub URLs fall through to git's default behavior:
+Instead, add a `tool git-credential` subcommand to the xagent binary (already mounted in the container as the agent driver). In-container agent helpers live under the `tool` namespace. The runner adds a `git config` line to the workspace's pre-clone setup commands, scoped to `github.com` so non-GitHub URLs fall through to git's default behavior:
 
 ```yaml
 commands:
-  - git config --global credential.https://github.com.helper "!xagent git-credential"
+  - git config --global credential.https://github.com.helper "!xagent tool git-credential"
   - git clone --bundle-uri http://gitbundler/xagent.bundle https://github.com/icholy/xagent.git
 ```
 
@@ -134,7 +134,7 @@ Add a tool to the agent MCP server (`internal/agentmcp/xmcp.go`) for the rare ca
 type getGitHubTokenInput struct{}
 ```
 
-This calls `CreateGitHubToken` on the server via the existing Unix socket proxy. Primary GitHub API access happens through the github MCP server (proxied via mcproxy — see below), and git uses the credential helper, so this tool is a fallback.
+This calls `CreateGitHubToken` on the server via the existing Unix socket proxy. Primary GitHub API access happens through the github MCP server (fronted by the `xagent tool github-mcp` adapter — see below), and git uses the credential helper, so this tool is a fallback.
 
 ### Installation ID Discovery via Setup Page
 
@@ -247,41 +247,30 @@ func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitH
 }
 ```
 
-### MCP Proxy Token Provider
+### GitHub MCP Adapter: `xagent tool github-mcp`
 
-The runner sits behind [mcproxy](https://github.com/icholy/mcproxy), which aggregates upstream MCP servers — including GitHub's MCP server at `https://api.githubcopilot.com/mcp/`. That upstream's `Authorization: Bearer <token>` header needs the same installation token, and also needs to refresh hourly.
+The agent's primary GitHub API path is GitHub's MCP server at `https://api.githubcopilot.com/mcp/`. Its `Authorization: Bearer <token>` header needs the same installation token, which expires hourly — so a long-lived upstream session would break after 1h.
 
-mcproxy has pluggable credential providers (`${type:name}` template syntax) and a rotation `Bus` that triggers hot-swaps of upstream sessions when a credential changes. Add an `xagent` provider that:
+Add a `tool github-mcp` subcommand to the xagent binary that fronts the GitHub MCP server and hot-swaps its upstream session as the token rotates. It builds on the vendored `internal/mcpswap` package (a single-upstream MCP adapter): an `mcpswap.Upstream` holds one live session to the GitHub MCP server and forwards requests via `Upstream.Dispatch`; `Upstream.Swap` atomically replaces the active session without dropping in-flight requests. mcpswap ships no rotation policy — the subcommand owns it.
 
-1. On startup, calls `CreateGitHubToken` on the xagent server (authenticated via an xagent API key).
-2. Tracks the returned `expires_at`.
-3. Re-fetches before expiry and `Publish`es to the `Bus`, causing mcproxy to reopen the GitHub upstream session with the new token.
+The subcommand:
 
-Proxy config sketch:
+1. Reads `XAGENT_SERVER` and `XAGENT_TOKEN` from the environment (already exported into every container by the runner) and builds an xagent client over the Unix socket proxy.
+2. On startup, calls `CreateGitHubToken`, builds a `StreamableClientTransport` to `https://api.githubcopilot.com/mcp/` with the `Authorization: Bearer <token>` header, and `Swap`s it in.
+3. Tracks the returned `expires_at` and re-fetches before expiry, calling `Swap` again with a fresh transport so the upstream session reopens with the new token.
+4. Serves `Upstream.Dispatch` over stdio to the agent's MCP client.
 
-```json
-{
-  "providers": [
-    {
-      "type": "xagent",
-      "endpoint": "https://xagent.example.com",
-      "api_key": "${env:XAGENT_API_KEY}",
-      "min_ttl": "5m"
-    }
-  ],
-  "servers": {
-    "github": {
-      "transport": "streamable",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": {
-        "Authorization": "Bearer ${xagent:github_token}"
-      }
-    }
-  }
-}
+Because it reads its credentials ambiently from the container environment and the socket is already bind-mounted, no runner or config-schema change is required for the first version — a workspace author wires it up as an ordinary stdio MCP server:
+
+```yaml
+mcp_servers:
+  github:
+    type: stdio
+    command: xagent
+    args: ["tool", "github-mcp"]
 ```
 
-The provider implementation lives in the mcproxy repo. This proposal only commits xagent to exposing `CreateGitHubToken` under API-key auth, which it already does for any RPC.
+A later ergonomic layer can add a built-in `type: "xagent:github"` that the runner rewrites into this stdio invocation, so workspace authors don't repeat the boilerplate.
 
 ## Trade-offs
 
@@ -291,9 +280,9 @@ The provider implementation lives in the mcproxy repo. This proposal only commit
 
 **`ghinstallation` library**: Use `github.com/bradleyfalzon/ghinstallation/v2` for JWT signing, token caching, and the GitHub API call. It handles the complexity of app authentication and is widely used.
 
-**Credential helper vs. env injection**: Injecting `GITHUB_TOKEN` at container start is simpler but the token goes stale after 1h, breaking any later git operation. A credential helper that hits the server on every git call avoids that — token refresh stays server-side via `ghinstallation`'s cache. The cost is a small extra binary surface (`xagent git-credential`) and one `git config` line in the setup commands.
+**Credential helper vs. env injection**: Injecting `GITHUB_TOKEN` at container start is simpler but the token goes stale after 1h, breaking any later git operation. A credential helper that hits the server on every git call avoids that — token refresh stays server-side via `ghinstallation`'s cache. The cost is a small extra binary surface (`xagent tool git-credential`) and one `git config` line in the setup commands.
 
-**`gh` CLI and other env-reading tools**: With no env injection, anything that reads `GITHUB_TOKEN` from the environment loses auth. The agent's primary GitHub API path is the github MCP server (via mcproxy), so this is rarely a problem. For the occasional shell-out, the `get_github_token` MCP tool provides a raw token on demand.
+**`gh` CLI and other env-reading tools**: With no env injection, anything that reads `GITHUB_TOKEN` from the environment loses auth. The agent's primary GitHub API path is the github MCP server (via the `xagent tool github-mcp` adapter), so this is rarely a problem. For the occasional shell-out, the `get_github_token` MCP tool provides a raw token on demand.
 
 **gitbundler**: The gitbundler service that produces clone bundles runs outside the container and still reads its credentials from `${env:...}` at startup. Migrating it to installation tokens is a separate change — out of scope here.
 
