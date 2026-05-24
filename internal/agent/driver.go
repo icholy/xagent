@@ -7,10 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strings"
-	"sync"
-	"syscall"
 	"text/template"
 	"time"
 
@@ -19,12 +16,6 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
-
-// reloadTimeout matches the runner's SIGTERM→SIGKILL window. If the
-// agent subprocess doesn't exit within this window of receiving
-// SIGHUP, the driver bails out non-zero so the runner's docker
-// monitor emits `failed` as a fallback.
-const reloadTimeout = 30 * time.Second
 
 // emitTimeout caps how long the driver waits for a runner-event ack.
 // emit uses context.Background so that SIGTERM-driven cancellation of
@@ -39,65 +30,8 @@ type Driver struct {
 }
 
 func (d *Driver) Run(ctx context.Context) error {
-	// mainCtx is cancelled by SIGTERM with ErrStop. agentCtx (created
-	// per iteration below) is a child of mainCtx, cancelled by SIGHUP
-	// with ErrReload so reload can recreate it without stopping the
-	// driver, while SIGTERM still propagates and takes precedence.
-	mainCtx, cancelMain := context.WithCancelCause(ctx)
-	defer cancelMain(nil)
-
-	var (
-		sigMu       sync.Mutex
-		agentCancel context.CancelCauseFunc
-		reloading   bool
-		reloadTimer *time.Timer
-	)
-	setAgentCancel := func(c context.CancelCauseFunc) {
-		sigMu.Lock()
-		defer sigMu.Unlock()
-		agentCancel = c
-	}
-	clearReload := func() {
-		sigMu.Lock()
-		defer sigMu.Unlock()
-		if reloadTimer != nil {
-			reloadTimer.Stop()
-			reloadTimer = nil
-		}
-		reloading = false
-	}
-
-	sigCh := make(chan os.Signal, 2)
-	// PID 1 ignores default-action signals — explicit Notify is mandatory.
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGHUP)
-	defer signal.Stop(sigCh)
-
-	go func() {
-		for sig := range sigCh {
-			switch sig {
-			case syscall.SIGTERM:
-				d.Log.Info("received SIGTERM, stopping agent")
-				cancelMain(ErrStop)
-			case syscall.SIGHUP:
-				sigMu.Lock()
-				switch {
-				case reloading:
-					d.Log.Info("ignoring SIGHUP: reload already in progress")
-				case agentCancel == nil:
-					d.Log.Info("ignoring SIGHUP: no active agent")
-				default:
-					d.Log.Info("received SIGHUP, reloading agent")
-					reloading = true
-					agentCancel(ErrReload)
-					reloadTimer = time.AfterFunc(reloadTimeout, func() {
-						d.Log.Error("reload timeout exceeded, exiting non-zero")
-						os.Exit(1)
-					})
-				}
-				sigMu.Unlock()
-			}
-		}
-	}()
+	state := newRunState(ctx, d.Log)
+	defer state.Close()
 
 	// Emit `started` before any setup. A successful ack proves the
 	// socket, JWT, server, and DB are all healthy — no separate ping.
@@ -121,7 +55,7 @@ func (d *Driver) Run(ctx context.Context) error {
 	if !cfg.Setup {
 		for _, command := range cfg.Commands {
 			d.Log.Info("Running setup command", "command", command)
-			c := exec.CommandContext(mainCtx, "sh", "-c", command)
+			c := exec.CommandContext(state.Context(), "sh", "-c", command)
 			c.Stdout = os.Stdout
 			c.Stderr = os.Stderr
 			if err := c.Run(); err != nil {
@@ -157,25 +91,16 @@ func (d *Driver) Run(ctx context.Context) error {
 			return d.fail(fmt.Errorf("failed to build prompt: %w", err))
 		}
 
-		agentCtx, agentCancelFn := context.WithCancelCause(mainCtx)
-		setAgentCancel(agentCancelFn)
-		promptErr := a.Prompt(agentCtx, prompt, cfg.Started)
-		agentCancelFn(nil)
-		setAgentCancel(nil)
-
-		// SIGTERM wins over SIGHUP — check mainCtx's cause first. We
-		// only treat the run as a reload/stop if Prompt actually
-		// returned an error; a naturally-completed Prompt is always
-		// reported as `stopped`, even if a signal raced in late.
-		switch {
-		case promptErr != nil && context.Cause(mainCtx) == ErrStop:
+		outcome, promptErr := state.Run(a, prompt, cfg.Started)
+		switch outcome {
+		case OutcomeStopped:
 			d.Log.Info("agent stopped gracefully")
 			if err := d.emit(model.RunnerEventStopped); err != nil {
 				return fmt.Errorf("failed to emit stopped: %w", err)
 			}
 			return nil
 
-		case promptErr != nil && context.Cause(agentCtx) == ErrReload:
+		case OutcomeReload:
 			d.Log.Info("agent reloaded")
 			// Future iterations must use the resume prompt.
 			cfg.Started = true
@@ -185,22 +110,21 @@ func (d *Driver) Run(ctx context.Context) error {
 			if err := d.emit(model.RunnerEventStarted); err != nil {
 				return fmt.Errorf("failed to emit started: %w", err)
 			}
-			clearReload()
-			continue
 
-		case promptErr != nil:
+		case OutcomeFailed:
 			return d.fail(promptErr)
-		}
 
-		cfg.Started = true
-		if err := SaveConfig(d.TaskID, cfg); err != nil {
-			return d.fail(fmt.Errorf("failed to save config: %w", err))
+		case OutcomeCompleted:
+			cfg.Started = true
+			if err := SaveConfig(d.TaskID, cfg); err != nil {
+				return d.fail(fmt.Errorf("failed to save config: %w", err))
+			}
+			d.Log.Info("Task completed successfully.")
+			if err := d.emit(model.RunnerEventStopped); err != nil {
+				return fmt.Errorf("failed to emit stopped: %w", err)
+			}
+			return nil
 		}
-		d.Log.Info("Task completed successfully.")
-		if err := d.emit(model.RunnerEventStopped); err != nil {
-			return fmt.Errorf("failed to emit stopped: %w", err)
-		}
-		return nil
 	}
 }
 
