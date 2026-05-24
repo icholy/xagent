@@ -2,7 +2,6 @@ package command
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,9 +11,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/auth/oauthflow"
-	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server"
 	"github.com/icholy/xagent/internal/server/archiver"
@@ -22,6 +19,7 @@ import (
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
 	"github.com/icholy/xagent/internal/store"
+	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/urfave/cli/v3"
 )
 
@@ -168,7 +166,7 @@ var ServerCommand = &cli.Command{
 				return fmt.Errorf("failed to generate app key: %w", err)
 			}
 		}
-		resolver := &storeUserResolver{store: st}
+		resolver := server.NewStoreUserResolver(st)
 		var devUser *apiauth.UserInfo
 		if noAuth {
 			slog.Warn("SSO authentication disabled, using dev user")
@@ -188,7 +186,7 @@ var ServerCommand = &cli.Command{
 			RedirectURI:   baseURL + "/auth/callback",
 			PostLogoutURI: baseURL,
 			EncryptionKey: key,
-			KeyValidator:  &storeKeyValidator{store: st},
+			KeyValidator:  server.NewStoreKeyValidator(st),
 			UserResolver:  resolver,
 			AppKey:        appKey,
 			DevUser:       devUser,
@@ -294,82 +292,4 @@ var ServerCommand = &cli.Command{
 		slog.Info("server stopped")
 		return nil
 	},
-}
-
-// storeKeyValidator implements apiauth.KeyValidator using the store.
-type storeKeyValidator struct {
-	store *store.Store
-}
-
-func (v *storeKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*apiauth.UserInfo, error) {
-	key, err := v.store.GetKeyByHash(ctx, nil, keyHash)
-	if err != nil {
-		return nil, err
-	}
-	if key.IsExpired() {
-		return nil, fmt.Errorf("key expired")
-	}
-	return &apiauth.UserInfo{OrgID: key.OrgID, Name: key.Name, Type: apiauth.AuthTypeKey}, nil
-}
-
-// storeUserResolver implements apiauth.UserResolver using the store.
-type storeUserResolver struct {
-	store *store.Store
-}
-
-func (r *storeUserResolver) Provision(ctx context.Context, user *apiauth.UserInfo) error {
-	return r.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		u := &model.User{
-			ID:    user.ID,
-			Email: user.Email,
-			Name:  user.Name,
-		}
-		if err := r.store.UpsertUser(ctx, tx, u); err != nil {
-			return err
-		}
-		// If the user has no default org, create one
-		if u.DefaultOrgID == 0 {
-			org := &model.Org{
-				Name:  user.Name + "'s Org",
-				Owner: user.ID,
-			}
-			if err := r.store.CreateOrg(ctx, tx, org); err != nil {
-				return err
-			}
-			if err := r.store.AddOrgMember(ctx, tx, &model.OrgMember{
-				OrgID:  org.ID,
-				UserID: user.ID,
-				Role:   "owner",
-			}); err != nil {
-				return err
-			}
-			if err := r.store.UpdateDefaultOrgID(ctx, tx, user.ID, org.ID); err != nil {
-				return err
-			}
-		}
-		return tx.Commit()
-	})
-}
-
-func (r *storeUserResolver) ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error) {
-	// Fall back to the user's default org if none requested
-	if orgID == 0 {
-		u, err := r.store.GetUser(ctx, nil, userID)
-		if err != nil {
-			return 0, err
-		}
-		if u.DefaultOrgID == 0 {
-			return 0, fmt.Errorf("user %s has no default org", userID)
-		}
-		orgID = u.DefaultOrgID
-	}
-	// Validate membership
-	ok, err := r.store.IsOrgMember(ctx, nil, orgID, userID)
-	if err != nil {
-		return 0, err
-	}
-	if !ok {
-		return 0, fmt.Errorf("user %s is not a member of org %d", userID, orgID)
-	}
-	return orgID, nil
 }
