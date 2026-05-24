@@ -1,0 +1,82 @@
+# Driver reloader state machine (NFA)
+#
+# Three live states while a run is in flight, distinguished by which cancel (if
+# any) has been issued and whether the stopping flag is set:
+#
+#   Running    : no cancel issued,   stopping=false
+#   Reloading  : cancel(ErrReload),  stopping=false   (run unwinding to reload)
+#   Stopping   : cancel(ErrStop),    stopping=true    (run unwinding to stop)
+#
+# Inputs (the alphabet):
+#   SIGTERM -> Stop()   : set stopping=true, cancel(ErrStop)
+#   SIGHUP  -> Reload() : cancel(ErrReload)   (ignored once stopping)
+#   nil     : agent run returned nil
+#   error   : agent run returned a non-cancellation error
+#
+# classify order is: nil -> Done, then stopping -> Stopped, then ErrReload ->
+# loop, else Failed. Because stopping is checked before the ErrReload cause, a
+# SIGTERM that races an in-flight reload always wins (Reloading -> Stopping).
+
+direction: right
+
+start: "" {
+  shape: circle
+  width: 24
+  height: 24
+  style.fill: "#2a2a2a"
+}
+
+running: Running {
+  shape: circle
+  tooltip: run in flight, no cancel issued
+}
+
+reloading: Reloading {
+  shape: circle
+  style.fill: "#d8c8e8"
+  tooltip: ErrReload issued, run unwinding
+}
+
+stopping: Stopping {
+  shape: circle
+  style.fill: "#f0e0a0"
+  tooltip: stopping=true, run unwinding
+}
+
+done: Done {
+  shape: circle
+  style.fill: "#b8e6b8"
+  style.stroke-width: 3
+}
+
+stopped: Stopped {
+  shape: circle
+  style.fill: "#b8d4f0"
+  style.stroke-width: 3
+}
+
+failed: Failed {
+  shape: circle
+  style.fill: "#f5b8b8"
+  style.stroke-width: 3
+}
+
+start -> running
+
+running -> done: nil
+running -> failed: error
+running -> reloading: SIGHUP
+running -> stopping: SIGTERM
+
+reloading -> running: unwinds\n(resume)
+reloading -> stopping: SIGTERM\n(stop wins)
+reloading -> reloading: SIGHUP\n(no-op)
+reloading -> done: nil (race) {
+  style.stroke-dash: 3
+}
+
+stopping -> stopped: unwinds
+stopping -> stopping: SIGHUP\n(ignored)
+stopping -> done: nil (race) {
+  style.stroke-dash: 3
+}

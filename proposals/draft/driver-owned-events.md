@@ -103,6 +103,21 @@ for {
 
 **SIGHUP-at-natural-completion race:** if SIGHUP arrives at the same moment the agent returns success, the driver doesn't go back to handle it — it emits `stopped` and exits. The runner's next `Poll` sees `running+restart` still set and the container not running, and falls into the recreate-and-start path. Self-heals.
 
+### Driver run-loop state machine
+
+The driver's run loop is an NFA with three live (in-flight) states, distinguished by which cancel — if any — has been issued for the current agent run:
+
+![Driver reload state machine](../images/reload-state-machine.svg)
+
+- **Running** — a run is in flight and no cancel has been issued. It exits to `Done`/`Failed` on natural completion, or moves to `Reloading`/`Stopping` on a signal.
+- **Reloading** — `cancel(ErrReload)` has been issued (SIGHUP) and the run is unwinding. When it returns, the loop resumes with the reload prompt.
+- **Stopping** — `cancel(ErrStop)` has been issued (SIGTERM) and the run is unwinding to a graceful stop.
+
+Two races fall out of the topology:
+
+- **Reload-then-stop:** reload has no stored bit (just a one-shot cancel), so a SIGTERM arriving during `Reloading` transitions to `Stopping` and wins.
+- **The nil race** (dashed edges): if a run returns `nil` at the same instant a signal lands, the completed work is honored and the outcome is `Done` — a late cancel does not discard a genuinely finished run.
+
 ### Runner responsibilities after the change
 
 - **`runner.Monitor`** keeps subscribing to docker `start` / `die` events. Its emits are no-ops in the happy path because the status-guarded `Task.ApplyRunnerEvent` state machine ignores redundant transitions. The monitor exists for processes that died before they could speak (OOM, SIGKILL, exec failure).
