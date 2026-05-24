@@ -128,4 +128,3 @@ for {
 
 1. **Fallback interval**: what value best balances overhead against worst-case latency when SSE is degraded? (Original draft suggested ~30s, 6× less frequent than today's 5s.)
 2. **Debounce**: the buffered size-1 channel already coalesces bursts; an explicit debounce window is probably unnecessary but could further reduce redundant polls during bulk operations.
-3. **Unix-socket SSE**: the current plan skips SSE for `unix://` server connections and keeps polling. Is supporting SSE over a Unix socket worth a custom transport?

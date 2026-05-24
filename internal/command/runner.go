@@ -5,15 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/agentauth"
-	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/runner/workspace"
+	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
@@ -53,8 +54,8 @@ var RunnerCommand = &cli.Command{
 		},
 		&cli.DurationFlag{
 			Name:  "poll",
-			Usage: "Poll interval for pending tasks",
-			Value: 5 * time.Second,
+			Usage: "Fallback poll interval when SSE wake-ups are unavailable",
+			Value: 30 * time.Second,
 		},
 		&cli.IntFlag{
 			Name:  "concurrency",
@@ -190,11 +191,34 @@ var RunnerCommand = &cli.Command{
 			}
 		}()
 
+		// Subscribe to server-sent task change notifications so the runner
+		// reacts to new commands immediately instead of waiting for the
+		// fallback poll.
+		sub := runner.NewSSESubscriber(runner.SSESubscriberOptions{
+			BaseURL:  serverAddr,
+			RunnerID: runnerID,
+			Client: &http.Client{
+				Transport: &xagentclient.AuthTransport{
+					Transport: http.DefaultTransport,
+					Token:     cfg.Token,
+				},
+			},
+			Log: log,
+		})
+		go func() {
+			if err := sub.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				log.Error("SSE subscriber stopped", "error", err)
+			}
+		}()
+
 		for {
 			if err := r.Poll(ctx); err != nil {
 				log.Error("failed to poll tasks", "error", err)
 			}
-			if !common.SleepContext(ctx, pollInterval) {
+			select {
+			case <-sub.C():
+			case <-time.After(pollInterval):
+			case <-ctx.Done():
 				return nil
 			}
 		}
