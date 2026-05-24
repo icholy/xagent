@@ -17,12 +17,19 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var orgID int64
-	if raw := r.URL.Query().Get("org_id"); raw != "" {
+	orgID := caller.OrgID
+
+	// Cookie auth doesn't have an org id, so we get it from the query parameter.
+	if caller.Type == apiauth.AuthTypeCookie {
 		var err error
-		orgID, err = strconv.ParseInt(raw, 10, 64)
+		orgID, err = strconv.ParseInt(r.URL.Query().Get("org_id"), 10, 64)
 		if err != nil {
 			http.Error(w, "invalid org_id", http.StatusBadRequest)
+			return
+		}
+		orgID, err = s.orgResolver.ResolveOrg(r.Context(), caller.ID, orgID)
+		if err != nil {
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 	}
@@ -30,11 +37,6 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	// When set, only forward notifications carrying pending work for this
 	// runner. Used by runners to wake on actionable task changes.
 	runner := r.URL.Query().Get("runner")
-	orgID, err := s.orgResolver.ResolveOrg(r.Context(), caller.ID, orgID)
-	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
 
 	ch, cancel, err := s.subscriber.Subscribe(r.Context(), orgID)
 	if err != nil {

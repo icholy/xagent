@@ -37,10 +37,7 @@ func TestSSE_Unauthenticated(t *testing.T) {
 	t.Parallel()
 
 	ps := pubsub.NewLocalPubSub()
-	srv := New(Options{
-		Subscriber:  ps,
-		OrgResolver: allowOrgResolver("u", 1),
-	})
+	srv := New(Options{Subscriber: ps})
 
 	// No user in context — bare handler without WithTestUser.
 	ts := httptest.NewServer(srv.Handler())
@@ -58,18 +55,15 @@ func TestSSE(t *testing.T) {
 
 	ps := pubsub.NewLocalPubSub()
 	const orgID int64 = 1
-	srv := New(Options{
-		Subscriber:  ps,
-		OrgResolver: allowOrgResolver("u", orgID),
-	})
+	srv := New(Options{Subscriber: ps})
 
-	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID, Type: apiauth.AuthTypeApp}))
 	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/events?org_id=%d", ts.URL, orgID), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", ts.URL+"/events", nil)
 	assert.NilError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -114,15 +108,12 @@ func TestSSE_SelfNotificationDelivered(t *testing.T) {
 
 	ps := pubsub.NewLocalPubSub()
 	const orgID int64 = 1
-	srv := New(Options{
-		Subscriber:  ps,
-		OrgResolver: allowOrgResolver("u", orgID),
-	})
+	srv := New(Options{Subscriber: ps})
 
-	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID, Type: apiauth.AuthTypeApp}))
 	defer ts.Close()
 
-	req, err := http.NewRequestWithContext(t.Context(), "GET", fmt.Sprintf("%s/events?org_id=%d", ts.URL, orgID), nil)
+	req, err := http.NewRequestWithContext(t.Context(), "GET", ts.URL+"/events", nil)
 	assert.NilError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -166,18 +157,15 @@ func TestSSE_RunnerFilter(t *testing.T) {
 
 	ps := pubsub.NewLocalPubSub()
 	const orgID int64 = 1
-	srv := New(Options{
-		Subscriber:  ps,
-		OrgResolver: allowOrgResolver("u", orgID),
-	})
+	srv := New(Options{Subscriber: ps})
 
-	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID, Type: apiauth.AuthTypeApp}))
 	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/events?org_id=%d&runner=r1", ts.URL, orgID), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", ts.URL+"/events?runner=r1", nil)
 	assert.NilError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -237,18 +225,15 @@ func TestSSE_OrgIsolation(t *testing.T) {
 
 	ps := pubsub.NewLocalPubSub()
 	const orgA, orgB int64 = 1, 2
-	srv := New(Options{
-		Subscriber:  ps,
-		OrgResolver: allowOrgResolver("u", orgB),
-	})
+	srv := New(Options{Subscriber: ps})
 
-	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgB}))
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgB, Type: apiauth.AuthTypeApp}))
 	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/events?org_id=%d", ts.URL, orgB), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", ts.URL+"/events", nil)
 	assert.NilError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -291,4 +276,78 @@ func TestSSE_OrgIsolation(t *testing.T) {
 	err = json.Unmarshal(ev.Data, &got)
 	assert.NilError(t, err)
 	assert.DeepEqual(t, got, wantB)
+}
+
+func TestSSE_CookieAuth(t *testing.T) {
+	t.Parallel()
+
+	ps := pubsub.NewLocalPubSub()
+	const orgID int64 = 1
+	srv := New(Options{
+		Subscriber:  ps,
+		OrgResolver: allowOrgResolver("u", orgID),
+	})
+
+	// Cookie auth has no org id on the caller; it comes from the org_id
+	// query parameter and is validated by the resolver.
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", Type: apiauth.AuthTypeCookie}))
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/events?org_id=%d", ts.URL, orgID), nil)
+	assert.NilError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	assert.NilError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
+
+	r := sse.NewReader(resp.Body)
+
+	// Read the ready event.
+	ev, err := r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "ready")
+
+	// Publish a notification for the resolved org.
+	want := model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "task", ID: 42}},
+		OrgID:     orgID,
+		Time:      time.Now().Truncate(time.Second),
+	}
+	err = ps.Publish(ctx, want)
+	assert.NilError(t, err)
+
+	ev, err = r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "change")
+
+	var got model.Notification
+	err = json.Unmarshal(ev.Data, &got)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, got, want)
+}
+
+func TestSSE_CookieAuthForbidden(t *testing.T) {
+	t.Parallel()
+
+	ps := pubsub.NewLocalPubSub()
+	srv := New(Options{
+		Subscriber:  ps,
+		OrgResolver: allowOrgResolver("u", 1),
+	})
+
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", Type: apiauth.AuthTypeCookie}))
+	defer ts.Close()
+
+	// Request an org the user is not a member of.
+	resp, err := http.Get(ts.URL + "/events?org_id=2")
+	assert.NilError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, resp.StatusCode, http.StatusForbidden)
 }
