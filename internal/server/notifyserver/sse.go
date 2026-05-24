@@ -26,6 +26,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// When set, only forward notifications carrying pending work for this
+	// runner. Used by runners to wake on actionable task changes.
+	runner := r.URL.Query().Get("runner")
 	orgID, err := s.orgResolver.ResolveOrg(r.Context(), caller.ID, orgID)
 	if err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -70,6 +74,9 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case n := <-ch:
+			if runner != "" && n.Runner != runner {
+				continue
+			}
 			seq++
 			data, err := json.Marshal(n)
 			if err != nil {

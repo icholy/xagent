@@ -7,10 +7,12 @@ import "time"
 type Notification struct {
 	Type      string                 `json:"type"`
 	Resources []NotificationResource `json:"resources,omitempty"`
+	Time      time.Time              `json:"timestamp"`
 	OrgID     int64                  `json:"org_id"`
 	UserID    string                 `json:"user_id,omitempty"`
 	ClientID  string                 `json:"client_id,omitempty"`
-	Time      time.Time              `json:"timestamp"`
+	// Runner is only set if there's pending work to do
+	Runner string `json:"for_runner,omitempty"`
 }
 
 // NotificationResource describes an affected resource within a "change" Notification.
