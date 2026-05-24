@@ -109,7 +109,7 @@ import "github.com/icholy/xagent/internal/xagentclient"
 client := xagentclient.New("http://localhost:6464")
 
 // Unix socket client (used inside containers)
-client := xagentclient.New("unix:///xagent.sock")
+client := xagentclient.New("unix:///xagent/socket")
 ```
 
 ### Making RPC calls

@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"time"
@@ -449,8 +450,11 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 			fmt.Sprintf("XAGENT_TOKEN=%s", token),
 			"XAGENT_SERVER=" + xagentclient.AgentSocketURL,
 		},
+		// Bind-mount the socket's parent directory rather than the socket
+		// file itself: the directory inode survives runner restarts, so the
+		// socket re-created inside it remains reachable from the container.
 		Binds: []string{
-			r.proxy.SocketPath() + ":" + xagentclient.AgentSocketPath,
+			filepath.Dir(r.proxy.SocketPath()) + ":" + path.Dir(xagentclient.AgentSocketPath),
 		},
 		Files: []containerbuild.File{
 			{Path: "/usr/local/bin/xagent", Data: binData, Mode: 0755},

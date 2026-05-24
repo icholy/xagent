@@ -82,7 +82,7 @@ func TestRunnerStart(t *testing.T) {
 		},
 		Concurrency: 1,
 		RunnerID:    "test-runner",
-		SocketPath:  filepath.Join(t.TempDir(), "xagent.sock"),
+		SocketPath:  filepath.Join(t.TempDir(), "socket"),
 	})
 	assert.NilError(t, err)
 	t.Cleanup(func() { r.Close() })
