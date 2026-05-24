@@ -14,7 +14,7 @@ func (s *Store) CreateLog(ctx context.Context, tx *sql.Tx, log *model.Log) error
 		TaskID:    log.TaskID,
 		Type:      log.Type,
 		Content:   log.Content,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		return err

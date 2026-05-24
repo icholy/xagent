@@ -16,7 +16,7 @@ func (s *Store) UpsertPendingIntegration(ctx context.Context, tx *sql.Tx, p *mod
 	if err != nil {
 		return fmt.Errorf("marshal options: %w", err)
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	if err := s.q(tx).UpsertPendingIntegration(ctx, sqlc.UpsertPendingIntegrationParams{
 		Type:       string(p.Type),
 		ExternalID: p.ExternalID,
