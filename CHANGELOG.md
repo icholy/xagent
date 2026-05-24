@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.19.0](https://github.com/icholy/xagent/compare/v0.18.0...v0.19.0) (2026-05-24)
+
+
+### Features
+
+* **runner:** wake on SSE task notifications ([#680](https://github.com/icholy/xagent/issues/680)) ([ec664dd](https://github.com/icholy/xagent/commit/ec664ddc2699994a6b1aaf7a67c5a6c06667dc02))
+* **server:** route actionable task notifications to runners ([#677](https://github.com/icholy/xagent/issues/677)) ([31bcecf](https://github.com/icholy/xagent/commit/31bcecf257f4036c6697976c254bdbdbfc8b6d19))
+
+
+### Bug Fixes
+
+* **runner:** bind-mount socket parent dir so it survives runner restart ([#686](https://github.com/icholy/xagent/issues/686)) ([e00b186](https://github.com/icholy/xagent/commit/e00b18697ec886d76106ea395eaa8f8a189946b1))
+* **store:** write timestamps in UTC ([#679](https://github.com/icholy/xagent/issues/679)) ([5db29d5](https://github.com/icholy/xagent/commit/5db29d59eda509f7dea562580c31e6e8d5e61b93))
+
+
+### Miscellaneous
+
+* move runner-sse-events proposal to accepted ([e5a2f7c](https://github.com/icholy/xagent/commit/e5a2f7c852dec139b29eb69f9dddabc0c8de406a))
+* **notifyserver:** exercise bearer and cookie auth paths for /events ([186880f](https://github.com/icholy/xagent/commit/186880f4ca6c7303e9b15b84d676d0d202d375b7))
+* **server:** move store-backed auth adapters into server package ([#685](https://github.com/icholy/xagent/issues/685)) ([6466efc](https://github.com/icholy/xagent/commit/6466efcaa45cd35a8cf12fbac74c17ff02e16a5f)), closes [#683](https://github.com/icholy/xagent/issues/683)
+
 ## [0.18.0](https://github.com/icholy/xagent/compare/v0.17.0...v0.18.0) (2026-05-23)
 
 
