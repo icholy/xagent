@@ -144,7 +144,7 @@ var RunnerCommand = &cli.Command{
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
 			Log:         log,
-			SocketPath:  filepath.Join(os.TempDir(), "xagent", runnerID+".sock"),
+			SocketPath:  filepath.Join(os.TempDir(), "xagent", runnerID, "socket"),
 			Queue:       queue,
 		})
 		if err != nil {

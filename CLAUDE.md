@@ -38,7 +38,7 @@ XAGENT is an async agent orchestrator using a botnet-style C2 (command & control
 - **Tasks** are the unit of work - contain workspace reference and prompts to execute
 - **Agents** run one-to-one with tasks inside containers named `xagent-{task-id}`
 - **Workspaces** define container config (image, volumes, env vars) and MCP servers in `workspaces.yaml`
-- Communication happens via Unix socket proxy at `/xagent.sock` inside containers
+- Communication happens via Unix socket proxy at `/xagent/socket` inside containers
 - Runner auto-injects an `xagent` MCP server (see below)
 
 ### MCP Server Tools
