@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Store) CreateOrg(ctx context.Context, tx *sql.Tx, org *model.Org) error {
-	now := time.Now()
+	now := time.Now().UTC()
 	id, err := s.q(tx).CreateOrg(ctx, sqlc.CreateOrgParams{
 		Name:      org.Name,
 		Owner:     org.Owner,
@@ -66,7 +66,7 @@ func (s *Store) ListOrgsByMember(ctx context.Context, tx *sql.Tx, userID string)
 }
 
 func (s *Store) UpdateOrg(ctx context.Context, tx *sql.Tx, org *model.Org) error {
-	org.UpdatedAt = time.Now()
+	org.UpdatedAt = time.Now().UTC()
 	return s.q(tx).UpdateOrg(ctx, sqlc.UpdateOrgParams{
 		ID:        org.ID,
 		Name:      org.Name,
@@ -83,7 +83,7 @@ func (s *Store) DestroyOrg(ctx context.Context, tx *sql.Tx, id int64) error {
 }
 
 func (s *Store) AddOrgMember(ctx context.Context, tx *sql.Tx, member *model.OrgMember) error {
-	now := time.Now()
+	now := time.Now().UTC()
 	err := s.q(tx).AddOrgMember(ctx, sqlc.AddOrgMemberParams{
 		OrgID:     member.OrgID,
 		UserID:    member.UserID,

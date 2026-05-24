@@ -15,7 +15,7 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 	if err != nil {
 		return err
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	id, err := s.q(tx).CreateTask(ctx, sqlc.CreateTaskParams{
 		Name:         task.Name,
 		Parent:       task.Parent,
@@ -112,7 +112,7 @@ func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 	if err != nil {
 		return err
 	}
-	task.UpdatedAt = time.Now()
+	task.UpdatedAt = time.Now().UTC()
 	return s.q(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
 		Name:         task.Name,
 		Parent:       task.Parent,

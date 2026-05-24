@@ -15,7 +15,7 @@ func (s *Store) CreateEvent(ctx context.Context, tx *sql.Tx, event *model.Event)
 		Data:        event.Data,
 		Url:         event.URL,
 		OrgID:       event.OrgID,
-		CreatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
 	})
 	if err != nil {
 		return err

@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Store) CreateKey(ctx context.Context, tx *sql.Tx, key *model.Key) error {
-	now := time.Now()
+	now := time.Now().UTC()
 	var expiresAt sql.NullTime
 	if key.ExpiresAt != nil {
 		expiresAt = sql.NullTime{Time: *key.ExpiresAt, Valid: true}
