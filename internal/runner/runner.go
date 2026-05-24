@@ -149,22 +149,8 @@ func (r *Runner) Poll(ctx context.Context) error {
 		switch task.Command {
 		case model.TaskCommandStop:
 			g.Go(func() error {
-				// If the container is running, the driver will emit
-				// `stopped` itself after handling SIGTERM (or the
-				// docker monitor emits `failed` on SIGKILL fallback).
-				// Only emit here when there is no live container to
-				// emit on the task's behalf — otherwise the task
-				// would stay stuck in `cancelling`.
-				running, err := r.isRunning(ctx, task)
-				if err != nil {
-					r.log.Error("failed to check if task is running", "task", task.ID, "error", err)
-					return nil
-				}
-				if running {
-					if err := r.Signal(ctx, task, "SIGTERM"); err != nil {
-						r.log.Error("failed to stop task", "task", task.ID, "error", err)
-					}
-					return nil
+				if err := r.Signal(ctx, task, "SIGTERM"); err != nil {
+					r.log.Error("failed to stop task", "task", task.ID, "error", err)
 				}
 				r.queue.Enqueue(model.RunnerEvent{
 					TaskID:  task.ID,
@@ -177,8 +163,9 @@ func (r *Runner) Poll(ctx context.Context) error {
 			g.Go(func() error {
 				// Prefer in-place reload via SIGHUP so the container —
 				// and the driver process inside it — stays alive. The
-				// driver emits `started` once the reloaded agent is
-				// running.
+				// driver emits `started` itself once the reloaded
+				// agent is running, since no docker start/die event
+				// fires for an in-place reload.
 				running, err := r.isRunning(ctx, task)
 				if err != nil {
 					r.log.Error("failed to check if task is running", "task", task.ID, "error", err)
@@ -192,7 +179,9 @@ func (r *Runner) Poll(ctx context.Context) error {
 				}
 				// Container exited (or was never created) — fall back
 				// to recreate-and-start, the same path used after a
-				// completed/failed/cancelled task is restarted.
+				// completed/failed/cancelled task is restarted. The
+				// docker monitor will emit `started` when the new
+				// container starts.
 				if !r.sem.TryAcquire(1) {
 					r.log.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
@@ -207,7 +196,6 @@ func (r *Runner) Poll(ctx context.Context) error {
 					})
 					return nil
 				}
-				// The "started" event is sent by the driver once it boots.
 				return nil
 			})
 		case model.TaskCommandStart:
