@@ -16,7 +16,7 @@ import (
 // InputEvent represents a parsed webhook event ready for routing.
 type InputEvent struct {
 	Source      string
-	Type       string
+	Type        string
 	Description string
 	Data        string
 	URL         string
@@ -74,16 +74,6 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 				r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
 				continue
 			}
-			r.publish(ctx, model.Notification{
-				Type: "change",
-				Resources: []model.NotificationResource{
-					{Action: "updated", Type: "task", ID: link.TaskID},
-					{Action: "updated", Type: "event", ID: event.ID},
-					{Action: "appended", Type: "task_logs", ID: link.TaskID},
-				},
-				OrgID: orgID,
-				Time:  time.Now(),
-			})
 			n++
 		}
 	}
@@ -121,9 +111,15 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 	}
 }
 
-// attach associates an event with a task, starts the task, and logs the action.
+// attach associates an event with a task, starts the task, logs the action,
+// and publishes a change notification.
 func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) error {
-	return r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+	notification := model.Notification{
+		Type:  "change",
+		OrgID: event.OrgID,
+		Time:  time.Now(),
+	}
+	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := r.Store.AddEventTask(ctx, tx, event.ID, taskID); err != nil {
 			return err
 		}
@@ -142,6 +138,17 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 		}); err != nil {
 			return err
 		}
+		notification.Resources = []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: task.ID},
+			{Action: "updated", Type: "event", ID: event.ID},
+			{Action: "appended", Type: "task_logs", ID: task.ID},
+		}
+		notification.Runner = task.PendingRunner()
 		return tx.Commit()
 	})
+	if err != nil {
+		return err
+	}
+	r.publish(ctx, notification)
+	return nil
 }

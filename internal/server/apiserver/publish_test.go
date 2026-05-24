@@ -37,6 +37,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
 		},
 		OrgID:  org.OrgID,
+		Runner: "r",
 		UserID: org.UserID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
 }

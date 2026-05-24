@@ -161,6 +161,77 @@ func TestSSE_SelfNotificationDelivered(t *testing.T) {
 	assert.DeepEqual(t, got, want)
 }
 
+func TestSSE_RunnerFilter(t *testing.T) {
+	t.Parallel()
+
+	ps := pubsub.NewLocalPubSub()
+	const orgID int64 = 1
+	srv := New(Options{
+		Subscriber:  ps,
+		OrgResolver: allowOrgResolver("u", orgID),
+	})
+
+	ts := httptest.NewServer(apiauth.WithTestUser(srv.Handler(), &apiauth.UserInfo{ID: "u", OrgID: orgID}))
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/events?org_id=%d&runner=r1", ts.URL, orgID), nil)
+	assert.NilError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	assert.NilError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
+
+	r := sse.NewReader(resp.Body)
+
+	// Read the ready event.
+	ev, err := r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "ready")
+
+	// Notification with no runner (no pending work) should be skipped.
+	err = ps.Publish(ctx, model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: 1}},
+		OrgID:     orgID,
+	})
+	assert.NilError(t, err)
+
+	// Notification for a different runner should be skipped.
+	err = ps.Publish(ctx, model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: 2}},
+		OrgID:     orgID,
+		Runner:    "r2",
+	})
+	assert.NilError(t, err)
+
+	// Notification for this runner should be delivered.
+	want := model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "restarted", Type: "task", ID: 3}},
+		OrgID:     orgID,
+		Runner:    "r1",
+		Time:      time.Now().Truncate(time.Second),
+	}
+	err = ps.Publish(ctx, want)
+	assert.NilError(t, err)
+
+	// Should only receive the r1 notification.
+	ev, err = r.Read()
+	assert.NilError(t, err)
+	assert.Equal(t, ev.Event, "change")
+
+	var got model.Notification
+	err = json.Unmarshal(ev.Data, &got)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, got, want)
+}
+
 func TestSSE_OrgIsolation(t *testing.T) {
 	t.Parallel()
 
