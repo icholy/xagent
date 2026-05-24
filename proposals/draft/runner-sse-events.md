@@ -12,269 +12,120 @@ The server already has a pub/sub system (`internal/pubsub/`) and an SSE endpoint
 
 ### High-level approach
 
-Replace the `time.Sleep`-based polling loop with an SSE subscription that triggers a poll whenever a relevant task change is published. The runner still calls `ListRunnerTasks` to get the authoritative list of pending commands — SSE only acts as a **wake-up signal**, not a replacement for the query. This keeps the design simple and avoids duplicating command-dispatch logic on the client side.
+SSE is a **wake-up signal**, not a data channel. The runner still calls `ListRunnerTasks` to get the authoritative list of pending commands — an SSE notification only tells it *when* to poll. This keeps the command-dispatch logic in one place and means the runner always acts on fresh state.
 
 ```
 Before:  loop { Poll(); sleep(5s) }
-After:   loop { Poll(); waitForSSEOrTimeout(30s) }
+After:   loop { Poll(); waitForSSEOrTimeout(fallback) }
 ```
 
-The runner calls `Poll()` immediately when it receives an SSE notification about a task change, or falls back to polling after a timeout (30 seconds) as a safety net for missed notifications.
+The runner polls immediately when it receives a relevant SSE notification, and falls back to a periodic poll as a safety net for missed notifications.
 
-### New SSE endpoint for runners
+### Reuse `/events` with a `runner` filter (no new endpoint)
 
-Add a runner-specific SSE endpoint that filters notifications to only task-related changes for the runner's org. This avoids sending irrelevant notifications (key changes, org member changes, etc.) to the runner.
+The original draft proposed a dedicated `/events/runner` endpoint, justified by the claim that `/events` filters out self-notifications server-side. **That claim was wrong**: `handleSSE` forwards every notification for the subscribed org. The web UI's self-notification suppression is entirely client-side (`webui/src/lib/notification-sse.ts` compares `client_id`). So no separate endpoint is needed — `/events` already:
 
-**URL**: `GET /events/runner`
+- Authenticates via the same `CheckAuth` middleware, which accepts the runner's API-key bearer token (the old `X-Auth-Type` header dispatch has since been removed).
+- Delivers all org notifications, including ones the runner itself triggered.
 
-This reuses the existing `notifyserver` package and `pubsub.Subscriber` interface. The handler is nearly identical to the existing `handleSSE` but:
-- Authenticates via API key (same as `ListRunnerTasks`).
-- Does not filter out notifications from the same user (unlike the web UI endpoint which skips self-notifications).
-- Only forwards notifications where at least one resource has `Type == "task"`.
+Instead, `/events` gained an optional `runner` query parameter. When set, the handler forwards only notifications whose `Runner` field matches:
 
 ```go
-func (s *Server) handleRunnerSSE(w http.ResponseWriter, r *http.Request) {
-    caller := apiauth.MustCaller(r.Context())
-    orgID := caller.OrgID
-
-    ch, cancel, err := s.subscriber.Subscribe(r.Context(), orgID)
-    if err != nil {
-        http.Error(w, "subscribe failed", http.StatusInternalServerError)
-        return
+// internal/server/notifyserver/sse.go
+runner := r.URL.Query().Get("runner")
+...
+case n := <-ch:
+    if runner != "" && n.Runner != runner {
+        continue
     }
-    defer cancel()
+    // forward
+```
 
-    flusher, ok := w.(http.Flusher)
-    if !ok {
-        http.Error(w, "streaming not supported", http.StatusInternalServerError)
-        return
-    }
+The `ready` event is sent before the loop, so it always reaches the client. With no `runner` param the behavior is unchanged, so the web UI is unaffected.
 
-    w.Header().Set("Content-Type", "text/event-stream")
-    w.Header().Set("Cache-Control", "no-cache")
-    w.Header().Set("Connection", "keep-alive")
+### `Notification.Runner`: routing target *and* actionability signal
 
-    sw := sse.NewWriter(w)
-    var seq int64
+A `Runner` field was added to `model.Notification`:
 
-    // Send ready event
-    data, _ := json.Marshal(model.Notification{Type: "ready", OrgID: orgID})
-    sw.Write(sse.Event{ID: "0", Event: "ready", Data: data})
-    flusher.Flush()
-
-    ctx := r.Context()
-    for {
-        select {
-        case n := <-ch:
-            // Only forward task-related notifications
-            hasTask := false
-            for _, r := range n.Resources {
-                if r.Type == "task" {
-                    hasTask = true
-                    break
-                }
-            }
-            if !hasTask {
-                continue
-            }
-            seq++
-            data, err := json.Marshal(n)
-            if err != nil {
-                continue
-            }
-            if err := sw.Write(sse.Event{
-                ID:    strconv.FormatInt(seq, 10),
-                Event: n.Type,
-                Data:  data,
-            }); err != nil {
-                return
-            }
-            flusher.Flush()
-        case <-ctx.Done():
-            return
-        }
-    }
+```go
+type Notification struct {
+    Type      string
+    Resources []NotificationResource
+    Time      time.Time
+    OrgID     int64
+    UserID    string
+    ClientID  string
+    // Runner is only set if there's pending work to do.
+    Runner string `json:"for_runner,omitempty"`
 }
 ```
 
-### Route registration
-
-In `internal/command/server.go`, register the new endpoint alongside the existing `/events`:
+It is set **only when a change leaves pending work for a runner** — the same condition `ListRunnerTasks` filters on (`command != 0 AND archived = FALSE`). That invariant lives in one place on the model:
 
 ```go
-mux.Handle("/events/runner", alice.New(s.auth.CheckAuth(), s.auth.AttachUserInfo()).ThenFunc(notifySrv.RunnerHandler()))
-```
-
-### Runner-side SSE client
-
-Add a new `SSESubscriber` to the runner package that connects to the server's SSE endpoint and exposes a channel that fires when a task-related notification arrives.
-
-```go
-// SSESubscriber connects to the server's SSE endpoint and signals
-// when task changes occur. It handles reconnection automatically.
-type SSESubscriber struct {
-    baseURL    string
-    token      string
-    log        *slog.Logger
-    notify     chan struct{}
-}
-
-func NewSSESubscriber(baseURL, token string, log *slog.Logger) *SSESubscriber {
-    return &SSESubscriber{
-        baseURL: baseURL,
-        token:   token,
-        log:     log,
-        notify:  make(chan struct{}, 1),
+// internal/model/task.go
+func (t *Task) PendingRunner() string {
+    if t.Command == TaskCommandNone || t.Archived {
+        return ""
     }
-}
-
-// C returns a channel that receives a value when task changes occur.
-func (s *SSESubscriber) C() <-chan struct{} {
-    return s.notify
-}
-
-// Run connects to the SSE endpoint and processes events.
-// It reconnects automatically on disconnection with backoff.
-func (s *SSESubscriber) Run(ctx context.Context) error {
-    for {
-        err := s.connect(ctx)
-        if ctx.Err() != nil {
-            return ctx.Err()
-        }
-        s.log.Warn("SSE connection lost, reconnecting", "error", err)
-        // Signal a poll on disconnect to catch any missed changes
-        s.signal()
-        if !common.SleepContext(ctx, 5*time.Second) {
-            return ctx.Err()
-        }
-    }
-}
-
-func (s *SSESubscriber) connect(ctx context.Context) error {
-    url := strings.TrimRight(s.baseURL, "/") + "/events/runner"
-    req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-    if err != nil {
-        return err
-    }
-    req.Header.Set("Authorization", "Bearer " + s.token)
-    req.Header.Set("X-Auth-Type", "key")
-
-    resp, err := http.DefaultClient.Do(req)
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
-
-    if resp.StatusCode != http.StatusOK {
-        return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-    }
-
-    scanner := bufio.NewScanner(resp.Body)
-    for scanner.Scan() {
-        line := scanner.Text()
-        if strings.HasPrefix(line, "event: change") {
-            s.signal()
-        }
-    }
-    return scanner.Err()
-}
-
-func (s *SSESubscriber) signal() {
-    select {
-    case s.notify <- struct{}{}:
-    default:
-        // Already signaled, no need to queue another
-    }
+    return t.Runner
 }
 ```
 
-The SSE client uses a simple `bufio.Scanner` to read the event stream. It doesn't need to parse the full SSE protocol — it only cares about detecting `event: change` lines to trigger a poll. The channel is buffered with size 1 and uses non-blocking sends to coalesce multiple rapid notifications into a single poll.
+The invariant: **`Notification.Runner` is set ⟺ the task would appear in that runner's next `ListRunnerTasks` query.** This single field doubles as the routing key (which runner) and the actionability signal (is there anything to do), which collapses several open questions from the original draft:
 
-### Updated runner loop
+- **Per-runner scoping**: pub/sub fans out by org, so in a multi-runner org each runner would otherwise see every runner's task notifications. `?runner=<id>` filters to its own.
+- **Command precision**: changes that don't leave a pending command (name-only edits, unarchive, a `started` event that transitions to `running`) yield an empty `Runner` and never reach the runner.
+- **Log firehose**: `AppendLogs` publishes only a `task_logs` resource and never sets `Runner`, so the high-frequency log stream is excluded automatically.
 
-In `internal/command/runner.go`, replace the fixed-interval sleep with a select on the SSE channel:
+### Publish sites
+
+Every task publish computes the field from the post-transition task via `PendingRunner()`:
+
+- `apiserver`: `CreateTask`, `UpdateTask`, `ArchiveTask`, `UnarchiveTask`, `CancelTask`, `RestartTask`, and the `applied` branch of `SubmitRunnerEvents`.
+- `eventrouter`: `attach` (a webhook event calling `task.Start()`).
+
+Handlers that mutate the task inside a transaction pre-declare the `notification`, then fill in `Resources` and `Runner` from the loaded task inside the closure, so both come from the model value rather than the request.
+
+### Why no client-id self-filtering
+
+An earlier idea was to stamp the runner's `ClientID` on its RPCs and have it skip its own notifications (as the web UI does). This was rejected: unlike the web UI — whose self-notifications merely confirm an optimistic update — the runner's own `SubmitRunnerEvents` can cause the server to set a **new** command. For example, a reported `stopped` while a `Start` is pending sends the task back to `Pending` with `Command=Start` (`applyRunnerEventStopped`), which is new work for the runner. Because `PendingRunner()` is computed from the resulting state, that notification correctly carries `Runner` and wakes the runner — so suppressing self-notifications would risk dropping real work. Self-wakes that *don't* carry pending work simply have an empty `Runner` and are filtered out anyway.
+
+### Runner-side client and loop (follow-up, not yet implemented)
+
+The server half above is implemented. The remaining work is the runner side:
+
+- A small SSE client that connects to `/events?runner=<id>` with the runner's bearer token, reads the event stream, and signals a buffered (size-1) channel on each `change` event so bursts coalesce into a single poll. It reconnects with backoff and signals once on reconnect to catch anything missed while disconnected.
+- The runner loop selects on that channel or a fallback timer:
 
 ```go
-// Start SSE subscriber in background
-var sseCh <-chan struct{}
-if !strings.HasPrefix(serverAddr, "unix://") {
-    sub := runner.NewSSESubscriber(serverAddr, cfg.Token, log)
-    sseCh = sub.C()
-    go func() {
-        if err := sub.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-            log.Error("SSE subscriber error", "error", err)
-        }
-    }()
-}
-
-// Main loop
 for {
     if err := r.Poll(ctx); err != nil {
         log.Error("failed to poll tasks", "error", err)
     }
-
-    // Wait for SSE notification or fall back to polling after timeout
     select {
-    case <-sseCh:
-        // Task change detected, poll immediately
-    case <-time.After(30 * time.Second):
-        // Safety-net poll in case SSE missed something
+    case <-sseCh:        // task change for this runner → poll now
+    case <-time.After(fallback):  // safety net for missed notifications
     case <-ctx.Done():
         return nil
     }
 }
 ```
 
-Key behaviors:
-- **Immediate reaction**: When a task is created, updated, restarted, or cancelled, the server publishes a notification. The runner's SSE subscription receives it and triggers an immediate poll.
-- **Fallback polling**: If SSE is disconnected or a notification is missed, the runner still polls every 30 seconds as a safety net. This is 6x less frequent than today's 5-second interval.
-- **Graceful degradation**: If the SSE connection fails entirely (e.g., server doesn't support the endpoint), the runner falls back to pure polling at the 30-second interval. When using a Unix socket connection, SSE is skipped entirely and the existing polling behavior is preserved.
-- **Coalescing**: Multiple rapid notifications (e.g., bulk task creation) coalesce into a single poll via the buffered channel.
-
-### Keeping the `--poll` flag
-
-The `--poll` flag is repurposed as the fallback timeout instead of the primary polling interval:
-
-```go
-&cli.DurationFlag{
-    Name:  "poll",
-    Usage: "Fallback poll interval when SSE is unavailable",
-    Value: 30 * time.Second,
-},
-```
-
-### What does NOT change
-
-- **`ListRunnerTasks` RPC**: Still the authoritative source for pending commands. SSE is only a wake-up signal.
-- **`SubmitRunnerEvents` RPC**: Runner events are still submitted the same way.
-- **`EventQueue`**: The event queue and its drain goroutine are unchanged.
-- **`Monitor`**: Docker event monitoring is unchanged.
-- **`Reconcile`**: Startup reconciliation is unchanged.
-- **`Prune`**: Container pruning continues on its own interval.
-- **Pub/sub layer**: `LocalPubSub` and the `Publisher`/`Subscriber` interfaces are unchanged.
-- **Web UI SSE**: The existing `/events` endpoint for the web UI is unaffected.
-- **Notification model**: `model.Notification` and `model.NotificationResource` are unchanged.
+- The `--poll` flag is repurposed as the fallback interval. For Unix-socket server connections, SSE is skipped and the existing polling behavior is preserved.
 
 ## Trade-offs
 
-**SSE wake-up vs. server-push with full task data**: The chosen approach uses SSE purely as a trigger to call `ListRunnerTasks`. An alternative would be to push the full task command payload via SSE, eliminating the follow-up RPC. This was rejected because:
-- It would duplicate the command-dispatch logic between the SSE publisher and the existing `ListRunnerTasks` handler.
-- The notification system was designed for lightweight change signals, not data transfer.
-- The follow-up `ListRunnerTasks` call is cheap (single indexed query) and ensures the runner always has the latest state.
+**SSE wake-up vs. server-push with full task data**: SSE is only a trigger; `ListRunnerTasks` stays authoritative. Pushing the full command payload over SSE would duplicate dispatch logic and turn a lightweight change-signal system into a data channel.
 
-**Server-streaming RPC vs. HTTP SSE**: Connect RPC supports server-streaming RPCs (`rpc WatchRunnerTasks(...) returns (stream ...)`) which would be more type-safe and avoid HTTP-level SSE parsing. This was rejected because:
-- The existing SSE infrastructure (`notifyserver`, `pubsub`, `sse.Writer`) is already proven and deployed.
-- A streaming RPC would require a separate pub/sub subscription path, duplicating plumbing.
-- The runner's SSE client is trivial (~50 lines) since it only needs to detect change events, not parse structured data.
+**Reuse `/events` vs. a dedicated endpoint**: reusing `/events` with a `runner` filter avoids a second handler and route, and a second pub/sub subscription path. The only thing a dedicated endpoint would have added is server-side filtering, which the `runner` param provides.
 
-**Dedicated `/events/runner` endpoint vs. reusing `/events`**: The existing `/events` endpoint filters out self-notifications (`n.UserID == caller.ID`) which would cause the runner to miss notifications about its own task updates (e.g., when `SubmitRunnerEvents` triggers a publish). A dedicated endpoint avoids this issue and also filters out non-task notifications (key changes, org member changes) that are irrelevant to the runner.
+**`Runner` set on every task change vs. only when actionable**: setting it only when `PendingRunner()` is non-empty means the `?runner=` stream is already scoped to actionable work, so the runner does not need to re-derive "does this change imply a command" — and there is no need to encode that mapping anywhere but the model.
 
-**30-second fallback vs. no fallback**: The fallback poll ensures correctness even if SSE has gaps. Without it, a missed notification could leave a task stuck until the next change event. 30 seconds is infrequent enough to be low-overhead but short enough to bound worst-case latency.
+**Fallback poll vs. none**: the periodic fallback bounds worst-case latency if a notification is missed (e.g. a brief disconnect) without reintroducing tight polling.
 
 ## Open Questions
 
-1. **Debounce window**: Should there be a short debounce (e.g., 100ms) after receiving an SSE notification before polling? This would coalesce rapid-fire notifications (e.g., creating 10 tasks at once) into a single poll. The current design relies on the buffered channel for coalescing, which works but means the runner might poll twice in quick succession if a second notification arrives between the first signal and the poll completing.
-
-2. **Runner-scoped notifications**: The current pub/sub fans out by org ID. If multiple runners share an org, each runner receives notifications for all runners' tasks. This is fine for correctness (the `ListRunnerTasks` query filters by runner ID) but could be noisy. Should `Notification` gain a `Runner` field so the SSE endpoint can filter server-side? This is an optimization — probably not worth it unless there are many runners per org.
-
-3. **Unix socket support**: The SSE client uses HTTP over TCP. Runners that connect to the server via Unix socket (`unix:///path`) would need either a custom HTTP transport for SSE or should fall back to pure polling. The current design skips SSE for Unix socket connections. Is this acceptable?
+1. **Fallback interval**: what value best balances overhead against worst-case latency when SSE is degraded? (Original draft suggested ~30s, 6× less frequent than today's 5s.)
+2. **Debounce**: the buffered size-1 channel already coalesces bursts; an explicit debounce window is probably unnecessary but could further reduce redundant polls during bulk operations.
+3. **Unix-socket SSE**: the current plan skips SSE for `unix://` server connections and keeps polling. Is supporting SSE over a Unix socket worth a custom transport?
