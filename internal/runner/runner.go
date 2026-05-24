@@ -149,8 +149,22 @@ func (r *Runner) Poll(ctx context.Context) error {
 		switch task.Command {
 		case model.TaskCommandStop:
 			g.Go(func() error {
-				if err := r.Kill(ctx, task); err != nil {
-					r.log.Error("failed to stop task", "task", task.ID, "error", err)
+				// If the container is running, the driver will emit
+				// `stopped` itself after handling SIGTERM (or the
+				// docker monitor emits `failed` on SIGKILL fallback).
+				// Only emit here when there is no live container to
+				// emit on the task's behalf — otherwise the task
+				// would stay stuck in `cancelling`.
+				running, err := r.isRunning(ctx, task)
+				if err != nil {
+					r.log.Error("failed to check if task is running", "task", task.ID, "error", err)
+					return nil
+				}
+				if running {
+					if err := r.Signal(ctx, task, "SIGTERM"); err != nil {
+						r.log.Error("failed to stop task", "task", task.ID, "error", err)
+					}
+					return nil
 				}
 				r.queue.Enqueue(model.RunnerEvent{
 					TaskID:  task.ID,
@@ -161,11 +175,24 @@ func (r *Runner) Poll(ctx context.Context) error {
 			})
 		case model.TaskCommandRestart:
 			g.Go(func() error {
-				// Kill existing container if running
-				if err := r.Kill(ctx, task); err != nil {
-					r.log.Error("failed to kill task for restart", "task", task.ID, "error", err)
+				// Prefer in-place reload via SIGHUP so the container —
+				// and the driver process inside it — stays alive. The
+				// driver emits `started` once the reloaded agent is
+				// running.
+				running, err := r.isRunning(ctx, task)
+				if err != nil {
+					r.log.Error("failed to check if task is running", "task", task.ID, "error", err)
+					return nil
 				}
-				// Atomically acquire a semaphore slot before starting
+				if running {
+					if err := r.Signal(ctx, task, "SIGHUP"); err != nil {
+						r.log.Error("failed to signal task for restart", "task", task.ID, "error", err)
+					}
+					return nil
+				}
+				// Container exited (or was never created) — fall back
+				// to recreate-and-start, the same path used after a
+				// completed/failed/cancelled task is restarted.
 				if !r.sem.TryAcquire(1) {
 					r.log.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
@@ -180,7 +207,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 					})
 					return nil
 				}
-				// The "started" event is sent by Monitor when the container starts
+				// The "started" event is sent by the driver once it boots.
 				return nil
 			})
 		case model.TaskCommandStart:
@@ -333,28 +360,43 @@ func (r *Runner) isRunning(ctx context.Context, task *model.Task) (bool, error) 
 	return c.State == "running", nil
 }
 
-func (r *Runner) Kill(ctx context.Context, task *model.Task) error {
+// killTimeout is the SIGTERM→SIGKILL escalation window for graceful
+// container shutdown. The driver reuses the same constant for its
+// SIGHUP→exit reload safety net so the two timeouts stay aligned.
+const killTimeout = 30 * time.Second
+
+// Signal delivers the given signal to the container's PID 1. SIGTERM
+// waits up to killTimeout for graceful exit and falls back to SIGKILL
+// — used by the stop path. Other signals (e.g. SIGHUP for in-place
+// reload) are fire-and-forget: the container is expected to stay
+// alive.
+func (r *Runner) Signal(ctx context.Context, task *model.Task, signal string) error {
 	c, ok, err := r.find(ctx, task.ID)
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if !ok || c.State != "running" {
 		return nil
 	}
-	if c.State != "running" {
-		return nil
-	}
-	r.log.Info("killing container", "task", task.ID)
+	r.log.Info("signaling container", "task", task.ID, "signal", signal)
 
-	// Try SIGTERM first with a timeout
-	killCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	if signal != "SIGTERM" {
+		if err := dockerx.ContainerSignal(ctx, r.docker, c.ID, signal); err != nil {
+			if errors.Is(err, dockerx.ErrNotRunning) {
+				return nil
+			}
+			return err
+		}
+		return nil
+	}
+
+	// SIGTERM: wait for the container to exit; escalate to SIGKILL on timeout.
+	killCtx, cancel := context.WithTimeout(ctx, killTimeout)
 	defer cancel()
 	err = dockerx.ContainerKill(killCtx, r.docker, c.ID, "SIGTERM")
 	if err == nil || errors.Is(err, dockerx.ErrNotRunning) {
 		return nil
 	}
-
-	// If SIGTERM timed out, send SIGKILL
 	if errors.Is(err, context.DeadlineExceeded) {
 		r.log.Warn("SIGTERM timed out, sending SIGKILL", "task", task.ID)
 		if err := dockerx.ContainerKill(ctx, r.docker, c.ID, "SIGKILL"); err != nil {
@@ -365,7 +407,6 @@ func (r *Runner) Kill(ctx context.Context, task *model.Task) error {
 		}
 		return nil
 	}
-
 	return err
 }
 

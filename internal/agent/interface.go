@@ -18,6 +18,13 @@ import (
 // to distinguish a graceful stop from other errors.
 var ErrStop = errors.New("stop")
 
+// ErrReload is a sentinel error used to signal that the agent should be
+// reloaded in-place (e.g. on SIGHUP). The driver cancels the per-agent
+// context with ErrReload, waits for Prompt to return, and then starts a
+// fresh agent invocation with the resume prompt — without restarting
+// the container.
+var ErrReload = errors.New("reload")
+
 // Agent type constants.
 const (
 	TypeClaude  = "claude"
