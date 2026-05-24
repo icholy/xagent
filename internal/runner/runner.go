@@ -430,12 +430,6 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		return "", fmt.Errorf("proxy socket not found: %w", err)
 	}
 
-	// Bind-mount the socket's parent directory rather than the socket file
-	// itself: the directory inode survives runner restarts, so the socket
-	// re-created inside it remains reachable from the container.
-	hostSocketDir := filepath.Dir(r.proxy.SocketPath())
-	agentSocketDir := path.Dir(xagentclient.AgentSocketPath)
-
 	b := &containerbuild.Builder{
 		Docker:    r.docker,
 		Name:      fmt.Sprintf("xagent-%d", task.ID),
@@ -456,8 +450,11 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 			fmt.Sprintf("XAGENT_TOKEN=%s", token),
 			"XAGENT_SERVER=" + xagentclient.AgentSocketURL,
 		},
+		// Bind-mount the socket's parent directory rather than the socket
+		// file itself: the directory inode survives runner restarts, so the
+		// socket re-created inside it remains reachable from the container.
 		Binds: []string{
-			hostSocketDir + ":" + agentSocketDir,
+			filepath.Dir(r.proxy.SocketPath()) + ":" + path.Dir(xagentclient.AgentSocketPath),
 		},
 		Files: []containerbuild.File{
 			{Path: "/usr/local/bin/xagent", Data: binData, Mode: 0755},
