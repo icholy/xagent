@@ -2,6 +2,8 @@ package command
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
@@ -57,7 +59,12 @@ var McpCommand = &cli.Command{
 		if err != nil {
 			return err
 		}
-		go mcpserver.PushChannels(ctx, transport, cmd.String("server"), cmd.String("token"))
+		channel := mcpserver.NewNotificationChannel(transport, client, cmd.String("server"), cmd.String("token"))
+		go func() {
+			if err := channel.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				slog.Warn("xagent channel stream ended", "error", err)
+			}
+		}()
 		return session.Wait()
 	},
 }
