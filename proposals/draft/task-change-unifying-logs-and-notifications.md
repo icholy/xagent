@@ -1,4 +1,4 @@
-# TaskEvent: a single source for task-scoped logs and notifications
+# TaskChange: a single source for task-scoped logs and notifications
 
 ## Problem
 
@@ -74,12 +74,12 @@ makes the log genuinely useful in the process.
 
 ## Design
 
-### `model.TaskEvent`
+### `model.TaskChange`
 
 Introduce a value type in `internal/model` (new file
-`internal/model/taskevent.go`) that captures the fact once. The working name
-is `TaskEvent`; alternatives considered and rejected at the end of this
-section.
+`internal/model/taskchange.go`) that captures the fact once. The name is
+`TaskChange`; the rejected `TaskEvent` alternative is discussed at the end of
+this section.
 
 ```go
 package model
@@ -90,41 +90,42 @@ import (
     "time"
 )
 
-// TaskEvent is the structured record of a single thing that happened to a
+// TaskChange is the structured record of a single thing that happened to a
 // task. It is the single source that projects to both the persisted audit
 // log row (Log) and the in-memory change notification (Notification).
 //
-// One TaskEvent is constructed per task per atomic change at every site that
+// One TaskChange is constructed per task per atomic change at every site that
 // today calls store.CreateLog or apiserver.Server.publish with a task in
 // scope. The value is constructed inside the same transaction closure that
 // updates the task, written to the log inside the transaction, and projected
 // to a notification after commit.
-type TaskEvent struct {
+type TaskChange struct {
     TaskID int64
-    Kind   TaskEventKind
+    Kind   TaskChangeKind
 
     // Actor identifies who or what caused the event. Populated from the
     // apiauth.UserInfo at API entry points; "runner" / "webhook" /
     // "archiver" for internal subsystems.
     Actor Actor
 
-    // Status is the task's status AFTER the event was applied. Always set
+    // Status is the task's status AFTER the change was applied. Meaningful
     // for kinds that can transition (lifecycle, status-mutating commands);
-    // zero for kinds that don't (LinkCreated, LogsAppended).
+    // carried verbatim from task.Status for the others so the projection
+    // can always read it.
     Status TaskStatus
 
     // Changed is the set of fields mutated by an UpdateTask-style call.
-    // Used by Kind == TaskEventUpdated to render "name, instructions, status".
+    // Used by Kind == TaskChangeUpdated to render "name, instructions, status".
     Changed []string
 
     // Event, if non-nil, is the triggering external event for
-    // TaskEventWoken. Carries Description and URL into Log() / Notification().
+    // TaskChangeWoken. Carries Description and URL into Log() / Notification().
     Event *Event
 
     // Exit, if non-nil, carries runner lifecycle context for
-    // TaskEventContainerExited / TaskEventContainerFailed: the runner event
+    // TaskChangeContainerExited / TaskChangeContainerFailed: the runner event
     // type and the resulting task status. Kept as a sub-struct so the
-    // TaskEvent stays compact for kinds that don't need it.
+    // TaskChange stays compact for kinds that don't need it.
     Exit *ExitInfo
 
     // Time the event was observed. Set by the constructor; copied verbatim
@@ -152,20 +153,20 @@ enough that a `Kind` enum (not a free-text string) is the right shape: each
 kind has a known projection to log text and to channel-message gating.
 
 ```go
-type TaskEventKind int
+type TaskChangeKind int
 
 const (
-    TaskEventCreated          TaskEventKind = iota // CreateTask
-    TaskEventUpdated                               // UpdateTask (name / instructions / archive_after / start)
-    TaskEventCancelled                             // CancelTask (terminal or Cancelling)
-    TaskEventRestarted                             // RestartTask
-    TaskEventArchived                              // ArchiveTask (manual)
-    TaskEventUnarchived                            // UnarchiveTask
-    TaskEventAutoArchived                          // archiver.archive (deadline tick)
-    TaskEventWoken                                 // eventrouter.attach
-    TaskEventContainerStarted                      // RunnerEventStarted (applied)
-    TaskEventContainerExited                       // RunnerEventStopped (applied, with resulting Status)
-    TaskEventContainerFailed                       // RunnerEventFailed (applied)
+    TaskChangeCreated          TaskChangeKind = iota // CreateTask
+    TaskChangeUpdated                               // UpdateTask (name / instructions / archive_after / start)
+    TaskChangeCancelled                             // CancelTask (terminal or Cancelling)
+    TaskChangeRestarted                             // RestartTask
+    TaskChangeArchived                              // ArchiveTask (manual)
+    TaskChangeUnarchived                            // UnarchiveTask
+    TaskChangeAutoArchived                          // archiver.archive (deadline tick)
+    TaskChangeWoken                                 // eventrouter.attach
+    TaskChangeContainerStarted                      // RunnerEventStarted (applied)
+    TaskChangeContainerExited                       // RunnerEventStopped (applied, with resulting Status)
+    TaskChangeContainerFailed                       // RunnerEventFailed (applied)
 )
 ```
 
@@ -173,10 +174,10 @@ This is closed and load-bearing. There is no free-text "other" kind: every
 publish site that currently has a task in scope maps cleanly to one of the
 above. The few `s.publish` sites that have no task in scope (event creation,
 key management, workspace registration, org membership) stay as plain
-`model.Notification` and are out of scope for `TaskEvent` (see scope boundary
+`model.Notification` and are out of scope for `TaskChange` (see scope boundary
 below).
 
-The two existing task-event-adjacent kinds that do **not** become `TaskEvent`
+The two existing task-event-adjacent kinds that do **not** become `TaskChange`
 values:
 
 - **`UploadLogs` agent log append** (`apiserver/log.go:31`). The agent uploads
@@ -189,11 +190,11 @@ values:
 - **`CreateLink`** (`apiserver/link.go:36`). Link creation is the agent
   attaching a reference to its own task, with no status transition and no
   call-site `CreateLog`. It produces a `Resources: [task_links, link]`
-  notification only. Folding link-create into a `TaskEvent` would force a
+  notification only. Folding link-create into a `TaskChange` would force a
   log-on-every-link policy that no caller has asked for and would noisy the
   audit log with rows the user already sees in the Links pane.
 
-These two exclusions are deliberate: `TaskEvent` is the projection target for
+These two exclusions are deliberate: `TaskChange` is the projection target for
 sites that **today already write both** a log row and a publish. The few
 publish-only or log-only sites without a peer remain as they are.
 
@@ -203,9 +204,9 @@ The type owns two pure projections:
 
 ```go
 // Log renders the audit-log row for this event. Always non-empty — every
-// TaskEvent logs. This is the key user-visible payoff: rich text replaces
+// TaskChange logs. This is the key user-visible payoff: rich text replaces
 // the canned "container started" / "webhook started task" lines.
-func (e *TaskEvent) Log() Log {
+func (e *TaskChange) Log() Log {
     return Log{
         TaskID:    e.TaskID,
         Type:      e.logType(),
@@ -217,13 +218,13 @@ func (e *TaskEvent) Log() Log {
 // Notification projects the event into a model.Notification suitable for
 // publication via apiserver.Server.publish. The envelope (OrgID, UserID,
 // ClientID, Runner) is supplied by the caller via Envelope — those fields
-// are caller state, not task fact, so the TaskEvent does not carry them.
+// are caller state, not task fact, so the TaskChange does not carry them.
 //
 // ChannelMessage is populated only for agent-actionable kinds; log-only
 // kinds (container_started, auto_archived, etc.) leave it empty, which the
 // channel forwarder gates on. This generalizes the "empty ChannelMessage
 // means silent" rule from PR #725 into a structural property of the kind.
-func (e *TaskEvent) Notification(env Envelope) Notification {
+func (e *TaskChange) Notification(env Envelope) Notification {
     return Notification{
         Type:           "change",
         Resources:      e.resources(),
@@ -236,7 +237,7 @@ func (e *TaskEvent) Notification(env Envelope) Notification {
     }
 }
 
-// Envelope is the caller/transport context that the TaskEvent itself does
+// Envelope is the caller/transport context that the TaskChange itself does
 // not own.
 type Envelope struct {
     OrgID    int64
@@ -324,9 +325,9 @@ one channel message.
 The `Updated` kind preserves that shape:
 
 ```go
-ev := model.TaskEvent{
+ev := model.TaskChange{
     TaskID:  task.ID,
-    Kind:    model.TaskEventUpdated,
+    Kind:    model.TaskChangeUpdated,
     Actor:   actorFromCaller(caller),
     Status:  task.Status,
     Changed: changed, // accumulated inside the closure, as today
@@ -348,25 +349,25 @@ when `Start` queued runner work — the same condition PR #725 already uses.
 
 No multi-event-per-call shape is needed; `UpdateTask` is the only accumulator
 site. Other sites (CreateTask, ArchiveTask, runner events, etc.) produce
-exactly one `TaskEvent` per call by construction.
+exactly one `TaskChange` per call by construction.
 
 ### The transaction-boundary seam
 
 Logs are written inside the transaction via `store.CreateLog`; notifications
-are published after commit via `s.publish`. The `TaskEvent` value spans this
+are published after commit via `s.publish`. The `TaskChange` value spans this
 boundary: it is built once inside the `WithTx` closure, used immediately to
 write the log row inside the transaction, and stashed in an outer-scope
 variable for use after commit:
 
 ```go
-var ev model.TaskEvent
+var ev model.TaskChange
 err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
     task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
     if err != nil { return err }
     // mutate task...
     if err := s.store.UpdateTask(ctx, tx, task); err != nil { return err }
-    ev = model.TaskEvent{
-        TaskID: task.ID, Kind: model.TaskEventCreated, /* ... */
+    ev = model.TaskChange{
+        TaskID: task.ID, Kind: model.TaskChangeCreated, /* ... */
         Time: time.Now(),
     }
     if err := s.store.CreateLog(ctx, tx, ev.Log().Ptr()); err != nil { return err }
@@ -384,7 +385,7 @@ s.publish(ev.Notification(model.Envelope{
 This matches the existing structure of every handler in `apiserver/task.go`
 (the `notification` value is already declared above the `WithTx` and filled
 inside the closure). The shape of the diff at each call site is "replace two
-hand-written values with one `TaskEvent` construction, then call its two
+hand-written values with one `TaskChange` construction, then call its two
 projections."
 
 For `eventrouter.attach` (`internal/eventrouter/eventrouter.go:117`), the
@@ -398,16 +399,16 @@ The notification carries caller/transport context (`OrgID`, `UserID`,
 `ClientID`, `Runner`) that is **not** a fact about the task — it's a fact
 about the request. Two options:
 
-- (a) `TaskEvent` carries an `Envelope` field, populated by the constructor.
+- (a) `TaskChange` carries an `Envelope` field, populated by the constructor.
 - (b) `Notification(env Envelope)` takes the envelope as an argument.
 
 **Recommend (b).** The envelope changes between authoring and projection in
 one important case: `Runner` is `task.PendingRunner()`, which is a derived
-value from the post-commit task state — keeping it out of the `TaskEvent`
+value from the post-commit task state — keeping it out of the `TaskChange`
 makes it explicit that the caller decides which envelope to attach (and lets
 the runner field reflect the final committed task, since the closure sets
 `Runner: task.PendingRunner()` after the task has been mutated). It also
-keeps `TaskEvent` JSON-clean: the type can be logged or printed without
+keeps `TaskChange` JSON-clean: the type can be logged or printed without
 leaking caller identity.
 
 ### Call-site survey
@@ -415,7 +416,7 @@ leaking caller identity.
 Surveyed with `rg "CreateLog\(|\.[Pp]ublish\(" internal/`. Task-scoped sites
 listed; non-task `s.publish` sites are out of scope (see scope boundary).
 
-| File:line | Site | Current log | Current ChannelMessage | TaskEvent Kind | Rich Log | Notifies? |
+| File:line | Site | Current log | Current ChannelMessage | TaskChange Kind | Rich Log | Notifies? |
 | --- | --- | --- | --- | --- | --- | --- |
 | `apiserver/task.go:107,120` | `CreateTask` | `<actor> created task` | `Task N created on R/W.` | `Created` | `<actor> created task on R/W` | yes |
 | `apiserver/task.go:210,234` | `UpdateTask` | `<actor> updated task: <changed>` | `Task N queued: <changed>.` (only when `Start`) | `Updated` | `<actor> updated task: <changed>[; started]` | yes iff queued |
@@ -437,7 +438,7 @@ listed; non-task `s.publish` sites are out of scope (see scope boundary).
 | `archiver/archiver.go:126,142` | `archive` (auto-archive tick) | `auto-archived: archive_after deadline reached` | (none) | `AutoArchived` | unchanged | no (silent) |
 
 Eleven kinds; one closed enum; every site that currently writes both a log
-and a publish becomes a single `TaskEvent` construction.
+and a publish becomes a single `TaskChange` construction.
 
 ### Runner lifecycle enrichment
 
@@ -462,7 +463,7 @@ Under this proposal:
 ```go
 applied = task.ApplyRunnerEvent(&event)
 if !applied { return nil }
-ev := model.TaskEvent{
+ev := model.TaskChange{
     TaskID: task.ID,
     Kind:   kindFromRunnerEvent(event.Event),  // Started / Exited / Failed
     Actor:  Actor{Kind: "runner", Name: caller.Name},
@@ -498,7 +499,7 @@ misleading `container exited successfully`.
 event-only changes that have no task in scope. **This asymmetry is the reason
 the new type is task-scoped.**
 
-In-scope (becomes a `TaskEvent`):
+In-scope (becomes a `TaskChange`):
 
 - Every site in `apiserver/task.go`, `apiserver/runner.go`
 - `eventrouter/eventrouter.go` `attach`
@@ -515,7 +516,7 @@ Out-of-scope (stays plain `model.Notification`):
 - `apiserver/org.go` `AddOrgMember`, `RemoveOrgMember`
 
 These continue to construct `model.Notification` literals as today. No
-`TaskEvent`, no `ChannelMessage`, no log row. The presence of the
+`TaskChange`, no `ChannelMessage`, no log row. The presence of the
 out-of-scope set is the reason for not merging `model.Log` and
 `model.Notification` outright (see Alternatives below).
 
@@ -534,7 +535,7 @@ Two reasons:
 
 1. **Single source is achieved at the projection layer**, not the schema
    layer. The current duplication is in the *construction* of log strings and
-   channel strings; making them flow from one `TaskEvent` value fixes that
+   channel strings; making them flow from one `TaskChange` value fixes that
    without touching disk. A migration is not required to fix the listed
    problems.
 2. **Structured-in-DB is a follow-up.** If the audit log later needs to be
@@ -542,7 +543,7 @@ Two reasons:
    "aggregate `Woken` per source"), a follow-up proposal can add
    `logs.kind text NOT NULL` and `logs.payload jsonb`, backfill from
    `Content` parsing or leave old rows opaque, and have `Log()` populate the
-   new columns. That work is orthogonal: the `TaskEvent` value already
+   new columns. That work is orthogonal: the `TaskChange` value already
    carries the structure; only the persistence target would change.
 
 Stating the recommendation explicitly: **first step is free-text-rendered;
@@ -565,7 +566,7 @@ structured-in-DB is deferred.**
     sees today (with rewordings where the proposal table differs from the
     current strings).
 - **`ChannelMessage` field.** Stays on `model.Notification`. The field is
-  *owned* by `TaskEvent.Notification()` once the change lands — every
+  *owned* by `TaskChange.Notification()` once the change lands — every
   task-scoped publish site sets it via the projection rather than by hand —
   but its position on the type and its consumer (the channel bridge) do not
   change. Non-task publishes leave it empty as they do today.
@@ -591,7 +592,7 @@ members) that has no log analogue and shouldn't grow one. Coupling the types
 would either bloat `Log` with non-task fields or force every workspace/key
 notification through a fake "task event," neither of which is justified.
 The asymmetry is real: every `Log` is task-scoped; not every `Notification`
-is. `TaskEvent` lives precisely in the intersection.
+is. `TaskChange` lives precisely in the intersection.
 
 **(c) Structured logs in the DB up front.** Add `logs.kind`, `logs.payload
 jsonb`, migrate every row, and re-render on read. Rejected as too large for
@@ -611,30 +612,31 @@ those. The PR-#725 prior art makes the same closed-set argument for
 *body* because it varies per emission; an enum is the right answer for the
 *kind* because the set is closed).
 
-**(e) Name it `TaskChange` instead of `TaskEvent`.** Considered. `TaskChange`
-reads more accurately for the audit-log domain (each row is a change), but
-`TaskEvent` reads more accurately for the runner-lifecycle and webhook-wake
-kinds (which aren't user-driven changes — they're events the task experienced
-from outside). The webhook wake (`Woken`) is the load-bearing case: it's
-neither a user-change nor a status-change-on-its-own; it's an *event* the
-task observed. We already have `model.Event` for external triggers, so
-naming this `TaskEvent` introduces a near-collision — but the existing
-`Event` is the *external* event, while `TaskEvent` is the *task's reaction
-record*; they appear together (the `Woken` kind carries an `*Event` field
-pointing at the triggering external event). The distinction is real and is
-worth the slight naming overlap. Recommend `TaskEvent`. (If reviewers prefer
-`TaskChange` the projection design is identical.)
+**(e) Name it `TaskEvent` instead of `TaskChange`.** Considered and rejected
+in review. `TaskEvent` reads accurately for the runner-lifecycle and
+webhook-wake kinds (which aren't user-driven changes — they're events the
+task experienced from outside), but the codebase already has `model.Event`
+for external triggers, and the runner subsystem already uses the word
+"event" extensively (`model.RunnerEvent`, `RunnerEventStarted`,
+`SubmitRunnerEvents`, `eventrouter`). A second `TaskEvent` type sitting next
+to `model.Event` and `model.RunnerEvent` is a name-overload that reviewers
+flagged immediately. `TaskChange` is unambiguous: every kind in the enum
+(including `Woken`, which is the load-bearing borderline case) is a *change
+the task underwent* as a result of an external trigger or an internal
+transition, and the audit-log domain is exactly "things that changed."
+Recommend `TaskChange`; the projection design is identical to the
+`TaskEvent` variant.
 
 ## Test plan
 
-The projections are pure functions of a `TaskEvent` value, so most of the
+The projections are pure functions of a `TaskChange` value, so most of the
 test surface is table-driven over `(kind, populated fields) → (expected log
 content, expected channel message, expected resources)`.
 
 **`internal/model/taskevent_test.go`** (new):
 
-- `TestTaskEvent_Log_Projection` — table-driven over every `Kind` with a
-  representative populated `TaskEvent`. Asserts `ev.Log().Content` matches
+- `TestTaskChange_Log_Projection` — table-driven over every `Kind` with a
+  representative populated `TaskChange`. Asserts `ev.Log().Content` matches
   the expected rendered string for each kind. Includes:
   - `Created` produces `<actor> created task on <runner>/<workspace>`.
   - `Woken` with `Event{Description: "PR comment from alice", URL:
@@ -643,7 +645,7 @@ content, expected channel message, expected resources)`.
   - `ContainerExited` with `Status: Pending` produces `container exited;
     task pending` (the re-queue case, distinguishing it from the
     `Completed` case).
-- `TestTaskEvent_Notification_ChannelMessage` — table-driven over every
+- `TestTaskChange_Notification_ChannelMessage` — table-driven over every
   `Kind`. Asserts:
   - Agent-actionable kinds produce a non-empty `ChannelMessage` containing
     the task id.
@@ -652,10 +654,10 @@ content, expected channel message, expected resources)`.
   - `ContainerExited` with `Status: Pending` (re-queue) produces `""` — the
     log row fires but the channel stays silent until the *next* exit
     resolves to a terminal status.
-- `TestTaskEvent_Notification_Envelope` — assert the `Envelope` argument is
+- `TestTaskChange_Notification_Envelope` — assert the `Envelope` argument is
   copied verbatim into `OrgID`, `UserID`, `ClientID`, `Runner` and is not
   derived from the event itself.
-- `TestTaskEvent_Updated_Accumulation` — construct an `Updated` event with
+- `TestTaskChange_Updated_Accumulation` — construct an `Updated` event with
   `Changed: []string{"name", "instructions", "status"}` and assert (i)
   `Log().Content` includes the comma-joined list, (ii) `channelMessage()`
   includes the joined list when `Runner` envelope is set (queued) and is
@@ -674,7 +676,7 @@ content, expected channel message, expected resources)`.
 
 **`internal/server/apiserver/task_test.go`** (existing):
 
-- `TestUpdateTask_TaskEvent_LogAndChannelAgree` — call `UpdateTask` with
+- `TestUpdateTask_TaskChange_LogAndChannelAgree` — call `UpdateTask` with
   `Name`, `AddInstructions`, and `Start: true`. Assert the persisted log row
   Content and the published Notification's ChannelMessage are both derived
   from the same `Changed` slice (no risk of them drifting). The test
@@ -721,5 +723,5 @@ tests are pure.
 - **Truncation.** Same open question as PR #725: should `Log()` cap content
   length (e.g. 2KB) to defend against a runaway `event.Description`? Cheap
   insurance; default to be decided in implementation.
-- **`TaskEvent` vs `TaskChange`.** Recommended `TaskEvent` above; reviewers
-  may want to revisit if the proximity to `model.Event` is judged confusing.
+- ~~**`TaskEvent` vs `TaskChange`.**~~ Resolved in review: `TaskChange`,
+  because `TaskEvent` collides with `model.Event` and `model.RunnerEvent`.
