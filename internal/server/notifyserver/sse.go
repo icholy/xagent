@@ -45,17 +45,12 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
+	sw, err := sse.NewServerWriter(w)
+	if err != nil {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	sw := sse.NewWriter(w)
 	var seq int64
 
 	// Send ready event so clients know the subscription is live.
@@ -70,7 +65,6 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		return
 	}
-	flusher.Flush()
 
 	ctx := r.Context()
 	for {
@@ -92,7 +86,6 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 			}); err != nil {
 				return
 			}
-			flusher.Flush()
 		case <-ctx.Done():
 			return
 		}

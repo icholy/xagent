@@ -23,14 +23,14 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
-	"github.com/icholy/xagent/internal/runner/containerbuild"
-	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/model"
-	"github.com/icholy/xagent/internal/runner/prebuilt"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/runner/containerbuild"
+	"github.com/icholy/xagent/internal/runner/prebuilt"
+	"github.com/icholy/xagent/internal/runner/workspace"
+	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/x/safesem"
 	"github.com/icholy/xagent/internal/x/wakeup"
-	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"golang.org/x/sync/errgroup"
 )
@@ -116,6 +116,9 @@ func New(opts Options) (*Runner, error) {
 // slot is released so the main loop can immediately retry tasks that were
 // previously skipped for being over the limit.
 func (r *Runner) WakeC() <-chan struct{} { return r.wake }
+
+// Wake signals the runner's main loop to poll immediately.
+func (r *Runner) Wake() { r.wake.Wake() }
 
 func (r *Runner) Close() error {
 	return errors.Join(
