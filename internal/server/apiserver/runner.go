@@ -53,32 +53,31 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if applied {
-			var channelMessage string
-			switch task.Status {
-			case model.TaskStatusCompleted:
-				channelMessage = fmt.Sprintf("Task %d completed.", task.ID)
-			case model.TaskStatusFailed:
-				channelMessage = fmt.Sprintf("Task %d failed.", task.ID)
-			case model.TaskStatusCancelled:
-				channelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
-			default:
-				if task.PendingRunner() != "" {
-					channelMessage = fmt.Sprintf("Task %d restarting.", task.ID)
-				}
-			}
-			s.publish(model.Notification{
+			notification := model.Notification{
 				Type: "change",
 				Resources: []model.NotificationResource{
 					{Action: "updated", Type: "task", ID: event.TaskID},
 					{Action: "appended", Type: "task_logs", ID: event.TaskID},
 				},
-				OrgID:          caller.OrgID,
-				Runner:         task.PendingRunner(),
-				UserID:         caller.ID,
-				ClientID:       caller.ClientID,
-				Time:           time.Now(),
-				ChannelMessage: channelMessage,
-			})
+				OrgID:    caller.OrgID,
+				Runner:   task.PendingRunner(),
+				UserID:   caller.ID,
+				ClientID: caller.ClientID,
+				Time:     time.Now(),
+			}
+			switch task.Status {
+			case model.TaskStatusCompleted:
+				notification.ChannelMessage = fmt.Sprintf("Task %d completed.", task.ID)
+			case model.TaskStatusFailed:
+				notification.ChannelMessage = fmt.Sprintf("Task %d failed.", task.ID)
+			case model.TaskStatusCancelled:
+				notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
+			default:
+				if task.PendingRunner() != "" {
+					notification.ChannelMessage = fmt.Sprintf("Task %d restarting.", task.ID)
+				}
+			}
+			s.publish(notification)
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
