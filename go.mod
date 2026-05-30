@@ -19,7 +19,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/justinas/alice v1.2.0
 	github.com/lib/pq v1.12.3
-	github.com/modelcontextprotocol/go-sdk v1.4.1
+	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/urfave/cli/v3 v3.9.0
 	github.com/zitadel/oidc/v3 v3.45.5
 	github.com/zitadel/zitadel-go/v3 v3.29.0
@@ -84,7 +84,7 @@ require (
 	github.com/google/go-containerregistry v0.21.5 // indirect
 	github.com/google/go-github/v84 v84.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
