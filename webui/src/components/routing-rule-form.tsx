@@ -10,7 +10,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
-import { EVENT_TYPES, findEventType, type EventTypeOption } from '@/lib/routing-rules'
+import {
+  EVENT_TYPES,
+  findEventType,
+  findEventTypeById,
+  legacyEventTypeOption,
+  mentionCopyForSource,
+} from '@/lib/routing-rules'
 
 export interface RoutingRuleFormValues {
   source: string
@@ -24,35 +30,6 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   type: '',
   prefix: '',
   mention: '',
-}
-
-interface MentionCopy {
-  label: string
-  placeholder: string
-  help: string
-}
-
-function mentionCopyForSource(source: string): MentionCopy {
-  switch (source) {
-    case 'github':
-      return {
-        label: 'Mentions user',
-        placeholder: 'octocat',
-        help: 'GitHub username (no leading @). Matches @-mentions of this user in the event body.',
-      }
-    case 'atlassian':
-      return {
-        label: 'Mentions account',
-        placeholder: '5b10ac8d82e05b22cc7d4ef5',
-        help: 'Atlassian account ID. The form wraps it as [~accountid:…] when matching — enter just the bare id.',
-      }
-    default:
-      return {
-        label: 'Mention',
-        placeholder: 'Username or account id',
-        help: 'Pick an event type to see the expected format.',
-      }
-  }
 }
 
 interface RoutingRuleFormProps {
@@ -74,23 +51,16 @@ export function RoutingRuleForm({
 }: RoutingRuleFormProps) {
   const [values, setValues] = useState<RoutingRuleFormValues>(initialValues)
 
-  // If the rule we're editing carries a (source, type) combination that isn't in the
-  // hardcoded list — e.g. a legacy wildcard rule with empty source — expose it as an
-  // extra dropdown option so it stays selectable and the stored values are preserved.
-  const legacyOption = useMemo<EventTypeOption | null>(() => {
+  // For a brand-new rule (no fields set), suppress the synthetic legacy option so
+  // the user doesn't see a "Legacy: (any) / (any)" entry in the dropdown.
+  const legacyOption = useMemo(() => {
     const isUntouched =
       !initialValues.source &&
       !initialValues.type &&
       !initialValues.prefix &&
       !initialValues.mention
     if (isUntouched) return null
-    if (findEventType(initialValues.source, initialValues.type)) return null
-    return {
-      id: `legacy:${initialValues.source}:${initialValues.type}`,
-      label: `Legacy: ${initialValues.source || '(any)'} / ${initialValues.type || '(any)'}`,
-      source: initialValues.source,
-      type: initialValues.type,
-    }
+    return legacyEventTypeOption(initialValues.source, initialValues.type)
   }, [initialValues])
 
   const selectedId = useMemo(() => {
@@ -110,7 +80,7 @@ export function RoutingRuleForm({
   const canSubmit = selectedId !== ''
 
   const handleEventTypeChange = (id: string) => {
-    const known = EVENT_TYPES.find((o) => o.id === id)
+    const known = findEventTypeById(id)
     if (known) {
       setValues({ ...values, source: known.source, type: known.type })
       return
