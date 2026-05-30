@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/x/mcpchannel"
 	"gotest.tools/v3/assert"
 )
 
@@ -13,7 +14,7 @@ func TestNotificationToChannels(t *testing.T) {
 	tests := []struct {
 		name string
 		in   model.Notification
-		want []channelParams
+		want []mcpchannel.Params
 	}{
 		{
 			name: "ready dropped",
@@ -34,7 +35,7 @@ func TestNotificationToChannels(t *testing.T) {
 					{Action: "updated", Type: "task", ID: 42},
 				},
 			},
-			want: []channelParams{{
+			want: []mcpchannel.Params{{
 				Content: "task 42 was updated.",
 				Meta: map[string]string{
 					"action":   "updated",
@@ -56,7 +57,7 @@ func TestNotificationToChannels(t *testing.T) {
 					{Action: "created", Type: "event", ID: 5},
 				},
 			},
-			want: []channelParams{
+			want: []mcpchannel.Params{
 				{Content: "task 1 was created.", Meta: map[string]string{"action": "created", "resource": "task", "id": "1"}},
 				{Content: "log 2 was appended.", Meta: map[string]string{"action": "appended", "resource": "log", "id": "2"}},
 				{Content: "task_logs 3 was appended.", Meta: map[string]string{"action": "appended", "resource": "task_logs", "id": "3"}},
@@ -75,7 +76,7 @@ func TestNotificationToChannels(t *testing.T) {
 					{Action: "updated", Type: "workspace", ID: 100},
 				},
 			},
-			want: []channelParams{
+			want: []mcpchannel.Params{
 				{Content: "task 1 was updated.", Meta: map[string]string{"action": "updated", "resource": "task", "id": "1"}},
 			},
 		},

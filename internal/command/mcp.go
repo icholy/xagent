@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/icholy/xagent/internal/server/mcpserver"
+	"github.com/icholy/xagent/internal/x/mcpchannel"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/urfave/cli/v3"
@@ -53,14 +54,12 @@ var McpCommand = &cli.Command{
 		}, &mcp.ServerOptions{
 			Instructions: mcpserver.Instructions + "\n\n" + channelInstructions,
 			Capabilities: &mcp.ServerCapabilities{
-				Experimental: map[string]any{
-					"claude/channel": map[string]any{},
-				},
+				Experimental: mcpchannel.Experimental(),
 			},
 		})
 		mcpserver.AddTools(server, client)
 
-		transport := newChannelTransport(&mcp.StdioTransport{})
+		transport := mcpchannel.NewTransport(&mcp.StdioTransport{})
 		session, err := server.Connect(ctx, transport, nil)
 		if err != nil {
 			return err
