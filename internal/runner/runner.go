@@ -117,6 +117,9 @@ func New(opts Options) (*Runner, error) {
 // previously skipped for being over the limit.
 func (r *Runner) WakeC() <-chan struct{} { return r.wake }
 
+// Wake signals the runner's main loop to poll immediately.
+func (r *Runner) Wake() { r.wake.Wake() }
+
 func (r *Runner) Close() error {
 	return errors.Join(
 		r.proxy.Close(),

@@ -72,14 +72,14 @@ func (f *fakeNotifyServer) query() string {
 	return f.lastQuery
 }
 
-// runSubscriber starts sub.Run in a goroutine and ensures it shuts down
-// before the test ends.
-func runSubscriber(t *testing.T, sub *xagentclient.NotificationSubscriber) {
+// runClient starts c.Run in a goroutine and ensures it shuts down before
+// the test ends.
+func runClient(t *testing.T, c *xagentclient.EventStreamClient) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
-		_ = sub.Run(ctx)
+		_ = c.Run(ctx)
 		close(done)
 	}()
 	t.Cleanup(func() {
@@ -87,7 +87,7 @@ func runSubscriber(t *testing.T, sub *xagentclient.NotificationSubscriber) {
 		select {
 		case <-done:
 		case <-time.After(time.Second):
-			t.Error("subscriber did not stop")
+			t.Error("client did not stop")
 		}
 	})
 }
@@ -104,17 +104,17 @@ func recv[T any](t *testing.T, ch <-chan T, d time.Duration, msg string) T {
 	}
 }
 
-func TestNotificationSubscriber_DecodesEvents(t *testing.T) {
+func TestEventStreamClient_DecodesEvents(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	f := newFakeNotifyServer(t)
 	received := make(chan model.Notification, 8)
-	sub := xagentclient.NewNotificationSubscriber(xagentclient.NotificationSubscriberOptions{
+	c := xagentclient.NewEventStreamClient(xagentclient.EventStreamClientOptions{
 		BaseURL: f.URL,
 		Runner:  "runner-1",
 		Handler: func(n model.Notification) { received <- n },
 	})
-	runSubscriber(t, sub)
+	runClient(t, c)
 
 	// Act + Assert: the ready event flows through decoded.
 	ready := recv(t, received, time.Second, "ready notification")
@@ -140,16 +140,16 @@ func TestNotificationSubscriber_DecodesEvents(t *testing.T) {
 	assert.Equal(t, f.query(), "runner=runner-1")
 }
 
-func TestNotificationSubscriber_NoRunnerFilter(t *testing.T) {
+func TestEventStreamClient_NoRunnerFilter(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	f := newFakeNotifyServer(t)
 	received := make(chan model.Notification, 4)
-	sub := xagentclient.NewNotificationSubscriber(xagentclient.NotificationSubscriberOptions{
+	c := xagentclient.NewEventStreamClient(xagentclient.EventStreamClientOptions{
 		BaseURL: f.URL,
 		Handler: func(n model.Notification) { received <- n },
 	})
-	runSubscriber(t, sub)
+	runClient(t, c)
 
 	// Act
 	recv(t, received, time.Second, "ready notification")
@@ -158,24 +158,24 @@ func TestNotificationSubscriber_NoRunnerFilter(t *testing.T) {
 	assert.Equal(t, f.query(), "")
 }
 
-func TestNotificationSubscriber_ReconnectsOnDrop(t *testing.T) {
+func TestEventStreamClient_ReconnectsOnDrop(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	f := newFakeNotifyServer(t)
 	received := make(chan model.Notification, 8)
-	sub := xagentclient.NewNotificationSubscriber(xagentclient.NotificationSubscriberOptions{
+	c := xagentclient.NewEventStreamClient(xagentclient.EventStreamClientOptions{
 		BaseURL:           f.URL,
 		Runner:            "runner-1",
 		ReconnectInterval: 10 * time.Millisecond,
 		Handler:           func(n model.Notification) { received <- n },
 	})
-	runSubscriber(t, sub)
+	runClient(t, c)
 	recv(t, received, time.Second, "initial ready")
 
 	// Act: drop the connection.
 	f.CloseClientConnections()
 
-	// Assert: the subscriber reconnects and we see a second ready, and a
+	// Assert: the client reconnects and we see a second ready, and a
 	// change event posted afterward flows through.
 	recv(t, received, 2*time.Second, "ready after reconnect")
 	assert.Assert(t, f.connects.Load() >= 2, "expected at least 2 connections, got %d", f.connects.Load())
@@ -185,7 +185,7 @@ func TestNotificationSubscriber_ReconnectsOnDrop(t *testing.T) {
 	assert.Equal(t, got.Type, "change")
 }
 
-func TestNotificationSubscriber_SkipsMalformedData(t *testing.T) {
+func TestEventStreamClient_SkipsMalformedData(t *testing.T) {
 	t.Parallel()
 	// Arrange: a handler that writes a malformed event followed by a valid one.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -195,7 +195,7 @@ func TestNotificationSubscriber_SkipsMalformedData(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
-		// Malformed JSON payload — subscriber must log and continue.
+		// Malformed JSON payload — client must log and continue.
 		_, _ = io.WriteString(w, "event: ready\ndata: not-json\n\n")
 		// Valid event afterwards.
 		data, _ := json.Marshal(model.Notification{Type: "change", OrgID: 9})
@@ -206,11 +206,11 @@ func TestNotificationSubscriber_SkipsMalformedData(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	received := make(chan model.Notification, 4)
-	sub := xagentclient.NewNotificationSubscriber(xagentclient.NotificationSubscriberOptions{
+	c := xagentclient.NewEventStreamClient(xagentclient.EventStreamClientOptions{
 		BaseURL: srv.URL,
 		Handler: func(n model.Notification) { received <- n },
 	})
-	runSubscriber(t, sub)
+	runClient(t, c)
 
 	// Act + Assert: malformed event is skipped; subsequent valid event arrives.
 	got := recv(t, received, time.Second, "change after malformed")

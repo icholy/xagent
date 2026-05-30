@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/configfile"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/common"
@@ -194,20 +194,16 @@ var RunnerCommand = &cli.Command{
 		// Subscribe to server-sent task change notifications so the runner
 		// reacts to new commands immediately instead of waiting for the
 		// fallback poll.
-		sub := runner.NewSSESubscriber(runner.SSESubscriberOptions{
-			BaseURL:  serverAddr,
-			RunnerID: runnerID,
-			Client: &http.Client{
-				Transport: &xagentclient.AuthTransport{
-					Transport: http.DefaultTransport,
-					Token:     cfg.Token,
-				},
-			},
-			Log: log,
+		es := xagentclient.NewEventStreamClient(xagentclient.EventStreamClientOptions{
+			BaseURL:    serverAddr,
+			Runner:     runnerID,
+			HTTPClient: xagentclient.NewEventStreamHTTPClient(cfg.Token),
+			Log:        log,
+			Handler:    func(model.Notification) { r.Wake() },
 		})
 		go func() {
-			if err := sub.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				log.Error("SSE subscriber stopped", "error", err)
+			if err := es.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				log.Error("event stream stopped", "error", err)
 			}
 		}()
 
@@ -216,7 +212,6 @@ var RunnerCommand = &cli.Command{
 				log.Error("failed to poll tasks", "error", err)
 			}
 			select {
-			case <-sub.C():
 			case <-r.WakeC():
 			case <-time.After(pollInterval):
 			case <-ctx.Done():

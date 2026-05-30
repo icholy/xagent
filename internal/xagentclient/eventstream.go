@@ -20,30 +20,31 @@ import (
 // the SSE connection drops.
 const DefaultSSEReconnectInterval = 5 * time.Second
 
-// NotificationSubscriber connects to the server's /events SSE endpoint,
+// EventStreamClient connects to the server's /events SSE endpoint,
 // decodes each event into a model.Notification, and hands it to a caller
 // supplied handler. Reconnects automatically on disconnect.
-type NotificationSubscriber struct {
+type EventStreamClient struct {
 	baseURL   string
 	runner    string
-	client    *http.Client
+	http      *http.Client
 	log       *slog.Logger
 	reconnect time.Duration
 	handler   func(model.Notification)
 }
 
-// NotificationSubscriberOptions configures a NotificationSubscriber.
-type NotificationSubscriberOptions struct {
+// EventStreamClientOptions configures an EventStreamClient.
+type EventStreamClientOptions struct {
 	// BaseURL is the server URL (e.g. https://xagent.choly.ca).
 	BaseURL string
 	// Runner is sent as the ?runner= filter; when empty, no filter is sent
 	// and the server forwards the whole-org stream.
 	Runner string
-	// Client is the HTTP client used for SSE requests. It must not have a
-	// request timeout since SSE connections are long-lived; its transport
-	// is expected to attach authentication. Defaults to http.DefaultClient
-	// (which has no timeout but no auth either).
-	Client *http.Client
+	// HTTPClient is the HTTP client used for SSE requests. It must not
+	// have a request timeout since SSE connections are long-lived; its
+	// transport is expected to attach authentication. Defaults to
+	// http.DefaultClient (no timeout, no auth). Use NewEventStreamHTTPClient
+	// for a token-authed client suitable for this stream.
+	HTTPClient *http.Client
 	// Log is used for connection diagnostics.
 	Log *slog.Logger
 	// ReconnectInterval is the wait between reconnect attempts after a
@@ -54,12 +55,12 @@ type NotificationSubscriberOptions struct {
 	Handler func(model.Notification)
 }
 
-// NewNotificationSubscriber returns a new NotificationSubscriber.
-func NewNotificationSubscriber(opts NotificationSubscriberOptions) *NotificationSubscriber {
-	return &NotificationSubscriber{
+// NewEventStreamClient returns a new EventStreamClient.
+func NewEventStreamClient(opts EventStreamClientOptions) *EventStreamClient {
+	return &EventStreamClient{
 		baseURL:   opts.BaseURL,
 		runner:    opts.Runner,
-		client:    cmp.Or(opts.Client, http.DefaultClient),
+		http:      cmp.Or(opts.HTTPClient, http.DefaultClient),
 		log:       cmp.Or(opts.Log, slog.Default()),
 		reconnect: cmp.Or(opts.ReconnectInterval, DefaultSSEReconnectInterval),
 		handler:   opts.Handler,
@@ -68,29 +69,29 @@ func NewNotificationSubscriber(opts NotificationSubscriberOptions) *Notification
 
 // Run connects to the SSE endpoint and dispatches events to the handler
 // until ctx is done. It reconnects automatically on disconnect.
-func (s *NotificationSubscriber) Run(ctx context.Context) error {
+func (c *EventStreamClient) Run(ctx context.Context) error {
 	for {
-		err := s.connect(ctx)
+		err := c.connect(ctx)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err != nil {
-			s.log.Warn("SSE connection lost, reconnecting", "error", err)
+			c.log.Warn("SSE connection lost, reconnecting", "error", err)
 		}
-		if !common.SleepContext(ctx, s.reconnect) {
+		if !common.SleepContext(ctx, c.reconnect) {
 			return ctx.Err()
 		}
 	}
 }
 
-func (s *NotificationSubscriber) connect(ctx context.Context) error {
-	u, err := url.Parse(strings.TrimRight(s.baseURL, "/") + "/events")
+func (c *EventStreamClient) connect(ctx context.Context) error {
+	u, err := url.Parse(strings.TrimRight(c.baseURL, "/") + "/events")
 	if err != nil {
 		return fmt.Errorf("parse url: %w", err)
 	}
-	if s.runner != "" {
+	if c.runner != "" {
 		q := u.Query()
-		q.Set("runner", s.runner)
+		q.Set("runner", c.runner)
 		u.RawQuery = q.Encode()
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -98,7 +99,7 @@ func (s *NotificationSubscriber) connect(ctx context.Context) error {
 		return err
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	resp, err := s.client.Do(req)
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -119,9 +120,9 @@ func (s *NotificationSubscriber) connect(ctx context.Context) error {
 		}
 		var n model.Notification
 		if err := json.Unmarshal(ev.Data, &n); err != nil {
-			s.log.Warn("failed to decode notification", "error", err)
+			c.log.Warn("failed to decode notification", "error", err)
 			continue
 		}
-		s.handler(n)
+		c.handler(n)
 	}
 }

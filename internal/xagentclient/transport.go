@@ -16,11 +16,11 @@ func (t *AuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.Transport.RoundTrip(req)
 }
 
-// NewEventStreamClient returns an *http.Client suitable for long-lived SSE
-// connections: no request timeout, with the bearer token attached via
+// NewEventStreamHTTPClient returns an *http.Client suitable for long-lived
+// SSE connections: no request timeout, with the bearer token attached via
 // AuthTransport. Intended for token-only callers that need to talk to the
-// /events endpoint via NotificationSubscriber.
-func NewEventStreamClient(token string) *http.Client {
+// /events endpoint via EventStreamClient.
+func NewEventStreamHTTPClient(token string) *http.Client {
 	return &http.Client{
 		Transport: &AuthTransport{
 			Transport: http.DefaultTransport,
