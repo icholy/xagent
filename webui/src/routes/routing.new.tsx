@@ -1,10 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import { create } from '@bufbuild/protobuf'
-import {
-  getRoutingRules,
-  setRoutingRules,
-} from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { getRoutingRules, setRoutingRules } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
 import { Card, CardContent } from '@/components/ui/card'
 import { useOrgId } from '@/hooks/use-org-id'

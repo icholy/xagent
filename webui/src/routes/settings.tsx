@@ -471,9 +471,7 @@ function RoutingRulesCard() {
     <Card>
       <CardHeader>
         <CardTitle>Routing Rules</CardTitle>
-        <CardDescription>
-          Configure how events get routed to tasks and workspaces.
-        </CardDescription>
+        <CardDescription>Configure how events get routed to tasks and workspaces.</CardDescription>
         <CardAction>
           <Link to="/routing/new" search={{ org: orgId }}>
             <Button>
