@@ -61,10 +61,6 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				notification.ChannelMessage = fmt.Sprintf("Task %d failed.", task.ID)
 			case model.TaskStatusCancelled:
 				notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
-			default:
-				if task.PendingRunner() != "" {
-					notification.ChannelMessage = fmt.Sprintf("Task %d restarting.", task.ID)
-				}
 			}
 			return tx.Commit()
 		})
