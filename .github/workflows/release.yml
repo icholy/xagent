@@ -118,7 +118,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
 
       - name: Build and push server
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: server
@@ -132,7 +132,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push runner
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: runner
@@ -178,7 +178,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: containers
           file: containers/Dockerfile.debian
@@ -222,7 +222,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: containers
           file: containers/Dockerfile.mise
