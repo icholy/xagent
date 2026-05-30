@@ -185,12 +185,9 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 // overlapping txns can still produce duplicates — accepted as a v1
 // limitation.
 func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) error {
-	var (
-		task         *model.Task
-		notification model.Notification
-	)
+	var notification model.Notification
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		task = &model.Task{
+		task := &model.Task{
 			Name:         routedTaskName(input),
 			Runner:       rule.Create.Runner,
 			Workspace:    rule.Create.Workspace,
