@@ -24,9 +24,10 @@ This proposal reworks routing so that an org's rules can opt into creating a tas
 
 ### Overview
 
-1. Derive candidate orgs from the (linked) commenter via `ListOrgsByMember`, not from matched links. Routing then proceeds per org even when no link covers the URL.
+1. Load rules for every org the commenter is a member of in one query (`ListRoutingRulesForUser`). Routing then proceeds per org even when no link covers the URL.
 2. Extend `model.RoutingRule` with an embedded create-task action carrying `workspace`, `runner`, and `prompt`.
-3. In each org's per-org loop, decide wake-vs-create from that org's own state: if any subscribed link in the org covers the URL, wake (existing `attach` path); otherwise, if a matched rule has the create action, create the task and its subscribed link in a single transaction with an in-tx re-check that absorbs webhook redeliveries and back-to-back events.
+3. For each org, pick the **first matching rule** (rule ordering is significant). Drop orgs with no match. Then look up subscribed links — but only for orgs whose rule matched (`FindSubscribedLinksForOrgs`).
+4. If the org has a subscribed link covering the URL, wake (existing `attach` path). Otherwise, if the matched rule has the create action, create the task and its subscribed link in a single transaction with an in-tx re-check that absorbs webhook redeliveries and back-to-back events.
 
 The "commenter must be a linked xagent user" constraint stays unchanged. It is the security boundary: only events authored by a linked xagent user may create or wake tasks.
 
@@ -37,7 +38,7 @@ Both webhook handlers already resolve the commenter to an xagent user before inv
 - `internal/server/webhookserver/github.go:52` — `GetUserByGitHubUserID(extracted.githubUserID)`; `sql.ErrNoRows` drops the event.
 - `internal/server/webhookserver/atlassian.go:77` — `GetUserByAtlassianAccountID(extracted.atlassianAccountID)`; same drop behaviour.
 
-Routing extends from there. Candidate orgs are the orgs the commenter belongs to, via `Store.ListOrgsByMember(user.ID)` (`internal/store/org.go:48`). Each candidate org then evaluates its own routing rules and its own links independently.
+Routing extends from there. Candidate orgs are the orgs the commenter belongs to, loaded together with each org's routing rules in one query (§4, `ListRoutingRulesForUser`). Each candidate org then evaluates its own rules and its own links independently.
 
 **Rejected alternative — resolve orgs by GitHub installation id.** The `orgs` table already stores the installation id (`internal/store/org.go:171`, `SetOrgGitHubInstallation`), so an installation-keyed lookup is technically available. We reject it because it would let *any* commenter in an installed repo trigger task creation. The current invariant — "only linked xagent users can trigger tasks" — is a deliberate security feature, not a limitation. Keying on the installation breaks that invariant.
 
@@ -106,6 +107,42 @@ message CreateTaskAction {
 
 ### 4. Reworked `Route` flow
 
+#### 4a. Data access — two queries, both org-keyed
+
+Two new store methods replace the current `ListOrgsByMember` + `GetRoutingRulesByOrgs` + `FindSubscribedLinksForUser` triple used by routing today.
+
+**`ListRoutingRulesForUser(ctx, tx, userID string) (map[int64][]model.RoutingRule, error)`** — returns rules for every org the user is a member of, keyed by org id. It **must include orgs with no configured rules** (which fall back to `defaultRules`), so the join is grounded in `org_members`. Since rules are stored as a JSON column on the `orgs` row today (`GetOrgRoutingRules` unmarshals `org.routing_rules` from `internal/store/org.go:191`), the query is a plain membership join — there is no LEFT-JOIN concern, because the rules column is always present on `orgs`:
+
+```sql
+-- name: ListRoutingRulesForUser :many
+SELECT o.id, o.routing_rules
+FROM orgs o
+JOIN org_members m ON m.org_id = o.id
+WHERE m.user_id = $1 AND o.archived = FALSE;
+```
+
+> If routing rules are ever normalized into their own table, this query must become `LEFT JOIN routing_rules` so rule-less member orgs aren't dropped — they still need to fall back to `defaultRules`.
+
+`ListOrgsByMember` (`internal/store/org.go:48`) stays in place for its other callers; the routing path simply stops using it.
+
+**`FindSubscribedLinksForOrgs(ctx, tx, url string, orgIDs []int64) (map[int64][]*model.Link, error)`** — org-scoped, filters `subscribe = TRUE` in SQL, groups by org. Replaces `FindSubscribedLinksForUser` in the routing path:
+
+```sql
+-- name: FindSubscribedLinksForOrgs :many
+SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, t.org_id
+FROM task_links l
+JOIN tasks t ON l.task_id = t.id
+WHERE l.url = $1 AND l.subscribe = TRUE AND t.archived = FALSE
+  AND t.org_id = ANY($2::BIGINT[])
+ORDER BY t.org_id, l.created_at DESC;
+```
+
+The create-path re-check (§5) calls the same method scoped to a single org, so it drops its manual `if l.Subscribe` filter — the SQL already enforces it.
+
+`FindSubscribedLinksForUser` (`internal/store/sql/queries/link.sql:23-29`) has no other callers in the repo, so it can be retired with this change. The renamed in-router helper `links` replaces `find` (`internal/eventrouter/eventrouter.go:86`).
+
+#### 4b. Control flow — first matching rule per org
+
 The replacement for `internal/eventrouter/eventrouter.go:42-82`:
 
 ```go
@@ -114,52 +151,42 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
         return 0, nil
     }
 
-    // Candidate orgs come from the (linked) commenter, not from matched links.
-    orgs, err := r.Store.ListOrgsByMember(ctx, nil, input.UserID)
-    if err != nil {
-        return 0, err
-    }
-    if len(orgs) == 0 {
-        return 0, nil
-    }
-    orgIDs := make([]int64, len(orgs))
-    for i, o := range orgs {
-        orgIDs[i] = o.ID
-    }
-
-    // Per-org links (subscribed, matching URL) and per-org rules, in one pass each.
-    linksByOrg, err := r.find(ctx, input) // still scoped to user, still groups by org
-    if err != nil {
-        return 0, err
-    }
-    orgRules, err := r.Store.GetRoutingRulesByOrgs(ctx, nil, orgIDs)
+    rulesByOrg, err := r.Store.ListRoutingRulesForUser(ctx, nil, input.UserID)
     if err != nil {
         return 0, err
     }
 
-    var n int
-    for _, orgID := range orgIDs {
-        rules := orgRules[orgID]
+    // 1. First matching rule per org; orgs with no match are dropped.
+    matched := map[int64]*model.RoutingRule{}
+    for orgID, rules := range rulesByOrg {
         if len(rules) == 0 {
             rules = defaultRules
         }
-        // Collect the matching rules; first matched create-rule (if any) wins.
-        var matched bool
-        var createRule *model.RoutingRule
         for i := range rules {
-            if !input.MatchRule(rules[i]) {
-                continue
-            }
-            matched = true
-            if createRule == nil && rules[i].Create != nil {
-                createRule = &rules[i]
+            if input.MatchRule(rules[i]) {
+                matched[orgID] = &rules[i]
+                break
             }
         }
-        if !matched {
-            continue
-        }
+    }
+    if len(matched) == 0 {
+        return 0, nil
+    }
+
+    // 2. Link lookup runs only for orgs that have a matching rule.
+    orgIDs := make([]int64, 0, len(matched))
+    for orgID := range matched {
+        orgIDs = append(orgIDs, orgID)
+    }
+    linksByOrg, err := r.links(ctx, input.URL, orgIDs)
+    if err != nil {
+        return 0, err
+    }
+
+    // 3. Wake if a subscribed link exists; otherwise create if the matched rule opts in.
+    var n int
+    for orgID, rule := range matched {
         if links := linksByOrg[orgID]; len(links) > 0 {
-            // Wake-path: unchanged.
             event := &model.Event{Description: input.Description, Data: input.Data, URL: input.URL, OrgID: orgID}
             if err := r.Store.CreateEvent(ctx, nil, event); err != nil {
                 r.Log.Error("failed to create event", "org_id", orgID, "error", err)
@@ -174,10 +201,10 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
             }
             continue
         }
-        if createRule == nil {
+        if rule.Create == nil {
             continue
         }
-        created, err := r.create(ctx, input, orgID, createRule)
+        created, err := r.create(ctx, input, orgID, rule)
         if err != nil {
             r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
             continue
@@ -192,11 +219,11 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 
 Notes on this flow:
 
-- `find` (`internal/eventrouter/eventrouter.go:86`) is unchanged. Its result is now consumed as an org-keyed map looked up inside the per-org loop; orgs absent from the map simply have no matching link.
-- Per-org isolation falls out naturally: a matching link in org A has no effect on org B's wake-vs-create decision, because `linksByOrg[orgB]` is empty by construction.
+- The link query is scoped to **only the orgs with a matching rule**, not all member orgs. Member orgs with no matching rule never trigger a link query.
+- Per-org isolation still falls out naturally: each org has its own `matched[orgID]` rule and its own `linksByOrg[orgID]` slice; nothing crosses between orgs.
 - The wake branch reuses the existing `attach` helper (`internal/eventrouter/eventrouter.go:117-159`), so log lines, notifications, and the "webhook started task" audit log are unchanged for the existing case.
-- "First matched create-rule wins" is a deterministic, easy-to-explain tie-breaker. Multiple matching create-rules are pathological config; we don't try to merge or score them.
-- **No scope gap between the two link lookups.** The wake path uses `FindSubscribedLinksForUser` (user-scoped, `internal/store/sql/queries/link.sql:23-29`) and the create path's re-check (below) uses `FindLinksByURL` (org-scoped, same file lines 16-21, with an `if l.Subscribe` filter). For any candidate org the user is a member of — which is exactly the orgs we iterate, since they come from `ListOrgsByMember` — these queries return the same set of subscribed links for the URL. There is no "neither wake nor create" gap arising from the scope difference.
+- **First matching rule wins per org. Rule ordering is significant.** A wake-only rule ordered ahead of a create-rule shadows the create-rule — this is intentional. Users who want create behaviour for a specific event-shape order the create-rule first. If precedence semantics become unwieldy, explicit precedence (priority field, "most specific match wins", etc.) is a follow-up.
+- **No scope gap between the two link lookups.** Both the routing-path lookup (`FindSubscribedLinksForOrgs`, called via `r.links`) and the create-path re-check (§5, also `FindSubscribedLinksForOrgs` scoped to one org) filter `subscribe = TRUE` in SQL. They return the same set of subscribed links for a given org and URL. There is no "neither wake nor create" gap.
 
 ### 5. Atomic create + redelivery dedup
 
@@ -210,15 +237,13 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
     err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
         // Re-check inside the tx: a redelivered or back-to-back webhook may have
         // already committed a task+link for this (org, url) since Route's initial
-        // FindSubscribedLinksForUser call.
-        existing, err := r.Store.FindLinksByURL(ctx, tx, input.URL, orgID)
+        // FindSubscribedLinksForOrgs call.
+        existing, err := r.Store.FindSubscribedLinksForOrgs(ctx, tx, input.URL, []int64{orgID})
         if err != nil {
             return err
         }
-        for _, l := range existing {
-            if l.Subscribe {
-                return nil // dedup hit — leave the existing task; the wake path on the next event handles it
-            }
+        if len(existing[orgID]) > 0 {
+            return nil // dedup hit — leave the existing task; the wake path on the next event handles it
         }
 
         task := &model.Task{
@@ -322,15 +347,17 @@ The proposal does **not** design that form; it flags that the friendlier event-t
 
 `internal/eventrouter` already has table-driven tests in `eventrouter_test.go`; the new cases extend it:
 
-- **Route — wake unchanged** — `TestRouteCreatesEventAndStartsTask` (current) and `TestRouteMultipleOrgs` (current) keep passing without modification.
+- **Route — wake unchanged** — `TestRouteCreatesEventAndStartsTask` (current) and `TestRouteMultipleOrgs` (current) keep passing without modification (they exercise the membership-grounded query and wake path equally).
 - **Route — create on first event** — set up an org with a create-rule, no link, fire an event matching the rule's match fields; assert one task created with the expected workspace/runner/instructions and one subscribed link pointing at the event URL.
 - **Route — second event wakes the created task** — replay the same event; assert no second task created, and the existing task transitions through `attach`.
-- **Per-org isolation** — user belongs to org A (matching link) and org B (matching create-rule, no link). Assert A wakes its task and B creates a new one; the link in A does not suppress creation in B.
+- **Per-org isolation** — user belongs to org A (matching link, no create-rule) and org B (matching create-rule, no link). Assert A wakes its task and B creates a new one; the link in A does not suppress creation in B.
+- **First matching rule wins** — org with `[wake-only rule that matches, create-rule that also matches]`. Assert the wake-only rule shadows the create-rule (no task created when no link exists). Reorder to `[create-rule first, wake-only second]` and assert the create-rule fires.
+- **Rule-less org uses `defaultRules`** — org member of the user with `routing_rules = []`. Fire an event whose body starts with `xagent:` and matches a subscribed link in the org; assert the wake path runs. Fire one without the `xagent:` prefix and assert nothing happens. (Confirms the membership join returns the org and the fallback is applied.)
+- **Link query scoped to matched orgs** — user is a member of orgs A, B, C, only B has a matching rule. Assert `FindSubscribedLinksForOrgs` is called with `[B]` only. (Easiest to assert via the store moq.)
 - **Redelivery dedup** — fire the same `Route` call twice sequentially against an org with a create-rule. Assert exactly one task and one subscribed link exist after both return. This exercises the in-tx re-check.
-- **Multiple matched create-rules** — assert the first-in-list rule wins (deterministic tie-break).
 - **Create-rule that doesn't match** — rule with `mention: bot` against an event without the mention; assert no task is created.
 
-The dedup test belongs in `internal/eventrouter` with `teststore.New(t)` — `teststore` already spins up real Postgres, so the tx behaviour is exercised end-to-end.
+The dedup and rule-less-org tests belong in `internal/eventrouter` with `teststore.New(t)` — `teststore` already spins up real Postgres, so the tx behaviour and SQL join are exercised end-to-end.
 
 ## Trade-offs
 
