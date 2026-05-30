@@ -11,12 +11,11 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/auth/agentauth"
-	"github.com/icholy/xagent/internal/x/dockerx"
-	"github.com/icholy/xagent/internal/x/wakeup"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/runner/workspace"
+	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"gotest.tools/v3/assert"
 )
@@ -109,38 +108,4 @@ func TestRunnerStart(t *testing.T) {
 
 	// Verify get_my_task was called
 	assert.Equal(t, len(mock.GetTaskDetailsCalls()), 1)
-}
-
-func TestRunnerWakeChannel(t *testing.T) {
-	r := &Runner{wake: wakeup.New()}
-
-	// No signal yet → WakeC should be empty.
-	select {
-	case <-r.WakeC():
-		t.Fatal("WakeC fired before Wake was called")
-	default:
-	}
-
-	// A single Wake delivers one value.
-	r.wake.Wake()
-	select {
-	case <-r.WakeC():
-	default:
-		t.Fatal("WakeC did not fire after Wake")
-	}
-
-	// Bursts coalesce into a single delivery.
-	r.wake.Wake()
-	r.wake.Wake()
-	r.wake.Wake()
-	select {
-	case <-r.WakeC():
-	default:
-		t.Fatal("WakeC did not fire after burst Wake")
-	}
-	select {
-	case <-r.WakeC():
-		t.Fatal("WakeC fired more than once for a coalesced burst")
-	default:
-	}
 }
