@@ -25,11 +25,11 @@ function NewRoutingRulePage() {
     const rules = data?.rules ?? []
     const newRule = create(RoutingRuleSchema, values)
     await mutation.mutateAsync({ rules: [...rules, newRule] })
-    navigate({ to: '/settings', search: { tab: 'events', org: orgId } })
+    navigate({ to: '/events', search: { org: orgId } })
   }
 
   const handleCancel = () => {
-    navigate({ to: '/settings', search: { tab: 'events', org: orgId } })
+    navigate({ to: '/events', search: { org: orgId } })
   }
 
   return (

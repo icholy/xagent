@@ -123,6 +123,13 @@ function RootComponent() {
               Tasks
             </Link>
             <Link
+              to="/events"
+              search={{ org: currentOrgId }}
+              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+            >
+              Events
+            </Link>
+            <Link
               to="/workspaces"
               search={{ org: currentOrgId }}
               className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
