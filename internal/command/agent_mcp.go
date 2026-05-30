@@ -3,15 +3,15 @@ package command
 import (
 	"context"
 
+	"github.com/icholy/xagent/internal/agentmcp"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/xagentclient"
-	"github.com/icholy/xagent/internal/agentmcp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/urfave/cli/v3"
 )
 
-var McpCommand = &cli.Command{
-	Name:  "mcp",
+var AgentMcpCommand = &cli.Command{
+	Name:  "agent-mcp",
 	Usage: "Run an MCP server that provides xagent tools",
 	Flags: []cli.Flag{
 		&cli.StringFlag{

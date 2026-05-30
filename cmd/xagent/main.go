@@ -20,7 +20,6 @@ func main() {
 			command.TaskCommand,
 			command.ContainersCommand,
 			command.WorkspacesCommand,
-			command.McpCommand,
 			command.ShellCommand,
 			command.PruneCommand,
 			command.LogsCommand,

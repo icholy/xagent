@@ -404,7 +404,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	// Build agent config
 	cfg := ws.AgentConfig()
 	mcpArgs := []string{
-		"mcp",
+		"tool", "agent-mcp",
 		"--server", xagentclient.AgentSocketURL,
 		"--task", fmt.Sprint(task.ID),
 		"--runner", task.Runner,
