@@ -118,9 +118,10 @@ type TaskChange struct {
 	Time time.Time
 }
 
-// Log projects the change into the audit-log row. Every kind logs.
-func (c *TaskChange) Log() Log {
-	return Log{
+// Log projects the change into the audit-log row. Every kind logs. The
+// returned value is suitable for handing directly to store.CreateLog.
+func (c *TaskChange) Log() *Log {
+	return &Log{
 		TaskID:    c.TaskID,
 		Type:      c.logType(),
 		Content:   c.logContent(),
@@ -235,10 +236,13 @@ func (c *TaskChange) channelMessage() string {
 	case TaskChangeCreated:
 		return fmt.Sprintf("Task %d created on %s/%s.", c.TaskID, c.Runner, c.Workspace)
 	case TaskChangeUpdated:
-		// Only queued updates (those that handed runner work to the
-		// runner) speak to the agent — matches PR #725's req.Start gate
-		// via the structurally equivalent Runner check.
-		if c.Runner == "" {
+		// Only an update that *this call* started — and that produced
+		// actual queued runner work — speaks. Started alone isn't enough
+		// (Start on a non-startable task is a no-op), and a non-empty
+		// Runner alone isn't enough (editing an already-pending task
+		// shouldn't re-announce "queued"). Both together match PR #725's
+		// req.Start gate.
+		if !c.Started || c.Runner == "" {
 			return ""
 		}
 		if len(c.Changed) == 0 {

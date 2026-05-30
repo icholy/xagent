@@ -17,7 +17,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 	caller := apiauth.MustCaller(ctx)
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)
-		kind, ok := runnerEventKind(event.Event)
+		kind, ok := event.Event.TaskChangeKind()
 		if !ok {
 			continue
 		}
@@ -56,8 +56,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			}
 			change.Status = task.Status
 			change.Runner = task.PendingRunner()
-			logRow := change.Log()
-			if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
+			if err := s.store.CreateLog(ctx, tx, change.Log()); err != nil {
 				return err
 			}
 			return tx.Commit()
@@ -75,15 +74,3 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
 }
 
-func runnerEventKind(e model.RunnerEventType) (model.TaskChangeKind, bool) {
-	switch e {
-	case model.RunnerEventStarted:
-		return model.TaskChangeContainerStarted, true
-	case model.RunnerEventStopped:
-		return model.TaskChangeContainerExited, true
-	case model.RunnerEventFailed:
-		return model.TaskChangeContainerFailed, true
-	default:
-		return 0, false
-	}
-}

@@ -136,8 +136,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 		}
 		change.Status = task.Status
 		change.Runner = task.PendingRunner()
-		logRow := change.Log()
-		if err := r.Store.CreateLog(ctx, tx, &logRow); err != nil {
+		if err := r.Store.CreateLog(ctx, tx, change.Log()); err != nil {
 			return err
 		}
 		return tx.Commit()

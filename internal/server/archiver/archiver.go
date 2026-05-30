@@ -132,8 +132,7 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		}
 		change.Status = t.Status
 		change.Runner = t.PendingRunner()
-		logRow := change.Log()
-		if err := a.store.CreateLog(ctx, tx, &logRow); err != nil {
+		if err := a.store.CreateLog(ctx, tx, change.Log()); err != nil {
 			return err
 		}
 		return tx.Commit()

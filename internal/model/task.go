@@ -147,6 +147,22 @@ const (
 	RunnerEventFailed  RunnerEventType = "failed"
 )
 
+// TaskChangeKind maps the runner event type to the TaskChange kind that
+// represents the post-applied task. Returns ok=false for unrecognized
+// event types so callers can skip without re-deriving the mapping.
+func (e RunnerEventType) TaskChangeKind() (TaskChangeKind, bool) {
+	switch e {
+	case RunnerEventStarted:
+		return TaskChangeContainerStarted, true
+	case RunnerEventStopped:
+		return TaskChangeContainerExited, true
+	case RunnerEventFailed:
+		return TaskChangeContainerFailed, true
+	default:
+		return 0, false
+	}
+}
+
 // RunnerEvent represents an event from the runner about a task's container.
 type RunnerEvent struct {
 	TaskID    int64

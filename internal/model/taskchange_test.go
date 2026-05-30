@@ -255,6 +255,20 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 			wantMsg: "",
 		},
 		{
+			// An edit to a task that already had queued runner work, with
+			// Start NOT set — the gate must look at Started, not just Runner,
+			// or we'd re-announce "queued" on every rename of a pending task.
+			name: "Updated silent when queued but not started",
+			change: TaskChange{
+				TaskID:  7,
+				Kind:    TaskChangeUpdated,
+				Actor:   Actor{Kind: ActorKindUser, Name: "alice"},
+				Changed: []string{"name"},
+				Runner:  "r",
+			},
+			wantMsg: "",
+		},
+		{
 			name: "Updated start-only when queued",
 			change: TaskChange{
 				TaskID:  7,

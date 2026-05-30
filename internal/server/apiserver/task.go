@@ -115,8 +115,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		change.TaskID = task.ID
 		change.Status = task.Status
 		change.Runner = task.PendingRunner()
-		logRow := change.Log()
-		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
+		if err := s.store.CreateLog(ctx, tx, change.Log()); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -206,8 +205,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		}
 		change.Status = task.Status
 		change.Runner = task.PendingRunner()
-		logRow := change.Log()
-		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
+		if err := s.store.CreateLog(ctx, tx, change.Log()); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -247,8 +245,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		}
 		change.Status = task.Status
 		change.Runner = task.PendingRunner()
-		logRow := change.Log()
-		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
+		if err := s.store.CreateLog(ctx, tx, change.Log()); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -288,8 +285,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		}
 		change.Status = task.Status
 		change.Runner = task.PendingRunner()
-		logRow := change.Log()
-		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
+		if err := s.store.CreateLog(ctx, tx, change.Log()); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -329,8 +325,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		}
 		change.Status = task.Status
 		change.Runner = task.PendingRunner()
-		logRow := change.Log()
-		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
+		if err := s.store.CreateLog(ctx, tx, change.Log()); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -370,8 +365,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		}
 		change.Status = task.Status
 		change.Runner = task.PendingRunner()
-		logRow := change.Log()
-		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
+		if err := s.store.CreateLog(ctx, tx, change.Log()); err != nil {
 			return err
 		}
 		return tx.Commit()

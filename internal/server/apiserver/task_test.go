@@ -613,6 +613,48 @@ func TestUpdateTask_NameOnly_LogsButSilent(t *testing.T) {
 	assert.Equal(t, calls[0].N.ChannelMessage, "")
 }
 
+func TestUpdateTask_AddInstructionsToPending_Silent(t *testing.T) {
+	t.Parallel()
+	// Adding instructions to a task that already has queued runner work,
+	// without setting Start, must not re-announce "queued" on the channel —
+	// the gate is "this call queued it" (Started), not "the task is queued"
+	// (Runner). Log row still fires.
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	srv := New(Options{Store: teststore.New(t), Publisher: pub})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "t", Runner: "r", Workspace: "w"})
+	assert.NilError(t, err)
+	// Task is Pending with Command=Start (PendingRunner() != ""). Don't
+	// transition; the next UpdateTask runs against this queued state.
+	pub.ResetCalls()
+
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:              createResp.Task.Id,
+		AddInstructions: []*xagentv1.Instruction{{Text: "do another thing"}},
+	})
+	assert.NilError(t, err)
+
+	logs, err := srv.store.ListLogsByTask(ctx, nil, createResp.Task.Id, org.OrgID)
+	assert.NilError(t, err)
+	var update *model.Log
+	for _, l := range logs {
+		if strings.Contains(l.Content, "updated task") {
+			update = l
+			break
+		}
+	}
+	assert.Assert(t, update != nil, "expected an update log row")
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.Equal(t, calls[0].N.ChannelMessage, "",
+		"adding instructions to a queued task must not re-announce 'queued' (only req.Start does)")
+}
+
 func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
