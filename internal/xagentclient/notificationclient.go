@@ -26,6 +26,7 @@ const DefaultSSEReconnectInterval = 5 * time.Second
 type NotificationClient struct {
 	baseURL   string
 	runner    string
+	clientID  string
 	http      *http.Client
 	log       *slog.Logger
 	reconnect time.Duration
@@ -43,6 +44,12 @@ type NotificationClientOptions struct {
 	// builds its own no-timeout http.Client internally (SSE connections
 	// are long-lived).
 	Token string
+	// ClientID, when non-empty, is the per-process id paired with the
+	// Connect client's X-Client-ID header. Notifications whose ClientID
+	// matches are dropped before the handler runs so a caller that
+	// issues mutations and subscribes to notifications doesn't echo
+	// its own events back to itself.
+	ClientID string
 	// Log is used for connection diagnostics.
 	Log *slog.Logger
 	// ReconnectInterval is the wait between reconnect attempts after a
@@ -56,10 +63,15 @@ type NotificationClientOptions struct {
 // NewNotificationClient returns a new NotificationClient.
 func NewNotificationClient(opts NotificationClientOptions) *NotificationClient {
 	return &NotificationClient{
-		baseURL: opts.BaseURL,
-		runner:  opts.Runner,
+		baseURL:  opts.BaseURL,
+		runner:   opts.Runner,
+		clientID: opts.ClientID,
 		http: &http.Client{
-			Transport: &AuthTransport{Transport: http.DefaultTransport, Token: opts.Token},
+			Transport: &AuthTransport{
+				Transport: http.DefaultTransport,
+				Token:     opts.Token,
+				ClientID:  opts.ClientID,
+			},
 		},
 		log:       cmp.Or(opts.Log, slog.Default()),
 		reconnect: cmp.Or(opts.ReconnectInterval, DefaultSSEReconnectInterval),
@@ -121,6 +133,11 @@ func (c *NotificationClient) connect(ctx context.Context) error {
 		var n model.Notification
 		if err := json.Unmarshal(ev.Data, &n); err != nil {
 			c.log.Warn("failed to decode notification", "error", err)
+			continue
+		}
+		// Drop notifications that originated from this client so callers
+		// that both mutate and subscribe don't echo their own events.
+		if c.clientID != "" && n.ClientID == c.clientID {
 			continue
 		}
 		c.handler(n)
