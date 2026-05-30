@@ -50,6 +50,7 @@ type LinkOptions struct {
 // with sensible defaults.
 type TaskOptions struct {
 	Status    model.TaskStatus
+	Runner    string
 	Workspace string
 	Links     []LinkOptions
 }
@@ -63,6 +64,7 @@ func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *mode
 	task := &model.Task{
 		OrgID:     org.OrgID,
 		Status:    cmp.Or(opts.Status, model.TaskStatusPending),
+		Runner:    opts.Runner,
 		Workspace: cmp.Or(opts.Workspace, "default"),
 	}
 	if err := s.CreateTask(t.Context(), nil, task); err != nil {

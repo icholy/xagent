@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -39,7 +40,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 		OrgID:  org.OrgID,
 		Runner: "r",
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestUpdateTask_Publishes(t *testing.T) {
@@ -75,7 +76,7 @@ func TestUpdateTask_Publishes(t *testing.T) {
 		OrgID:  org.OrgID,
 		Runner: "r",
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestCancelTask_Publishes(t *testing.T) {
@@ -108,7 +109,7 @@ func TestCancelTask_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestUploadLogs_Publishes(t *testing.T) {
@@ -143,7 +144,7 @@ func TestUploadLogs_Publishes(t *testing.T) {
 		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
 		UserID:    org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestCreateLink_Publishes(t *testing.T) {
@@ -180,7 +181,7 @@ func TestCreateLink_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestAddEventTask_Publishes(t *testing.T) {
@@ -221,7 +222,79 @@ func TestAddEventTask_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+}
+
+func TestUpdateTask_ChannelMessage_QueuedOnStart(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+	// Move past the queued/start state so the next UpdateTask works from
+	// a non-queued task; then re-queue via Start: true.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: resp.Task.Id, Event: string(model.RunnerEventStarted), Version: 1},
+			{TaskId: resp.Task.Id, Event: string(model.RunnerEventStopped), Version: 1},
+		},
+	})
+	assert.NilError(t, err)
+	pub.ResetCalls()
+
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id: resp.Task.Id, Start: true,
+	})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	msg := calls[0].N.ChannelMessage
+	assert.Assert(t, strings.Contains(msg, "queued"), "expected queued in message, got %q", msg)
+}
+
+func TestUpdateTask_NoChannelMessage_NameOnly(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+	// Transition to Running so PendingRunner == "" and the helper stays silent
+	// on a name-only update.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: resp.Task.Id, Event: string(model.RunnerEventStarted), Version: 1},
+		},
+	})
+	assert.NilError(t, err)
+	pub.ResetCalls()
+
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id: resp.Task.Id, Name: "renamed",
+	})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.Equal(t, calls[0].N.ChannelMessage, "")
 }
 
 func TestSubmitRunnerEvents_Publishes(t *testing.T) {
@@ -262,5 +335,5 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }

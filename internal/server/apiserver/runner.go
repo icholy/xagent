@@ -17,11 +17,20 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 	caller := apiauth.MustCaller(ctx)
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)
-		var task *model.Task
+		notification := model.Notification{
+			Type: "change",
+			Resources: []model.NotificationResource{
+				{Action: "updated", Type: "task", ID: event.TaskID},
+				{Action: "appended", Type: "task_logs", ID: event.TaskID},
+			},
+			OrgID:    caller.OrgID,
+			UserID:   caller.ID,
+			ClientID: caller.ClientID,
+			Time:     time.Now(),
+		}
 		var applied bool
 		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			var err error
-			task, err = s.store.GetTaskForUpdate(ctx, tx, event.TaskID, caller.OrgID)
+			task, err := s.store.GetTaskForUpdate(ctx, tx, event.TaskID, caller.OrgID)
 			if err != nil {
 				return err
 			}
@@ -44,6 +53,21 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 					return err
 				}
 			}
+			notification.Runner = task.PendingRunner()
+			// Only terminal statuses produce a channel message. Completed,
+			// Failed, and Cancelled are unambiguous and agent-actionable; the
+			// non-terminal runner transitions (running, restarting, pending
+			// re-queue) don't carry enough context to say anything useful
+			// without re-deriving why, so we stay silent and let the
+			// eventual terminal event speak.
+			switch task.Status {
+			case model.TaskStatusCompleted:
+				notification.ChannelMessage = fmt.Sprintf("Task %d completed.", task.ID)
+			case model.TaskStatusFailed:
+				notification.ChannelMessage = fmt.Sprintf("Task %d failed.", task.ID)
+			case model.TaskStatusCancelled:
+				notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
+			}
 			return tx.Commit()
 		})
 		if err != nil {
@@ -53,18 +77,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if applied {
-			s.publish(model.Notification{
-				Type: "change",
-				Resources: []model.NotificationResource{
-					{Action: "updated", Type: "task", ID: event.TaskID},
-					{Action: "appended", Type: "task_logs", ID: event.TaskID},
-				},
-				OrgID:    caller.OrgID,
-				Runner:   task.PendingRunner(),
-				UserID:   caller.ID,
-				ClientID: caller.ClientID,
-				Time:     time.Now(),
-			})
+			s.publish(notification)
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
