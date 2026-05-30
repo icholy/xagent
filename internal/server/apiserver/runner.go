@@ -28,13 +28,12 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			ClientID: caller.ClientID,
 			Time:     time.Now(),
 		}
-		var applied bool
 		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 			task, err := s.store.GetTaskForUpdate(ctx, tx, event.TaskID, caller.OrgID)
 			if err != nil {
 				return err
 			}
-			applied = task.ApplyRunnerEvent(&event)
+			applied := task.ApplyRunnerEvent(&event)
 			s.log.Info("runner event recieved",
 				"task_id", event.TaskID,
 				"event", event.Event,
@@ -43,6 +42,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				"applied", applied,
 			)
 			if !applied {
+				notification.Ignore = true
 				return nil
 			}
 			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
@@ -76,9 +76,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			}
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		if applied {
-			s.publish(notification)
-		}
+		s.publish(notification)
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
 }

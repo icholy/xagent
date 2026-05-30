@@ -378,3 +378,46 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 		UserID: org.UserID,
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
+
+func TestSubmitRunnerEvents_NotApplied_DoesNotPublish(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+	pub.ResetCalls()
+
+	// Stale version: ApplyRunnerEvent returns false and the notification's
+	// Ignore field is set inside the tx, so publish is a no-op.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: taskResp.Task.Id, Event: string(model.RunnerEventStarted), Version: 999},
+		},
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(pub.PublishCalls()), 0)
+}
+
+func TestServerPublish_IgnoreSuppressesDelivery(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	srv := New(Options{Publisher: pub})
+
+	srv.publish(model.Notification{Type: "change", OrgID: 1, Ignore: true})
+	assert.Equal(t, len(pub.PublishCalls()), 0)
+
+	srv.publish(model.Notification{Type: "change", OrgID: 1})
+	assert.Equal(t, len(pub.PublishCalls()), 1)
+}

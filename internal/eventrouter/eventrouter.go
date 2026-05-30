@@ -125,6 +125,9 @@ func (r *Router) links(ctx context.Context, url string, orgIDs []int64) (map[int
 }
 
 func (r *Router) publish(ctx context.Context, n model.Notification) {
+	if n.Ignore {
+		return
+	}
 	if r.Publisher == nil {
 		return
 	}
