@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { RelativeTime } from '@/components/relative-time'
+import { eventTypeLabel } from '@/lib/routing-rules'
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
@@ -205,8 +206,7 @@ function RoutingRulesCard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Source</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>Event Type</TableHead>
                 <TableHead>Prefix</TableHead>
                 <TableHead>Mention</TableHead>
                 <TableHead></TableHead>
@@ -215,8 +215,9 @@ function RoutingRulesCard() {
             <TableBody>
               {rules.map((rule, index) => (
                 <TableRow key={index}>
-                  <TableCell className="font-medium">{rule.source}</TableCell>
-                  <TableCell className="text-muted-foreground">{rule.type || '-'}</TableCell>
+                  <TableCell className="font-medium">
+                    {eventTypeLabel(rule.source, rule.type)}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
                   <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
                   <TableCell>
