@@ -1,6 +1,8 @@
 package command
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -99,4 +101,53 @@ func TestNotificationToChannels(t *testing.T) {
 			assert.DeepEqual(t, got, tt.want)
 		})
 	}
+}
+
+type recordingSender struct {
+	got     []mcpchannel.Params
+	errOn   map[int]error
+	callIdx int
+}
+
+func (r *recordingSender) SendChannel(_ context.Context, p mcpchannel.Params) error {
+	r.got = append(r.got, p)
+	defer func() { r.callIdx++ }()
+	if err, ok := r.errOn[r.callIdx]; ok {
+		return err
+	}
+	return nil
+}
+
+func TestForwardNotification_LogAndContinue(t *testing.T) {
+	t.Parallel()
+	// Arrange — notification with three forwardable resources;
+	// the sender will fail on the first call.
+	sender := &recordingSender{
+		errOn: map[int]error{0: errors.New("broken pipe")},
+	}
+	n := model.Notification{
+		Type:  "change",
+		OrgID: 1,
+		Resources: []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: 1},
+			{Action: "appended", Type: "log", ID: 2},
+			{Action: "created", Type: "link", ID: 3},
+		},
+	}
+
+	// Act
+	forwardNotification(context.Background(), sender, n)
+
+	// Assert — all three were attempted despite the first error.
+	assert.Equal(t, len(sender.got), 3)
+	assert.Equal(t, sender.got[0].Meta["id"], "1")
+	assert.Equal(t, sender.got[1].Meta["id"], "2")
+	assert.Equal(t, sender.got[2].Meta["id"], "3")
+}
+
+func TestForwardNotification_DropsNonChange(t *testing.T) {
+	t.Parallel()
+	sender := &recordingSender{}
+	forwardNotification(context.Background(), sender, model.Notification{Type: "ready", OrgID: 1})
+	assert.Equal(t, len(sender.got), 0)
 }
