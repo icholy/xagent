@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,8 +10,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
-
-export const ROUTING_SOURCES = ['github', 'atlassian'] as const
 
 export interface RoutingRuleFormValues {
   source: string
@@ -25,6 +23,76 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   type: '',
   prefix: '',
   mention: '',
+}
+
+interface EventTypeOption {
+  id: string
+  label: string
+  source: string
+  type: string
+}
+
+// Mirrors the (source, type) pairs the webhook handlers actually emit:
+//   internal/server/webhookserver/github.go    — type is the X-GitHub-Event header
+//   internal/server/webhookserver/atlassian.go — type is the parsed webhookEvent
+const EVENT_TYPES: EventTypeOption[] = [
+  {
+    id: 'github:issue_comment',
+    label: 'GitHub: Issue/PR Comment',
+    source: 'github',
+    type: 'issue_comment',
+  },
+  {
+    id: 'github:pull_request_review_comment',
+    label: 'GitHub: PR Review Comment',
+    source: 'github',
+    type: 'pull_request_review_comment',
+  },
+  {
+    id: 'github:pull_request_review',
+    label: 'GitHub: PR Review',
+    source: 'github',
+    type: 'pull_request_review',
+  },
+  {
+    id: 'atlassian:comment_created',
+    label: 'Jira: Issue Comment',
+    source: 'atlassian',
+    type: 'comment_created',
+  },
+]
+
+function findEventType(source: string, type: string): EventTypeOption | undefined {
+  return EVENT_TYPES.find((o) => o.source === source && o.type === type)
+}
+
+interface MentionCopy {
+  label: string
+  placeholder: string
+  help: string
+}
+
+function mentionCopyForSource(source: string): MentionCopy {
+  switch (source) {
+    case 'github':
+      return {
+        label: 'Mentions user',
+        placeholder: 'octocat',
+        help: 'GitHub username (no leading @). Matches @-mentions of this user in the event body.',
+      }
+    case 'atlassian':
+      return {
+        label: 'Mentions account',
+        placeholder: '5b10ac8d82e05b22cc7d4ef5',
+        help: 'Atlassian account ID. The form wraps it as [~accountid:…] when matching — enter just the bare id.',
+      }
+    default:
+      return {
+        label: 'Mention',
+        placeholder: 'Username or account id',
+        help: 'Pick an event type to see the expected format.',
+      }
+  }
 }
 
 interface RoutingRuleFormProps {
@@ -46,68 +114,109 @@ export function RoutingRuleForm({
 }: RoutingRuleFormProps) {
   const [values, setValues] = useState<RoutingRuleFormValues>(initialValues)
 
+  // If the rule we're editing carries a (source, type) combination that isn't in the
+  // hardcoded list — e.g. a legacy wildcard rule with empty source — expose it as an
+  // extra dropdown option so it stays selectable and the stored values are preserved.
+  const legacyOption = useMemo<EventTypeOption | null>(() => {
+    const isUntouched =
+      !initialValues.source &&
+      !initialValues.type &&
+      !initialValues.prefix &&
+      !initialValues.mention
+    if (isUntouched) return null
+    if (findEventType(initialValues.source, initialValues.type)) return null
+    return {
+      id: `legacy:${initialValues.source}:${initialValues.type}`,
+      label: `Legacy: ${initialValues.source || '(any)'} / ${initialValues.type || '(any)'}`,
+      source: initialValues.source,
+      type: initialValues.type,
+    }
+  }, [initialValues])
+
+  const selectedId = useMemo(() => {
+    const known = findEventType(values.source, values.type)
+    if (known) return known.id
+    if (
+      legacyOption &&
+      legacyOption.source === values.source &&
+      legacyOption.type === values.type
+    ) {
+      return legacyOption.id
+    }
+    return ''
+  }, [values.source, values.type, legacyOption])
+
+  const mentionCopy = mentionCopyForSource(values.source)
+  const canSubmit = selectedId !== ''
+
+  const handleEventTypeChange = (id: string) => {
+    const known = EVENT_TYPES.find((o) => o.id === id)
+    if (known) {
+      setValues({ ...values, source: known.source, type: known.type })
+      return
+    }
+    if (legacyOption && legacyOption.id === id) {
+      setValues({ ...values, source: legacyOption.source, type: legacyOption.type })
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!values.source) return
+    if (!canSubmit) return
     void onSubmit(values)
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
-        <Label htmlFor="source">Source</Label>
-        <Select
-          value={values.source}
-          onValueChange={(v) => setValues({ ...values, source: v })}
-          required
-        >
-          <SelectTrigger id="source">
-            <SelectValue placeholder="Select a source" />
+        <Label htmlFor="event-type">Event type</Label>
+        <Select value={selectedId} onValueChange={handleEventTypeChange} required>
+          <SelectTrigger id="event-type">
+            <SelectValue placeholder="Select an event type" />
           </SelectTrigger>
           <SelectContent>
-            {ROUTING_SOURCES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
+            {EVENT_TYPES.map((o) => (
+              <SelectItem key={o.id} value={o.id}>
+                {o.label}
               </SelectItem>
             ))}
+            {legacyOption && <SelectItem value={legacyOption.id}>{legacyOption.label}</SelectItem>}
           </SelectContent>
         </Select>
+        <p className="text-muted-foreground text-xs">
+          The kind of incoming webhook event this rule applies to.
+        </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="type">Type</Label>
-        <Input
-          id="type"
-          placeholder="e.g. pull_request, issue_comment"
-          value={values.type}
-          onChange={(e) => setValues({ ...values, type: e.target.value })}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="prefix">Prefix</Label>
+        <Label htmlFor="prefix">Message starts with</Label>
         <Input
           id="prefix"
-          placeholder="Message prefix to match"
+          placeholder="Optional — e.g. /xagent"
           value={values.prefix}
           onChange={(e) => setValues({ ...values, prefix: e.target.value })}
         />
+        <p className="text-muted-foreground text-xs">
+          Leave blank to match any message. Otherwise the rule only fires when the event body starts
+          with this string.
+        </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="mention">Mention</Label>
+        <Label htmlFor="mention">{mentionCopy.label}</Label>
         <Input
           id="mention"
-          placeholder="Mention to match (e.g. username)"
+          placeholder={mentionCopy.placeholder}
           value={values.mention}
           onChange={(e) => setValues({ ...values, mention: e.target.value })}
         />
+        <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
       </div>
 
       {error && <div className="text-destructive text-sm">{error}</div>}
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={isSubmitting || !values.source}>
+        <Button type="submit" disabled={isSubmitting || !canSubmit}>
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {submitLabel}
         </Button>
