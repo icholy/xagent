@@ -1,3 +1,6 @@
+import { create } from '@bufbuild/protobuf'
+import { type RoutingRule, RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
+
 export interface EventTypeOption {
   id: string
   label: string
@@ -69,6 +72,77 @@ export interface MentionCopy {
   label: string
   placeholder: string
   help: string
+}
+
+// Form-level shape for the routing-rule editor. Mirrors the RoutingRule proto
+// fields plus a `createTask` toggle and flattened CreateTaskAction fields so
+// the form can keep its draft state across toggling the action off and on.
+export interface RoutingRuleFormValues {
+  source: string
+  type: string
+  prefix: string
+  mention: string
+  createTask: boolean
+  createWorkspace: string
+  createRunner: string
+  createPrompt: string
+}
+
+export const emptyRoutingRule: RoutingRuleFormValues = {
+  source: '',
+  type: '',
+  prefix: '',
+  mention: '',
+  createTask: false,
+  createWorkspace: '',
+  createRunner: '',
+  createPrompt: '',
+}
+
+export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormValues {
+  return {
+    source: rule.source,
+    type: rule.type,
+    prefix: rule.prefix,
+    mention: rule.mention,
+    createTask: rule.create !== undefined,
+    createWorkspace: rule.create?.workspace ?? '',
+    createRunner: rule.create?.runner ?? '',
+    createPrompt: rule.create?.prompt ?? '',
+  }
+}
+
+// Builds a RoutingRule from the form's draft values. `create` is only set
+// when the toggle is on — otherwise it's omitted so the rule reverts to the
+// wake-only behaviour.
+export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
+  return create(RoutingRuleSchema, {
+    source: values.source,
+    type: values.type,
+    prefix: values.prefix,
+    mention: values.mention,
+    create: values.createTask
+      ? {
+          workspace: values.createWorkspace,
+          runner: values.createRunner,
+          prompt: values.createPrompt,
+        }
+      : undefined,
+  })
+}
+
+// True when the form has the minimum fields needed to submit. Event type
+// must be selected; if the create-task toggle is on, workspace and runner
+// must both be chosen.
+export function isRoutingRuleFormValid(
+  values: RoutingRuleFormValues,
+  eventTypeSelected: boolean,
+): boolean {
+  if (!eventTypeSelected) return false
+  if (values.createTask) {
+    if (!values.createRunner.trim() || !values.createWorkspace.trim()) return false
+  }
+  return true
 }
 
 export function mentionCopyForSource(source: string): MentionCopy {

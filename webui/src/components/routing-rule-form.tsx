@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@connectrpc/connect-query'
+import { listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,28 +11,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { Loader2 } from 'lucide-react'
 import {
   EVENT_TYPES,
+  emptyRoutingRule,
   findEventType,
   findEventTypeById,
+  isRoutingRuleFormValid,
   legacyEventTypeOption,
   mentionCopyForSource,
+  type RoutingRuleFormValues,
 } from '@/lib/routing-rules'
 
-export interface RoutingRuleFormValues {
-  source: string
-  type: string
-  prefix: string
-  mention: string
-}
-
-export const emptyRoutingRule: RoutingRuleFormValues = {
-  source: '',
-  type: '',
-  prefix: '',
-  mention: '',
-}
+export { emptyRoutingRule, type RoutingRuleFormValues }
 
 interface RoutingRuleFormProps {
   initialValues: RoutingRuleFormValues
@@ -77,7 +72,17 @@ export function RoutingRuleForm({
   }, [values.source, values.type, legacyOption])
 
   const mentionCopy = mentionCopyForSource(values.source)
-  const canSubmit = selectedId !== ''
+  const canSubmit = isRoutingRuleFormValid(values, selectedId !== '')
+
+  const { data: workspacesData } = useQuery(listWorkspaces, {}, { enabled: values.createTask })
+  const runners = useMemo(
+    () => [...new Set(workspacesData?.workspaces.map((ws) => ws.runnerId) ?? [])],
+    [workspacesData],
+  )
+  const workspaces = useMemo(
+    () => workspacesData?.workspaces.filter((ws) => ws.runnerId === values.createRunner) ?? [],
+    [workspacesData, values.createRunner],
+  )
 
   const handleEventTypeChange = (id: string) => {
     const known = findEventTypeById(id)
@@ -88,6 +93,12 @@ export function RoutingRuleForm({
     if (legacyOption && legacyOption.id === id) {
       setValues({ ...values, source: legacyOption.source, type: legacyOption.type })
     }
+  }
+
+  const handleCreateRunnerChange = (newRunner: string) => {
+    // Clear the workspace when the runner changes — workspaces are filtered
+    // per-runner and the previous selection likely won't apply.
+    setValues({ ...values, createRunner: newRunner, createWorkspace: '' })
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -141,6 +152,85 @@ export function RoutingRuleForm({
           onChange={(e) => setValues({ ...values, mention: e.target.value })}
         />
         <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
+      </div>
+
+      <div className="space-y-4 rounded-md border p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="create-task">Create a task</Label>
+            <p className="text-muted-foreground text-xs">
+              When the rule matches and no subscribed task is found, create a new task in the
+              selected workspace.
+            </p>
+          </div>
+          <Switch
+            id="create-task"
+            checked={values.createTask}
+            onCheckedChange={(checked) => setValues({ ...values, createTask: checked })}
+          />
+        </div>
+
+        {values.createTask && (
+          <div className="space-y-4 border-t pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="create-runner">Runner</Label>
+              <Select value={values.createRunner} onValueChange={handleCreateRunnerChange} required>
+                <SelectTrigger id="create-runner">
+                  <SelectValue placeholder="Select a runner" />
+                </SelectTrigger>
+                <SelectContent>
+                  {runners.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="create-workspace">Workspace</Label>
+              <Select
+                value={values.createWorkspace}
+                onValueChange={(v) => setValues({ ...values, createWorkspace: v })}
+                required
+                disabled={!values.createRunner}
+              >
+                <SelectTrigger id="create-workspace">
+                  <SelectValue
+                    placeholder={
+                      values.createRunner ? 'Select a workspace' : 'Select a runner first'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {workspaces.map((ws) => (
+                    <SelectItem key={ws.name} value={ws.name}>
+                      <span>{ws.name}</span>
+                      {ws.description && (
+                        <span className="text-muted-foreground text-xs ml-2">{ws.description}</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="create-prompt">Prompt (optional)</Label>
+              <Textarea
+                id="create-prompt"
+                placeholder="Initial instruction for the created task..."
+                value={values.createPrompt}
+                onChange={(e) => setValues({ ...values, createPrompt: e.target.value })}
+                rows={4}
+              />
+              <p className="text-muted-foreground text-xs">
+                Leave blank to use the event body as the task's first instruction.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && <div className="text-destructive text-sm">{error}</div>}

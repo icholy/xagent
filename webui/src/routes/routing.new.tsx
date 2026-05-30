@@ -1,15 +1,10 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
-import { create } from '@bufbuild/protobuf'
 import { getRoutingRules, setRoutingRules } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
 import { Card, CardContent } from '@/components/ui/card'
 import { useOrgId } from '@/hooks/use-org-id'
-import {
-  RoutingRuleForm,
-  emptyRoutingRule,
-  type RoutingRuleFormValues,
-} from '@/components/routing-rule-form'
+import { RoutingRuleForm } from '@/components/routing-rule-form'
+import { buildRoutingRule, emptyRoutingRule, type RoutingRuleFormValues } from '@/lib/routing-rules'
 
 export const Route = createFileRoute('/routing/new')({
   component: NewRoutingRulePage,
@@ -23,7 +18,7 @@ function NewRoutingRulePage() {
 
   const handleSubmit = async (values: RoutingRuleFormValues) => {
     const rules = data?.rules ?? []
-    const newRule = create(RoutingRuleSchema, values)
+    const newRule = buildRoutingRule(values)
     await mutation.mutateAsync({ rules: [...rules, newRule] })
     navigate({ to: '/events', search: { org: orgId } })
   }
