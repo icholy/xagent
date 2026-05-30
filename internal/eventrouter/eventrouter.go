@@ -137,7 +137,11 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 }
 
 // attach associates an event with a task, starts the task, logs the action,
-// and publishes a change notification.
+// and publishes a change notification. The wake ChannelMessage is set only
+// when the attach causes a transition out of a terminal state; an empty
+// ChannelMessage keeps the agent channel silent (PR #725's gate) for
+// already-running / already-queued tasks while the FE still receives the
+// same notification.
 func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) error {
 	notification := model.Notification{
 		Type:  "change",
@@ -152,6 +156,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 		if err != nil {
 			return err
 		}
+		prevStatus := task.Status
 		task.Start()
 		if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
 			return err
@@ -169,7 +174,10 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
 		notification.Runner = task.PendingRunner()
-		notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s (%s)", task.ID, event.ID, event.Description, event.URL)
+		switch prevStatus {
+		case model.TaskStatusCompleted, model.TaskStatusFailed, model.TaskStatusCancelled:
+			notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s (%s)", task.ID, event.ID, event.Description, event.URL)
+		}
 		return tx.Commit()
 	})
 	if err != nil {
