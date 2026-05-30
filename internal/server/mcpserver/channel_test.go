@@ -40,52 +40,12 @@ func TestForwardNotification_RelaysChannelMessage(t *testing.T) {
 	sender := &recordingSender{}
 
 	err := ForwardNotification(t.Context(), sender, model.Notification{
-		Type: "change",
-		Resources: []model.NotificationResource{
-			{Action: "updated", Type: "task", ID: 7},
-			{Action: "updated", Type: "event", ID: 99},
-		},
+		Type:           "change",
 		ChannelMessage: "Task 7 completed.",
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, sender.calls, 1)
 	assert.DeepEqual(t, sender.got, []mcpchannel.Params{
-		{
-			Content: "Task 7 completed.",
-			Meta:    map[string]string{"resource": "task", "id": "7"},
-		},
+		{Content: "Task 7 completed."},
 	})
-}
-
-func TestForwardNotification_NoTaskResource(t *testing.T) {
-	t.Parallel()
-	sender := &recordingSender{}
-
-	err := ForwardNotification(t.Context(), sender, model.Notification{
-		Type: "change",
-		Resources: []model.NotificationResource{
-			{Action: "updated", Type: "event", ID: 42},
-		},
-		ChannelMessage: "Something happened.",
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, sender.calls, 1)
-	assert.DeepEqual(t, sender.got, []mcpchannel.Params{
-		{
-			Content: "Something happened.",
-			Meta:    map[string]string{},
-		},
-	})
-}
-
-func TestForwardNotification_IgnoresNonChange(t *testing.T) {
-	t.Parallel()
-	sender := &recordingSender{}
-
-	err := ForwardNotification(t.Context(), sender, model.Notification{
-		Type:           "ready",
-		ChannelMessage: "Task 1 completed.",
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, sender.calls, 0)
 }

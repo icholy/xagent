@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -415,22 +414,4 @@ func (t *Task) PendingRunner() string {
 		return ""
 	}
 	return t.Runner
-}
-
-// ChannelMessage returns the agent-channel notification line for the task's
-// current state, or "" if the state isn't channel-worthy. The cause string is
-// only used for the queued case; terminal status produces its own message.
-func (t *Task) ChannelMessage(cause string) string {
-	switch t.Status {
-	case TaskStatusCompleted:
-		return fmt.Sprintf("Task %d completed.", t.ID)
-	case TaskStatusFailed:
-		return fmt.Sprintf("Task %d failed.", t.ID)
-	case TaskStatusCancelled:
-		return fmt.Sprintf("Task %d cancelled.", t.ID)
-	}
-	if t.PendingRunner() != "" {
-		return cause
-	}
-	return ""
 }

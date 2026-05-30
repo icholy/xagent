@@ -145,11 +145,10 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
 		notification.Runner = task.PendingRunner()
-		cause := fmt.Sprintf("Task %d woken by event %d: %s", task.ID, event.ID, event.Description)
+		notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s", task.ID, event.ID, event.Description)
 		if event.URL != "" {
-			cause += " (" + event.URL + ")"
+			notification.ChannelMessage += " (" + event.URL + ")"
 		}
-		notification.ChannelMessage = task.ChannelMessage(cause)
 		return tx.Commit()
 	})
 	if err != nil {

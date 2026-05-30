@@ -53,6 +53,19 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if applied {
+			var channelMessage string
+			switch task.Status {
+			case model.TaskStatusCompleted:
+				channelMessage = fmt.Sprintf("Task %d completed.", task.ID)
+			case model.TaskStatusFailed:
+				channelMessage = fmt.Sprintf("Task %d failed.", task.ID)
+			case model.TaskStatusCancelled:
+				channelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
+			default:
+				if task.PendingRunner() != "" {
+					channelMessage = fmt.Sprintf("Task %d restarting.", task.ID)
+				}
+			}
 			s.publish(model.Notification{
 				Type: "change",
 				Resources: []model.NotificationResource{
@@ -64,7 +77,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				UserID:         caller.ID,
 				ClientID:       caller.ClientID,
 				Time:           time.Now(),
-				ChannelMessage: task.ChannelMessage(fmt.Sprintf("Task %d restarting.", task.ID)),
+				ChannelMessage: channelMessage,
 			})
 		}
 	}
