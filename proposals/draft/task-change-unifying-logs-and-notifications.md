@@ -325,7 +325,7 @@ one channel message.
 The `Updated` kind preserves that shape:
 
 ```go
-ev := model.TaskChange{
+change := model.TaskChange{
     TaskID:  task.ID,
     Kind:    model.TaskChangeUpdated,
     Actor:   actorFromCaller(caller),
@@ -333,7 +333,7 @@ ev := model.TaskChange{
     Changed: changed, // accumulated inside the closure, as today
     Time:    time.Now(),
 }
-if err := s.store.CreateLog(ctx, tx, ev.Log().Ptr()); err != nil {
+if err := s.store.CreateLog(ctx, tx, change.Log().Ptr()); err != nil {
     return err
 }
 ```
@@ -360,21 +360,21 @@ write the log row inside the transaction, and stashed in an outer-scope
 variable for use after commit:
 
 ```go
-var ev model.TaskChange
+var change model.TaskChange
 err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
     task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
     if err != nil { return err }
     // mutate task...
     if err := s.store.UpdateTask(ctx, tx, task); err != nil { return err }
-    ev = model.TaskChange{
+    change = model.TaskChange{
         TaskID: task.ID, Kind: model.TaskChangeCreated, /* ... */
         Time: time.Now(),
     }
-    if err := s.store.CreateLog(ctx, tx, ev.Log().Ptr()); err != nil { return err }
+    if err := s.store.CreateLog(ctx, tx, change.Log().Ptr()); err != nil { return err }
     return tx.Commit()
 })
 if err != nil { return nil, ... }
-s.publish(ev.Notification(model.Envelope{
+s.publish(change.Notification(model.Envelope{
     OrgID:    caller.OrgID,
     UserID:   caller.ID,
     ClientID: caller.ClientID,
@@ -389,7 +389,7 @@ hand-written values with one `TaskChange` construction, then call its two
 projections."
 
 For `eventrouter.attach` (`internal/eventrouter/eventrouter.go:117`), the
-same pattern applies: `ev` is built inside the closure with `Event: event`
+same pattern applies: `change` is built inside the closure with `Event: event`
 populated from the second parameter, `Log()` is written inside the tx, and
 `Notification()` is projected after commit and handed to `r.publish`.
 
@@ -463,7 +463,7 @@ Under this proposal:
 ```go
 applied = task.ApplyRunnerEvent(&event)
 if !applied { return nil }
-ev := model.TaskChange{
+change := model.TaskChange{
     TaskID: task.ID,
     Kind:   kindFromRunnerEvent(event.Event),  // Started / Exited / Failed
     Actor:  Actor{Kind: "runner", Name: caller.Name},
@@ -471,13 +471,13 @@ ev := model.TaskChange{
     Exit:   &model.ExitInfo{Event: event.Event},
     Time:   time.Now(),
 }
-if err := s.store.CreateLog(ctx, tx, ev.Log().Ptr()); err != nil { return err }
+if err := s.store.CreateLog(ctx, tx, change.Log().Ptr()); err != nil { return err }
 ```
 
 After commit:
 
 ```go
-s.publish(ev.Notification(model.Envelope{
+s.publish(change.Notification(model.Envelope{
     OrgID:    caller.OrgID,
     UserID:   caller.ID,
     ClientID: caller.ClientID,
@@ -633,10 +633,10 @@ The projections are pure functions of a `TaskChange` value, so most of the
 test surface is table-driven over `(kind, populated fields) → (expected log
 content, expected channel message, expected resources)`.
 
-**`internal/model/taskevent_test.go`** (new):
+**`internal/model/taskchange_test.go`** (new):
 
 - `TestTaskChange_Log_Projection` — table-driven over every `Kind` with a
-  representative populated `TaskChange`. Asserts `ev.Log().Content` matches
+  representative populated `TaskChange`. Asserts `change.Log().Content` matches
   the expected rendered string for each kind. Includes:
   - `Created` produces `<actor> created task on <runner>/<workspace>`.
   - `Woken` with `Event{Description: "PR comment from alice", URL:
