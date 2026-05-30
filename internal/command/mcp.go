@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -24,7 +25,7 @@ import (
 // or schemas are involved.
 var McpCommand = &cli.Command{
 	Name:  "mcp",
-	Usage: "Run a local MCP bridge: proxies xagent tools and pushes task changes as Claude Code channel events",
+	Usage: "Run a stdio MCP server for managing tasks",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:    "server",
@@ -35,7 +36,12 @@ var McpCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:     "token",
 			Usage:    "Authentication token",
+			Sources:  cli.EnvVars("XAGENT_TOKEN"),
 			Required: true,
+		},
+		&cli.BoolFlag{
+			Name:  "channel",
+			Usage: "Enable experimental claude/channel support",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -43,14 +49,16 @@ var McpCommand = &cli.Command{
 			BaseURL: cmd.String("server"),
 			Token:   cmd.String("token"),
 		})
+		var capabilities mcp.ServerCapabilities
+		if cmd.Bool("channel") {
+			capabilities.Experimental = mcpchannel.Experimental()
+		}
 		server := mcp.NewServer(&mcp.Implementation{
 			Name:    "xagent",
 			Version: "1.0.0",
 		}, &mcp.ServerOptions{
-			Instructions: mcpserver.Instructions + "\n\n" + mcpserver.ChannelInstructions,
-			Capabilities: &mcp.ServerCapabilities{
-				Experimental: mcpchannel.Experimental(),
-			},
+			Instructions: mcpserver.Instructions,
+			Capabilities: &capabilities,
 		})
 		mcpserver.AddTools(server, client)
 
@@ -59,12 +67,22 @@ var McpCommand = &cli.Command{
 		if err != nil {
 			return err
 		}
-		channel := mcpserver.NewNotificationChannel(transport, client, cmd.String("server"), cmd.String("token"))
-		go func() {
-			if err := channel.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				slog.Warn("xagent channel stream ended", "error", err)
-			}
-		}()
+		if cmd.Bool("channel") {
+			go func() {
+				nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
+					BaseURL: cmd.String("server"),
+					Token:   cmd.String("token"),
+					Handler: func(n model.Notification) {
+						if err := mcpserver.ForwardNotification(ctx, transport, n); err != nil {
+							slog.Warn("xagent channel: failed to send", "error", err)
+						}
+					},
+				})
+				if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					slog.Warn("xagent channel: stream ended", "error", err)
+				}
+			}()
+		}
 		return session.Wait()
 	},
 }
