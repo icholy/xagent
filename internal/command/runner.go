@@ -217,6 +217,7 @@ var RunnerCommand = &cli.Command{
 			}
 			select {
 			case <-sub.C():
+			case <-r.WakeC():
 			case <-time.After(pollInterval):
 			case <-ctx.Done():
 				return nil

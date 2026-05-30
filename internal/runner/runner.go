@@ -29,6 +29,7 @@ import (
 	"github.com/icholy/xagent/internal/runner/prebuilt"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/x/safesem"
+	"github.com/icholy/xagent/internal/x/wakeup"
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"golang.org/x/sync/errgroup"
@@ -44,6 +45,7 @@ type Runner struct {
 	sem         *safesem.Semaphore
 	log         *slog.Logger
 	queue       *EventQueue
+	wake        wakeup.Chan
 }
 
 type Options struct {
@@ -105,8 +107,15 @@ func New(opts Options) (*Runner, error) {
 		sem:         safesem.New(concurrency),
 		log:         log,
 		queue:       opts.Queue,
+		wake:        wakeup.New(),
 	}, nil
 }
+
+// WakeC returns a channel that receives one value per coalesced burst of
+// internally-generated wake-ups. Currently signalled when a concurrency
+// slot is released so the main loop can immediately retry tasks that were
+// previously skipped for being over the limit.
+func (r *Runner) WakeC() <-chan struct{} { return r.wake }
 
 func (r *Runner) Close() error {
 	return errors.Join(
@@ -537,6 +546,7 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				})
 			case events.ActionDie:
 				r.sem.Release(1)
+				r.wake.Wake()
 				// Use version 0 to bypass version check (spontaneous events)
 				exitCode := event.Actor.Attributes["exitCode"]
 				if exitCode == "0" {
