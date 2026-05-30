@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { create } from '@bufbuild/protobuf'
 import {
@@ -13,8 +13,9 @@ import {
   generateAtlassianWebhookSecret,
   getRoutingRules,
   setRoutingRules,
+  listEvents,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { Org, RoutingRule } from '@/gen/xagent/v1/xagent_pb'
+import type { Event, Org, RoutingRule } from '@/gen/xagent/v1/xagent_pb'
 import { RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { Button } from '@/components/ui/button'
@@ -57,10 +58,15 @@ import {
 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
+const SETTINGS_TABS = ['account', 'organisation', 'events'] as const
+type SettingsTab = (typeof SETTINGS_TABS)[number]
+
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
-  validateSearch: (search: Record<string, unknown>): { tab: string } => ({
-    tab: search.tab === 'organisation' ? 'organisation' : 'account',
+  validateSearch: (search: Record<string, unknown>): { tab: SettingsTab } => ({
+    tab: SETTINGS_TABS.includes(search.tab as SettingsTab)
+      ? (search.tab as SettingsTab)
+      : 'account',
   }),
 })
 
@@ -75,7 +81,11 @@ function SettingsPage() {
       <Tabs
         value={tab}
         onValueChange={(value) =>
-          navigate({ to: '/settings', search: { tab: value, org: orgId }, replace: true })
+          navigate({
+            to: '/settings',
+            search: { tab: value as SettingsTab, org: orgId },
+            replace: true,
+          })
         }
       >
         <div className="flex items-center mb-4">
@@ -83,6 +93,7 @@ function SettingsPage() {
           <TabsList className="ml-auto">
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="organisation">Organisation</TabsTrigger>
+            <TabsTrigger value="events">Events</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="account">
@@ -90,6 +101,9 @@ function SettingsPage() {
         </TabsContent>
         <TabsContent value="organisation">
           <OrgSettings />
+        </TabsContent>
+        <TabsContent value="events">
+          <EventSettings />
         </TabsContent>
       </Tabs>
       <VersionFooter />
@@ -309,8 +323,129 @@ function OrgSettings() {
           )}
         </CardContent>
       </Card>
-      <RoutingRulesCard />
     </div>
+  )
+}
+
+function EventSettings() {
+  return (
+    <div className="space-y-6">
+      <RoutingRulesCard />
+      <RecentEventsCard />
+    </div>
+  )
+}
+
+function RecentEventsCard() {
+  const orgId = useOrgId()
+  const [limit, setLimit] = useState(25)
+  const { data, isLoading, error } = useQuery(
+    listEvents,
+    { limit },
+    { refetchInterval: 60000 },
+  )
+
+  const events = data?.events ?? []
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <CardTitle>Recent Events</CardTitle>
+            <CardDescription>
+              Inspect events received from external sources.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Show</span>
+              <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="75">75</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Link to="/events/new" search={{ org: orgId }}>
+              <Button>
+                <Plus className="h-4 w-4" />
+                Event
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-muted-foreground">Loading...</div>
+        ) : error ? (
+          <div className="text-destructive">Error: {error.message}</div>
+        ) : events.length === 0 ? (
+          <div className="text-muted-foreground text-center py-8">No events found</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="hidden md:table-cell">ID</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead className="hidden md:table-cell">Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {events.map((event) => (
+                <EventRow key={String(event.id)} event={event} />
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function EventRow({ event }: { event: Event }) {
+  const orgId = useOrgId()
+  const dataContent = event.data || '-'
+  const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
+
+  return (
+    <TableRow>
+      <TableCell className="hidden md:table-cell">{String(event.id)}</TableCell>
+      <TableCell>
+        <Link
+          to="/events/$id"
+          search={{ org: orgId }}
+          params={{ id: String(event.id) }}
+          className="text-primary hover:underline"
+        >
+          {event.description || '-'}
+        </Link>
+      </TableCell>
+      <TableCell className="max-w-xs truncate">
+        {event.url ? (
+          <a
+            href={event.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            {truncatedData}
+          </a>
+        ) : (
+          truncatedData
+        )}
+      </TableCell>
+      <TableCell className="hidden md:table-cell text-muted-foreground">
+        {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
+      </TableCell>
+    </TableRow>
   )
 }
 
