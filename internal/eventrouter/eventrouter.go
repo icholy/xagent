@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"maps"
-	"slices"
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
@@ -36,71 +34,94 @@ var defaultRules = []model.RoutingRule{
 	{Prefix: "xagent:"},
 }
 
-// Route finds all subscribed links matching the event URL for the given user,
-// creates events per org, and starts the associated tasks. It returns the total
-// number of tasks routed and any error finding links.
+// Route evaluates routing rules for every org the user belongs to. For each
+// org with a matching rule, it either wakes the subscribed task(s) for the
+// event URL or — if the matched rule has a Create action — creates a new
+// task in a single transaction. Returns the number of tasks woken or created.
 func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
-	linksByOrg, err := r.find(ctx, input)
-	if err != nil {
-		return 0, err
-	}
-	if len(linksByOrg) == 0 {
+	if input.URL == "" || input.UserID == "" {
 		return 0, nil
 	}
-	orgRules, err := r.Store.GetRoutingRulesByOrgs(ctx, nil, slices.Collect(maps.Keys(linksByOrg)))
+
+	rulesByOrg, err := r.Store.ListRoutingRulesForUser(ctx, nil, input.UserID)
 	if err != nil {
 		return 0, err
 	}
-	var n int
-	for orgID, links := range linksByOrg {
-		rules := orgRules[orgID]
+
+	// First matching rule per org; orgs with no match are dropped.
+	matched := map[int64]*model.RoutingRule{}
+	for orgID, rules := range rulesByOrg {
 		if len(rules) == 0 {
 			rules = defaultRules
 		}
-		if !slices.ContainsFunc(rules, input.MatchRule) {
-			continue
+		for i := range rules {
+			if input.MatchRule(rules[i]) {
+				matched[orgID] = &rules[i]
+				break
+			}
 		}
-		event := &model.Event{
-			Description: input.Description,
-			Data:        input.Data,
-			URL:         input.URL,
-			OrgID:       orgID,
-		}
-		if err := r.Store.CreateEvent(ctx, nil, event); err != nil {
-			r.Log.Error("failed to create event", "org_id", orgID, "error", err)
-			continue
-		}
-		for _, link := range links {
-			if err := r.attach(ctx, link.TaskID, event); err != nil {
-				r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
+	}
+	if len(matched) == 0 {
+		return 0, nil
+	}
+
+	// Link lookup runs only for orgs that have a matching rule.
+	orgIDs := make([]int64, 0, len(matched))
+	for orgID := range matched {
+		orgIDs = append(orgIDs, orgID)
+	}
+	linksByOrg, err := r.links(ctx, input.URL, orgIDs)
+	if err != nil {
+		return 0, err
+	}
+
+	// Wake if a subscribed link exists; otherwise create if the matched rule opts in.
+	var n int
+	for orgID, rule := range matched {
+		if links := linksByOrg[orgID]; len(links) > 0 {
+			event := &model.Event{
+				Description: input.Description,
+				Data:        input.Data,
+				URL:         input.URL,
+				OrgID:       orgID,
+			}
+			if err := r.Store.CreateEvent(ctx, nil, event); err != nil {
+				r.Log.Error("failed to create event", "org_id", orgID, "error", err)
 				continue
 			}
-			n++
+			seen := map[int64]bool{}
+			for _, link := range links {
+				if seen[link.TaskID] {
+					continue
+				}
+				seen[link.TaskID] = true
+				if err := r.attach(ctx, link.TaskID, event); err != nil {
+					r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
+					continue
+				}
+				n++
+			}
+			continue
 		}
+		if rule.Create == nil {
+			continue
+		}
+		if err := r.create(ctx, input, orgID, rule); err != nil {
+			r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
+			continue
+		}
+		n++
 	}
 	return n, nil
 }
 
-// find queries all matching subscribed links for a URL across all
-// the user's orgs and groups them by org ID.
-func (r *Router) find(ctx context.Context, input InputEvent) (map[int64][]*model.Link, error) {
-	if input.URL == "" {
+// links queries subscribed links matching the URL, scoped to the given orgs,
+// grouped by org ID. Subscribe-filtering happens in SQL.
+func (r *Router) links(ctx context.Context, url string, orgIDs []int64) (map[int64][]*model.Link, error) {
+	if url == "" || len(orgIDs) == 0 {
 		return nil, nil
 	}
-	matches, err := r.Store.FindSubscribedLinksForUser(ctx, nil, input.URL, input.UserID)
-	if err != nil {
-		return nil, err
-	}
-	seen := map[int64]bool{}
-	result := map[int64][]*model.Link{}
-	for _, m := range matches {
-		if seen[m.Link.TaskID] {
-			continue
-		}
-		seen[m.Link.TaskID] = true
-		result[m.OrgID] = append(result[m.OrgID], m.Link)
-	}
-	return result, nil
+	return r.Store.FindSubscribedLinksForOrgs(ctx, nil, url, orgIDs)
 }
 
 func (r *Router) publish(ctx context.Context, n model.Notification) {
@@ -154,3 +175,68 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 	r.publish(ctx, notification)
 	return nil
 }
+
+// create handles the create-task branch of routing. It creates the task, a
+// subscribed link, and an audit log in a single transaction. Dedup for
+// sequential redeliveries comes from the routing-level link lookup in
+// Route: once this tx commits, the next event for the same URL sees the
+// subscribed link and takes the wake path. Genuinely-concurrent
+// overlapping txns can still produce duplicates — accepted as a v1
+// limitation.
+func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) error {
+	var notification model.Notification
+	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		task := &model.Task{
+			Runner:    rule.Create.Runner,
+			Workspace: rule.Create.Workspace,
+			Instructions: []model.Instruction{{
+				Text: fmt.Sprintf("You were created by a routing rule in response to a %s %s event.", input.Source, input.Type),
+			}},
+			Status:  model.TaskStatusPending,
+			Command: model.TaskCommandStart,
+			Version: 1,
+			OrgID:   orgID,
+		}
+		if rule.Create.Prompt != "" {
+			task.Instructions = append(task.Instructions, model.Instruction{Text: rule.Create.Prompt})
+		}
+		if err := r.Store.CreateTask(ctx, tx, task); err != nil {
+			return err
+		}
+		if err := r.Store.CreateLink(ctx, tx, &model.Link{
+			TaskID:    task.ID,
+			URL:       input.URL,
+			Title:     input.Description,
+			Relevance: "trigger",
+			Subscribe: true,
+			CreatedAt: time.Now().UTC(),
+		}); err != nil {
+			return err
+		}
+		if err := r.Store.CreateLog(ctx, tx, &model.Log{
+			TaskID:  task.ID,
+			Type:    "audit",
+			Content: "webhook created task",
+		}); err != nil {
+			return err
+		}
+		notification = model.Notification{
+			Type:  "change",
+			OrgID: orgID,
+			Time:  time.Now(),
+			Resources: []model.NotificationResource{
+				{Action: "created", Type: "task", ID: task.ID},
+				{Action: "appended", Type: "task_logs", ID: task.ID},
+			},
+			Runner:         task.PendingRunner(),
+			ChannelMessage: fmt.Sprintf("Task %d created by routing rule for event: %s (%s)", task.ID, input.Description, input.URL),
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		return err
+	}
+	r.publish(ctx, notification)
+	return nil
+}
+

@@ -50,34 +50,27 @@ func (s *Store) FindLinksByURL(ctx context.Context, tx *sql.Tx, url string, orgI
 	return toModelLinks(rows), nil
 }
 
-// LinkWithOrg pairs a Link with its task's org ID.
-type LinkWithOrg struct {
-	Link  *model.Link
-	OrgID int64
-}
-
-func (s *Store) FindSubscribedLinksForUser(ctx context.Context, tx *sql.Tx, url string, userID string) ([]LinkWithOrg, error) {
-	rows, err := s.q(tx).FindSubscribedLinksForUser(ctx, sqlc.FindSubscribedLinksForUserParams{
+// FindSubscribedLinksForOrgs returns subscribed links matching the URL,
+// scoped to the given orgs, grouped by org ID.
+func (s *Store) FindSubscribedLinksForOrgs(ctx context.Context, tx *sql.Tx, url string, orgIDs []int64) (map[int64][]*model.Link, error) {
+	rows, err := s.q(tx).FindSubscribedLinksForOrgs(ctx, sqlc.FindSubscribedLinksForOrgsParams{
 		Url:    url,
-		UserID: userID,
+		OrgIds: orgIDs,
 	})
 	if err != nil {
 		return nil, err
 	}
-	result := make([]LinkWithOrg, len(rows))
-	for i, row := range rows {
-		result[i] = LinkWithOrg{
-			Link: &model.Link{
-				ID:        row.ID,
-				TaskID:    row.TaskID,
-				Relevance: row.Relevance,
-				URL:       row.Url,
-				Title:     row.Title,
-				Subscribe: row.Subscribe,
-				CreatedAt: row.CreatedAt,
-			},
-			OrgID: row.OrgID,
-		}
+	result := make(map[int64][]*model.Link)
+	for _, row := range rows {
+		result[row.OrgID] = append(result[row.OrgID], &model.Link{
+			ID:        row.ID,
+			TaskID:    row.TaskID,
+			Relevance: row.Relevance,
+			URL:       row.Url,
+			Title:     row.Title,
+			Subscribe: row.Subscribe,
+			CreatedAt: row.CreatedAt,
+		})
 	}
 	return result, nil
 }

@@ -8,6 +8,8 @@ package sqlc
 import (
 	"context"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const createLink = `-- name: CreateLink :one
@@ -92,21 +94,21 @@ func (q *Queries) FindLinksByURL(ctx context.Context, arg FindLinksByURLParams) 
 	return items, nil
 }
 
-const findSubscribedLinksForUser = `-- name: FindSubscribedLinksForUser :many
+const findSubscribedLinksForOrgs = `-- name: FindSubscribedLinksForOrgs :many
 SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, t.org_id
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
-JOIN org_members om ON t.org_id = om.org_id
-WHERE l.url = $1 AND l.subscribe = TRUE AND t.archived = FALSE AND om.user_id = $2
+WHERE l.url = $1 AND l.subscribe = TRUE AND t.archived = FALSE
+  AND t.org_id = ANY($2::BIGINT[])
 ORDER BY t.org_id, l.created_at DESC
 `
 
-type FindSubscribedLinksForUserParams struct {
-	Url    string `json:"url"`
-	UserID string `json:"user_id"`
+type FindSubscribedLinksForOrgsParams struct {
+	Url    string  `json:"url"`
+	OrgIds []int64 `json:"org_ids"`
 }
 
-type FindSubscribedLinksForUserRow struct {
+type FindSubscribedLinksForOrgsRow struct {
 	ID        int64     `json:"id"`
 	TaskID    int64     `json:"task_id"`
 	Relevance string    `json:"relevance"`
@@ -117,15 +119,15 @@ type FindSubscribedLinksForUserRow struct {
 	OrgID     int64     `json:"org_id"`
 }
 
-func (q *Queries) FindSubscribedLinksForUser(ctx context.Context, arg FindSubscribedLinksForUserParams) ([]FindSubscribedLinksForUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, findSubscribedLinksForUser, arg.Url, arg.UserID)
+func (q *Queries) FindSubscribedLinksForOrgs(ctx context.Context, arg FindSubscribedLinksForOrgsParams) ([]FindSubscribedLinksForOrgsRow, error) {
+	rows, err := q.db.QueryContext(ctx, findSubscribedLinksForOrgs, arg.Url, pq.Array(arg.OrgIds))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []FindSubscribedLinksForUserRow{}
+	items := []FindSubscribedLinksForOrgsRow{}
 	for rows.Next() {
-		var i FindSubscribedLinksForUserRow
+		var i FindSubscribedLinksForOrgsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TaskID,
