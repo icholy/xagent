@@ -341,11 +341,7 @@ function EventSettings() {
 function RecentEventsCard() {
   const orgId = useOrgId()
   const [limit, setLimit] = useState(25)
-  const { data, isLoading, error } = useQuery(
-    listEvents,
-    { limit },
-    { refetchInterval: 60000 },
-  )
+  const { data, isLoading, error } = useQuery(listEvents, { limit }, { refetchInterval: 60000 })
 
   const events = data?.events ?? []
 
@@ -355,9 +351,7 @@ function RecentEventsCard() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <CardTitle>Recent Events</CardTitle>
-            <CardDescription>
-              Inspect events received from external sources.
-            </CardDescription>
+            <CardDescription>Inspect events received from external sources.</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2">
