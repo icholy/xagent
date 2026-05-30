@@ -12,6 +12,7 @@ import (
 
 	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/x/sse"
+	"github.com/icholy/xagent/internal/x/wakeup"
 )
 
 // DefaultSSEReconnectInterval is the wait between reconnect attempts when
@@ -29,7 +30,7 @@ type SSESubscriber struct {
 	client    *http.Client
 	log       *slog.Logger
 	reconnect time.Duration
-	notify    chan struct{}
+	notify    wakeup.Chan
 }
 
 // SSESubscriberOptions configures an SSESubscriber.
@@ -59,7 +60,7 @@ func NewSSESubscriber(opts SSESubscriberOptions) *SSESubscriber {
 		client:    cmp.Or(opts.Client, http.DefaultClient),
 		log:       cmp.Or(opts.Log, slog.Default()),
 		reconnect: cmp.Or(opts.ReconnectInterval, DefaultSSEReconnectInterval),
-		notify:    make(chan struct{}, 1),
+		notify:    wakeup.New(),
 	}
 }
 
@@ -120,13 +121,6 @@ func (s *SSESubscriber) connect(ctx context.Context) error {
 		if ev.Event == "" {
 			return nil
 		}
-		s.signal()
-	}
-}
-
-func (s *SSESubscriber) signal() {
-	select {
-	case s.notify <- struct{}{}:
-	default:
+		s.notify.Wake()
 	}
 }
