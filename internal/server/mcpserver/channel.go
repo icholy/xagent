@@ -2,8 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/icholy/xagent/internal/model"
@@ -17,23 +15,31 @@ type ChannelSender interface {
 	SendChannel(ctx context.Context, p mcpchannel.Params) error
 }
 
-// ForwardNotification sends notifications to the mcp channel
+// ForwardNotification sends a notification to the mcp channel. It is a pure
+// relay gated on n.ChannelMessage: an empty message means the publisher
+// intentionally silenced the channel for this notification.
 func ForwardNotification(ctx context.Context, sender ChannelSender, n model.Notification) error {
-	if n.Type != "change" {
+	if n.Type != "change" || n.ChannelMessage == "" {
 		return nil
 	}
-	var errs []error
-	for _, r := range n.Resources {
-		if r.Type != "task" {
-			continue
-		}
-		errs = append(errs, sender.SendChannel(ctx, mcpchannel.Params{
-			Content: fmt.Sprintf("task %d was %s.", r.ID, r.Action),
-			Meta: map[string]string{
-				"resource": "task",
-				"id":       strconv.FormatInt(r.ID, 10),
-			},
-		}))
+	meta := map[string]string{}
+	if id, ok := primaryTaskID(n.Resources); ok {
+		meta["resource"] = "task"
+		meta["id"] = strconv.FormatInt(id, 10)
 	}
-	return errors.Join(errs...)
+	return sender.SendChannel(ctx, mcpchannel.Params{
+		Content: n.ChannelMessage,
+		Meta:    meta,
+	})
+}
+
+// primaryTaskID returns the ID of the first task resource in resources, or
+// (0, false) if none is present.
+func primaryTaskID(resources []model.NotificationResource) (int64, bool) {
+	for _, r := range resources {
+		if r.Type == "task" {
+			return r.ID, true
+		}
+	}
+	return 0, false
 }

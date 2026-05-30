@@ -592,6 +592,64 @@ func TestTask_Restart(t *testing.T) {
 	}
 }
 
+func TestTask_ChannelMessage_Terminal(t *testing.T) {
+	tests := []struct {
+		name   string
+		status TaskStatus
+		want   string
+	}{
+		{"completed", TaskStatusCompleted, "Task 42 completed."},
+		{"failed", TaskStatusFailed, "Task 42 failed."},
+		{"cancelled", TaskStatusCancelled, "Task 42 cancelled."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := Task{ID: 42, Status: tt.status}
+			assert.Equal(t, task.ChannelMessage("ignored cause"), tt.want)
+			assert.Equal(t, task.ChannelMessage(""), tt.want)
+		})
+	}
+}
+
+func TestTask_ChannelMessage_Queued(t *testing.T) {
+	task := Task{
+		ID:      7,
+		Runner:  "r1",
+		Status:  TaskStatusPending,
+		Command: TaskCommandStart,
+	}
+	assert.Equal(t, task.ChannelMessage("woken by event"), "woken by event")
+}
+
+func TestTask_ChannelMessage_Silent(t *testing.T) {
+	tests := []struct {
+		name string
+		task Task
+	}{
+		{
+			name: "running -> running no-op (Command=None after match)",
+			task: Task{ID: 1, Runner: "r1", Status: TaskStatusRunning, Command: TaskCommandNone},
+		},
+		{
+			name: "started event on archived task (Cancelling, Archived)",
+			task: Task{ID: 1, Runner: "r1", Status: TaskStatusCancelling, Command: TaskCommandStop, Archived: true},
+		},
+		{
+			name: "restarting mid-flight (no PendingRunner without Command)",
+			task: Task{ID: 1, Runner: "r1", Status: TaskStatusRestarting, Command: TaskCommandNone},
+		},
+		{
+			name: "pending with no command",
+			task: Task{ID: 1, Runner: "r1", Status: TaskStatusPending, Command: TaskCommandNone},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.task.ChannelMessage("some cause"), "")
+		})
+	}
+}
+
 func TestTask_Start(t *testing.T) {
 	tests := []struct {
 		name   string

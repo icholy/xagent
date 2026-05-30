@@ -123,11 +123,12 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 			{Action: "created", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		},
-		OrgID:    caller.OrgID,
-		Runner:   task.PendingRunner(),
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
+		OrgID:          caller.OrgID,
+		Runner:         task.PendingRunner(),
+		UserID:         caller.ID,
+		ClientID:       caller.ClientID,
+		Time:           time.Now(),
+		ChannelMessage: task.ChannelMessage(fmt.Sprintf("Task %d created on %s/%s.", task.ID, task.Runner, task.Workspace)),
 	})
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(s.baseURL),
@@ -218,6 +219,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			{Action: "updated", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
+		notification.ChannelMessage = task.ChannelMessage(
+			fmt.Sprintf("Task %d queued: %s.", task.ID, strings.Join(changed, ", ")),
+		)
 		return tx.Commit()
 	})
 	if err != nil {
@@ -263,6 +267,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 			{Action: "archived", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
+		notification.ChannelMessage = task.ChannelMessage("")
 		return tx.Commit()
 	})
 	if err != nil {
@@ -308,6 +313,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 			{Action: "unarchived", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
+		notification.ChannelMessage = task.ChannelMessage("")
 		return tx.Commit()
 	})
 	if err != nil {
@@ -353,6 +359,9 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 			{Action: "cancelled", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
+		notification.ChannelMessage = task.ChannelMessage(
+			fmt.Sprintf("Task %d cancellation requested.", task.ID),
+		)
 		return tx.Commit()
 	})
 	if err != nil {
@@ -398,6 +407,9 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 			{Action: "restarted", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
+		notification.ChannelMessage = task.ChannelMessage(
+			fmt.Sprintf("Task %d restart requested.", task.ID),
+		)
 		return tx.Commit()
 	})
 	if err != nil {

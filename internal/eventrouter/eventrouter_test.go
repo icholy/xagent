@@ -1,10 +1,13 @@
 package eventrouter
 
 import (
+	"context"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/pubsub"
 
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
@@ -190,6 +193,47 @@ func TestRouteSkipsEventsWithoutXAgentPrefix(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
+}
+
+func TestRouter_AttachSetsWakeMessage(t *testing.T) {
+	t.Parallel()
+
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	url := "https://github.com/owner/repo/pull/1#issuecomment-1"
+	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Runner:    "r",
+		Workspace: "w",
+		Status:    model.TaskStatusCompleted,
+		Links:     []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	r := &Router{
+		Log:       slog.Default(),
+		Store:     s,
+		Publisher: pub,
+	}
+
+	n, err := r.Route(t.Context(), InputEvent{
+		Source:      "github",
+		Description: "PR comment from alice",
+		Data:        "xagent: fix tests",
+		URL:         url,
+		UserID:      org.UserID,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	msg := calls[0].N.ChannelMessage
+	assert.Assert(t, msg != "", "expected non-empty ChannelMessage, got empty")
+	assert.Assert(t, strings.Contains(msg, "Task "), "expected task id in message: %q", msg)
+	assert.Assert(t, strings.Contains(msg, "woken by event"), "expected wake phrase in message: %q", msg)
+	assert.Assert(t, strings.Contains(msg, "PR comment from alice"), "expected description in message: %q", msg)
+	assert.Assert(t, strings.Contains(msg, url), "expected URL in message: %q", msg)
 }
 
 func TestRouteOrgRulesOverrideDefaults(t *testing.T) {

@@ -13,6 +13,11 @@ type Notification struct {
 	ClientID  string                 `json:"client_id,omitempty"`
 	// Runner is only set if there's pending work to do
 	Runner string `json:"for_runner,omitempty"`
+	// ChannelMessage is the human-readable line forwarded to the agent
+	// channel by mcpserver.ForwardNotification. Empty means silent (the
+	// channel forwarder gates on this field). Consumed only by the channel
+	// bridge; runner and web UI ignore it.
+	ChannelMessage string `json:"channel_message,omitempty"`
 }
 
 // NotificationResource describes an affected resource within a "change" Notification.
