@@ -357,10 +357,11 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 			{Action: "cancelled", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
+		// Only the Pending->Cancelled branch is terminal here; the Running->
+		// Cancelling branch will produce its terminal "cancelled" message via
+		// SubmitRunnerEvents once the runner stops the container.
 		if task.Status == model.TaskStatusCancelled {
 			notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
-		} else {
-			notification.ChannelMessage = fmt.Sprintf("Task %d cancellation requested.", task.ID)
 		}
 		return tx.Commit()
 	})

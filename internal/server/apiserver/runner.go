@@ -54,6 +54,12 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				}
 			}
 			notification.Runner = task.PendingRunner()
+			// Only terminal statuses produce a channel message. Completed,
+			// Failed, and Cancelled are unambiguous and agent-actionable; the
+			// non-terminal runner transitions (running, restarting, pending
+			// re-queue) don't carry enough context to say anything useful
+			// without re-deriving why, so we stay silent and let the
+			// eventual terminal event speak.
 			switch task.Status {
 			case model.TaskStatusCompleted:
 				notification.ChannelMessage = fmt.Sprintf("Task %d completed.", task.ID)
