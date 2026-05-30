@@ -6,89 +6,159 @@ Issue: https://github.com/icholy/xagent/issues/703
 
 xagent currently delegates the entire login flow to Zitadel Cloud's hosted Login UI (the V2 login served at `/ui/v2/login` on the managed `*.zitadel.cloud` domain). The OIDC code flow is configured in `internal/auth/apiauth/apiauth.go:159-188` via `github.com/zitadel/zitadel-go/v3/pkg/authentication`, with the redirect URI set to `<base>/auth/callback` in `internal/command/server.go:186`. xagent's own server never sees the username/password form — it only receives the authorization code after Zitadel finishes.
 
-The hosted V2 page does not play well with password managers: 1Password, Bitwarden, and the browser-built-in managers frequently fail to autofill the password field. The user has to type credentials by hand every time the cookie session expires. The managed branding settings expose logos, colors, and message strings — not autocomplete attributes, form layout, or DOM structure — so this can't be fixed from inside the Zitadel admin UI.
+The hosted V2 page does not play well with password managers: 1Password, Bitwarden, and the browser-built-in managers frequently fail to autofill the password field, so the user types credentials by hand every time the cookie session expires. The managed branding settings expose logos, colors, and message strings — not autocomplete attributes, form layout, or DOM structure — so this can't be fixed from inside the Zitadel admin UI.
 
-Everything else about the current setup is fine: OIDC is correctly wired, MFA works, and the cookie middleware (`a.cookie` in `apiauth.go:124`) is unchanged by anything below. The replacement only needs to take over what the user *sees and types into* — credential collection, MFA prompts, and the redirect back into the OIDC flow.
+Everything else about the current setup is fine: OIDC is correctly wired, MFA works, and the cookie middleware (`a.cookie` in `apiauth.go:124`) is unchanged by anything below. The replacement only needs to take over what the user *sees and types into* — credential collection, MFA prompts, and the redirect back into the OIDC code flow.
 
 ## Design
 
-Zitadel offers three customization tiers, and only the third can actually fix autofill:
+Build a login page inside our existing `webui/` (React + TanStack Router/Query + shadcn/ui) as a new route, written from scratch and styled like the rest of the app. It talks to Zitadel's Session API and OIDC v2 API through a thin proxy on the xagent server so that the privileged login-client token never reaches the browser. Zitadel's open-source TypeScript login app is used as a *reference* for the flow only — not forked, not vendored.
 
-1. **Hosted V2 branding.** Logos, colors, custom domain (`login.acme.com`), and message-string overrides via the Settings V2 API. Does not expose the form HTML. *Not sufficient.*
-2. **Self-hosted Login UI (fork of `zitadel/typescript`).** Zitadel ships their own Next.js Login app as open source. We fork it, fix the autocomplete attributes, deploy it ourselves, and point Zitadel at it. We get full HTML/CSS control while keeping Zitadel's session/MFA/passkey logic.
-3. **Build our own from scratch against the Session + OIDC v2 APIs.** Maximum control, weeks of work, recreates MFA/passkey/external-IDP flows ourselves.
+This keeps the surface area inside the existing repo, deployment, and CI pipeline. There is no new domain, no second hosting target, no upstream fork to track. The only thing that changes about Zitadel itself is one application setting: the Custom Login UI URL points at our `webui` route instead of the managed `/ui/v2/login`.
 
-This proposal picks **Option 2**. Option 1 doesn't solve the problem. Option 3 is many weeks of identity-flow work to fix a CSS/attribute bug.
+### Flow
 
-### Does the Zitadel Cloud free tier support this?
+What happens today:
 
-Yes. The relevant capabilities are all documented as available on Cloud instances (not gated to self-hosted or paid tiers):
+```
+Browser
+  → GET /auth/login                           (xagent — zitadel-go authentication middleware)
+  → 302 to https://<instance>.zitadel.cloud/oauth/v2/authorize?…
+  → 302 to https://<instance>.zitadel.cloud/ui/v2/login?authRequest=V2_…   ← the broken page
+  → user types credentials, MFA, etc.
+  → 302 to <base>/auth/callback?code=…
+  → zitadel-go middleware exchanges code, sets cookie session
+  → 302 to original URL
+```
 
-- **`IAM_LOGIN_CLIENT` role.** Granted in *Default settings → Manager* on the Cloud console to a service account; this is the role the Login app uses to call the Session API on the user's behalf. (See [Login App docs](https://zitadel.com/docs/guides/integrate/login-ui/login-app) and [Self-Hosting Login Client](https://zitadel.com/docs/self-hosting/manage/login-client) — the role itself is instance-level and is not a paid-plan feature.)
-- **Service accounts + Personal Access Tokens.** Standard free-tier feature.
-- **Trusted Domains.** The login UI's domain (e.g. `login.xagent.choly.ca`) must be added to the instance's Trusted Domains list. Configurable from the Cloud console.
-- **Session API + OIDC v2 API.** Both are part of the standard Zitadel API surface available on Cloud — they are what the managed hosted UI itself uses.
-- **"Custom login UI URL" on the Application.** Each Zitadel application has a setting to point its OIDC flow at an external login UI instead of the managed `/ui/v2/login`.
+What happens after this change:
 
-The only Cloud-specific concern is that our instance currently lives on a `*.zitadel.cloud` subdomain. The custom Login UI does not require a custom Zitadel domain — it only requires that *our* login domain be in Trusted Domains. The instance keeps its current URL; only the user-facing login form moves.
+```
+Browser
+  → GET /auth/login                           (unchanged xagent — zitadel-go authentication middleware)
+  → 302 to https://<instance>.zitadel.cloud/oauth/v2/authorize?…
+  → 302 to <base>/ui/login?authRequest=V2_…   ← our own React route
+  → user types into our form; UI calls our /auth/login/* proxy endpoints
+  → on success the proxy returns the Zitadel callback URL; UI navigates there
+  → 302 to <base>/auth/callback?code=…
+  → zitadel-go middleware exchanges code, sets cookie session  (unchanged)
+  → 302 to original URL
+```
 
-### Phase 1 — Stand up the forked Login app
+The first and last steps stay byte-for-byte identical. Only the middle (the page the user types into) moves into `webui/`.
 
-1. **Fork `zitadel/typescript`.** Pin to the same minor version as our Zitadel Cloud instance ([Login App: Versioning](https://zitadel.com/docs/guides/integrate/login-ui/login-app)). Live in a sibling repo under `icholy/xagent-login` so it can iterate independently of `xagent`'s release cadence.
-2. **Service account + PAT.** In the Cloud console: create a service account `xagent-login-client`, mint a PAT, grant `IAM_LOGIN_CLIENT` under Default settings.
-3. **Deployment target.** Two options here, expanded under *Trade-offs*. The default plan is to deploy the Next.js app to Fly.io alongside the existing `xagent` server (we already have a Fly project from `fly.toml`), under `login.xagent.choly.ca`. PAT lives in Fly secrets.
-4. **Environment.** Per Zitadel's docs, only three vars are mandatory: `ZITADEL_API_URL=https://<our-instance>.zitadel.cloud`, `ZITADEL_SERVICE_USER_ID`, `ZITADEL_SERVICE_USER_TOKEN`. Optional: `EMAIL_VERIFICATION=true` (we already require verified email today).
-5. **Trusted Domain.** Add `login.xagent.choly.ca` in the Zitadel Cloud console.
-6. **Application config.** On the xagent application registered in Zitadel, set the "Custom Login UI URL" to `https://login.xagent.choly.ca`. Zitadel's OIDC authorize endpoint will redirect there instead of `/ui/v2/login`.
+### What needs to live in `xagent` server
 
-After Phase 1 the user-visible login looks the same (because we haven't changed any HTML yet), but the form is served from our domain. No changes are needed in `xagent` itself — `apiauth.go` still talks OIDC to the Zitadel instance; only the page the browser hits between `/authorize` and `/auth/callback` has moved.
+A small set of new routes on the xagent server, all under `/auth/login/*`, that proxy the Zitadel Session and OIDC v2 APIs and inject the login-client bearer token server-side. The browser only ever talks to xagent; the PAT for the `IAM_LOGIN_CLIENT`-roled service account stays in server config (added to `apiauth.Config` and read from a CLI flag / env var alongside the existing `auth-domain` / `auth-client-id` in `internal/command/server.go:42-56`).
 
-### Phase 2 — Fix the autofill bug
+The endpoints map one-to-one onto Zitadel calls:
 
-The actual fix lives in the forked login app, not in xagent. The most likely culprits, based on the typical pattern that breaks password managers:
+| xagent endpoint | Method | Proxies to Zitadel | Purpose |
+|---|---|---|---|
+| `/auth/login/auth-request/{id}` | GET | `GET /v2/oidc/auth_requests/{id}` | Fetch the OIDC auth request — login hint, prompt, scope, requested IDPs |
+| `/auth/login/session` | POST | `POST /v2/sessions` | Start session, check username (`checks.user.loginName`) |
+| `/auth/login/session/{id}` | PATCH | `PATCH /v2/sessions/{id}` | Submit password / MFA challenge or check (see *Steps* below) |
+| `/auth/login/auth-request/{id}/finalize` | POST | `POST /v2/oidc/auth_requests/{id}` | Tie the authenticated session to the auth request; returns the callback URL |
 
-- **Two-step username → password forms** where the second step is rendered into a different DOM element (or behind a route change) without the username field still present in the form. Password managers heuristically look for a username field paired with the password field; if it's been unmounted, autofill silently misses.
-  - Fix: keep a hidden, populated `<input type="text" autocomplete="username" readonly>` in the password-step form, mirroring the username from step 1.
-- **`autocomplete` attributes.** Ensure username inputs use `autocomplete="username"` (not `off`, not `email`) and password inputs use `autocomplete="current-password"`.
-- **`name` attributes.** Some password managers look at `name="username"` / `name="password"` in addition to `autocomplete`.
-- **Form submission via `<button onClick>` instead of a real form submit.** Some managers only save credentials when a `<form>` is submitted; a click-handler-only flow may load fine but never trigger the "save password" prompt.
+The proxy is intentionally thin: it forwards JSON bodies untouched, adds `Authorization: Bearer <PAT>`, and returns the upstream response. The session token returned by `POST /v2/sessions` is opaque per-user state, not a privileged credential, so it is fine to round-trip through the browser between calls. The PAT, on the other hand, is the keys-to-the-instance-shaped thing the login-client docs hand you and must never reach JS.
 
-The fork lets us iterate on these one at a time in a real browser with real password managers, which we cannot do against the hosted page.
+A new file in the same package: `internal/auth/apiauth/login.go`, providing a handler `HandleLogin()` mounted in `internal/server/server.go` next to the existing `/auth/token` and `/auth/` routes:
 
-### Phase 3 — Reduce drift from upstream
+```go
+mux.Handle("/auth/login/", s.auth.HandleLogin())          // new — public, no auth required
+mux.Handle("/auth/token", alice.New(s.auth.CheckAuth())…) // unchanged
+mux.Handle("/auth/", s.auth.Handler())                    // unchanged — still serves /auth/login, /auth/callback, /auth/logout via the zitadel-go middleware
+```
 
-Once the fix is in place, the fork has a long-term maintenance burden: Zitadel's TypeScript login app is under active development and will get security fixes. The fork strategy that minimizes drift:
+The order matters: `/auth/login/` (with trailing slash, our new proxy prefix) is registered *before* `/auth/` so it wins on `/auth/login/auth-request/…`. The existing zitadel-go route `/auth/login` (no trailing slash, no path beyond it) is untouched — it remains the entry point that issues the initial redirect to Zitadel's `/authorize`.
 
-- Keep the fork as a **thin layer**: only the changed components live in our repo; everything else is upstream.
-- Rebase against upstream `main` on a regular schedule (e.g. monthly), driven by a Dependabot-style alert.
-- Pin the Zitadel API surface to the version of our Cloud instance, since Cloud lags self-hosted by a release or two.
+### What needs to live in `webui/`
 
-If upstream eventually fixes the autofill issue, we delete the fork and switch the Application's Custom Login UI URL back to the managed `/ui/v2/login`. This is a one-setting reversal with no code changes in xagent.
+A single new route, `/ui/login`, with its own components, served as part of the existing SPA. It reads `?authRequest=V2_…` from the URL, fetches the auth request, walks the user through the necessary steps, and on success follows the callback URL Zitadel returns.
 
-### What changes in `xagent` itself
+```
+webui/src/routes/login.tsx                  — TanStack Router route, top-level layout
+webui/src/components/login/
+  ├── username-step.tsx                     — step 1: collect email/username
+  ├── password-step.tsx                     — step 2: collect password
+  ├── mfa-step.tsx                          — step 3 (conditional): TOTP / OTP / passkey
+  └── login-form.ts                         — shared form state, autocomplete attrs, submit helpers
+webui/src/lib/login-api.ts                  — thin client over /auth/login/* (returns Promise of typed responses)
+```
 
-Essentially nothing in the Go code. The OIDC flow in `apiauth.go` continues to point at the Zitadel instance domain, and Zitadel handles the redirect to our custom login UI based on its application config. The webui isn't involved either — the login page is served from a separate domain.
+The `__root.tsx` route currently expects an authenticated user (`__root.tsx:60` derives the org from the auth context). The login route must opt out of that. Two ways:
 
-Two small operational changes:
-- `internal/command/server.go:182-188`: no flag changes. `Domain`, `ClientID`, `ClientSecret`, `RedirectURI`, `PostLogoutURI` all stay as today.
-- README + ops docs: a section describing the login-app deployment, the PAT rotation procedure, and the rollback (flip the Custom Login UI URL back to the managed default).
+1. Move the org/profile-loading logic out of `__root.tsx` and into a sub-route, leaving `__root.tsx` purely structural. The login route becomes a sibling to the rest of the tree.
+2. Add a `beforeLoad` short-circuit in the login route that skips the org logic.
+
+Option 1 is cleaner; option 2 is smaller. Either is fine — this is a webui refactor detail.
+
+Crucially, the login route is **not** behind `s.auth.RequireAuth()`. The current server mounts the SPA as `mux.Handle("/ui/", … s.auth.RequireAuth()(WebUI()))` in `server.go:121`, which means the cookie middleware redirects unauthenticated requests on `/ui/*` straight to Zitadel via `/auth/login`. We carve out `/ui/login` so that one path is reachable without a cookie:
+
+```go
+mux.Handle("/ui/login", WebUI())                           // public — no auth middleware
+mux.Handle("/ui/", s.auth.RequireAuth()(WebUI()))          // unchanged for everything else
+```
+
+The mux matches longest prefix, so `/ui/login` is hit only for that exact route; everything else stays behind cookie auth.
+
+### Steps
+
+The flow inside the React route, with the underlying Zitadel calls noted. All calls go through the xagent proxy described above; this is what the proxy ultimately translates to.
+
+1. **Read `authRequest` from the URL.** Required. If missing, render a generic "please sign in from the app" message — this route should not be reachable except through Zitadel's redirect from `/oauth/v2/authorize`.
+
+2. **Fetch the auth request.** `GET /v2/oidc/auth_requests/{id}`. The response carries the application's settings: `loginHint` (email to prefill), `prompt` (e.g. `login` forces re-auth), requested scopes, and the list of allowed external IDPs. We use this to (a) prefill the username, (b) decide whether the existing-cookie shortcut applies (the user might already have a Zitadel session for this instance — out of scope for v1, see open questions), and (c) render the "sign in with …" buttons if external IDPs are configured.
+
+3. **Username step.** A real `<form>` with `<input type="email" name="username" autocomplete="username">` and a submit button. On submit:
+   - `POST /v2/sessions` with `{ "checks": { "user": { "loginName": "<email>" } } }`.
+   - Response includes `sessionId`, `sessionToken`, and a `user` object with what factors are available. Store `sessionId` + `sessionToken` in component state (not in `AuthTransport`, which is for our own app JWT — the Zitadel session token is short-lived and round-trips with the password step). On error, surface the message (unknown user, account locked, etc.).
+
+4. **Password step.** Renders the same form structure as step 3 with the username field still present as a hidden, readonly `<input autocomplete="username">` — this is the autofill fix. Adds a `<input type="password" name="password" autocomplete="current-password">`. On submit:
+   - `PATCH /v2/sessions/{sessionId}` with `{ "checks": { "password": { "password": "<pwd>" } } }` and `Authorization: Bearer <sessionToken>`.
+   - Response gives an updated `sessionToken`. If the response indicates additional factors required, transition to MFA step.
+
+5. **MFA step (conditional).** If the previous response carries a `challenges` requirement or the session is not yet sufficient for the auth request's auth-method policy, run the appropriate challenge/check pair:
+   - TOTP: single PATCH with `{ "checks": { "totp": { "code": "<digits>" } } }`.
+   - OTP email: PATCH with `{ "challenges": { "otpEmail": {} } }` first, then PATCH again with `{ "checks": { "otpEmail": { "code": "<digits>" } } }`.
+   - Passkey (WebAuthn): PATCH with `{ "challenges": { "webAuthN": { "domain": "<our-domain>", "userVerificationRequirement": "USER_VERIFICATION_REQUIREMENT_REQUIRED" } } }`, hand the returned `publicKeyCredentialRequestOptions` to `navigator.credentials.get`, PATCH back with the assertion.
+
+6. **Finalize.** `POST /v2/oidc/auth_requests/{authRequestId}` with `{ "session": { "sessionId": "<id>", "sessionToken": "<token>" } }`. Response contains a `callbackUrl` — an absolute URL on the Zitadel instance like `https://<instance>.zitadel.cloud/oauth/v2/authorize/callback?…`.
+
+7. **Navigate.** `window.location.href = callbackUrl`. Zitadel completes the auth code issuance and 302s the browser back to `<base>/auth/callback`. The existing zitadel-go middleware in `apiauth.go` picks it up, exchanges the code, sets the cookie, and lands the user on whatever URL they were trying to reach. No changes to `apiauth.go` for this leg.
+
+### What does *not* change
+
+- `internal/auth/apiauth/apiauth.go` — OIDC code flow, cookie middleware, `/auth/callback` exchange. Untouched.
+- `RedirectURI`, `PostLogoutURI`, and the OIDC scopes in `internal/command/server.go:182-188`. Untouched.
+- The `/auth/token` endpoint and `webui/src/lib/transport.ts`. Untouched — app JWTs and org switching work the same way.
+- The "remember me" cookie behavior. The session that the cookie middleware sets is unrelated to the Zitadel session created in step 3 of the login flow; the cookie outlives the Zitadel session and gates everything in `/ui/*` after login.
+
+### Configuration changes
+
+Two new server-side knobs in `apiauth.Config`, populated from new CLI flags / env vars in `internal/command/server.go`:
+
+- `LoginClientToken` (PAT for the `IAM_LOGIN_CLIENT`-roled service account). Required to talk to Session API and OIDC v2 API.
+- `LoginUIBaseURL` (typically `<baseURL>/ui/login`). Used only for the operator-facing log line at startup that says "set this as the Custom Login UI URL on your Zitadel application." The actual configuration on the Zitadel side is a one-time admin-console action, not something xagent does on boot.
+
+A `webui/.env` (or build-time constant) does not need a new entry — the proxy URL is same-origin.
 
 ## Trade-offs
 
-**Fork vs. build from scratch.** Forking inherits the Session/MFA/passkey/external-IDP plumbing for free, which is the bulk of an identity UI. The cost is rebasing against upstream. Building from scratch costs weeks per flow (MFA, passkeys, external IdPs each need their own page), all to land at the same autofill fix. The fork wins until the diff against upstream grows past a couple of components, at which point we'd reconsider.
+**Server-side proxy vs. browser-direct to Zitadel.** The Session API requires a PAT for a user with the `IAM_LOGIN_CLIENT` role — that's a privileged credential. Letting the browser hold it would broadcast it to anyone hitting the login page. The proxy keeps it on the server and gives us a place to add rate limiting, logging, and pre-flight validation later if we want.
 
-**Deploy to Fly vs. deploy to Vercel.** Zitadel's docs use Vercel as the example deployment target. Vercel is one click to ship a Next.js app, and gives previews per PR. Against that, we already operate Fly (`fly.toml`), have secrets management there, and don't want a second hosting bill or a second place to check status during an incident. Picking Fly: one fewer vendor, slightly more setup. If the Fly Next.js path turns out to be painful, Vercel is the documented fallback.
+**Reference vs. fork of `zitadel/typescript`.** The TS app is permissively licensed and would be a fine starting point, but it's a full Next.js application with its own state management, i18n, theming, and routing layered on top of the Session API plumbing. Reading it to understand the flow, then writing our own React components against the same APIs, is less code than carrying a fork — and it's the only path that delivers the autofill fix without inheriting whatever caused the bug in upstream's form structure.
 
-**Custom domain on our login UI vs. on Zitadel itself.** This proposal keeps the Zitadel instance on its `*.zitadel.cloud` URL and only puts the login UI on `login.xagent.choly.ca`. An alternative is to put Zitadel itself behind `auth.xagent.choly.ca`, which makes the OIDC issuer match our brand. That is a Cloud "Custom Domain" feature, available on Cloud, but unrelated to fixing autofill — it's a separate concern that can be done later or never. Out of scope here.
+**One-shot vs. step-by-step UI.** The flow above is structured as discrete steps (username → password → MFA), which mirrors what users see on most login pages today. A simpler "all on one screen" form is possible since the Session API accepts username and password checks in a single `POST /v2/sessions` (`checks.user.loginName` + `checks.password.password` together). The step-by-step shape is preferred because (a) it surfaces "unknown user" before asking for a password, (b) it matches the prefill story for external IDPs, and (c) it lets us render the username-step `loginName` as a hidden input in the password step, which is the autofill fix.
 
-**Status of the existing Login UI on free tier.** Zitadel Cloud has historically restricted some enterprise features to paid plans. Before committing engineering time we should confirm in the Cloud console that *(a)* the `IAM_LOGIN_CLIENT` role is grantable on our instance and *(b)* the application has a "Custom Login UI URL" field. Both are documented as Cloud features, but tier gating is the kind of detail docs sometimes elide. This is the first thing to verify in Phase 1 step 2 — if either is paid-only, the plan changes (see Open questions).
+**Where the Zitadel session token lives.** It lives in React component state for the duration of the login flow and never touches local storage. That is fine: the session token is short-lived, single-purpose, and ceases to matter as soon as `POST /v2/oidc/auth_requests/{id}` is called. If the user reloads mid-flow they restart from the username step, which is acceptable behavior — same as today.
 
 ## Open Questions
 
-1. **Free-tier verification.** Before any code is written, log into the Zitadel Cloud console for our instance and confirm: can a service account be granted `IAM_LOGIN_CLIENT`? Does the xagent application show a "Custom Login UI URL" field? Both should be present on the free Cloud plan based on docs — but if either turns out to be paywalled, this proposal needs to switch to Option 3 (build from scratch against the public OIDC v2 / Session APIs, which are not gated) and the effort estimate triples.
+1. **Existing-session shortcut.** A user who already has a valid Zitadel session (e.g. they signed into another app on the same Zitadel instance, or just signed in here and the OIDC `prompt` doesn't say `login`) can skip the form entirely — the auth request can be finalized against the existing session. Detecting that requires `ListSessions` or similar; it's a nice-to-have for v1 since most users will hit the login page only when their cookie has expired and there's no live Zitadel session either. Worth scoping in v2.
 
-2. **Domain.** `login.xagent.choly.ca` assumes the current production deployment. If the production domain is different, swap accordingly. The login app must be on a domain we control, since one of the Trusted Domains entries needs to point at it.
+2. **External IDPs.** If the Zitadel application has Google/GitHub/etc. configured as login methods, the auth-request response lists them. Adding "Sign in with X" buttons that initiate the external-IDP redirect dance is a separate, contained piece of work; v1 can omit it and gracefully fall back to the username/password form, with the caveat that anyone relying on external IDPs would be blocked until v2 lands. Confirm whether any current xagent users use an external IDP — if not, deferring is safe.
 
-3. **Existing sessions on cut-over.** When the Custom Login UI URL flips, do live cookie sessions survive (they should — the cookie is on xagent's domain, not Zitadel's), and what happens to mid-flight `/authorize` calls? Worth a brief test in a staging app/instance before the production flip.
+3. **Self-service.** Zitadel's hosted UI exposes registration, password reset, and email verification flows. xagent currently relies on those for first-time setup. Our custom login does not need to reimplement all of them — for `forgot password` we can link to Zitadel's hosted reset flow at `<instance>.zitadel.cloud/ui/v2/password/reset` and reload back to our login on completion. Acceptable for v1; revisit if the password manager problem turns out to also affect those pages.
 
-4. **Where does the fork live?** Sibling repo `icholy/xagent-login` keeps it out of `xagent`'s Go build and release pipeline. A monorepo subdirectory (e.g. `login/`) would be one fewer repo but couples a Next.js app to xagent's CI matrix. Default to sibling repo; revisit if cross-repo coordination becomes painful.
+4. **Where the per-step state lives in TanStack Router.** Search params (`?step=password`) survive reload but expose flow state in URLs; route-level state is cleaner but loses on reload. Default: search params for `step`, component state for the session token. This is a webui implementation detail to settle during the build.
