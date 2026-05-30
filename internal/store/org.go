@@ -226,3 +226,24 @@ func (s *Store) GetRoutingRulesByOrgs(ctx context.Context, tx *sql.Tx, orgIDs []
 	}
 	return result, nil
 }
+
+// ListRoutingRulesForUser returns routing rules for every org the user is a
+// member of, keyed by org ID. Member orgs without configured rules are
+// included with a nil/empty slice so callers can apply a fallback.
+func (s *Store) ListRoutingRulesForUser(ctx context.Context, tx *sql.Tx, userID string) (map[int64][]model.RoutingRule, error) {
+	rows, err := s.q(tx).ListRoutingRulesForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[int64][]model.RoutingRule, len(rows))
+	for _, row := range rows {
+		var rules []model.RoutingRule
+		if len(row.RoutingRules) > 0 {
+			if err := json.Unmarshal(row.RoutingRules, &rules); err != nil {
+				return nil, fmt.Errorf("org %d: %w", row.ID, err)
+			}
+		}
+		result[row.ID] = rules
+	}
+	return result, nil
+}

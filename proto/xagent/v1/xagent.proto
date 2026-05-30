@@ -534,6 +534,13 @@ message RoutingRule {
   string type = 2;
   string prefix = 3;
   string mention = 4;
+  CreateTaskAction create = 5;
+}
+
+message CreateTaskAction {
+  string workspace = 1;
+  string runner = 2;
+  string prompt = 3;
 }
 
 message GetRoutingRulesRequest {}

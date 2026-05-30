@@ -330,6 +330,41 @@ func (q *Queries) ListOrgsByMember(ctx context.Context, userID string) ([]ListOr
 	return items, nil
 }
 
+const listRoutingRulesForUser = `-- name: ListRoutingRulesForUser :many
+SELECT o.id, o.routing_rules
+FROM orgs o
+JOIN org_members m ON m.org_id = o.id
+WHERE m.user_id = $1 AND o.archived = FALSE
+`
+
+type ListRoutingRulesForUserRow struct {
+	ID           int64           `json:"id"`
+	RoutingRules json.RawMessage `json:"routing_rules"`
+}
+
+func (q *Queries) ListRoutingRulesForUser(ctx context.Context, userID string) ([]ListRoutingRulesForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRoutingRulesForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoutingRulesForUserRow{}
+	for rows.Next() {
+		var i ListRoutingRulesForUserRow
+		if err := rows.Scan(&i.ID, &i.RoutingRules); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeOrgMember = `-- name: RemoveOrgMember :exec
 DELETE FROM org_members
 WHERE org_id = $1 AND user_id = $2

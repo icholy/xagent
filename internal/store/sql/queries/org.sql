@@ -86,3 +86,9 @@ WHERE id = $1;
 -- name: GetRoutingRulesByOrgs :many
 SELECT id, routing_rules FROM orgs WHERE id = ANY($1::BIGINT[]);
 
+-- name: ListRoutingRulesForUser :many
+SELECT o.id, o.routing_rules
+FROM orgs o
+JOIN org_members m ON m.org_id = o.id
+WHERE m.user_id = $1 AND o.archived = FALSE;
+
