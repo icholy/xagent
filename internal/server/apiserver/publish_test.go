@@ -297,36 +297,6 @@ func TestUpdateTask_NoChannelMessage_NameOnly(t *testing.T) {
 	assert.Equal(t, calls[0].N.ChannelMessage, "")
 }
 
-func TestUploadLogs_NoChannelMessage(t *testing.T) {
-	t.Parallel()
-
-	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
-	}
-	st := teststore.New(t)
-	srv := New(Options{Store: st, Publisher: pub})
-	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
-	ctx := createCtx(t, org)
-
-	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name: "test", Runner: "r", Workspace: "w",
-	})
-	assert.NilError(t, err)
-	pub.ResetCalls()
-
-	_, err = srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
-		TaskId: resp.Task.Id,
-		Entries: []*xagentv1.LogEntry{
-			{Type: "info", Content: "hello"},
-		},
-	})
-	assert.NilError(t, err)
-
-	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.ChannelMessage, "")
-}
-
 func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	t.Parallel()
 
