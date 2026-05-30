@@ -194,16 +194,16 @@ var RunnerCommand = &cli.Command{
 		// Subscribe to server-sent task change notifications so the runner
 		// reacts to new commands immediately instead of waiting for the
 		// fallback poll.
-		es := xagentclient.NewEventStreamClient(xagentclient.EventStreamClientOptions{
+		nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
 			BaseURL:    serverAddr,
 			Runner:     runnerID,
-			HTTPClient: xagentclient.NewEventStreamHTTPClient(cfg.Token),
+			HTTPClient: xagentclient.NewNotificationHTTPClient(cfg.Token),
 			Log:        log,
 			Handler:    func(model.Notification) { r.Wake() },
 		})
 		go func() {
-			if err := es.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				log.Error("event stream stopped", "error", err)
+			if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				log.Error("notification client stopped", "error", err)
 			}
 		}()
 

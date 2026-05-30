@@ -20,10 +20,10 @@ import (
 // the SSE connection drops.
 const DefaultSSEReconnectInterval = 5 * time.Second
 
-// EventStreamClient connects to the server's /events SSE endpoint,
+// NotificationClient connects to the server's /events SSE endpoint,
 // decodes each event into a model.Notification, and hands it to a caller
 // supplied handler. Reconnects automatically on disconnect.
-type EventStreamClient struct {
+type NotificationClient struct {
 	baseURL   string
 	runner    string
 	http      *http.Client
@@ -32,8 +32,8 @@ type EventStreamClient struct {
 	handler   func(model.Notification)
 }
 
-// EventStreamClientOptions configures an EventStreamClient.
-type EventStreamClientOptions struct {
+// NotificationClientOptions configures a NotificationClient.
+type NotificationClientOptions struct {
 	// BaseURL is the server URL (e.g. https://xagent.choly.ca).
 	BaseURL string
 	// Runner is sent as the ?runner= filter; when empty, no filter is sent
@@ -42,7 +42,7 @@ type EventStreamClientOptions struct {
 	// HTTPClient is the HTTP client used for SSE requests. It must not
 	// have a request timeout since SSE connections are long-lived; its
 	// transport is expected to attach authentication. Defaults to
-	// http.DefaultClient (no timeout, no auth). Use NewEventStreamHTTPClient
+	// http.DefaultClient (no timeout, no auth). Use NewNotificationHTTPClient
 	// for a token-authed client suitable for this stream.
 	HTTPClient *http.Client
 	// Log is used for connection diagnostics.
@@ -55,9 +55,9 @@ type EventStreamClientOptions struct {
 	Handler func(model.Notification)
 }
 
-// NewEventStreamClient returns a new EventStreamClient.
-func NewEventStreamClient(opts EventStreamClientOptions) *EventStreamClient {
-	return &EventStreamClient{
+// NewNotificationClient returns a new NotificationClient.
+func NewNotificationClient(opts NotificationClientOptions) *NotificationClient {
+	return &NotificationClient{
 		baseURL:   opts.BaseURL,
 		runner:    opts.Runner,
 		http:      cmp.Or(opts.HTTPClient, http.DefaultClient),
@@ -69,7 +69,7 @@ func NewEventStreamClient(opts EventStreamClientOptions) *EventStreamClient {
 
 // Run connects to the SSE endpoint and dispatches events to the handler
 // until ctx is done. It reconnects automatically on disconnect.
-func (c *EventStreamClient) Run(ctx context.Context) error {
+func (c *NotificationClient) Run(ctx context.Context) error {
 	for {
 		err := c.connect(ctx)
 		if ctx.Err() != nil {
@@ -84,7 +84,7 @@ func (c *EventStreamClient) Run(ctx context.Context) error {
 	}
 }
 
-func (c *EventStreamClient) connect(ctx context.Context) error {
+func (c *NotificationClient) connect(ctx context.Context) error {
 	u, err := url.Parse(strings.TrimRight(c.baseURL, "/") + "/events")
 	if err != nil {
 		return fmt.Errorf("parse url: %w", err)
