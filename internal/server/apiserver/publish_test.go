@@ -112,6 +112,47 @@ func TestCancelTask_Publishes(t *testing.T) {
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
+func TestArchiveTask_Publishes(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	st := teststore.New(t)
+	srv := New(Options{Store: st, Publisher: pub})
+	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name: "test", Runner: "r", Workspace: "w",
+	})
+	assert.NilError(t, err)
+	// Archive requires a terminal status; mark the task COMPLETED first.
+	dbTask, err := st.GetTask(ctx, nil, resp.Task.Id, org.OrgID)
+	assert.NilError(t, err)
+	dbTask.Status = 5 // COMPLETED
+	dbTask.Command = 0
+	assert.NilError(t, st.UpdateTask(ctx, nil, dbTask))
+	pub.ResetCalls()
+
+	_, err = srv.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{Id: resp.Task.Id})
+	assert.NilError(t, err)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.DeepEqual(t, calls[0].N, model.Notification{
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "archived", Type: "task", ID: resp.Task.Id},
+			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
+		},
+		OrgID:  org.OrgID,
+		UserID: org.UserID,
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	msg := calls[0].N.ChannelMessage
+	assert.Assert(t, strings.Contains(msg, "archived"), "expected archived in message, got %q", msg)
+}
+
 func TestUploadLogs_Publishes(t *testing.T) {
 	t.Parallel()
 
