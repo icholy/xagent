@@ -29,11 +29,12 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				Name: caller.DisplayName(),
 				ID:   caller.ID,
 			},
-			Exit: &model.ExitInfo{Event: event.Event},
-			Time: time.Now(),
+			OrgID:    caller.OrgID,
+			UserID:   caller.ID,
+			ClientID: caller.ClientID,
+			Time:     time.Now(),
 		}
 		var applied bool
-		var runner string
 		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 			task, err := s.store.GetTaskForUpdate(ctx, tx, event.TaskID, caller.OrgID)
 			if err != nil {
@@ -54,7 +55,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				return err
 			}
 			change.Status = task.Status
-			runner = task.PendingRunner()
+			change.Runner = task.PendingRunner()
 			logRow := change.Log()
 			if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 				return err
@@ -68,12 +69,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if applied {
-			s.publish(change.Notification(model.Envelope{
-				OrgID:    caller.OrgID,
-				UserID:   caller.ID,
-				ClientID: caller.ClientID,
-				Runner:   runner,
-			}))
+			s.publish(change.Notification())
 		}
 	}
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil

@@ -76,24 +76,10 @@ type Actor struct {
 	ID string
 }
 
-// ExitInfo carries runner-lifecycle context for the container-event kinds.
-type ExitInfo struct {
-	Event RunnerEventType
-}
-
-// Envelope is the caller/transport context that TaskChange itself does
-// not own. It is supplied by the caller when projecting to a Notification.
-type Envelope struct {
-	OrgID    int64
-	UserID   string
-	ClientID string
-	// Runner is task.PendingRunner() captured at the call site, used to
-	// gate "queued" channel messages and to route the notification to a
-	// runner subscription.
-	Runner string
-}
-
-// TaskChange captures one structured change to a task.
+// TaskChange captures one structured change to a task. It carries every
+// field needed to project both the audit log row and the change
+// notification, including the caller/transport context (OrgID, UserID,
+// ClientID, Runner) used to address the published notification.
 type TaskChange struct {
 	TaskID int64
 	Kind   TaskChangeKind
@@ -104,7 +90,9 @@ type TaskChange struct {
 
 	// Runner and Workspace are populated for the Created kind so its log
 	// can render "<actor> created task on <runner>/<workspace>" without
-	// re-loading the task.
+	// re-loading the task. Runner is also used by Notification.Runner —
+	// it doubles as task.PendingRunner() at the call site, which gates
+	// "queued" channel messages and routes the notification.
 	Runner    string
 	Workspace string
 
@@ -119,8 +107,11 @@ type TaskChange struct {
 	// Event is the triggering webhook event for Woken.
 	Event *Event
 
-	// Exit carries the runner-lifecycle context for Container* kinds.
-	Exit *ExitInfo
+	// OrgID / UserID / ClientID are the caller/transport context the
+	// projected Notification needs to address subscribers.
+	OrgID    int64
+	UserID   string
+	ClientID string
 
 	// Time when the change was observed; copied verbatim into the
 	// projected Notification and Log.
@@ -138,22 +129,22 @@ func (c *TaskChange) Log() Log {
 }
 
 // Notification projects the change into a model.Notification suitable
-// for publication. The envelope supplies the caller/transport fields.
+// for publication.
 //
 // ChannelMessage is populated only for agent-actionable kinds; log-only
 // kinds leave it empty, which mcpserver.ForwardNotification gates on.
 // This generalizes the PR #725 "empty ChannelMessage means silent" rule
 // into a per-kind structural property.
-func (c *TaskChange) Notification(env Envelope) Notification {
+func (c *TaskChange) Notification() Notification {
 	return Notification{
 		Type:           "change",
 		Resources:      c.resources(),
 		Time:           c.Time,
-		OrgID:          env.OrgID,
-		UserID:         env.UserID,
-		ClientID:       env.ClientID,
-		Runner:         env.Runner,
-		ChannelMessage: c.channelMessage(env),
+		OrgID:          c.OrgID,
+		UserID:         c.UserID,
+		ClientID:       c.ClientID,
+		Runner:         c.Runner,
+		ChannelMessage: c.channelMessage(),
 	}
 }
 
@@ -239,15 +230,15 @@ func (c *TaskChange) wokenLogContent() string {
 	return s
 }
 
-func (c *TaskChange) channelMessage(env Envelope) string {
+func (c *TaskChange) channelMessage() string {
 	switch c.Kind {
 	case TaskChangeCreated:
 		return fmt.Sprintf("Task %d created on %s/%s.", c.TaskID, c.Runner, c.Workspace)
 	case TaskChangeUpdated:
 		// Only queued updates (those that handed runner work to the
 		// runner) speak to the agent — matches PR #725's req.Start gate
-		// via the structurally equivalent envelope.Runner check.
-		if env.Runner == "" {
+		// via the structurally equivalent Runner check.
+		if c.Runner == "" {
 			return ""
 		}
 		if len(c.Changed) == 0 {

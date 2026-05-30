@@ -162,7 +162,6 @@ func TestTaskChange_Log_Projection(t *testing.T) {
 				Kind:   TaskChangeContainerStarted,
 				Actor:  Actor{Kind: ActorKindRunner, Name: "r"},
 				Status: TaskStatusRunning,
-				Exit:   &ExitInfo{Event: RunnerEventStarted},
 			},
 			wantType:    "info",
 			wantContent: "container started (status: running)",
@@ -174,7 +173,6 @@ func TestTaskChange_Log_Projection(t *testing.T) {
 				Kind:   TaskChangeContainerExited,
 				Actor:  Actor{Kind: ActorKindRunner, Name: "r"},
 				Status: TaskStatusCompleted,
-				Exit:   &ExitInfo{Event: RunnerEventStopped},
 			},
 			wantType:    "info",
 			wantContent: "container exited; task completed",
@@ -186,7 +184,6 @@ func TestTaskChange_Log_Projection(t *testing.T) {
 				Kind:   TaskChangeContainerExited,
 				Actor:  Actor{Kind: ActorKindRunner, Name: "r"},
 				Status: TaskStatusPending,
-				Exit:   &ExitInfo{Event: RunnerEventStopped},
 			},
 			wantType:    "info",
 			wantContent: "container exited; task pending",
@@ -198,7 +195,6 @@ func TestTaskChange_Log_Projection(t *testing.T) {
 				Kind:   TaskChangeContainerFailed,
 				Actor:  Actor{Kind: ActorKindRunner, Name: "r"},
 				Status: TaskStatusFailed,
-				Exit:   &ExitInfo{Event: RunnerEventFailed},
 			},
 			wantType:    "error",
 			wantContent: "container failed; task failed",
@@ -223,7 +219,6 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 	tests := []struct {
 		name    string
 		change  TaskChange
-		env     Envelope
 		wantMsg string
 	}{
 		{
@@ -235,7 +230,6 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				Runner:    "r",
 				Workspace: "w",
 			},
-			env:     Envelope{Runner: "r"},
 			wantMsg: "Task 7 created on r/w.",
 		},
 		{
@@ -246,8 +240,8 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				Actor:   Actor{Kind: ActorKindUser, Name: "alice"},
 				Changed: []string{"name", "instructions"},
 				Started: true,
+				Runner:  "r",
 			},
-			env:     Envelope{Runner: "r"},
 			wantMsg: "Task 7 queued: name, instructions.",
 		},
 		{
@@ -258,7 +252,6 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				Actor:   Actor{Kind: ActorKindUser, Name: "alice"},
 				Changed: []string{"name"},
 			},
-			env:     Envelope{Runner: ""},
 			wantMsg: "",
 		},
 		{
@@ -268,8 +261,8 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				Kind:    TaskChangeUpdated,
 				Actor:   Actor{Kind: ActorKindUser, Name: "alice"},
 				Started: true,
+				Runner:  "r",
 			},
-			env:     Envelope{Runner: "r"},
 			wantMsg: "Task 7 queued.",
 		},
 		{
@@ -280,7 +273,6 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				Actor:  Actor{Kind: ActorKindUser, Name: "alice"},
 				Status: TaskStatusCancelled,
 			},
-			env:     Envelope{},
 			wantMsg: "Task 7 cancelled.",
 		},
 		{
@@ -290,8 +282,8 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				Kind:   TaskChangeCancelled,
 				Actor:  Actor{Kind: ActorKindUser, Name: "alice"},
 				Status: TaskStatusCancelling,
+				Runner: "r",
 			},
-			env:     Envelope{Runner: "r"},
 			wantMsg: "",
 		},
 		{
@@ -300,8 +292,8 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				TaskID: 7,
 				Kind:   TaskChangeRestarted,
 				Actor:  Actor{Kind: ActorKindUser, Name: "alice"},
+				Runner: "r",
 			},
-			env:     Envelope{Runner: "r"},
 			wantMsg: "Task 7 restart requested.",
 		},
 		{
@@ -342,8 +334,8 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 					Description: "PR comment from alice",
 					URL:         "https://github.com/x/y/pull/1#issuecomment-1",
 				},
+				Runner: "r",
 			},
-			env:     Envelope{Runner: "r"},
 			wantMsg: "Task 7 woken by event 42: PR comment from alice (https://github.com/x/y/pull/1#issuecomment-1)",
 		},
 		{
@@ -353,8 +345,8 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				Kind:   TaskChangeContainerStarted,
 				Actor:  Actor{Kind: ActorKindRunner},
 				Status: TaskStatusRunning,
+				Runner: "r",
 			},
-			env:     Envelope{Runner: "r"},
 			wantMsg: "",
 		},
 		{
@@ -384,8 +376,8 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 				Kind:   TaskChangeContainerExited,
 				Actor:  Actor{Kind: ActorKindRunner},
 				Status: TaskStatusPending,
+				Runner: "r",
 			},
-			env:     Envelope{Runner: "r"},
 			wantMsg: "",
 		},
 		{
@@ -404,7 +396,7 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 			t.Parallel()
 			c := tt.change
 			c.Time = nonzeroTime
-			got := c.Notification(tt.env)
+			got := c.Notification()
 			assert.Equal(t, got.ChannelMessage, tt.wantMsg)
 			// Agent-actionable rows must mention the task id so the channel
 			// reader can correlate the line back to a task.
@@ -415,27 +407,27 @@ func TestTaskChange_Notification_ChannelMessage(t *testing.T) {
 	}
 }
 
-func TestTaskChange_Notification_Envelope(t *testing.T) {
+func TestTaskChange_Notification_AddressingFields(t *testing.T) {
 	t.Parallel()
+	// The caller/transport fields (OrgID/UserID/ClientID/Runner) flow from
+	// the TaskChange directly into Notification, verbatim. The notification
+	// addresses subscribers; it doesn't re-derive any of these.
 	change := TaskChange{
 		TaskID:    7,
 		Kind:      TaskChangeCreated,
 		Actor:     Actor{Kind: ActorKindUser, Name: "alice"},
-		Runner:    "task-runner",
 		Workspace: "task-workspace",
+		OrgID:     99,
+		UserID:    "user-123",
+		ClientID:  "client-abc",
+		Runner:    "task-runner",
 		Time:      nonzeroTime,
 	}
-	env := Envelope{
-		OrgID:    99,
-		UserID:   "user-123",
-		ClientID: "client-abc",
-		Runner:   "envelope-runner",
-	}
-	got := change.Notification(env)
-	assert.Equal(t, got.OrgID, env.OrgID)
-	assert.Equal(t, got.UserID, env.UserID)
-	assert.Equal(t, got.ClientID, env.ClientID)
-	assert.Equal(t, got.Runner, env.Runner)
+	got := change.Notification()
+	assert.Equal(t, got.OrgID, int64(99))
+	assert.Equal(t, got.UserID, "user-123")
+	assert.Equal(t, got.ClientID, "client-abc")
+	assert.Equal(t, got.Runner, "task-runner")
 	assert.Equal(t, got.Time, nonzeroTime)
 	assert.Equal(t, got.Type, "change")
 }
@@ -545,7 +537,7 @@ func TestTaskChange_Notification_Resources(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			c := tt.change
-			got := c.Notification(Envelope{})
+			got := c.Notification()
 			assert.DeepEqual(t, got.Resources, tt.want, cmpopts.EquateEmpty())
 		})
 	}
@@ -562,14 +554,17 @@ func TestTaskChange_Updated_Accumulation(t *testing.T) {
 		Actor:   Actor{Kind: ActorKindUser, Name: "alice"},
 		Changed: []string{"name", "instructions"},
 		Started: true,
+		Runner:  "r",
 		Time:    nonzeroTime,
 	}
-	queued := change.Notification(Envelope{Runner: "r"})
+	queued := change.Notification()
 	assert.Equal(t, change.Log().Content, "alice updated task: name, instructions; started")
 	assert.Equal(t, queued.ChannelMessage, "Task 7 queued: name, instructions.")
 
-	// Same Changed without a runner envelope (e.g., the task isn't queued):
+	// Same Changed without a runner (e.g., the task isn't queued):
 	// the log row still fires, the channel stays silent.
-	silent := change.Notification(Envelope{Runner: ""})
+	silentChange := change
+	silentChange.Runner = ""
+	silent := silentChange.Notification()
 	assert.Equal(t, silent.ChannelMessage, "")
 }

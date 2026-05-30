@@ -102,8 +102,10 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	change := model.TaskChange{
 		Kind:      model.TaskChangeCreated,
 		Actor:     actorFromCaller(caller),
-		Runner:    task.Runner,
 		Workspace: task.Workspace,
+		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
 		Time:      time.Now(),
 	}
 	err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
@@ -112,6 +114,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		}
 		change.TaskID = task.ID
 		change.Status = task.Status
+		change.Runner = task.PendingRunner()
 		logRow := change.Log()
 		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
@@ -122,12 +125,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
-	s.publish(change.Notification(model.Envelope{
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Runner:   task.PendingRunner(),
-	}))
+	s.publish(change.Notification())
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(s.baseURL),
 	}, nil
@@ -174,13 +172,15 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	change := model.TaskChange{
-		TaskID:  req.Id,
-		Kind:    model.TaskChangeUpdated,
-		Actor:   actorFromCaller(caller),
-		Started: req.Start,
-		Time:    time.Now(),
+		TaskID:   req.Id,
+		Kind:     model.TaskChangeUpdated,
+		Actor:    actorFromCaller(caller),
+		Started:  req.Start,
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Time:     time.Now(),
 	}
-	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -205,7 +205,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			return err
 		}
 		change.Status = task.Status
-		runner = task.PendingRunner()
+		change.Runner = task.PendingRunner()
 		logRow := change.Log()
 		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
@@ -219,24 +219,21 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task updated", "id", req.Id, "name", req.Name, "start", req.Start, "instructions_added", len(req.AddInstructions))
-	s.publish(change.Notification(model.Envelope{
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Runner:   runner,
-	}))
+	s.publish(change.Notification())
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	change := model.TaskChange{
-		TaskID: req.Id,
-		Kind:   model.TaskChangeArchived,
-		Actor:  actorFromCaller(caller),
-		Time:   time.Now(),
+		TaskID:   req.Id,
+		Kind:     model.TaskChangeArchived,
+		Actor:    actorFromCaller(caller),
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Time:     time.Now(),
 	}
-	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -249,7 +246,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 			return err
 		}
 		change.Status = task.Status
-		runner = task.PendingRunner()
+		change.Runner = task.PendingRunner()
 		logRow := change.Log()
 		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
@@ -263,24 +260,21 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task archived", "id", req.Id)
-	s.publish(change.Notification(model.Envelope{
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Runner:   runner,
-	}))
+	s.publish(change.Notification())
 	return &xagentv1.ArchiveTaskResponse{}, nil
 }
 
 func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	change := model.TaskChange{
-		TaskID: req.Id,
-		Kind:   model.TaskChangeUnarchived,
-		Actor:  actorFromCaller(caller),
-		Time:   time.Now(),
+		TaskID:   req.Id,
+		Kind:     model.TaskChangeUnarchived,
+		Actor:    actorFromCaller(caller),
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Time:     time.Now(),
 	}
-	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -293,7 +287,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 			return err
 		}
 		change.Status = task.Status
-		runner = task.PendingRunner()
+		change.Runner = task.PendingRunner()
 		logRow := change.Log()
 		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
@@ -307,24 +301,21 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task unarchived", "id", req.Id)
-	s.publish(change.Notification(model.Envelope{
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Runner:   runner,
-	}))
+	s.publish(change.Notification())
 	return &xagentv1.UnarchiveTaskResponse{}, nil
 }
 
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	change := model.TaskChange{
-		TaskID: req.Id,
-		Kind:   model.TaskChangeCancelled,
-		Actor:  actorFromCaller(caller),
-		Time:   time.Now(),
+		TaskID:   req.Id,
+		Kind:     model.TaskChangeCancelled,
+		Actor:    actorFromCaller(caller),
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Time:     time.Now(),
 	}
-	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -337,7 +328,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 			return err
 		}
 		change.Status = task.Status
-		runner = task.PendingRunner()
+		change.Runner = task.PendingRunner()
 		logRow := change.Log()
 		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
@@ -351,24 +342,21 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task cancelled", "id", req.Id)
-	s.publish(change.Notification(model.Envelope{
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Runner:   runner,
-	}))
+	s.publish(change.Notification())
 	return &xagentv1.CancelTaskResponse{}, nil
 }
 
 func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	change := model.TaskChange{
-		TaskID: req.Id,
-		Kind:   model.TaskChangeRestarted,
-		Actor:  actorFromCaller(caller),
-		Time:   time.Now(),
+		TaskID:   req.Id,
+		Kind:     model.TaskChangeRestarted,
+		Actor:    actorFromCaller(caller),
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Time:     time.Now(),
 	}
-	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -381,7 +369,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 			return err
 		}
 		change.Status = task.Status
-		runner = task.PendingRunner()
+		change.Runner = task.PendingRunner()
 		logRow := change.Log()
 		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
@@ -395,11 +383,6 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task restarted", "id", req.Id)
-	s.publish(change.Notification(model.Envelope{
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Runner:   runner,
-	}))
+	s.publish(change.Notification())
 	return &xagentv1.RestartTaskResponse{}, nil
 }

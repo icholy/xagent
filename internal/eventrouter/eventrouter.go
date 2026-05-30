@@ -119,9 +119,9 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 		Kind:   model.TaskChangeWoken,
 		Actor:  model.Actor{Kind: model.ActorKindWebhook},
 		Event:  event,
+		OrgID:  event.OrgID,
 		Time:   time.Now(),
 	}
-	var runner string
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := r.Store.AddEventTask(ctx, tx, event.ID, taskID); err != nil {
 			return err
@@ -135,7 +135,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 			return err
 		}
 		change.Status = task.Status
-		runner = task.PendingRunner()
+		change.Runner = task.PendingRunner()
 		logRow := change.Log()
 		if err := r.Store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
@@ -145,9 +145,6 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 	if err != nil {
 		return err
 	}
-	r.publish(ctx, change.Notification(model.Envelope{
-		OrgID:  event.OrgID,
-		Runner: runner,
-	}))
+	r.publish(ctx, change.Notification())
 	return nil
 }

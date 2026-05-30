@@ -113,6 +113,7 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		TaskID: due.ID,
 		Kind:   model.TaskChangeAutoArchived,
 		Actor:  model.Actor{Kind: model.ActorKindArchiver},
+		OrgID:  due.OrgID,
 		Time:   time.Now(),
 	}
 	err := a.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
@@ -130,6 +131,7 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 			return err
 		}
 		change.Status = t.Status
+		change.Runner = t.PendingRunner()
 		logRow := change.Log()
 		if err := a.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
@@ -143,7 +145,7 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		return false, err
 	}
 	if a.publisher != nil {
-		if err := a.publisher.Publish(ctx, change.Notification(model.Envelope{OrgID: due.OrgID})); err != nil {
+		if err := a.publisher.Publish(ctx, change.Notification()); err != nil {
 			a.log.Warn("failed to publish archive notification", "id", due.ID, "err", err)
 		}
 	}
