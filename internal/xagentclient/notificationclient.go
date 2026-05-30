@@ -39,12 +39,10 @@ type NotificationClientOptions struct {
 	// Runner is sent as the ?runner= filter; when empty, no filter is sent
 	// and the server forwards the whole-org stream.
 	Runner string
-	// HTTPClient is the HTTP client used for SSE requests. It must not
-	// have a request timeout since SSE connections are long-lived; its
-	// transport is expected to attach authentication. Defaults to
-	// http.DefaultClient (no timeout, no auth). Use NewNotificationHTTPClient
-	// for a token-authed client suitable for this stream.
-	HTTPClient *http.Client
+	// Token is the bearer token sent with each SSE request. The client
+	// builds its own no-timeout http.Client internally (SSE connections
+	// are long-lived).
+	Token string
 	// Log is used for connection diagnostics.
 	Log *slog.Logger
 	// ReconnectInterval is the wait between reconnect attempts after a
@@ -58,9 +56,11 @@ type NotificationClientOptions struct {
 // NewNotificationClient returns a new NotificationClient.
 func NewNotificationClient(opts NotificationClientOptions) *NotificationClient {
 	return &NotificationClient{
-		baseURL:   opts.BaseURL,
-		runner:    opts.Runner,
-		http:      cmp.Or(opts.HTTPClient, http.DefaultClient),
+		baseURL: opts.BaseURL,
+		runner:  opts.Runner,
+		http: &http.Client{
+			Transport: &AuthTransport{Transport: http.DefaultTransport, Token: opts.Token},
+		},
 		log:       cmp.Or(opts.Log, slog.Default()),
 		reconnect: cmp.Or(opts.ReconnectInterval, DefaultSSEReconnectInterval),
 		handler:   opts.Handler,

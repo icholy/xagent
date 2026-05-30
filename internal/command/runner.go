@@ -195,11 +195,11 @@ var RunnerCommand = &cli.Command{
 		// reacts to new commands immediately instead of waiting for the
 		// fallback poll.
 		nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
-			BaseURL:    serverAddr,
-			Runner:     runnerID,
-			HTTPClient: xagentclient.NewNotificationHTTPClient(cfg.Token),
-			Log:        log,
-			Handler:    func(model.Notification) { r.Wake() },
+			BaseURL: serverAddr,
+			Runner:  runnerID,
+			Token:   cfg.Token,
+			Log:     log,
+			Handler: func(model.Notification) { r.Wake() },
 		})
 		go func() {
 			if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
