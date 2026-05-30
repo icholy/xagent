@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getProfile,
@@ -10,22 +10,12 @@ import {
   deleteOrg,
   getOrgSettings,
   generateAtlassianWebhookSecret,
-  getRoutingRules,
-  setRoutingRules,
-  listEvents,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { Event, Org } from '@/gen/xagent/v1/xagent_pb'
+import type { Org } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -34,13 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RelativeTime } from '@/components/relative-time'
 import {
@@ -52,7 +35,6 @@ import {
   KeyRound,
   Loader2,
   Mail,
-  Pencil,
   Plus,
   RefreshCw,
   Trash2,
@@ -61,10 +43,10 @@ import {
 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
-type SettingsTab = 'account' | 'organisation' | 'events'
+type SettingsTab = 'account' | 'organisation'
 
 function toSettingsTab(value: unknown): SettingsTab {
-  if (value === 'organisation' || value === 'events') return value
+  if (value === 'organisation') return value
   return 'account'
 }
 
@@ -98,7 +80,6 @@ function SettingsPage() {
           <TabsList className="ml-auto">
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="organisation">Organisation</TabsTrigger>
-            <TabsTrigger value="events">Events</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="account">
@@ -106,9 +87,6 @@ function SettingsPage() {
         </TabsContent>
         <TabsContent value="organisation">
           <OrgSettings />
-        </TabsContent>
-        <TabsContent value="events">
-          <EventSettings />
         </TabsContent>
       </Tabs>
       <VersionFooter />
@@ -329,216 +307,6 @@ function OrgSettings() {
         </CardContent>
       </Card>
     </div>
-  )
-}
-
-function EventSettings() {
-  return (
-    <div className="space-y-6">
-      <RoutingRulesCard />
-      <RecentEventsCard />
-    </div>
-  )
-}
-
-function RecentEventsCard() {
-  const orgId = useOrgId()
-  const [limit, setLimit] = useState(25)
-  const { data, isLoading, error } = useQuery(listEvents, { limit }, { refetchInterval: 60000 })
-
-  const events = data?.events ?? []
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <CardTitle>Recent Events</CardTitle>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Show</span>
-              <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="75">75</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Link to="/events/new" search={{ org: orgId }}>
-              <Button>
-                <Plus className="h-4 w-4" />
-                Event
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
-        ) : error ? (
-          <div className="text-destructive">Error: {error.message}</div>
-        ) : events.length === 0 ? (
-          <div className="text-muted-foreground text-center py-8">No events found</div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="hidden md:table-cell">ID</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead className="hidden md:table-cell">Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {events.map((event) => (
-                <EventRow key={String(event.id)} event={event} />
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function EventRow({ event }: { event: Event }) {
-  const orgId = useOrgId()
-  const dataContent = event.data || '-'
-  const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
-
-  return (
-    <TableRow>
-      <TableCell className="hidden md:table-cell">{String(event.id)}</TableCell>
-      <TableCell>
-        <Link
-          to="/events/$id"
-          search={{ org: orgId }}
-          params={{ id: String(event.id) }}
-          className="text-primary hover:underline"
-        >
-          {event.description || '-'}
-        </Link>
-      </TableCell>
-      <TableCell className="max-w-xs truncate">
-        {event.url ? (
-          <a
-            href={event.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            {truncatedData}
-          </a>
-        ) : (
-          truncatedData
-        )}
-      </TableCell>
-      <TableCell className="hidden md:table-cell text-muted-foreground">
-        {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
-      </TableCell>
-    </TableRow>
-  )
-}
-
-function RoutingRulesCard() {
-  const orgId = useOrgId()
-  const { data, isLoading, refetch } = useQuery(
-    getRoutingRules,
-    {},
-    {
-      refetchInterval: 6000,
-    },
-  )
-  const deleteMutation = useMutation(setRoutingRules, {
-    onSuccess: () => refetch(),
-  })
-
-  const rules = data?.rules ?? []
-
-  const handleDelete = async (index: number) => {
-    const updated = rules.filter((_, i) => i !== index)
-    await deleteMutation.mutateAsync({ rules: updated })
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Routing Rules</CardTitle>
-        <CardDescription>Configure how events get routed to tasks and workspaces.</CardDescription>
-        <CardAction>
-          <Link to="/routing/new" search={{ org: orgId }}>
-            <Button>
-              <Plus className="h-4 w-4" />
-              Add Rule
-            </Button>
-          </Link>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {deleteMutation.error && (
-          <div className="text-destructive text-sm">{deleteMutation.error.message}</div>
-        )}
-        {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
-        ) : rules.length === 0 ? (
-          <div className="text-muted-foreground text-center py-8">No routing rules configured</div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Source</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Prefix</TableHead>
-                <TableHead>Mention</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rules.map((rule, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">{rule.source}</TableCell>
-                  <TableCell className="text-muted-foreground">{rule.type || '-'}</TableCell>
-                  <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
-                  <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Link
-                        to="/routing/$index"
-                        params={{ index: String(index) }}
-                        search={{ org: orgId }}
-                      >
-                        <Button variant="outline" size="sm" disabled={deleteMutation.isPending}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(index)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        {deleteMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
   )
 }
 

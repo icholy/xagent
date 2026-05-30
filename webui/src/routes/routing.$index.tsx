@@ -27,7 +27,7 @@ function EditRoutingRulePage() {
 
   useEffect(() => {
     if (!isLoading && !rule) {
-      navigate({ to: '/settings', search: { tab: 'events', org: orgId }, replace: true })
+      navigate({ to: '/events', search: { org: orgId }, replace: true })
     }
   }, [isLoading, rule, navigate, orgId])
 
@@ -37,11 +37,11 @@ function EditRoutingRulePage() {
       i === parsedIndex ? create(RoutingRuleSchema, values) : existing,
     )
     await mutation.mutateAsync({ rules: updated })
-    navigate({ to: '/settings', search: { tab: 'events', org: orgId } })
+    navigate({ to: '/events', search: { org: orgId } })
   }
 
   const handleCancel = () => {
-    navigate({ to: '/settings', search: { tab: 'events', org: orgId } })
+    navigate({ to: '/events', search: { org: orgId } })
   }
 
   return (
