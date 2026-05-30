@@ -1,203 +1,272 @@
-# Claude Code Channels support for xagent MCP server
+# Claude Code Channels for a local xagent MCP bridge
 
 Issue: https://github.com/icholy/xagent/issues/466
 
 ## Problem
 
-xagent agents running inside containers interact with the orchestrator through a request-response MCP tool model. The agent must explicitly call `get_my_task` to discover new events, status changes, or instructions. There is no mechanism for xagent to proactively push information into a running Claude Code session.
+A common way to drive xagent is from a local Claude Code session: a developer runs `claude` on their workstation, and that session creates and supervises xagent tasks through xagent's user-facing MCP server. Today, after creating a task, the local Claude has no way to know when something changes — it must poll `get_task` or `list_tasks` to discover new logs, new instructions, status transitions, or completion. Polling wastes turns, delays reactions, and bloats the model's context with repeated reads.
 
-Claude Code Channels (research preview, v2.1.80+) allow an MCP server to push events into a session via `notifications/claude/channel`. This would let xagent notify agents about child task completions, new parent instructions, external webhook events, and child task log output — without polling.
+Claude Code Channels (research preview, v2.1.80+) provide exactly the primitive that's missing: an MCP server can push `notifications/claude/channel` events into a running session as `<channel>` tags in Claude's context, so the model reacts on the next turn without polling. The C2 server already publishes structured change notifications for every task mutation; the gap is the transport that delivers them to the local Claude.
 
 ## Background: How Channels Work
 
-A channel is an MCP server that declares `claude/channel` in its experimental capabilities and emits `notifications/claude/channel` notifications. Key contract:
+Sources: [code.claude.com/docs/en/channels](https://code.claude.com/docs/en/channels), [code.claude.com/docs/en/channels-reference](https://code.claude.com/docs/en/channels-reference).
 
-- **Capability declaration**: `capabilities.experimental["claude/channel"] = {}` in the MCP server constructor
-- **Notification format**: `method: "notifications/claude/channel"`, `params: { content: string, meta: Record<string, string> }` — content becomes the body of a `<channel>` tag, meta entries become tag attributes
-- **Reply tools**: Optional. Standard MCP tools exposed alongside the channel for two-way communication
-- **Permission relay**: Optional. `claude/channel/permission` capability allows forwarding tool approval prompts remotely
-- **Transport**: stdio only (Claude Code spawns the server as a subprocess)
-- **Instructions**: A string added to Claude's system prompt describing what events to expect
+- **Status**: research preview. Requires Claude Code **v2.1.80+** (one-way + tools); permission relay needs **v2.1.81+**.
+- **Capability declaration**: an MCP server registers as a channel by setting `capabilities.experimental["claude/channel"] = {}`. The value is always an empty object — its presence is the signal. Two-way channels additionally declare `tools: {}`; permission relay adds `capabilities.experimental["claude/channel/permission"] = {}`.
+- **Notification format**: method `notifications/claude/channel`, params `{ content: string, meta: Record<string, string> }`. `content` becomes the body of a `<channel>` tag; each `meta` entry becomes a tag attribute. The `source` attribute is auto-populated from the server's configured name.
+- **`meta` keys must be identifiers**: letters, digits, and underscores only. Keys containing hyphens or other characters are **silently dropped**. Use `task_id`, not `task-id`.
+- **Transport is stdio-only**: a channel server must be a subprocess spawned by Claude Code. Streamable HTTP MCP servers cannot register as channels.
+- **Delivery is fire-and-forget**: the notification call resolves when the JSON-RPC frame is written to the transport, not when Claude processes it. If the session didn't load the server with `--channels`, or org policy blocks channels, events are dropped silently with no error returned. Guaranteed delivery requires a reply tool that the model can call back through.
+- **Queuing**: events are delivered in order, and multiple events arriving while Claude is mid-turn are batched onto the next turn.
+- **Allowlist constraint**: during the preview, `--channels` only accepts plugins on an Anthropic-curated allowlist. A custom server like `xagent` is not on it, so the session must launch with `--dangerously-load-development-channels server:xagent` (which prompts for confirmation per entry), or the org must add the server to the `allowedChannelPlugins` managed setting. Being listed in `.mcp.json` is necessary but not sufficient — the server must also be named in `--channels`.
+- **Auth/platform constraints**: channels require Anthropic auth via claude.ai or a Console API key. They are not available on Amazon Bedrock, Google Vertex AI, or Microsoft Foundry. Team/Enterprise orgs must enable `channelsEnabled` in managed settings.
+- **Channels are a notification layer, not a data layer**. The event says "task 42 updated" with small `meta` attributes; Claude then calls `get_task` for the full payload.
 
-Events arrive in Claude's context as:
+An event arrives in Claude's context as:
+
 ```
-<channel source="xagent" task_id="42" event_type="child_completed">
-Child task 43 (fix auth bug) completed successfully.
+<channel source="xagent" action="updated" resource="task" id="42">
+Task 42 was updated.
 </channel>
 ```
 
 ## Design
 
-### Architecture
+### Two MCP servers already exist
 
-The xagent MCP server (`xagent mcp`) already runs as a stdio subprocess inside each agent container. The channel capability would be added to this same process rather than introducing a separate channel server.
+The proposal hinges on distinguishing the two xagent MCP servers in the tree today:
+
+1. **User-facing MCP server** (`internal/server/mcpserver/mcpserver.go`, backed by package `mcpserver`). Served as MCP **Streamable HTTP** via `mcp.NewStreamableHTTPHandler` with `Stateless: true`, mounted on the C2 HTTP API at `/mcp`. Exposes `list_workspaces`, `create_task`, `get_task`, `list_tasks`, `update_task`. This is what the developer's local Claude Code talks to today.
+
+2. **In-container agent MCP server** (`internal/command/mcp.go` — `McpCommand` — backed by `internal/agentmcp`). stdio transport. Spawned by the runner inside each task's container. Exposes `get_my_task`, `update_my_task`, `report`, `create_link`, and the child-task tools. (A separate task is moving this command out of the top-level `mcp` slot to `xagent tool agent-mcp`, freeing `xagent mcp` for the new bridge described below.)
+
+This proposal only affects path (1): how the local Claude that drives the user-facing server receives push notifications. Pushing into in-container agents is explicitly out of scope (see "Future work").
+
+### The hard constraint
+
+The user-facing server is stateless Streamable HTTP. **Channels require stdio.** We cannot simply add `claude/channel` to the experimental capabilities in `mcpserver.go` and have it push notifications into a session — the session does not have a long-lived bidirectional connection to that handler, and `--channels` does not accept HTTP MCP servers. Any push delivery has to happen over a stdio subprocess that Claude Code spawns.
+
+### The bridge
+
+Introduce a new top-level subcommand:
 
 ```
-Claude Code agent
-    ↕ stdio (MCP tools + channel notifications)
-xagent mcp process
-    ↕ HTTP over unix socket
-xagent server
+xagent mcp [--server URL] [--token TOKEN]
 ```
 
-The `xagent mcp` process gains a background goroutine that polls the xagent server for new events and pushes them as channel notifications to Claude Code.
+A local stdio MCP server that the developer's `.mcp.json` launches. It does two things:
 
-### Go MCP SDK Gap
+1. **Re-exposes the user-facing tools** (`list_workspaces`, `create_task`, `get_task`, `list_tasks`, `update_task`) over stdio, proxying each call to the C2 server via `xagentclient.New(...)` (the existing Connect RPC client). For a CLI-driven setup this replaces the remote HTTP MCP entry, so the developer only needs **one** MCP entry instead of an HTTP endpoint plus a separate channel process.
 
-The Go MCP SDK v1.2.0 (`github.com/modelcontextprotocol/go-sdk`) supports setting experimental capabilities via `ServerOptions.Capabilities.Experimental`, but **does not expose a public API to send arbitrary notifications**. The internal `handleNotify` function and `ServerSession.getConn()` are both unexported.
+2. **Declares the `claude/channel` capability** and pushes `notifications/claude/channel` events for task changes by translating an SSE subscription to the existing notification stream.
 
-The existing public notification methods (`NotifyProgress`, `Log`, `ResourceUpdated`) only send predefined MCP notification types — none support the custom `notifications/claude/channel` method.
+The user-facing HTTP MCP endpoint at `/mcp` stays in place for hosted/web-driven Claude clients that cannot spawn local subprocesses.
 
-**Resolution options (in order of preference):**
+#### Updated architecture
 
-1. **Contribute upstream**: Add a `ServerSession.Notify(ctx, method string, params any) error` method to the Go SDK. This is a small, well-scoped change — it just needs to call `conn.Notify()` on the underlying jsonrpc2 connection. This would unblock all Go-based channel implementations.
+```
+Local Claude Code session
+    ↕ stdio (MCP tools + notifications/claude/channel)
+xagent mcp  (NEW local bridge — proxies tools, translates SSE → channel)
+    ↕ HTTP: Connect RPC (tools)  +  SSE subscription (notifyserver)
+xagent C2 server  (already publishes task notifications on every change)
+```
 
-2. **Use the jsonrpc2 layer directly**: The `internal/jsonrpc2.Connection` type has a public `Notify(ctx, method, params)` method. We could create a custom `mcp.Transport` wrapper that intercepts the connection before it's passed to the SDK, retaining a reference for direct notification sending. This is hacky but avoids forking.
+### Reusing the existing notification pipeline
 
-3. **Separate TypeScript channel process**: Run a small Node/Bun process as the channel server alongside `xagent mcp`. The TypeScript MCP SDK has native channel support. The channel process would communicate with the Go `xagent mcp` process (or directly with the xagent server) to get events. This adds operational complexity (Node runtime in containers).
+This is a translator, not a new event system. The pieces are already in place:
 
-4. **Fork the Go SDK temporarily**: Add the `Notify` method in a fork, use it until upstream merges the change.
+- `internal/server/apiserver/apiserver.go` calls `s.publish(model.Notification{...})` on every mutating RPC (`task.go`, `event.go`, `log.go`, `link.go`, `workspace.go`, `key.go`, `org.go`, `runner.go`). Every task create / update / status change / log append / link append already produces a notification.
+- `internal/server/notifyserver/sse.go` fans these notifications out per-org over an SSE endpoint mounted at `/events`. The web UI is already a consumer of this stream for live updates.
+- `internal/model/notification.go` defines the payload:
 
-Option 1 is strongly preferred. The change is minimal and benefits the broader Go MCP ecosystem.
+  ```go
+  type Notification struct {
+      Type      string                 `json:"type"`       // "ready" | "change"
+      Resources []NotificationResource `json:"resources,omitempty"`
+      Time      time.Time              `json:"timestamp"`
+      OrgID     int64                  `json:"org_id"`
+      UserID    string                 `json:"user_id,omitempty"`
+      ClientID  string                 `json:"client_id,omitempty"`
+      Runner    string                 `json:"for_runner,omitempty"`
+  }
 
-### Event Polling
+  type NotificationResource struct {
+      Action string `json:"action"` // created | updated | appended
+      Type   string `json:"type"`   // task | event | log | link | task_logs
+      ID     int64  `json:"id"`
+  }
+  ```
 
-The `xagent mcp` process would start a background goroutine after connecting:
+  Every field that ends up in a channel `meta` attribute (`action`, `type`, `id`) is already identifier-safe — letters, digits, underscores only — so they pass the channel `meta` key/value rules without transformation.
+- `internal/x/sse` is an existing SSE Reader/Writer the bridge can consume.
+
+The bridge:
+
+1. Connects to the C2 SSE endpoint (`GET /events`, `Accept: text/event-stream`) using the same auth token configured for the RPC client.
+2. Reads `model.Notification` JSON payloads via `internal/x/sse.Reader`.
+3. Filters down to task-relevant resources (`type` in `{task, log, link, task_logs, event}`).
+4. For each surviving `NotificationResource`, emits one `notifications/claude/channel`:
+
+   ```jsonc
+   {
+     "method": "notifications/claude/channel",
+     "params": {
+       "content": "Task 42 was updated.",
+       "meta": {
+         "action":   "updated",
+         "resource": "task",
+         "id":       "42"
+       }
+     }
+   }
+   ```
+
+   Channel `meta` requires identifier keys, so we rename `Type` → `resource` (since `type` is also reserved in some contexts) and stringify `ID`. `OrgID`, `UserID`, `ClientID` are not forwarded to the model.
+
+5. Reconnects the SSE stream on transport errors with backoff, mirroring the web UI's behavior.
+
+The bridge does **not** open new RPCs or read full task payloads. Claude does that itself by calling `get_task` through the same bridge after the channel event arrives.
+
+### `mcpserver.AddTools` refactor
+
+To avoid duplicating the tool schemas between the HTTP handler and the new stdio bridge, extract the tool registrations currently inline in `mcpserver.Server.Handler()` (the five `mcp.AddTool(server, ...)` calls plus the input/output types) into a reusable function on the `mcpserver` package, roughly:
 
 ```go
-// After server.Run starts (requires refactoring to use server.Connect directly)
-go s.pollEvents(ctx, session)
-```
-
-The poll loop would call a new RPC endpoint on the xagent server:
-
-```protobuf
-message PollEventsRequest {
-  int64 task_id = 1;
-  int64 after_event_id = 2;  // cursor for incremental polling
-}
-
-message PollEventsResponse {
-  repeated TaskEvent events = 1;
-}
-
-message TaskEvent {
-  string type = 1;           // "child_completed", "child_failed", "instruction_added", "external_event", "child_log"
-  string content = 2;        // human-readable description
-  map<string, string> meta = 3;  // routing attributes
-  int64 id = 4;              // monotonic ID for cursor
+// AddTools registers the user-facing xagent tools on the given MCP server.
+// Both the HTTP handler and the local stdio bridge call this so they share
+// schemas, descriptions, and behavior.
+func AddTools(server *mcp.Server, service xagentv1connect.XAgentServiceHandler, baseURL string) {
+    s := &Server{service: service, baseURL: cmp.Or(baseURL, xagentclient.DefaultURL)}
+    mcp.AddTool(server, &mcp.Tool{Name: "list_workspaces", /* ... */}, s.listWorkspaces)
+    mcp.AddTool(server, &mcp.Tool{Name: "create_task",     /* ... */}, s.createTask)
+    mcp.AddTool(server, &mcp.Tool{Name: "get_task",        /* ... */}, s.getTask)
+    mcp.AddTool(server, &mcp.Tool{Name: "list_tasks",      /* ... */}, s.listTasks)
+    mcp.AddTool(server, &mcp.Tool{Name: "update_task",     /* ... */}, s.updateTask)
 }
 ```
 
-This is a new endpoint because the existing `GetTaskDetails` returns the full task state — we need an incremental, cursor-based stream of changes.
+`mcpserver.Handler()` calls `AddTools(server, s.service, s.baseURL)` after constructing the server; the bridge calls the same function with a Connect-client-backed `service` (the existing `xagentclient.Client` type already satisfies the same `XAgentServiceHandler` interface used by `apiserver.Server`, since tool calls just forward to RPCs).
 
-### Event Types
+The handler keeps its `Stateless: true` Streamable HTTP wrapper; the bridge wraps the same server with `mcp.StdioTransport` and additionally sets `Capabilities.Experimental["claude/channel"] = map[string]any{}` plus channel-specific `Instructions`.
 
-| Type | Trigger | Content | Meta |
-|------|---------|---------|------|
-| `child_completed` | Child task status → COMPLETED | "Child task {id} ({name}) completed" | `task_id`, `child_id` |
-| `child_failed` | Child task status → FAILED | "Child task {id} ({name}) failed" | `task_id`, `child_id` |
-| `instruction_added` | Parent adds instruction via `update_child_task` | The instruction text | `task_id`, `source` |
-| `external_event` | Webhook routed via subscribed link | Event description + data | `task_id`, `event_id`, `url` |
-| `child_log` | Child task uploads a log with type "llm" | The log message | `task_id`, `child_id` |
-
-### Capability Declaration
-
-In `internal/command/mcp.go`, change the server constructor:
+### `xagent mcp` skeleton
 
 ```go
-server := mcp.NewServer(&mcp.Implementation{
-    Name:    "xagent",
-    Version: "1.0.0",
-}, &mcp.ServerOptions{
-    Capabilities: &mcp.ServerCapabilities{
-        Experimental: map[string]any{
-            "claude/channel": map[string]any{},
-        },
+var McpCommand = &cli.Command{
+    Name:  "mcp",
+    Usage: "Local stdio MCP bridge: re-exposes xagent tools and pushes task change notifications as Claude Code channel events",
+    Flags: []cli.Flag{
+        &cli.StringFlag{Name: "server", Value: xagentclient.DefaultURL, Usage: "C2 server URL"},
+        &cli.StringFlag{Name: "token",  Required: true,                 Usage: "API token"},
     },
-    Instructions: "Events from the xagent channel arrive as <channel source=\"xagent\" ...>. " +
-        "They notify you about task status changes, new instructions, and external events. " +
-        "You do not need to reply to these events — they are informational. " +
-        "Use the existing xagent MCP tools to take action based on them.",
-})
-```
+    Action: func(ctx context.Context, cmd *cli.Command) error {
+        client := xagentclient.New(xagentclient.Options{
+            BaseURL: cmd.String("server"),
+            Token:   cmd.String("token"),
+        })
 
-### Server.Run Refactoring
+        server := mcp.NewServer(&mcp.Implementation{
+            Name:    "xagent",
+            Version: version.String(),
+        }, &mcp.ServerOptions{
+            Capabilities: &mcp.ServerCapabilities{
+                Experimental: map[string]any{
+                    "claude/channel": map[string]any{},
+                },
+            },
+            Instructions: "Events from the xagent channel arrive as " +
+                "<channel source=\"xagent\" action=... resource=... id=...>. " +
+                "They notify you that an xagent task, log, link, or event " +
+                "changed. Call get_task with the id for details before acting.",
+        })
 
-Currently `xagent mcp` calls `server.Run(ctx, &mcp.StdioTransport{})` which blocks. To start the poll goroutine, we need the `ServerSession`:
+        mcpserver.AddTools(server, client, cmd.String("server"))
 
-```go
-session, err := server.Connect(ctx, &mcp.StdioTransport{}, nil)
-if err != nil {
-    return err
+        // channelTransport wraps StdioTransport and exposes a public
+        // Notify(method, params) for the SSE→channel goroutine. See
+        // "Sending notifications/claude/channel" below.
+        transport := newChannelTransport(&mcp.StdioTransport{})
+        session, err := server.Connect(ctx, transport, nil)
+        if err != nil {
+            return err
+        }
+        go pushTaskChannels(ctx, transport, client, cmd.String("server"), cmd.String("token"))
+        return session.Wait()
+    },
 }
-go pollEvents(ctx, session, client, task)
-return session.Wait()
 ```
 
-### Runner Integration
+`server.Run` is replaced by the lower-level `server.Connect` + `session.Wait` pair so the bridge can hold a reference both to the `ServerSession` (for shutdown) and to the transport wrapper (for sending `notifications/claude/channel` from the background goroutine).
 
-The runner (`internal/runner/runner.go`) injects the `xagent` MCP server config into each container. For channels, Claude Code needs a separate `--channels` flag. The runner would need to:
+### The Go MCP SDK: capability vs. notification
 
-1. Detect if the Claude Code version supports channels (v2.1.80+)
-2. Pass `--dangerously-load-development-channels server:xagent` during research preview, or `--channels server:xagent` once allowlisted
-3. Add the xagent MCP server to the channels config section
+The repo currently vendors `github.com/modelcontextprotocol/go-sdk` **v1.4.1**; latest is **v1.6.1**. The relevant API surface is identical across those versions. Splitting the prior "SDK gap" into the two things it actually was:
 
-This requires changes to `internal/agent/config.go` and `internal/agent/claude.go` to support the channels CLI flag.
+**Advertising `claude/channel` — already public API.** `ServerOptions.Capabilities.Experimental` is a public `map[string]any` (`protocol.go` ~ L1547 in v1.4.1) and is plumbed into the InitializeResult the server returns to Claude Code. Setting `Experimental: map[string]any{"claude/channel": map[string]any{}}` on stock SDK is sufficient to register the listener; **no patch, fork, or wrapper is needed** for the capability declaration shown in the `xagent mcp` skeleton above.
 
-### Database Changes
+**Sending `notifications/claude/channel` — chosen path is a transport wrapper.** The SDK's public notification methods (`NotifyProgress`, `Log`, `ResourceUpdated`) only cover predefined MCP types, and there is no exported general-purpose `Server.Notify(method, params)`. However, the transport-level types are fully exported and sufficient:
 
-Add an `events_log` table to store the incremental event stream:
+- `mcp.Transport` and `mcp.Connection` are public interfaces (`transport.go` L37–67). `Connection` exposes `Write(context.Context, jsonrpc.Message) error`; its contract documents that "Write may be called concurrently."
+- `jsonrpc.Request`, `jsonrpc.Message`, and `jsonrpc.EncodeMessage` are public re-exports from `github.com/modelcontextprotocol/go-sdk/jsonrpc`. A `*jsonrpc.Request{Method: "notifications/claude/channel", Params: raw}` **with no ID** is, by JSON-RPC 2.0 definition, a notification (see `Request.IsCall()` — `messages.go:110`).
 
-```sql
-CREATE TABLE task_events (
-    id BIGSERIAL PRIMARY KEY,
-    task_id BIGINT NOT NULL REFERENCES tasks(id),
-    type TEXT NOT NULL,
-    content TEXT NOT NULL,
-    meta JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+The bridge therefore ships a ~30-line wrapper that:
 
-CREATE INDEX idx_task_events_task_id_id ON task_events(task_id, id);
-```
+1. Wraps `mcp.StdioTransport` (`type channelTransport struct { inner mcp.Transport; conn *channelConn }`).
+2. On `Connect`, calls `inner.Connect(ctx)`, retains the returned `Connection`, and returns its own wrapper that delegates `Read`/`Close`/`SessionID` straight through.
+3. Exposes a public `Notify(ctx, method string, params any) error` that JSON-marshals `params` to `json.RawMessage`, constructs `&jsonrpc.Request{Method: method, Params: raw}` (no ID), and calls the wrapped `Connection.Write`.
+4. Holds a `sync.Mutex` around `Write` so injected notification frames cannot interleave with the SDK's own writes. (The `Connection` contract already promises concurrent-safe `Write`, but the lock keeps the framing easy to reason about and matches the reviewer's recommendation.)
 
-Events are written by the server when task state changes occur (status updates, new instructions, webhook events). The `xagent mcp` process polls `task_events WHERE task_id = ? AND id > ?`.
+The bridge constructs `channelTransport{inner: &mcp.StdioTransport{}}`, passes it to `server.Connect`, and keeps a handle to the wrapper so the background SSE→channel goroutine can call `wrapper.Notify(ctx, "notifications/claude/channel", params)` directly. 100% public API; no fork; no internal-package access.
 
-### Permission Relay (Future)
+**Why not upstream `ServerSession.Notify`?** This was the prior draft's preferred option. It is the wrong bet for now: it has been proposed in [`go-sdk` PR #898](https://github.com/modelcontextprotocol/go-sdk/pull/898) (which explicitly cites `notifications/claude/channel` as motivation) and rejected by maintainer @jba — "A send-only solution isn't sufficient. There must be a story on the receive side… let's not write more code until we understand the solution." The unified send/receive design is tracked in [`go-sdk` #745](https://github.com/modelcontextprotocol/go-sdk/issues/745), with competing PRs [#844](https://github.com/modelcontextprotocol/go-sdk/pull/844) and [#956](https://github.com/modelcontextprotocol/go-sdk/pull/956) still in flight. The net is: ship the transport wrapper now, add a `TODO` referencing #745, and delete the wrapper once upstream lands a combined design. A temporary fork is now unnecessary and is dropped from consideration.
 
-Permission relay (`claude/channel/permission`) is not in scope for the initial implementation. It would require a trusted sender path (e.g., the web UI or a chat integration) and adds significant complexity around authentication and UX. This can be added later once the one-way channel is proven.
+The receive-side concern @jba raised matters only if we add **permission relay** (Claude Code → bridge → user → response). That is explicitly out of scope for v1; the send-only one-way "task updated" push is fully covered by the wrapper.
+
+### What the original draft proposed and why we're dropping it
+
+The earlier draft of this proposal proposed:
+
+- A new `task_events` table for an incremental, channel-shaped event log.
+- A new `PollEventsRequest` / `PollEventsResponse` Connect RPC the agent process would poll every few seconds with a cursor.
+- A `channel/channel` capability bolted onto the in-container `xagent mcp` process so it could push events into the *in-container* Claude Code agent.
+
+All three are superseded:
+
+- The C2 server **already publishes a `model.Notification` on every relevant mutation** and **already fans them out over SSE** at `/events`. A new table and a new polling RPC would duplicate that pipeline.
+- The use case has moved to the local-developer Claude that drives the user-facing MCP server, not to in-container agents. The original framing of "replace the in-container agent's `get_my_task` polling with channels" is preserved as future work but is no longer the primary motivation.
+
+The "Capability Declaration", "Server.Run Refactoring", and "Runner Integration" sections from the prior draft are replaced by the bridge command and `AddTools` refactor described above; "Database Changes" and "Event Polling" are removed entirely.
 
 ## Trade-offs
 
-### Why modify the existing `xagent mcp` process vs. a separate channel server?
+### Go bridge vs. TypeScript/Bun bridge — resolved toward Go
 
-A separate channel server (e.g., in TypeScript) would sidestep the Go SDK gap but adds:
-- Node.js runtime dependency in Docker containers
-- IPC between the channel process and the Go MCP process or xagent server
-- Two separate MCP server configs to manage
-- More failure modes
+The prior draft rejected a TypeScript channel server because it would have dragged a Node runtime *into container images*. The bridge runs locally — Bun is already a Claude Code Channels prerequisite — so the runtime cost of TS is no longer an objection. That reopened the choice.
 
-Modifying the existing process keeps everything in one binary, reuses the existing auth/transport, and is architecturally simpler. The Go SDK gap is the only blocker and is solvable.
+The transport-wrapper path described above closes it again, this time on its own merits:
 
-### Why polling vs. server-push (WebSocket/SSE)?
+- **Go bridge** (`xagent mcp` subcommand): reuses `xagentclient`, `internal/x/sse`, the `mcpserver` tool definitions, and `model.Notification` directly. No code duplication, single static binary, ships through the existing release pipeline. The "no public arbitrary-notify API" cost that previously offset these gains is paid by ~30 lines of transport-wrapper code with 100% public-API surface.
+- **TS/Bun bridge**: the official `@modelcontextprotocol/sdk` server has first-class `notification()` support, so the channel-side problem is trivial — but the bridge would re-implement Connect-RPC tool proxying, auth token handling, and SSE parsing in TypeScript and introduce a second release artifact in a new language for the project to maintain.
 
-The `xagent mcp` process communicates with the server over a unix socket HTTP transport. Adding WebSocket or SSE support to the unix socket proxy (`internal/runner/proxy.go`) and the Connect RPC API is significant work. Polling every 2-5 seconds with a cursor is simple, efficient (small payloads), and consistent with the runner's existing polling pattern for task assignment.
+Once `Notify` is no longer a real engineering cost on the Go side, the TS bridge's only remaining argument is "native channel support," which the wrapper provides for free. **Go wins.** This trade-off is resolved here rather than left as an open question.
 
-### Why a new `task_events` table vs. reusing existing events?
+### Push into the bridge vs. point Claude at the existing HTTP endpoint
 
-The existing `events` table stores webhook payloads routed via subscribed links. Channel events are broader — they include task status changes and log forwarding which aren't external webhooks. A dedicated table with a simple monotonic ID makes cursor-based polling trivial and avoids complicating the existing event routing system.
+We could leave `/mcp` as the only entry point and ship a separate, minimal stdio "channel-only" subprocess whose sole job is to translate SSE → notifications. Pros: smaller surface; Claude can keep talking to the proven HTTP endpoint for tools. Cons: developers configure two MCP entries; the channel server still needs auth, an SSE client, and Bun-or-Go runtime — most of the bridge's complexity — without the simplicity win of "one stdio entry replaces everything for local use." We propose the bundled bridge as the default, but the split layout remains a valid alternative.
+
+### Reusing the existing SSE stream vs. building a per-task subscription
+
+The notify SSE stream is per-org: a bridge subscribes once and sees every notification the user's org generates. We could instead build a per-task channel-shaped endpoint and have the bridge open one subscription per task it has touched. Cons: more state on the bridge, more reconnect/lifecycle handling, more endpoints on the server. Pro of going per-task: trivially scoped — no risk of leaking another user's activity into the local Claude. We propose reusing the existing org-scoped stream and filtering in the bridge, but the filtering policy is itself an open question (next section).
 
 ## Open Questions
 
-1. **Go SDK upstream appetite**: Would the `modelcontextprotocol/go-sdk` maintainers accept a `ServerSession.Notify` method? This should be validated before starting implementation.
+1. **Scope of forwarded notifications.** Should the bridge push every task notification on the org's SSE stream, or filter to tasks created by the same user (`Notification.UserID`) or even the same session (`Notification.ClientID`)? The `model.Notification` envelope carries both, so a filter is cheap; the policy choice (and the UX of "I created task 42 from this terminal — only tell me about it" vs. "tell me about everything in my org") is the question.
+2. **Bridge-as-everything vs. channel-only bridge.** Should `xagent mcp` re-expose the user-facing tools alongside the channel (one MCP entry for the local user, as proposed), or stay channel-only and let the user keep pointing Claude at the HTTP `/mcp` endpoint for tools (two entries, sharper layering)?
+3. **How rich should `content` be?** Channel `content` is the `<channel>` tag body. We could send a minimal `"Task 42 updated."` and rely on Claude calling `get_task`, or we could embed a short human-readable summary (status transition, instruction author) to save a round-trip. Richer `content` means the bridge fetches details before emitting, which costs an RPC per change.
+4. **Permission relay.** Two-way channels and the `claude/channel/permission` capability would let xagent prompt the local Claude for approvals (e.g. before running a destructive task action). Out of scope for v1; flagged because permission relay would need the receive-side story that [`go-sdk` #745](https://github.com/modelcontextprotocol/go-sdk/issues/745) is blocking on, so picking it up later is bounded by that upstream design.
 
-2. **Poll interval**: What's the right balance between responsiveness and load? 2 seconds seems reasonable but should be configurable. Long-polling would be better but requires more transport work.
+## Future work: pushing into in-container agents
 
-3. **Event retention**: How long should `task_events` rows be kept? Options: delete when task is archived, TTL-based cleanup, or keep indefinitely. Archival cleanup is simplest and aligns with existing patterns.
-
-4. **Research preview constraints**: Channels require `--dangerously-load-development-channels` for custom servers. Should xagent wait for a stable release, or ship with the development flag during the preview? The flag requires user confirmation on each launch.
-
-5. **Which events to start with**: The full set (child status, instructions, external events, child logs) may be too ambitious for v1. Starting with just `external_event` (webhook forwarding) would deliver the highest value with the least new infrastructure, since events already exist in the database.
-
-6. **Channel vs. tool hybrid**: Should channel events supplement or replace the polling done by `get_my_task`? If Claude receives a channel event about a child completing, it may still need to call `get_my_task` or `list_child_tasks` to get the full details. The channel serves as a notification layer, not a data layer.
+The original framing — replacing the in-container `xagent mcp` process's reliance on the agent polling `get_my_task` with pushed channel events — is still achievable on top of this work. The transport wrapper used by the local bridge is reusable as-is inside the agent server, since the agent already runs over stdio. The design question is which agent-side state changes (child completions, parent instructions, routed external events, child logs) deserve a push, and whether the agent should subscribe to its own per-task slice of `model.Notification`s or get a curated stream. That work is deferred to a follow-up proposal so this one can ship the local-developer use case first.
