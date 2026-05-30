@@ -157,6 +157,55 @@ func TestNotificationClient_ReconnectsOnDrop(t *testing.T) {
 	assert.Equal(t, got.Type, "change")
 }
 
+func TestNotificationClient_SkipsOwnClientID(t *testing.T) {
+	t.Parallel()
+	// Arrange: bind the client to a specific ClientID. The handler will
+	// only see notifications whose ClientID does not match.
+	ts, ps := newTestNotifyServer(t)
+	const myID = "bridge-self"
+	received := make(chan model.Notification, 4)
+	c := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
+		BaseURL:  ts.URL,
+		ClientID: myID,
+		Handler:  func(n model.Notification) { received <- n },
+	})
+	runClient(t, c)
+	// The ready event has no ClientID and must still flow through.
+	ready := recv(t, received, time.Second, "ready notification")
+	assert.Equal(t, ready.Type, "ready")
+
+	// Act: publish two changes — one tagged with our id (self-echo), one
+	// from a different client. Only the second should arrive.
+	assert.NilError(t, ps.Publish(t.Context(), model.Notification{
+		Type:     "change",
+		OrgID:    testOrgID,
+		ClientID: myID,
+		Resources: []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: 1},
+		},
+	}))
+	assert.NilError(t, ps.Publish(t.Context(), model.Notification{
+		Type:     "change",
+		OrgID:    testOrgID,
+		ClientID: "other-client",
+		Resources: []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: 2},
+		},
+	}))
+
+	// Assert: the only delivered change is the one from the other client.
+	got := recv(t, received, time.Second, "non-self change")
+	assert.Equal(t, got.ClientID, "other-client")
+	assert.Equal(t, got.Resources[0].ID, int64(2))
+
+	// Drain to confirm no self-echo follows.
+	select {
+	case n := <-received:
+		t.Fatalf("unexpected echoed notification: %+v", n)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestNotificationClient_SkipsMalformedData(t *testing.T) {
 	t.Parallel()
 	// Arrange: a tiny standalone handler — the real notifyserver only

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
@@ -45,9 +46,17 @@ var McpCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		// One stable id per bridge process. It is sent on every mutation
+		// RPC so the server stamps the resulting notifications with this
+		// id, and on the SSE subscription so the notification client
+		// filters those same events back out. Without it the bridge
+		// would echo its own create_task/update_task changes back to the
+		// host Claude Code session as channel events (#718).
+		clientID := uuid.NewString()
 		client := xagentclient.New(xagentclient.Options{
-			BaseURL: cmd.String("server"),
-			Token:   cmd.String("token"),
+			BaseURL:  cmd.String("server"),
+			Token:    cmd.String("token"),
+			ClientID: clientID,
 		})
 		var capabilities mcp.ServerCapabilities
 		if cmd.Bool("channel") {
@@ -70,8 +79,9 @@ var McpCommand = &cli.Command{
 		if cmd.Bool("channel") {
 			go func() {
 				nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
-					BaseURL: cmd.String("server"),
-					Token:   cmd.String("token"),
+					BaseURL:  cmd.String("server"),
+					Token:    cmd.String("token"),
+					ClientID: clientID,
 					Handler: func(n model.Notification) {
 						if err := mcpserver.ForwardNotification(ctx, transport, n); err != nil {
 							slog.Warn("xagent channel: failed to send", "error", err)

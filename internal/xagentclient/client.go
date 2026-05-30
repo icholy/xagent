@@ -39,6 +39,11 @@ type Options struct {
 	// Timeout is the timeout for RPC calls.
 	// Defaults to DefaultTimeout if zero.
 	Timeout time.Duration
+	// ClientID, when non-empty, is sent on every request as the X-Client-ID
+	// header so the server stamps the resulting notifications with this id.
+	// Pair with NotificationClientOptions.ClientID to suppress
+	// self-notifications.
+	ClientID string
 }
 
 // New returns a Connect client.
@@ -57,6 +62,7 @@ func New(opts Options) Client {
 		transport = &AuthTransport{
 			Transport: transport,
 			Token:     opts.Token,
+			ClientID:  opts.ClientID,
 		}
 	}
 	httpClient := &http.Client{Transport: transport, Timeout: cmp.Or(opts.Timeout, DefaultTimeout)}
