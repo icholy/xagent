@@ -77,7 +77,7 @@ func AddTools(server *mcp.Server, service xagentv1connect.XAgentServiceHandler) 
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "archive_task",
-		Description: "Archive a task",
+		Description: "Archive a task. The task must be in a terminal state (completed, failed, or cancelled) — running or pending tasks cannot be archived.",
 	}, h.archiveTask)
 }
 
