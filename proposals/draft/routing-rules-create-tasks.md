@@ -287,25 +287,23 @@ If duplicates actually show up in production we can revisit — options include 
 
 ### 6. Prompt sourcing
 
-The created task gets a two-instruction prompt:
+The created task gets a short prompt:
 
-1. **A boilerplate preamble** generated from event context. Recommend a single short line that names the source, type, description, and URL — enough for the agent to know who triggered it and where to look. Sketch:
+1. **A one-line preamble** that orients the agent — source/type and the description. Sketch:
 
    ```
-   You were created by a routing rule in response to a {source} {type} event.
-
-   Description: {description}
-   URL: {url}
-
-   Data:
-   {data}
+   You were created by a routing rule in response to a {source} {type} event: {description}.
    ```
 
-2. **The rule's `Prompt`** appended verbatim as a second instruction, with the trigger context above. If `Prompt` is empty, only the preamble is sent (acceptable degenerate case).
+   The preamble deliberately does **not** embed `{url}` or `{data}`. The subscribed `Link` attached to the task in the same transaction (§5) carries the URL, and the agent reaches the event source through it. The agent fetches the body specifics from the source itself rather than reading the inlined payload.
 
-Two instructions, not one concatenated string, matches the existing system: `model.Task.Instructions` is `[]Instruction` (`internal/model/task.go:67`) and the runner already iterates over multiple instructions. It also keeps the rule author's prompt distinguishable from the auto-generated context.
+2. **The rule's `Prompt`** appended verbatim as a second instruction. If `Prompt` is empty, only the preamble is sent (acceptable degenerate case).
 
-Templating the rule prompt with `{description}` / `{url}` / etc. is **not** proposed. The preamble already carries the event context; mixing templating into the user-supplied prompt invites a second design problem (escaping, missing-field errors, validation). If we later need it, it's an additive change to a single function.
+The task's `Name` is left empty — the agent populates it on first run via `update_my_task`.
+
+Two instructions, not one concatenated string, matches the existing system: `model.Task.Instructions` is `[]Instruction` (`internal/model/task.go:67`) and the runner already iterates over multiple instructions. It also keeps the rule author's prompt distinguishable from the auto-generated preamble.
+
+Templating the rule prompt with `{description}` / `{url}` / etc. is **not** proposed. If we later need it, it's an additive change to a single function.
 
 ### 7. Atlassian parity
 

@@ -278,8 +278,13 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, task.Status, model.TaskStatusPending)
 	assert.Equal(t, task.Command, model.TaskCommandStart)
 	assert.Equal(t, len(task.Instructions), 2)
+	// Preamble orients the agent but doesn't duplicate the URL or event
+	// body — the subscribed link carries the URL, and the agent fetches
+	// specifics via the link.
 	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "routing rule"))
-	assert.Assert(t, strings.Contains(task.Instructions[0].Text, url))
+	assert.Assert(t, !strings.Contains(task.Instructions[0].Text, url))
+	assert.Assert(t, !strings.Contains(task.Instructions[0].Text, "please look at this"))
+	assert.Equal(t, task.Instructions[0].URL, "")
 	assert.Equal(t, task.Instructions[1].Text, "Triage this issue.")
 
 	links, err := s.ListLinksByTask(t.Context(), nil, task.ID, org.OrgID)
