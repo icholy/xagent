@@ -14,12 +14,17 @@ production code or commit to the repo yourself — the xagent agents do that.
 1. **Delegating is the default; implementing is the exception.** Most real implementation
    work should be done by xagent tasks, not by you. Reach for a task before reaching for
    the editor.
-2. **Local edits are usually throwaway validation.** You'll often edit code in the working
+2. **Don't front-load exploration before delegating.** The point of delegating is to
+   offload work, not to do it first. Resist the urge to grep/read your way to a complete
+   picture before creating a task — the agent has the repo and explores faster than you
+   can hand-feed it. Delegate from what you already know; let the agent discover the rest.
+   (Reviewing what comes back is different — that's the manager job, see rule 6.)
+3. **Local edits are usually throwaway validation.** You'll often edit code in the working
    tree to validate an idea, probe an API, or confirm an approach is feasible (e.g.
    checking whether an SDK exposes a method, prototyping a wrapper). That kind of edit is
    to inform the task you're about to create — not the deliverable. Discard it once it's
    served its purpose.
-3. **Committing is allowed, but deliberate.** The default is to delegate, but you do
+4. **Committing is allowed, but deliberate.** The default is to delegate, but you do
    commit directly in some cases:
    - Workflow / config / tooling files (skills, settings, docs about process) — like this
      skill itself.
@@ -27,13 +32,13 @@ production code or commit to the repo yourself — the xagent agents do that.
      back-and-forth is faster done together than round-tripped through a task.
    When in doubt, prefer delegating; commit directly only when one of these clearly
    applies (or the user asks).
-4. **Review everything that comes back.** Read the proposals and PRs the tasks produce.
+5. **Review everything that comes back.** Read the proposals and PRs the tasks produce.
    Check them against what was asked, surface stale assumptions, gaps, and risks.
-5. **Talk to the human before giving feedback.** When you find issues in a task's
+6. **Talk to the human before giving feedback.** When you find issues in a task's
    proposal or PR, do **not** post feedback right away. Surface what you found to the
    user first and discuss it — they may disagree, have context you don't, or want to
    redirect. Only after you've aligned do you write the feedback.
-6. **Request changes on the PR, tagging the author.** Once aligned with the human, post a
+7. **Request changes on the PR, tagging the author.** Once aligned with the human, post a
    comment on the PR (`mcp__meta__Github__add_issue_comment` with the PR number) and tag
    the author (e.g. `@icholy-bot` for bot-generated PRs). Be specific and actionable.
    Prefer this over fixing it yourself.
@@ -45,9 +50,10 @@ production code or commit to the repo yourself — the xagent agents do that.
 2. **Validate (optional)** — If an approach has technical unknowns, prototype locally to
    de-risk it. Read the relevant code, probe APIs, confirm feasibility. Keep notes; throw
    the code away.
-3. **Delegate** — Create an xagent task with a clear, actionable instruction. Fold in the
-   context you already have (files read, APIs confirmed, decisions made, gotchas found) so
-   the agent doesn't have to rediscover it. Specify the deliverable: a GitHub issue for
+3. **Delegate** — Create an xagent task with a clear, actionable instruction. Keep it
+   lean: state the decisions you've already made, the scope boundaries, and the
+   deliverable — then stop and let the agent explore. Don't pad the instruction with
+   context the agent can find itself. Specify the deliverable: a GitHub issue for
    investigations, a PR for implementation.
 4. **Review** — When the task opens a proposal or PR, read it end to end. Compare it to
    the intent. Note what's correct, what's missing, what's risky, and any assumptions that
@@ -76,12 +82,23 @@ context on the sweep.
 
 ## Writing good task instructions
 
-- Include context you **already have** — don't make the agent re-explore what you've
-  already learned this session (file paths, type names, decisions, constraints).
-- State scope boundaries explicitly, including what is **out of scope** ("do NOT add X").
-- Name the deliverable and the conventional-commit type for the PR.
-- Flag known gotchas and acceptable ways to resolve them, rather than leaving the agent to
-  trip over them.
+Lean beats exhaustive. The agent has the repo, the skills, and the merged artifacts — a
+short, pointed instruction outperforms a wall of pasted context. Aim for the smallest
+instruction that uniquely determines the right outcome.
+
+- **Reference in-repo artifacts; don't paste them.** Proposals, issues, and code are in
+  the repo the agent has cloned. Point at the file (e.g. "implement
+  `proposals/draft/foo.md`") instead of copying its contents into the instruction — a
+  pasted copy only drifts from the source of truth and bloats the task.
+- **State decisions, not derivations.** Include the choices already made, the scope
+  boundaries (especially what is **out of scope** — "do NOT add X"), and any non-obvious
+  gotcha. Leave the rediscoverable details (file paths, type names, exact code) to the
+  agent.
+- **Name the deliverable and the conventional-commit type** for the PR.
+- **Don't explore just to write the instruction.** If you find yourself grepping the
+  codebase to fill in the task, stop — that's the agent's job. (Validating a genuine
+  technical unknown before committing to an approach is the exception, per workflow step
+  2.)
 
 ## Reviewing proposals and PRs
 
