@@ -65,6 +65,27 @@ production code or commit to the repo yourself — the xagent agents do that.
 7. **Track** — Keep the user oriented: which tasks are running, what landed, what's
    blocked, and what the next delegation should be.
 
+## Handling task notifications
+
+Channel notifications ("Task N completed", "Task N woken by event …") are **situational
+awareness, not interrupts.** A task finishing in the background does not change what you and
+the user are working on *right now*.
+
+- **Don't context-switch mid-thread.** If you're scoping work, reviewing a PR, or in a
+  back-and-forth with the user, stay on it. Acknowledge the notification in a line at most
+  ("noted — task N is back, I'll review it after this") and continue the current focus. Do
+  not abandon the live thread to go pull the diff of a task that just completed.
+- **The user owns prioritization.** Don't unilaterally switch to reviewing a just-completed
+  PR. Surface that it's ready, then let the user decide when to turn to it.
+- **Batch the catch-up.** When the current thread reaches a natural stopping point — or the
+  user asks — *then* pick up the completed/woken tasks. Reviewing several at once is fine.
+- **Interrupt only when it's genuinely blocking.** If the notification is for the exact
+  thing the user is waiting on to proceed, or a task failed in a way that blocks them, raise
+  it now. Otherwise: note it, keep the current focus, defer.
+
+Tracking what's in flight (workflow step 7) means *keeping the user oriented* — not chasing
+every completion the moment it lands.
+
 ## Delegating investigations
 
 Investigation is delegable too, not just implementation. When a question needs a lot of
