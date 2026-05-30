@@ -88,7 +88,7 @@ export function RoutingRuleForm({
         <Label htmlFor="prefix">Prefix</Label>
         <Input
           id="prefix"
-          placeholder="URL prefix to match"
+          placeholder="Message prefix to match"
           value={values.prefix}
           onChange={(e) => setValues({ ...values, prefix: e.target.value })}
         />
@@ -98,7 +98,7 @@ export function RoutingRuleForm({
         <Label htmlFor="mention">Mention</Label>
         <Input
           id="mention"
-          placeholder="Mention to match (e.g. @username)"
+          placeholder="Mention to match (e.g. username)"
           value={values.mention}
           onChange={(e) => setValues({ ...values, mention: e.target.value })}
         />

@@ -18,13 +18,13 @@ import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
+import { Route as RoutingNewRouteImport } from './routes/routing.new'
+import { Route as RoutingIndexRouteImport } from './routes/routing.$index'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as KeysNewRouteImport } from './routes/keys.new'
 import { Route as GithubSetupRouteImport } from './routes/github.setup'
 import { Route as EventsNewRouteImport } from './routes/events.new'
 import { Route as EventsIdRouteImport } from './routes/events.$id'
-import { Route as SettingsRoutingRulesNewRouteImport } from './routes/settings_.routing-rules.new'
-import { Route as SettingsRoutingRulesIndexRouteImport } from './routes/settings_.routing-rules.$index'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -71,6 +71,16 @@ const TasksIdRoute = TasksIdRouteImport.update({
   path: '/tasks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RoutingNewRoute = RoutingNewRouteImport.update({
+  id: '/routing/new',
+  path: '/routing/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoutingIndexRoute = RoutingIndexRouteImport.update({
+  id: '/routing/$index',
+  path: '/routing/$index',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
   id: '/oauth/authorize',
   path: '/oauth/authorize',
@@ -96,17 +106,6 @@ const EventsIdRoute = EventsIdRouteImport.update({
   path: '/events/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsRoutingRulesNewRoute = SettingsRoutingRulesNewRouteImport.update({
-  id: '/settings_/routing-rules/new',
-  path: '/settings/routing-rules/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoutingRulesIndexRoute =
-  SettingsRoutingRulesIndexRouteImport.update({
-    id: '/settings_/routing-rules/$index',
-    path: '/settings/routing-rules/$index',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -116,6 +115,8 @@ export interface FileRoutesByFullPath {
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/routing/$index': typeof RoutingIndexRoute
+  '/routing/new': typeof RoutingNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
@@ -123,8 +124,6 @@ export interface FileRoutesByFullPath {
   '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
-  '/settings/routing-rules/$index': typeof SettingsRoutingRulesIndexRoute
-  '/settings/routing-rules/new': typeof SettingsRoutingRulesNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -134,6 +133,8 @@ export interface FileRoutesByTo {
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/routing/$index': typeof RoutingIndexRoute
+  '/routing/new': typeof RoutingNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
@@ -141,8 +142,6 @@ export interface FileRoutesByTo {
   '/members': typeof MembersIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
-  '/settings/routing-rules/$index': typeof SettingsRoutingRulesIndexRoute
-  '/settings/routing-rules/new': typeof SettingsRoutingRulesNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -153,6 +152,8 @@ export interface FileRoutesById {
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/routing/$index': typeof RoutingIndexRoute
+  '/routing/new': typeof RoutingNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
@@ -160,8 +161,6 @@ export interface FileRoutesById {
   '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
-  '/settings_/routing-rules/$index': typeof SettingsRoutingRulesIndexRoute
-  '/settings_/routing-rules/new': typeof SettingsRoutingRulesNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -173,6 +172,8 @@ export interface FileRouteTypes {
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
+    | '/routing/$index'
+    | '/routing/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
@@ -180,8 +181,6 @@ export interface FileRouteTypes {
     | '/members/'
     | '/tasks/'
     | '/workspaces/'
-    | '/settings/routing-rules/$index'
-    | '/settings/routing-rules/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -191,6 +190,8 @@ export interface FileRouteTypes {
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
+    | '/routing/$index'
+    | '/routing/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events'
@@ -198,8 +199,6 @@ export interface FileRouteTypes {
     | '/members'
     | '/tasks'
     | '/workspaces'
-    | '/settings/routing-rules/$index'
-    | '/settings/routing-rules/new'
   id:
     | '__root__'
     | '/'
@@ -209,6 +208,8 @@ export interface FileRouteTypes {
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
+    | '/routing/$index'
+    | '/routing/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
@@ -216,8 +217,6 @@ export interface FileRouteTypes {
     | '/members/'
     | '/tasks/'
     | '/workspaces/'
-    | '/settings_/routing-rules/$index'
-    | '/settings_/routing-rules/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -228,6 +227,8 @@ export interface RootRouteChildren {
   GithubSetupRoute: typeof GithubSetupRoute
   KeysNewRoute: typeof KeysNewRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
+  RoutingIndexRoute: typeof RoutingIndexRoute
+  RoutingNewRoute: typeof RoutingNewRoute
   TasksIdRoute: typeof TasksIdRoute
   TasksNewRoute: typeof TasksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
@@ -235,8 +236,6 @@ export interface RootRouteChildren {
   MembersIndexRoute: typeof MembersIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
-  SettingsRoutingRulesIndexRoute: typeof SettingsRoutingRulesIndexRoute
-  SettingsRoutingRulesNewRoute: typeof SettingsRoutingRulesNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -304,6 +303,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/routing/new': {
+      id: '/routing/new'
+      path: '/routing/new'
+      fullPath: '/routing/new'
+      preLoaderRoute: typeof RoutingNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/routing/$index': {
+      id: '/routing/$index'
+      path: '/routing/$index'
+      fullPath: '/routing/$index'
+      preLoaderRoute: typeof RoutingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth/authorize': {
       id: '/oauth/authorize'
       path: '/oauth/authorize'
@@ -339,20 +352,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings_/routing-rules/new': {
-      id: '/settings_/routing-rules/new'
-      path: '/settings/routing-rules/new'
-      fullPath: '/settings/routing-rules/new'
-      preLoaderRoute: typeof SettingsRoutingRulesNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings_/routing-rules/$index': {
-      id: '/settings_/routing-rules/$index'
-      path: '/settings/routing-rules/$index'
-      fullPath: '/settings/routing-rules/$index'
-      preLoaderRoute: typeof SettingsRoutingRulesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -364,6 +363,8 @@ const rootRouteChildren: RootRouteChildren = {
   GithubSetupRoute: GithubSetupRoute,
   KeysNewRoute: KeysNewRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
+  RoutingIndexRoute: RoutingIndexRoute,
+  RoutingNewRoute: RoutingNewRoute,
   TasksIdRoute: TasksIdRoute,
   TasksNewRoute: TasksNewRoute,
   EventsIndexRoute: EventsIndexRoute,
@@ -371,8 +372,6 @@ const rootRouteChildren: RootRouteChildren = {
   MembersIndexRoute: MembersIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
-  SettingsRoutingRulesIndexRoute: SettingsRoutingRulesIndexRoute,
-  SettingsRoutingRulesNewRoute: SettingsRoutingRulesNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -18,7 +18,14 @@ import type { Event, Org } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -463,20 +470,18 @@ function RoutingRulesCard() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <CardTitle>Routing Rules</CardTitle>
-            <CardDescription>
-              Configure how events get routed to tasks and workspaces.
-            </CardDescription>
-          </div>
-          <Link to="/settings/routing-rules/new" search={{ org: orgId }}>
+        <CardTitle>Routing Rules</CardTitle>
+        <CardDescription>
+          Configure how events get routed to tasks and workspaces.
+        </CardDescription>
+        <CardAction>
+          <Link to="/routing/new" search={{ org: orgId }}>
             <Button>
               <Plus className="h-4 w-4" />
               Add Rule
             </Button>
           </Link>
-        </div>
+        </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">
         {deleteMutation.error && (
@@ -507,7 +512,7 @@ function RoutingRulesCard() {
                   <TableCell>
                     <div className="flex gap-1">
                       <Link
-                        to="/settings/routing-rules/$index"
+                        to="/routing/$index"
                         params={{ index: String(index) }}
                         search={{ org: orgId }}
                       >
