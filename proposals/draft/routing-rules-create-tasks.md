@@ -27,7 +27,7 @@ This proposal reworks routing so that an org's rules can opt into creating a tas
 1. Load rules for every org the commenter is a member of in one query (`ListRoutingRulesForUser`). Routing then proceeds per org even when no link covers the URL.
 2. Extend `model.RoutingRule` with an embedded create-task action carrying `workspace`, `runner`, and `prompt`.
 3. For each org, pick the **first matching rule** (rule ordering is significant). Drop orgs with no match. Then look up subscribed links — but only for orgs whose rule matched (`FindSubscribedLinksForOrgs`).
-4. If the org has a subscribed link covering the URL, wake (existing `attach` path). Otherwise, if the matched rule has the create action, create the task and its subscribed link in a single transaction with an in-tx re-check that absorbs webhook redeliveries and back-to-back events.
+4. If the org has a subscribed link covering the URL, wake (existing `attach` path). Otherwise, if the matched rule has the create action, create the task and its subscribed link in a single transaction. Sequential redeliveries are absorbed by the routing-level link lookup on the second event, which sees the just-committed link and takes the wake path.
 
 The "commenter must be a linked xagent user" constraint stays unchanged. It is the security boundary: only events authored by a linked xagent user may create or wake tasks.
 
@@ -137,8 +137,6 @@ WHERE l.url = $1 AND l.subscribe = TRUE AND t.archived = FALSE
 ORDER BY t.org_id, l.created_at DESC;
 ```
 
-The create-path re-check (§5) calls the same method scoped to a single org, so it drops its manual `if l.Subscribe` filter — the SQL already enforces it.
-
 `FindSubscribedLinksForUser` (`internal/store/sql/queries/link.sql:23-29`) has no other callers in the repo, so it can be retired with this change. The renamed in-router helper `links` replaces `find` (`internal/eventrouter/eventrouter.go:86`).
 
 #### 4b. Control flow — first matching rule per org
@@ -223,30 +221,22 @@ Notes on this flow:
 - Per-org isolation still falls out naturally: each org has its own `matched[orgID]` rule and its own `linksByOrg[orgID]` slice; nothing crosses between orgs.
 - The wake branch reuses the existing `attach` helper (`internal/eventrouter/eventrouter.go:117-159`), so log lines, notifications, and the "webhook started task" audit log are unchanged for the existing case.
 - **First matching rule wins per org. Rule ordering is significant.** A wake-only rule ordered ahead of a create-rule shadows the create-rule — this is intentional. Users who want create behaviour for a specific event-shape order the create-rule first. If precedence semantics become unwieldy, explicit precedence (priority field, "most specific match wins", etc.) is a follow-up.
-- **No scope gap between the two link lookups.** Both the routing-path lookup (`FindSubscribedLinksForOrgs`, called via `r.links`) and the create-path re-check (§5, also `FindSubscribedLinksForOrgs` scoped to one org) filter `subscribe = TRUE` in SQL. They return the same set of subscribed links for a given org and URL. There is no "neither wake nor create" gap.
+- **The routing-level link lookup is the dedup boundary.** `FindSubscribedLinksForOrgs` filters `subscribe = TRUE` in SQL. For a given (org, URL), the first event that goes through `create` commits a subscribed link; the next event's lookup sees it and goes wake. There is no "neither wake nor create" gap.
 
 ### 5. Atomic create + redelivery dedup
 
-When a create-rule fires, the new task and its subscribed `Link` to the event URL must be created in the **same transaction**. The link is the dedup key: once it exists, the next event for this URL takes the wake path via `find` → `attach` and no duplicate task is created.
+When a create-rule fires, the new task and its subscribed `Link` to the event URL must be created in the **same transaction**. The link is the dedup key: once it exists, the next event for this URL takes the wake path via `links` → `attach` and no duplicate task is created.
 
-`internal/server/apiserver/task.go:103-115` already shows the pattern for creating a task + audit log in one tx via `Store.WithTx`. The router-side helper extends that pattern with the link create and an in-tx re-check:
+`internal/server/apiserver/task.go:103-115` already shows the pattern for creating a task + audit log in one tx via `Store.WithTx`. The router-side helper extends that pattern with the link create:
 
 ```go
-func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) (bool, error) {
-    var created bool
+func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) error {
+    var (
+        task         *model.Task
+        notification model.Notification
+    )
     err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-        // Re-check inside the tx: a redelivered or back-to-back webhook may have
-        // already committed a task+link for this (org, url) since Route's initial
-        // FindSubscribedLinksForOrgs call.
-        existing, err := r.Store.FindSubscribedLinksForOrgs(ctx, tx, input.URL, []int64{orgID})
-        if err != nil {
-            return err
-        }
-        if len(existing[orgID]) > 0 {
-            return nil // dedup hit — leave the existing task; the wake path on the next event handles it
-        }
-
-        task := &model.Task{
+        task = &model.Task{
             Name:         routedTaskName(input),
             Runner:       rule.Create.Runner,
             Workspace:    rule.Create.Workspace,
@@ -274,24 +264,22 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
         }); err != nil {
             return err
         }
-        created = true
+        notification = /* task created + log appended */
         return tx.Commit()
     })
     if err != nil {
-        return false, err
+        return err
     }
-    if created {
-        r.publish(ctx, /* notification: task created + log appended */)
-    }
-    return created, nil
+    r.publish(ctx, notification)
+    return nil
 }
 ```
 
 Be precise about what each piece buys:
 
 - **The same transaction** gives *atomicity* — task and its dedup link commit together, never a half-created task whose link is missing.
-- **The in-tx re-check** is what *dedups* the realistic duplicate sources — webhook redeliveries (GitHub retries on non-2xx, Atlassian retries on timeouts) and back-to-back events for the same resource — because the first task's link is already committed by the time the second tx queries.
-- **Known limitation, accepted for v1.** Two genuinely *overlapping* transactions (e.g., the same webhook redelivered with millisecond spacing while the first tx is still open) can each pass the re-check and produce a duplicate task. This is rare in practice and recoverable by cancelling one of the tasks. We do not engineer around it in v1.
+- **Dedup for sequential redeliveries** (webhook retries on non-2xx, back-to-back events for the same resource) comes from the routing-level link lookup in `Route`: once `create`'s tx commits, the next event's `FindSubscribedLinksForOrgs` call sees the subscribed link and takes the wake path instead of calling `create` again. No in-tx re-check is needed — it would only narrow the genuinely-concurrent window, which we already accept as a v1 limitation.
+- **Known limitation, accepted for v1.** Two genuinely *overlapping* transactions (e.g., the same webhook redelivered with millisecond spacing while the first tx is still open) can each pass the routing-level lookup and produce a duplicate task. This is rare in practice and recoverable by cancelling one of the tasks. We do not engineer around it in v1.
 
 If duplicates actually show up in production we can revisit — options include a `pg_advisory_xact_lock` keyed on `(orgID, url)` at the top of the tx, or a `UNIQUE (org_id, url) WHERE subscribe = TRUE` partial index after deciding whether multi-task subscriptions are a pattern we want to keep supporting (see Trade-offs below).
 
@@ -354,7 +342,7 @@ The proposal does **not** design that form; it flags that the friendlier event-t
 - **First matching rule wins** — org with `[wake-only rule that matches, create-rule that also matches]`. Assert the wake-only rule shadows the create-rule (no task created when no link exists). Reorder to `[create-rule first, wake-only second]` and assert the create-rule fires.
 - **Rule-less org uses `defaultRules`** — org member of the user with `routing_rules = []`. Fire an event whose body starts with `xagent:` and matches a subscribed link in the org; assert the wake path runs. Fire one without the `xagent:` prefix and assert nothing happens. (Confirms the membership join returns the org and the fallback is applied.)
 - **Link query scoped to matched orgs** — user is a member of orgs A, B, C, only B has a matching rule. Assert `FindSubscribedLinksForOrgs` is called with `[B]` only. (Easiest to assert via the store moq.)
-- **Redelivery dedup** — fire the same `Route` call twice sequentially against an org with a create-rule. Assert exactly one task and one subscribed link exist after both return. This exercises the in-tx re-check.
+- **Redelivery dedup** — fire the same `Route` call twice sequentially against an org with a create-rule. Assert exactly one task and one subscribed link exist after both return. The second call sees the link committed by the first and takes the wake path (the dedup happens at the routing-level link lookup, not inside the tx).
 - **Create-rule that doesn't match** — rule with `mention: bot` against an event without the mention; assert no task is created.
 
 The dedup and rule-less-org tests belong in `internal/eventrouter` with `teststore.New(t)` — `teststore` already spins up real Postgres, so the tx behaviour and SQL join are exercised end-to-end.
@@ -365,14 +353,14 @@ The dedup and rule-less-org tests belong in `internal/eventrouter` with `teststo
 
 **Chosen: linked-commenter (`ListOrgsByMember`).** The invariant "only linked xagent users can trigger tasks" is a security feature. Installation-id keying would let any commenter in an installed repo trigger creation — strictly broader and a strict regression in posture. See §1.
 
-### Dedup: in-tx re-check vs advisory lock vs unique constraint
+### Dedup: routing-level lookup vs advisory lock vs unique constraint
 
-**Chosen: in-tx re-check only.** A `pg_advisory_xact_lock` keyed on `(orgID, url)` would close the overlapping-tx gap, and a `UNIQUE (org_id, url) WHERE subscribe = TRUE` partial index would close it at the DB level — but both are over-engineering for v1:
+**Chosen: routing-level link lookup only.** A `pg_advisory_xact_lock` keyed on `(orgID, url)` would close the overlapping-tx gap, and a `UNIQUE (org_id, url) WHERE subscribe = TRUE` partial index would close it at the DB level — but both are over-engineering for v1:
 
 - The advisory lock adds a store method, a per-create round trip, and surface area to test, all to defend against a race we have no evidence of yet.
 - The unique constraint forbids multiple tasks in the same org subscribing to the same URL (a pattern `task_links` allows today and that parent/child task setups can legitimately produce), and requires a backfill/dedup of any existing rows that would collide.
 
-The in-tx re-check absorbs webhook redeliveries and back-to-back events, which are the realistic duplicate sources. The remaining gap (genuinely overlapping transactions) is rare and recoverable by cancelling one of the tasks. Revisit if duplicates actually show up.
+The routing-level `FindSubscribedLinksForOrgs` lookup absorbs sequential webhook redeliveries — once `create` commits, the next call's lookup sees the link and takes the wake path. The remaining gap (genuinely overlapping transactions racing past that lookup) is rare and recoverable by cancelling one of the tasks. Revisit if duplicates actually show up. (An earlier draft of this proposal added an in-tx re-check inside `create`; it was dropped because it only narrows the same overlapping-tx window we already accept, while doubling the link-lookup count on every create.)
 
 ### Rule shape: embedded `create` block vs flat fields
 

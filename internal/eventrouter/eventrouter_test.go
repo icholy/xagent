@@ -375,7 +375,11 @@ func TestRouteSecondEventWakesCreatedTask(t *testing.T) {
 func TestRouteRedeliveryDedup(t *testing.T) {
 	t.Parallel()
 
-	// Arrange
+	// Arrange: sequential replay. The first Route creates the task and a
+	// subscribed link; the second Route sees that link via the routing-level
+	// FindSubscribedLinksForOrgs lookup and takes the wake path instead of
+	// creating a duplicate. (Genuinely-concurrent overlapping txns can still
+	// produce duplicates — accepted as a v1 limitation.)
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/issues/3"

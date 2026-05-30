@@ -107,14 +107,11 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		if rule.Create == nil {
 			continue
 		}
-		created, err := r.create(ctx, input, orgID, rule)
-		if err != nil {
+		if err := r.create(ctx, input, orgID, rule); err != nil {
 			r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
 			continue
 		}
-		if created {
-			n++
-		}
+		n++
 	}
 	return n, nil
 }
@@ -181,24 +178,18 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 }
 
 // create handles the create-task branch of routing. It creates the task, a
-// subscribed link, and an audit log in a single transaction. An in-tx
-// re-check of FindSubscribedLinksForOrgs absorbs webhook redeliveries and
-// back-to-back events for the same resource. Returns true if a task was
-// created (false on dedup hit).
-func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) (bool, error) {
+// subscribed link, and an audit log in a single transaction. Dedup for
+// sequential redeliveries comes from the routing-level link lookup in
+// Route: once this tx commits, the next event for the same URL sees the
+// subscribed link and takes the wake path. Genuinely-concurrent
+// overlapping txns can still produce duplicates — accepted as a v1
+// limitation.
+func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) error {
 	var (
-		created      bool
 		task         *model.Task
 		notification model.Notification
 	)
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		existing, err := r.Store.FindSubscribedLinksForOrgs(ctx, tx, input.URL, []int64{orgID})
-		if err != nil {
-			return err
-		}
-		if len(existing[orgID]) > 0 {
-			return nil
-		}
 		task = &model.Task{
 			Name:         routedTaskName(input),
 			Runner:       rule.Create.Runner,
@@ -239,16 +230,13 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			Runner:         task.PendingRunner(),
 			ChannelMessage: fmt.Sprintf("Task %d created by routing rule for event: %s (%s)", task.ID, input.Description, input.URL),
 		}
-		created = true
 		return tx.Commit()
 	})
 	if err != nil {
-		return false, err
+		return err
 	}
-	if created {
-		r.publish(ctx, notification)
-	}
-	return created, nil
+	r.publish(ctx, notification)
+	return nil
 }
 
 // routedTaskName returns a short name for a task created by a routing rule.
