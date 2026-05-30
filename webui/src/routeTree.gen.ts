@@ -23,6 +23,8 @@ import { Route as KeysNewRouteImport } from './routes/keys.new'
 import { Route as GithubSetupRouteImport } from './routes/github.setup'
 import { Route as EventsNewRouteImport } from './routes/events.new'
 import { Route as EventsIdRouteImport } from './routes/events.$id'
+import { Route as SettingsRoutingRulesNewRouteImport } from './routes/settings_.routing-rules.new'
+import { Route as SettingsRoutingRulesIndexRouteImport } from './routes/settings_.routing-rules.$index'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -94,6 +96,17 @@ const EventsIdRoute = EventsIdRouteImport.update({
   path: '/events/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoutingRulesNewRoute = SettingsRoutingRulesNewRouteImport.update({
+  id: '/settings_/routing-rules/new',
+  path: '/settings/routing-rules/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoutingRulesIndexRoute =
+  SettingsRoutingRulesIndexRouteImport.update({
+    id: '/settings_/routing-rules/$index',
+    path: '/settings/routing-rules/$index',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +123,8 @@ export interface FileRoutesByFullPath {
   '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
+  '/settings/routing-rules/$index': typeof SettingsRoutingRulesIndexRoute
+  '/settings/routing-rules/new': typeof SettingsRoutingRulesNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +141,8 @@ export interface FileRoutesByTo {
   '/members': typeof MembersIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
+  '/settings/routing-rules/$index': typeof SettingsRoutingRulesIndexRoute
+  '/settings/routing-rules/new': typeof SettingsRoutingRulesNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +160,8 @@ export interface FileRoutesById {
   '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
+  '/settings_/routing-rules/$index': typeof SettingsRoutingRulesIndexRoute
+  '/settings_/routing-rules/new': typeof SettingsRoutingRulesNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +180,8 @@ export interface FileRouteTypes {
     | '/members/'
     | '/tasks/'
     | '/workspaces/'
+    | '/settings/routing-rules/$index'
+    | '/settings/routing-rules/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,6 +198,8 @@ export interface FileRouteTypes {
     | '/members'
     | '/tasks'
     | '/workspaces'
+    | '/settings/routing-rules/$index'
+    | '/settings/routing-rules/new'
   id:
     | '__root__'
     | '/'
@@ -193,6 +216,8 @@ export interface FileRouteTypes {
     | '/members/'
     | '/tasks/'
     | '/workspaces/'
+    | '/settings_/routing-rules/$index'
+    | '/settings_/routing-rules/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,6 +235,8 @@ export interface RootRouteChildren {
   MembersIndexRoute: typeof MembersIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
+  SettingsRoutingRulesIndexRoute: typeof SettingsRoutingRulesIndexRoute
+  SettingsRoutingRulesNewRoute: typeof SettingsRoutingRulesNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -312,6 +339,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings_/routing-rules/new': {
+      id: '/settings_/routing-rules/new'
+      path: '/settings/routing-rules/new'
+      fullPath: '/settings/routing-rules/new'
+      preLoaderRoute: typeof SettingsRoutingRulesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings_/routing-rules/$index': {
+      id: '/settings_/routing-rules/$index'
+      path: '/settings/routing-rules/$index'
+      fullPath: '/settings/routing-rules/$index'
+      preLoaderRoute: typeof SettingsRoutingRulesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -330,6 +371,8 @@ const rootRouteChildren: RootRouteChildren = {
   MembersIndexRoute: MembersIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
+  SettingsRoutingRulesIndexRoute: SettingsRoutingRulesIndexRoute,
+  SettingsRoutingRulesNewRoute: SettingsRoutingRulesNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
