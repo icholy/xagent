@@ -9,9 +9,10 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/x/common"
+	"github.com/icholy/xagent/internal/x/wakeup"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
 
@@ -21,7 +22,7 @@ import (
 type EventQueue struct {
 	mu            sync.Mutex
 	events        *list.List
-	notify        chan struct{}
+	notify        wakeup.Chan
 	client        xagentclient.Client
 	log           *slog.Logger
 	retryInterval time.Duration
@@ -38,7 +39,7 @@ type EventQueueOptions struct {
 func NewEventQueue(opts EventQueueOptions) *EventQueue {
 	return &EventQueue{
 		events:        list.New(),
-		notify:        make(chan struct{}, 1),
+		notify:        wakeup.New(),
 		client:        opts.Client,
 		log:           opts.Log,
 		retryInterval: opts.RetryInterval,
@@ -50,10 +51,7 @@ func (q *EventQueue) Enqueue(event model.RunnerEvent) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.events.PushBack(event)
-	select {
-	case q.notify <- struct{}{}:
-	default:
-	}
+	q.notify.Wake()
 }
 
 // Len returns the number of events in the queue.
