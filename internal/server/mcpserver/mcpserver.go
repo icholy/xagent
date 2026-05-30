@@ -1,49 +1,45 @@
 package mcpserver
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
-	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Server is an MCP server that proxies tool calls to the xagent
-// Connect RPC service.
-type Server struct {
-	service xagentv1connect.XAgentServiceHandler
-	baseURL string
-}
+// Instructions is the prompt shown to MCP clients describing what the
+// xagent server offers.
+const Instructions = "xagent is an async agent orchestrator that runs AI coding agents in parallel inside Docker containers.\n" +
+	"Use it to create and manage tasks that execute in isolated workspaces.\n" +
+	"Workspaces define the container image, volumes, environment variables, and MCP servers available to agents.\n" +
+	"Each task runs an AI coding agent with access to the codebase and configured tools.\n" +
+	"Agents attach links to their tasks for external resources they create, such as GitHub PRs or Jira issues."
 
-// New creates a new MCP server backed by the given service handler.
-func New(service xagentv1connect.XAgentServiceHandler, baseURL string) *Server {
-	return &Server{service: service, baseURL: cmp.Or(baseURL, xagentclient.DefaultURL)}
-}
-
-// Handler returns an http.Handler that serves the MCP Streamable HTTP
-// protocol. The handler expects auth middleware to have set UserInfo
-// in the request context.
-func (s *Server) Handler() http.Handler {
+// NewServer builds an MCP server with the user-facing xagent tools
+// registered. The same setup is used by the HTTP handler and by the
+// local stdio command.
+func NewServer(service xagentv1connect.XAgentServiceHandler) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "xagent",
 		Version: "1.0.0",
 	}, &mcp.ServerOptions{
-		Instructions: strings.Join([]string{
-			"xagent is an async agent orchestrator that runs AI coding agents in parallel inside Docker containers.",
-			"Use it to create and manage tasks that execute in isolated workspaces.",
-			"Workspaces define the container image, volumes, environment variables, and MCP servers available to agents.",
-			"Each task runs an AI coding agent with access to the codebase and configured tools.",
-			"Agents attach links to their tasks for external resources they create, such as GitHub PRs or Jira issues.",
-		}, "\n"),
+		Instructions: Instructions,
 	})
+	AddTools(server, service)
+	return server
+}
+
+// AddTools registers the user-facing xagent tools on the given MCP server.
+// Tool handlers proxy to the supplied service, which can be either an
+// in-process XAgentServiceHandler (server-side) or the generated Connect
+// client (remote) since both interfaces share the same method signatures.
+func AddTools(server *mcp.Server, service xagentv1connect.XAgentServiceHandler) {
+	h := &handlers{service: service}
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_workspaces",
@@ -51,12 +47,12 @@ func (s *Server) Handler() http.Handler {
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint: true,
 		},
-	}, s.listWorkspaces)
+	}, h.listWorkspaces)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_task",
 		Description: "Create a new task",
-	}, s.createTask)
+	}, h.createTask)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_task",
@@ -64,7 +60,7 @@ func (s *Server) Handler() http.Handler {
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint: true,
 		},
-	}, s.getTask)
+	}, h.getTask)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_tasks",
@@ -72,13 +68,19 @@ func (s *Server) Handler() http.Handler {
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint: true,
 		},
-	}, s.listTasks)
+	}, h.listTasks)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_task",
 		Description: "Add an instruction to a task, optionally start it",
-	}, s.updateTask)
+	}, h.updateTask)
+}
 
+// Handler returns an http.Handler that serves the MCP Streamable HTTP
+// protocol. The handler expects auth middleware to have set UserInfo in
+// the request context.
+func Handler(service xagentv1connect.XAgentServiceHandler) http.Handler {
+	server := NewServer(service)
 	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		if apiauth.Caller(r.Context()) == nil {
 			return nil
@@ -89,10 +91,14 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 
+type handlers struct {
+	service xagentv1connect.XAgentServiceHandler
+}
+
 type listWorkspacesInput struct{}
 
-func (s *Server) listWorkspaces(ctx context.Context, req *mcp.CallToolRequest, input listWorkspacesInput) (*mcp.CallToolResult, any, error) {
-	resp, err := s.service.ListWorkspaces(ctx, &xagentv1.ListWorkspacesRequest{})
+func (h *handlers) listWorkspaces(ctx context.Context, req *mcp.CallToolRequest, input listWorkspacesInput) (*mcp.CallToolResult, any, error) {
+	resp, err := h.service.ListWorkspaces(ctx, &xagentv1.ListWorkspacesRequest{})
 	if err != nil {
 		return errorResult("failed to list workspaces: %v", err), nil, nil
 	}
@@ -119,9 +125,8 @@ type createTaskInput struct {
 	Runner      string `json:"runner" jsonschema:"Runner ID to target"`
 }
 
-func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
-	caller := apiauth.MustCaller(ctx)
-	resp, err := s.service.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+func (h *handlers) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
+	resp, err := h.service.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Workspace: input.Workspace,
 		Runner:    input.Runner,
@@ -132,30 +137,15 @@ func (s *Server) createTask(ctx context.Context, req *mcp.CallToolRequest, input
 	if err != nil {
 		return errorResult("failed to create task: %v", err), nil, nil
 	}
-	type taskResult struct {
-		ID        int64  `json:"id"`
-		Name      string `json:"name"`
-		Workspace string `json:"workspace"`
-		Status    string `json:"status"`
-		URL       string `json:"url,omitempty"`
-	}
-	result := taskResult{
-		ID:        resp.Task.Id,
-		Name:      resp.Task.Name,
-		Workspace: resp.Task.Workspace,
-		Status:    resp.Task.Status.String(),
-		URL:       model.TaskURL(s.baseURL, resp.Task.Id, caller.OrgID),
-	}
-	return jsonResult(result), nil, nil
+	return jsonResult(taskSummaryOf(resp.Task)), nil, nil
 }
 
 type getTaskInput struct {
 	ID int64 `json:"id" jsonschema:"The task ID"`
 }
 
-func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input getTaskInput) (*mcp.CallToolResult, any, error) {
-	caller := apiauth.MustCaller(ctx)
-	resp, err := s.service.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{
+func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input getTaskInput) (*mcp.CallToolResult, any, error) {
+	resp, err := h.service.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{
 		Id: input.ID,
 	})
 	if err != nil {
@@ -203,7 +193,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
 		Status:    task.Status.String(),
-		URL:       model.TaskURL(s.baseURL, task.Id, caller.OrgID),
+		URL:       task.Url,
 	}
 	for _, inst := range task.Instructions {
 		result.Instructions = append(result.Instructions, instruction{
@@ -211,8 +201,7 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 			URL:  inst.Url,
 		})
 	}
-	// Fetch logs for the task
-	logsResp, err := s.service.ListLogs(ctx, &xagentv1.ListLogsRequest{
+	logsResp, err := h.service.ListLogs(ctx, &xagentv1.ListLogsRequest{
 		TaskId: input.ID,
 	})
 	if err == nil {
@@ -245,28 +234,14 @@ func (s *Server) getTask(ctx context.Context, req *mcp.CallToolRequest, input ge
 
 type listTasksInput struct{}
 
-func (s *Server) listTasks(ctx context.Context, req *mcp.CallToolRequest, input listTasksInput) (*mcp.CallToolResult, any, error) {
-	caller := apiauth.MustCaller(ctx)
-	resp, err := s.service.ListTasks(ctx, &xagentv1.ListTasksRequest{})
+func (h *handlers) listTasks(ctx context.Context, req *mcp.CallToolRequest, input listTasksInput) (*mcp.CallToolResult, any, error) {
+	resp, err := h.service.ListTasks(ctx, &xagentv1.ListTasksRequest{})
 	if err != nil {
 		return errorResult("failed to list tasks: %v", err), nil, nil
 	}
-	type taskSummary struct {
-		ID        int64  `json:"id"`
-		Name      string `json:"name"`
-		Workspace string `json:"workspace"`
-		Status    string `json:"status"`
-		URL       string `json:"url,omitempty"`
-	}
 	result := make([]taskSummary, len(resp.Tasks))
 	for i, t := range resp.Tasks {
-		result[i] = taskSummary{
-			ID:        t.Id,
-			Name:      t.Name,
-			Workspace: t.Workspace,
-			Status:    t.Status.String(),
-			URL:       model.TaskURL(s.baseURL, t.Id, caller.OrgID),
-		}
+		result[i] = taskSummaryOf(t)
 	}
 	return jsonResult(result), nil, nil
 }
@@ -278,9 +253,8 @@ type updateTaskInput struct {
 	Start       bool   `json:"start,omitempty" jsonschema:"Start the task (non-interrupting if already running)"`
 }
 
-func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
-	caller := apiauth.MustCaller(ctx)
-	_, err := s.service.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+func (h *handlers) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
+	_, err := h.service.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:    input.ID,
 		Start: input.Start,
 		AddInstructions: []*xagentv1.Instruction{
@@ -290,25 +264,29 @@ func (s *Server) updateTask(ctx context.Context, req *mcp.CallToolRequest, input
 	if err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
-	resp, err := s.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
+	resp, err := h.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
 	if err != nil {
 		return errorResult("failed to get updated task: %v", err), nil, nil
 	}
-	type taskResult struct {
-		ID        int64  `json:"id"`
-		Name      string `json:"name"`
-		Workspace string `json:"workspace"`
-		Status    string `json:"status"`
-		URL       string `json:"url,omitempty"`
+	return jsonResult(taskSummaryOf(resp.Task)), nil, nil
+}
+
+type taskSummary struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Workspace string `json:"workspace"`
+	Status    string `json:"status"`
+	URL       string `json:"url,omitempty"`
+}
+
+func taskSummaryOf(t *xagentv1.Task) taskSummary {
+	return taskSummary{
+		ID:        t.Id,
+		Name:      t.Name,
+		Workspace: t.Workspace,
+		Status:    t.Status.String(),
+		URL:       t.Url,
 	}
-	result := taskResult{
-		ID:        resp.Task.Id,
-		Name:      resp.Task.Name,
-		Workspace: resp.Task.Workspace,
-		Status:    resp.Task.Status.String(),
-		URL:       model.TaskURL(s.baseURL, resp.Task.Id, caller.OrgID),
-	}
-	return jsonResult(result), nil, nil
 }
 
 func errorResult(format string, args ...any) *mcp.CallToolResult {
@@ -331,3 +309,4 @@ func jsonResult(v any) *mcp.CallToolResult {
 		},
 	}
 }
+

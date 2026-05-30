@@ -25,6 +25,7 @@ func main() {
 			command.LogsCommand,
 			command.DownloadCommand,
 			command.VersionCommand,
+			command.McpCommand,
 			command.ToolCommand,
 		},
 	}
