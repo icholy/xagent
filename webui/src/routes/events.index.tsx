@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { RelativeTime } from '@/components/relative-time'
-import { eventTypeLabel } from '@/components/routing-rule-form'
+import { eventTypeLabel } from '@/lib/routing-rules'
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
