@@ -8,6 +8,7 @@ import {
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Event } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -209,6 +210,7 @@ function RoutingRulesCard() {
                 <TableHead>Event Type</TableHead>
                 <TableHead>Prefix</TableHead>
                 <TableHead>Mention</TableHead>
+                <TableHead>Action</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -220,6 +222,13 @@ function RoutingRulesCard() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
                   <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
+                  <TableCell>
+                    {rule.create ? (
+                      <Badge variant="secondary">Creates task</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">Wake only</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Link

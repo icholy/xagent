@@ -1,12 +1,15 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
-import { create } from '@bufbuild/protobuf'
 import { getRoutingRules, setRoutingRules } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
 import { Card, CardContent } from '@/components/ui/card'
 import { useOrgId } from '@/hooks/use-org-id'
-import { RoutingRuleForm, type RoutingRuleFormValues } from '@/components/routing-rule-form'
+import { RoutingRuleForm } from '@/components/routing-rule-form'
+import {
+  buildRoutingRule,
+  formValuesFromRoutingRule,
+  type RoutingRuleFormValues,
+} from '@/lib/routing-rules'
 
 export const Route = createFileRoute('/routing/$index')({
   component: EditRoutingRulePage,
@@ -34,11 +37,13 @@ function EditRoutingRulePage() {
   const handleSubmit = async (values: RoutingRuleFormValues) => {
     if (!isValidIndex) return
     const updated = rules.map((existing, i) =>
-      i === parsedIndex ? create(RoutingRuleSchema, values) : existing,
+      i === parsedIndex ? buildRoutingRule(values) : existing,
     )
     await mutation.mutateAsync({ rules: updated })
     navigate({ to: '/events', search: { org: orgId } })
   }
+
+  const initialValues = useMemo(() => (rule ? formValuesFromRoutingRule(rule) : undefined), [rule])
 
   const handleCancel = () => {
     navigate({ to: '/events', search: { org: orgId } })
@@ -50,16 +55,11 @@ function EditRoutingRulePage() {
 
       <Card>
         <CardContent className="pt-6">
-          {isLoading || !rule ? (
+          {isLoading || !initialValues ? (
             <div className="text-muted-foreground">Loading...</div>
           ) : (
             <RoutingRuleForm
-              initialValues={{
-                source: rule.source,
-                type: rule.type,
-                prefix: rule.prefix,
-                mention: rule.mention,
-              }}
+              initialValues={initialValues}
               submitLabel={mutation.isPending ? 'Saving...' : 'Save Changes'}
               isSubmitting={mutation.isPending}
               error={mutation.error?.message ?? null}
