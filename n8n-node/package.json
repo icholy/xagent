@@ -27,7 +27,7 @@
   "devDependencies": {
     "@bufbuild/buf": "^1.63.0",
     "@bufbuild/protoc-gen-es": "^2.10.2",
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.0.0",
     "n8n-workflow": "*",
     "typescript": "^5.0.0"
   },
