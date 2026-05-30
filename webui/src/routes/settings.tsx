@@ -58,15 +58,16 @@ import {
 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
-const SETTINGS_TABS = ['account', 'organisation', 'events'] as const
-type SettingsTab = (typeof SETTINGS_TABS)[number]
+type SettingsTab = 'account' | 'organisation' | 'events'
+
+function isSettingsTab(value: unknown): value is SettingsTab {
+  return value === 'account' || value === 'organisation' || value === 'events'
+}
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
   validateSearch: (search: Record<string, unknown>): { tab: SettingsTab } => ({
-    tab: SETTINGS_TABS.includes(search.tab as SettingsTab)
-      ? (search.tab as SettingsTab)
-      : 'account',
+    tab: isSettingsTab(search.tab) ? search.tab : 'account',
   }),
 })
 
@@ -80,13 +81,14 @@ function SettingsPage() {
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
       <Tabs
         value={tab}
-        onValueChange={(value) =>
+        onValueChange={(value) => {
+          if (!isSettingsTab(value)) return
           navigate({
             to: '/settings',
-            search: { tab: value as SettingsTab, org: orgId },
+            search: { tab: value, org: orgId },
             replace: true,
           })
-        }
+        }}
       >
         <div className="flex items-center mb-4">
           <ProfileCard />
