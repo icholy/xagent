@@ -3,7 +3,6 @@ package eventrouter
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
 	"maps"
 	"slices"
@@ -115,11 +114,14 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 // attach associates an event with a task, starts the task, logs the action,
 // and publishes a change notification.
 func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) error {
-	notification := model.Notification{
-		Type:  "change",
-		OrgID: event.OrgID,
-		Time:  time.Now(),
+	change := model.TaskChange{
+		TaskID: taskID,
+		Kind:   model.TaskChangeWoken,
+		Actor:  model.Actor{Kind: model.ActorKindWebhook},
+		Event:  event,
+		Time:   time.Now(),
 	}
+	var runner string
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := r.Store.AddEventTask(ctx, tx, event.ID, taskID); err != nil {
 			return err
@@ -132,28 +134,20 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 		if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := r.Store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  taskID,
-			Type:    "audit",
-			Content: "webhook started task",
-		}); err != nil {
+		change.Status = task.Status
+		runner = task.PendingRunner()
+		logRow := change.Log()
+		if err := r.Store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
-		}
-		notification.Resources = []model.NotificationResource{
-			{Action: "updated", Type: "task", ID: task.ID},
-			{Action: "updated", Type: "event", ID: event.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
-		}
-		notification.Runner = task.PendingRunner()
-		notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s", task.ID, event.ID, event.Description)
-		if event.URL != "" {
-			notification.ChannelMessage += " (" + event.URL + ")"
 		}
 		return tx.Commit()
 	})
 	if err != nil {
 		return err
 	}
-	r.publish(ctx, notification)
+	r.publish(ctx, change.Notification(model.Envelope{
+		OrgID:  event.OrgID,
+		Runner: runner,
+	}))
 	return nil
 }

@@ -201,7 +201,7 @@ func TestRouter_AttachSetsWakeMessage(t *testing.T) {
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
 	url := "https://github.com/owner/repo/pull/1#issuecomment-1"
-	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
 		Runner:    "r",
 		Workspace: "w",
 		Status:    model.TaskStatusCompleted,
@@ -234,6 +234,23 @@ func TestRouter_AttachSetsWakeMessage(t *testing.T) {
 	assert.Assert(t, strings.Contains(msg, "woken by event"), "expected wake phrase in message: %q", msg)
 	assert.Assert(t, strings.Contains(msg, "PR comment from alice"), "expected description in message: %q", msg)
 	assert.Assert(t, strings.Contains(msg, url), "expected URL in message: %q", msg)
+
+	// The log row's content must also include the event description and URL
+	// — same projection feeds both, so both stay coherent.
+	logs, err := s.ListLogsByTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	var wake *model.Log
+	for _, l := range logs {
+		if strings.Contains(l.Content, "woken by event") {
+			wake = l
+			break
+		}
+	}
+	assert.Assert(t, wake != nil, "expected a woken log row")
+	assert.Assert(t, strings.Contains(wake.Content, "PR comment from alice"),
+		"log missing event description: %q", wake.Content)
+	assert.Assert(t, strings.Contains(wake.Content, url),
+		"log missing event URL: %q", wake.Content)
 }
 
 func TestRouteOrgRulesOverrideDefaults(t *testing.T) {

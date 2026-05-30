@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -100,15 +99,21 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	if req.ArchiveAfter != nil {
 		task.ArchiveAfter = req.ArchiveAfter.AsDuration()
 	}
+	change := model.TaskChange{
+		Kind:      model.TaskChangeCreated,
+		Actor:     actorFromCaller(caller),
+		Runner:    task.Runner,
+		Workspace: task.Workspace,
+		Time:      time.Now(),
+	}
 	err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := s.store.CreateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  task.ID,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s created task", caller.AuditName()),
-		}); err != nil {
+		change.TaskID = task.ID
+		change.Status = task.Status
+		logRow := change.Log()
+		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -117,19 +122,12 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
-	s.publish(model.Notification{
-		Type: "change",
-		Resources: []model.NotificationResource{
-			{Action: "created", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
-		},
-		OrgID:          caller.OrgID,
-		Runner:         task.PendingRunner(),
-		UserID:         caller.ID,
-		ClientID:       caller.ClientID,
-		Time:           time.Now(),
-		ChannelMessage: fmt.Sprintf("Task %d created on %s/%s.", task.ID, task.Runner, task.Workspace),
-	})
+	s.publish(change.Notification(model.Envelope{
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Runner:   task.PendingRunner(),
+	}))
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(s.baseURL),
 	}, nil
@@ -175,52 +173,42 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	notification := model.Notification{
-		Type:     "change",
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
+	change := model.TaskChange{
+		TaskID:  req.Id,
+		Kind:    model.TaskChangeUpdated,
+		Actor:   actorFromCaller(caller),
+		Started: req.Start,
+		Time:    time.Now(),
 	}
+	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
 		}
-		var changed []string
 		if req.Name != "" {
 			task.Name = req.Name
-			changed = append(changed, "name")
+			change.Changed = append(change.Changed, "name")
 		}
 		for _, inst := range req.AddInstructions {
 			task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
-			changed = append(changed, "instructions")
+			change.Changed = append(change.Changed, "instructions")
 		}
 		if req.Start {
 			task.Start()
-			changed = append(changed, "status")
 		}
 		if req.ArchiveAfter != nil {
 			task.ArchiveAfter = req.ArchiveAfter.AsDuration()
-			changed = append(changed, "archive_after")
+			change.Changed = append(change.Changed, "archive_after")
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s updated task: %s", caller.AuditName(), strings.Join(changed, ", ")),
-		}); err != nil {
+		change.Status = task.Status
+		runner = task.PendingRunner()
+		logRow := change.Log()
+		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
-		}
-		notification.Runner = task.PendingRunner()
-		notification.Resources = []model.NotificationResource{
-			{Action: "updated", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
-		}
-		if req.Start {
-			notification.ChannelMessage = fmt.Sprintf("Task %d queued: %s.", task.ID, strings.Join(changed, ", "))
 		}
 		return tx.Commit()
 	})
@@ -231,19 +219,24 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task updated", "id", req.Id, "name", req.Name, "start", req.Start, "instructions_added", len(req.AddInstructions))
-	s.publish(notification)
+	s.publish(change.Notification(model.Envelope{
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Runner:   runner,
+	}))
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
 
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	notification := model.Notification{
-		Type:     "change",
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
+	change := model.TaskChange{
+		TaskID: req.Id,
+		Kind:   model.TaskChangeArchived,
+		Actor:  actorFromCaller(caller),
+		Time:   time.Now(),
 	}
+	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -255,17 +248,11 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s archived task", caller.AuditName()),
-		}); err != nil {
+		change.Status = task.Status
+		runner = task.PendingRunner()
+		logRow := change.Log()
+		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
-		}
-		notification.Runner = task.PendingRunner()
-		notification.Resources = []model.NotificationResource{
-			{Action: "archived", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
 		return tx.Commit()
 	})
@@ -276,19 +263,24 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task archived", "id", req.Id)
-	s.publish(notification)
+	s.publish(change.Notification(model.Envelope{
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Runner:   runner,
+	}))
 	return &xagentv1.ArchiveTaskResponse{}, nil
 }
 
 func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	notification := model.Notification{
-		Type:     "change",
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
+	change := model.TaskChange{
+		TaskID: req.Id,
+		Kind:   model.TaskChangeUnarchived,
+		Actor:  actorFromCaller(caller),
+		Time:   time.Now(),
 	}
+	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -300,17 +292,11 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s unarchived task", caller.AuditName()),
-		}); err != nil {
+		change.Status = task.Status
+		runner = task.PendingRunner()
+		logRow := change.Log()
+		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
-		}
-		notification.Runner = task.PendingRunner()
-		notification.Resources = []model.NotificationResource{
-			{Action: "unarchived", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
 		return tx.Commit()
 	})
@@ -321,19 +307,24 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task unarchived", "id", req.Id)
-	s.publish(notification)
+	s.publish(change.Notification(model.Envelope{
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Runner:   runner,
+	}))
 	return &xagentv1.UnarchiveTaskResponse{}, nil
 }
 
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	notification := model.Notification{
-		Type:     "change",
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
+	change := model.TaskChange{
+		TaskID: req.Id,
+		Kind:   model.TaskChangeCancelled,
+		Actor:  actorFromCaller(caller),
+		Time:   time.Now(),
 	}
+	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -345,23 +336,11 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s cancelled task", caller.AuditName()),
-		}); err != nil {
+		change.Status = task.Status
+		runner = task.PendingRunner()
+		logRow := change.Log()
+		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
-		}
-		notification.Runner = task.PendingRunner()
-		notification.Resources = []model.NotificationResource{
-			{Action: "cancelled", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
-		}
-		// Only the Pending->Cancelled branch is terminal here; the Running->
-		// Cancelling branch will produce its terminal "cancelled" message via
-		// SubmitRunnerEvents once the runner stops the container.
-		if task.Status == model.TaskStatusCancelled {
-			notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
 		}
 		return tx.Commit()
 	})
@@ -372,19 +351,24 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task cancelled", "id", req.Id)
-	s.publish(notification)
+	s.publish(change.Notification(model.Envelope{
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Runner:   runner,
+	}))
 	return &xagentv1.CancelTaskResponse{}, nil
 }
 
 func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	notification := model.Notification{
-		Type:     "change",
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
+	change := model.TaskChange{
+		TaskID: req.Id,
+		Kind:   model.TaskChangeRestarted,
+		Actor:  actorFromCaller(caller),
+		Time:   time.Now(),
 	}
+	var runner string
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
@@ -396,19 +380,12 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s restarted task", caller.AuditName()),
-		}); err != nil {
+		change.Status = task.Status
+		runner = task.PendingRunner()
+		logRow := change.Log()
+		if err := s.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
 		}
-		notification.Runner = task.PendingRunner()
-		notification.Resources = []model.NotificationResource{
-			{Action: "restarted", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
-		}
-		notification.ChannelMessage = fmt.Sprintf("Task %d restart requested.", task.ID)
 		return tx.Commit()
 	})
 	if err != nil {
@@ -418,6 +395,11 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("task restarted", "id", req.Id)
-	s.publish(notification)
+	s.publish(change.Notification(model.Envelope{
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Runner:   runner,
+	}))
 	return &xagentv1.RestartTaskResponse{}, nil
 }

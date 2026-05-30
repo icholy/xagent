@@ -109,6 +109,12 @@ func (a *Archiver) Tick(ctx context.Context) error {
 // was restarted or already archived between the list and the update), the
 // archive is skipped silently.
 func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bool, error) {
+	change := model.TaskChange{
+		TaskID: due.ID,
+		Kind:   model.TaskChangeAutoArchived,
+		Actor:  model.Actor{Kind: model.ActorKindArchiver},
+		Time:   time.Now(),
+	}
 	err := a.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		t, err := a.store.GetTaskForUpdate(ctx, tx, due.ID, due.OrgID)
 		if err != nil {
@@ -123,11 +129,9 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		if err := a.store.UpdateTask(ctx, tx, t); err != nil {
 			return err
 		}
-		if err := a.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  due.ID,
-			Type:    "audit",
-			Content: "auto-archived: archive_after deadline reached",
-		}); err != nil {
+		change.Status = t.Status
+		logRow := change.Log()
+		if err := a.store.CreateLog(ctx, tx, &logRow); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -139,15 +143,7 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		return false, err
 	}
 	if a.publisher != nil {
-		if err := a.publisher.Publish(ctx, model.Notification{
-			Type: "change",
-			Resources: []model.NotificationResource{
-				{Action: "archived", Type: "task", ID: due.ID},
-				{Action: "appended", Type: "task_logs", ID: due.ID},
-			},
-			OrgID: due.OrgID,
-			Time:  time.Now(),
-		}); err != nil {
+		if err := a.publisher.Publish(ctx, change.Notification(model.Envelope{OrgID: due.OrgID})); err != nil {
 			a.log.Warn("failed to publish archive notification", "id", due.ID, "err", err)
 		}
 	}

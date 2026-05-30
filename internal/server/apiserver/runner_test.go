@@ -1,9 +1,13 @@
 package apiserver
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
@@ -159,6 +163,103 @@ func TestListRunnerTasks_OnlyWithCommand(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, len(resp.Tasks), 0)
+}
+
+func TestSubmitRunnerEvents_RichLogIncludesResultingStatus(t *testing.T) {
+	t.Parallel()
+	// A re-queue case: an "stopped" event with a pending Start command sends
+	// the task back to Pending. The rich log must distinguish that from a
+	// clean Completed exit; the notification stays silent (the eventual
+	// terminal exit speaks for itself).
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	srv := New(Options{Store: teststore.New(t), Publisher: pub})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "t", Runner: "r", Workspace: "w"})
+	assert.NilError(t, err)
+	taskID := createResp.Task.Id
+
+	// Start then re-queue: started → running (Command cleared) → UpdateTask
+	// with Start re-arms the Start command → stopped re-queues the task.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "started", Version: 1}},
+	})
+	assert.NilError(t, err)
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: taskID, Start: true})
+	assert.NilError(t, err)
+	pub.ResetCalls()
+
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "stopped", Version: 0}},
+	})
+	assert.NilError(t, err)
+
+	// Re-queue log row must say "task pending" (not "exited successfully").
+	logs, err := srv.store.ListLogsByTask(ctx, nil, taskID, org.OrgID)
+	assert.NilError(t, err)
+	var requeueLog *model.Log
+	for _, l := range logs {
+		if l.Content == "container exited; task pending" {
+			requeueLog = l
+			break
+		}
+	}
+	assert.Assert(t, requeueLog != nil, "expected a re-queue log row, got logs: %v", logContents(logs))
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.Equal(t, calls[0].N.ChannelMessage, "", "re-queue must not emit a channel message")
+}
+
+func TestSubmitRunnerEvents_TerminalExitFiresChannelMessage(t *testing.T) {
+	t.Parallel()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	srv := New(Options{Store: teststore.New(t), Publisher: pub})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "t", Runner: "r", Workspace: "w"})
+	assert.NilError(t, err)
+	taskID := createResp.Task.Id
+
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "started", Version: 1}},
+	})
+	assert.NilError(t, err)
+	pub.ResetCalls()
+
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "stopped", Version: 0}},
+	})
+	assert.NilError(t, err)
+
+	logs, err := srv.store.ListLogsByTask(ctx, nil, taskID, org.OrgID)
+	assert.NilError(t, err)
+	var completedLog *model.Log
+	for _, l := range logs {
+		if l.Content == "container exited; task completed" {
+			completedLog = l
+			break
+		}
+	}
+	assert.Assert(t, completedLog != nil, "expected a Completed log row, got logs: %v", logContents(logs))
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.Equal(t, calls[0].N.ChannelMessage, fmt.Sprintf("Task %d completed.", taskID))
+}
+
+func logContents(logs []*model.Log) []string {
+	out := make([]string, len(logs))
+	for i, l := range logs {
+		out[i] = l.Content
+	}
+	return out
 }
 
 func TestListRunnerTasks_Permissions(t *testing.T) {

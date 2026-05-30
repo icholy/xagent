@@ -1,10 +1,15 @@
 package apiserver
 
 import (
+	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -511,6 +516,101 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), time.Duration(0), "zero duration means never auto-archive")
+}
+
+func TestUpdateTask_TaskChange_LogAndChannelAgree(t *testing.T) {
+	t.Parallel()
+	// Both the persisted log row and the published channel message must
+	// derive from the same Changed slice — the structural invariant that
+	// the TaskChange projection replaces PR #725's hand-written gate.
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	srv := New(Options{Store: teststore.New(t), Publisher: pub})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "t", Runner: "r", Workspace: "w"})
+	assert.NilError(t, err)
+	// Land the task at Completed so UpdateTask{Start: true} actually queues it.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{
+			{TaskId: createResp.Task.Id, Event: "started", Version: 1},
+			{TaskId: createResp.Task.Id, Event: "stopped", Version: 1},
+		},
+	})
+	assert.NilError(t, err)
+	pub.ResetCalls()
+
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:              createResp.Task.Id,
+		Name:            "renamed",
+		AddInstructions: []*xagentv1.Instruction{{Text: "do thing"}},
+		Start:           true,
+	})
+	assert.NilError(t, err)
+
+	logs, err := srv.store.ListLogsByTask(ctx, nil, createResp.Task.Id, org.OrgID)
+	assert.NilError(t, err)
+	var update *model.Log
+	for _, l := range logs {
+		if strings.Contains(l.Content, "updated task") {
+			update = l
+			break
+		}
+	}
+	assert.Assert(t, update != nil, "expected an update log row")
+	assert.Assert(t, strings.Contains(update.Content, "name"), "log missing 'name': %q", update.Content)
+	assert.Assert(t, strings.Contains(update.Content, "instructions"), "log missing 'instructions': %q", update.Content)
+	assert.Assert(t, strings.Contains(update.Content, "started"), "log missing 'started': %q", update.Content)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	msg := calls[0].N.ChannelMessage
+	assert.Assert(t, strings.Contains(msg, "queued"), "channel message missing 'queued': %q", msg)
+	assert.Assert(t, strings.Contains(msg, "name"), "channel message missing 'name': %q", msg)
+	assert.Assert(t, strings.Contains(msg, "instructions"), "channel message missing 'instructions': %q", msg)
+	assert.Assert(t, strings.Contains(msg, fmt.Sprintf("Task %d", createResp.Task.Id)),
+		"channel message missing task id: %q", msg)
+}
+
+func TestUpdateTask_NameOnly_LogsButSilent(t *testing.T) {
+	t.Parallel()
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	srv := New(Options{Store: teststore.New(t), Publisher: pub})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	ctx := createCtx(t, org)
+
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "t", Runner: "r", Workspace: "w"})
+	assert.NilError(t, err)
+	// Move to Running so PendingRunner == "" and a name-only update stays silent.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: createResp.Task.Id, Event: "started", Version: 1}},
+	})
+	assert.NilError(t, err)
+	pub.ResetCalls()
+
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: createResp.Task.Id, Name: "renamed"})
+	assert.NilError(t, err)
+
+	logs, err := srv.store.ListLogsByTask(ctx, nil, createResp.Task.Id, org.OrgID)
+	assert.NilError(t, err)
+	var update *model.Log
+	for _, l := range logs {
+		if strings.Contains(l.Content, "updated task") {
+			update = l
+			break
+		}
+	}
+	assert.Assert(t, update != nil, "expected an update log row")
+	assert.Assert(t, strings.HasSuffix(update.Content, "updated task: name"),
+		"expected log to read '... updated task: name', got %q", update.Content)
+
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.Equal(t, calls[0].N.ChannelMessage, "")
 }
 
 func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
