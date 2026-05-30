@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.20.0](https://github.com/icholy/xagent/compare/v0.19.1...v0.20.0) (2026-05-30)
+
+
+### Features
+
+* add xagent mcp local stdio command ([#708](https://github.com/icholy/xagent/issues/708)) ([5e34cc0](https://github.com/icholy/xagent/commit/5e34cc0261dab439dd9209bfe81abb89e87e785b))
+* **mcp:** push task changes as Claude Code channel events ([#713](https://github.com/icholy/xagent/issues/713)) ([2b74513](https://github.com/icholy/xagent/commit/2b7451306d12d3ed777ff66e7e982d93f38bd58c))
+* **webui:** move events into a settings tab ([#710](https://github.com/icholy/xagent/issues/710)) ([346835f](https://github.com/icholy/xagent/commit/346835f1ddcee8c3965c7579d19df60131f5d740))
+
+
+### Bug Fixes
+
+* **runner:** wake main loop when a concurrency slot frees ([#711](https://github.com/icholy/xagent/issues/711)) ([b3c9be3](https://github.com/icholy/xagent/commit/b3c9be374b57e670c9ce4d6b757359c215cb0e8b))
+* **webui:** remove Recent Events card description ([b701b62](https://github.com/icholy/xagent/commit/b701b622154f6ece7707d9d265ec064473df72f6))
+
+
+### Miscellaneous
+
+* add xagent-orchestrator skill ([ec4c2ac](https://github.com/icholy/xagent/commit/ec4c2acd988112a12848c7f91df78eec17af013d))
+* extract shared SSE notification subscriber into xagentclient ([#714](https://github.com/icholy/xagent/issues/714)) ([361109a](https://github.com/icholy/xagent/commit/361109a28c2dbcdfec9bae149b5c2dd58d9f34ca))
+* extract wakeup.Chan coalescing wake-up signal ([#712](https://github.com/icholy/xagent/issues/712)) ([b11174d](https://github.com/icholy/xagent/commit/b11174d48dc639a1694fe972303f5a05f9306920))
+* move agent mcp server under tool subcommand ([#705](https://github.com/icholy/xagent/issues/705)) ([12a4fdb](https://github.com/icholy/xagent/commit/12a4fdb09c62d3881ff08f078e67d2a2356d4672))
+* organize the proposals ([e90ef2f](https://github.com/icholy/xagent/commit/e90ef2f81d69edc4982dd397bc1e327b7c6fee03))
+* remove redundant TestRunnerWakeChannel ([a7a8cc8](https://github.com/icholy/xagent/commit/a7a8cc892cfd8c78641e1b8b544fc16544747497))
+* rework channels proposal around local mcp bridge ([#706](https://github.com/icholy/xagent/issues/706)) ([bed15d1](https://github.com/icholy/xagent/commit/bed15d1f1ef2b5577c8bccb314337f8332d02052))
+
 ## [0.19.1](https://github.com/icholy/xagent/compare/v0.19.0...v0.19.1) (2026-05-30)
 
 
