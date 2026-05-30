@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	connectrpc.com/connect v1.20.0
 	connectrpc.com/otelconnect v0.9.0
-	github.com/XSAM/otelsql v0.41.0
+	github.com/XSAM/otelsql v0.42.0
 	github.com/amacneil/dbmate/v2 v2.33.0
 	github.com/bradleyfalzon/ghinstallation/v2 v2.18.0
 	github.com/containerd/errdefs v1.0.0
