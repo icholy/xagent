@@ -236,6 +236,46 @@ func TestRouter_AttachSetsWakeMessage(t *testing.T) {
 	assert.Assert(t, strings.Contains(msg, url), "expected URL in message: %q", msg)
 }
 
+func TestRouter_AttachToRunningTaskStaysSilent(t *testing.T) {
+	t.Parallel()
+
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	url := "https://github.com/owner/repo/pull/1#issuecomment-1"
+	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Runner:    "r",
+		Workspace: "w",
+		Status:    model.TaskStatusRunning,
+		Links:     []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	r := &Router{
+		Log:       slog.Default(),
+		Store:     s,
+		Publisher: pub,
+	}
+
+	n, err := r.Route(t.Context(), InputEvent{
+		Source:      "github",
+		Description: "PR comment from alice",
+		Data:        "xagent: fix tests",
+		URL:         url,
+		UserID:      org.UserID,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	// The notification still publishes with the usual resources so the FE
+	// invalidates, but ChannelMessage is empty — PR #725's gate keeps the
+	// agent channel silent on a no-transition attach.
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.Equal(t, calls[0].N.ChannelMessage, "")
+	assert.Equal(t, len(calls[0].N.Resources), 3)
+}
+
 func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	t.Parallel()
 
