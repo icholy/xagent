@@ -267,6 +267,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 			{Action: "archived", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
+		notification.ChannelMessage = fmt.Sprintf("Task %d archived.", task.ID)
 		return tx.Commit()
 	})
 	if err != nil {
