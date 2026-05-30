@@ -25,7 +25,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   mention: '',
 }
 
-interface EventTypeOption {
+export interface EventTypeOption {
   id: string
   label: string
   source: string
@@ -35,7 +35,7 @@ interface EventTypeOption {
 // Mirrors the (source, type) pairs the webhook handlers actually emit:
 //   internal/server/webhookserver/github.go    — type is the X-GitHub-Event header
 //   internal/server/webhookserver/atlassian.go — type is the parsed webhookEvent
-const EVENT_TYPES: EventTypeOption[] = [
+export const EVENT_TYPES: EventTypeOption[] = [
   {
     id: 'github:issue_comment',
     label: 'GitHub: Issue/PR Comment',
@@ -62,8 +62,17 @@ const EVENT_TYPES: EventTypeOption[] = [
   },
 ]
 
-function findEventType(source: string, type: string): EventTypeOption | undefined {
+export function findEventType(source: string, type: string): EventTypeOption | undefined {
   return EVENT_TYPES.find((o) => o.source === source && o.type === type)
+}
+
+// Friendly label for a stored (source, type) combo. Falls back to a "Legacy: …"
+// label for rules whose combo isn't in EVENT_TYPES (e.g. legacy wildcard rules
+// or types emitted by an older server) so the value is still readable.
+export function eventTypeLabel(source: string, type: string): string {
+  const known = findEventType(source, type)
+  if (known) return known.label
+  return `Legacy: ${source || '(any)'} / ${type || '(any)'}`
 }
 
 interface MentionCopy {
