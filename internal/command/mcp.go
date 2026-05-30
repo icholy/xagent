@@ -10,13 +10,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// channelInstructions tells Claude Code how to interpret the
-// notifications/claude/channel events emitted by this bridge.
-const channelInstructions = "Events from the xagent channel arrive as " +
-	"<channel source=\"xagent\" action=... resource=... id=...> tags. " +
-	"They notify you that an xagent task, log, link, or event changed. " +
-	"Call get_task with the id for details before acting."
-
 // McpCommand runs a local stdio MCP bridge that re-exposes the
 // user-facing xagent tools by proxying calls to the C2 server's
 // Connect RPC API, and pushes task change notifications to the host
@@ -52,7 +45,7 @@ var McpCommand = &cli.Command{
 			Name:    "xagent",
 			Version: "1.0.0",
 		}, &mcp.ServerOptions{
-			Instructions: mcpserver.Instructions + "\n\n" + channelInstructions,
+			Instructions: mcpserver.Instructions + "\n\n" + mcpserver.ChannelInstructions,
 			Capabilities: &mcp.ServerCapabilities{
 				Experimental: mcpchannel.Experimental(),
 			},
@@ -64,7 +57,7 @@ var McpCommand = &cli.Command{
 		if err != nil {
 			return err
 		}
-		go pushTaskChannels(ctx, transport, cmd.String("server"), cmd.String("token"))
+		go mcpserver.PushChannels(ctx, transport, cmd.String("server"), cmd.String("token"))
 		return session.Wait()
 	},
 }

@@ -1,4 +1,4 @@
-package command
+package mcpserver
 
 import (
 	"context"
@@ -12,10 +12,19 @@ import (
 	"github.com/icholy/xagent/internal/xagentclient"
 )
 
-// channelSender is the subset of *mcpchannel.Transport that
-// pushTaskChannels needs. Defined as an interface so tests can
-// exercise the SSE → channel translation without a real transport.
-type channelSender interface {
+// ChannelInstructions is the prompt fragment that tells Claude Code
+// how to interpret the notifications/claude/channel events the
+// bridge emits. Callers concatenate it with Instructions when
+// building the server.
+const ChannelInstructions = "Events from the xagent channel arrive as " +
+	"<channel source=\"xagent\" action=... resource=... id=...> tags. " +
+	"They notify you that an xagent task, log, link, or event changed. " +
+	"Call get_task with the id for details before acting."
+
+// ChannelSender pushes a translated channel event. *mcpchannel.Transport
+// satisfies it; an interface so the push logic is testable without a
+// real transport.
+type ChannelSender interface {
 	SendChannel(ctx context.Context, p mcpchannel.Params) error
 }
 
@@ -57,24 +66,24 @@ func notificationToChannels(n model.Notification) []mcpchannel.Params {
 // forwardNotification translates n and sends each resulting channel
 // event. A SendChannel failure is logged and skipped so one bad send
 // doesn't drop the rest of the batch or the subscription.
-func forwardNotification(ctx context.Context, transport channelSender, n model.Notification) {
+func forwardNotification(ctx context.Context, sender ChannelSender, n model.Notification) {
 	for _, params := range notificationToChannels(n) {
-		if err := transport.SendChannel(ctx, params); err != nil {
+		if err := sender.SendChannel(ctx, params); err != nil {
 			slog.Warn("xagent channel: failed to send", "error", err)
 		}
 	}
 }
 
-// pushTaskChannels subscribes to the C2 server's per-org SSE notification
-// stream via xagentclient.NotificationClient and forwards task-relevant
-// changes as notifications/claude/channel events on the given transport.
-// Reconnect is owned by the client; this function returns when ctx is
-// done.
-func pushTaskChannels(ctx context.Context, transport channelSender, serverURL, token string) {
+// PushChannels subscribes to the C2 server's per-org notification
+// stream and forwards task-relevant changes as
+// notifications/claude/channel events on sender. Reconnect is owned
+// by the underlying xagentclient.NotificationClient; this function
+// returns when ctx is done.
+func PushChannels(ctx context.Context, sender ChannelSender, serverURL, token string) {
 	nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
 		BaseURL: serverURL,
 		Token:   token,
-		Handler: func(n model.Notification) { forwardNotification(ctx, transport, n) },
+		Handler: func(n model.Notification) { forwardNotification(ctx, sender, n) },
 	})
 	if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Warn("xagent channel stream ended", "error", err)
