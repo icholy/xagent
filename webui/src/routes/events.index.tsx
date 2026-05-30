@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/select'
 import { RelativeTime } from '@/components/relative-time'
 import { eventTypeLabel } from '@/lib/routing-rules'
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/events/')({
@@ -170,7 +170,7 @@ function RoutingRulesCard() {
       refetchInterval: 6000,
     },
   )
-  const deleteMutation = useMutation(setRoutingRules, {
+  const updateMutation = useMutation(setRoutingRules, {
     onSuccess: () => refetch(),
   })
 
@@ -178,7 +178,15 @@ function RoutingRulesCard() {
 
   const handleDelete = async (index: number) => {
     const updated = rules.filter((_, i) => i !== index)
-    await deleteMutation.mutateAsync({ rules: updated })
+    await updateMutation.mutateAsync({ rules: updated })
+  }
+
+  const handleMove = async (index: number, direction: -1 | 1) => {
+    const target = index + direction
+    if (target < 0 || target >= rules.length) return
+    const updated = [...rules]
+    ;[updated[index], updated[target]] = [updated[target], updated[index]]
+    await updateMutation.mutateAsync({ rules: updated })
   }
 
   return (
@@ -196,68 +204,91 @@ function RoutingRulesCard() {
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">
-        {deleteMutation.error && (
-          <div className="text-destructive text-sm">{deleteMutation.error.message}</div>
+        {updateMutation.error && (
+          <div className="text-destructive text-sm">{updateMutation.error.message}</div>
         )}
         {isLoading ? (
           <div className="text-muted-foreground">Loading...</div>
         ) : rules.length === 0 ? (
           <div className="text-muted-foreground text-center py-8">No routing rules configured</div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event Type</TableHead>
-                <TableHead>Prefix</TableHead>
-                <TableHead>Mention</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rules.map((rule, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">
-                    {eventTypeLabel(rule.source, rule.type)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
-                  <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
-                  <TableCell>
-                    {rule.create ? (
-                      <Badge variant="secondary">Creates task</Badge>
-                    ) : (
-                      <span className="text-muted-foreground">Wake only</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Link
-                        to="/routing/$index"
-                        params={{ index: String(index) }}
-                        search={{ org: orgId }}
-                      >
-                        <Button variant="outline" size="sm" disabled={deleteMutation.isPending}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(index)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        {deleteMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </TableCell>
+          <>
+            <p className="text-sm text-muted-foreground">
+              Rules are evaluated top to bottom; the first match wins.
+            </p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Event Type</TableHead>
+                  <TableHead>Prefix</TableHead>
+                  <TableHead>Mention</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead></TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {rules.map((rule, index) => (
+                  <TableRow key={index}>
+                    <TableCell className="font-medium">
+                      {eventTypeLabel(rule.source, rule.type)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
+                    <TableCell>
+                      {rule.create ? (
+                        <Badge variant="secondary">Creates task</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">Wake only</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleMove(index, -1)}
+                          disabled={updateMutation.isPending || index === 0}
+                          aria-label="Move rule up"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleMove(index, 1)}
+                          disabled={updateMutation.isPending || index === rules.length - 1}
+                          aria-label="Move rule down"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                        <Link
+                          to="/routing/$index"
+                          params={{ index: String(index) }}
+                          search={{ org: orgId }}
+                        >
+                          <Button variant="outline" size="sm" disabled={updateMutation.isPending}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(index)}
+                          disabled={updateMutation.isPending}
+                        >
+                          {updateMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
         )}
       </CardContent>
     </Card>
