@@ -18,6 +18,8 @@ import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
+import { Route as RoutingNewRouteImport } from './routes/routing.new'
+import { Route as RoutingIndexRouteImport } from './routes/routing.$index'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as KeysNewRouteImport } from './routes/keys.new'
 import { Route as GithubSetupRouteImport } from './routes/github.setup'
@@ -69,6 +71,16 @@ const TasksIdRoute = TasksIdRouteImport.update({
   path: '/tasks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RoutingNewRoute = RoutingNewRouteImport.update({
+  id: '/routing/new',
+  path: '/routing/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoutingIndexRoute = RoutingIndexRouteImport.update({
+  id: '/routing/$index',
+  path: '/routing/$index',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
   id: '/oauth/authorize',
   path: '/oauth/authorize',
@@ -103,6 +115,8 @@ export interface FileRoutesByFullPath {
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/routing/$index': typeof RoutingIndexRoute
+  '/routing/new': typeof RoutingNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
@@ -119,6 +133,8 @@ export interface FileRoutesByTo {
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/routing/$index': typeof RoutingIndexRoute
+  '/routing/new': typeof RoutingNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
@@ -136,6 +152,8 @@ export interface FileRoutesById {
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/routing/$index': typeof RoutingIndexRoute
+  '/routing/new': typeof RoutingNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
@@ -154,6 +172,8 @@ export interface FileRouteTypes {
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
+    | '/routing/$index'
+    | '/routing/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
@@ -170,6 +190,8 @@ export interface FileRouteTypes {
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
+    | '/routing/$index'
+    | '/routing/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events'
@@ -186,6 +208,8 @@ export interface FileRouteTypes {
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
+    | '/routing/$index'
+    | '/routing/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
@@ -203,6 +227,8 @@ export interface RootRouteChildren {
   GithubSetupRoute: typeof GithubSetupRoute
   KeysNewRoute: typeof KeysNewRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
+  RoutingIndexRoute: typeof RoutingIndexRoute
+  RoutingNewRoute: typeof RoutingNewRoute
   TasksIdRoute: typeof TasksIdRoute
   TasksNewRoute: typeof TasksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
@@ -277,6 +303,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/routing/new': {
+      id: '/routing/new'
+      path: '/routing/new'
+      fullPath: '/routing/new'
+      preLoaderRoute: typeof RoutingNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/routing/$index': {
+      id: '/routing/$index'
+      path: '/routing/$index'
+      fullPath: '/routing/$index'
+      preLoaderRoute: typeof RoutingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth/authorize': {
       id: '/oauth/authorize'
       path: '/oauth/authorize'
@@ -323,6 +363,8 @@ const rootRouteChildren: RootRouteChildren = {
   GithubSetupRoute: GithubSetupRoute,
   KeysNewRoute: KeysNewRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
+  RoutingIndexRoute: RoutingIndexRoute,
+  RoutingNewRoute: RoutingNewRoute,
   TasksIdRoute: TasksIdRoute,
   TasksNewRoute: TasksNewRoute,
   EventsIndexRoute: EventsIndexRoute,

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
-import { create } from '@bufbuild/protobuf'
 import {
   getProfile,
   ping,
@@ -15,12 +14,18 @@ import {
   setRoutingRules,
   listEvents,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { Event, Org, RoutingRule } from '@/gen/xagent/v1/xagent_pb'
-import { RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
+import type { Event, Org } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -50,11 +55,9 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Save,
   Trash2,
   Unlink,
   User,
-  X,
 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
@@ -444,16 +447,8 @@ function EventRow({ event }: { event: Event }) {
   )
 }
 
-const ROUTING_SOURCES = ['github', 'atlassian'] as const
-
-interface RuleFormState {
-  source: string
-  type: string
-  prefix: string
-  mention: string
-}
-
 function RoutingRulesCard() {
+  const orgId = useOrgId()
   const { data, isLoading, refetch } = useQuery(
     getRoutingRules,
     {},
@@ -461,49 +456,15 @@ function RoutingRulesCard() {
       refetchInterval: 6000,
     },
   )
-  const saveMutation = useMutation(setRoutingRules, {
+  const deleteMutation = useMutation(setRoutingRules, {
     onSuccess: () => refetch(),
-  })
-  const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const [editForm, setEditForm] = useState<RuleFormState>({
-    source: '',
-    type: '',
-    prefix: '',
-    mention: '',
   })
 
   const rules = data?.rules ?? []
 
   const handleDelete = async (index: number) => {
     const updated = rules.filter((_, i) => i !== index)
-    await saveMutation.mutateAsync({ rules: updated })
-  }
-
-  const handleStartEdit = (index: number) => {
-    const rule = rules[index]
-    setEditForm({
-      source: rule.source,
-      type: rule.type,
-      prefix: rule.prefix,
-      mention: rule.mention,
-    })
-    setEditingIndex(index)
-  }
-
-  const handleSaveEdit = async () => {
-    if (editingIndex === null) return
-    const updated = rules.map((rule, i) =>
-      i === editingIndex
-        ? create(RoutingRuleSchema, {
-            source: editForm.source,
-            type: editForm.type,
-            prefix: editForm.prefix,
-            mention: editForm.mention,
-          })
-        : rule,
-    )
-    await saveMutation.mutateAsync({ rules: updated })
-    setEditingIndex(null)
+    await deleteMutation.mutateAsync({ rules: updated })
   }
 
   return (
@@ -511,208 +472,73 @@ function RoutingRulesCard() {
       <CardHeader>
         <CardTitle>Routing Rules</CardTitle>
         <CardDescription>Configure how events get routed to tasks and workspaces.</CardDescription>
+        <CardAction>
+          <Link to="/routing/new" search={{ org: orgId }}>
+            <Button>
+              <Plus className="h-4 w-4" />
+              Add Rule
+            </Button>
+          </Link>
+        </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">
+        {deleteMutation.error && (
+          <div className="text-destructive text-sm">{deleteMutation.error.message}</div>
+        )}
         {isLoading ? (
           <div className="text-muted-foreground">Loading...</div>
+        ) : rules.length === 0 ? (
+          <div className="text-muted-foreground text-center py-8">No routing rules configured</div>
         ) : (
-          <>
-            <AddRuleForm rules={rules} onAdd={refetch} />
-            {saveMutation.error && (
-              <div className="text-destructive text-sm">{saveMutation.error.message}</div>
-            )}
-            {rules.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Prefix</TableHead>
-                    <TableHead>Mention</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rules.map((rule, index) =>
-                    editingIndex === index ? (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <Select
-                            value={editForm.source}
-                            onValueChange={(v) => setEditForm({ ...editForm, source: v })}
-                          >
-                            <SelectTrigger className="w-32">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ROUTING_SOURCES.map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  {s}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={editForm.type}
-                            onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
-                            placeholder="Type"
-                            className="w-32"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={editForm.prefix}
-                            onChange={(e) => setEditForm({ ...editForm, prefix: e.target.value })}
-                            placeholder="Prefix"
-                            className="w-48"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={editForm.mention}
-                            onChange={(e) => setEditForm({ ...editForm, mention: e.target.value })}
-                            placeholder="Mention"
-                            className="w-32"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={handleSaveEdit}
-                              disabled={saveMutation.isPending || !editForm.source}
-                            >
-                              {saveMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Save className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditingIndex(null)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{rule.source}</TableCell>
-                        <TableCell className="text-muted-foreground">{rule.type || '-'}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {rule.prefix || '-'}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {rule.mention || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleStartEdit(index)}
-                              disabled={saveMutation.isPending}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDelete(index)}
-                              disabled={saveMutation.isPending}
-                            >
-                              {saveMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Source</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Prefix</TableHead>
+                <TableHead>Mention</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rules.map((rule, index) => (
+                <TableRow key={index}>
+                  <TableCell className="font-medium">{rule.source}</TableCell>
+                  <TableCell className="text-muted-foreground">{rule.type || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Link
+                        to="/routing/$index"
+                        params={{ index: String(index) }}
+                        search={{ org: orgId }}
+                      >
+                        <Button variant="outline" size="sm" disabled={deleteMutation.isPending}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDelete(index)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        {deleteMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </CardContent>
     </Card>
-  )
-}
-
-function AddRuleForm({ rules, onAdd }: { rules: RoutingRule[]; onAdd: () => void }) {
-  const [form, setForm] = useState<RuleFormState>({ source: '', type: '', prefix: '', mention: '' })
-  const saveMutation = useMutation(setRoutingRules, {
-    onSuccess: () => {
-      setForm({ source: '', type: '', prefix: '', mention: '' })
-      onAdd()
-    },
-  })
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.source) return
-    const newRule = create(RoutingRuleSchema, {
-      source: form.source,
-      type: form.type,
-      prefix: form.prefix,
-      mention: form.mention,
-    })
-    await saveMutation.mutateAsync({ rules: [...rules, newRule] })
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="flex gap-2 flex-wrap">
-      <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })}>
-        <SelectTrigger className="w-32">
-          <SelectValue placeholder="Source" />
-        </SelectTrigger>
-        <SelectContent>
-          {ROUTING_SOURCES.map((s) => (
-            <SelectItem key={s} value={s}>
-              {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Input
-        placeholder="Type"
-        value={form.type}
-        onChange={(e) => setForm({ ...form, type: e.target.value })}
-        className="w-32"
-      />
-      <Input
-        placeholder="Prefix"
-        value={form.prefix}
-        onChange={(e) => setForm({ ...form, prefix: e.target.value })}
-        className="w-48"
-      />
-      <Input
-        placeholder="Mention"
-        value={form.mention}
-        onChange={(e) => setForm({ ...form, mention: e.target.value })}
-        className="w-32"
-      />
-      <Button type="submit" disabled={saveMutation.isPending || !form.source}>
-        {saveMutation.isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Plus className="h-4 w-4" />
-        )}
-        Add Rule
-      </Button>
-      {saveMutation.error && (
-        <span className="text-destructive text-sm self-center">{saveMutation.error.message}</span>
-      )}
-    </form>
   )
 }
 
