@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.19.1](https://github.com/icholy/xagent/compare/v0.19.0...v0.19.1) (2026-05-30)
+
+
+### Miscellaneous
+
+* **deps:** update dependency @types/react to v19.2.15 ([#699](https://github.com/icholy/xagent/issues/699)) ([5f79162](https://github.com/icholy/xagent/commit/5f79162ecf6cfa9a1272c80b05e6de31f85618b0))
+* **deps:** update dependency date-fns to v4.2.1 ([#700](https://github.com/icholy/xagent/issues/700)) ([d3ce37a](https://github.com/icholy/xagent/commit/d3ce37a847e40678a63d34d6214744bca37ea690))
+* **deps:** update dependency date-fns to v4.3.0 ([#702](https://github.com/icholy/xagent/issues/702)) ([d858aba](https://github.com/icholy/xagent/commit/d858ababbb5c2dcb87e3b2d454d2e254da2580b1))
+* **deps:** update dependency typescript-eslint to v8.59.4 ([#695](https://github.com/icholy/xagent/issues/695)) ([d857057](https://github.com/icholy/xagent/commit/d8570577de79d141c3bb86381aa867063b18d104))
+* **deps:** update tanstack-query monorepo to v5.100.11 ([#696](https://github.com/icholy/xagent/issues/696)) ([1b0943a](https://github.com/icholy/xagent/commit/1b0943a47f3757ac508b4467f13196b5867bdb3c))
+* **deps:** update tanstack-query monorepo to v5.100.13 ([#701](https://github.com/icholy/xagent/issues/701)) ([81fd1ac](https://github.com/icholy/xagent/commit/81fd1ac0ea0c34f1f93933ec16baac25496ed2f3))
+* **deps:** update tanstack-router monorepo ([#689](https://github.com/icholy/xagent/issues/689)) ([994c5ea](https://github.com/icholy/xagent/commit/994c5ea6f6f59536f90dee0af248e9cb7f35cdfe))
+* **deps:** update tanstack-router monorepo ([#697](https://github.com/icholy/xagent/issues/697)) ([47c9fd8](https://github.com/icholy/xagent/commit/47c9fd8e6ba603ff6b621f2305b2869c899a9bd2))
+* **deps:** update tanstack-router monorepo ([#698](https://github.com/icholy/xagent/issues/698)) ([bc36594](https://github.com/icholy/xagent/commit/bc36594c3f93e303f0f6757b78d5c8cf9ac9992f))
+
 ## [0.19.0](https://github.com/icholy/xagent/compare/v0.18.0...v0.19.0) (2026-05-24)
 
 
