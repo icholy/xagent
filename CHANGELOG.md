@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.21.0](https://github.com/icholy/xagent/compare/v0.20.0...v0.21.0) (2026-05-30)
+
+
+### Features
+
+* **mcp:** channel-message-gated notifications ([#725](https://github.com/icholy/xagent/issues/725)) ([88720f0](https://github.com/icholy/xagent/commit/88720f0860448433c3d5e309f8f0b18b2f5dccce))
+
+
+### Bug Fixes
+
+* **deps:** update module connectrpc.com/connect to v1.20.0 ([#723](https://github.com/icholy/xagent/issues/723)) ([ceccde5](https://github.com/icholy/xagent/commit/ceccde558a84d583fc680d6a30d30153043a8d10))
+* **deps:** update module github.com/modelcontextprotocol/go-sdk to v1.6.1 ([#724](https://github.com/icholy/xagent/issues/724)) ([9648682](https://github.com/icholy/xagent/commit/9648682ef47b6c1dbace485c9bc6d52b524c6e65))
+* **mcp:** suppress self-notifications in the bridge ([#719](https://github.com/icholy/xagent/issues/719)) ([ed23ade](https://github.com/icholy/xagent/commit/ed23aded75537056256537bb1addc9f3dfed9880))
+
+
+### Miscellaneous
+
+* **deps:** update tanstack-query monorepo to v5.100.14 ([#715](https://github.com/icholy/xagent/issues/715)) ([1a45dd8](https://github.com/icholy/xagent/commit/1a45dd84e0b3ef02c0a44bb3fda8d8f05bc3ba5d))
+* keep orchestrator task instructions lean ([6b320a5](https://github.com/icholy/xagent/commit/6b320a58ccf43cb84c4cbf12d9f3955d0c269967))
+* throttle tanstack renovate updates to monthly ([#721](https://github.com/icholy/xagent/issues/721)) ([e372f49](https://github.com/icholy/xagent/commit/e372f49d721e87106dba4f0d6215d054e60a58b4))
+
 ## [0.20.0](https://github.com/icholy/xagent/compare/v0.19.1...v0.20.0) (2026-05-30)
 
 
