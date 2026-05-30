@@ -289,21 +289,21 @@ If duplicates actually show up in production we can revisit — options include 
 
 The created task gets a short prompt:
 
-1. **A one-line preamble** that orients the agent — source/type and the description. Sketch:
+1. **A one-line preamble** that orients the agent. Sketch:
 
    ```
-   You were created by a routing rule in response to a {source} {type} event: {description}.
+   You were created by a routing rule in response to a {source} {type} event.
    ```
 
-   The preamble deliberately does **not** embed `{url}` or `{data}`. The subscribed `Link` attached to the task in the same transaction (§5) carries the URL, and the agent reaches the event source through it. The agent fetches the body specifics from the source itself rather than reading the inlined payload.
+   The preamble deliberately does **not** embed `{description}`, `{url}`, or `{data}`. The subscribed `Link` attached to the task in the same transaction (§5) carries the URL as `url` and the event description as `title`, so both are reachable via `get_my_task`. The agent fetches the body specifics from the source itself rather than reading an inlined payload.
 
 2. **The rule's `Prompt`** appended verbatim as a second instruction. If `Prompt` is empty, only the preamble is sent (acceptable degenerate case).
 
 The task's `Name` is left empty — the agent populates it on first run via `update_my_task`.
 
-Two instructions, not one concatenated string, matches the existing system: `model.Task.Instructions` is `[]Instruction` (`internal/model/task.go:67`) and the runner already iterates over multiple instructions. It also keeps the rule author's prompt distinguishable from the auto-generated preamble.
+The preamble is inlined into the task literal in `Router.create`; appending the rule's prompt is a two-line `if` immediately after. No `buildInstructions` helper — the construction is small enough to read in place.
 
-Templating the rule prompt with `{description}` / `{url}` / etc. is **not** proposed. If we later need it, it's an additive change to a single function.
+Templating the rule prompt with `{description}` / `{url}` / etc. is **not** proposed. If we later need it, it's an additive change to that block.
 
 ### 7. Atlassian parity
 

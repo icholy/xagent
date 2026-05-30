@@ -278,11 +278,11 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, task.Status, model.TaskStatusPending)
 	assert.Equal(t, task.Command, model.TaskCommandStart)
 	assert.Equal(t, len(task.Instructions), 2)
-	// Preamble orients the agent but doesn't duplicate the URL or event
-	// body — the subscribed link carries the URL, and the agent fetches
-	// specifics via the link.
+	// Preamble orients the agent with source/type only — URL, description,
+	// and event body are all reachable via the subscribed link.
 	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "routing rule"))
 	assert.Assert(t, !strings.Contains(task.Instructions[0].Text, url))
+	assert.Assert(t, !strings.Contains(task.Instructions[0].Text, "alice commented"))
 	assert.Assert(t, !strings.Contains(task.Instructions[0].Text, "please look at this"))
 	assert.Equal(t, task.Instructions[0].URL, "")
 	assert.Equal(t, task.Instructions[1].Text, "Triage this issue.")
@@ -292,6 +292,7 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, len(links), 1)
 	assert.Equal(t, links[0].URL, url)
 	assert.Equal(t, links[0].Subscribe, true)
+	assert.Equal(t, links[0].Title, "alice commented on issue #1")
 }
 
 func TestRouteCreateRuleOmittedPromptUsesPreambleOnly(t *testing.T) {

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
@@ -188,13 +187,18 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 	var notification model.Notification
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task := &model.Task{
-			Runner:       rule.Create.Runner,
-			Workspace:    rule.Create.Workspace,
-			Instructions: buildInstructions(input, rule),
-			Status:       model.TaskStatusPending,
-			Command:      model.TaskCommandStart,
-			Version:      1,
-			OrgID:        orgID,
+			Runner:    rule.Create.Runner,
+			Workspace: rule.Create.Workspace,
+			Instructions: []model.Instruction{{
+				Text: fmt.Sprintf("You were created by a routing rule in response to a %s %s event.", input.Source, input.Type),
+			}},
+			Status:  model.TaskStatusPending,
+			Command: model.TaskCommandStart,
+			Version: 1,
+			OrgID:   orgID,
+		}
+		if rule.Create.Prompt != "" {
+			task.Instructions = append(task.Instructions, model.Instruction{Text: rule.Create.Prompt})
 		}
 		if err := r.Store.CreateTask(ctx, tx, task); err != nil {
 			return err
@@ -202,6 +206,7 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		if err := r.Store.CreateLink(ctx, tx, &model.Link{
 			TaskID:    task.ID,
 			URL:       input.URL,
+			Title:     input.Description,
 			Relevance: "trigger",
 			Subscribe: true,
 			CreatedAt: time.Now().UTC(),
@@ -235,20 +240,3 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 	return nil
 }
 
-// buildInstructions assembles the prompt for a created task: a short
-// preamble that orients the agent, followed by the rule's configured
-// prompt (if any). The event URL and body are not embedded — the
-// subscribed Link attached to the task carries the URL, and the agent
-// fetches event specifics through that link.
-func buildInstructions(input InputEvent, rule *model.RoutingRule) []model.Instruction {
-	preamble := fmt.Sprintf("You were created by a routing rule in response to a %s %s event", input.Source, input.Type)
-	if input.Description != "" {
-		preamble += ": " + input.Description
-	}
-	preamble += "."
-	out := []model.Instruction{{Text: preamble}}
-	if rule.Create != nil && strings.TrimSpace(rule.Create.Prompt) != "" {
-		out = append(out, model.Instruction{Text: rule.Create.Prompt})
-	}
-	return out
-}
