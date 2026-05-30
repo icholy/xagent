@@ -52,6 +52,9 @@ func New(opts Options) *Server {
 }
 
 func (s *Server) publish(n model.Notification) {
+	if n.Ignore {
+		return
+	}
 	if s.publisher == nil {
 		return
 	}

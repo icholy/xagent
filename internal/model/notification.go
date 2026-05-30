@@ -18,6 +18,11 @@ type Notification struct {
 	// channel forwarder gates on this field). Consumed only by the channel
 	// bridge; runner and web UI ignore it.
 	ChannelMessage string `json:"channel_message,omitempty"`
+	// Ignore causes the publisher to skip this notification entirely. Lets
+	// callers always build and "publish" a notification and decide inside
+	// the transaction whether it actually goes out, instead of gating the
+	// publish call with a separate boolean.
+	Ignore bool `json:"-"`
 }
 
 // NotificationResource describes an affected resource within a "change" Notification.

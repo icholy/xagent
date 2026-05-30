@@ -676,3 +676,18 @@ func TestRouteOrgRulesOverrideDefaults(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
 }
+
+func TestRouterPublish_IgnoreSuppressesDelivery(t *testing.T) {
+	t.Parallel()
+
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	r := &Router{Log: slog.Default(), Publisher: pub}
+
+	r.publish(t.Context(), model.Notification{Type: "change", OrgID: 1, Ignore: true})
+	assert.Equal(t, len(pub.PublishCalls()), 0)
+
+	r.publish(t.Context(), model.Notification{Type: "change", OrgID: 1})
+	assert.Equal(t, len(pub.PublishCalls()), 1)
+}
