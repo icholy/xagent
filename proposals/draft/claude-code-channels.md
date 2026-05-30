@@ -184,29 +184,45 @@ var McpCommand = &cli.Command{
 
         mcpserver.AddTools(server, client, cmd.String("server"))
 
-        session, err := server.Connect(ctx, &mcp.StdioTransport{}, nil)
+        // channelTransport wraps StdioTransport and exposes a public
+        // Notify(method, params) for the SSE→channel goroutine. See
+        // "Sending notifications/claude/channel" below.
+        transport := newChannelTransport(&mcp.StdioTransport{})
+        session, err := server.Connect(ctx, transport, nil)
         if err != nil {
             return err
         }
-        go pushTaskChannels(ctx, session, client, cmd.String("server"), cmd.String("token"))
+        go pushTaskChannels(ctx, transport, client, cmd.String("server"), cmd.String("token"))
         return session.Wait()
     },
 }
 ```
 
-`server.Run` is replaced by the lower-level `server.Connect` + `session.Wait` pair so the bridge can hold a reference to the `ServerSession` and emit notifications from a background goroutine.
+`server.Run` is replaced by the lower-level `server.Connect` + `session.Wait` pair so the bridge can hold a reference both to the `ServerSession` (for shutdown) and to the transport wrapper (for sending `notifications/claude/channel` from the background goroutine).
 
-### The Go MCP SDK gap (relocated, not eliminated)
+### The Go MCP SDK: capability vs. notification
 
-The Go MCP SDK v1.2.0 (`github.com/modelcontextprotocol/go-sdk`) supports declaring experimental capabilities via `ServerOptions.Capabilities.Experimental`, but **does not expose a public API to send arbitrary notifications**. The internal `handleNotify` and `ServerSession.getConn()` are unexported, and the public notification methods (`NotifyProgress`, `Log`, `ResourceUpdated`) only cover predefined MCP types — none can send `notifications/claude/channel`.
+The repo currently vendors `github.com/modelcontextprotocol/go-sdk` **v1.4.1**; latest is **v1.6.1**. The relevant API surface is identical across those versions. Splitting the prior "SDK gap" into the two things it actually was:
 
-Resolution options:
+**Advertising `claude/channel` — already public API.** `ServerOptions.Capabilities.Experimental` is a public `map[string]any` (`protocol.go` ~ L1547 in v1.4.1) and is plumbed into the InitializeResult the server returns to Claude Code. Setting `Experimental: map[string]any{"claude/channel": map[string]any{}}` on stock SDK is sufficient to register the listener; **no patch, fork, or wrapper is needed** for the capability declaration shown in the `xagent mcp` skeleton above.
 
-1. **Upstream `ServerSession.Notify(ctx context.Context, method string, params any) error`.** The smallest possible change: a public method that delegates to the underlying jsonrpc2 connection's existing `Notify`. Strongly preferred because it unblocks the whole Go MCP ecosystem, not just xagent.
-2. **A jsonrpc2-layer wrapper.** The underlying `internal/jsonrpc2.Connection` has a public `Notify(ctx, method, params)`. Build a thin `mcp.Transport` wrapper that retains a reference to the connection before it is handed to the SDK, then call `Notify` directly. Avoids a fork but is hacky.
-3. **Temporary fork.** Add `Notify` in a fork and pin to it until upstream merges.
+**Sending `notifications/claude/channel` — chosen path is a transport wrapper.** The SDK's public notification methods (`NotifyProgress`, `Log`, `ResourceUpdated`) only cover predefined MCP types, and there is no exported general-purpose `Server.Notify(method, params)`. However, the transport-level types are fully exported and sufficient:
 
-Note: the **TypeScript/Bun bridge alternative discussed below sidesteps this gap entirely** — the TS SDK supports arbitrary notifications natively. The Go-vs-TS choice is therefore upstream of this list (see Trade-offs and Open Questions).
+- `mcp.Transport` and `mcp.Connection` are public interfaces (`transport.go` L37–67). `Connection` exposes `Write(context.Context, jsonrpc.Message) error`; its contract documents that "Write may be called concurrently."
+- `jsonrpc.Request`, `jsonrpc.Message`, and `jsonrpc.EncodeMessage` are public re-exports from `github.com/modelcontextprotocol/go-sdk/jsonrpc`. A `*jsonrpc.Request{Method: "notifications/claude/channel", Params: raw}` **with no ID** is, by JSON-RPC 2.0 definition, a notification (see `Request.IsCall()` — `messages.go:110`).
+
+The bridge therefore ships a ~30-line wrapper that:
+
+1. Wraps `mcp.StdioTransport` (`type channelTransport struct { inner mcp.Transport; conn *channelConn }`).
+2. On `Connect`, calls `inner.Connect(ctx)`, retains the returned `Connection`, and returns its own wrapper that delegates `Read`/`Close`/`SessionID` straight through.
+3. Exposes a public `Notify(ctx, method string, params any) error` that JSON-marshals `params` to `json.RawMessage`, constructs `&jsonrpc.Request{Method: method, Params: raw}` (no ID), and calls the wrapped `Connection.Write`.
+4. Holds a `sync.Mutex` around `Write` so injected notification frames cannot interleave with the SDK's own writes. (The `Connection` contract already promises concurrent-safe `Write`, but the lock keeps the framing easy to reason about and matches the reviewer's recommendation.)
+
+The bridge constructs `channelTransport{inner: &mcp.StdioTransport{}}`, passes it to `server.Connect`, and keeps a handle to the wrapper so the background SSE→channel goroutine can call `wrapper.Notify(ctx, "notifications/claude/channel", params)` directly. 100% public API; no fork; no internal-package access.
+
+**Why not upstream `ServerSession.Notify`?** This was the prior draft's preferred option. It is the wrong bet for now: it has been proposed in [`go-sdk` PR #898](https://github.com/modelcontextprotocol/go-sdk/pull/898) (which explicitly cites `notifications/claude/channel` as motivation) and rejected by maintainer @jba — "A send-only solution isn't sufficient. There must be a story on the receive side… let's not write more code until we understand the solution." The unified send/receive design is tracked in [`go-sdk` #745](https://github.com/modelcontextprotocol/go-sdk/issues/745), with competing PRs [#844](https://github.com/modelcontextprotocol/go-sdk/pull/844) and [#956](https://github.com/modelcontextprotocol/go-sdk/pull/956) still in flight. The net is: ship the transport wrapper now, add a `TODO` referencing #745, and delete the wrapper once upstream lands a combined design. A temporary fork is now unnecessary and is dropped from consideration.
+
+The receive-side concern @jba raised matters only if we add **permission relay** (Claude Code → bridge → user → response). That is explicitly out of scope for v1; the send-only one-way "task updated" push is fully covered by the wrapper.
 
 ### What the original draft proposed and why we're dropping it
 
@@ -225,14 +241,16 @@ The "Capability Declaration", "Server.Run Refactoring", and "Runner Integration"
 
 ## Trade-offs
 
-### Go bridge vs. TypeScript/Bun bridge
+### Go bridge vs. TypeScript/Bun bridge — resolved toward Go
 
-The prior draft rejected a TypeScript channel server because it would have dragged a Node runtime *into container images*. That objection no longer applies: the bridge runs on the developer's local machine, and **Bun is already a prerequisite for Claude Code Channels** — every official channel plugin in the preview ships as a Bun script. So the runtime cost of TS is essentially zero on a machine that already has channels working.
+The prior draft rejected a TypeScript channel server because it would have dragged a Node runtime *into container images*. The bridge runs locally — Bun is already a Claude Code Channels prerequisite — so the runtime cost of TS is no longer an objection. That reopened the choice.
 
-- **Go bridge** (`xagent mcp` subcommand): reuses `xagentclient`, `internal/x/sse`, `internal/server/mcpserver` tool definitions, and `model.Notification` directly. No code duplication; lives in the existing repo, ships with the existing release pipeline (single static binary). Cost: the Go MCP SDK has no public API for arbitrary notifications, so option 1, 2, or 3 above must be picked.
-- **TS/Bun bridge**: the official `@modelcontextprotocol/sdk` server has first-class `notification()` support, so the channel-side problem is trivial. Cost: re-implements the user-facing tool proxying, Connect-client transport, auth token handling, and SSE parsing in TypeScript, and adds a second release artifact in a new language for the project to maintain.
+The transport-wrapper path described above closes it again, this time on its own merits:
 
-This is the central open question (see below).
+- **Go bridge** (`xagent mcp` subcommand): reuses `xagentclient`, `internal/x/sse`, the `mcpserver` tool definitions, and `model.Notification` directly. No code duplication, single static binary, ships through the existing release pipeline. The "no public arbitrary-notify API" cost that previously offset these gains is paid by ~30 lines of transport-wrapper code with 100% public-API surface.
+- **TS/Bun bridge**: the official `@modelcontextprotocol/sdk` server has first-class `notification()` support, so the channel-side problem is trivial — but the bridge would re-implement Connect-RPC tool proxying, auth token handling, and SSE parsing in TypeScript and introduce a second release artifact in a new language for the project to maintain.
+
+Once `Notify` is no longer a real engineering cost on the Go side, the TS bridge's only remaining argument is "native channel support," which the wrapper provides for free. **Go wins.** This trade-off is resolved here rather than left as an open question.
 
 ### Push into the bridge vs. point Claude at the existing HTTP endpoint
 
@@ -244,12 +262,11 @@ The notify SSE stream is per-org: a bridge subscribes once and sees every notifi
 
 ## Open Questions
 
-1. **Go or TypeScript/Bun for the bridge?** The container-runtime objection that drove the original Go preference is gone. Decide deliberately whether to absorb the upstream-Notify work (Go) or maintain a second small TypeScript artifact (TS). Both are real, neither is obviously right.
-2. **Scope of forwarded notifications.** Should the bridge push every task notification on the org's SSE stream, or filter to tasks created by the same user (`Notification.UserID`) or even the same session (`Notification.ClientID`)? The `model.Notification` envelope carries both, so a filter is cheap; the policy choice (and the UX of "I created task 42 from this terminal — only tell me about it" vs. "tell me about everything in my org") is the question.
-3. **Bridge-as-everything vs. channel-only bridge.** Should `xagent mcp` re-expose the user-facing tools alongside the channel (one MCP entry for the local user, as proposed), or stay channel-only and let the user keep pointing Claude at the HTTP `/mcp` endpoint for tools (two entries, sharper layering)?
-4. **How rich should `content` be?** Channel `content` is the `<channel>` tag body. We could send a minimal `"Task 42 updated."` and rely on Claude calling `get_task`, or we could embed a short human-readable summary (status transition, instruction author) to save a round-trip. Richer `content` means the bridge fetches details before emitting, which costs an RPC per change.
-5. **Permission relay.** Two-way channels and the `claude/channel/permission` capability would let xagent prompt the local Claude for approvals (e.g. before running a destructive task action). Out of scope for v1; flagged so we don't paint ourselves into a corner on transport/auth choices.
+1. **Scope of forwarded notifications.** Should the bridge push every task notification on the org's SSE stream, or filter to tasks created by the same user (`Notification.UserID`) or even the same session (`Notification.ClientID`)? The `model.Notification` envelope carries both, so a filter is cheap; the policy choice (and the UX of "I created task 42 from this terminal — only tell me about it" vs. "tell me about everything in my org") is the question.
+2. **Bridge-as-everything vs. channel-only bridge.** Should `xagent mcp` re-expose the user-facing tools alongside the channel (one MCP entry for the local user, as proposed), or stay channel-only and let the user keep pointing Claude at the HTTP `/mcp` endpoint for tools (two entries, sharper layering)?
+3. **How rich should `content` be?** Channel `content` is the `<channel>` tag body. We could send a minimal `"Task 42 updated."` and rely on Claude calling `get_task`, or we could embed a short human-readable summary (status transition, instruction author) to save a round-trip. Richer `content` means the bridge fetches details before emitting, which costs an RPC per change.
+4. **Permission relay.** Two-way channels and the `claude/channel/permission` capability would let xagent prompt the local Claude for approvals (e.g. before running a destructive task action). Out of scope for v1; flagged because permission relay would need the receive-side story that [`go-sdk` #745](https://github.com/modelcontextprotocol/go-sdk/issues/745) is blocking on, so picking it up later is bounded by that upstream design.
 
 ## Future work: pushing into in-container agents
 
-The original framing — replacing the in-container `xagent mcp` process's reliance on the agent polling `get_my_task` with pushed channel events — is still achievable on top of this work once the Go SDK gap (resolution 1, 2, or 3 above) is closed. The in-container agent server already runs over stdio, so adding the capability is mechanically straightforward; the design question is which agent-side state changes (child completions, parent instructions, routed external events, child logs) deserve a push. That work is deferred to a follow-up proposal so this one can ship the local-developer use case first.
+The original framing — replacing the in-container `xagent mcp` process's reliance on the agent polling `get_my_task` with pushed channel events — is still achievable on top of this work. The transport wrapper used by the local bridge is reusable as-is inside the agent server, since the agent already runs over stdio. The design question is which agent-side state changes (child completions, parent instructions, routed external events, child logs) deserve a push, and whether the agent should subscribe to its own per-task slice of `model.Notification`s or get a curated stream. That work is deferred to a follow-up proposal so this one can ship the local-developer use case first.
