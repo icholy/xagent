@@ -1,23 +1,19 @@
 package runner
 
 import (
-	"cmp"
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
-	"github.com/icholy/xagent/internal/x/common"
-	"github.com/icholy/xagent/internal/x/sse"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/wakeup"
+	"github.com/icholy/xagent/internal/xagentclient"
 )
 
 // DefaultSSEReconnectInterval is the wait between reconnect attempts when
 // the SSE connection drops.
-const DefaultSSEReconnectInterval = 5 * time.Second
+const DefaultSSEReconnectInterval = xagentclient.DefaultSSEReconnectInterval
 
 // SSESubscriber connects to the server's /events endpoint with a runner
 // filter and signals a buffered (size-1) channel each time the server
@@ -25,12 +21,8 @@ const DefaultSSEReconnectInterval = 5 * time.Second
 // for this runner, so any event received is a reason to wake up and poll.
 // Reconnects automatically with a fixed backoff on disconnect.
 type SSESubscriber struct {
-	baseURL   string
-	runnerID  string
-	client    *http.Client
-	log       *slog.Logger
-	reconnect time.Duration
-	notify    wakeup.Chan
+	sub    *xagentclient.NotificationSubscriber
+	notify wakeup.Chan
 }
 
 // SSESubscriberOptions configures an SSESubscriber.
@@ -54,13 +46,18 @@ type SSESubscriberOptions struct {
 
 // NewSSESubscriber returns a new SSESubscriber.
 func NewSSESubscriber(opts SSESubscriberOptions) *SSESubscriber {
+	notify := wakeup.New()
+	sub := xagentclient.NewNotificationSubscriber(xagentclient.NotificationSubscriberOptions{
+		BaseURL:           opts.BaseURL,
+		Runner:            opts.RunnerID,
+		Client:            opts.Client,
+		Log:               opts.Log,
+		ReconnectInterval: opts.ReconnectInterval,
+		Handler:           func(model.Notification) { notify.Wake() },
+	})
 	return &SSESubscriber{
-		baseURL:   opts.BaseURL,
-		runnerID:  opts.RunnerID,
-		client:    cmp.Or(opts.Client, http.DefaultClient),
-		log:       cmp.Or(opts.Log, slog.Default()),
-		reconnect: cmp.Or(opts.ReconnectInterval, DefaultSSEReconnectInterval),
-		notify:    wakeup.New(),
+		sub:    sub,
+		notify: notify,
 	}
 }
 
@@ -75,52 +72,5 @@ func (s *SSESubscriber) C() <-chan struct{} {
 // event on each (re)connect which naturally signals the wake-up channel,
 // so the runner picks up any changes it missed while disconnected.
 func (s *SSESubscriber) Run(ctx context.Context) error {
-	for {
-		err := s.connect(ctx)
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil {
-			s.log.Warn("SSE connection lost, reconnecting", "error", err)
-		}
-		if !common.SleepContext(ctx, s.reconnect) {
-			return ctx.Err()
-		}
-	}
-}
-
-func (s *SSESubscriber) connect(ctx context.Context) error {
-	u, err := url.Parse(strings.TrimRight(s.baseURL, "/") + "/events")
-	if err != nil {
-		return fmt.Errorf("parse url: %w", err)
-	}
-	q := u.Query()
-	q.Set("runner", s.runnerID)
-	u.RawQuery = q.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "text/event-stream")
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-	r := sse.NewReader(resp.Body)
-	for {
-		ev, err := r.Read()
-		if err != nil {
-			return err
-		}
-		// The reader returns a zero Event with nil error on clean EOF.
-		// Real events always carry an Event type from the server.
-		if ev.Event == "" {
-			return nil
-		}
-		s.notify.Wake()
-	}
+	return s.sub.Run(ctx)
 }
