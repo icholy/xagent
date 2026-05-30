@@ -37,11 +37,55 @@ func TestListTools(t *testing.T) {
 		got[i] = tool.Name
 	}
 	assert.DeepEqual(t, got, []string{
+		"archive_task",
 		"create_task",
 		"get_task",
 		"list_tasks",
 		"list_workspaces",
 		"update_task",
+	})
+}
+
+func TestArchiveTask(t *testing.T) {
+	client := &xagentclient.ClientMock{
+		ArchiveTaskFunc: func(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
+			assert.Equal(t, req.Id, int64(42))
+			return &xagentv1.ArchiveTaskResponse{}, nil
+		},
+		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+			assert.Equal(t, req.Id, int64(42))
+			return &xagentv1.GetTaskResponse{
+				Task: &xagentv1.Task{
+					Id:        42,
+					Name:      "test",
+					Workspace: "ws",
+					Status:    xagentv1.TaskStatus_COMPLETED,
+					Url:       "https://xagent.example.com/ui/tasks/42?org=7",
+				},
+			}, nil
+		},
+	}
+	session := setupSession(t, client)
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "archive_task",
+		Arguments: map[string]any{
+			"id": 42,
+		},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
+
+	text, ok := result.Content[0].(*mcp.TextContent)
+	assert.Assert(t, ok)
+	var got map[string]any
+	assert.NilError(t, json.Unmarshal([]byte(text.Text), &got))
+	assert.DeepEqual(t, got, map[string]any{
+		"id":        float64(42),
+		"name":      "test",
+		"workspace": "ws",
+		"status":    "COMPLETED",
+		"url":       "https://xagent.example.com/ui/tasks/42?org=7",
 	})
 }
 

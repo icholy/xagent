@@ -74,6 +74,11 @@ func AddTools(server *mcp.Server, service xagentv1connect.XAgentServiceHandler) 
 		Name:        "update_task",
 		Description: "Add an instruction to a task, optionally start it",
 	}, h.updateTask)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "archive_task",
+		Description: "Archive a task",
+	}, h.archiveTask)
 }
 
 // Handler returns an http.Handler that serves the MCP Streamable HTTP
@@ -267,6 +272,24 @@ func (h *handlers) updateTask(ctx context.Context, req *mcp.CallToolRequest, inp
 	resp, err := h.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
 	if err != nil {
 		return errorResult("failed to get updated task: %v", err), nil, nil
+	}
+	return jsonResult(taskSummaryOf(resp.Task)), nil, nil
+}
+
+type archiveTaskInput struct {
+	ID int64 `json:"id" jsonschema:"The task ID to archive"`
+}
+
+func (h *handlers) archiveTask(ctx context.Context, req *mcp.CallToolRequest, input archiveTaskInput) (*mcp.CallToolResult, any, error) {
+	_, err := h.service.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{
+		Id: input.ID,
+	})
+	if err != nil {
+		return errorResult("failed to archive task: %v", err), nil, nil
+	}
+	resp, err := h.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
+	if err != nil {
+		return errorResult("failed to get archived task: %v", err), nil, nil
 	}
 	return jsonResult(taskSummaryOf(resp.Task)), nil, nil
 }
