@@ -60,14 +60,15 @@ import { useOrgId } from '@/hooks/use-org-id'
 
 type SettingsTab = 'account' | 'organisation' | 'events'
 
-function isSettingsTab(value: unknown): value is SettingsTab {
-  return value === 'account' || value === 'organisation' || value === 'events'
+function toSettingsTab(value: unknown): SettingsTab {
+  if (value === 'organisation' || value === 'events') return value
+  return 'account'
 }
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
   validateSearch: (search: Record<string, unknown>): { tab: SettingsTab } => ({
-    tab: isSettingsTab(search.tab) ? search.tab : 'account',
+    tab: toSettingsTab(search.tab),
   }),
 })
 
@@ -81,14 +82,13 @@ function SettingsPage() {
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
       <Tabs
         value={tab}
-        onValueChange={(value) => {
-          if (!isSettingsTab(value)) return
+        onValueChange={(value) =>
           navigate({
             to: '/settings',
-            search: { tab: value, org: orgId },
+            search: { tab: toSettingsTab(value), org: orgId },
             replace: true,
           })
-        }}
+        }
       >
         <div className="flex items-center mb-4">
           <ProfileCard />
