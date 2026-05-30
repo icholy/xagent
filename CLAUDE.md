@@ -82,6 +82,7 @@ Use `create_link` with `subscribe=true` for resources that may need follow-up (P
 xagent server     # Start C2 server
 xagent runner     # Start container orchestrator
 xagent driver     # Run agent (inside container, started by runner)
+xagent mcp        # Local user-facing stdio MCP server that proxies to the C2
 xagent tool agent-mcp # In-container MCP server providing xagent tools to the agent
 xagent task       # Task CRUD (list, create, update, delete)
 xagent containers # List xagent containers
