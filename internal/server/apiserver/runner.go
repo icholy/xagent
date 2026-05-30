@@ -17,11 +17,20 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 	caller := apiauth.MustCaller(ctx)
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)
-		var task *model.Task
+		notification := model.Notification{
+			Type: "change",
+			Resources: []model.NotificationResource{
+				{Action: "updated", Type: "task", ID: event.TaskID},
+				{Action: "appended", Type: "task_logs", ID: event.TaskID},
+			},
+			OrgID:    caller.OrgID,
+			UserID:   caller.ID,
+			ClientID: caller.ClientID,
+			Time:     time.Now(),
+		}
 		var applied bool
 		err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-			var err error
-			task, err = s.store.GetTaskForUpdate(ctx, tx, event.TaskID, caller.OrgID)
+			task, err := s.store.GetTaskForUpdate(ctx, tx, event.TaskID, caller.OrgID)
 			if err != nil {
 				return err
 			}
@@ -44,27 +53,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 					return err
 				}
 			}
-			return tx.Commit()
-		})
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", event.TaskID))
-			}
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		if applied {
-			notification := model.Notification{
-				Type: "change",
-				Resources: []model.NotificationResource{
-					{Action: "updated", Type: "task", ID: event.TaskID},
-					{Action: "appended", Type: "task_logs", ID: event.TaskID},
-				},
-				OrgID:    caller.OrgID,
-				Runner:   task.PendingRunner(),
-				UserID:   caller.ID,
-				ClientID: caller.ClientID,
-				Time:     time.Now(),
-			}
+			notification.Runner = task.PendingRunner()
 			switch task.Status {
 			case model.TaskStatusCompleted:
 				notification.ChannelMessage = fmt.Sprintf("Task %d completed.", task.ID)
@@ -77,6 +66,15 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 					notification.ChannelMessage = fmt.Sprintf("Task %d restarting.", task.ID)
 				}
 			}
+			return tx.Commit()
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", event.TaskID))
+			}
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if applied {
 			s.publish(notification)
 		}
 	}
