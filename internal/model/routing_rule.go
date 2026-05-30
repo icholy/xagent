@@ -24,6 +24,27 @@ type CreateTaskAction struct {
 	Prompt    string `json:"prompt,omitempty"`
 }
 
+// Proto converts a CreateTaskAction to its protobuf representation.
+func (a *CreateTaskAction) Proto() *xagentv1.CreateTaskAction {
+	return &xagentv1.CreateTaskAction{
+		Workspace: a.Workspace,
+		Runner:    a.Runner,
+		Prompt:    a.Prompt,
+	}
+}
+
+// CreateTaskActionFromProto converts a protobuf CreateTaskAction to the model type.
+func CreateTaskActionFromProto(pb *xagentv1.CreateTaskAction) *CreateTaskAction {
+	if pb == nil {
+		return nil
+	}
+	return &CreateTaskAction{
+		Workspace: pb.Workspace,
+		Runner:    pb.Runner,
+		Prompt:    pb.Prompt,
+	}
+}
+
 // Proto converts a RoutingRule to its protobuf representation.
 func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 	pb := &xagentv1.RoutingRule{
@@ -33,29 +54,18 @@ func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 		Mention: r.Mention,
 	}
 	if r.Create != nil {
-		pb.Create = &xagentv1.CreateTaskAction{
-			Workspace: r.Create.Workspace,
-			Runner:    r.Create.Runner,
-			Prompt:    r.Create.Prompt,
-		}
+		pb.Create = r.Create.Proto()
 	}
 	return pb
 }
 
 // RoutingRuleFromProto converts a protobuf RoutingRule to the model type.
 func RoutingRuleFromProto(pb *xagentv1.RoutingRule) RoutingRule {
-	rule := RoutingRule{
+	return RoutingRule{
 		Source:  pb.Source,
 		Type:    pb.Type,
 		Prefix:  pb.Prefix,
 		Mention: pb.Mention,
+		Create:  CreateTaskActionFromProto(pb.Create),
 	}
-	if pb.Create != nil {
-		rule.Create = &CreateTaskAction{
-			Workspace: pb.Create.Workspace,
-			Runner:    pb.Create.Runner,
-			Prompt:    pb.Create.Prompt,
-		}
-	}
-	return rule
 }
