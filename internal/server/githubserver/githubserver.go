@@ -72,9 +72,9 @@ func New(opts Options) (*Server, error) {
 		return nil, fmt.Errorf("failed to parse GitHub App private key: %w", err)
 	}
 	tokens, err := githubx.NewAppTokenCache(githubx.AppTokenCacheOptions{
-		AppID:      appID,
-		PrivateKey: opts.Config.PrivateKey,
-		Transport:  http.DefaultTransport,
+		AppID:     appID,
+		Key:       key,
+		Transport: http.DefaultTransport,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GitHub App token cache: %w", err)
