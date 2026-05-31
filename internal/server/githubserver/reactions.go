@@ -7,20 +7,6 @@ import (
 	"github.com/icholy/xagent/internal/eventrouter"
 )
 
-// reactionEmoji picks the acknowledgement emoji from the routing outcome: a
-// created task gets 🚀 ("rocket"), a woken task 👀 ("eyes"), and a comment that
-// matched a rule but created or woke nothing gets 😕 ("confused").
-func reactionEmoji(outcome eventrouter.RouteOutcome) string {
-	switch {
-	case outcome.Created:
-		return "rocket"
-	case len(outcome.TaskIDs) > 0:
-		return "eyes"
-	default:
-		return "confused"
-	}
-}
-
 // react adds a reaction to the comment that triggered the outcome. It is a
 // plain synchronous function: it does the work and returns an error. It owns no
 // concurrency or lifetime policy — the WebhookHandler glue runs it in a
@@ -47,7 +33,18 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 	}
 	client := github.NewClient(nil).WithAuthToken(token.Token)
 
-	content := reactionEmoji(outcome)
+	// Pick the emoji from the routing outcome: a created task gets 🚀, a woken
+	// task 👀, and a comment that matched a rule but created or woke nothing 😕.
+	var content string
+	switch {
+	case outcome.Created:
+		content = "rocket"
+	case len(outcome.TaskIDs) > 0:
+		content = "eyes"
+	default:
+		content = "confused"
+	}
+
 	switch outcome.Input.Type {
 	case EventTypeIssueComment:
 		_, _, err = client.Reactions.CreateIssueCommentReaction(ctx, meta.Owner, meta.Repo, meta.CommentID, content)
