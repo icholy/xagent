@@ -93,7 +93,11 @@ var McpCommand = &cli.Command{
 					BaseURL:  cmd.String("server"),
 					Token:    cmd.String("token"),
 					ClientID: clientID,
-					Handler:  func(n model.Notification) { ch.Forward(ctx, n) },
+					Handler: func(n model.Notification) {
+						if err := ch.Forward(ctx, n); err != nil {
+							slog.Warn("xagent channel: failed to send", "error", err)
+						}
+					},
 				})
 				if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					slog.Warn("xagent channel: stream ended", "error", err)

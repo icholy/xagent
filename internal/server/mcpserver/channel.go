@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"log/slog"
 	"slices"
 	"strconv"
 	"sync"
@@ -82,24 +81,23 @@ func findTaskID(n model.Notification) (int64, bool) {
 
 // Forward applies the gate and pushes a channel notification when the
 // notification is channel-worthy AND names a task this agent is watching.
-// It is suitable as a NotificationClient handler.
+// It returns nil when the notification is gated out and otherwise returns
+// the result of sending it; the caller (the command glue) handles logging.
 //
 // Subscriptions are purely explicit: a task stays watched until
 // unwatch_task is called. The gate carries no task-status awareness.
-func (c *Channel) Forward(ctx context.Context, n model.Notification) {
+func (c *Channel) Forward(ctx context.Context, n model.Notification) error {
 	if n.ChannelMessage == "" {
-		return // summary gate: not channel-worthy
+		return nil // summary gate: not channel-worthy
 	}
 	id, ok := findTaskID(n)
 	if !ok || !c.watching(id) {
-		return // mute-by-default: not a task this agent is watching
+		return nil // mute-by-default: not a task this agent is watching
 	}
-	if err := c.sender.SendChannel(ctx, mcpchannel.Params{
+	return c.sender.SendChannel(ctx, mcpchannel.Params{
 		Content: n.ChannelMessage,
 		Meta:    map[string]string{"resource": "task", "id": strconv.FormatInt(id, 10)},
-	}); err != nil {
-		slog.Warn("xagent channel: failed to send", "error", err)
-	}
+	})
 }
 
 // AddTools registers the watch_task / unwatch_task / list_watched_tasks

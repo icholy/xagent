@@ -42,13 +42,14 @@ func TestForward_WatchedTask(t *testing.T) {
 	c.ids[42] = struct{}{}
 
 	// Act
-	c.Forward(context.Background(), model.Notification{
+	err := c.Forward(context.Background(), model.Notification{
 		Type:           "change",
 		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
 		ChannelMessage: "Task 42 queued: start.",
 	})
 
 	// Assert
+	assert.NilError(t, err)
 	assert.Equal(t, len(sender.sent), 1)
 	assert.Equal(t, sender.sent[0].Content, "Task 42 queued: start.")
 	assert.DeepEqual(t, sender.sent[0].Meta, map[string]string{"resource": "task", "id": "42"})
