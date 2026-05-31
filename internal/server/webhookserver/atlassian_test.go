@@ -41,7 +41,7 @@ func TestToAtlassianInputEvent(t *testing.T) {
 				Description: "Test User commented on PROJ-123",
 				Data:        "xagent: do something",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
-				Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: "abc123", DisplayName: "Test User"}},
+				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			},
 		},
 		{
@@ -63,7 +63,7 @@ func TestToAtlassianInputEvent(t *testing.T) {
 				Description: "Test User commented on PROJ-123",
 				Data:        "just a regular comment",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
-				Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: "abc123", DisplayName: "Test User"}},
+				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			},
 		},
 		{
@@ -131,7 +131,7 @@ func TestToAtlassianInputEvent(t *testing.T) {
 				Description: "Test User commented on PROJ-1",
 				Data:        "xagent: trimmed",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-1",
-				Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: "abc123", DisplayName: "Test User"}},
+				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			},
 		},
 	}
@@ -208,7 +208,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 		Data:        "xagent: please fix the tests",
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
 		UserID:      "user-1",
-		Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: accountID, DisplayName: "Test User"}},
+		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
 	})
 }
 

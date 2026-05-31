@@ -43,7 +43,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "testuser commented on issue #1",
 				Data:        "xagent: do something",
 				URL:         "https://github.com/owner/repo/issues/1",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 123, Username: "testuser"}},
+				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
 			},
 		},
 		{
@@ -69,7 +69,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "pruser commented on PR #2",
 				Data:        "xagent: review this",
 				URL:         "https://github.com/owner/repo/pull/2",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 456, Username: "pruser"}},
+				Meta:        GitHubMeta{AuthorID: 456, AuthorLogin: "pruser"},
 			},
 		},
 		{
@@ -94,7 +94,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "testuser commented on issue #1",
 				Data:        "just a regular comment",
 				URL:         "https://github.com/owner/repo/issues/1",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 123, Username: "testuser"}},
+				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
 			},
 		},
 		{
@@ -124,7 +124,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "testuser commented on issue #1",
 				Data:        "xagent: do something",
 				URL:         "https://github.com/owner/repo/issues/1",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 123, Username: "testuser"}},
+				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
 			},
 		},
 		{
@@ -167,7 +167,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "reviewer reviewed PR #3",
 				Data:        "xagent: fix this",
 				URL:         "https://github.com/owner/repo/pull/3",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 789, Username: "reviewer"}},
+				Meta:        GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
 			},
 		},
 		{
@@ -192,7 +192,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "reviewer reviewed PR #3",
 				Data:        "looks good",
 				URL:         "https://github.com/owner/repo/pull/3",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 789, Username: "reviewer"}},
+				Meta:        GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
 			},
 		},
 		{
@@ -222,7 +222,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "reviewer reviewed PR #3",
 				Data:        "xagent: fix this",
 				URL:         "https://github.com/owner/repo/pull/3",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 789, Username: "reviewer"}},
+				Meta:        GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
 			},
 		},
 		{
@@ -265,7 +265,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "lead reviewed PR #4",
 				Data:        "xagent: please address comments",
 				URL:         "https://github.com/owner/repo/pull/4",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 101, Username: "lead"}},
+				Meta:        GitHubMeta{AuthorID: 101, AuthorLogin: "lead"},
 			},
 		},
 		{
@@ -307,7 +307,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "lead reviewed PR #4",
 				Data:        "approved",
 				URL:         "https://github.com/owner/repo/pull/4",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 101, Username: "lead"}},
+				Meta:        GitHubMeta{AuthorID: 101, AuthorLogin: "lead"},
 			},
 		},
 		{
@@ -342,7 +342,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "testuser commented on issue #1",
 				Data:        "xagent: trimmed",
 				URL:         "https://github.com/owner/repo/issues/1",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 123, Username: "testuser"}},
+				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
 			},
 		},
 		{
@@ -367,7 +367,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "octocat assigned issue #7 to @icholy-bot",
 				URL:         "https://github.com/owner/repo/issues/7",
 				Assignee:    "icholy-bot",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 999, Username: "octocat"}},
+				Meta:        GitHubMeta{AuthorID: 999, AuthorLogin: "octocat"},
 			},
 		},
 		{
@@ -420,7 +420,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "alice assigned PR #12 to @icholy-bot",
 				URL:         "https://github.com/owner/repo/pull/12",
 				Assignee:    "icholy-bot",
-				Meta:        GitHubMeta{Author: GithubUser{ID: 42, Username: "alice"}},
+				Meta:        GitHubMeta{AuthorID: 42, AuthorLogin: "alice"},
 			},
 		},
 		{
@@ -526,7 +526,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		Data:        "xagent: please fix the tests",
 		URL:         "https://github.com/owner/repo/pull/10",
 		UserID:      "user-1",
-		Meta:        GitHubMeta{Author: GithubUser{ID: ghUserID, Username: "testuser"}},
+		Meta:        GitHubMeta{AuthorID: ghUserID, AuthorLogin: "testuser"},
 	})
 }
 
