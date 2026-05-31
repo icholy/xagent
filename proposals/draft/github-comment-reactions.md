@@ -12,97 +12,84 @@ GitHub's native [Reactions API](https://docs.github.com/en/rest/reactions) is a 
 
 ### Overview
 
-When `eventrouter.Router.Route()` finds that an `InputEvent` matches an org's routing rules, it hands the routing outcome to a set of registered `Reactor`s. The GitHub reactor recognizes the event's source-specific metadata and asynchronously adds a reaction to the originating comment using that org's GitHub App installation token. The reaction is a side-effect of *matching*, decoupled from the existing event/task attachment flow.
+When `eventrouter.Router.Route()` finds that an `InputEvent` matches an org's routing rules, it hands the routing outcome to a set of registered `Reactor`s. The GitHub reactor recognizes the event's source-specific metadata and asynchronously adds a reaction to the originating comment using that org's GitHub App installation token. The reaction is a side-effect of *matching*, decoupled from the existing event/task flow.
 
-### 1. Carry source-specific metadata on `InputEvent`
+This builds directly on the webhook refactor that just landed on master:
 
-`InputEvent` (`internal/eventrouter/eventrouter.go:17`) currently carries the issue/PR `URL` for link matching but not the comment ID needed to react. Add a single optional, source-agnostic metadata field that reactors interpret with a type switch:
+- **PR #775 ("parse GitHub webhooks directly into InputEvent")** removed the `githubWebhookEvent` intermediate struct. `extractGitHubWebhookEvent` now returns an `*eventrouter.InputEvent` directly. `InputEvent` already has a `Meta any` field, and `webhookserver` already defines `GithubUser{ID, Username}` and `GitHubMeta{Author GithubUser}`. The extractor sets `Meta = GitHubMeta{Author: ...}` on **every** GitHub event, and `ServeHTTP` resolves identity via `input.Meta.(GitHubMeta).Author`.
+- **PR #774 ("ignore non-create/edit GitHub comment webhook actions")** means only `created`/`edited` comments route at all — `deleted` is dropped in the extractor before routing. So we never react to a comment that no longer exists; it's handled upstream, not a risk we need to guard against here.
+
+Because `Meta` and `GitHubMeta` already exist, this proposal does **not** add a new field to `InputEvent` and does **not** put any GitHub-specific type in `eventrouter`. The reaction target rides along on the existing `GitHubMeta`, and the only generic additions to `eventrouter` are the source-agnostic `Reactor` interface and `RouteOutcome` struct.
+
+### 1. Carry the reaction target on `webhookserver.GitHubMeta`
+
+`GitHubMeta` (`internal/server/webhookserver/github.go`) already carries the GitHub-native author. Extend it with an optional reaction target, expressed as small `webhookserver`-local value types — one per Reactions endpoint:
 
 ```go
-// internal/eventrouter/eventrouter.go
+// internal/server/webhookserver/github.go
 
-type InputEvent struct {
-    Source      string
-    Type        string
-    Description string
-    Data        string
-    URL         string
-    UserID      string
+type GitHubMeta struct {
+    Author GithubUser
 
-    // Meta carries optional, source-specific metadata about the event that the
-    // generic router doesn't interpret. Reactors type-switch on it to decide
-    // whether (and how) to act. nil for events with no extra metadata.
-    Meta any
+    // Reaction, when non-nil, identifies a comment that supports GitHub's
+    // Reactions API. Set only for issue_comment and pull_request_review_comment
+    // events; nil for assignments and review submissions. The github reactor
+    // type-switches on it. Holds one of the GitHub*Reaction types below.
+    Reaction any
 }
 
-// Metadata carriers are plain data with no source-client imports, so eventrouter
-// stays generic. Keeping them as distinct concrete types — rather than one
-// struct with a discriminator field — lets a reactor dispatch with a single type
-// switch that maps 1:1 to an API endpoint, and lets future sources (e.g. Jira)
-// add their own types without touching this one.
+// Reaction targets are plain data — no github.Client dependency — so this
+// stays a pure metadata package. One type per Reactions endpoint lets the
+// reactor dispatch with a single type switch that maps 1:1 to an API call.
 
-type GitHubIssueComment struct {
+type GitHubIssueCommentReaction struct {
     Owner     string // repository owner, e.g. "icholy"
     Repo      string // repository name, e.g. "xagent"
     CommentID int64  // ID of the issue comment
 }
 
-type GitHubPullRequestReviewComment struct {
+type GitHubPullRequestReviewCommentReaction struct {
     Owner     string
     Repo      string
     CommentID int64 // ID of the PR review comment
 }
 ```
 
-These are **value types**, not pointers, so an unpopulated `Meta` is a clean nil interface — a reactor's type switch falls through to its `default` (no-op) without the typed-nil-pointer pitfall.
+`Reaction` is a value type held in an `any`, mirroring the existing `Meta any` idiom — an unpopulated target is a clean nil interface, so the reactor's nil check and type switch fall through to a no-op without the typed-nil-pointer pitfall.
 
-The Atlassian path needs no change — Jira reactions are a separate follow-up (see Trade-offs), and would slot in as another `Meta` type plus a `case` in a Jira reactor.
+Populate it in `extractGitHubWebhookEvent`, alongside the `Author` that's already set. Only the two comment events get a target.
 
-### 2. Populate it in the webhook handler
-
-`extractGitHubWebhookEvent` (`internal/server/webhookserver/github.go:145`) currently extracts only the URL, description, and user. Extend its return struct with a `meta any` field, and copy it into `InputEvent.Meta` in `ServeHTTP`:
+For `*github.IssueCommentEvent`:
 
 ```go
-// internal/server/webhookserver/github.go
-
-type githubWebhookEvent struct {
-    description    string
-    data           string
-    url            string
-    githubUserID   int64
-    githubUsername string
-
-    // meta is optional source-specific metadata, copied into InputEvent.Meta.
-    // nil if the event has no reactable comment.
-    meta any
-}
-```
-
-For `IssueCommentEvent`:
-
-```go
-meta: eventrouter.GitHubIssueComment{
-    Owner:     event.GetRepo().GetOwner().GetLogin(),
-    Repo:      event.GetRepo().GetName(),
-    CommentID: event.GetComment().GetID(),
+Meta: GitHubMeta{
+    Author: GithubUser{ID: *event.Comment.User.ID, Username: login},
+    Reaction: GitHubIssueCommentReaction{
+        Owner:     event.GetRepo().GetOwner().GetLogin(),
+        Repo:      event.GetRepo().GetName(),
+        CommentID: event.GetComment().GetID(),
+    },
 },
 ```
 
-For `PullRequestReviewCommentEvent`:
+For `*github.PullRequestReviewCommentEvent`:
 
 ```go
-meta: eventrouter.GitHubPullRequestReviewComment{
-    Owner:     event.GetRepo().GetOwner().GetLogin(),
-    Repo:      event.GetRepo().GetName(),
-    CommentID: event.GetComment().GetID(),
+Meta: GitHubMeta{
+    Author: GithubUser{ID: *event.Comment.User.ID, Username: login},
+    Reaction: GitHubPullRequestReviewCommentReaction{
+        Owner:     event.GetRepo().GetOwner().GetLogin(),
+        Repo:      event.GetRepo().GetName(),
+        CommentID: event.GetComment().GetID(),
+    },
 },
 ```
 
-For `PullRequestReviewEvent`: leave `meta` nil. GitHub's REST API has no reaction endpoint for review *submissions* (only for the individual review *comments*, which arrive on the separate `pull_request_review_comment` webhook).
+For `*github.PullRequestReviewEvent` (submission) and the `assigned` `*github.IssuesEvent` / `*github.PullRequestEvent`: leave `Reaction` nil — keep setting `Author` exactly as today. GitHub's REST API has no reaction endpoint for review *submissions* (only for the individual review *comments*, which arrive on the separate `pull_request_review_comment` webhook), and assignments have no reactable comment.
 
-### 3. `Reactor` hooks on the Router
+### 2. Generic `Reactor` hook on the Router
 
-Define a minimal interface in the eventrouter package so the Router stays source-agnostic, and register a slice of them. Each reactor is handed the full routing outcome and must be a **no-op if it doesn't recognize the event** — so reactors compose freely (a GitHub reactor and a future Jira reactor can both be registered; each ignores outcomes whose `Meta` isn't theirs):
+Define a minimal interface and outcome struct in `eventrouter` so the Router stays source-agnostic (no GitHub imports), and register a slice of reactors. Each reactor is handed the full routing outcome and must be a **no-op if it doesn't recognize the event** — so reactors compose freely (a GitHub reactor and a future Jira reactor can both be registered; each ignores outcomes whose `Meta` isn't theirs):
 
 ```go
 // internal/eventrouter/eventrouter.go
@@ -116,13 +103,13 @@ type Reactor interface {
 }
 
 // RouteOutcome describes what the Router did with an InputEvent for one org.
-// It gives reactors the routing context — which org matched, the persisted
-// event, and which tasks the event was attached to — not just the raw input.
+// It gives reactors the routing context — which org matched, the rule that
+// matched, and which tasks were woken or created — not just the raw input.
 type RouteOutcome struct {
-    Input   InputEvent   // the routed event, including its Meta
-    OrgID   int64        // the org whose routing rules matched
-    Event   *model.Event // the persisted event row
-    TaskIDs []int64       // tasks the event was attached to (may be empty)
+    Input   InputEvent         // the routed event, including its Meta
+    OrgID   int64              // the org whose routing rule matched
+    Rule    *model.RoutingRule // the rule that matched
+    TaskIDs []int64            // tasks woken or created for this event
 }
 
 type Router struct {
@@ -133,29 +120,15 @@ type Router struct {
 }
 ```
 
-In `Router.Route()`, after the rule match passes and the event is attached to its tasks, fire every reactor in the background with the outcome:
+`eventrouter` already imports `model`, so `RouteOutcome` needs no new import and carries nothing GitHub-specific.
+
+In `Route()`, the matched rule per org is already computed (the `matched` map) and each org is then either woken or has a task created. Collect the woken-or-created task IDs per org and fan the outcome out to every reactor:
 
 ```go
-// internal/eventrouter/eventrouter.go (Route)
+// internal/eventrouter/eventrouter.go (Route, per matched org)
 
-if !slices.ContainsFunc(rules, input.MatchRule) {
-    continue
-}
-event := &model.Event{ ... }
-if err := r.Store.CreateEvent(ctx, nil, event); err != nil {
-    r.Log.Error("failed to create event", "org_id", orgID, "error", err)
-    continue
-}
-var taskIDs []int64
-for _, link := range links {
-    if err := r.attach(ctx, link.TaskID, event); err != nil {
-        r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
-        continue
-    }
-    taskIDs = append(taskIDs, link.TaskID)
-    n++
-}
-r.react(ctx, RouteOutcome{Input: input, OrgID: orgID, Event: event, TaskIDs: taskIDs})
+// ... after the wake/create handling for this org, with taskIDs collected ...
+r.react(ctx, RouteOutcome{Input: input, OrgID: orgID, Rule: rule, TaskIDs: taskIDs})
 ```
 
 ```go
@@ -168,9 +141,11 @@ func (r *Router) react(ctx context.Context, outcome RouteOutcome) {
 }
 ```
 
-`context.WithoutCancel` keeps reactors alive after the webhook handler returns, since the source round-trip should not block the webhook response. Each reactor is responsible for its own timeout (a few seconds). A nil/empty `Reactors` slice simply means the `for` loop does nothing — no explicit guard needed.
+`context.WithoutCancel` keeps reactors alive after the webhook handler returns, since the source round-trip should not block the webhook response. Each reactor owns its own timeout (a few seconds). A nil/empty `Reactors` slice simply means the `for` loop does nothing — no explicit guard needed, and the Atlassian router gets reactions-free for free.
 
-### 4. Concrete reactor in `githubserver`
+### 3. Concrete reactor in `githubserver`
+
+`githubserver` already imports `webhookserver` (it constructs `webhookserver.GitHubHandler` in `WebhookHandler`), so the reactor can read the concrete `webhookserver.GitHubMeta` and its reaction-target types with no import cycle:
 
 ```go
 // internal/server/githubserver/reactor.go
@@ -184,24 +159,26 @@ type Reactor struct {
 
 func (r *Reactor) React(ctx context.Context, outcome eventrouter.RouteOutcome) {
     // Recognize the event first, before any work (token mint, API call). Return
-    // for anything this reactor doesn't own: a nil Meta (event with no reactable
-    // comment) or a foreign type (e.g. a future Jira Meta). Because every
-    // registered reactor sees every outcome, this no-op-on-unrecognized rule is
-    // what lets reactors compose.
-    var react func(ctx context.Context, client *github.Client, content string) error
-    switch m := outcome.Input.Meta.(type) {
-    case eventrouter.GitHubIssueComment:
+    // for anything this reactor doesn't own: a non-GitHub Meta, a GitHub event
+    // with no reactable comment (nil Reaction), or a target type we don't handle.
+    meta, ok := outcome.Input.Meta.(webhookserver.GitHubMeta)
+    if !ok || meta.Reaction == nil {
+        return
+    }
+    var react func(ctx context.Context, c *github.Client, content string) error
+    switch t := meta.Reaction.(type) {
+    case webhookserver.GitHubIssueCommentReaction:
         react = func(ctx context.Context, c *github.Client, content string) error {
-            _, _, err := c.Reactions.CreateIssueCommentReaction(ctx, m.Owner, m.Repo, m.CommentID, content)
+            _, _, err := c.Reactions.CreateIssueCommentReaction(ctx, t.Owner, t.Repo, t.CommentID, content)
             return err
         }
-    case eventrouter.GitHubPullRequestReviewComment:
+    case webhookserver.GitHubPullRequestReviewCommentReaction:
         react = func(ctx context.Context, c *github.Client, content string) error {
-            _, _, err := c.Reactions.CreatePullRequestCommentReaction(ctx, m.Owner, m.Repo, m.CommentID, content)
+            _, _, err := c.Reactions.CreatePullRequestCommentReaction(ctx, t.Owner, t.Repo, t.CommentID, content)
             return err
         }
     default:
-        return // not ours — no-op
+        return // unknown target type — no-op
     }
 
     ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -229,11 +206,11 @@ func (r *Reactor) React(ctx context.Context, outcome eventrouter.RouteOutcome) {
 }
 ```
 
-GitHub's reaction endpoint is idempotent at the user level — a given GitHub user (the App's bot identity) can only have one of each reaction type on a given comment, so duplicate calls are harmless (the API returns the existing reaction with 200).
+GitHub's reaction endpoint is idempotent at the user level — a given GitHub user (the App's bot identity) can only have one of each reaction type on a given comment, so duplicate calls (e.g. an `edited` redelivery) are harmless: the API returns the existing reaction with 200.
 
-### 5. Wiring
+### 4. Wiring
 
-`githubserver.Server.WebhookHandler()` (`internal/server/githubserver/githubserver.go:150`) constructs the Router today. Inject the reactor here:
+`githubserver.Server.WebhookHandler()` constructs the Router today as `&eventrouter.Router{Log, Store, Publisher}`. Register the reactor on it:
 
 ```go
 func (s *Server) WebhookHandler() http.Handler {
@@ -252,44 +229,41 @@ func (s *Server) WebhookHandler() http.Handler {
 }
 ```
 
-The Atlassian webhook router just constructs its `Router` with an empty `Reactors` slice (or omits it), and the `for` loop in `react` is a no-op there. Registering reactors as a slice means another source's reactor can be appended later without changing the `Router` type.
+Registering reactors as a slice means another source's reactor can be appended later without changing the `Router` type, and an empty slice is a clean no-op.
 
-### 6. Configuration
+### 5. Configuration
 
 v1: hardcoded `"eyes"`. Two natural extension points if we want to customize later:
 
-- **Per-org**: add a `reaction_emoji` column to `orgs` and read it in the Reactor. The `Reactor.Content` field accommodates this without API change.
-- **Per-rule**: add an optional `Emoji string` field on `model.RoutingRule` and pass the matched rule (not just the event) to the reactor.
+- **Per-org**: add a `reaction_emoji` column to `orgs` and read it in the Reactor. The `Reactor.Content` field accommodates this without an API change.
+- **Per-rule**: `RouteOutcome` already carries the matched `*model.RoutingRule`, so a per-rule `Emoji string` field could be honored by the reactor with no signature change.
 
 We don't need either for v1 — start simple and add config if users ask.
 
-### 7. Tests
+### 6. Tests
 
-- `eventrouter_test.go`: register two fake `Reactor`s that record the `RouteOutcome`s they receive; assert both fire once per matched org with the right `OrgID`, `Event`, and `TaskIDs`, and that neither fires when no rule matches.
-- `webhookserver/github_test.go`: assert `extractGitHubWebhookEvent` sets `meta` to a `GitHubIssueComment` for issue comments and a `GitHubPullRequestReviewComment` for PR review comments, and leaves it nil for review submissions.
-- `githubserver/reactor_test.go`: stub the GitHub API with `httptest.Server` and verify the correct endpoint is hit for each `Meta` type. Verify that a nil `Meta`, a foreign `Meta` type, and an org with no installation ID are each no-ops (and mint no token).
+- `eventrouter_test.go`: register two fake `Reactor`s that record the `RouteOutcome`s they receive; assert both fire once per matched org with the right `OrgID`, `Rule`, and `TaskIDs`, and that neither fires when no rule matches.
+- `webhookserver/github_test.go`: assert `extractGitHubWebhookEvent` sets `Meta.Reaction` to a `GitHubIssueCommentReaction` for issue comments and a `GitHubPullRequestReviewCommentReaction` for PR review comments, and leaves it nil for review submissions and assignments. (The existing action-filtering test from PR #774 already covers `deleted` comments being dropped before routing.)
+- `githubserver/reactor_test.go`: stub the GitHub API with `httptest.Server` and verify the correct endpoint is hit for each reaction-target type. Verify that a non-GitHub `Meta`, a nil `Reaction`, an unknown target type, and an org with no installation ID are each no-ops (and the last few mint no token).
 
-### 8. Implementation order
+### 7. Implementation order
 
-1. Add the `Meta` types (`GitHubIssueComment`, `GitHubPullRequestReviewComment`), the `Meta any` field, and the `Reactor` interface + `RouteOutcome` struct to `eventrouter`.
-2. Add the `Reactors []Reactor` field to `Router`, the `react` fan-out helper, and the call in `Route` (capturing `TaskIDs`).
-3. Extend the webhook extractor to populate `meta`.
-4. Implement `githubserver.Reactor` and register it in `WebhookHandler()`.
-5. Tests.
+1. Add the `Reaction` field and the two reaction-target types to `webhookserver.GitHubMeta`; populate them in `extractGitHubWebhookEvent` for the two comment events.
+2. Add the `Reactor` interface, `RouteOutcome` struct, and `Reactors []Reactor` field to `eventrouter`, plus the `react` fan-out and the call in `Route` (collecting `TaskIDs`).
+3. Implement `githubserver.Reactor` and register it in `WebhookHandler()`.
+4. Tests.
 
 No migrations, no proto changes, no UI changes.
 
 ## Trade-offs
 
-**React on match, not after task start.** The whole point is fast feedback. Reactors fire the moment routing matches and the event is attached — within a webhook round-trip, rather than after the runner schedules a container. The outcome carries `TaskIDs`, so a reactor *could* choose to react only when tasks actually started, but the v1 GitHub reactor reacts on match regardless: a 👀 means "matched and accepted", and even if every attach failed the reaction is still a true signal that the bot saw the comment. (See Open Question 3.)
+**Reaction target lives in `webhookserver`, not `eventrouter`.** The original draft put `GitHubIssueComment`/`GitHubPullRequestReviewComment` in `eventrouter`; that was the main objection. With PR #775, the right home is obvious: `webhookserver` already owns `GitHubMeta` (the GitHub-native metadata bag) and is where the webhook is parsed, so the reaction target is just another field on it. `eventrouter` stays free of GitHub types — it only gains the generic `Reactor`/`RouteOutcome`. `githubserver` already depends on `webhookserver`, so the concrete reactor reads those types with no import cycle.
 
-**Pass a `RouteOutcome`, not just the input.** The reactor gets the org that matched, the persisted event, and the attached task IDs — not only the raw `InputEvent`. This keeps the reactor from re-deriving routing context the Router already computed, and leaves room for richer reactor behavior later (e.g. reflect task state in the reaction) without changing the interface.
+**React on match, not after task start.** The whole point is fast feedback. Reactors fire the moment routing matches and wakes/creates the task — within a webhook round-trip, rather than after the runner schedules a container. The outcome carries `TaskIDs`, so a reactor *could* react only when tasks actually started, but the v1 GitHub reactor reacts on match regardless: a 👀 means "matched and accepted". (See Open Questions.)
 
-**Hook in the Router, not the webhook handler.** The webhook handler doesn't know which rules matched or which orgs the event was routed to — that's the Router's job. Putting the hook in the Router also means future event sources (e.g. another webhook handler that produces `InputEvent`s) get reactions for free as long as they populate `Meta`.
+**Pass a `RouteOutcome`, not just the input.** The reactor gets the org that matched, the matched rule, and the woken/created task IDs — not only the raw `InputEvent`. This keeps the reactor from re-deriving routing context the Router already computed, and leaves room for richer behavior later (per-rule emoji, reflecting task state) without changing the interface.
 
-**`Meta any` resolved by a type switch, not a typed field.** Rather than a GitHub-named field (`GitHub *GitHubReactionTarget`), `InputEvent` carries an opaque `Meta any` and each `Reactor` type-switches on it. This keeps `InputEvent` — and the whole `eventrouter` package — free of any source-specific shape: a Jira reactor adds its own `Meta` type and `case` without ever touching `InputEvent`. The cost is that dispatch is runtime- rather than compile-checked, but the surface is tiny (one switch per reactor with a defensive `default`), and each `Meta` type maps 1:1 to an API endpoint, so there's no discriminator/`Kind` enum to keep in sync.
-
-**A slice of reactors, each a no-op on unrecognized events.** The Router holds `[]Reactor` and invokes every one for every matched outcome; a reactor that doesn't recognize the `Meta` returns immediately (before minting any token). This composes cleanly — registering a Jira reactor alongside the GitHub one needs no dispatch logic in the Router, and an empty slice (the Atlassian router) is simply a no-op. The cost is that every reactor is invoked for every match, but the unrecognized-event check is a cheap type switch, so the overhead is negligible.
+**A slice of reactors, each a no-op on unrecognized events.** The Router holds `[]Reactor` and invokes every one for every matched outcome; a reactor that doesn't recognize the `Meta` returns immediately, before minting any token. This composes cleanly — registering a Jira reactor alongside the GitHub one needs no dispatch logic in the Router, and an empty slice (the Atlassian router) is simply a no-op. The cost is that every reactor is invoked for every match, but the recognition check is a cheap type assertion, so the overhead is negligible.
 
 **Async, fire-and-forget, one goroutine per reactor.** Source API round-trips can be hundreds of milliseconds. Calling synchronously from the webhook handler would slow webhook responses and risk timeouts, so the Router spawns a goroutine per reactor with `context.WithoutCancel`. Failures are logged but don't block routing — a missed reaction is a degraded experience, not a broken one.
 
@@ -297,16 +271,16 @@ No migrations, no proto changes, no UI changes.
 
 **Hardcoded emoji in v1.** 👀 is the most idiomatic "I see this and am working on it" reaction (used by github-actions[bot], Linear, many CI bots). Per-org or per-rule customization is easy to add later without breaking the v1 contract.
 
-**Skip PR review submissions.** GitHub's REST API supports reactions on individual review comments but not on review submissions themselves. We could fall back to a reaction on the underlying PR (a different content kind), but a 👀 on a whole PR is confusing — it would imply we noticed the PR, not the review. Better to silently skip review submissions; the individual review comments still get reactions via the `pull_request_review_comment` webhook.
+**Skip PR review submissions.** GitHub's REST API supports reactions on individual review comments but not on review submissions themselves. We could fall back to a reaction on the underlying PR (a different content kind), but a 👀 on a whole PR is confusing — it would imply we noticed the PR, not the review. Better to silently skip review submissions (leave `Reaction` nil); the individual review comments still get reactions via the `pull_request_review_comment` webhook.
 
-**Reactor interface in eventrouter.** Defining the interface in the eventrouter keeps that package free of GitHub imports. The concrete `githubserver.Reactor` carries the GitHub client and installation-token plumbing where it belongs. This mirrors the existing split between `eventrouter` (generic) and `webhookserver` (source-specific).
+**`Reaction any` resolved by a type switch.** Rather than a discriminator enum, each reaction target is its own value type and the reactor type-switches on it. Each type maps 1:1 to an API endpoint, so there's nothing to keep in sync; adding an endpoint is a new type plus a `case`. Dispatch is runtime- rather than compile-checked, but the surface is one switch with a defensive `default`.
 
 ## Open Questions
 
-1. **Should we react to atlassian/Jira matches too?** Jira issue comments support reactions via the [Atlassian REST API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/) — `POST /rest/api/3/issue/{issueIdOrKey}/comment/{id}/reactions`. With `Meta any` and a slice of reactors, this slots in cleanly: add a `JiraComment` `Meta` type, populate it in the Jira webhook extractor, and handle it with a `case` in a Jira reactor appended to the Atlassian router's `Reactors`. No change to `InputEvent`, `Router`, or the existing GitHub reactor. Worth doing in a v2 once the GitHub side is proven.
+1. **Should we react to atlassian/Jira matches too?** Jira issue comments support reactions via the [Atlassian REST API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/) — `POST /rest/api/3/issue/{issueIdOrKey}/comment/{id}/reactions`. With the generic `Reactor`/`RouteOutcome` and a slice of reactors, this slots in cleanly: give the Jira webhook its own `Meta` type carrying the comment ref, add a Jira reactor that type-switches on it, and append it to the Atlassian router's `Reactors`. No change to `InputEvent`, `Router`, `eventrouter`, or the GitHub reactor. Worth doing in a v2 once the GitHub side is proven.
 
-2. **Should the reaction get removed when the task finishes?** Some bots (e.g. github-actions) update reactions to reflect state: 👀 while running, 🎉 on success, 👎 on failure. This is appealing but adds a lot of state management: we'd need to track the reaction ID per comment, plumb task-completion events back to the reactor, and handle deletion failures. Not worth it in v1; can be added later if there's demand.
+2. **Should the reaction get removed/updated when the task finishes?** Some bots (e.g. github-actions) update reactions to reflect state: 👀 while running, 🎉 on success, 👎 on failure. Appealing, but it adds a lot of state management: we'd track the reaction ID per comment, plumb task-completion events back to the reactor, and handle deletion failures. Not worth it in v1; can be added later if there's demand.
 
-3. **What about "I matched but couldn't start the task" cases?** If `Router.attach()` fails for *all* matching tasks, we'll have reacted to a comment that produced no work. Acceptable — the reaction means "I matched", not "I succeeded". Errors are already logged and visible in xagent.
+3. **What about "I matched but couldn't start the task" cases?** If routing matches but every wake/create fails, we'll have reacted to a comment that produced no work. Acceptable — the reaction means "I matched", not "I succeeded", and errors are already logged and visible in xagent. A reactor that wanted stricter semantics could inspect `RouteOutcome.TaskIDs` and skip when empty.
 
 4. **Rate limits?** GitHub Apps get 5,000 requests/hour per installation, shared across all reads/writes. A reaction is one extra request per matched comment. At realistic comment volumes this is negligible, but worth keeping in mind if an org has a high-volume routing rule.
