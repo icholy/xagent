@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/icholy/xagent/compare/v0.22.0...v0.22.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* install postgresql-client-17 from Debian trixie main ([0437292](https://github.com/icholy/xagent/commit/043729212aaf2600762223288275d86b34ebab60))
+
 ## [0.22.0](https://github.com/icholy/xagent/compare/v0.21.0...v0.22.0) (2026-05-31)
 
 
