@@ -270,9 +270,11 @@ func (t *Task) applyRunnerEventFailed() bool {
 	}
 }
 
-// IsTerminal reports whether the task is in an end state (no further
-// transitions): completed, failed, or cancelled.
-func (t *Task) IsTerminal() bool {
+// IsDone reports whether the task has finished its run: completed, failed,
+// or cancelled. A done task can still be restarted via Start/Restart, so
+// this isn't an absorbing state — just a snapshot that the current run
+// reached an end.
+func (t *Task) IsDone() bool {
 	return t.Status == TaskStatusCompleted ||
 		t.Status == TaskStatusFailed ||
 		t.Status == TaskStatusCancelled
@@ -283,7 +285,7 @@ func (t *Task) CanArchive() bool {
 	if t.Archived || t.Command != TaskCommandNone {
 		return false
 	}
-	return t.IsTerminal()
+	return t.IsDone()
 }
 
 // Archive marks the task as archived.

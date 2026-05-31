@@ -376,7 +376,7 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 	}
 }
 
-func TestTask_IsTerminal(t *testing.T) {
+func TestTask_IsDone(t *testing.T) {
 	tests := []struct {
 		status TaskStatus
 		want   bool
@@ -392,7 +392,7 @@ func TestTask_IsTerminal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.status.String(), func(t *testing.T) {
 			task := Task{Status: tt.status}
-			assert.Equal(t, task.IsTerminal(), tt.want)
+			assert.Equal(t, task.IsDone(), tt.want)
 		})
 	}
 }
