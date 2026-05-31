@@ -99,13 +99,12 @@ Both the extractor and the callback live in `githubserver`, so they share these 
 // internal/eventrouter/eventrouter.go
 
 // RouteOutcome describes what the Router did with an InputEvent for one org.
-// It gives the callback the routing context — which org matched, the rule that
-// matched, and which tasks were woken or created — not just the raw input.
+// It gives the callback the routing context — which org matched and the rule
+// that matched — not just the raw input.
 type RouteOutcome struct {
-    Input   InputEvent         // the routed event, including its Meta
-    OrgID   int64              // the org whose routing rule matched
-    Rule    *model.RoutingRule // the rule that matched
-    TaskIDs []int64            // tasks woken or created for this event
+    Input InputEvent         // the routed event, including its Meta
+    OrgID int64              // the org whose routing rule matched
+    Rule  *model.RoutingRule // the rule that matched
 }
 
 type Router struct {
@@ -122,16 +121,12 @@ type Router struct {
 
 `eventrouter` already imports `model`, so `RouteOutcome` needs no new import and carries nothing source-specific.
 
-In `Route()`, the matched rule per org is already computed (the `matched` map). The per-org loop then either **wakes** subscribed tasks or **creates** a task. Two real integration points to call out, both verified against the current `Route()`:
-
-1. **Populating `TaskIDs` on the create path** requires `r.create(...)` to return the new task ID — it currently returns only `error`. Change it to `(int64, error)`. The wake path can collect `link.TaskID`s directly as it attaches.
-2. **The callback must be placed past the loop's early `continue`s.** Today the wake branch ends in a `continue` and the create branch has its own `continue`s, so a single call at the loop bottom wouldn't fire for the wake path. Restructure the branches into `if / else if / else` so one `OnRouteOutcome` call at the end of the iteration covers both:
+In `Route()`, the matched rule per org is already computed (the `matched` map). The per-org loop then either **wakes** subscribed tasks or **creates** a task. One real integration point to call out, verified against the current `Route()`: **the callback must be placed past the loop's early `continue`s.** Today the wake branch ends in a `continue` and the create branch has its own `continue`s, so a single call at the loop bottom wouldn't fire for the wake path. Restructure the branches into `if / else if / else` so one `OnRouteOutcome` call at the end of the iteration covers both the wake and create paths (and is skipped when the org matched a rule but had nothing to do):
 
 ```go
 // internal/eventrouter/eventrouter.go (Route, per matched org)
 
 for orgID, rule := range matched {
-    var taskIDs []int64
     if links := linksByOrg[orgID]; len(links) > 0 {
         event := &model.Event{Description: input.Description, Data: input.Data, URL: input.URL, OrgID: orgID}
         if err := r.Store.CreateEvent(ctx, nil, event); err != nil {
@@ -148,27 +143,26 @@ for orgID, rule := range matched {
                 r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
                 continue
             }
-            taskIDs = append(taskIDs, link.TaskID)
             n++
         }
     } else if rule.Create != nil {
-        taskID, err := r.create(ctx, input, orgID, rule) // now returns (int64, error)
-        if err != nil {
+        if err := r.create(ctx, input, orgID, rule); err != nil {
             r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
             continue
         }
-        taskIDs = append(taskIDs, taskID)
         n++
     } else {
         continue // matched a rule but no subscribed link and no create action
     }
     if r.OnRouteOutcome != nil {
         go r.OnRouteOutcome(context.WithoutCancel(ctx), RouteOutcome{
-            Input: input, OrgID: orgID, Rule: rule, TaskIDs: taskIDs,
+            Input: input, OrgID: orgID, Rule: rule,
         })
     }
 }
 ```
+
+`r.create` keeps its current `error`-only signature — without `TaskIDs` to populate, the outcome doesn't need the created task's ID.
 
 `context.WithoutCancel` keeps the callback alive after the webhook handler returns, since the source round-trip should not block the webhook response. The callback owns its own timeout (a few seconds). A nil `OnRouteOutcome` is a no-op, so the Atlassian router (which leaves it unset) is unaffected.
 
@@ -252,13 +246,13 @@ Start simple and add config if users ask.
 ### 7. Tests
 
 - `githubserver/webhook_test.go`: assert `toInputEvent` populates `Owner`/`Repo`/`CommentID` (and the right `Type`) for issue comments and PR review comments, and leaves the comment coordinates zero for review submissions and assignments.
-- `eventrouter_test.go`: set a fake `OnRouteOutcome` that records the `RouteOutcome`s it receives; assert it fires once per matched org with the right `OrgID`, `Rule`, and `TaskIDs` on both the wake and create paths, and not at all when no rule matches. This also covers the `create` → `(int64, error)` change (the create-path `TaskIDs` must be non-empty).
+- `eventrouter_test.go`: set a fake `OnRouteOutcome` that records the `RouteOutcome`s it receives; assert it fires once per matched org with the right `OrgID` and `Rule` on both the wake and create paths, and not at all when no rule matches.
 - `githubserver`: test `reactToOutcome` against a stubbed GitHub API (`httptest.Server`); verify the issue-comment vs review-comment endpoint is chosen by `Type`, and that a non-GitHub `Meta`, a zero `CommentID`, a non-reactable `Type`, and an org with no installation ID are each no-ops.
 
 ### 8. Implementation order
 
 1. Add `Owner`/`Repo`/`CommentID` to `githubserver.GitHubMeta` and the event-type constants; populate the coordinates in `toInputEvent` for the two comment events.
-2. Add `RouteOutcome` and the `OnRouteOutcome` field to `eventrouter.Router`; change `create` to return `(int64, error)`; restructure the per-org loop and add the fire-and-forget call.
+2. Add `RouteOutcome` and the `OnRouteOutcome` field to `eventrouter.Router`; restructure the per-org loop and add the fire-and-forget call.
 3. Implement `Server.reactToOutcome` and assign it in `WebhookHandler()`.
 4. Tests.
 
@@ -274,9 +268,9 @@ No migrations, no proto changes, no UI changes.
 
 **Dispatch on `InputEvent.Type`, not a discriminator field.** The event type already distinguishes issue comments from PR review comments, and the callback needs exactly that distinction to pick the endpoint. Reusing `Type` avoids a redundant field that could drift out of sync. The cost is that the callback now depends on those type strings, which is why they're promoted to named constants shared by extractor and callback.
 
-**React on match, not after task start.** The whole point is fast feedback. The callback fires the moment routing matches and wakes/creates the task — within a webhook round-trip, rather than after the runner schedules a container. `TaskIDs` is included, so a stricter consumer *could* react only when tasks actually started, but v1 reacts on match regardless: a 👀 means "matched and accepted". (See Open Questions.)
+**React on match, not after task start.** The whole point is fast feedback. The callback fires the moment routing matches and wakes/creates the task — within a webhook round-trip, rather than after the runner schedules a container. v1 reacts on match regardless of what happens downstream: a 👀 means "matched and accepted".
 
-**Pass a `RouteOutcome`, not just the input.** The callback gets the org that matched, the matched rule, and the woken/created task IDs — not only the raw `InputEvent`. This keeps it from re-deriving routing context the Router already computed and leaves room for richer behavior later (per-rule emoji, reflecting task state) without changing the signature.
+**Pass a `RouteOutcome`, not just the input.** The callback gets the org that matched and the matched rule — not only the raw `InputEvent`. This keeps it from re-deriving routing context the Router already computed and leaves room for richer behavior later (e.g. per-rule emoji) without changing the signature.
 
 **Async, fire-and-forget.** Source API round-trips can be hundreds of milliseconds. Calling synchronously from the webhook handler would slow webhook responses and risk timeouts, so the Router invokes `OnRouteOutcome` in a goroutine with `context.WithoutCancel`. Failures are logged but don't block routing — a missed reaction is a degraded experience, not a broken one.
 
@@ -292,6 +286,6 @@ No migrations, no proto changes, no UI changes.
 
 2. **Should the reaction get removed/updated when the task finishes?** Some bots (e.g. github-actions) update reactions to reflect state: 👀 while running, 🎉 on success, 👎 on failure. Appealing, but it adds a lot of state management: we'd track the reaction ID per comment, plumb task-completion events back to the server, and handle deletion failures. Not worth it in v1; can be added later if there's demand.
 
-3. **What about "I matched but couldn't start the task" cases?** If routing matches but every wake/create fails, we'll have reacted to a comment that produced no work. Acceptable — the reaction means "I matched", not "I succeeded", and errors are already logged and visible in xagent. A stricter callback could inspect `RouteOutcome.TaskIDs` and skip when empty.
+3. **What about "I matched but couldn't start the task" cases?** The callback fires once the org's wake/create branch runs to the bottom of the iteration — skipped only when the branch hits an early error `continue` (event creation failed, `create` failed) or the org matched a rule with no subscribed link and no create action. A per-task attach failure inside the wake loop is logged but still lets the reaction fire. So a reaction means "I matched and routing acted on it", not "every task started successfully" — acceptable, and errors are already logged and visible in xagent.
 
 4. **Rate limits?** GitHub Apps get 5,000 requests/hour per installation, shared across all reads/writes. A reaction is one extra request per matched comment. At realistic comment volumes this is negligible, but worth keeping in mind if an org has a high-volume routing rule.
