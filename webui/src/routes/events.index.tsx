@@ -6,7 +6,7 @@ import {
   listEvents,
   setRoutingRules,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { Event } from '@/gen/xagent/v1/xagent_pb'
+import type { Event, RoutingRule } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -161,6 +161,18 @@ function EventRow({ event }: { event: Event }) {
   )
 }
 
+// Compact labels for a rule's matchers, shown as badges in the routing rules
+// list. The url prefix value is omitted because URLs are too long to fit on a
+// single line.
+function ruleMatchBadges(rule: RoutingRule): string[] {
+  const labels: string[] = []
+  if (rule.urlPrefix) labels.push('urlprefix')
+  if (rule.prefix) labels.push(`prefix:${rule.prefix}`)
+  if (rule.mention) labels.push(`mention:${rule.mention}`)
+  if (rule.assignee) labels.push(`assignee:${rule.assignee}`)
+  return labels
+}
+
 function RoutingRulesCard() {
   const orgId = useOrgId()
   const { data, isLoading, refetch } = useQuery(
@@ -215,84 +227,67 @@ function RoutingRulesCard() {
         ) : rules.length === 0 ? (
           <div className="text-muted-foreground text-center py-8">No routing rules configured</div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event Type</TableHead>
-                <TableHead>URL prefix</TableHead>
-                <TableHead>Prefix</TableHead>
-                <TableHead>Mention</TableHead>
-                <TableHead>Assignee</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rules.map((rule, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">
-                    {eventTypeLabel(rule.source, rule.type)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground max-w-xs truncate">
-                    {rule.urlPrefix || '-'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
-                  <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
-                  <TableCell className="text-muted-foreground">{rule.assignee || '-'}</TableCell>
-                  <TableCell>
-                    {rule.create ? (
-                      <Badge variant="secondary">Creates task</Badge>
+          <div className="space-y-2">
+            {rules.map((rule, index) => (
+              <div
+                key={index}
+                className="flex flex-wrap items-center gap-2 rounded-md border p-3 text-sm"
+              >
+                <span className="font-medium">{eventTypeLabel(rule.source, rule.type)}</span>
+                {ruleMatchBadges(rule).map((label) => (
+                  <Badge key={label} variant="outline" className="font-mono max-w-full truncate">
+                    {label}
+                  </Badge>
+                ))}
+                {rule.create ? (
+                  <Badge variant="secondary">create</Badge>
+                ) : (
+                  <span className="text-muted-foreground">wake only</span>
+                )}
+                <div className="ml-auto flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleMove(index, -1)}
+                    disabled={updateMutation.isPending || index === 0}
+                    aria-label="Move rule up"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleMove(index, 1)}
+                    disabled={updateMutation.isPending || index === rules.length - 1}
+                    aria-label="Move rule down"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                  <Link
+                    to="/routing/$index"
+                    params={{ index: String(index) }}
+                    search={{ org: orgId }}
+                  >
+                    <Button variant="outline" size="sm" disabled={updateMutation.isPending}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDelete(index)}
+                    disabled={updateMutation.isPending}
+                  >
+                    {updateMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <span className="text-muted-foreground">Wake only</span>
+                      <Trash2 className="h-4 w-4" />
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleMove(index, -1)}
-                        disabled={updateMutation.isPending || index === 0}
-                        aria-label="Move rule up"
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleMove(index, 1)}
-                        disabled={updateMutation.isPending || index === rules.length - 1}
-                        aria-label="Move rule down"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                      <Link
-                        to="/routing/$index"
-                        params={{ index: String(index) }}
-                        search={{ org: orgId }}
-                      >
-                        <Button variant="outline" size="sm" disabled={updateMutation.isPending}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(index)}
-                        disabled={updateMutation.isPending}
-                      >
-                        {updateMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
