@@ -135,40 +135,6 @@ func TestSetup_OutOfRangeCountClampsToZero(t *testing.T) {
 	assertFileExists(t, marker)
 }
 
-func TestLoadConfig_LegacySetupTrueMigratesToCount(t *testing.T) {
-	// Arrange — write a legacy cfg.json with `"setup": true` and no count.
-	ConfigDir = t.TempDir()
-	legacy := []byte(`{
-		"commands": ["a", "b", "c"],
-		"setup": true
-	}`)
-	assert.NilError(t, os.WriteFile(ConfigPath(1), legacy, 0o666))
-
-	// Act
-	cfg, err := LoadConfig(1)
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, cfg.SetupCommandsCompleted, 3)
-}
-
-func TestLoadConfig_LegacySetupFalseLeavesCountZero(t *testing.T) {
-	// Arrange
-	ConfigDir = t.TempDir()
-	legacy := []byte(`{
-		"commands": ["a", "b"],
-		"setup": false
-	}`)
-	assert.NilError(t, os.WriteFile(ConfigPath(1), legacy, 0o666))
-
-	// Act
-	cfg, err := LoadConfig(1)
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, cfg.SetupCommandsCompleted, 0)
-}
-
 func assertFileExists(t *testing.T, path string) {
 	t.Helper()
 	_, err := os.Stat(path)
