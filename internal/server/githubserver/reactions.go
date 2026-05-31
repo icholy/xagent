@@ -6,10 +6,6 @@ import (
 	"github.com/icholy/xagent/internal/eventrouter"
 )
 
-// reactionContent is the emoji added to a matched comment. "eyes" (👀) is the
-// idiomatic "I see this and am working on it" acknowledgement.
-const reactionContent = "eyes"
-
 // react adds the 👀 reaction to the comment that triggered the outcome. It is a
 // plain synchronous function: it does the work and returns an error. It owns no
 // concurrency or lifetime policy — the WebhookHandler glue runs it in a
@@ -32,11 +28,13 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 	// installation transport — no manual token mint or client construction here.
 	client := s.tokens.Client(org.GitHubInstallationID)
 
+	// "eyes" (👀) is the idiomatic "I see this and am working on it" ack.
+	const content = "eyes"
 	switch outcome.Input.Type {
 	case EventTypeIssueComment:
-		_, _, err = client.Reactions.CreateIssueCommentReaction(ctx, meta.Owner, meta.Repo, meta.CommentID, reactionContent)
+		_, _, err = client.Reactions.CreateIssueCommentReaction(ctx, meta.Owner, meta.Repo, meta.CommentID, content)
 	case EventTypePullRequestReviewComment:
-		_, _, err = client.Reactions.CreatePullRequestCommentReaction(ctx, meta.Owner, meta.Repo, meta.CommentID, reactionContent)
+		_, _, err = client.Reactions.CreatePullRequestCommentReaction(ctx, meta.Owner, meta.Repo, meta.CommentID, content)
 	default:
 		return nil
 	}
