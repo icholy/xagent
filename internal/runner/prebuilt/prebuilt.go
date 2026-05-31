@@ -85,9 +85,13 @@ func Download(ctx context.Context, repo string) error {
 	if !ok {
 		return fmt.Errorf("invalid github-repo format, expected owner/repo: %s", repo)
 	}
-	client := github.NewClient(nil)
+	var opts []github.ClientOptionsFunc
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		client = client.WithAuthToken(token)
+		opts = append(opts, github.WithAuthToken(token))
+	}
+	client, err := github.NewClient(opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create github client: %w", err)
 	}
 	release, _, err := client.Repositories.GetLatestRelease(ctx, owner, repoName)
 	if err != nil {

@@ -113,5 +113,5 @@ func (c *AppTokenCache) Client(installationID int64) (*github.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return github.NewClient(&http.Client{Transport: t}), nil
+	return github.NewClient(github.WithHTTPClient(&http.Client{Transport: t}))
 }

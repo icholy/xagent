@@ -139,7 +139,12 @@ func (s *Server) OAuthLink() *oauthlink.Handler {
 				http.Error(w, "this operation requires a user identity", http.StatusForbidden)
 				return
 			}
-			ghClient := github.NewClient(nil).WithAuthToken(token.AccessToken)
+			ghClient, err := github.NewClient(github.WithAuthToken(token.AccessToken))
+			if err != nil {
+				s.log.Error("failed to create GitHub client", "error", err)
+				http.Error(w, "failed to create GitHub client", http.StatusInternalServerError)
+				return
+			}
 			ghUser, _, err := ghClient.Users.Get(r.Context(), "")
 			if err != nil {
 				s.log.Error("failed to fetch GitHub user", "error", err)
