@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.24.0](https://github.com/icholy/xagent/compare/v0.23.1...v0.24.0) (2026-05-31)
+
+
+### Features
+
+* **githubserver:** react to issue and PR assignment events ([#816](https://github.com/icholy/xagent/issues/816)) ([fb7ad79](https://github.com/icholy/xagent/commit/fb7ad79d2e94fa62f0ff315cf72b54d22abab160)), closes [#811](https://github.com/icholy/xagent/issues/811)
+
+
+### Bug Fixes
+
+* **eventrouter:** custom routing-rule prompt replaces default preamble ([#823](https://github.com/icholy/xagent/issues/823)) ([6b15a2d](https://github.com/icholy/xagent/commit/6b15a2d89225cd3b86a52d99391dda70a193a0f1))
+* install postgresql-client-18 to match the v18 server ([#819](https://github.com/icholy/xagent/issues/819)) ([442cc51](https://github.com/icholy/xagent/commit/442cc51e81ef9e090ffd4972bfdb7acc50a432aa))
+* use single-line inline table for dbmate task env ([#812](https://github.com/icholy/xagent/issues/812)) ([7b3a31a](https://github.com/icholy/xagent/commit/7b3a31ab29ec3f8af6fdded7f3c59f18c5abade5))
+* **webui:** make routing rules list compact on small screens ([#820](https://github.com/icholy/xagent/issues/820)) ([addb199](https://github.com/icholy/xagent/commit/addb19936c09abdebc7fac4cefe84cf948b47460))
+
+
+### Miscellaneous
+
+* **deps:** update dependency flyctl to v0.4.54 ([#814](https://github.com/icholy/xagent/issues/814)) ([5797645](https://github.com/icholy/xagent/commit/5797645b923c65e5820692cc7d8c12b47832fca8))
+* **githubx:** return *http.Client from AppTokenCache ([#828](https://github.com/icholy/xagent/issues/828)) ([973d321](https://github.com/icholy/xagent/commit/973d32105b48b2f7112c06c54f309bab4474a715))
+* move mcpswap package under internal/x/ ([#815](https://github.com/icholy/xagent/issues/815)) ([b87af55](https://github.com/icholy/xagent/commit/b87af55d1acd303b670ce35f18f211139a95bc25))
+
 ## [0.23.1](https://github.com/icholy/xagent/compare/v0.23.0...v0.23.1) (2026-05-31)
 
 
