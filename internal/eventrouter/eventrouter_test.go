@@ -923,6 +923,224 @@ func TestRouteAssignmentWrongAssigneeIsNoOp(t *testing.T) {
 	assert.Equal(t, len(tasks), 0)
 }
 
+func TestRouteOnRouteOutcomeFiresOnCreate(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a create-rule with no subscribed link — the create branch runs.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	rule := model.RoutingRule{
+		Source: "github",
+		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+	}
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{rule}))
+
+	var outcomes []RouteOutcome
+	r := &Router{
+		Log:   slog.Default(),
+		Store: s,
+		OnRouteOutcome: func(_ context.Context, o RouteOutcome) {
+			outcomes = append(outcomes, o)
+		},
+	}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "hello",
+		URL:    url,
+		UserID: org.UserID,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+
+	assert.Equal(t, len(outcomes), 1)
+	got := outcomes[0]
+	assert.Equal(t, got.OrgID, org.OrgID)
+	assert.Equal(t, got.Created, true)
+	assert.Equal(t, got.Rule.Source, "github")
+	assert.Assert(t, got.Rule.Create != nil)
+	assert.DeepEqual(t, got.TaskIDs, []int64{tasks[0].ID})
+	assert.Equal(t, got.Input.URL, url)
+}
+
+func TestRouteOnRouteOutcomeFiresOnWake(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a subscribed link exists, so the wake branch runs.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/1"
+	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+
+	var outcomes []RouteOutcome
+	r := &Router{
+		Log:   slog.Default(),
+		Store: s,
+		OnRouteOutcome: func(_ context.Context, o RouteOutcome) {
+			outcomes = append(outcomes, o)
+		},
+	}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Data:   "xagent: fix tests",
+		URL:    url,
+		UserID: org.UserID,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	assert.Equal(t, len(outcomes), 1)
+	got := outcomes[0]
+	assert.Equal(t, got.OrgID, org.OrgID)
+	assert.Equal(t, got.Created, false)
+	assert.DeepEqual(t, got.TaskIDs, []int64{task.ID})
+}
+
+func TestRouteOnRouteOutcomeFiresOnMatchOnly(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a wake-only rule matches but there is no subscribed link at the
+	// URL and the rule has no Create action — matched, nothing done.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{Source: "github"},
+	}))
+
+	var outcomes []RouteOutcome
+	r := &Router{
+		Log:   slog.Default(),
+		Store: s,
+		OnRouteOutcome: func(_ context.Context, o RouteOutcome) {
+			outcomes = append(outcomes, o)
+		},
+	}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "no link, no create",
+		URL:    url,
+		UserID: org.UserID,
+	})
+
+	// Assert: the callback still fires, but nothing was woken or created.
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 0)
+
+	assert.Equal(t, len(outcomes), 1)
+	got := outcomes[0]
+	assert.Equal(t, got.OrgID, org.OrgID)
+	assert.Equal(t, got.Created, false)
+	assert.Equal(t, len(got.TaskIDs), 0)
+}
+
+func TestRouteOnRouteOutcomeDoesNotFireWhenNoMatch(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: the default "xagent:" prefix rule applies, but the event has no
+	// matching prefix — no rule matches, so the callback never fires.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+
+	var outcomes []RouteOutcome
+	r := &Router{
+		Log:   slog.Default(),
+		Store: s,
+		OnRouteOutcome: func(_ context.Context, o RouteOutcome) {
+			outcomes = append(outcomes, o)
+		},
+	}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Data:   "just a regular comment",
+		URL:    url,
+		UserID: org.UserID,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
+	assert.Equal(t, len(outcomes), 0)
+}
+
+func TestRouteOnRouteOutcomeFiresOncePerMatchedOrg(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: user in two orgs, both with a subscribed link at the URL.
+	s := teststore.New(t)
+	orgA := teststore.CreateOrg(t, s, nil)
+	orgB := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/1"
+	taskA := teststore.CreateTask(t, s, orgA, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	taskB := teststore.CreateTask(t, s, orgB, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	assert.NilError(t, s.AddOrgMember(t.Context(), nil, &model.OrgMember{
+		OrgID:  orgB.OrgID,
+		UserID: orgA.UserID,
+		Role:   "member",
+	}))
+
+	byOrg := map[int64]RouteOutcome{}
+	r := &Router{
+		Log:   slog.Default(),
+		Store: s,
+		OnRouteOutcome: func(_ context.Context, o RouteOutcome) {
+			byOrg[o.OrgID] = o
+		},
+	}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Data:   "xagent: do something",
+		URL:    url,
+		UserID: orgA.UserID,
+	})
+
+	// Assert: fired once per matched org with the right woken task.
+	assert.NilError(t, err)
+	assert.Equal(t, n, 2)
+	assert.Equal(t, len(byOrg), 2)
+	assert.DeepEqual(t, byOrg[orgA.OrgID].TaskIDs, []int64{taskA.ID})
+	assert.DeepEqual(t, byOrg[orgB.OrgID].TaskIDs, []int64{taskB.ID})
+	assert.Equal(t, byOrg[orgA.OrgID].Created, false)
+	assert.Equal(t, byOrg[orgB.OrgID].Created, false)
+}
+
 func TestRouterPublish_IgnoreSuppressesDelivery(t *testing.T) {
 	t.Parallel()
 

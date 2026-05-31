@@ -27,11 +27,34 @@ type InputEvent struct {
 	Meta any
 }
 
+// RouteOutcome describes what the Router did with an InputEvent for one org. It
+// gives the callback the routing context — which org matched, the rule, the
+// affected tasks, and whether a task was created — so it can react differently
+// per case:
+//
+//	Created                       -> a task was created
+//	!Created && len(TaskIDs) > 0  -> existing task(s) were woken
+//	!Created && len(TaskIDs) == 0 -> matched, but nothing was created or woken
+type RouteOutcome struct {
+	Input   InputEvent         // the routed event, including its Meta
+	OrgID   int64              // the org whose routing rule matched
+	Rule    *model.RoutingRule // the rule that matched
+	TaskIDs []int64            // tasks created or woken
+	Created bool               // whether a task was created (vs woken / matched-only)
+}
+
 // Router routes events to subscribed tasks via the store.
 type Router struct {
 	Log       *slog.Logger
 	Store     *store.Store
 	Publisher pubsub.Publisher
+
+	// OnRouteOutcome, if set, is called synchronously once per matched org
+	// after routing handles that org, with the request context. The Router
+	// imposes no concurrency or lifetime policy — the callback owns that (e.g.
+	// spawning its own goroutine). Optional — nil disables it (e.g. the
+	// Atlassian router leaves it unset).
+	OnRouteOutcome func(ctx context.Context, outcome RouteOutcome)
 }
 
 // defaultRules is the fallback when an org has no custom routing rules configured.
@@ -83,6 +106,11 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	// Wake if a subscribed link exists; otherwise create if the matched rule opts in.
 	var n int
 	for orgID, rule := range matched {
+		// Built at the top, updated by whichever branch runs, passed to the
+		// callback at the end. Defaults to "matched, nothing done" (no TaskIDs,
+		// Created false).
+		outcome := RouteOutcome{Input: input, OrgID: orgID, Rule: rule}
+
 		if links := linksByOrg[orgID]; len(links) > 0 {
 			event := &model.Event{
 				Description: input.Description,
@@ -104,18 +132,25 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 					r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
 					continue
 				}
+				outcome.TaskIDs = append(outcome.TaskIDs, link.TaskID)
 				n++
 			}
-			continue
+		} else if rule.Create != nil {
+			taskID, err := r.create(ctx, input, orgID, rule)
+			if err != nil {
+				r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
+				continue
+			}
+			outcome.TaskIDs = []int64{taskID}
+			outcome.Created = true
+			n++
 		}
-		if rule.Create == nil {
-			continue
+		// else: matched a rule but no subscribed link and no create action —
+		// outcome stays empty, and we still fire the callback below.
+
+		if r.OnRouteOutcome != nil {
+			r.OnRouteOutcome(ctx, outcome)
 		}
-		if err := r.create(ctx, input, orgID, rule); err != nil {
-			r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
-			continue
-		}
-		n++
 	}
 	return n, nil
 }
@@ -198,8 +233,9 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 // subscribed link and takes the wake path. Genuinely-concurrent
 // overlapping txns can still produce duplicates — accepted as a v1
 // limitation.
-func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) error {
+func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) (int64, error) {
 	var notification model.Notification
+	var taskID int64
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		task := &model.Task{
 			Runner:    rule.Create.Runner,
@@ -219,6 +255,7 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		if err := r.Store.CreateTask(ctx, tx, task); err != nil {
 			return err
 		}
+		taskID = task.ID
 		if err := r.Store.CreateLink(ctx, tx, &model.Link{
 			TaskID:    task.ID,
 			URL:       input.URL,
@@ -250,8 +287,8 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		return tx.Commit()
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	r.publish(ctx, notification)
-	return nil
+	return taskID, nil
 }
