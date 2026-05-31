@@ -267,6 +267,28 @@ export function RoutingRuleForm({
                 Leave blank to use the event body as the task's first instruction.
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="create-archive-after">Auto-archive after</Label>
+              <Select
+                value={values.createArchiveAfter}
+                onValueChange={(v) => setValues({ ...values, createArchiveAfter: v })}
+              >
+                <SelectTrigger id="create-archive-after">
+                  <SelectValue placeholder="Never (default)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="never">Never</SelectItem>
+                  <SelectItem value="1">1 hour</SelectItem>
+                  <SelectItem value="24">24 hours</SelectItem>
+                  <SelectItem value="168">7 days</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs">
+                Once the created task reaches a terminal status, the server archives it after this
+                delay so the container is reclaimed.
+              </p>
+            </div>
           </div>
         )}
       </div>

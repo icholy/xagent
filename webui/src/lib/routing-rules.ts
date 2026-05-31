@@ -1,5 +1,6 @@
 import { create } from '@bufbuild/protobuf'
 import { type RoutingRule, RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
+import { durationFromHours, hoursFromDuration } from '@/lib/duration'
 
 export interface EventTypeOption {
   id: string
@@ -117,6 +118,9 @@ export interface RoutingRuleFormValues {
   createWorkspace: string
   createRunner: string
   createPrompt: string
+  // Whole-hours string ('' / 'never' = never) for the created task's
+  // auto-archive timeout. Matches the Create Task screen's control.
+  createArchiveAfter: string
 }
 
 export const emptyRoutingRule: RoutingRuleFormValues = {
@@ -130,6 +134,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   createWorkspace: '',
   createRunner: '',
   createPrompt: '',
+  createArchiveAfter: '',
 }
 
 export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormValues {
@@ -144,6 +149,7 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
     createPrompt: rule.create?.prompt ?? '',
+    createArchiveAfter: hoursFromDuration(rule.create?.archiveAfter),
   }
 }
 
@@ -168,6 +174,7 @@ export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
           workspace: values.createWorkspace,
           runner: values.createRunner,
           prompt: values.createPrompt,
+          archiveAfter: durationFromHours(values.createArchiveAfter),
         }
       : undefined,
   })
