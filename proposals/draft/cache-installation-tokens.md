@@ -33,30 +33,15 @@ func (t *Transport) Token(ctx context.Context) (string, error) {
 
 A freshly-constructed transport has `token == nil`, so its first `Token()` call always mints over the network. Because the transport is constructed, used once, and discarded, the cache never survives a call — **every** call mints a fresh token. The upcoming comment-reactions feature amplifies this: one mint per matched comment, fanned out across concurrent goroutines.
 
-This proposal does **not** patch that specific call site — the `CreateInstallationToken` RPC path is being reworked separately, so we don't anchor on it. Instead the root cause motivates a **reusable utility** that any GitHub-App consumer (starting with the reactions code) can use to get installation tokens without re-minting on every call: `githubx.AppTokenCache`.
-
-### Why not just retain the `ghinstallation.Transport`?
-
-The obvious fix — keep one `*ghinstallation.Transport` per installation and let it cache — has a sharp edge that disqualifies it for any consumer that *holds* the returned token (a git credential, an MCP upstream session, a token handed to a sub-process). The transport's refresh window is **hardcoded and not configurable**:
-
-```go
-func (at *accessToken) getRefreshTime() time.Time {
-    return at.ExpiresAt.Add(-time.Minute)   // ghinstallation/v2@v2.18.0, transport.go:146
-}
-func (at *accessToken) isExpired() bool {
-    return at == nil || at.getRefreshTime().Before(time.Now())
-}
-```
-
-So a cached transport will happily return a token with as little as ~1 minute of remaining life — refreshing only once it's *within* 60 seconds of expiry. A caller that takes that token and uses it a minute later is holding an expired credential. We need a configurable safety margin, and `ghinstallation` gives us no hook to set one.
-
-The utility therefore does **not** rely on the transport's internal cache. It uses a throwaway transport purely as a one-shot minting primitive (sign JWT → POST → read token+expiry), then **owns the caching and the TTL policy itself**, enforcing a configurable minimum remaining lifetime.
+The fix is to **retain** the per-installation transport so its internal token cache (and ~1h auto-refresh) is reused across calls. Rather than patch one call site, this proposal packages that as a **reusable utility** — `githubx.AppTokenCache` — that any GitHub-App consumer (starting with the reactions code) can use. It does **not** integrate with or change the existing `CreateInstallationToken` RPC, which is being reworked separately.
 
 ## Design
 
-A self-contained leaf helper in `internal/x/githubx`, alongside the existing GitHub-auth machinery (`ParsePrivateKey`, `ParseWebHook`). It imports only `ghinstallation`, `go-github`, `golang-lru`, and `singleflight` — **never** `githubserver` or `store`. Dependency direction stays `githubserver → githubx`.
+A self-contained leaf helper in `internal/x/githubx`, alongside the existing GitHub-auth machinery (`ParsePrivateKey`, `ParseWebHook`). It imports only `ghinstallation`, `go-github`, and `golang-lru` — **never** `githubserver` or `store`. Dependency direction stays `githubserver → githubx`.
 
 ### `githubx.AppTokenCache`
+
+The cache holds one `*ghinstallation.Transport` per installation ID in a bounded LRU. The transport is the unit of caching: `ghinstallation` owns token expiry/refresh inside it, so we add no token-lifetime logic of our own.
 
 ```go
 package githubx
@@ -64,42 +49,31 @@ package githubx
 import (
     "context"
     "net/http"
-    "strconv"
+    "sync"
     "time"
 
     "github.com/bradleyfalzon/ghinstallation/v2"
     "github.com/google/go-github/v68/github"
     lru "github.com/hashicorp/golang-lru/v2"
-    "golang.org/x/sync/singleflight"
 )
 
-const (
-    // DefaultAppTokenCacheSize bounds the number of cached installation tokens.
-    DefaultAppTokenCacheSize = 256
-    // DefaultAppTokenMinTTL is the minimum remaining lifetime of a returned token.
-    DefaultAppTokenMinTTL = 5 * time.Minute
-)
+// DefaultAppTokenCacheSize bounds the number of per-installation transports retained.
+const DefaultAppTokenCacheSize = 256
 
 // AppTokenCacheOptions configures an AppTokenCache. Zero values fall back to the
 // package defaults.
 type AppTokenCacheOptions struct {
-    MaxSize int           // max cached tokens; <= 0 -> DefaultAppTokenCacheSize
-    MinTTL  time.Duration // min remaining lifetime of a returned token; <= 0 -> DefaultAppTokenMinTTL
+    MaxSize int // max retained transports; <= 0 -> DefaultAppTokenCacheSize
 }
 
-// AppTokenCache issues GitHub App installation tokens, caching the token value
-// per installation (bounded LRU) and guaranteeing every returned token has at
-// least MinTTL of remaining life. It is safe for concurrent use.
+// AppTokenCache issues GitHub App installation tokens, caching one
+// auto-refreshing *ghinstallation.Transport per installation ID so repeated
+// calls reuse the cached token instead of minting a fresh one every time.
+// It is safe for concurrent use.
 type AppTokenCache struct {
-    app    *ghinstallation.AppsTransport
-    minTTL time.Duration
-    cache  *lru.Cache[int64, cachedToken]
-    group  singleflight.Group // dedupes concurrent mints, keyed by installation ID
-}
-
-type cachedToken struct {
-    token     string
-    expiresAt time.Time
+    app   *ghinstallation.AppsTransport
+    mu    sync.Mutex                                   // guards get-or-create on cache
+    cache *lru.Cache[int64, *ghinstallation.Transport] // bounded, keyed by installation ID
 }
 
 // NewAppTokenCache returns a cache backed by app (which authenticates as the
@@ -108,124 +82,76 @@ func NewAppTokenCache(app *ghinstallation.AppsTransport, opts AppTokenCacheOptio
     if opts.MaxSize <= 0 {
         opts.MaxSize = DefaultAppTokenCacheSize
     }
-    if opts.MinTTL <= 0 {
-        opts.MinTTL = DefaultAppTokenMinTTL
-    }
-    cache, err := lru.New[int64, cachedToken](opts.MaxSize)
+    cache, err := lru.New[int64, *ghinstallation.Transport](opts.MaxSize)
     if err != nil {
         return nil, err
     }
-    return &AppTokenCache{app: app, minTTL: opts.MinTTL, cache: cache}, nil
+    return &AppTokenCache{app: app, cache: cache}, nil
 }
-```
 
-### `Token` — value-cache with a MinTTL floor
-
-```go
-// Token returns a valid installation access token with at least MinTTL of
-// remaining life, minting a fresh ~1h token over the network only when the
-// cached value is absent or within MinTTL of expiry.
-func (c *AppTokenCache) Token(ctx context.Context, installationID int64) (string, time.Time, error) {
-    if tok, ok := c.fresh(installationID); ok {
-        return tok.token, tok.expiresAt, nil
+// transport returns the cached transport for an installation, creating one on
+// first use. ghinstallation.Transport caches and auto-refreshes the token, so
+// reusing the instance is what lets repeated calls skip the network mint.
+//
+// The lock is held only around the LRU lookup/insert — never across Token()'s
+// network refresh. NewFromAppsTransport does no I/O (it just allocates), so the
+// critical section is cheap.
+func (c *AppTokenCache) transport(installationID int64) *ghinstallation.Transport {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    if t, ok := c.cache.Get(installationID); ok {
+        return t
     }
-    // Mint, deduped per installation so a concurrent burst crossing the MinTTL
-    // threshold collapses to a single GitHub round-trip.
-    key := strconv.FormatInt(installationID, 10)
-    v, err, _ := c.group.Do(key, func() (any, error) {
-        // Re-check inside the flight: a just-finished winner may have filled it.
-        if tok, ok := c.fresh(installationID); ok {
-            return tok, nil
-        }
-        tok, err := c.mint(ctx, installationID)
-        if err != nil {
-            return cachedToken{}, err
-        }
-        c.cache.Add(installationID, tok)
-        return tok, nil
-    })
+    t := ghinstallation.NewFromAppsTransport(c.app, installationID)
+    c.cache.Add(installationID, t)
+    return t
+}
+
+// Token returns a valid installation access token and its expiry, minting one
+// over the network only when the cached transport's token is absent or near expiry.
+func (c *AppTokenCache) Token(ctx context.Context, installationID int64) (string, time.Time, error) {
+    t := c.transport(installationID)
+    token, err := t.Token(ctx)
     if err != nil {
         return "", time.Time{}, err
     }
-    tok := v.(cachedToken)
-    return tok.token, tok.expiresAt, nil
-}
-
-// fresh returns the cached token for an installation if it still has >= MinTTL life.
-func (c *AppTokenCache) fresh(installationID int64) (cachedToken, bool) {
-    tok, ok := c.cache.Get(installationID)
-    if !ok || time.Until(tok.expiresAt) < c.minTTL {
-        return cachedToken{}, false
-    }
-    return tok, true
-}
-
-// mint fetches a fresh installation token from GitHub. The throwaway transport
-// is used only as a one-shot minting primitive; we keep the value, not the transport.
-func (c *AppTokenCache) mint(ctx context.Context, installationID int64) (cachedToken, error) {
-    t := ghinstallation.NewFromAppsTransport(c.app, installationID)
-    token, err := t.Token(ctx)
-    if err != nil {
-        return cachedToken{}, err
-    }
     expiresAt, _, err := t.Expiry()
     if err != nil {
-        return cachedToken{}, err
+        return "", time.Time{}, err
     }
-    return cachedToken{token: token, expiresAt: expiresAt}, nil
+    return token, expiresAt, nil
 }
-```
 
-A freshly minted token has ~1h of life, comfortably above any sane `MinTTL`, so the steady state is: one mint per installation roughly every `~55m` (`1h − MinTTL`), every other call served from the value-cache.
-
-### `Client` — same value-cache behind a `*github.Client`
-
-`Client` returns a `*github.Client` whose transport pulls auth from the **same** `Token` path, so both accessors share one MinTTL value-cache — a single source of truth, no second cache.
-
-```go
-// Client returns a *github.Client authenticated as the installation. Each
-// request fetches a token via Token(), so it benefits from the same value-cache
-// and MinTTL guarantee, and auth rotates automatically as tokens expire.
+// Client returns a *github.Client authenticated as the installation, backed by
+// the cached auto-refreshing transport. The transport injects the Authorization
+// header and rotates the token automatically; no custom RoundTripper is needed.
 func (c *AppTokenCache) Client(installationID int64) *github.Client {
-    rt := &appTokenTransport{cache: c, installationID: installationID, base: http.DefaultTransport}
-    return github.NewClient(&http.Client{Transport: rt})
-}
-
-type appTokenTransport struct {
-    cache          *AppTokenCache
-    installationID int64
-    base           http.RoundTripper
-}
-
-func (t *appTokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-    token, _, err := t.cache.Token(req.Context(), t.installationID)
-    if err != nil {
-        return nil, err
-    }
-    req = req.Clone(req.Context()) // per RoundTripper contract: don't mutate the input
-    req.Header.Set("Authorization", "token "+token)
-    return t.base.RoundTrip(req)
+    return github.NewClient(&http.Client{Transport: c.transport(installationID)})
 }
 ```
 
-(`go-github/v68` is the version `githubx` already uses in `webhook.go`; `ghinstallation` internally wraps a different go-github major, which is irrelevant since the transport is a plain `http.RoundTripper`.)
+Notes:
+
+- **`Token` and `Client` share one cached transport.** Both call `transport(installationID)`, so there's a single source of truth — `Token` for consumers that need the raw token string, `Client` for server-side API calls. A `*ghinstallation.Transport` is itself an `http.RoundTripper` that injects `Authorization` and refreshes the token mid-flight, so `Client` needs no custom round-tripper.
+- **`go-github/v68`** is the version `githubx` already uses (`webhook.go`); `ghinstallation` internally wraps a different go-github major, which is irrelevant since the transport is a plain `http.RoundTripper`.
+- **No manual expiry logic.** `Token()` checks `isExpired()` (a built-in ~1-minute pre-expiry refresh window) and re-fetches transparently. We never compare `ExpiresAt` to the clock, never proactively refresh, never invalidate. The `expiresAt` we return is informational.
 
 ### Concurrency
 
-The reactions feature calls the cache from many goroutines concurrently. The design never double-mints for a single installation and never holds a lock across the network mint:
+The reactions feature calls the cache from many goroutines concurrently. The design is safe and never double-mints for a single installation:
 
-- **Read path is lock-light.** `golang-lru/v2` is internally synchronized, so `fresh()`'s `Get` is safe on its own. The hot path (cached token with `>= MinTTL` life) returns without any mint and without a coarse lock.
-- **Mint is deduped by `singleflight`, keyed by installation ID.** When a burst of goroutines for the same installation all find the cached token stale (or absent), exactly one executes the mint; the rest block on `group.Do` and receive that same result. A double-mint for one installation cannot happen. Different installations have different keys and mint in parallel.
-- **No lock is held across the mint.** `singleflight` serializes only the duplicate-suppressed call; it is not a mutex we hold over unrelated work. The `lru.Cache` `Add` happens inside the flight but is a fast in-memory op.
-- **Harmless-extra-mint backstop.** Even in the worst interleaving (e.g. an entry evicted between the `fresh` re-check and `Add`), the only cost is one extra network mint and a discarded token value — a perf blip, never a correctness problem.
+- **Get-or-create is atomic.** `transport()` runs the LRU `Get`, and on a miss the `NewFromAppsTransport` + `Add`, entirely under `c.mu`. Only one transport is ever created per installation ID, even under a concurrent burst. `NewFromAppsTransport` does no I/O, so holding the lock across it is cheap.
+- **The lock is never held across the network refresh.** `transport()` returns and releases `c.mu`; only then does `Token()` run, so refreshes for *different* installations proceed in parallel.
+- **Same-installation serialization is the transport's job.** When N goroutines share one cached transport and its token is expired, the transport's own `sync.Mutex` lets the first refresh while the rest block, then return the freshly cached token without re-fetching. `ghinstallation` documents `Token`/`RoundTrip` as safe for concurrent use.
+- **Harmless-double-create backstop.** Holding `c.mu` already guarantees create-once, but even if two transports were somehow created for one ID, the only cost would be one extra network mint and a discarded transport — a perf blip, never a correctness issue.
 
-One caveat worth noting: `singleflight.Do` runs the work under the **first** caller's `ctx`; if that caller cancels mid-flight, the shared mint is canceled for all waiters. For our usage (short mint calls, callers with comparable deadlines) this is acceptable. If per-caller cancellation isolation is ever needed, switch to `group.DoChan` + a `select` on each caller's `ctx.Done()`; called out in Open Questions.
+We hold `c.mu` rather than rely on `golang-lru`'s internal locking because `Get`-then-`Add` must be a single critical section to guarantee create-once; the library's per-call locking wouldn't make the compound operation atomic on its own.
 
 ### Bounded LRU and eviction safety
 
-The value-cache is a **bounded LRU** keyed by installation ID, default size `DefaultAppTokenCacheSize = 256`, configurable via `AppTokenCacheOptions.MaxSize`. When full, inserting a new installation evicts the least-recently-used entry. We do **not** rely on "installations are few and bounded" — the bound makes that assumption unnecessary.
+The cache is a **bounded LRU** keyed by installation ID, default size `DefaultAppTokenCacheSize = 256`, configurable via `AppTokenCacheOptions.MaxSize`. When full, inserting a new installation evicts the least-recently-used entry. We do **not** rely on "installations are few and bounded" — the bound makes that assumption unnecessary.
 
-The key property: **a cache entry is pure performance state, never correctness state.** Evicting an installation's entry only discards a cached token value. The next call for that installation simply re-mints a fresh token — one extra network round-trip. There is:
+The key property: **a cache entry is pure performance state, never correctness state.** Evicting an installation's transport only discards its in-memory token. The next call for that installation just re-creates the transport and mints one fresh token — a single extra network round-trip. There is:
 
 - **no correctness impact** — a re-minted token is exactly as valid as a cached one; eviction is a behavioral no-op;
 - **no data loss** — nothing durable lives in the cache; GitHub is the source of truth and re-issues on demand;
@@ -234,11 +160,6 @@ The key property: **a cache entry is pure performance state, never correctness s
 That asymmetry — hard memory bound up top, at most a cold-entry re-mint as the downside — is exactly why an LRU is low-risk here.
 
 **Library: `github.com/hashicorp/golang-lru/v2`** (new direct dependency) rather than a hand-rolled LRU. It's generic, well-tested, dependency-light, and already common in the Go ecosystem; hand-rolling the eviction list + map bookkeeping would be code to write and test for no benefit. The only argument for hand-rolling is avoiding a dependency, which doesn't outweigh a small mature library.
-
-### New dependencies
-
-- `github.com/hashicorp/golang-lru/v2` — the bounded token-value cache.
-- `golang.org/x/sync` (`singleflight`) — per-installation mint dedup. Already present in `go.mod` (`v0.20.0`); this just adds a direct import of the `singleflight` subpackage.
 
 ### Wiring (light)
 
@@ -254,27 +175,29 @@ tokens, err := githubx.NewAppTokenCache(appsTransport, githubx.AppTokenCacheOpti
 
 The max size can be surfaced through a `githubserver.Config` field (e.g. `AppTokenCacheSize int`, `0` → default) if tuning is ever wanted. This wiring is intentionally minimal: the proposal's deliverable is the utility, not a rework of any existing call site. We do **not** touch `CreateInstallationToken` or any other current caller.
 
+### New dependency
+
+- `github.com/hashicorp/golang-lru/v2` — the bounded transport cache.
+
 ## Tests
 
 All in `internal/x/githubx`, unit-testable in isolation via an `httptest.Server` that counts `POST /app/installations/{id}/access_tokens` requests and returns a token with a controllable `expires_at`. The apps transport's `BaseURL` is pointed at the fake server.
 
-- **Mint-count / reuse**: call `Token` N times for one installation (fresh-enough token); assert exactly **one** mint reached the server and every call returned the same token. (Against today's throwaway-transport behavior this would be N mints — the regression pin.)
-- **Concurrency (`-race`)**: fire `Token` from many goroutines for the same installation (and a couple of distinct IDs); assert one mint per distinct installation ID (singleflight dedup) and no data race.
-- **LRU eviction**: build with `MaxSize: 1`. Mint A (1 mint), mint B (evicts A, 1 mint), mint A again → assert A **re-mints** (A's count goes to 2). Proves eviction drops the value and re-minting is a correctness no-op.
-- **MinTTL floor**: configure a `MinTTL` and have the fake server return a token whose `expires_at` is *within* `MinTTL` of now. Assert the first call mints and the *second* call mints again (the cached token is too close to expiry to reuse) — i.e. the cache never hands out a token with less than `MinTTL` of life. A companion case with `expires_at` comfortably beyond `MinTTL` asserts reuse (one mint).
-- **`Client` accessor carries auth from the cache**: point `Client(id)` at a fake API endpoint; assert the outbound request carries `Authorization: token <token>` sourced from the cache, and that repeated requests reuse one mint (shared value-cache).
+- **Mint-count / reuse**: call `Token` N times for one installation; assert exactly **one** mint reached the server and every call returned the same token. (Against today's throwaway-transport behavior this would be N mints — the regression pin.)
+- **Concurrency (`-race`)**: fire `Token` from many goroutines for the same installation (and a couple of distinct IDs); assert create-once and one mint per distinct installation ID, with no data race on the cache.
+- **LRU eviction**: build with `MaxSize: 1`. Mint A (1 mint), mint B (evicts A, 1 mint), mint A again → assert A **re-mints** (A's count goes to 2). Proves eviction drops the transport and re-minting is a correctness no-op.
+- **`Client` accessor carries auth from the cache**: point `Client(id)` at a fake API endpoint; assert the outbound request carries `Authorization` sourced from the cached transport and that repeated requests reuse one mint (shared transport).
 
 ## Trade-offs
 
-- **Own value-cache + MinTTL vs. retaining a `ghinstallation.Transport`**: retaining the transport would reuse its internal cache, but its refresh window is hardcoded to `ExpiresAt − 1m` and not configurable, so it can return a near-dead token to a caller that holds it. Owning the value and enforcing a configurable `MinTTL` gives every consumer a usable safety margin. The cost is that we manage the cache ourselves (LRU + singleflight) instead of leaning on the library.
 - **Generic `githubx.AppTokenCache` vs. baking caching into a server method**: the cache is pure GitHub-auth machinery with no server/store dependencies, so it belongs next to `ParsePrivateKey`/`ParseWebHook` as a reusable leaf helper — unit-testable in isolation and usable by any future App consumer.
-- **`Token` and `Client` on one type**: both accessors share a single MinTTL value-cache (Client's transport calls Token), so there's no duplicate cache and no migration of token-string consumers.
-- **`singleflight` vs. a per-installation mutex map**: singleflight expresses "collapse concurrent duplicates into one call" directly and returns the shared result, which is exactly the mint-dedup semantics we want, without us maintaining a keyed mutex map.
-- **Bounded LRU vs. unbounded map**: a tiny dependency buys a hard memory bound and removes the unbounded-growth question; eviction is provably safe (drops only a cached value; next use re-mints).
+- **Caching the transport vs. caching the token value**: retaining the `*ghinstallation.Transport` lets the library own expiry/refresh, so we write no token-lifetime logic — the simplest design. The accepted limitation (the library's refresh window can return a token with ~1 minute of life) is called out in Open Questions.
+- **`Token` and `Client` on one type**: both share a single cached transport, so there's no duplicate cache and no migration of token-string consumers; `Client` needs no custom round-tripper because the transport already injects and rotates auth.
+- **Bounded LRU vs. unbounded map**: a tiny dependency buys a hard memory bound and removes the unbounded-growth question; eviction is provably safe (drops only a cached transport; next use re-mints).
 - **`hashicorp/golang-lru/v2` vs. hand-rolled**: a mature generic library beats writing and testing eviction bookkeeping for no benefit.
+- **Own mutex vs. `golang-lru` internal locking**: we hold `c.mu` around `Get`+`Add` so create-once is atomic; the library's per-call locking can't make the compound op atomic on its own. The lock is never held across the network refresh.
 
 ## Open Questions
 
-- **`MinTTL` default**: `5m` is a conservative floor for "hold the token and use it shortly." Consumers that hold a token for a long, fixed operation could pass a larger `MinTTL`. Is per-call `MinTTL` override (vs. per-cache) worth it, or is per-cache sufficient? Recommend per-cache for now.
-- **`singleflight` context sharing**: `Do` runs under the first caller's `ctx`; if cancellation isolation between concurrent callers matters, move to `DoChan` + per-caller `select`. Recommend the simple `Do` until a real need appears.
-- **Config surface for `MaxSize`/`MinTTL`**: expose on `githubserver.Config` only, or also as server flags/env? Recommend `Config` fields defaulting to the package constants; flags can follow if production tuning is needed.
+- **~1-minute token floor (accepted for now)**: because the cache leans on `ghinstallation`'s internal refresh (hardcoded `ExpiresAt − 1m`, `getRefreshTime()` in v2.18.0, not configurable), a returned token can have as little as ~1 minute of remaining life. That's accepted for now. If it ever causes problems for a consumer that holds the token, a configurable `MinTTL` floor could be layered on later — cache the token *value* and re-mint whenever the cached token is within `MinTTL` of expiry — without changing the public accessors.
+- **Config surface for `MaxSize`**: expose on `githubserver.Config` only, or also as a server flag/env? Recommend a `Config` field defaulting to `DefaultAppTokenCacheSize`; a flag can follow if production tuning is needed.
