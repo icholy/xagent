@@ -20,6 +20,7 @@ This builds on the webhook refactors now on master:
 - **PR #777** flattened the metadata structs — `GithubUser`/`AtlassianUser` are gone.
 - **PR #780** moved webhook handling into the per-source server packages. The GitHub webhook handler, the `toInputEvent` extractor, and `GitHubMeta{AuthorID, AuthorLogin}` now all live in `internal/server/githubserver` (`webhook.go`) — the **same package** as `Server` and `WebhookHandler`. `toInputEvent` sets `Meta = GitHubMeta{...}` on every GitHub event, and the handler resolves identity via `input.Meta.(GitHubMeta)`.
 - **PR #774** filters comment actions: only `created`/`edited` route; `deleted` is dropped in the extractor before routing. So we never react to a comment that no longer exists — handled upstream, not a risk here.
+- **PR #782** adds the `githubx.AppTokenCache` design: `githubserver.Server` holds an `*githubx.AppTokenCache` and consumers call `cache.Client(installationID)` to get a `*github.Client` backed by a cached, auto-refreshing installation transport. The reactor uses this instead of minting a token and building a client by hand.
 
 Because `Meta`, `GitHubMeta`, and `Type` already exist, this proposal adds **no new field to `InputEvent`** and **no GitHub-specific type to `eventrouter`**. The reaction target rides along as a few more flat fields on `GitHubMeta`, and `eventrouter` gains only a generic, purpose-agnostic `OnRouteOutcome` callback and a `RouteOutcome` struct. Since `GitHubMeta` and the reaction callback are colocated in `githubserver`, the callback reads `GitHubMeta` directly — no cross-package reference.
 
@@ -189,12 +190,11 @@ func (s *Server) reactToOutcome(ctx context.Context, outcome eventrouter.RouteOu
     if err != nil || org.GitHubInstallationID == 0 {
         return
     }
-    token, err := s.CreateInstallationToken(ctx, org.GitHubInstallationID)
-    if err != nil {
-        s.log.Warn("github reaction: failed to mint token", "org_id", outcome.OrgID, "error", err)
-        return
-    }
-    client := github.NewClient(nil).WithAuthToken(token.Token)
+    // s.tokens is the *githubx.AppTokenCache the Server holds (see the
+    // cache-installation-tokens proposal). Client returns a *github.Client
+    // backed by the cached, auto-refreshing installation transport — no manual
+    // token mint or client construction here.
+    client := s.tokens.Client(org.GitHubInstallationID)
 
     const content = "eyes"
     switch outcome.Input.Type {
@@ -274,7 +274,7 @@ No migrations, no proto changes, no UI changes.
 
 **Async, fire-and-forget.** Source API round-trips can be hundreds of milliseconds. Calling synchronously from the webhook handler would slow webhook responses and risk timeouts, so the Router invokes `OnRouteOutcome` in a goroutine with `context.WithoutCancel`. Failures are logged but don't block routing — a missed reaction is a degraded experience, not a broken one.
 
-**Installation token, not OAuth user token.** Reactions posted via the installation token appear under the GitHub App's bot identity (e.g. `xagent-app[bot]`), which is the correct attribution — it's the bot acknowledging the comment, not the user who triggered it. OAuth tokens also tie to a specific linked user and would fail if that user un-links.
+**Installation token, not OAuth user token.** Reactions posted via the installation token (obtained through `AppTokenCache.Client`) appear under the GitHub App's bot identity (e.g. `xagent-app[bot]`), which is the correct attribution — it's the bot acknowledging the comment, not the user who triggered it. OAuth tokens also tie to a specific linked user and would fail if that user un-links.
 
 **Hardcoded emoji in v1.** 👀 is the most idiomatic "I see this and am working on it" reaction (used by github-actions[bot], Linear, many CI bots). Per-org or per-rule customization is easy to add later without breaking the v1 contract.
 
