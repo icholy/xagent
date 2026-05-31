@@ -237,20 +237,23 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 	var notification model.Notification
 	var taskID int64
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		// A custom prompt replaces the default preamble rather than supplementing
+		// it — use one or the other, never both.
+		prompt := rule.Create.Prompt
+		if prompt == "" {
+			prompt = fmt.Sprintf("You were created by a routing rule in response to a %s %s event.", input.Source, input.Type)
+		}
 		task := &model.Task{
 			Runner:    rule.Create.Runner,
 			Workspace: rule.Create.Workspace,
 			Instructions: []model.Instruction{{
-				Text: fmt.Sprintf("You were created by a routing rule in response to a %s %s event.", input.Source, input.Type),
+				Text: prompt,
 			}},
 			Status:       model.TaskStatusPending,
 			Command:      model.TaskCommandStart,
 			Version:      1,
 			OrgID:        orgID,
 			ArchiveAfter: rule.Create.ArchiveAfter,
-		}
-		if rule.Create.Prompt != "" {
-			task.Instructions = append(task.Instructions, model.Instruction{Text: rule.Create.Prompt})
 		}
 		if err := r.Store.CreateTask(ctx, tx, task); err != nil {
 			return err

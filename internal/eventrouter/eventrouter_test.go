@@ -318,15 +318,11 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, task.Runner, "test-runner")
 	assert.Equal(t, task.Status, model.TaskStatusPending)
 	assert.Equal(t, task.Command, model.TaskCommandStart)
-	assert.Equal(t, len(task.Instructions), 2)
-	// Preamble orients the agent with source/type only — URL, description,
-	// and event body are all reachable via the subscribed link.
-	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "routing rule"))
-	assert.Assert(t, !strings.Contains(task.Instructions[0].Text, url))
-	assert.Assert(t, !strings.Contains(task.Instructions[0].Text, "alice commented"))
-	assert.Assert(t, !strings.Contains(task.Instructions[0].Text, "please look at this"))
+	// A custom prompt replaces the default preamble entirely — the task gets
+	// exactly the configured prompt and nothing else.
+	assert.Equal(t, len(task.Instructions), 1)
+	assert.Equal(t, task.Instructions[0].Text, "Triage this issue.")
 	assert.Equal(t, task.Instructions[0].URL, "")
-	assert.Equal(t, task.Instructions[1].Text, "Triage this issue.")
 
 	links, err := s.ListLinksByTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
@@ -334,6 +330,44 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, links[0].URL, url)
 	assert.Equal(t, links[0].Subscribe, true)
 	assert.Equal(t, links[0].Title, "alice commented on issue #1")
+}
+
+func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
+	t.Parallel()
+
+	// Arrange — a create rule with no custom prompt falls back to the default
+	// preamble orienting the agent with the event source/type.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source: "github",
+		Create: &model.CreateTaskAction{Workspace: "default", Runner: "test-runner"},
+	}})
+	assert.NilError(t, err)
+	r := &Router{Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source:      "github",
+		Type:        "issue_comment",
+		Description: "alice commented on issue #1",
+		Data:        "@icholy-bot please look at this",
+		URL:         url,
+		UserID:      org.UserID,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+	task := tasks[0]
+	assert.Equal(t, len(task.Instructions), 1)
+	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "routing rule"))
+	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "github"))
+	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "issue_comment"))
 }
 
 func TestRouteCreateRuleAppliesArchiveAfter(t *testing.T) {
