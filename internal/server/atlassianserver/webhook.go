@@ -109,6 +109,13 @@ type AtlassianMeta struct {
 	AuthorDisplayName string
 }
 
+// Event-type strings set on eventrouter.InputEvent.Type by toInputEvent. They
+// form a contract between the extractor (producer) and any consumer that
+// dispatches on InputEvent.Type.
+const (
+	EventTypeCommentCreated = "comment_created"
+)
+
 func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 	payload, err := atlassian.ParseWebhook(body)
 	if err != nil {
@@ -116,7 +123,7 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 	}
 
 	switch payload.WebhookEvent {
-	case "comment_created":
+	case EventTypeCommentCreated:
 		if payload.Comment == nil || payload.Issue == nil {
 			return nil, nil
 		}
@@ -137,7 +144,7 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 
 		return &eventrouter.InputEvent{
 			Source:      "atlassian",
-			Type:        payload.WebhookEvent,
+			Type:        EventTypeCommentCreated,
 			Description: description,
 			Data:        commentBody,
 			URL:         url,
