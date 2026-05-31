@@ -148,6 +148,9 @@ type githubWebhookEvent struct {
 func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
+		if action := event.GetAction(); action != "created" && action != "edited" {
+			return nil
+		}
 		if event.Comment == nil || event.Issue == nil ||
 			event.Comment.Body == nil || event.Issue.HTMLURL == nil ||
 			event.Comment.User == nil || event.Comment.User.ID == nil {
@@ -170,6 +173,9 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		}
 
 	case *github.PullRequestReviewCommentEvent:
+		if action := event.GetAction(); action != "created" && action != "edited" {
+			return nil
+		}
 		if event.Comment == nil || event.PullRequest == nil ||
 			event.Comment.Body == nil || event.PullRequest.HTMLURL == nil ||
 			event.Comment.User == nil || event.Comment.User.ID == nil {

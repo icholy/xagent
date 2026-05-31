@@ -25,6 +25,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name: "IssueComment",
 			event: &github.IssueCommentEvent{
+				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
 					Body: github.Ptr("xagent: do something"),
 					User: &github.User{
@@ -49,6 +50,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name: "IssueComment_PullRequest",
 			event: &github.IssueCommentEvent{
+				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
 					Body: github.Ptr("xagent: review this"),
 					User: &github.User{
@@ -74,6 +76,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name: "IssueComment_NoXAgentPrefix",
 			event: &github.IssueCommentEvent{
+				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
 					Body: github.Ptr("just a regular comment"),
 					User: &github.User{
@@ -101,8 +104,52 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 			expected: nil,
 		},
 		{
+			name: "IssueComment_Edited",
+			event: &github.IssueCommentEvent{
+				Action: github.Ptr("edited"),
+				Comment: &github.IssueComment{
+					Body: github.Ptr("xagent: do something"),
+					User: &github.User{
+						ID:    github.Ptr[int64](123),
+						Login: github.Ptr("testuser"),
+					},
+				},
+				Issue: &github.Issue{
+					Number:  github.Ptr(1),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
+				},
+			},
+			expected: &githubWebhookEvent{
+				eventType:      "issue_comment",
+				description:    "testuser commented on issue #1",
+				data:           "xagent: do something",
+				url:            "https://github.com/owner/repo/issues/1",
+				githubUserID:   123,
+				githubUsername: "testuser",
+			},
+		},
+		{
+			name: "IssueComment_Deleted",
+			event: &github.IssueCommentEvent{
+				Action: github.Ptr("deleted"),
+				Comment: &github.IssueComment{
+					Body: github.Ptr("xagent: do something"),
+					User: &github.User{
+						ID:    github.Ptr[int64](123),
+						Login: github.Ptr("testuser"),
+					},
+				},
+				Issue: &github.Issue{
+					Number:  github.Ptr(1),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
+				},
+			},
+			expected: nil,
+		},
+		{
 			name: "PullRequestReviewComment",
 			event: &github.PullRequestReviewCommentEvent{
+				Action: github.Ptr("created"),
 				Comment: &github.PullRequestComment{
 					Body: github.Ptr("xagent: fix this"),
 					User: &github.User{
@@ -127,6 +174,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name: "PullRequestReviewComment_NoXAgentPrefix",
 			event: &github.PullRequestReviewCommentEvent{
+				Action: github.Ptr("created"),
 				Comment: &github.PullRequestComment{
 					Body: github.Ptr("looks good"),
 					User: &github.User{
@@ -151,6 +199,49 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name:     "PullRequestReviewComment_NilFields",
 			event:    &github.PullRequestReviewCommentEvent{Comment: nil},
+			expected: nil,
+		},
+		{
+			name: "PullRequestReviewComment_Edited",
+			event: &github.PullRequestReviewCommentEvent{
+				Action: github.Ptr("edited"),
+				Comment: &github.PullRequestComment{
+					Body: github.Ptr("xagent: fix this"),
+					User: &github.User{
+						ID:    github.Ptr[int64](789),
+						Login: github.Ptr("reviewer"),
+					},
+				},
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(3),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
+				},
+			},
+			expected: &githubWebhookEvent{
+				eventType:      "pull_request_review_comment",
+				description:    "reviewer reviewed PR #3",
+				data:           "xagent: fix this",
+				url:            "https://github.com/owner/repo/pull/3",
+				githubUserID:   789,
+				githubUsername: "reviewer",
+			},
+		},
+		{
+			name: "PullRequestReviewComment_Deleted",
+			event: &github.PullRequestReviewCommentEvent{
+				Action: github.Ptr("deleted"),
+				Comment: &github.PullRequestComment{
+					Body: github.Ptr("xagent: fix this"),
+					User: &github.User{
+						ID:    github.Ptr[int64](789),
+						Login: github.Ptr("reviewer"),
+					},
+				},
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(3),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
+				},
+			},
 			expected: nil,
 		},
 		{
@@ -233,6 +324,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 		{
 			name: "WhitespacePrefix",
 			event: &github.IssueCommentEvent{
+				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
 					Body: github.Ptr("  xagent: trimmed"),
 					User: &github.User{
