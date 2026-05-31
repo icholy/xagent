@@ -68,7 +68,7 @@ jobs:
         run: go build -ldflags "-X github.com/icholy/xagent/internal/version.Version=${{ needs.release-please.outputs.tag_name }}" -o xagent-linux-arm64 ./cmd/xagent
 
       - name: Attach binaries to Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
