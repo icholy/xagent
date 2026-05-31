@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-github/v68/github"
+	"github.com/google/go-github/v88/github"
 )
 
 const DefaultRepo = "icholy/xagent"

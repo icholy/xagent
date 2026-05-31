@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/go-github/v68/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/githubx"

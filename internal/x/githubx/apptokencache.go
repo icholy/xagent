@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/google/go-github/v68/github"
+	"github.com/google/go-github/v88/github"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 

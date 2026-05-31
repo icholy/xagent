@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/google/go-github/v68/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/oauthlink"
 	"github.com/icholy/xagent/internal/eventrouter"
