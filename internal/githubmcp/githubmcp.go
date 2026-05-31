@@ -1,6 +1,6 @@
 // Package githubmcp adapts GitHub's MCP server for use with rotating
 // GitHub App installation tokens. A Server holds a single upstream
-// session to the GitHub MCP endpoint via internal/mcpswap and refreshes
+// session to the GitHub MCP endpoint via internal/x/mcpswap and refreshes
 // the underlying installation token before each expiry so a long-running
 // agent never sees the 1h TTL break its session.
 package githubmcp
@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/icholy/xagent/internal/mcpswap"
+	"github.com/icholy/xagent/internal/x/mcpswap"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
