@@ -3,7 +3,6 @@ package githubserver
 import (
 	"context"
 
-	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/eventrouter"
 )
 
@@ -25,13 +24,13 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 	if org.GitHubInstallationID == 0 {
 		return nil
 	}
-	// Mint an installation token so the reaction is attributed to the App's bot
-	// identity, then build a client from it.
-	token, err := s.CreateInstallationToken(ctx, org.GitHubInstallationID)
+	// Build a client authenticated as the App's bot identity, backed by the
+	// cached auto-refreshing installation transport so the reaction is
+	// attributed to the App and repeated calls skip re-minting the token.
+	client, err := s.tokens.Client(org.GitHubInstallationID)
 	if err != nil {
 		return err
 	}
-	client := github.NewClient(nil).WithAuthToken(token.Token)
 
 	// Pick the emoji from the routing outcome: a created task gets 🚀, a woken
 	// task 👀, and a comment that matched a rule but created or woke nothing 😕.
