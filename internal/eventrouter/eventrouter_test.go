@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
@@ -333,6 +334,75 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, links[0].URL, url)
 	assert.Equal(t, links[0].Subscribe, true)
 	assert.Equal(t, links[0].Title, "alice commented on issue #1")
+}
+
+func TestRouteCreateRuleAppliesArchiveAfter(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source: "github",
+		Create: &model.CreateTaskAction{
+			Workspace:    "default",
+			Runner:       "test-runner",
+			ArchiveAfter: 24 * time.Hour,
+		},
+	}})
+	assert.NilError(t, err)
+	r := &Router{Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "hello",
+		URL:    url,
+		UserID: org.UserID,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+	assert.Equal(t, tasks[0].ArchiveAfter, 24*time.Hour)
+}
+
+func TestRouteCreateRuleDefaultsArchiveAfterToNever(t *testing.T) {
+	t.Parallel()
+
+	// Arrange — a create rule without ArchiveAfter leaves the task at the
+	// "never auto-archive" default (zero duration).
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/2"
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source: "github",
+		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+	}})
+	assert.NilError(t, err)
+	r := &Router{Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "hello",
+		URL:    url,
+		UserID: org.UserID,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+	assert.Equal(t, tasks[0].ArchiveAfter, time.Duration(0))
 }
 
 func TestRouteCreateRuleOmittedPromptUsesPreambleOnly(t *testing.T) {

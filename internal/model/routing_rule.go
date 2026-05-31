@@ -1,7 +1,10 @@
 package model
 
 import (
+	"time"
+
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // RoutingRule defines a routing rule that determines whether an event
@@ -24,14 +27,19 @@ type CreateTaskAction struct {
 	Workspace string `json:"workspace"`
 	Runner    string `json:"runner"`
 	Prompt    string `json:"prompt,omitempty"`
+	// ArchiveAfter is applied to the created task's auto-archive timeout.
+	// See Task.ArchiveAfter for the value semantics (0 = never, <0 =
+	// immediate, >0 = delay).
+	ArchiveAfter time.Duration `json:"archive_after,omitempty"`
 }
 
 // Proto converts a CreateTaskAction to its protobuf representation.
 func (a *CreateTaskAction) Proto() *xagentv1.CreateTaskAction {
 	return &xagentv1.CreateTaskAction{
-		Workspace: a.Workspace,
-		Runner:    a.Runner,
-		Prompt:    a.Prompt,
+		Workspace:    a.Workspace,
+		Runner:       a.Runner,
+		Prompt:       a.Prompt,
+		ArchiveAfter: durationpb.New(a.ArchiveAfter),
 	}
 }
 
@@ -41,9 +49,10 @@ func CreateTaskActionFromProto(pb *xagentv1.CreateTaskAction) *CreateTaskAction 
 		return nil
 	}
 	return &CreateTaskAction{
-		Workspace: pb.Workspace,
-		Runner:    pb.Runner,
-		Prompt:    pb.Prompt,
+		Workspace:    pb.Workspace,
+		Runner:       pb.Runner,
+		Prompt:       pb.Prompt,
+		ArchiveAfter: pb.ArchiveAfter.AsDuration(),
 	}
 }
 

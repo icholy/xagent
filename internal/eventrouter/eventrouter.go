@@ -207,10 +207,11 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			Instructions: []model.Instruction{{
 				Text: fmt.Sprintf("You were created by a routing rule in response to a %s %s event.", input.Source, input.Type),
 			}},
-			Status:  model.TaskStatusPending,
-			Command: model.TaskCommandStart,
-			Version: 1,
-			OrgID:   orgID,
+			Status:       model.TaskStatusPending,
+			Command:      model.TaskCommandStart,
+			Version:      1,
+			OrgID:        orgID,
+			ArchiveAfter: rule.Create.ArchiveAfter,
 		}
 		if rule.Create.Prompt != "" {
 			task.Instructions = append(task.Instructions, model.Instruction{Text: rule.Create.Prompt})
@@ -254,4 +255,3 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 	r.publish(ctx, notification)
 	return nil
 }
-
