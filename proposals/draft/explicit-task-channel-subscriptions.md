@@ -72,7 +72,7 @@ and gate channel forwarding on it.
   that spawns 20 fire-and-forget tasks gets no interrupts from them unless it
   explicitly opts in — which is the whole point.
 
-### Where subscriptions live: the bridge process
+### Where subscriptions live: a dedicated `internal/mcpbridge` package
 
 Subscriptions are **in-memory, per-bridge-process state**, not server state. This
 mirrors where the two existing channel filters already live (the `ChannelMessage`
@@ -81,36 +81,77 @@ and follows the precedent set in the summary-gated proposal: *"Notification
 batching… belongs to the bridge, not to `model.Notification`."* Filtering is the
 same kind of concern.
 
-Concretely, a small concurrency-safe set:
+The subscription set, the watch tools, and the forwarding gate are **not** placed
+in `internal/command`. The `command` package is the CLI entrypoint and should
+stay a thin wiring layer — it parses flags and composes objects, it does not own
+behaviour. They go in a new package, **`internal/mcpbridge`**, which owns the
+local-bridge-specific half of the channel feature.
+
+**Why a new package, and why there.** The two existing candidates don't fit:
+
+- **`internal/x/mcpchannel`** is, by its own package doc, *"xagent-agnostic: it
+  knows only the Claude Code channel protocol and the MCP SDK."* The subscription
+  set and gate are the opposite — they speak `model.Notification`, task ids, and the
+  task-resource shape. Putting them here would break that boundary; `mcpbridge`
+  instead *depends on* `mcpchannel` for the transport/`Params` primitives.
+- **`internal/server/mcpserver`** is server-side: it holds the HTTP `Handler`,
+  imports `apiauth`, and its tools proxy to the Connect service. The watch tools
+  are client-side, hold no service, and mutate local state. They don't belong
+  next to the server handler.
+
+`internal/mcpbridge` is the natural composition point for the *local stdio
+bridge*: it pulls together the proxy tools (`mcpserver.AddTools`), the channel
+transport (`mcpchannel`), the notification stream (`xagentclient`), and the new
+subscription state. It sits at the same layer as `internal/agentmcp` (the
+in-container agent server) — a cohesive home for one MCP surface — rather than
+under `internal/server` or `internal/x`.
+
+The package exposes a `Channel` that ties together the subscription set, a
+channel sender, and the forwarding gate:
 
 ```go
-// watchset is the set of task ids the bridge forwards channel
-// notifications for. Empty means mute-by-default: nothing is forwarded.
-// It is mutated by the watch_task / unwatch_task tools (MCP request
-// goroutines) and read by the SSE notification handler goroutine, so all
-// access goes through the mutex.
-type watchset struct {
-    mu  sync.Mutex
-    ids map[int64]struct{}
+// Package mcpbridge implements the local stdio MCP bridge: it re-exposes
+// the user-facing xagent tools and forwards task change notifications to
+// the host Claude Code session as channel events, gated by an explicit
+// per-task subscription set (mute-by-default).
+package mcpbridge
+
+// ChannelSender is the subset of *mcpchannel.Transport the bridge needs
+// to push a channel notification. Defined here so the gate can be tested
+// without a live stdio transport.
+type ChannelSender interface {
+    SendChannel(ctx context.Context, p mcpchannel.Params) error
 }
 
-func newWatchset() *watchset { return &watchset{ids: map[int64]struct{}{}} }
+// Channel owns the per-process subscription set and the mute-by-default
+// forwarding gate. One Channel is created per `xagent mcp --channel`
+// process.
+type Channel struct {
+    sender ChannelSender
 
-func (w *watchset) add(id int64) { w.mu.Lock(); defer w.mu.Unlock(); w.ids[id] = struct{}{} }
-func (w *watchset) remove(id int64) { w.mu.Lock(); defer w.mu.Unlock(); delete(w.ids, id) }
+    mu  sync.Mutex
+    ids map[int64]struct{} // watched task ids; empty == muted
+}
 
-func (w *watchset) has(id int64) bool {
-    w.mu.Lock()
-    defer w.mu.Unlock()
-    _, ok := w.ids[id]
+func NewChannel(sender ChannelSender) *Channel {
+    return &Channel{sender: sender, ids: map[int64]struct{}{}}
+}
+
+func (c *Channel) watch(id int64)   { c.mu.Lock(); defer c.mu.Unlock(); c.ids[id] = struct{}{} }
+func (c *Channel) unwatch(id int64) { c.mu.Lock(); defer c.mu.Unlock(); delete(c.ids, id) }
+
+func (c *Channel) watching(id int64) bool {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    _, ok := c.ids[id]
     return ok
 }
 
-func (w *watchset) list() []int64 {
-    w.mu.Lock()
-    defer w.mu.Unlock()
-    ids := make([]int64, 0, len(w.ids))
-    for id := range w.ids {
+func (c *Channel) watched() []int64 {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    ids := make([]int64, 0, len(c.ids))
+    for id := range c.ids {
         ids = append(ids, id)
     }
     slices.Sort(ids)
@@ -118,15 +159,14 @@ func (w *watchset) list() []int64 {
 }
 ```
 
-The set is created once per `xagent mcp` invocation, alongside the existing
-`clientID`.
-
 ### The forwarding gate
 
-The notification handler grows one more condition: the notification must name a
-watched task. Task ids ride along in `n.Resources` (each
-`NotificationResource` carries `Type: "task"` and an `ID`), which the current
-handler ignores entirely. We extract the primary task id and check membership:
+The gate is a method on `Channel`, `Forward`, suitable as the
+`NotificationClient` handler. It grows one condition over today's bridge handler:
+the notification must name a watched task. Task ids ride along in `n.Resources`
+(each `NotificationResource` carries `Type: "task"` and an `ID`), which the
+current handler ignores entirely. `Forward` extracts the primary task id and
+checks membership:
 
 ```go
 // primaryTaskID returns the id of the first task resource in the
@@ -139,24 +179,24 @@ func primaryTaskID(n model.Notification) (int64, bool) {
     }
     return 0, false
 }
-```
 
-```go
-Handler: func(n model.Notification) {
+// Forward applies the gate and pushes a channel notification when the
+// notification is channel-worthy AND names a task this agent is watching.
+func (c *Channel) Forward(ctx context.Context, n model.Notification) {
     if n.ChannelMessage == "" {
         return // summary gate: not channel-worthy
     }
     id, ok := primaryTaskID(n)
-    if !ok || !watch.has(id) {
+    if !ok || !c.watching(id) {
         return // mute-by-default: not a task this agent is watching
     }
-    if err := transport.SendChannel(ctx, mcpchannel.Params{
+    if err := c.sender.SendChannel(ctx, mcpchannel.Params{
         Content: n.ChannelMessage,
         Meta:    map[string]string{"resource": "task", "id": strconv.FormatInt(id, 10)},
     }); err != nil {
         slog.Warn("xagent channel: failed to send", "error", err)
     }
-},
+}
 ```
 
 Two things change beyond the gate:
@@ -175,9 +215,10 @@ Two things change beyond the gate:
 
 Three tools, registered on the bridge's MCP server **only when `--channel` is
 enabled** (without channels there is nothing to subscribe to). They are bridge
-tools, not server-proxy tools: they mutate the local `watchset` and do not call
-the C2 RPC API, so they live in the bridge alongside the watchset rather than in
-`mcpserver.AddTools` (whose handlers all proxy to the Connect service).
+tools, not server-proxy tools: they mutate the local subscription set and do not
+call the C2 RPC API, so they are registered by `Channel.AddTools` in
+`internal/mcpbridge` rather than by `mcpserver.AddTools` (whose handlers all proxy
+to the Connect service).
 
 | Tool | Input | Behaviour |
 | --- | --- | --- |
@@ -185,10 +226,12 @@ the C2 RPC API, so they live in the bridge alongside the watchset rather than in
 | `unwatch_task` | `task_id int64` | Remove `task_id`. Idempotent. No further channel events for it. |
 | `list_watched_tasks` | — | Return the sorted set of currently-watched task ids, so the agent can introspect its own subscriptions. |
 
-Sketch (in `internal/command/mcp.go`, gated by `--channel`):
+Sketch (`Channel.AddTools` in `internal/mcpbridge`):
 
 ```go
-func addWatchTools(server *mcp.Server, watch *watchset) {
+// AddTools registers the watch_task / unwatch_task / list_watched_tasks
+// tools on server. Called by the bridge only when --channel is enabled.
+func (c *Channel) AddTools(server *mcp.Server) {
     mcp.AddTool(server, &mcp.Tool{
         Name: "watch_task",
         Description: "Receive Claude Code channel notifications for a task's " +
@@ -199,8 +242,8 @@ func addWatchTools(server *mcp.Server, watch *watchset) {
     }, func(ctx context.Context, req *mcp.CallToolRequest, in struct {
         TaskID int64 `json:"task_id" jsonschema:"The task ID to watch"`
     }) (*mcp.CallToolResult, any, error) {
-        watch.add(in.TaskID)
-        return jsonResult(map[string]any{"watching": watch.list()}), nil, nil
+        c.watch(in.TaskID)
+        return jsonResult(map[string]any{"watching": c.watched()}), nil, nil
     })
     // unwatch_task and list_watched_tasks follow the same shape.
 }
@@ -212,6 +255,49 @@ not-yet-created id is harmless (no notification will ever match it), and keeping
 the tool offline avoids both an RPC per call and a failure mode where a transient
 server error blocks the agent from muting itself. (See Open Questions for the
 validate-on-watch alternative.)
+
+### `command/mcp.go` stays thin
+
+With the subscription set, tools, and gate in `internal/mcpbridge`, the CLI
+entrypoint only constructs and wires the pieces — no behaviour lives here:
+
+```go
+transport := mcpchannel.NewTransport(&mcp.StdioTransport{})
+server := mcp.NewServer(&mcp.Implementation{Name: "xagent", Version: "1.0.0"},
+    &mcp.ServerOptions{Instructions: mcpserver.Instructions, Capabilities: &capabilities})
+mcpserver.AddTools(server, client) // user-facing proxy tools (unchanged)
+
+var ch *mcpbridge.Channel
+if cmd.Bool("channel") {
+    ch = mcpbridge.NewChannel(transport) // *mcpchannel.Transport satisfies ChannelSender
+    ch.AddTools(server)                  // watch_task / unwatch_task / list_watched_tasks
+}
+
+session, err := server.Connect(ctx, transport, nil)
+if err != nil {
+    return err
+}
+if ch != nil {
+    go func() {
+        nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
+            BaseURL:  cmd.String("server"),
+            Token:    cmd.String("token"),
+            ClientID: clientID,
+            Handler:  func(n model.Notification) { ch.Forward(ctx, n) },
+        })
+        if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+            slog.Warn("xagent channel: stream ended", "error", err)
+        }
+    }()
+}
+return session.Wait()
+```
+
+The one-line `Handler` closure only adapts the `func(model.Notification)`
+callback shape to `Channel.Forward`'s `(ctx, n)` signature; the gate logic itself
+lives entirely in `mcpbridge`. Everything channel-specific — the subscription
+set, the tools, the gate — is now unit-testable in `internal/mcpbridge` against a
+fake `ChannelSender`, with no stdio transport or live CLI required.
 
 ### Naming: why not `subscribe` / `unsubscribe`
 
