@@ -1,10 +1,12 @@
 FROM debian:13-slim
 
+# postgresql-client-17 ships in Debian 13 (trixie) main and matches the Postgres 17 server.
 RUN apt-get update  \
     && apt-get -y --no-install-recommends install  \
         sudo curl git ca-certificates build-essential \
         fd-find ripgrep jq unzip iputils-ping dnsutils \
         netcat-openbsd procps wget \
+        postgresql-client-17 \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && rm -rf /var/lib/apt/lists/*
 
@@ -20,17 +22,6 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && rm -rf /var/lib/apt/lists/*
 
 VOLUME /var/lib/docker
-
-# https://www.postgresql.org/download/linux/debian/
-# Install postgresql-client-17 from PGDG to match the Postgres 17 server.
-RUN install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /etc/apt/keyrings/postgresql.asc \
-    && chmod a+r /etc/apt/keyrings/postgresql.asc \
-    && echo "deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
-        > /etc/apt/sources.list.d/pgdg.list \
-    && apt-get update \
-    && apt-get -y --no-install-recommends install postgresql-client-17 \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
