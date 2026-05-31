@@ -15,7 +15,6 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/icholy/xagent/internal/model"
@@ -77,30 +76,12 @@ func primaryTaskID(n model.Notification) (int64, bool) {
 	return 0, false
 }
 
-// isTerminal reports whether a channel message announces a terminal task
-// status (completed, failed, or cancelled). The publishing sites format
-// these as "Task N completed." / "Task N failed." / "Task N cancelled."
-// (see apiserver/runner.go and apiserver/task.go); matching the suffix
-// keeps the bridge self-contained with no server or model.Notification
-// change. If the wording of those messages ever drifts, this is the one
-// place to update.
-func isTerminal(channelMessage string) bool {
-	for _, suffix := range []string{"completed.", "failed.", "cancelled."} {
-		if strings.HasSuffix(channelMessage, suffix) {
-			return true
-		}
-	}
-	return false
-}
-
 // Forward applies the gate and pushes a channel notification when the
 // notification is channel-worthy AND names a task this agent is watching.
 // It is suitable as a NotificationClient handler.
 //
-// After forwarding a terminal-status notification, the task is removed
-// from the watch set: the agent has received the result it was waiting
-// for and almost never wants further events about it. The agent can
-// always re-watch.
+// Subscriptions are purely explicit: a task stays watched until
+// unwatch_task is called. The gate carries no task-status awareness.
 func (c *Channel) Forward(ctx context.Context, n model.Notification) {
 	if n.ChannelMessage == "" {
 		return // summary gate: not channel-worthy
@@ -114,8 +95,5 @@ func (c *Channel) Forward(ctx context.Context, n model.Notification) {
 		Meta:    map[string]string{"resource": "task", "id": strconv.FormatInt(id, 10)},
 	}); err != nil {
 		slog.Warn("xagent channel: failed to send", "error", err)
-	}
-	if isTerminal(n.ChannelMessage) {
-		c.unwatch(id)
 	}
 }

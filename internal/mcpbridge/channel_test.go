@@ -96,35 +96,19 @@ func TestForward_NoTaskResource(t *testing.T) {
 	assert.Equal(t, len(sender.sent), 0)
 }
 
-func TestForward_AutoUnwatchOnTerminal(t *testing.T) {
+func TestForward_StaysWatchedAfterTerminal(t *testing.T) {
 	// Arrange
 	sender := &fakeSender{}
 	c := NewChannel(sender)
 	c.watch(42)
 
-	// Act - terminal notification forwards, then auto-unwatches
+	// Act - subscriptions are purely explicit; a terminal notification does
+	// not auto-unwatch, so a follow-up notification is still forwarded.
 	c.Forward(context.Background(), taskNotification(42, "Task 42 completed."))
+	c.Forward(context.Background(), taskNotification(42, "Task 42 archived."))
 
 	// Assert
-	assert.Equal(t, len(sender.sent), 1)
-	assert.Equal(t, c.watching(42), false)
-	assert.DeepEqual(t, c.watched(), []int64{})
-
-	// A subsequent notification for the same task is now muted.
-	c.Forward(context.Background(), taskNotification(42, "Task 42 archived."))
-	assert.Equal(t, len(sender.sent), 1)
-}
-
-func TestForward_NonTerminalKeepsWatch(t *testing.T) {
-	// Arrange
-	sender := &fakeSender{}
-	c := NewChannel(sender)
-	c.watch(42)
-
-	// Act
-	c.Forward(context.Background(), taskNotification(42, "Task 42 queued: start."))
-
-	// Assert - still watching after a non-terminal notification
+	assert.Equal(t, len(sender.sent), 2)
 	assert.Equal(t, c.watching(42), true)
 	assert.DeepEqual(t, c.watched(), []int64{42})
 }
@@ -182,28 +166,6 @@ func TestPrimaryTaskID(t *testing.T) {
 			id, ok := primaryTaskID(model.Notification{Resources: tt.resources})
 			assert.Equal(t, ok, tt.wantOK)
 			assert.Equal(t, id, tt.wantID)
-		})
-	}
-}
-
-func TestIsTerminal(t *testing.T) {
-	tests := []struct {
-		msg  string
-		want bool
-	}{
-		{"Task 1 completed.", true},
-		{"Task 1 failed.", true},
-		{"Task 1 cancelled.", true},
-		{"Task 1 queued: start.", false},
-		{"Task 1 created on r/w.", false},
-		{"Task 1 archived.", false},
-		{"Task 1 restart requested.", false},
-		{"Task 1 woken by event 2: desc (url)", false},
-		{"", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.msg, func(t *testing.T) {
-			assert.Equal(t, isTerminal(tt.msg), tt.want)
 		})
 	}
 }

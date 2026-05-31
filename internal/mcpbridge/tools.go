@@ -14,8 +14,8 @@ import (
 const Instructions = "Channel notifications about task status changes are MUTED BY DEFAULT. " +
 	"To be notified when a task is queued, woken, completed, failed, or cancelled, " +
 	"call watch_task(task_id) for each task you want situational awareness on. " +
-	"A task is automatically unwatched once it reaches a terminal state. " +
-	"Use unwatch_task(task_id) to stop early and list_watched_tasks to introspect. " +
+	"A task stays watched until you call unwatch_task(task_id); use " +
+	"list_watched_tasks to introspect. " +
 	"This is separate from create_link(subscribe=true), which routes inbound external events to a task."
 
 // AddTools registers the watch_task / unwatch_task / list_watched_tasks
@@ -29,10 +29,9 @@ func (c *Channel) AddTools(server *mcp.Server) {
 		Description: "Receive Claude Code channel notifications for a task's " +
 			"status changes (queued, woken, completed, failed, cancelled). " +
 			"Channel notifications are muted by default — call this for each " +
-			"task you want situational awareness on. A watched task is " +
-			"automatically unwatched once it reaches a terminal state. " +
-			"Distinct from create_link(subscribe=true), which routes external " +
-			"events to a task.",
+			"task you want situational awareness on. A task stays watched " +
+			"until you call unwatch_task. Distinct from " +
+			"create_link(subscribe=true), which routes external events to a task.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in struct {
 		TaskID int64 `json:"task_id" jsonschema:"The task ID to watch"`
 	}) (*mcp.CallToolResult, any, error) {
