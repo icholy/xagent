@@ -148,7 +148,16 @@ ALTER TABLE events     DROP COLUMN IF EXISTS routing_url;
 ALTER TABLE task_links DROP COLUMN IF EXISTS routing_url;
 ```
 
-The existing `idx_task_links_url` / `idx_events_url` indexes stay (they back the unchanged `FindLinksByURL` / `FindEventsByURL`).
+The existing `idx_task_links_url` / `idx_events_url` indexes are dropped, because their only users (`FindLinksByURL` / `FindEventsByURL`) are removed — see Cleanup below.
+
+### 6. Cleanup: remove unused `FindLinksByURL` / `FindEventsByURL`
+
+Both lookups are dead code today and routing no longer needs them, so they are removed rather than carried forward:
+
+- **`FindEventsByURL`** (`store.FindEventsByURL` + the `event.sql` query) has no callers at all — no RPC, no CLI, no test.
+- **`FindLinksByURL`** has a store method, an `event`/`link.sql` query, an RPC (`FindLinksByURLRequest`/`Response` + the `apiserver` handler), and generated stubs — but nothing consumes the RPC (not the webui, the CLI, the n8n node, nor the `xagentclient` wrapper). Removing it also drops the `FindLinksByURL` RPC from `proto/xagent/v1/xagent.proto`.
+
+This leaves `FindSubscribedLinksForOrgs` (now matching on `routing_url`) as the only URL-based lookup, and removes the `idx_task_links_url` / `idx_events_url` indexes that backed the deleted queries.
 
 Queries: `CreateLink` / `CreateEvent` insert `routing_url`; `SELECT`s return it; `FindSubscribedLinksForOrgs` matches `WHERE l.routing_url = sqlc.arg(routing_url)`. `model.Link` and `model.Event` each gain a `RoutingURL string` field (with `Proto` / `FromProto` wiring). Proto adds a read-only `string routing_url` to `TaskLink` (field 8) and `Event` (field 6).
 
@@ -162,5 +171,4 @@ Queries: `CreateLink` / `CreateEvent` insert `routing_url`; `SELECT`s return it;
 ## Open Questions
 
 1. **Re-derivation on logic change.** If `RoutingURL` evolves, stored keys can drift. A one-shot backfill command can re-derive existing rows; acceptable to defer.
-2. **`FindLinksByURL` / `FindEventsByURL`.** These still match raw `url`. Proposed: leave them exact (they answer "links to this precise URL"); only routing uses `routing_url`.
-3. **Unmappable API URLs.** GitHub API comment URLs without the parent number, and Jira API URLs that use a numeric issue id, can't be reduced to the web key without a network lookup. Proposed: leave them unchanged (they simply won't cross-match a web URL). Worth confirming this is acceptable or whether a lookup is warranted.
+2. **Unmappable API URLs.** GitHub API comment URLs without the parent number, and Jira API URLs that use a numeric issue id, can't be reduced to the web key without a network lookup. Proposed: leave them unchanged (they simply won't cross-match a web URL). Worth confirming this is acceptable or whether a lookup is warranted.
