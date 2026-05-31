@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.22.0](https://github.com/icholy/xagent/compare/v0.21.0...v0.22.0) (2026-05-31)
+
+
+### Features
+
+* add assignment-triggered routing rules for GitHub ([#761](https://github.com/icholy/xagent/issues/761)) ([4478868](https://github.com/icholy/xagent/commit/4478868642ce0c55acf50763580b783031a189a0))
+* add URL-prefix matching to routing rules ([#763](https://github.com/icholy/xagent/issues/763)) ([cf68f57](https://github.com/icholy/xagent/commit/cf68f57ebe3687dd390263e3dc420ddc5330776d)), closes [#742](https://github.com/icholy/xagent/issues/742)
+* **mcp:** add archive_task tool to user-facing MCP server ([#744](https://github.com/icholy/xagent/issues/744)) ([e8c333f](https://github.com/icholy/xagent/commit/e8c333f2e441d739d981ba68701cbe6127d2658c))
+* **server:** notify agent channel when task is archived ([#747](https://github.com/icholy/xagent/issues/747)) ([3e663f0](https://github.com/icholy/xagent/commit/3e663f04f8a36d5a45989eebfb5e7eba9eafc05c))
+* support routing rules that create tasks ([#746](https://github.com/icholy/xagent/issues/746)) ([8098eb7](https://github.com/icholy/xagent/commit/8098eb7707643232c8e9b658d065a5791bcdbf35))
+* **webui:** allow reordering routing rules ([#754](https://github.com/icholy/xagent/issues/754)) ([b27297b](https://github.com/icholy/xagent/commit/b27297b9f72e34460b359b5b7be99ae64db799ef)), closes [#717](https://github.com/icholy/xagent/issues/717)
+* **webui:** wire CreateTaskAction into routing-rule editor ([#749](https://github.com/icholy/xagent/issues/749)) ([b0cd154](https://github.com/icholy/xagent/commit/b0cd154bb4424a968c30e4f1a6401630322465e7)), closes [#717](https://github.com/icholy/xagent/issues/717)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/xsam/otelsql to v0.42.0 ([#726](https://github.com/icholy/xagent/issues/726)) ([33c0645](https://github.com/icholy/xagent/commit/33c064592e5433b6920b395430cffc6ae109bdfa))
+* **deps:** update module github.com/zitadel/oidc/v3 to v3.47.5 ([#728](https://github.com/icholy/xagent/issues/728)) ([c528474](https://github.com/icholy/xagent/commit/c52847455b0ab23e8edf2b28fb17744e8ff4fb14))
+* **eventrouter:** suppress wake notifications when no transition ([#748](https://github.com/icholy/xagent/issues/748)) ([caabd69](https://github.com/icholy/xagent/commit/caabd69414d8af8c9430ce96ca259716958707db))
+* **mcp:** marshal channel meta as empty object when nil ([5ad5eb7](https://github.com/icholy/xagent/commit/5ad5eb702a03cdf5b8d92b66016fe55bffea7c6d))
+* resume setup from failed command ([#762](https://github.com/icholy/xagent/issues/762)) ([5cc04b9](https://github.com/icholy/xagent/commit/5cc04b903981feb8ce3603a27c9f3593fcef41ee))
+* **server:** there's always a url ([61577cb](https://github.com/icholy/xagent/commit/61577cbb4e06bd5bf6baaa82da17e4aa6cd0043f))
+* switch mise pnpm backend to npm and bump Dockerfile to v11 ([#755](https://github.com/icholy/xagent/issues/755)) ([f290563](https://github.com/icholy/xagent/commit/f29056304add99054863b0d244acae8efc1ccd0f))
+* **webui:** fold routing-rules hint into card description ([#759](https://github.com/icholy/xagent/issues/759)) ([23c69bb](https://github.com/icholy/xagent/commit/23c69bbe8cc8562c981ed9417cf9f88883cb5bc1))
+
+
+### Miscellaneous
+
+* add notification-handling guidance to orchestrator skill ([c3fcde6](https://github.com/icholy/xagent/commit/c3fcde6d1af3bf23ccedddca1cc606f4c6eabaab))
+* add Task.IsTerminal() helper ([#756](https://github.com/icholy/xagent/issues/756)) ([40cbb12](https://github.com/icholy/xagent/commit/40cbb12f4d1545697223a566391ebc37de3a307a))
+* **deps:** update debian docker tag to v13 ([#731](https://github.com/icholy/xagent/issues/731)) ([709af15](https://github.com/icholy/xagent/commit/709af156c8bbef6aaa9d0065cd0c6d57b7a8aac6))
+* **deps:** update dependency @vitejs/plugin-react to v6 ([#732](https://github.com/icholy/xagent/issues/732)) ([bb7865b](https://github.com/icholy/xagent/commit/bb7865b11080a82b1a7c2728705a7c93e1eeccee))
+* **deps:** update dependency globals to v17 ([#734](https://github.com/icholy/xagent/issues/734)) ([1eeb5a6](https://github.com/icholy/xagent/commit/1eeb5a6fed2f9aceb22ad035d7eb9a2b0d502d64))
+* **deps:** update dependency node to v24 ([#735](https://github.com/icholy/xagent/issues/735)) ([1872a96](https://github.com/icholy/xagent/commit/1872a963ae103c3b70218ec37a533e0fd595d004))
+* **deps:** update dependency pnpm to v11 ([#740](https://github.com/icholy/xagent/issues/740)) ([c3a0e77](https://github.com/icholy/xagent/commit/c3a0e7752517934e20704fa9bb741ff820f7d539))
+* **deps:** update dependency typescript to v6 ([#750](https://github.com/icholy/xagent/issues/750)) ([c4e59c7](https://github.com/icholy/xagent/commit/c4e59c7647646ac7adbbea41aa9ede10dae2c97c))
+* **deps:** update docker/build-push-action action to v7 ([#752](https://github.com/icholy/xagent/issues/752)) ([73df7ee](https://github.com/icholy/xagent/commit/73df7ee6165fa2204dd5d6d3dce86c02618eab40))
+* **deps:** update docker/login-action action to v4 ([#757](https://github.com/icholy/xagent/issues/757)) ([96d3a8a](https://github.com/icholy/xagent/commit/96d3a8ab1204a56a418ec3a9a6de55582f08e147))
+* **deps:** update docker/metadata-action action to v6 ([#758](https://github.com/icholy/xagent/issues/758)) ([66234ff](https://github.com/icholy/xagent/commit/66234ffda4c95fb50c22470bc9c868f52cb918cd))
+* gate notification publishing on Notification.Ignore ([#753](https://github.com/icholy/xagent/issues/753)) ([64af1ee](https://github.com/icholy/xagent/commit/64af1ee5b22288f90a8c775573a5978a4b1398ef))
+* move implemented proposals out of draft ([4d78311](https://github.com/icholy/xagent/commit/4d78311c104655de55543ecfe4075c1ca2b32fe2))
+* **webui:** make routing-rule form source-aware ([#737](https://github.com/icholy/xagent/issues/737)) ([d92122d](https://github.com/icholy/xagent/commit/d92122d508f4f3c505c48a914cdbd9865b859035))
+* **webui:** move routing rule editor to dedicated routes ([#730](https://github.com/icholy/xagent/issues/730)) ([8c48b68](https://github.com/icholy/xagent/commit/8c48b683746e338f6a706935f621e2f93b0e52e7))
+* **webui:** promote Events to top-level nav page ([#733](https://github.com/icholy/xagent/issues/733)) ([6d831c9](https://github.com/icholy/xagent/commit/6d831c9852598b13f8f7a2116e050a5d51423dd2))
+
 ## [0.21.0](https://github.com/icholy/xagent/compare/v0.20.0...v0.21.0) (2026-05-30)
 
 
