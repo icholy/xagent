@@ -16,20 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Duration } from '@bufbuild/protobuf/wkt'
+import { durationFromHours } from '@/lib/duration'
 
 export const Route = createFileRoute('/tasks/new')({
   component: NewTaskPage,
 })
-
-// durationFromHours parses an integer string number of hours and returns a protobuf
-// Duration, or undefined for empty / "never".
-function durationFromHours(value: string): Duration | undefined {
-  if (!value || value === 'never') return undefined
-  const hours = Number.parseInt(value, 10)
-  if (!Number.isFinite(hours) || hours <= 0) return undefined
-  return { seconds: BigInt(hours * 3600), nanos: 0, $typeName: 'google.protobuf.Duration' }
-}
 
 function NewTaskPage() {
   const navigate = useNavigate()
