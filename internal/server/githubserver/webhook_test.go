@@ -26,6 +26,7 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
+					ID:   github.Ptr[int64](555),
 					Body: github.Ptr("xagent: do something"),
 					User: &github.User{
 						ID:    github.Ptr[int64](123),
@@ -36,6 +37,10 @@ func TestToGithubInputEvent(t *testing.T) {
 					Number:  github.Ptr(1),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
 			},
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
@@ -43,7 +48,13 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "testuser commented on issue #1",
 				Data:        "xagent: do something",
 				URL:         "https://github.com/owner/repo/issues/1",
-				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
+				Meta: GitHubMeta{
+					AuthorID:    123,
+					AuthorLogin: "testuser",
+					Owner:       "owner",
+					Repo:        "repo",
+					CommentID:   555,
+				},
 			},
 		},
 		{
@@ -51,6 +62,7 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
+					ID:   github.Ptr[int64](556),
 					Body: github.Ptr("xagent: review this"),
 					User: &github.User{
 						ID:    github.Ptr[int64](456),
@@ -62,6 +74,10 @@ func TestToGithubInputEvent(t *testing.T) {
 					HTMLURL:          github.Ptr("https://github.com/owner/repo/pull/2"),
 					PullRequestLinks: &github.PullRequestLinks{},
 				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
 			},
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
@@ -69,7 +85,13 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "pruser commented on PR #2",
 				Data:        "xagent: review this",
 				URL:         "https://github.com/owner/repo/pull/2",
-				Meta:        GitHubMeta{AuthorID: 456, AuthorLogin: "pruser"},
+				Meta: GitHubMeta{
+					AuthorID:    456,
+					AuthorLogin: "pruser",
+					Owner:       "owner",
+					Repo:        "repo",
+					CommentID:   556,
+				},
 			},
 		},
 		{
@@ -150,6 +172,7 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.PullRequestReviewCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.PullRequestComment{
+					ID:   github.Ptr[int64](777),
 					Body: github.Ptr("xagent: fix this"),
 					User: &github.User{
 						ID:    github.Ptr[int64](789),
@@ -160,6 +183,10 @@ func TestToGithubInputEvent(t *testing.T) {
 					Number:  github.Ptr(3),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
 				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
 			},
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
@@ -167,7 +194,13 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "reviewer reviewed PR #3",
 				Data:        "xagent: fix this",
 				URL:         "https://github.com/owner/repo/pull/3",
-				Meta:        GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
+				Meta: GitHubMeta{
+					AuthorID:    789,
+					AuthorLogin: "reviewer",
+					Owner:       "owner",
+					Repo:        "repo",
+					CommentID:   777,
+				},
 			},
 		},
 		{
@@ -258,7 +291,13 @@ func TestToGithubInputEvent(t *testing.T) {
 					Number:  github.Ptr(4),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4"),
 				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
 			},
+			// Review submissions have no reactable comment, so the comment
+			// coordinates stay zero even though the repo is present.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_review",
@@ -360,7 +399,13 @@ func TestToGithubInputEvent(t *testing.T) {
 					ID:    github.Ptr[int64](999),
 					Login: github.Ptr("octocat"),
 				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
 			},
+			// Assignments have no reactable comment, so the comment coordinates
+			// stay zero even though the repo is present.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "issue_assigned",
@@ -413,7 +458,13 @@ func TestToGithubInputEvent(t *testing.T) {
 					ID:    github.Ptr[int64](42),
 					Login: github.Ptr("alice"),
 				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
 			},
+			// Assignments have no reactable comment, so the comment coordinates
+			// stay zero even though the repo is present.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_assigned",
