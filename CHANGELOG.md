@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.23.0](https://github.com/icholy/xagent/compare/v0.22.2...v0.23.0) (2026-05-31)
+
+
+### Features
+
+* add archive-after option to routing-rule create-task config ([#786](https://github.com/icholy/xagent/issues/786)) ([cfb0e89](https://github.com/icholy/xagent/commit/cfb0e8915655fc0e0132ab13bc950a4b4ce21a65))
+* add OnRouteOutcome callback to eventrouter ([#791](https://github.com/icholy/xagent/issues/791)) ([519d7d7](https://github.com/icholy/xagent/commit/519d7d7030fef073409b57431fddfa1e7094695f))
+* add reaction-target coordinates to GitHubMeta ([#792](https://github.com/icholy/xagent/issues/792)) ([964f419](https://github.com/icholy/xagent/commit/964f4193171a71d1443b90298c638fe7cdf8975d))
+* add reusable githubx.AppTokenCache ([#785](https://github.com/icholy/xagent/issues/785)) ([7573021](https://github.com/icholy/xagent/commit/757302149ddb1ddb4acc9e94a6b9e54d4dddd305))
+* explicit per-task channel subscriptions in mcp bridge ([#798](https://github.com/icholy/xagent/issues/798)) ([f4130aa](https://github.com/icholy/xagent/commit/f4130aa3945fc1ce6e1b4b142d69d6b173e27ffc))
+* react to matched GitHub comments with 👀 ([#796](https://github.com/icholy/xagent/issues/796)) ([0346ae5](https://github.com/icholy/xagent/commit/0346ae5ec3759e7468a24ed047b14f32eecae0a6))
+
+
+### Bug Fixes
+
+* **deps:** update dependency lucide-react to v1 ([#790](https://github.com/icholy/xagent/issues/790)) ([9e33461](https://github.com/icholy/xagent/commit/9e33461f841965663545aadfbce2a0e5d61dc572))
+* **deps:** update module github.com/golang-jwt/jwt/v4 to v5 ([#794](https://github.com/icholy/xagent/issues/794)) ([bd6f4b9](https://github.com/icholy/xagent/commit/bd6f4b95745cd3f1b8f3df881c821ccf2251cb84))
+* **deps:** update module github.com/golang-jwt/jwt/v4 to v5 ([#797](https://github.com/icholy/xagent/issues/797)) ([4c15568](https://github.com/icholy/xagent/commit/4c1556871ffb433e8fc0fa551e06d70df2c74001))
+* **deps:** update module github.com/golang-jwt/jwt/v4 to v5 ([#799](https://github.com/icholy/xagent/issues/799)) ([dfaca44](https://github.com/icholy/xagent/commit/dfaca445a055636c92abcc3386c4f4c383e73e44))
+* **deps:** update module github.com/google/go-github/v68 to v88 ([#800](https://github.com/icholy/xagent/issues/800)) ([f9f891e](https://github.com/icholy/xagent/commit/f9f891ee31dce177750e14c25b3f7d93150f6c65))
+* ignore non-create/edit GitHub comment webhook actions ([#774](https://github.com/icholy/xagent/issues/774)) ([567588b](https://github.com/icholy/xagent/commit/567588ba3769d42beda90803a79dff1a75c6d9d5))
+
+
+### Reverts
+
+* back out per-task channel subscription watch tools and skill docs ([856f721](https://github.com/icholy/xagent/commit/856f721a94108deb94f643011cb4a17a11b99a6c))
+
+
+### Miscellaneous
+
+* build per-installation transports from raw materials in AppTokenCache ([#801](https://github.com/icholy/xagent/issues/801)) ([7e88a8d](https://github.com/icholy/xagent/commit/7e88a8d0539473412ed5119e1aa79690271e9a49)), closes [#787](https://github.com/icholy/xagent/issues/787)
+* build release images for linux/amd64 only ([3096dca](https://github.com/icholy/xagent/commit/3096dca61d2b74ba49b0fcdcfc6dcda08b69fec7))
+* **deps:** update eslint monorepo to v10 ([#772](https://github.com/icholy/xagent/issues/772)) ([8c874bc](https://github.com/icholy/xagent/commit/8c874bcd3a920886f9a5619eb2f392b2023b5e09))
+* **deps:** update googleapis/release-please-action action to v5 ([#778](https://github.com/icholy/xagent/issues/778)) ([b8007c0](https://github.com/icholy/xagent/commit/b8007c07bd85e401f09311ef4e5c9c5e534e816e))
+* **deps:** update pnpm/action-setup action to v6 ([#779](https://github.com/icholy/xagent/issues/779)) ([d1ed0e6](https://github.com/icholy/xagent/commit/d1ed0e693ccc82125f314e66820c330bda8dfdf7))
+* **deps:** update postgres docker tag to v18 ([#783](https://github.com/icholy/xagent/issues/783)) ([cf81cf1](https://github.com/icholy/xagent/commit/cf81cf14e819c94302956665b1eee41d6238cf2d))
+* **deps:** update softprops/action-gh-release action to v3 ([#784](https://github.com/icholy/xagent/issues/784)) ([2a9cd03](https://github.com/icholy/xagent/commit/2a9cd03e473f8e9715bbbbaa5d47cd293fc0c43a))
+* dissolve webhookserver into source packages ([#780](https://github.com/icholy/xagent/issues/780)) ([9d308a4](https://github.com/icholy/xagent/commit/9d308a4279e2cade8abe910e605cf702c26c56b5))
+* flatten webhook Meta structs (drop GithubUser/AtlassianUser) ([#777](https://github.com/icholy/xagent/issues/777)) ([161c452](https://github.com/icholy/xagent/commit/161c45273a6ed6f0da5601d176df0b60398fb03e))
+* move implemented proposals out of draft ([748b729](https://github.com/icholy/xagent/commit/748b7297d4e686952ddeb978de90c4820113710d))
+* parse Atlassian webhooks into InputEvent, rename extractors ([#776](https://github.com/icholy/xagent/issues/776)) ([966dad1](https://github.com/icholy/xagent/commit/966dad1090df3279f85a543244e6fd13df8f2956))
+* parse GitHub webhooks directly into InputEvent ([#775](https://github.com/icholy/xagent/issues/775)) ([7216541](https://github.com/icholy/xagent/commit/7216541185f14eb55e6571927938df0ed70bbbab))
+* promote Atlassian event-type string to a named constant ([#789](https://github.com/icholy/xagent/issues/789)) ([5e39020](https://github.com/icholy/xagent/commit/5e3902071c2329b5e332d6b6cd8a2ae247ecc8e8))
+* promote github webhook event-type strings to named constants ([#788](https://github.com/icholy/xagent/issues/788)) ([753727a](https://github.com/icholy/xagent/commit/753727a31dc800c96bef3c04d9b5eea91f247cb5))
+* **renovate:** rewrite Go import paths on major module updates ([f81879e](https://github.com/icholy/xagent/commit/f81879e3aea38db4b0d6a804e83b4b061809643a))
+* **skills:** document mute-by-default channel notifications and watch tools ([b8686c8](https://github.com/icholy/xagent/commit/b8686c88e58ef7eaa7315239d220d9da559ac1b5))
+
 ## [0.22.2](https://github.com/icholy/xagent/compare/v0.22.1...v0.22.2) (2026-05-31)
 
 
