@@ -22,7 +22,9 @@ The issue proposes giving links (and events) **two URLs**: the original expressi
 
 ### Core idea
 
-Add a `routing_url` column to `task_links` and `events`, derived from `url` by `model.RoutingURL`. Routing matches on `routing_url` instead of `url`. `url` stays expressive and user-facing; `routing_url` is an internal key.
+Add a `routing_url` column to `task_links`, derived from `url` by `model.RoutingURL`. Routing matches on the link's `routing_url` instead of its `url`. `url` stays expressive and user-facing; `routing_url` is an internal key.
+
+The `events` table does **not** get a `routing_url` column. Routing matches on the *link* side, and nothing queries events by URL (the only such query, `FindEventsByURL`, is removed — see Cleanup). The router still derives a routing key to look up links, but it doesn't need to persist that key on the event; the event keeps its expressive `url` for display.
 
 `RoutingURL` only normalizes URLs it recognizes (GitHub issue/PR and Jira issue, in both their **web and API** forms). Everything else is returned unchanged — there is no general-purpose normalization.
 
@@ -73,7 +75,7 @@ Anything else: returned unchanged (matches by exact equality, as today).
   }
   ```
 
-- **Event routing (`eventrouter`).** The router already computes the routing key (see §3) and sets it on both the event and the auto-created subscribed link before calling the store.
+- **Event routing (`eventrouter`).** The router already computes the routing key (see §3) and sets it on the auto-created subscribed link before calling the store.
 
 `CreateLinkRequest` itself is unchanged — clients still send only `url`; the server derives `routing_url`.
 
@@ -102,12 +104,11 @@ event := &model.Event{
     Description: input.Description,
     Data:        input.Data,
     URL:         input.URL,   // the comment/review that triggered it
-    RoutingURL:  key,
     OrgID:       orgID,
 }
 ```
 
-The auto-created subscribed link in `Router.create` is given the same `key` as its `RoutingURL`.
+`key` is only used to look up links; it is not stored on the event (the `events` table has no `routing_url` column). The auto-created subscribed link in `Router.create`, however, is given the same `key` as its `RoutingURL`.
 
 ### 4. Webhook handlers — link to the real trigger
 
@@ -131,24 +132,19 @@ Migration `internal/store/sql/migrations/<ts>_link_routing_url.sql`:
 ```sql
 -- migrate:up
 ALTER TABLE task_links ADD COLUMN routing_url TEXT NOT NULL DEFAULT '';
-ALTER TABLE events     ADD COLUMN routing_url TEXT NOT NULL DEFAULT '';
 
 -- Existing rows already stored the canonical parent URL (the old contract),
 -- so seeding routing_url = url preserves all current matches.
 UPDATE task_links SET routing_url = url WHERE routing_url = '';
-UPDATE events     SET routing_url = url WHERE routing_url = '';
 
 CREATE INDEX idx_task_links_routing_url ON task_links (routing_url);
-CREATE INDEX idx_events_routing_url     ON events (routing_url);
 
 -- migrate:down
-DROP INDEX IF EXISTS idx_events_routing_url;
 DROP INDEX IF EXISTS idx_task_links_routing_url;
-ALTER TABLE events     DROP COLUMN IF EXISTS routing_url;
 ALTER TABLE task_links DROP COLUMN IF EXISTS routing_url;
 ```
 
-The existing `idx_task_links_url` / `idx_events_url` indexes are dropped, because their only users (`FindLinksByURL` / `FindEventsByURL`) are removed — see Cleanup below.
+Only `task_links` gets the column. The existing `idx_task_links_url` / `idx_events_url` indexes are dropped, because their only users (`FindLinksByURL` / `FindEventsByURL`) are removed — see Cleanup below.
 
 ### 6. Cleanup: remove unused `FindLinksByURL` / `FindEventsByURL`
 
@@ -159,7 +155,7 @@ Both lookups are dead code today and routing no longer needs them, so they are r
 
 This leaves `FindSubscribedLinksForOrgs` (now matching on `routing_url`) as the only URL-based lookup, and removes the `idx_task_links_url` / `idx_events_url` indexes that backed the deleted queries.
 
-Queries: `CreateLink` / `CreateEvent` insert `routing_url`; `SELECT`s return it; `FindSubscribedLinksForOrgs` matches `WHERE l.routing_url = sqlc.arg(routing_url)`. `model.Link` and `model.Event` each gain a `RoutingURL string` field (with `Proto` / `FromProto` wiring). Proto adds a read-only `string routing_url` to `TaskLink` (field 8) and `Event` (field 6).
+Queries: `CreateLink` inserts `routing_url`; the link `SELECT`s return it; `FindSubscribedLinksForOrgs` matches `WHERE l.routing_url = sqlc.arg(routing_url)`. The `events` queries are unchanged (no `routing_url`). `model.Link` gains a `RoutingURL string` field (with `Proto` / `FromProto` wiring); `model.Event` is unchanged. Proto adds a read-only `string routing_url` to `TaskLink` (field 8) only.
 
 ## Trade-offs
 
