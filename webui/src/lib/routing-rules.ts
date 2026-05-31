@@ -141,17 +141,19 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
 
 // Builds a RoutingRule from the form's draft values. `create` is only set
 // when the toggle is on — otherwise it's omitted so the rule reverts to the
-// wake-only behaviour. `assignee` is only set when the selected event type
-// is an assignment event so toggling event types doesn't carry a stale
-// assignee through.
+// wake-only behaviour. Assignment events have no message body, so when the
+// selected event type is an assignment one we drop prefix/mention; for
+// non-assignment types we drop assignee. This keeps the form's draft state
+// usable across event-type toggles without persisting fields the rule can't
+// actually match on.
 export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
-  const assignee = isAssignmentType(values.source, values.type) ? values.assignee : ''
+  const isAssignment = isAssignmentType(values.source, values.type)
   return create(RoutingRuleSchema, {
     source: values.source,
     type: values.type,
-    prefix: values.prefix,
-    mention: values.mention,
-    assignee,
+    prefix: isAssignment ? '' : values.prefix,
+    mention: isAssignment ? '' : values.mention,
+    assignee: isAssignment ? values.assignee : '',
     create: values.createTask
       ? {
           workspace: values.createWorkspace,

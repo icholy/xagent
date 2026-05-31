@@ -76,7 +76,9 @@ export function RoutingRuleForm({
 
   const mentionCopy = mentionCopyForSource(values.source)
   const assigneeCopy = assigneeCopyForSource(values.source)
-  const showAssignee = isAssignmentType(values.source, values.type)
+  // Assignment events have no message body, so prefix/mention can't match —
+  // hide those fields and show the assignee field instead.
+  const isAssignment = isAssignmentType(values.source, values.type)
   const canSubmit = isRoutingRuleFormValid(values, selectedId !== '')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {}, { enabled: values.createTask })
@@ -134,32 +136,36 @@ export function RoutingRuleForm({
         </p>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="prefix">Message starts with</Label>
-        <Input
-          id="prefix"
-          placeholder="Optional — e.g. /xagent"
-          value={values.prefix}
-          onChange={(e) => setValues({ ...values, prefix: e.target.value })}
-        />
-        <p className="text-muted-foreground text-xs">
-          Leave blank to match any message. Otherwise the rule only fires when the event body starts
-          with this string.
-        </p>
-      </div>
+      {!isAssignment && (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="prefix">Message starts with</Label>
+            <Input
+              id="prefix"
+              placeholder="Optional — e.g. /xagent"
+              value={values.prefix}
+              onChange={(e) => setValues({ ...values, prefix: e.target.value })}
+            />
+            <p className="text-muted-foreground text-xs">
+              Leave blank to match any message. Otherwise the rule only fires when the event body
+              starts with this string.
+            </p>
+          </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="mention">{mentionCopy.label}</Label>
-        <Input
-          id="mention"
-          placeholder={mentionCopy.placeholder}
-          value={values.mention}
-          onChange={(e) => setValues({ ...values, mention: e.target.value })}
-        />
-        <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
-      </div>
+          <div className="space-y-2">
+            <Label htmlFor="mention">{mentionCopy.label}</Label>
+            <Input
+              id="mention"
+              placeholder={mentionCopy.placeholder}
+              value={values.mention}
+              onChange={(e) => setValues({ ...values, mention: e.target.value })}
+            />
+            <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
+          </div>
+        </>
+      )}
 
-      {showAssignee && (
+      {isAssignment && (
         <div className="space-y-2">
           <Label htmlFor="assignee">{assigneeCopy.label}</Label>
           <Input
