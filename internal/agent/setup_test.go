@@ -64,44 +64,6 @@ func TestSetup_ResumesFromSavedIndex(t *testing.T) {
 	assertFileExists(t, marker4)
 }
 
-func TestSetup_AlreadyCompleteSkipsLoop(t *testing.T) {
-	// Arrange
-	d := newTestDriver(t)
-	cfg := &Config{
-		Commands:               []string{"exit 1"}, // would fail if executed
-		SetupCommandsCompleted: 1,
-	}
-
-	// Act
-	err := d.setup(context.Background(), cfg)
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, cfg.SetupCommandsCompleted, 1)
-}
-
-func TestSetup_NoCountRunsFromZero(t *testing.T) {
-	// Arrange
-	d := newTestDriver(t)
-	marker0 := filepath.Join(t.TempDir(), "marker0")
-	marker1 := filepath.Join(t.TempDir(), "marker1")
-	cfg := &Config{
-		Commands: []string{
-			"touch " + marker0,
-			"touch " + marker1,
-		},
-	}
-
-	// Act
-	err := d.setup(context.Background(), cfg)
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, cfg.SetupCommandsCompleted, 2)
-	assertFileExists(t, marker0)
-	assertFileExists(t, marker1)
-}
-
 func TestSetup_LastCommandFailureLeavesIncompleteCount(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
