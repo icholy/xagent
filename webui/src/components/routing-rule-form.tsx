@@ -24,6 +24,7 @@ import {
   isRoutingRuleFormValid,
   legacyEventTypeOption,
   mentionCopyForSource,
+  urlPrefixCopyForSource,
   type RoutingRuleFormValues,
 } from '@/lib/routing-rules'
 
@@ -56,7 +57,8 @@ export function RoutingRuleForm({
       !initialValues.type &&
       !initialValues.prefix &&
       !initialValues.mention &&
-      !initialValues.assignee
+      !initialValues.assignee &&
+      !initialValues.urlPrefix
     if (isUntouched) return null
     return legacyEventTypeOption(initialValues.source, initialValues.type)
   }, [initialValues])
@@ -76,6 +78,7 @@ export function RoutingRuleForm({
 
   const mentionCopy = mentionCopyForSource(values.source)
   const assigneeCopy = assigneeCopyForSource(values.source)
+  const urlPrefixCopy = urlPrefixCopyForSource(values.source)
   // Assignment events have no message body, so prefix/mention can't match —
   // hide those fields and show the assignee field instead.
   const isAssignment = isAssignmentType(values.source, values.type)
@@ -134,6 +137,17 @@ export function RoutingRuleForm({
         <p className="text-muted-foreground text-xs">
           The kind of incoming webhook event this rule applies to.
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="url-prefix">URL prefix</Label>
+        <Input
+          id="url-prefix"
+          placeholder={urlPrefixCopy.placeholder}
+          value={values.urlPrefix}
+          onChange={(e) => setValues({ ...values, urlPrefix: e.target.value })}
+        />
+        <p className="text-muted-foreground text-xs">{urlPrefixCopy.help}</p>
       </div>
 
       {!isAssignment && (

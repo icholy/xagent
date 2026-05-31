@@ -159,6 +159,48 @@ func TestMatchRule(t *testing.T) {
 			want:  false,
 		},
 		{
+			name:  "empty url prefix matches any url",
+			rule:  model.RoutingRule{},
+			event: InputEvent{URL: "https://github.com/icholy/xagent/pull/1"},
+			want:  true,
+		},
+		{
+			name:  "url prefix match",
+			rule:  model.RoutingRule{URLPrefix: "https://github.com/icholy/xagent/"},
+			event: InputEvent{URL: "https://github.com/icholy/xagent/pull/1"},
+			want:  true,
+		},
+		{
+			name:  "url prefix mismatch",
+			rule:  model.RoutingRule{URLPrefix: "https://github.com/icholy/xagent/"},
+			event: InputEvent{URL: "https://github.com/other/repo/pull/1"},
+			want:  false,
+		},
+		{
+			name:  "url prefix mismatch on empty url",
+			rule:  model.RoutingRule{URLPrefix: "https://github.com/icholy/xagent/"},
+			event: InputEvent{URL: ""},
+			want:  false,
+		},
+		{
+			name: "url prefix is independent of body prefix",
+			rule: model.RoutingRule{URLPrefix: "https://github.com/icholy/xagent/"},
+			event: InputEvent{
+				URL:  "https://github.com/icholy/xagent/issues/1",
+				Data: "no xagent: prefix here",
+			},
+			want: true,
+		},
+		{
+			name: "body prefix is independent of url",
+			rule: model.RoutingRule{Prefix: "xagent:"},
+			event: InputEvent{
+				URL:  "https://example.com/whatever",
+				Data: "xagent: do the thing",
+			},
+			want: true,
+		},
+		{
 			name: "combined source type assignee all match",
 			rule: model.RoutingRule{
 				Source:   "github",

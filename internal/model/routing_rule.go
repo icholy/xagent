@@ -7,12 +7,13 @@ import (
 // RoutingRule defines a routing rule that determines whether an event
 // should be routed to an org's tasks. Empty fields are treated as wildcards.
 type RoutingRule struct {
-	Source   string            `json:"source,omitempty"`
-	Type     string            `json:"type,omitempty"`
-	Prefix   string            `json:"prefix,omitempty"`
-	Mention  string            `json:"mention,omitempty"`
-	Assignee string            `json:"assignee,omitempty"`
-	Create   *CreateTaskAction `json:"create,omitempty"`
+	Source    string            `json:"source,omitempty"`
+	Type      string            `json:"type,omitempty"`
+	Prefix    string            `json:"prefix,omitempty"`
+	Mention   string            `json:"mention,omitempty"`
+	Assignee  string            `json:"assignee,omitempty"`
+	URLPrefix string            `json:"url_prefix,omitempty"`
+	Create    *CreateTaskAction `json:"create,omitempty"`
 }
 
 // CreateTaskAction configures a routing rule to create a new task on
@@ -49,11 +50,12 @@ func CreateTaskActionFromProto(pb *xagentv1.CreateTaskAction) *CreateTaskAction 
 // Proto converts a RoutingRule to its protobuf representation.
 func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 	pb := &xagentv1.RoutingRule{
-		Source:   r.Source,
-		Type:     r.Type,
-		Prefix:   r.Prefix,
-		Mention:  r.Mention,
-		Assignee: r.Assignee,
+		Source:    r.Source,
+		Type:      r.Type,
+		Prefix:    r.Prefix,
+		Mention:   r.Mention,
+		Assignee:  r.Assignee,
+		UrlPrefix: r.URLPrefix,
 	}
 	if r.Create != nil {
 		pb.Create = r.Create.Proto()
@@ -64,11 +66,12 @@ func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 // RoutingRuleFromProto converts a protobuf RoutingRule to the model type.
 func RoutingRuleFromProto(pb *xagentv1.RoutingRule) RoutingRule {
 	return RoutingRule{
-		Source:   pb.Source,
-		Type:     pb.Type,
-		Prefix:   pb.Prefix,
-		Mention:  pb.Mention,
-		Assignee: pb.Assignee,
-		Create:   CreateTaskActionFromProto(pb.Create),
+		Source:    pb.Source,
+		Type:      pb.Type,
+		Prefix:    pb.Prefix,
+		Mention:   pb.Mention,
+		Assignee:  pb.Assignee,
+		URLPrefix: pb.UrlPrefix,
+		Create:    CreateTaskActionFromProto(pb.Create),
 	}
 }
