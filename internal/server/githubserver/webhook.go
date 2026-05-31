@@ -135,6 +135,15 @@ func (h *WebhookHandler) handleInstallationEvent(w http.ResponseWriter, r *http.
 type GitHubMeta struct {
 	AuthorID    int64
 	AuthorLogin string
+
+	// Owner, Repo, and CommentID locate the comment for GitHub's Reactions API.
+	// Populated only for issue_comment and pull_request_review_comment events;
+	// left zero for assignments and review submissions (which have no reactable
+	// comment). Consumers key off InputEvent.Type, not these fields, to decide
+	// whether and how to react.
+	Owner     string
+	Repo      string
+	CommentID int64
 }
 
 // Event-type strings set on eventrouter.InputEvent.Type by toInputEvent. They
@@ -172,7 +181,13 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: description,
 			Data:        body,
 			URL:         *event.Issue.HTMLURL,
-			Meta:        GitHubMeta{AuthorID: *event.Comment.User.ID, AuthorLogin: login},
+			Meta: GitHubMeta{
+				AuthorID:    *event.Comment.User.ID,
+				AuthorLogin: login,
+				Owner:       event.GetRepo().GetOwner().GetLogin(),
+				Repo:        event.GetRepo().GetName(),
+				CommentID:   event.GetComment().GetID(),
+			},
 		}
 
 	case *github.PullRequestReviewCommentEvent:
@@ -193,7 +208,13 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
 			Data:        body,
 			URL:         *event.PullRequest.HTMLURL,
-			Meta:        GitHubMeta{AuthorID: *event.Comment.User.ID, AuthorLogin: login},
+			Meta: GitHubMeta{
+				AuthorID:    *event.Comment.User.ID,
+				AuthorLogin: login,
+				Owner:       event.GetRepo().GetOwner().GetLogin(),
+				Repo:        event.GetRepo().GetName(),
+				CommentID:   event.GetComment().GetID(),
+			},
 		}
 
 	case *github.PullRequestReviewEvent:
