@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
@@ -20,7 +19,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 	tests := []struct {
 		name     string
 		event    any
-		expected *githubWebhookEvent
+		expected *eventrouter.InputEvent
 	}{
 		{
 			name: "IssueComment",
@@ -38,13 +37,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "issue_comment",
-				description:    "testuser commented on issue #1",
-				data:           "xagent: do something",
-				url:            "https://github.com/owner/repo/issues/1",
-				githubUserID:   123,
-				githubUsername: "testuser",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "issue_comment",
+				Description: "testuser commented on issue #1",
+				Data:        "xagent: do something",
+				URL:         "https://github.com/owner/repo/issues/1",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 123, Username: "testuser"}},
 			},
 		},
 		{
@@ -64,13 +63,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					PullRequestLinks: &github.PullRequestLinks{},
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "issue_comment",
-				description:    "pruser commented on PR #2",
-				data:           "xagent: review this",
-				url:            "https://github.com/owner/repo/pull/2",
-				githubUserID:   456,
-				githubUsername: "pruser",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "issue_comment",
+				Description: "pruser commented on PR #2",
+				Data:        "xagent: review this",
+				URL:         "https://github.com/owner/repo/pull/2",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 456, Username: "pruser"}},
 			},
 		},
 		{
@@ -89,13 +88,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "issue_comment",
-				description:    "testuser commented on issue #1",
-				data:           "just a regular comment",
-				url:            "https://github.com/owner/repo/issues/1",
-				githubUserID:   123,
-				githubUsername: "testuser",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "issue_comment",
+				Description: "testuser commented on issue #1",
+				Data:        "just a regular comment",
+				URL:         "https://github.com/owner/repo/issues/1",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 123, Username: "testuser"}},
 			},
 		},
 		{
@@ -119,13 +118,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "issue_comment",
-				description:    "testuser commented on issue #1",
-				data:           "xagent: do something",
-				url:            "https://github.com/owner/repo/issues/1",
-				githubUserID:   123,
-				githubUsername: "testuser",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "issue_comment",
+				Description: "testuser commented on issue #1",
+				Data:        "xagent: do something",
+				URL:         "https://github.com/owner/repo/issues/1",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 123, Username: "testuser"}},
 			},
 		},
 		{
@@ -162,13 +161,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "pull_request_review_comment",
-				description:    "reviewer reviewed PR #3",
-				data:           "xagent: fix this",
-				url:            "https://github.com/owner/repo/pull/3",
-				githubUserID:   789,
-				githubUsername: "reviewer",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_review_comment",
+				Description: "reviewer reviewed PR #3",
+				Data:        "xagent: fix this",
+				URL:         "https://github.com/owner/repo/pull/3",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 789, Username: "reviewer"}},
 			},
 		},
 		{
@@ -187,13 +186,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "pull_request_review_comment",
-				description:    "reviewer reviewed PR #3",
-				data:           "looks good",
-				url:            "https://github.com/owner/repo/pull/3",
-				githubUserID:   789,
-				githubUsername: "reviewer",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_review_comment",
+				Description: "reviewer reviewed PR #3",
+				Data:        "looks good",
+				URL:         "https://github.com/owner/repo/pull/3",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 789, Username: "reviewer"}},
 			},
 		},
 		{
@@ -217,13 +216,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "pull_request_review_comment",
-				description:    "reviewer reviewed PR #3",
-				data:           "xagent: fix this",
-				url:            "https://github.com/owner/repo/pull/3",
-				githubUserID:   789,
-				githubUsername: "reviewer",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_review_comment",
+				Description: "reviewer reviewed PR #3",
+				Data:        "xagent: fix this",
+				URL:         "https://github.com/owner/repo/pull/3",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 789, Username: "reviewer"}},
 			},
 		},
 		{
@@ -260,13 +259,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "pull_request_review",
-				description:    "lead reviewed PR #4",
-				data:           "xagent: please address comments",
-				url:            "https://github.com/owner/repo/pull/4",
-				githubUserID:   101,
-				githubUsername: "lead",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_review",
+				Description: "lead reviewed PR #4",
+				Data:        "xagent: please address comments",
+				URL:         "https://github.com/owner/repo/pull/4",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 101, Username: "lead"}},
 			},
 		},
 		{
@@ -302,13 +301,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "pull_request_review",
-				description:    "lead reviewed PR #4",
-				data:           "approved",
-				url:            "https://github.com/owner/repo/pull/4",
-				githubUserID:   101,
-				githubUsername: "lead",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_review",
+				Description: "lead reviewed PR #4",
+				Data:        "approved",
+				URL:         "https://github.com/owner/repo/pull/4",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 101, Username: "lead"}},
 			},
 		},
 		{
@@ -337,13 +336,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "issue_comment",
-				description:    "testuser commented on issue #1",
-				data:           "xagent: trimmed",
-				url:            "https://github.com/owner/repo/issues/1",
-				githubUserID:   123,
-				githubUsername: "testuser",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "issue_comment",
+				Description: "testuser commented on issue #1",
+				Data:        "xagent: trimmed",
+				URL:         "https://github.com/owner/repo/issues/1",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 123, Username: "testuser"}},
 			},
 		},
 		{
@@ -362,13 +361,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					Login: github.Ptr("octocat"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "issue_assigned",
-				description:    "octocat assigned issue #7 to @icholy-bot",
-				url:            "https://github.com/owner/repo/issues/7",
-				githubUserID:   999,
-				githubUsername: "octocat",
-				assignee:       "icholy-bot",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "issue_assigned",
+				Description: "octocat assigned issue #7 to @icholy-bot",
+				URL:         "https://github.com/owner/repo/issues/7",
+				Assignee:    "icholy-bot",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 999, Username: "octocat"}},
 			},
 		},
 		{
@@ -415,13 +414,13 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 					Login: github.Ptr("alice"),
 				},
 			},
-			expected: &githubWebhookEvent{
-				eventType:      "pull_request_assigned",
-				description:    "alice assigned PR #12 to @icholy-bot",
-				url:            "https://github.com/owner/repo/pull/12",
-				githubUserID:   42,
-				githubUsername: "alice",
-				assignee:       "icholy-bot",
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_assigned",
+				Description: "alice assigned PR #12 to @icholy-bot",
+				URL:         "https://github.com/owner/repo/pull/12",
+				Assignee:    "icholy-bot",
+				Meta:        GitHubMeta{Author: GithubUser{ID: 42, Username: "alice"}},
 			},
 		},
 		{
@@ -457,7 +456,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := extractGitHubWebhookEvent(tt.event)
-			assert.DeepEqual(t, got, tt.expected, cmp.AllowUnexported(githubWebhookEvent{}))
+			assert.DeepEqual(t, got, tt.expected)
 		})
 	}
 }
@@ -527,6 +526,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		Data:        "xagent: please fix the tests",
 		URL:         "https://github.com/owner/repo/pull/10",
 		UserID:      "user-1",
+		Meta:        GitHubMeta{Author: GithubUser{ID: ghUserID, Username: "testuser"}},
 	})
 }
 

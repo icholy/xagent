@@ -21,6 +21,10 @@ type InputEvent struct {
 	URL         string
 	UserID      string
 	Assignee    string
+	// Meta carries source-specific data that the router does not interpret. It
+	// lets webhook handlers attach native identity (e.g. the GitHub author)
+	// without leaking source-specific types into eventrouter.
+	Meta any
 }
 
 // Router routes events to subscribed tasks via the store.
