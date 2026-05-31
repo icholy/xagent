@@ -137,6 +137,17 @@ type GitHubMeta struct {
 	AuthorLogin string
 }
 
+// Event-type strings set on eventrouter.InputEvent.Type by toInputEvent. They
+// form a contract between the extractor (producer) and any consumer that
+// dispatches on InputEvent.Type.
+const (
+	EventTypeIssueComment             = "issue_comment"
+	EventTypePullRequestReviewComment = "pull_request_review_comment"
+	EventTypePullRequestReview        = "pull_request_review"
+	EventTypeIssueAssigned            = "issue_assigned"
+	EventTypePullRequestAssigned      = "pull_request_assigned"
+)
+
 func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
@@ -157,7 +168,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 		}
 		return &eventrouter.InputEvent{
 			Source:      "github",
-			Type:        "issue_comment",
+			Type:        EventTypeIssueComment,
 			Description: description,
 			Data:        body,
 			URL:         *event.Issue.HTMLURL,
@@ -178,7 +189,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 		number := event.PullRequest.GetNumber()
 		return &eventrouter.InputEvent{
 			Source:      "github",
-			Type:        "pull_request_review_comment",
+			Type:        EventTypePullRequestReviewComment,
 			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
 			Data:        body,
 			URL:         *event.PullRequest.HTMLURL,
@@ -197,7 +208,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 		number := event.PullRequest.GetNumber()
 		return &eventrouter.InputEvent{
 			Source:      "github",
-			Type:        "pull_request_review",
+			Type:        EventTypePullRequestReview,
 			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
 			Data:        body,
 			URL:         *event.PullRequest.HTMLURL,
@@ -216,7 +227,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 		number := event.Issue.GetNumber()
 		return &eventrouter.InputEvent{
 			Source:      "github",
-			Type:        "issue_assigned",
+			Type:        EventTypeIssueAssigned,
 			Description: fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
 			URL:         *event.Issue.HTMLURL,
 			Assignee:    assigneeLogin,
@@ -235,7 +246,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 		number := event.PullRequest.GetNumber()
 		return &eventrouter.InputEvent{
 			Source:      "github",
-			Type:        "pull_request_assigned",
+			Type:        EventTypePullRequestAssigned,
 			Description: fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
 			URL:         *event.PullRequest.HTMLURL,
 			Assignee:    assigneeLogin,
