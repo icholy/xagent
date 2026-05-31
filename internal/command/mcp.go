@@ -75,21 +75,19 @@ var McpCommand = &cli.Command{
 
 		transport := mcpchannel.NewTransport(&mcp.StdioTransport{})
 
-		// *mcpchannel.Transport satisfies mcpserver.ChannelSender. When
-		// channels are enabled the bridge owns the per-task subscription
-		// set, the watch tools, and the mute-by-default forwarding gate;
-		// the gate logic lives in mcpserver, not here.
-		var ch *mcpserver.Channel
 		if cmd.Bool("channel") {
-			ch = mcpserver.NewChannel(transport)
+			// *mcpchannel.Transport satisfies mcpserver.ChannelSender. The
+			// bridge owns the per-task subscription set, the watch tools, and
+			// the mute-by-default forwarding gate; the gate logic lives in
+			// mcpserver, not here.
+			//
+			// The notification stream starts here, before Connect: with
+			// mute-by-default nothing is forwarded until the agent explicitly
+			// watches a task, which can only happen via a tool call once the
+			// session is up, so there is no race against the transport being
+			// connected.
+			ch := mcpserver.NewChannel(transport)
 			ch.AddTools(server)
-		}
-
-		session, err := server.Connect(ctx, transport, nil)
-		if err != nil {
-			return err
-		}
-		if ch != nil {
 			go func() {
 				nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
 					BaseURL:  cmd.String("server"),
@@ -101,6 +99,11 @@ var McpCommand = &cli.Command{
 					slog.Warn("xagent channel: stream ended", "error", err)
 				}
 			}()
+		}
+
+		session, err := server.Connect(ctx, transport, nil)
+		if err != nil {
+			return err
 		}
 		return session.Wait()
 	},

@@ -19,21 +19,17 @@ func (f *fakeSender) SendChannel(ctx context.Context, p mcpchannel.Params) error
 	return nil
 }
 
-func taskNotification(id int64, msg string) model.Notification {
-	return model.Notification{
-		Type:           "change",
-		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: id}},
-		ChannelMessage: msg,
-	}
-}
-
 func TestForward_MutedByDefault(t *testing.T) {
 	// Arrange
 	sender := &fakeSender{}
 	c := NewChannel(sender)
 
 	// Act - no watch_task call has been made
-	c.Forward(context.Background(), taskNotification(42, "Task 42 queued: start."))
+	c.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
+		ChannelMessage: "Task 42 queued: start.",
+	})
 
 	// Assert
 	assert.Equal(t, len(sender.sent), 0)
@@ -46,7 +42,11 @@ func TestForward_WatchedTask(t *testing.T) {
 	c.ids[42] = struct{}{}
 
 	// Act
-	c.Forward(context.Background(), taskNotification(42, "Task 42 queued: start."))
+	c.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
+		ChannelMessage: "Task 42 queued: start.",
+	})
 
 	// Assert
 	assert.Equal(t, len(sender.sent), 1)
@@ -61,7 +61,11 @@ func TestForward_UnwatchedTask(t *testing.T) {
 	c.ids[42] = struct{}{}
 
 	// Act - a different task's notification arrives
-	c.Forward(context.Background(), taskNotification(43, "Task 43 queued: start."))
+	c.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 43}},
+		ChannelMessage: "Task 43 queued: start.",
+	})
 
 	// Assert
 	assert.Equal(t, len(sender.sent), 0)
@@ -74,7 +78,10 @@ func TestForward_EmptyChannelMessage(t *testing.T) {
 	c.ids[42] = struct{}{}
 
 	// Act - summary gate: silent notification
-	c.Forward(context.Background(), taskNotification(42, ""))
+	c.Forward(context.Background(), model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
+	})
 
 	// Assert
 	assert.Equal(t, len(sender.sent), 0)
@@ -104,8 +111,16 @@ func TestForward_StaysWatchedAfterTerminal(t *testing.T) {
 
 	// Act - subscriptions are purely explicit; a terminal notification does
 	// not auto-unwatch, so a follow-up notification is still forwarded.
-	c.Forward(context.Background(), taskNotification(42, "Task 42 completed."))
-	c.Forward(context.Background(), taskNotification(42, "Task 42 archived."))
+	c.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
+		ChannelMessage: "Task 42 completed.",
+	})
+	c.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
+		ChannelMessage: "Task 42 archived.",
+	})
 
 	// Assert
 	assert.Equal(t, len(sender.sent), 2)
