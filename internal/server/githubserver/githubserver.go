@@ -148,7 +148,22 @@ func (s *Server) OAuthLink() *oauthlink.Handler {
 // WebhookHandler returns the HTTP handler for GitHub App webhook events.
 func (s *Server) WebhookHandler() http.Handler {
 	return &WebhookHandler{
-		Router:        &eventrouter.Router{Log: s.log, Store: s.store, Publisher: s.publisher},
+		Router: &eventrouter.Router{
+			Log:       s.log,
+			Store:     s.store,
+			Publisher: s.publisher,
+			OnRouteOutcome: func(ctx context.Context, o eventrouter.RouteOutcome) {
+				// react is synchronous; the goroutine + detached context +
+				// timeout keep a slow GitHub round-trip off the webhook path.
+				go func() {
+					ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+					defer cancel()
+					if err := s.react(ctx, o); err != nil {
+						s.log.Warn("github reaction failed", "org_id", o.OrgID, "url", o.Input.URL, "error", err)
+					}
+				}()
+			},
+		},
 		Store:         s.store,
 		WebhookSecret: s.config.WebhookSecret,
 	}
