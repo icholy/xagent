@@ -99,13 +99,20 @@ Both the extractor and the callback live in `githubserver`, so they share these 
 ```go
 // internal/eventrouter/eventrouter.go
 
-// RouteOutcome describes what the Router did with an InputEvent for one org.
-// It gives the callback the routing context — which org matched and the rule
-// that matched — not just the raw input.
+// RouteOutcome describes what the Router did with an InputEvent for one org. It
+// gives the callback the routing context — which org matched, the rule, the
+// affected tasks, and whether a task was created — so it can react differently
+// per case:
+//
+//	Created                       -> a task was created
+//	!Created && len(TaskIDs) > 0  -> existing task(s) were woken
+//	!Created && len(TaskIDs) == 0 -> matched, but nothing was created or woken
 type RouteOutcome struct {
-    Input InputEvent         // the routed event, including its Meta
-    OrgID int64              // the org whose routing rule matched
-    Rule  *model.RoutingRule // the rule that matched
+    Input   InputEvent         // the routed event, including its Meta
+    OrgID   int64              // the org whose routing rule matched
+    Rule    *model.RoutingRule // the rule that matched
+    TaskIDs []int64            // tasks created or woken
+    Created bool               // whether a task was created (vs woken / matched-only)
 }
 
 type Router struct {
@@ -113,21 +120,27 @@ type Router struct {
     Store     *store.Store
     Publisher pubsub.Publisher
 
-    // OnRouteOutcome, if set, is called once per matched org after routing
-    // handles that org. Fire-and-forget; the Router does not wait for it.
-    // Optional — nil disables it (e.g. the Atlassian router leaves it unset).
+    // OnRouteOutcome, if set, is called synchronously once per matched org
+    // after routing handles that org, with the request context. The Router
+    // imposes no concurrency or lifetime policy — the callback owns that (e.g.
+    // spawning its own goroutine). Optional — nil disables it (e.g. the
+    // Atlassian router leaves it unset).
     OnRouteOutcome func(ctx context.Context, outcome RouteOutcome)
 }
 ```
 
 `eventrouter` already imports `model`, so `RouteOutcome` needs no new import and carries nothing source-specific.
 
-In `Route()`, the matched rule per org is already computed (the `matched` map). The per-org loop then either **wakes** subscribed tasks or **creates** a task. One real integration point to call out, verified against the current `Route()`: **the callback must be placed past the loop's early `continue`s.** Today the wake branch ends in a `continue` and the create branch has its own `continue`s, so a single call at the loop bottom wouldn't fire for the wake path. Restructure the branches into `if / else if / else` so one `OnRouteOutcome` call at the end of the iteration covers both the wake and create paths (and is skipped when the org matched a rule but had nothing to do):
+In `Route()`, the matched rule per org is already computed (the `matched` map). The per-org loop then either **wakes** subscribed tasks or **creates** a task. The shape: declare a `RouteOutcome` at the top of each iteration, update it as the branch runs (record woken/created task IDs, set `Created`), and fire `OnRouteOutcome` once at the end. The callback now fires for **all** matched orgs — including the matched-but-no-action case (no subscribed link, no create action), so a rule can react even when it neither woke nor created a task. Error paths (event-create / task-create failure) still `continue` past the callback. This turns the loop's previous `else { continue }` into a fall-through that fires the callback with an empty outcome.
 
 ```go
 // internal/eventrouter/eventrouter.go (Route, per matched org)
 
 for orgID, rule := range matched {
+    // Built at the top, updated by whichever branch runs, passed to the callback
+    // at the end. Defaults to "matched, nothing done" (no TaskIDs, Created false).
+    outcome := RouteOutcome{Input: input, OrgID: orgID, Rule: rule}
+
     if links := linksByOrg[orgID]; len(links) > 0 {
         event := &model.Event{Description: input.Description, Data: input.Data, URL: input.URL, OrgID: orgID}
         if err := r.Store.CreateEvent(ctx, nil, event); err != nil {
@@ -144,56 +157,60 @@ for orgID, rule := range matched {
                 r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
                 continue
             }
+            outcome.TaskIDs = append(outcome.TaskIDs, link.TaskID)
             n++
         }
     } else if rule.Create != nil {
-        if err := r.create(ctx, input, orgID, rule); err != nil {
+        taskID, err := r.create(ctx, input, orgID, rule)
+        if err != nil {
             r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
             continue
         }
+        outcome.TaskIDs = []int64{taskID}
+        outcome.Created = true
         n++
-    } else {
-        continue // matched a rule but no subscribed link and no create action
     }
+    // else: matched a rule but no subscribed link and no create action —
+    // outcome stays empty, and we still fire the callback below.
+
     if r.OnRouteOutcome != nil {
-        go r.OnRouteOutcome(context.WithoutCancel(ctx), RouteOutcome{
-            Input: input, OrgID: orgID, Rule: rule,
-        })
+        r.OnRouteOutcome(ctx, outcome)
     }
 }
 ```
 
-`r.create` keeps its current `error`-only signature — without `TaskIDs` to populate, the outcome doesn't need the created task's ID.
+`r.create` is changed to return `(int64, error)` — the new task's ID — so it can populate `outcome.TaskIDs`.
 
-`context.WithoutCancel` keeps the callback alive after the webhook handler returns, since the source round-trip should not block the webhook response. The callback owns its own timeout (a few seconds). A nil `OnRouteOutcome` is a no-op, so the Atlassian router (which leaves it unset) is unaffected.
+`Route` calls `OnRouteOutcome` **synchronously, with the request context** — it spawns no goroutine and does not alter the context. `eventrouter` deliberately imposes no concurrency or lifetime policy; that's the caller's decision (see the `WebhookHandler` glue below, which runs the synchronous `react` in a goroutine so a slow GitHub round-trip doesn't block the webhook response). A nil `OnRouteOutcome` is a no-op, so the Atlassian router (which leaves it unset) is unaffected.
 
-### 4. The reaction callback on `githubserver.Server`
+### 4. The reaction logic on `githubserver.Server`
 
-The reaction logic is a method on `githubserver.Server`, assigned to the Router's `OnRouteOutcome` in `WebhookHandler()`. `GitHubMeta` and the event-type constants live in the same package, so the callback reads them directly:
+The reaction is a plain synchronous method on `githubserver.Server` that returns an error — no goroutines, no logging, no context juggling (the async glue lives in `WebhookHandler()`, below). `GitHubMeta` and the event-type constants live in the same package, so it reads them directly:
 
 ```go
 // internal/server/githubserver/webhook.go (or a sibling file in the package)
 
-func (s *Server) reactToOutcome(ctx context.Context, outcome eventrouter.RouteOutcome) {
-    // Recognize the event first. Bail for anything without GitHub comment
-    // coordinates: a non-GitHub Meta, or a GitHub event with no reactable
-    // comment (assignment / review submission, where CommentID is zero).
+// react adds the 👀 reaction to the comment that triggered the outcome. It is a
+// plain synchronous function: it does the work and returns an error. It owns no
+// concurrency or lifetime policy — the WebhookHandler glue (below) runs it in a
+// goroutine and logs the error. Returns nil (not an error) when there's nothing
+// to do: a non-GitHub Meta, an event with no reactable comment (CommentID == 0),
+// an org with no installation, or a non-reactable event type.
+func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) error {
     meta, ok := outcome.Input.Meta.(GitHubMeta)
     if !ok || meta.CommentID == 0 {
-        return
+        return nil
     }
-
-    ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-    defer cancel()
-
     org, err := s.store.GetOrg(ctx, nil, outcome.OrgID)
-    if err != nil || org.GitHubInstallationID == 0 {
-        return
+    if err != nil {
+        return err
     }
-    // s.tokens is the *githubx.AppTokenCache the Server holds (see the
-    // cache-installation-tokens proposal). Client returns a *github.Client
-    // backed by the cached, auto-refreshing installation transport — no manual
-    // token mint or client construction here.
+    if org.GitHubInstallationID == 0 {
+        return nil
+    }
+    // s.tokens is the *githubx.AppTokenCache the Server holds. Client returns a
+    // *github.Client backed by the cached, auto-refreshing installation
+    // transport — no manual token mint or client construction here.
     client := s.tokens.Client(org.GitHubInstallationID)
 
     const content = "eyes"
@@ -203,11 +220,9 @@ func (s *Server) reactToOutcome(ctx context.Context, outcome eventrouter.RouteOu
     case EventTypePullRequestReviewComment:
         _, _, err = client.Reactions.CreatePullRequestCommentReaction(ctx, meta.Owner, meta.Repo, meta.CommentID, content)
     default:
-        return // not a reactable event type
+        return nil
     }
-    if err != nil {
-        s.log.Warn("github reaction failed", "org_id", outcome.OrgID, "url", outcome.Input.URL, "error", err)
-    }
+    return err
 }
 ```
 
@@ -215,16 +230,26 @@ GitHub's reaction endpoint is idempotent at the user level — a given GitHub us
 
 ### 5. Wiring
 
-`githubserver.Server.WebhookHandler()` constructs the Router today as `&eventrouter.Router{Log, Store, Publisher}`. Assign the callback:
+`githubserver.Server.WebhookHandler()` constructs the Router today as `&eventrouter.Router{Log, Store, Publisher}`. Assign `OnRouteOutcome` to a small glue closure that holds all the dirty work — running the synchronous `react` in a goroutine (since `eventrouter` calls the callback inline), detaching from the request context, applying a timeout, and logging the error:
 
 ```go
 func (s *Server) WebhookHandler() http.Handler {
     return &WebhookHandler{
         Router: &eventrouter.Router{
-            Log:            s.log,
-            Store:          s.store,
-            Publisher:      s.publisher,
-            OnRouteOutcome: s.reactToOutcome,
+            Log:       s.log,
+            Store:     s.store,
+            Publisher: s.publisher,
+            OnRouteOutcome: func(ctx context.Context, o eventrouter.RouteOutcome) {
+                // react is synchronous; the goroutine + detached context +
+                // timeout keep a slow GitHub round-trip off the webhook path.
+                go func() {
+                    ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+                    defer cancel()
+                    if err := s.react(ctx, o); err != nil {
+                        s.log.Warn("github reaction failed", "org_id", o.OrgID, "url", o.Input.URL, "error", err)
+                    }
+                }()
+            },
         },
         Store:         s.store,
         WebhookSecret: s.config.WebhookSecret,
@@ -232,13 +257,15 @@ func (s *Server) WebhookHandler() http.Handler {
 }
 ```
 
+Keeping `react` a plain `func(...) error` makes it directly unit-testable (call it, assert the error and the API call) without spawning goroutines or stubbing timeouts; the glue is trivial enough to leave untested.
+
 The Atlassian webhook router constructs its `Router` without `OnRouteOutcome`, so it's a clean no-op there.
 
 ### 6. Configuration
 
 v1: hardcoded `"eyes"`. Two natural extension points if we want to customize later, neither requiring an interface or signature change:
 
-- **Per-org**: add a `reaction_emoji` column to `orgs` and read it in `reactToOutcome` (we already fetch the org for its installation ID).
+- **Per-org**: add a `reaction_emoji` column to `orgs` and read it in `react` (we already fetch the org for its installation ID).
 - **Per-rule**: `RouteOutcome` already carries the matched `*model.RoutingRule`, so a per-rule `Emoji string` field could be honored directly.
 
 Start simple and add config if users ask.
@@ -246,21 +273,21 @@ Start simple and add config if users ask.
 ### 7. Tests
 
 - `githubserver/webhook_test.go`: assert `toInputEvent` populates `Owner`/`Repo`/`CommentID` (and the right `Type`) for issue comments and PR review comments, and leaves the comment coordinates zero for review submissions and assignments.
-- `eventrouter_test.go`: set a fake `OnRouteOutcome` that records the `RouteOutcome`s it receives; assert it fires once per matched org with the right `OrgID` and `Rule` on both the wake and create paths, and not at all when no rule matches.
-- `githubserver`: test `reactToOutcome` against a stubbed GitHub API (`httptest.Server`); verify the issue-comment vs review-comment endpoint is chosen by `Type`, and that a non-GitHub `Meta`, a zero `CommentID`, a non-reactable `Type`, and an org with no installation ID are each no-ops.
+- `eventrouter_test.go`: set a fake `OnRouteOutcome` that records the `RouteOutcome`s it receives; assert it fires once per matched org with the right `OrgID`/`Rule`, and that `TaskIDs`/`Created` are correct for each case — created (`Created` true, the new id), woken (`Created` false, the woken ids), and matched-only (no subscribed link, no create action → empty `TaskIDs`, `Created` false). Assert it does not fire when no rule matches.
+- `githubserver`: test `react` against a stubbed GitHub API (`httptest.Server`); verify the issue-comment vs review-comment endpoint is chosen by `Type`, and that a non-GitHub `Meta`, a zero `CommentID`, a non-reactable `Type`, and an org with no installation ID are each no-ops.
 
 ### 8. Implementation order
 
 1. Add `Owner`/`Repo`/`CommentID` to `githubserver.GitHubMeta` and the event-type constants; populate the coordinates in `toInputEvent` for the two comment events.
-2. Add `RouteOutcome` and the `OnRouteOutcome` field to `eventrouter.Router`; restructure the per-org loop and add the fire-and-forget call.
-3. Implement `Server.reactToOutcome` and assign it in `WebhookHandler()`.
+2. Add `RouteOutcome` and the `OnRouteOutcome` field to `eventrouter.Router`, change `r.create` to return the new task ID, restructure the per-org loop (build the outcome, fire for all matched orgs including matched-only), and add the synchronous call.
+3. Implement `Server.react` and assign it in `WebhookHandler()`.
 4. Tests.
 
 No migrations, no proto changes, no UI changes.
 
 ## Trade-offs
 
-**A single `OnRouteOutcome` func, not an interface or registry.** `eventrouter` exposes one optional `func(ctx, RouteOutcome)` rather than a `Reactor` interface and a slice of registered reactors. The router stays completely purpose-agnostic — it has no notion of "reactions", just "here's what I did, do whatever you want." The GitHub-specific behavior lives entirely in `githubserver` as a `Server` method. This is less machinery than an interface + registry for what is, today, a single consumer per router; a second concern on the same router can compose by wrapping (`OnRouteOutcome: func(ctx, o){ s.reactToOutcome(ctx, o); s.somethingElse(ctx, o) }`).
+**A single `OnRouteOutcome` func, not an interface or registry.** `eventrouter` exposes one optional `func(ctx, RouteOutcome)` rather than a `Reactor` interface and a slice of registered reactors. The router stays completely purpose-agnostic — it has no notion of "reactions", just "here's what I did, do whatever you want." The GitHub-specific behavior lives entirely in `githubserver` as a `Server` method. This is less machinery than an interface + registry for what is, today, a single consumer per router; a second concern on the same router can compose by wrapping (`OnRouteOutcome: func(ctx, o){ s.react(ctx, o); s.somethingElse(ctx, o) }`).
 
 **Meta and callback colocated in `githubserver`.** The GitHub webhook extractor, `GitHubMeta`, and the reaction callback all live in one package, so the callback reads `GitHubMeta` and the event-type constants directly — no cross-package reference. `eventrouter` still stays free of GitHub types: it only gains the generic `OnRouteOutcome`/`RouteOutcome`.
 
@@ -272,7 +299,7 @@ No migrations, no proto changes, no UI changes.
 
 **Pass a `RouteOutcome`, not just the input.** The callback gets the org that matched and the matched rule — not only the raw `InputEvent`. This keeps it from re-deriving routing context the Router already computed and leaves room for richer behavior later (e.g. per-rule emoji) without changing the signature.
 
-**Async, fire-and-forget.** Source API round-trips can be hundreds of milliseconds. Calling synchronously from the webhook handler would slow webhook responses and risk timeouts, so the Router invokes `OnRouteOutcome` in a goroutine with `context.WithoutCancel`. Failures are logged but don't block routing — a missed reaction is a degraded experience, not a broken one.
+**Async lives in the wiring, not the router or the logic.** Source API round-trips can be hundreds of milliseconds, so the reaction must not block the webhook response — but `eventrouter` stays policy-free (`Route` calls `OnRouteOutcome` synchronously with the request context) and `react` stays a pure, testable `func(...) error`. The concurrency/lifetime policy lives in one place: the `WebhookHandler` glue closure, which runs `react` in a goroutine with `context.WithoutCancel` + a timeout and logs the error. A missed reaction is a degraded experience, not a broken one.
 
 **Installation token, not OAuth user token.** Reactions posted via the installation token (obtained through `AppTokenCache.Client`) appear under the GitHub App's bot identity (e.g. `xagent-app[bot]`), which is the correct attribution — it's the bot acknowledging the comment, not the user who triggered it. OAuth tokens also tie to a specific linked user and would fail if that user un-links.
 
