@@ -29,8 +29,9 @@ type Config struct {
 	Dummy      *DummyOptions        `json:"dummy,omitempty"`
 
 	// Agent-managed state
-	Setup   bool `json:"setup,omitempty"`
-	Started bool `json:"started,omitempty"`
+	Setup                  bool `json:"setup,omitempty"`
+	SetupCommandsCompleted int  `json:"setup_commands_completed,omitempty"`
+	Started                bool `json:"started,omitempty"`
 }
 
 type McpServer struct {

@@ -52,24 +52,12 @@ func (d *Driver) Run(ctx context.Context) error {
 		"commands", cfg.Commands,
 		"mcp_servers", len(cfg.McpServers),
 		"setup", cfg.Setup,
+		"setup_completed", cfg.SetupCommandsCompleted,
 		"started", cfg.Started,
 	)
 
-	// Run setup commands if not already done
-	if !cfg.Setup {
-		for _, command := range cfg.Commands {
-			d.Log.Info("Running setup command", "command", command)
-			c := exec.CommandContext(ctx, "sh", "-c", command)
-			c.Stdout = os.Stdout
-			c.Stderr = os.Stderr
-			if err := c.Run(); err != nil {
-				return fmt.Errorf("setup command failed: %w", err)
-			}
-		}
-		cfg.Setup = true
-		if err := SaveConfig(d.TaskID, cfg); err != nil {
-			return fmt.Errorf("failed to save config: %w", err)
-		}
+	if err := d.runSetup(ctx, cfg); err != nil {
+		return err
 	}
 
 	// Start agent
@@ -111,6 +99,41 @@ func (d *Driver) Run(ctx context.Context) error {
 	}
 
 	d.Log.Info("Task completed successfully.")
+	return nil
+}
+
+// runSetup runs the setup commands listed in cfg.Commands, resuming from
+// cfg.SetupCommandsCompleted. After each successful command, the updated
+// count is persisted via SaveConfig so a restart can pick up where the
+// previous run left off. cfg.Setup is set to true only after the last
+// command completes.
+func (d *Driver) runSetup(ctx context.Context, cfg *Config) error {
+	if cfg.Setup {
+		return nil
+	}
+	// Defensive clamp: if the saved count exceeds the current command
+	// list, reset to 0 and re-run from the beginning.
+	if cfg.SetupCommandsCompleted > len(cfg.Commands) {
+		cfg.SetupCommandsCompleted = 0
+	}
+	for i := cfg.SetupCommandsCompleted; i < len(cfg.Commands); i++ {
+		command := cfg.Commands[i]
+		d.Log.Info("Running setup command", "index", i, "command", command)
+		c := exec.CommandContext(ctx, "sh", "-c", command)
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		if err := c.Run(); err != nil {
+			return fmt.Errorf("setup command %d failed: %w", i, err)
+		}
+		cfg.SetupCommandsCompleted = i + 1
+		if err := SaveConfig(d.TaskID, cfg); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+	}
+	cfg.Setup = true
+	if err := SaveConfig(d.TaskID, cfg); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
 	return nil
 }
 
