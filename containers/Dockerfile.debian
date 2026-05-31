@@ -1,12 +1,21 @@
 FROM debian:13-slim
 
-# postgresql-client-17 ships in Debian 13 (trixie) main and matches the Postgres 17 server.
+# Debian 13 (trixie) main only ships postgresql-client-17, but the Postgres
+# server is now v18. pg_dump refuses to dump from a newer server, so dbmate's
+# schema dump (pg_dump) would fail. Install postgresql-client-18 from the PGDG
+# apt repository to match the server version.
 RUN apt-get update  \
     && apt-get -y --no-install-recommends install  \
         sudo curl git ca-certificates build-essential \
         fd-find ripgrep jq unzip iputils-ping dnsutils \
-        netcat-openbsd procps wget \
-        postgresql-client-17 \
+        netcat-openbsd procps wget gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get -y --no-install-recommends install postgresql-client-18 \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && rm -rf /var/lib/apt/lists/*
 
