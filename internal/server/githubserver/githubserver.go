@@ -40,6 +40,7 @@ type Server struct {
 	baseURL   string
 	publisher pubsub.Publisher
 	app       *ghinstallation.AppsTransport
+	tokens    *githubx.AppTokenCache
 }
 
 // Options configures a Server.
@@ -70,13 +71,19 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse GitHub App private key: %w", err)
 	}
+	app := ghinstallation.NewAppsTransportFromPrivateKey(http.DefaultTransport, appID, key)
+	tokens, err := githubx.NewAppTokenCache(app, githubx.AppTokenCacheOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub app token cache: %w", err)
+	}
 	return &Server{
 		log:       log,
 		config:    opts.Config,
 		store:     opts.Store,
 		baseURL:   opts.BaseURL,
 		publisher: opts.Publisher,
-		app:       ghinstallation.NewAppsTransportFromPrivateKey(http.DefaultTransport, appID, key),
+		app:       app,
+		tokens:    tokens,
 	}, nil
 }
 
@@ -148,7 +155,22 @@ func (s *Server) OAuthLink() *oauthlink.Handler {
 // WebhookHandler returns the HTTP handler for GitHub App webhook events.
 func (s *Server) WebhookHandler() http.Handler {
 	return &WebhookHandler{
-		Router:        &eventrouter.Router{Log: s.log, Store: s.store, Publisher: s.publisher},
+		Router: &eventrouter.Router{
+			Log:       s.log,
+			Store:     s.store,
+			Publisher: s.publisher,
+			OnRouteOutcome: func(ctx context.Context, o eventrouter.RouteOutcome) {
+				// react is synchronous; the goroutine + detached context +
+				// timeout keep a slow GitHub round-trip off the webhook path.
+				go func() {
+					ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+					defer cancel()
+					if err := s.react(ctx, o); err != nil {
+						s.log.Warn("github reaction failed", "org_id", o.OrgID, "url", o.Input.URL, "error", err)
+					}
+				}()
+			},
+		},
 		Store:         s.store,
 		WebhookSecret: s.config.WebhookSecret,
 	}
