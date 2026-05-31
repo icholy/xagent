@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/google/go-github/v88/github"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -99,12 +98,16 @@ func (c *AppTokenCache) Token(ctx context.Context, installationID int64) (string
 	return token, expiresAt, nil
 }
 
-// Client returns a *github.Client authenticated as the installation, backed by
-// the cached auto-refreshing transport. The transport injects the Authorization
-// header and rotates the token automatically; no custom RoundTripper is needed.
-func (c *AppTokenCache) Client(installationID int64) *github.Client {
-	t := c.transport(installationID)
-	// WithHTTPClient only errors on a nil client, which never happens here.
-	client, _ := github.NewClient(github.WithHTTPClient(&http.Client{Transport: t}))
-	return client
+// Client returns an *http.Client authenticated as the installation, backed by
+// the cached auto-refreshing transport. The transport injects the
+// Authorization header and rotates the token automatically.
+//
+// An *http.Client (rather than a typed REST client) is what both the go-github
+// REST client and the shurcooL/githubv4 GraphQL client consume, so callers can
+// hand the result to whichever API they need:
+//
+//	rest, _ := github.NewClient(github.WithHTTPClient(cache.Client(id)))
+//	gql := githubv4.NewClient(cache.Client(id))
+func (c *AppTokenCache) Client(installationID int64) *http.Client {
+	return &http.Client{Transport: c.transport(installationID)}
 }
