@@ -26,12 +26,12 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RelativeTime } from '@/components/relative-time'
+import { GithubIcon } from '@/components/github-icon'
 import {
   Cable,
   Check,
   Copy,
   ExternalLink,
-  Github,
   KeyRound,
   Loader2,
   Mail,
@@ -125,7 +125,7 @@ function AccountSettings() {
           ) : account ? (
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <Github className="h-5 w-5" />
+                <GithubIcon className="h-5 w-5" />
                 <span className="font-medium">{account.githubUsername}</span>
               </div>
               <Button
@@ -145,7 +145,7 @@ function AccountSettings() {
           ) : (
             <a href="/github/login">
               <Button>
-                <Github className="h-4 w-4" />
+                <GithubIcon className="h-4 w-4" />
                 Link GitHub Account
               </Button>
             </a>
