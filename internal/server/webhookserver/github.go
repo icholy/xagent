@@ -40,14 +40,14 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleInstallationEvent(w, r, event)
 		return
 	}
-	input := extractGitHubWebhookEvent(webhookEvent)
+	input := toGithubInputEvent(webhookEvent)
 	if input == nil {
 		eventType := r.Header.Get("X-GitHub-Event")
 		slog.Debug("ignoring GitHub webhook event", "event_type", eventType)
 		fmt.Fprintf(w, "ignored")
 		return
 	}
-	// extractGitHubWebhookEvent always sets Meta to a GitHubMeta, so this
+	// toGithubInputEvent always sets Meta to a GitHubMeta, so this
 	// assertion is safe. It panics loudly if that invariant is ever broken.
 	author := input.Meta.(GitHubMeta).Author
 
@@ -143,7 +143,7 @@ type GitHubMeta struct {
 	Author GithubUser
 }
 
-func extractGitHubWebhookEvent(webhookEvent any) *eventrouter.InputEvent {
+func toGithubInputEvent(webhookEvent any) *eventrouter.InputEvent {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
 		if action := event.GetAction(); action != "created" && action != "edited" {
