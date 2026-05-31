@@ -15,10 +15,12 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2 } from 'lucide-react'
 import {
+  assigneeCopyForSource,
   EVENT_TYPES,
   emptyRoutingRule,
   findEventType,
   findEventTypeById,
+  isAssignmentType,
   isRoutingRuleFormValid,
   legacyEventTypeOption,
   mentionCopyForSource,
@@ -53,7 +55,8 @@ export function RoutingRuleForm({
       !initialValues.source &&
       !initialValues.type &&
       !initialValues.prefix &&
-      !initialValues.mention
+      !initialValues.mention &&
+      !initialValues.assignee
     if (isUntouched) return null
     return legacyEventTypeOption(initialValues.source, initialValues.type)
   }, [initialValues])
@@ -72,6 +75,10 @@ export function RoutingRuleForm({
   }, [values.source, values.type, legacyOption])
 
   const mentionCopy = mentionCopyForSource(values.source)
+  const assigneeCopy = assigneeCopyForSource(values.source)
+  // Assignment events have no message body, so prefix/mention can't match —
+  // hide those fields and show the assignee field instead.
+  const isAssignment = isAssignmentType(values.source, values.type)
   const canSubmit = isRoutingRuleFormValid(values, selectedId !== '')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {}, { enabled: values.createTask })
@@ -129,30 +136,47 @@ export function RoutingRuleForm({
         </p>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="prefix">Message starts with</Label>
-        <Input
-          id="prefix"
-          placeholder="Optional — e.g. /xagent"
-          value={values.prefix}
-          onChange={(e) => setValues({ ...values, prefix: e.target.value })}
-        />
-        <p className="text-muted-foreground text-xs">
-          Leave blank to match any message. Otherwise the rule only fires when the event body starts
-          with this string.
-        </p>
-      </div>
+      {!isAssignment && (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="prefix">Message starts with</Label>
+            <Input
+              id="prefix"
+              placeholder="Optional — e.g. /xagent"
+              value={values.prefix}
+              onChange={(e) => setValues({ ...values, prefix: e.target.value })}
+            />
+            <p className="text-muted-foreground text-xs">
+              Leave blank to match any message. Otherwise the rule only fires when the event body
+              starts with this string.
+            </p>
+          </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="mention">{mentionCopy.label}</Label>
-        <Input
-          id="mention"
-          placeholder={mentionCopy.placeholder}
-          value={values.mention}
-          onChange={(e) => setValues({ ...values, mention: e.target.value })}
-        />
-        <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
-      </div>
+          <div className="space-y-2">
+            <Label htmlFor="mention">{mentionCopy.label}</Label>
+            <Input
+              id="mention"
+              placeholder={mentionCopy.placeholder}
+              value={values.mention}
+              onChange={(e) => setValues({ ...values, mention: e.target.value })}
+            />
+            <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
+          </div>
+        </>
+      )}
+
+      {isAssignment && (
+        <div className="space-y-2">
+          <Label htmlFor="assignee">{assigneeCopy.label}</Label>
+          <Input
+            id="assignee"
+            placeholder={assigneeCopy.placeholder}
+            value={values.assignee}
+            onChange={(e) => setValues({ ...values, assignee: e.target.value })}
+          />
+          <p className="text-muted-foreground text-xs">{assigneeCopy.help}</p>
+        </div>
+      )}
 
       <div className="space-y-4 rounded-md border p-4">
         <div className="flex items-start justify-between gap-4">

@@ -535,6 +535,7 @@ message RoutingRule {
   string prefix = 3;
   string mention = 4;
   CreateTaskAction create = 5;
+  string assignee = 6;
 }
 
 message CreateTaskAction {

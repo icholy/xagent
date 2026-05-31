@@ -71,11 +71,12 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Route event to subscribed tasks
 	input := eventrouter.InputEvent{
 		Source:      "github",
-		Type:        r.Header.Get("X-GitHub-Event"),
+		Type:        extracted.eventType,
 		Description: extracted.description,
 		Data:        extracted.data,
 		URL:         extracted.url,
 		UserID:      user.ID,
+		Assignee:    extracted.assignee,
 	}
 	totalRouted, err := h.Router.Route(r.Context(), input)
 	if err != nil {
@@ -135,11 +136,13 @@ func (h *GitHubHandler) handleInstallationEvent(w http.ResponseWriter, r *http.R
 }
 
 type githubWebhookEvent struct {
+	eventType      string
 	description    string
 	data           string
 	url            string
 	githubUserID   int64
 	githubUsername string
+	assignee       string
 }
 
 func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
@@ -158,6 +161,7 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 			description = fmt.Sprintf("%s commented on PR #%d", login, number)
 		}
 		return &githubWebhookEvent{
+			eventType:      "issue_comment",
 			description:    description,
 			data:           body,
 			url:            *event.Issue.HTMLURL,
@@ -175,6 +179,7 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		login := event.Comment.User.GetLogin()
 		number := event.PullRequest.GetNumber()
 		return &githubWebhookEvent{
+			eventType:      "pull_request_review_comment",
 			description:    fmt.Sprintf("%s reviewed PR #%d", login, number),
 			data:           body,
 			url:            *event.PullRequest.HTMLURL,
@@ -193,11 +198,50 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		login := event.Review.User.GetLogin()
 		number := event.PullRequest.GetNumber()
 		return &githubWebhookEvent{
+			eventType:      "pull_request_review",
 			description:    fmt.Sprintf("%s reviewed PR #%d", login, number),
 			data:           body,
 			url:            *event.PullRequest.HTMLURL,
 			githubUserID:   *event.Review.User.ID,
 			githubUsername: login,
+		}
+
+	case *github.IssuesEvent:
+		if event.GetAction() != "assigned" ||
+			event.Issue == nil || event.Issue.HTMLURL == nil ||
+			event.Assignee == nil || event.Assignee.Login == nil ||
+			event.Sender == nil || event.Sender.ID == nil {
+			return nil
+		}
+		senderLogin := event.Sender.GetLogin()
+		assigneeLogin := event.Assignee.GetLogin()
+		number := event.Issue.GetNumber()
+		return &githubWebhookEvent{
+			eventType:      "issue_assigned",
+			description:    fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
+			url:            *event.Issue.HTMLURL,
+			githubUserID:   *event.Sender.ID,
+			githubUsername: senderLogin,
+			assignee:       assigneeLogin,
+		}
+
+	case *github.PullRequestEvent:
+		if event.GetAction() != "assigned" ||
+			event.PullRequest == nil || event.PullRequest.HTMLURL == nil ||
+			event.Assignee == nil || event.Assignee.Login == nil ||
+			event.Sender == nil || event.Sender.ID == nil {
+			return nil
+		}
+		senderLogin := event.Sender.GetLogin()
+		assigneeLogin := event.Assignee.GetLogin()
+		number := event.PullRequest.GetNumber()
+		return &githubWebhookEvent{
+			eventType:      "pull_request_assigned",
+			description:    fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
+			url:            *event.PullRequest.HTMLURL,
+			githubUserID:   *event.Sender.ID,
+			githubUsername: senderLogin,
+			assignee:       assigneeLogin,
 		}
 	}
 

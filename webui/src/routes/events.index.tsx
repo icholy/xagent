@@ -222,6 +222,7 @@ function RoutingRulesCard() {
                   <TableHead>Event Type</TableHead>
                   <TableHead>Prefix</TableHead>
                   <TableHead>Mention</TableHead>
+                  <TableHead>Assignee</TableHead>
                   <TableHead>Action</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -234,6 +235,7 @@ function RoutingRulesCard() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
                     <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{rule.assignee || '-'}</TableCell>
                     <TableCell>
                       {rule.create ? (
                         <Badge variant="secondary">Creates task</Badge>

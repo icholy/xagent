@@ -717,6 +717,142 @@ func TestRouteOrgRulesOverrideDefaults(t *testing.T) {
 	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
 }
 
+func TestRouteAssignmentCreatesTaskAndLink(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: create-rule gated on assignee for pull_request_assigned events.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/9"
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source:   "github",
+		Type:     "pull_request_assigned",
+		Assignee: "icholy-bot",
+		Create:   &model.CreateTaskAction{Workspace: "default", Runner: "r", Prompt: "Review it."},
+	}})
+	assert.NilError(t, err)
+	r := &Router{Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source:      "github",
+		Type:        "pull_request_assigned",
+		Description: "alice assigned PR #9 to @icholy-bot",
+		URL:         url,
+		UserID:      org.UserID,
+		Assignee:    "icholy-bot",
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+	assert.Equal(t, tasks[0].Workspace, "default")
+	assert.Equal(t, tasks[0].Runner, "r")
+
+	links, err := s.FindSubscribedLinksForOrgs(t.Context(), nil, url, []int64{org.OrgID})
+	assert.NilError(t, err)
+	assert.Equal(t, len(links[org.OrgID]), 1)
+	assert.Equal(t, links[org.OrgID][0].URL, url)
+}
+
+func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: two rules — an assignment create-rule and a comment wake-rule.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/9"
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{
+			Source:   "github",
+			Type:     "pull_request_assigned",
+			Assignee: "icholy-bot",
+			Create:   &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+		},
+		{Source: "github", Type: "issue_comment", Prefix: "xagent:"},
+	})
+	assert.NilError(t, err)
+	r := &Router{Log: slog.Default(), Store: s}
+
+	// Act: first event creates the task and a subscribed link.
+	n, err := r.Route(t.Context(), InputEvent{
+		Source:   "github",
+		Type:     "pull_request_assigned",
+		URL:      url,
+		UserID:   org.UserID,
+		Assignee: "icholy-bot",
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+	created := tasks[0]
+
+	// Bring the task back to a wakeable state so the wake path is observable.
+	created.Status = model.TaskStatusCompleted
+	created.Command = model.TaskCommandNone
+	assert.NilError(t, s.UpdateTask(t.Context(), nil, created))
+
+	// Act: a subsequent comment on the same URL wakes the existing task —
+	// no second task is created.
+	n, err = r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "xagent: please look",
+		URL:    url,
+		UserID: org.UserID,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	tasks, err = s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+	updated, err := s.GetTask(t.Context(), nil, created.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusPending)
+	assert.Equal(t, updated.Command, model.TaskCommandStart)
+}
+
+func TestRouteAssignmentWrongAssigneeIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: create-rule gated on a specific assignee.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/9"
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source:   "github",
+		Type:     "pull_request_assigned",
+		Assignee: "icholy-bot",
+		Create:   &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+	}})
+	assert.NilError(t, err)
+	r := &Router{Log: slog.Default(), Store: s}
+
+	// Act: an assignment event for a different assignee does not match.
+	n, err := r.Route(t.Context(), InputEvent{
+		Source:   "github",
+		Type:     "pull_request_assigned",
+		URL:      url,
+		UserID:   org.UserID,
+		Assignee: "someone-else",
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 0)
+}
+
 func TestRouterPublish_IgnoreSuppressesDelivery(t *testing.T) {
 	t.Parallel()
 
