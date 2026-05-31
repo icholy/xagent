@@ -16,7 +16,6 @@ import (
 	"github.com/icholy/xagent/internal/auth/oauthlink"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/pubsub"
-	"github.com/icholy/xagent/internal/server/webhookserver"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/x/githubx"
 	"golang.org/x/oauth2"
@@ -148,7 +147,7 @@ func (s *Server) OAuthLink() *oauthlink.Handler {
 
 // WebhookHandler returns the HTTP handler for GitHub App webhook events.
 func (s *Server) WebhookHandler() http.Handler {
-	return &webhookserver.GitHubHandler{
+	return &WebhookHandler{
 		Router:        &eventrouter.Router{Log: s.log, Store: s.store, Publisher: s.publisher},
 		Store:         s.store,
 		WebhookSecret: s.config.WebhookSecret,

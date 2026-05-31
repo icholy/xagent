@@ -1,4 +1,4 @@
-package webhookserver
+package githubserver
 
 import (
 	"bytes"
@@ -455,7 +455,7 @@ func TestToGithubInputEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toGithubInputEvent(tt.event)
+			got := toInputEvent(tt.event)
 			assert.DeepEqual(t, got, tt.expected)
 		})
 	}
@@ -480,7 +480,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 			return 1, nil
 		},
 	}
-	h := &GitHubHandler{
+	h := &WebhookHandler{
 		Router: router,
 		Store: &StoreMock{
 			GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
@@ -531,7 +531,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 }
 
 func TestHandleGitHubWebhookIgnoredEventType(t *testing.T) {
-	h := &GitHubHandler{}
+	h := &WebhookHandler{}
 
 	payload := github.PushEvent{}
 	req := makeWebhookRequest(t, "push", payload)
@@ -548,7 +548,7 @@ func TestHandleGitHubWebhookInstallationCreated(t *testing.T) {
 			return nil
 		},
 	}
-	h := &GitHubHandler{Store: store}
+	h := &WebhookHandler{Store: store}
 
 	payload := github.InstallationEvent{
 		Action: github.Ptr("created"),
@@ -593,7 +593,7 @@ func TestHandleGitHubWebhookInstallationDeleted(t *testing.T) {
 			return nil
 		},
 	}
-	h := &GitHubHandler{Store: store}
+	h := &WebhookHandler{Store: store}
 
 	payload := github.InstallationEvent{
 		Action: github.Ptr("deleted"),
@@ -618,7 +618,7 @@ func TestHandleGitHubWebhookInstallationDeleted(t *testing.T) {
 
 func TestHandleGitHubWebhookInstallationOtherAction(t *testing.T) {
 	store := &StoreMock{}
-	h := &GitHubHandler{Store: store}
+	h := &WebhookHandler{Store: store}
 
 	payload := github.InstallationEvent{
 		Action: github.Ptr("suspend"),
@@ -637,7 +637,7 @@ func TestHandleGitHubWebhookInstallationOtherAction(t *testing.T) {
 }
 
 func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {
-	h := &GitHubHandler{
+	h := &WebhookHandler{
 		Store: &StoreMock{
 			GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
 				return nil, sql.ErrNoRows
