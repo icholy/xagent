@@ -9,8 +9,8 @@ export interface EventTypeOption {
 }
 
 // Mirrors the (source, type) pairs the webhook handlers actually emit:
-//   internal/server/webhookserver/github.go    — type is the X-GitHub-Event header
-//   internal/server/webhookserver/atlassian.go — type is the parsed webhookEvent
+//   internal/server/githubserver/github.go       — type is the X-GitHub-Event header
+//   internal/server/atlassianserver/atlassian.go  — type is the parsed webhookEvent
 export const EVENT_TYPES: EventTypeOption[] = [
   {
     id: 'github:issue_comment',
