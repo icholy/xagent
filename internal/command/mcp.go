@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	"github.com/icholy/xagent/internal/mcpbridge"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
@@ -63,7 +62,7 @@ var McpCommand = &cli.Command{
 		var capabilities mcp.ServerCapabilities
 		if cmd.Bool("channel") {
 			capabilities.Experimental = mcpchannel.Experimental()
-			instructions += "\n\n" + mcpbridge.Instructions
+			instructions += "\n\n" + mcpserver.ChannelInstructions
 		}
 		server := mcp.NewServer(&mcp.Implementation{
 			Name:    "xagent",
@@ -76,13 +75,13 @@ var McpCommand = &cli.Command{
 
 		transport := mcpchannel.NewTransport(&mcp.StdioTransport{})
 
-		// *mcpchannel.Transport satisfies mcpbridge.ChannelSender. When
+		// *mcpchannel.Transport satisfies mcpserver.ChannelSender. When
 		// channels are enabled the bridge owns the per-task subscription
 		// set, the watch tools, and the mute-by-default forwarding gate;
-		// the gate logic lives in internal/mcpbridge, not here.
-		var ch *mcpbridge.Channel
+		// the gate logic lives in mcpserver, not here.
+		var ch *mcpserver.Channel
 		if cmd.Bool("channel") {
-			ch = mcpbridge.NewChannel(transport)
+			ch = mcpserver.NewChannel(transport)
 			ch.AddTools(server)
 		}
 
