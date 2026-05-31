@@ -1,4 +1,4 @@
-package webhookserver
+package atlassianserver
 
 import (
 	"database/sql"
@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/icholy/xagent/internal/x/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
+	"github.com/icholy/xagent/internal/x/atlassian"
 )
 
 // AtlassianHandler handles incoming Atlassian (Jira) webhook events.
