@@ -136,14 +136,17 @@ type GitHubMeta struct {
 	AuthorID    int64
 	AuthorLogin string
 
-	// Owner, Repo, and CommentID locate the comment for GitHub's Reactions API.
-	// Populated only for issue_comment and pull_request_review_comment events;
-	// left zero for assignments and review submissions (which have no reactable
-	// comment). Consumers key off InputEvent.Type, not these fields, to decide
-	// whether and how to react.
+	// Owner and Repo locate the repository for GitHub's Reactions API. CommentID
+	// identifies the comment reacted to for issue_comment and
+	// pull_request_review_comment events; Number identifies the issue/PR reacted
+	// to for issue_assigned and pull_request_assigned events. Comment events set
+	// Owner/Repo/CommentID, assignment events set Owner/Repo/Number, and review
+	// submissions leave all of them zero (no reactable target). Consumers key off
+	// InputEvent.Type, not these fields, to decide whether and how to react.
 	Owner     string
 	Repo      string
 	CommentID int64
+	Number    int
 }
 
 // Event-type strings set on eventrouter.InputEvent.Type by toInputEvent. They
@@ -252,7 +255,13 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
 			URL:         *event.Issue.HTMLURL,
 			Assignee:    assigneeLogin,
-			Meta:        GitHubMeta{AuthorID: *event.Sender.ID, AuthorLogin: senderLogin},
+			Meta: GitHubMeta{
+				AuthorID:    *event.Sender.ID,
+				AuthorLogin: senderLogin,
+				Owner:       event.GetRepo().GetOwner().GetLogin(),
+				Repo:        event.GetRepo().GetName(),
+				Number:      number,
+			},
 		}
 
 	case *github.PullRequestEvent:
@@ -271,7 +280,13 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
 			URL:         *event.PullRequest.HTMLURL,
 			Assignee:    assigneeLogin,
-			Meta:        GitHubMeta{AuthorID: *event.Sender.ID, AuthorLogin: senderLogin},
+			Meta: GitHubMeta{
+				AuthorID:    *event.Sender.ID,
+				AuthorLogin: senderLogin,
+				Owner:       event.GetRepo().GetOwner().GetLogin(),
+				Repo:        event.GetRepo().GetName(),
+				Number:      number,
+			},
 		}
 	}
 
