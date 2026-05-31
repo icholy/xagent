@@ -40,7 +40,6 @@ type Server struct {
 	baseURL   string
 	publisher pubsub.Publisher
 	app       *ghinstallation.AppsTransport
-	tokens    *githubx.AppTokenCache
 }
 
 // Options configures a Server.
@@ -71,19 +70,13 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse GitHub App private key: %w", err)
 	}
-	app := ghinstallation.NewAppsTransportFromPrivateKey(http.DefaultTransport, appID, key)
-	tokens, err := githubx.NewAppTokenCache(app, githubx.AppTokenCacheOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GitHub app token cache: %w", err)
-	}
 	return &Server{
 		log:       log,
 		config:    opts.Config,
 		store:     opts.Store,
 		baseURL:   opts.BaseURL,
 		publisher: opts.Publisher,
-		app:       app,
-		tokens:    tokens,
+		app:       ghinstallation.NewAppsTransportFromPrivateKey(http.DefaultTransport, appID, key),
 	}, nil
 }
 

@@ -3,6 +3,7 @@ package githubserver
 import (
 	"context"
 
+	"github.com/google/go-github/v68/github"
 	"github.com/icholy/xagent/internal/eventrouter"
 )
 
@@ -24,9 +25,13 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 	if org.GitHubInstallationID == 0 {
 		return nil
 	}
-	// s.tokens returns a *github.Client backed by the cached, auto-refreshing
-	// installation transport — no manual token mint or client construction here.
-	client := s.tokens.Client(org.GitHubInstallationID)
+	// Mint an installation token so the reaction is attributed to the App's bot
+	// identity, then build a client from it.
+	token, err := s.CreateInstallationToken(ctx, org.GitHubInstallationID)
+	if err != nil {
+		return err
+	}
+	client := github.NewClient(nil).WithAuthToken(token.Token)
 
 	// "eyes" (👀) is the idiomatic "I see this and am working on it" ack.
 	const content = "eyes"

@@ -2,10 +2,7 @@ package githubx
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,13 +18,6 @@ const DefaultAppTokenCacheSize = 256
 // package defaults.
 type AppTokenCacheOptions struct {
 	MaxSize int // max retained transports; <= 0 -> DefaultAppTokenCacheSize
-
-	// BaseURL overrides the GitHub REST API base URL for clients returned by
-	// Client. Empty means the go-github default (https://api.github.com/). Set
-	// it for GitHub Enterprise or to point clients at a test server. It does not
-	// affect the token-mint endpoint, which is governed by the AppsTransport's
-	// own BaseURL.
-	BaseURL string
 }
 
 // AppTokenCache issues GitHub App installation tokens, caching one
@@ -35,10 +25,9 @@ type AppTokenCacheOptions struct {
 // calls reuse the cached token instead of minting a fresh one every time.
 // It is safe for concurrent use.
 type AppTokenCache struct {
-	app     *ghinstallation.AppsTransport
-	baseURL *url.URL                                     // REST API base for Client; nil -> go-github default
-	mu      sync.Mutex                                   // guards get-or-create on cache
-	cache   *lru.Cache[int64, *ghinstallation.Transport] // bounded, keyed by installation ID
+	app   *ghinstallation.AppsTransport
+	mu    sync.Mutex                                   // guards get-or-create on cache
+	cache *lru.Cache[int64, *ghinstallation.Transport] // bounded, keyed by installation ID
 }
 
 // NewAppTokenCache returns a cache backed by app (which authenticates as the
@@ -51,17 +40,7 @@ func NewAppTokenCache(app *ghinstallation.AppsTransport, opts AppTokenCacheOptio
 	if err != nil {
 		return nil, err
 	}
-	var baseURL *url.URL
-	if opts.BaseURL != "" {
-		// go-github resolves request paths against BaseURL, which must end in a
-		// trailing slash for ResolveReference to keep the configured path.
-		u, err := url.Parse(strings.TrimSuffix(opts.BaseURL, "/") + "/")
-		if err != nil {
-			return nil, fmt.Errorf("invalid base url: %w", err)
-		}
-		baseURL = u
-	}
-	return &AppTokenCache{app: app, baseURL: baseURL, cache: cache}, nil
+	return &AppTokenCache{app: app, cache: cache}, nil
 }
 
 // transport returns the cached transport for an installation, creating one on
@@ -109,9 +88,5 @@ func (c *AppTokenCache) Token(ctx context.Context, installationID int64) (string
 // the cached auto-refreshing transport. The transport injects the Authorization
 // header and rotates the token automatically; no custom RoundTripper is needed.
 func (c *AppTokenCache) Client(installationID int64) *github.Client {
-	client := github.NewClient(&http.Client{Transport: c.transport(installationID)})
-	if c.baseURL != nil {
-		client.BaseURL = c.baseURL
-	}
-	return client
+	return github.NewClient(&http.Client{Transport: c.transport(installationID)})
 }
