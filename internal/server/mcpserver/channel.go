@@ -20,8 +20,7 @@ const ChannelInstructions = "Channel notifications about task status changes are
 	"To be notified when a task is queued, woken, completed, failed, or cancelled, " +
 	"call watch_task(task_id) for each task you want situational awareness on. " +
 	"A task stays watched until you call unwatch_task(task_id); use " +
-	"list_watched_tasks to introspect. " +
-	"This is separate from create_link(subscribe=true), which routes inbound external events to a task."
+	"list_watched_tasks to introspect."
 
 // ChannelSender is the subset of *mcpchannel.Transport the bridge needs
 // to push a channel notification. Defined here so the gate can be tested
@@ -52,9 +51,6 @@ func NewChannel(sender ChannelSender) *Channel {
 	return &Channel{sender: sender, ids: map[int64]struct{}{}}
 }
 
-func (c *Channel) watch(id int64)   { c.mu.Lock(); defer c.mu.Unlock(); c.ids[id] = struct{}{} }
-func (c *Channel) unwatch(id int64) { c.mu.Lock(); defer c.mu.Unlock(); delete(c.ids, id) }
-
 func (c *Channel) watching(id int64) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -73,9 +69,9 @@ func (c *Channel) watched() []int64 {
 	return ids
 }
 
-// primaryTaskID returns the id of the first task resource in the
+// findTaskID returns the id of the first task resource in the
 // notification, if any.
-func primaryTaskID(n model.Notification) (int64, bool) {
+func findTaskID(n model.Notification) (int64, bool) {
 	for _, r := range n.Resources {
 		if r.Type == "task" {
 			return r.ID, true
@@ -94,7 +90,7 @@ func (c *Channel) Forward(ctx context.Context, n model.Notification) {
 	if n.ChannelMessage == "" {
 		return // summary gate: not channel-worthy
 	}
-	id, ok := primaryTaskID(n)
+	id, ok := findTaskID(n)
 	if !ok || !c.watching(id) {
 		return // mute-by-default: not a task this agent is watching
 	}
@@ -118,12 +114,13 @@ func (c *Channel) AddTools(server *mcp.Server) {
 			"status changes (queued, woken, completed, failed, cancelled). " +
 			"Channel notifications are muted by default — call this for each " +
 			"task you want situational awareness on. A task stays watched " +
-			"until you call unwatch_task. Distinct from " +
-			"create_link(subscribe=true), which routes external events to a task.",
+			"until you call unwatch_task.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in struct {
 		TaskID int64 `json:"task_id" jsonschema:"The task ID to watch"`
 	}) (*mcp.CallToolResult, any, error) {
-		c.watch(in.TaskID)
+		c.mu.Lock()
+		c.ids[in.TaskID] = struct{}{}
+		c.mu.Unlock()
 		return jsonResult(map[string]any{"watching": c.watched()}), nil, nil
 	})
 
@@ -134,7 +131,9 @@ func (c *Channel) AddTools(server *mcp.Server) {
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in struct {
 		TaskID int64 `json:"task_id" jsonschema:"The task ID to unwatch"`
 	}) (*mcp.CallToolResult, any, error) {
-		c.unwatch(in.TaskID)
+		c.mu.Lock()
+		delete(c.ids, in.TaskID)
+		c.mu.Unlock()
 		return jsonResult(map[string]any{"watching": c.watched()}), nil, nil
 	})
 

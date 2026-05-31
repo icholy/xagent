@@ -43,7 +43,7 @@ func TestForward_WatchedTask(t *testing.T) {
 	// Arrange
 	sender := &fakeSender{}
 	c := NewChannel(sender)
-	c.watch(42)
+	c.ids[42] = struct{}{}
 
 	// Act
 	c.Forward(context.Background(), taskNotification(42, "Task 42 queued: start."))
@@ -58,7 +58,7 @@ func TestForward_UnwatchedTask(t *testing.T) {
 	// Arrange
 	sender := &fakeSender{}
 	c := NewChannel(sender)
-	c.watch(42)
+	c.ids[42] = struct{}{}
 
 	// Act - a different task's notification arrives
 	c.Forward(context.Background(), taskNotification(43, "Task 43 queued: start."))
@@ -71,7 +71,7 @@ func TestForward_EmptyChannelMessage(t *testing.T) {
 	// Arrange
 	sender := &fakeSender{}
 	c := NewChannel(sender)
-	c.watch(42)
+	c.ids[42] = struct{}{}
 
 	// Act - summary gate: silent notification
 	c.Forward(context.Background(), taskNotification(42, ""))
@@ -84,7 +84,7 @@ func TestForward_NoTaskResource(t *testing.T) {
 	// Arrange
 	sender := &fakeSender{}
 	c := NewChannel(sender)
-	c.watch(42)
+	c.ids[42] = struct{}{}
 
 	// Act - channel-worthy message with no task resource
 	c.Forward(context.Background(), model.Notification{
@@ -100,7 +100,7 @@ func TestForward_StaysWatchedAfterTerminal(t *testing.T) {
 	// Arrange
 	sender := &fakeSender{}
 	c := NewChannel(sender)
-	c.watch(42)
+	c.ids[42] = struct{}{}
 
 	// Act - subscriptions are purely explicit; a terminal notification does
 	// not auto-unwatch, so a follow-up notification is still forwarded.
@@ -113,26 +113,23 @@ func TestForward_StaysWatchedAfterTerminal(t *testing.T) {
 	assert.DeepEqual(t, c.watched(), []int64{42})
 }
 
-func TestWatchSet(t *testing.T) {
+func TestWatched(t *testing.T) {
 	// Arrange
 	c := NewChannel(&fakeSender{})
+	c.ids[3] = struct{}{}
+	c.ids[1] = struct{}{}
+	c.ids[2] = struct{}{}
 
-	// Act / Assert - watch is idempotent and the set stays sorted
-	c.watch(3)
-	c.watch(1)
-	c.watch(2)
-	c.watch(1)
+	// Act / Assert - watched returns a sorted snapshot
 	assert.DeepEqual(t, c.watched(), []int64{1, 2, 3})
 
-	// unwatch removes; unwatching a missing id is a no-op
-	c.unwatch(2)
-	c.unwatch(99)
+	delete(c.ids, 2)
 	assert.DeepEqual(t, c.watched(), []int64{1, 3})
 	assert.Equal(t, c.watching(2), false)
 	assert.Equal(t, c.watching(1), true)
 }
 
-func TestPrimaryTaskID(t *testing.T) {
+func TestFindTaskID(t *testing.T) {
 	tests := []struct {
 		name      string
 		resources []model.NotificationResource
@@ -163,7 +160,7 @@ func TestPrimaryTaskID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id, ok := primaryTaskID(model.Notification{Resources: tt.resources})
+			id, ok := findTaskID(model.Notification{Resources: tt.resources})
 			assert.Equal(t, ok, tt.wantOK)
 			assert.Equal(t, id, tt.wantID)
 		})
