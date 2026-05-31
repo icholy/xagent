@@ -74,11 +74,7 @@ run = "go run ./cmd/migrate"
 
 [tasks.dbmate]
 description = "Run dbmate CLI against the local database (for experiments)"
-env = {
-	DATABASE_URL = "postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable",
-	DBMATE_MIGRATIONS_DIR = "internal/store/sql/migrations",
-	DBMATE_SCHEMA_FILE = "internal/store/sql/schema.sql",
-}
+env = { DATABASE_URL = "postgres://xagent:xagent@localhost:5433/xagent?sslmode=disable", DBMATE_MIGRATIONS_DIR = "internal/store/sql/migrations", DBMATE_SCHEMA_FILE = "internal/store/sql/schema.sql" }
 run = "dbmate"
 
 [tasks.test]
