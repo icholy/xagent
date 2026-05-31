@@ -49,17 +49,28 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, err
 	}
 
-	// First matching rule per org; orgs with no match are dropped.
-	matched := map[int64]*model.RoutingRule{}
+	// Per org, record whether any rule matched (gates the wake path) and the
+	// first matching rule that carries a create action (drives the create
+	// path). These are tracked independently: the wake-vs-create choice is
+	// decided by link presence below, so a matching wake-only rule must not
+	// shadow a later matching create-rule. Orgs with no match are dropped.
+	matched := map[int64]*orgMatch{}
 	for orgID, rules := range rulesByOrg {
 		if len(rules) == 0 {
 			rules = defaultRules
 		}
+		var m orgMatch
 		for i := range rules {
-			if input.MatchRule(rules[i]) {
-				matched[orgID] = &rules[i]
-				break
+			if !input.MatchRule(rules[i]) {
+				continue
 			}
+			m.any = true
+			if m.createRule == nil && rules[i].Create != nil {
+				m.createRule = &rules[i]
+			}
+		}
+		if m.any {
+			matched[orgID] = &m
 		}
 	}
 	if len(matched) == 0 {
@@ -76,9 +87,9 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, err
 	}
 
-	// Wake if a subscribed link exists; otherwise create if the matched rule opts in.
+	// Wake if a subscribed link exists; otherwise create if a matching rule opts in.
 	var n int
-	for orgID, rule := range matched {
+	for orgID, m := range matched {
 		if links := linksByOrg[orgID]; len(links) > 0 {
 			event := &model.Event{
 				Description: input.Description,
@@ -104,16 +115,25 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 			}
 			continue
 		}
-		if rule.Create == nil {
+		if m.createRule == nil {
 			continue
 		}
-		if err := r.create(ctx, input, orgID, rule); err != nil {
+		if err := r.create(ctx, input, orgID, m.createRule); err != nil {
 			r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
 			continue
 		}
 		n++
 	}
 	return n, nil
+}
+
+// orgMatch records, for a single org, the result of evaluating its routing
+// rules against an event: whether any rule matched (relevance for the wake
+// path) and the first matching rule with a create action (for the create
+// path).
+type orgMatch struct {
+	any        bool
+	createRule *model.RoutingRule
 }
 
 // links queries subscribed links matching the URL, scoped to the given orgs,
@@ -250,4 +270,3 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 	r.publish(ctx, notification)
 	return nil
 }
-

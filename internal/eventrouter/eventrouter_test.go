@@ -459,16 +459,16 @@ func TestRouteRedeliveryDedup(t *testing.T) {
 	assert.Equal(t, len(links[org.OrgID]), 1)
 }
 
-func TestRouteFirstMatchingRuleWins(t *testing.T) {
+func TestRouteFirstMatchingCreateRuleWins(t *testing.T) {
 	t.Parallel()
 
-	// Arrange: wake-only rule ordered before create-rule shadows the create.
+	// Arrange: two matching create-rules; the first one's config is used.
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/issues/4"
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Source: "github"}, // wake-only, matches
-		{Source: "github", Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"}},
+		{Source: "github", Create: &model.CreateTaskAction{Workspace: "first", Runner: "r1"}},
+		{Source: "github", Create: &model.CreateTaskAction{Workspace: "second", Runner: "r2"}},
 	})
 	assert.NilError(t, err)
 	r := &Router{Log: slog.Default(), Store: s}
@@ -481,19 +481,86 @@ func TestRouteFirstMatchingRuleWins(t *testing.T) {
 		URL:    url,
 		UserID: org.UserID,
 	})
+
+	// Assert: the first matching create-rule wins.
 	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
+	assert.Equal(t, n, 1)
 	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
 	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 0)
+	assert.Equal(t, len(tasks), 1)
+	assert.Equal(t, tasks[0].Workspace, "first")
+	assert.Equal(t, tasks[0].Runner, "r1")
+}
 
-	// Reorder so the create-rule comes first.
-	err = s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Source: "github", Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"}},
-		{Source: "github"},
+func TestRouteEarlierWakeOnlyRuleDoesNotShadowCreate(t *testing.T) {
+	t.Parallel()
+
+	// Regression for the routing-rule create-task bug: a broad wake-only
+	// rule ordered before a create-rule must not prevent task creation when
+	// no subscribed task exists. Rule matching only gates relevance; the
+	// wake-vs-create choice is driven by link presence, so an earlier
+	// matching rule without a create action must not shadow a later one
+	// that has it. References PRs #746, #761, #763.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	r := &Router{Log: slog.Default(), Store: s}
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{Source: "github"}, // broad wake-only rule, matches every github event
+		{Source: "github", Type: "issue_comment", Prefix: "xagent:test",
+			Create: &model.CreateTaskAction{Workspace: "ws", Runner: "r"}},
+		{Source: "github", Type: "pull_request_assigned", Assignee: "icholy-bot",
+			Create: &model.CreateTaskAction{Workspace: "ws", Runner: "r"}},
 	})
 	assert.NilError(t, err)
+
+	// A comment event still creates a task despite the preceding wake-only rule.
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "xagent:test",
+		URL:    "https://github.com/icholy/xagent/issues/1",
+		UserID: org.UserID,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	// An assignment event (no body, so the wake-only rule still matches but
+	// the comment create-rule does not) also creates a task.
 	n, err = r.Route(t.Context(), InputEvent{
+		Source:   "github",
+		Type:     "pull_request_assigned",
+		Assignee: "icholy-bot",
+		URL:      "https://github.com/icholy/xagent/pull/2",
+		UserID:   org.UserID,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 2)
+}
+
+func TestRouteEarlierWakeOnlyRuleStillWakesViaLink(t *testing.T) {
+	t.Parallel()
+
+	// The fix must not regress the wake path: when a subscribed link exists,
+	// a matching wake-only rule still wakes the task (no new task created).
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/7"
+	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{Source: "github"}, // wake-only
+		{Source: "github", Create: &model.CreateTaskAction{Workspace: "ws", Runner: "r"}},
+	})
+	assert.NilError(t, err)
+	r := &Router{Log: slog.Default(), Store: s}
+
+	n, err := r.Route(t.Context(), InputEvent{
 		Source: "github",
 		Type:   "issue_comment",
 		Data:   "hi",
@@ -502,9 +569,9 @@ func TestRouteFirstMatchingRuleWins(t *testing.T) {
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
-	tasks, err = s.ListTasks(t.Context(), nil, org.OrgID)
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
 	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 1)
+	assert.Equal(t, len(tasks), 1) // woken, not created
 }
 
 func TestRoutePerOrgIsolation(t *testing.T) {
