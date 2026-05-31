@@ -404,15 +404,21 @@ func TestToGithubInputEvent(t *testing.T) {
 					Owner: &github.User{Login: github.Ptr("owner")},
 				},
 			},
-			// Assignments have no reactable comment, so the comment coordinates
-			// stay zero even though the repo is present.
+			// Assignments have no reactable comment, so CommentID stays zero, but
+			// Owner/Repo/Number locate the issue for the Reactions API.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "issue_assigned",
 				Description: "octocat assigned issue #7 to @icholy-bot",
 				URL:         "https://github.com/owner/repo/issues/7",
 				Assignee:    "icholy-bot",
-				Meta:        GitHubMeta{AuthorID: 999, AuthorLogin: "octocat"},
+				Meta: GitHubMeta{
+					AuthorID:    999,
+					AuthorLogin: "octocat",
+					Owner:       "owner",
+					Repo:        "repo",
+					Number:      7,
+				},
 			},
 		},
 		{
@@ -463,15 +469,21 @@ func TestToGithubInputEvent(t *testing.T) {
 					Owner: &github.User{Login: github.Ptr("owner")},
 				},
 			},
-			// Assignments have no reactable comment, so the comment coordinates
-			// stay zero even though the repo is present.
+			// Assignments have no reactable comment, so CommentID stays zero, but
+			// Owner/Repo/Number locate the PR for the Reactions API.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_assigned",
 				Description: "alice assigned PR #12 to @icholy-bot",
 				URL:         "https://github.com/owner/repo/pull/12",
 				Assignee:    "icholy-bot",
-				Meta:        GitHubMeta{AuthorID: 42, AuthorLogin: "alice"},
+				Meta: GitHubMeta{
+					AuthorID:    42,
+					AuthorLogin: "alice",
+					Owner:       "owner",
+					Repo:        "repo",
+					Number:      12,
+				},
 			},
 		},
 		{
