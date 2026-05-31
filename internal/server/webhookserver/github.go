@@ -40,19 +40,20 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleInstallationEvent(w, r, event)
 		return
 	}
-	extracted := extractGitHubWebhookEvent(webhookEvent)
-	if extracted == nil {
+	input := extractGitHubWebhookEvent(webhookEvent)
+	if input == nil {
 		eventType := r.Header.Get("X-GitHub-Event")
 		slog.Debug("ignoring GitHub webhook event", "event_type", eventType)
 		fmt.Fprintf(w, "ignored")
 		return
 	}
+	author := input.Meta.(GitHubMeta).Author
 
 	// Look up xagent owner by GitHub user ID
-	user, err := h.Store.GetUserByGitHubUserID(r.Context(), nil, extracted.githubUserID)
+	user, err := h.Store.GetUserByGitHubUserID(r.Context(), nil, author.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			slog.Info("no linked GitHub account", "github_user_id", extracted.githubUserID)
+			slog.Info("no linked GitHub account", "github_user_id", author.ID)
 			fmt.Fprintf(w, "no linked account")
 			return
 		}
@@ -62,30 +63,22 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update cached username if it changed
-	if extracted.githubUsername != "" && extracted.githubUsername != user.GitHubUsername {
-		if err := h.Store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, extracted.githubUsername); err != nil {
+	if author.Username != "" && author.Username != user.GitHubUsername {
+		if err := h.Store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, author.Username); err != nil {
 			slog.Warn("failed to update GitHub username", "error", err)
 		}
 	}
 
 	// Route event to subscribed tasks
-	input := eventrouter.InputEvent{
-		Source:      "github",
-		Type:        extracted.eventType,
-		Description: extracted.description,
-		Data:        extracted.data,
-		URL:         extracted.url,
-		UserID:      user.ID,
-		Assignee:    extracted.assignee,
-	}
-	totalRouted, err := h.Router.Route(r.Context(), input)
+	input.UserID = user.ID
+	totalRouted, err := h.Router.Route(r.Context(), *input)
 	if err != nil {
 		slog.Error("failed to route event", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	slog.Info("GitHub webhook processed", "url", extracted.url, "tasks_routed", totalRouted)
+	slog.Info("GitHub webhook processed", "url", input.URL, "tasks_routed", totalRouted)
 	fmt.Fprintf(w, "processed")
 }
 
@@ -135,17 +128,20 @@ func (h *GitHubHandler) handleInstallationEvent(w http.ResponseWriter, r *http.R
 	}
 }
 
-type githubWebhookEvent struct {
-	eventType      string
-	description    string
-	data           string
-	url            string
-	githubUserID   int64
-	githubUsername string
-	assignee       string
+// GithubUser identifies a GitHub user in their native form, before resolution
+// to an xagent user.
+type GithubUser struct {
+	ID       int64
+	Username string
 }
 
-func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
+// GitHubMeta is attached to an eventrouter.InputEvent's Meta field, carrying
+// GitHub-native identity that the router does not interpret.
+type GitHubMeta struct {
+	Author GithubUser
+}
+
+func extractGitHubWebhookEvent(webhookEvent any) *eventrouter.InputEvent {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
 		if action := event.GetAction(); action != "created" && action != "edited" {
@@ -163,13 +159,13 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		if event.Issue.IsPullRequest() {
 			description = fmt.Sprintf("%s commented on PR #%d", login, number)
 		}
-		return &githubWebhookEvent{
-			eventType:      "issue_comment",
-			description:    description,
-			data:           body,
-			url:            *event.Issue.HTMLURL,
-			githubUserID:   *event.Comment.User.ID,
-			githubUsername: login,
+		return &eventrouter.InputEvent{
+			Source:      "github",
+			Type:        "issue_comment",
+			Description: description,
+			Data:        body,
+			URL:         *event.Issue.HTMLURL,
+			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Comment.User.ID, Username: login}},
 		}
 
 	case *github.PullRequestReviewCommentEvent:
@@ -184,13 +180,13 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		body := strings.TrimSpace(*event.Comment.Body)
 		login := event.Comment.User.GetLogin()
 		number := event.PullRequest.GetNumber()
-		return &githubWebhookEvent{
-			eventType:      "pull_request_review_comment",
-			description:    fmt.Sprintf("%s reviewed PR #%d", login, number),
-			data:           body,
-			url:            *event.PullRequest.HTMLURL,
-			githubUserID:   *event.Comment.User.ID,
-			githubUsername: login,
+		return &eventrouter.InputEvent{
+			Source:      "github",
+			Type:        "pull_request_review_comment",
+			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
+			Data:        body,
+			URL:         *event.PullRequest.HTMLURL,
+			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Comment.User.ID, Username: login}},
 		}
 
 	case *github.PullRequestReviewEvent:
@@ -203,13 +199,13 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		body := strings.TrimSpace(*event.Review.Body)
 		login := event.Review.User.GetLogin()
 		number := event.PullRequest.GetNumber()
-		return &githubWebhookEvent{
-			eventType:      "pull_request_review",
-			description:    fmt.Sprintf("%s reviewed PR #%d", login, number),
-			data:           body,
-			url:            *event.PullRequest.HTMLURL,
-			githubUserID:   *event.Review.User.ID,
-			githubUsername: login,
+		return &eventrouter.InputEvent{
+			Source:      "github",
+			Type:        "pull_request_review",
+			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
+			Data:        body,
+			URL:         *event.PullRequest.HTMLURL,
+			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Review.User.ID, Username: login}},
 		}
 
 	case *github.IssuesEvent:
@@ -222,13 +218,13 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		senderLogin := event.Sender.GetLogin()
 		assigneeLogin := event.Assignee.GetLogin()
 		number := event.Issue.GetNumber()
-		return &githubWebhookEvent{
-			eventType:      "issue_assigned",
-			description:    fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
-			url:            *event.Issue.HTMLURL,
-			githubUserID:   *event.Sender.ID,
-			githubUsername: senderLogin,
-			assignee:       assigneeLogin,
+		return &eventrouter.InputEvent{
+			Source:      "github",
+			Type:        "issue_assigned",
+			Description: fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
+			URL:         *event.Issue.HTMLURL,
+			Assignee:    assigneeLogin,
+			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Sender.ID, Username: senderLogin}},
 		}
 
 	case *github.PullRequestEvent:
@@ -241,13 +237,13 @@ func extractGitHubWebhookEvent(webhookEvent any) *githubWebhookEvent {
 		senderLogin := event.Sender.GetLogin()
 		assigneeLogin := event.Assignee.GetLogin()
 		number := event.PullRequest.GetNumber()
-		return &githubWebhookEvent{
-			eventType:      "pull_request_assigned",
-			description:    fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
-			url:            *event.PullRequest.HTMLURL,
-			githubUserID:   *event.Sender.ID,
-			githubUsername: senderLogin,
-			assignee:       assigneeLogin,
+		return &eventrouter.InputEvent{
+			Source:      "github",
+			Type:        "pull_request_assigned",
+			Description: fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
+			URL:         *event.PullRequest.HTMLURL,
+			Assignee:    assigneeLogin,
+			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Sender.ID, Username: senderLogin}},
 		}
 	}
 
