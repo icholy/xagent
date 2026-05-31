@@ -12,11 +12,6 @@ Use the `mcp__xagent__create_task` and `mcp__xagent__list_workspaces` MCP tools 
 1. If the user hasn't specified a workspace, use `mcp__xagent__list_workspaces` to find the right one.
 2. Create the task with `mcp__xagent__create_task`, always including the `runner` parameter.
 3. Show the user the task URL from the response.
-4. If you want to be notified about this task's status changes, call `watch_task(<id>)` —
-   channel notifications are **muted by default**. `unwatch_task(<id>)` stops them and
-   `list_watched_tasks` shows what you're tracking. Don't watch fire-and-forget tasks you'll
-   just check on later. (These watch tools exist only when the MCP bridge runs in `--channel`
-   mode — `xagent mcp --channel`.)
 
 ## Guidelines
 

@@ -67,30 +67,9 @@ production code or commit to the repo yourself — the xagent agents do that.
 
 ## Handling task notifications
 
-> These channel notifications and the `watch_task` / `unwatch_task` / `list_watched_tasks`
-> tools exist **only when the MCP bridge runs in `--channel` mode** (`xagent mcp --channel`).
-> Without `--channel` you receive no channel notifications and the watch tools aren't
-> registered — this whole section doesn't apply.
-
-Channel notifications about task status are **muted by default** — you receive them only for
-tasks you explicitly subscribe to. Use the watch tools to control your own attention:
-
-- **`watch_task(id)`** starts forwarding channel notifications ("Task N completed", "woken by
-  event …") for that task; **`unwatch_task(id)`** stops; **`list_watched_tasks`** shows what
-  you're currently tracking.
-- **Watch the tasks you're actively tracking, for their whole lifecycle.** When you kick off
-  a task you intend to follow (review its PR, iterate on it), `watch_task` it and **stay
-  watched** — most tasks have follow-up rounds (review → request changes → re-review → merge),
-  so don't `unwatch` just because you've looked at it once; that would drop you right before
-  the next round. `unwatch_task(id)` only when the task is genuinely done (merged / closed /
-  abandoned) or you've consciously decided to stop tracking it.
-- **Don't watch fire-and-forget delegations** you'll only check on later — that just
-  re-creates the firehose this is meant to avoid. Track those by checking back with
-  `list_tasks` / `get_task`.
-
-When a notification for a watched task does arrive, it's still **situational awareness, not an
-interrupt.** A task finishing in the background does not change what you and the user are
-working on *right now*.
+Channel notifications ("Task N completed", "Task N woken by event …") are **situational
+awareness, not interrupts.** A task finishing in the background does not change what you and
+the user are working on *right now*.
 
 - **Don't context-switch mid-thread.** If you're scoping work, reviewing a PR, or in a
   back-and-forth with the user, stay on it. Acknowledge the notification in a line at most
