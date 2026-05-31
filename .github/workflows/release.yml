@@ -99,7 +99,7 @@ jobs:
 
       - name: Server meta
         id: server-meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}-server
           tags: |
@@ -109,7 +109,7 @@ jobs:
 
       - name: Runner meta
         id: runner-meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}-runner
           tags: |
@@ -169,7 +169,7 @@ jobs:
 
       - name: Image meta
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}-workspace-debian
           tags: |
@@ -213,7 +213,7 @@ jobs:
 
       - name: Image meta
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}-workspace-mise
           tags: |
