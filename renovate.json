@@ -2,6 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", ":semanticCommits"],
   "minimumReleaseAge": "7 days",
+  "postUpdateOptions": ["gomodUpdateImportPaths"],
   "prConcurrentLimit": 3,
   "packageRules": [
     {
