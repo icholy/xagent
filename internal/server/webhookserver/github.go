@@ -47,6 +47,8 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "ignored")
 		return
 	}
+	// extractGitHubWebhookEvent always sets Meta to a GitHubMeta, so this
+	// assertion is safe. It panics loudly if that invariant is ever broken.
 	author := input.Meta.(GitHubMeta).Author
 
 	// Look up xagent owner by GitHub user ID
