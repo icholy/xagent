@@ -27,10 +27,7 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 	// Build a client authenticated as the App's bot identity, backed by the
 	// cached auto-refreshing installation transport so the reaction is
 	// attributed to the App and repeated calls skip re-minting the token.
-	client, err := s.tokens.Client(org.GitHubInstallationID)
-	if err != nil {
-		return err
-	}
+	client := s.tokens.Client(org.GitHubInstallationID)
 
 	// Pick the emoji from the routing outcome: a created task gets 🚀, a woken
 	// task 👀, and a comment that matched a rule but created or woke nothing 😕.
