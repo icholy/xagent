@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/google/go-github/v68/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
