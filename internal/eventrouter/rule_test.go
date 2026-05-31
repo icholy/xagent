@@ -57,6 +57,24 @@ func TestMatchRule(t *testing.T) {
 			want:  false,
 		},
 		{
+			name:  "atlassian label_added matches rule prefix on label",
+			rule:  model.RoutingRule{Source: "atlassian", Type: "label_added", Prefix: "xagent"},
+			event: InputEvent{Source: "atlassian", Type: "label_added", Data: "xagent"},
+			want:  true,
+		},
+		{
+			name:  "atlassian label_added does not match different label",
+			rule:  model.RoutingRule{Source: "atlassian", Type: "label_added", Prefix: "xagent"},
+			event: InputEvent{Source: "atlassian", Type: "label_added", Data: "triage"},
+			want:  false,
+		},
+		{
+			name:  "atlassian label_added empty prefix matches any label",
+			rule:  model.RoutingRule{Source: "atlassian", Type: "label_added"},
+			event: InputEvent{Source: "atlassian", Type: "label_added", Data: "anything"},
+			want:  true,
+		},
+		{
 			name:  "github mention match",
 			rule:  model.RoutingRule{Mention: "botuser"},
 			event: InputEvent{Source: "github", Data: "hey @botuser fix this"},

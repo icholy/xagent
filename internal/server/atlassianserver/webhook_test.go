@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/icholy/xagent/internal/x/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/x/atlassian"
 	"gotest.tools/v3/assert"
 )
 
@@ -20,7 +20,7 @@ func TestToAtlassianInputEvent(t *testing.T) {
 	tests := []struct {
 		name     string
 		payload  atlassian.WebhookPayload
-		expected *eventrouter.InputEvent
+		expected []*eventrouter.InputEvent
 	}{
 		{
 			name: "CommentCreated",
@@ -35,14 +35,14 @@ func TestToAtlassianInputEvent(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
 				},
 			},
-			expected: &eventrouter.InputEvent{
+			expected: []*eventrouter.InputEvent{{
 				Source:      "atlassian",
 				Type:        "comment_created",
 				Description: "Test User commented on PROJ-123",
 				Data:        "xagent: do something",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-			},
+			}},
 		},
 		{
 			name: "NoXAgentPrefix",
@@ -57,14 +57,14 @@ func TestToAtlassianInputEvent(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
 				},
 			},
-			expected: &eventrouter.InputEvent{
+			expected: []*eventrouter.InputEvent{{
 				Source:      "atlassian",
 				Type:        "comment_created",
 				Description: "Test User commented on PROJ-123",
 				Data:        "just a regular comment",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-			},
+			}},
 		},
 		{
 			name: "NilComment",
@@ -125,14 +125,83 @@ func TestToAtlassianInputEvent(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/1",
 				},
 			},
-			expected: &eventrouter.InputEvent{
+			expected: []*eventrouter.InputEvent{{
 				Source:      "atlassian",
 				Type:        "comment_created",
 				Description: "Test User commented on PROJ-1",
 				Data:        "xagent: trimmed",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-1",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
+			}},
+		},
+		{
+			name: "LabelAddedSingle",
+			payload: atlassian.WebhookPayload{
+				WebhookEvent: "jira:issue_updated",
+				User:         &atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-7",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/7",
+				},
+				Changelog: &atlassian.Changelog{Items: []atlassian.ChangelogItem{
+					{Field: "labels", FromString: "bug", ToString: "bug xagent"},
+				}},
 			},
+			expected: []*eventrouter.InputEvent{{
+				Source:      "atlassian",
+				Type:        "label_added",
+				Description: `Test User added label "xagent" to PROJ-7`,
+				Data:        "xagent",
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-7",
+				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
+			}},
+		},
+		{
+			name: "LabelAddedMultiple",
+			payload: atlassian.WebhookPayload{
+				WebhookEvent: "jira:issue_updated",
+				User:         &atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-8",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/8",
+				},
+				Changelog: &atlassian.Changelog{Items: []atlassian.ChangelogItem{
+					{Field: "labels", FromString: "bug", ToString: "bug xagent triage"},
+				}},
+			},
+			expected: []*eventrouter.InputEvent{
+				{
+					Source:      "atlassian",
+					Type:        "label_added",
+					Description: `Test User added label "xagent" to PROJ-8`,
+					Data:        "xagent",
+					URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
+					Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
+				},
+				{
+					Source:      "atlassian",
+					Type:        "label_added",
+					Description: `Test User added label "triage" to PROJ-8`,
+					Data:        "triage",
+					URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
+					Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
+				},
+			},
+		},
+		{
+			name: "IssueUpdatedNoLabelChange",
+			payload: atlassian.WebhookPayload{
+				WebhookEvent: "jira:issue_updated",
+				User:         &atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-9",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/9",
+				},
+				Changelog: &atlassian.Changelog{Items: []atlassian.ChangelogItem{
+					{Field: "status", FromString: "To Do", ToString: "In Progress"},
+				}},
+			},
+			expected: nil,
 		},
 	}
 
@@ -140,7 +209,7 @@ func TestToAtlassianInputEvent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			body, err := json.Marshal(tt.payload)
 			assert.NilError(t, err)
-			got, err := toInputEvent(body)
+			got, err := toInputEvents(body)
 			assert.NilError(t, err)
 			assert.DeepEqual(t, got, tt.expected)
 		})

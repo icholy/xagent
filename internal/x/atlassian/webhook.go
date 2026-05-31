@@ -11,9 +11,54 @@ import (
 
 // WebhookPayload represents the relevant fields of a Jira Cloud webhook payload.
 type WebhookPayload struct {
-	WebhookEvent string   `json:"webhookEvent"`
-	Comment      *Comment `json:"comment"`
-	Issue        *Issue   `json:"issue"`
+	WebhookEvent string     `json:"webhookEvent"`
+	Comment      *Comment   `json:"comment"`
+	Issue        *Issue     `json:"issue"`
+	User         *User      `json:"user"`      // actor of the update (jira:issue_updated)
+	Changelog    *Changelog `json:"changelog"` // present on jira:issue_updated
+}
+
+// Changelog represents the set of field changes carried by a jira:issue_updated
+// webhook payload.
+type Changelog struct {
+	Items []ChangelogItem `json:"items"`
+}
+
+// ChangelogItem represents a single field change within a Changelog. For label
+// changes the field is "labels" and FromString/ToString hold the previous and
+// new space-separated label sets.
+type ChangelogItem struct {
+	Field      string `json:"field"`
+	FromString string `json:"fromString"`
+	ToString   string `json:"toString"`
+}
+
+// AddedLabels returns the labels present in the new label set but not the old
+// one (the set difference toString − fromString) across all "labels" changelog
+// items. Labels are space-separated. Returns nil when no labels were added.
+func (c *Changelog) AddedLabels() []string {
+	if c == nil {
+		return nil
+	}
+	var added []string
+	for _, item := range c.Items {
+		if item.Field != "labels" {
+			continue
+		}
+		old := map[string]bool{}
+		for _, l := range strings.Fields(item.FromString) {
+			old[l] = true
+		}
+		seen := map[string]bool{}
+		for _, l := range strings.Fields(item.ToString) {
+			if old[l] || seen[l] {
+				continue
+			}
+			seen[l] = true
+			added = append(added, l)
+		}
+	}
+	return added
 }
 
 // Comment represents a Jira issue comment from a webhook payload.

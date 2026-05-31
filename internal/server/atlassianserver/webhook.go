@@ -60,23 +60,26 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse and extract the event
-	input, err := toInputEvent(body)
+	// Parse and extract the events. A single webhook can yield multiple events
+	// (e.g. one jira:issue_updated payload adding several labels).
+	inputs, err := toInputEvents(body)
 	if err != nil {
 		slog.Error("failed to parse Atlassian webhook payload", "error", err)
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	if input == nil {
+	if len(inputs) == 0 {
 		slog.Debug("ignoring Atlassian webhook event")
 		fmt.Fprintf(w, "ignored")
 		return
 	}
-	// toInputEvent always sets Meta to an AtlassianMeta, so this
-	// assertion is safe. It panics loudly if that invariant is ever broken.
-	meta := input.Meta.(AtlassianMeta)
+	// toInputEvents always sets Meta to an AtlassianMeta on every event, and
+	// all events from one payload share the same actor, so this assertion is
+	// safe. It panics loudly if that invariant is ever broken.
+	meta := inputs[0].Meta.(AtlassianMeta)
 
-	// Look up xagent owner by Atlassian account ID
+	// Look up xagent owner by Atlassian account ID. The actor is the same for
+	// every event from a single payload, so the lookup runs once.
 	user, err := h.Store.GetUserByAtlassianAccountID(r.Context(), nil, meta.AuthorAccountID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -89,16 +92,20 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Route event to subscribed tasks
-	input.UserID = user.ID
-	totalRouted, err := h.Router.Route(r.Context(), *input)
-	if err != nil {
-		slog.Error("failed to route event", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+	// Route every event to subscribed tasks.
+	var totalRouted int
+	for _, input := range inputs {
+		input.UserID = user.ID
+		n, err := h.Router.Route(r.Context(), *input)
+		if err != nil {
+			slog.Error("failed to route event", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		totalRouted += n
 	}
 
-	slog.Info("Atlassian webhook processed", "url", input.URL, "tasks_routed", totalRouted)
+	slog.Info("Atlassian webhook processed", "events", len(inputs), "tasks_routed", totalRouted)
 	fmt.Fprintf(w, "processed")
 }
 
@@ -114,9 +121,19 @@ type AtlassianMeta struct {
 // dispatches on InputEvent.Type.
 const (
 	EventTypeCommentCreated = "comment_created"
+	EventTypeLabelAdded     = "label_added"
 )
 
-func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
+// JiraEventIssueUpdated is the wire webhookEvent value Jira Cloud sends when an
+// issue field changes (including label additions). Unlike comment_created, it
+// carries the "jira:" prefix on the wire.
+const JiraEventIssueUpdated = "jira:issue_updated"
+
+// toInputEvents parses a Jira webhook payload and converts it into zero or more
+// routable events. A comment yields a single comment_created event; an issue
+// update yields one label_added event per added label. Every returned event has
+// its Meta set to an AtlassianMeta carrying the actor's identity.
+func toInputEvents(body []byte) ([]*eventrouter.InputEvent, error) {
 	payload, err := atlassian.ParseWebhook(body)
 	if err != nil {
 		return nil, err
@@ -142,14 +159,49 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 
 		description := fmt.Sprintf("%s commented on %s", displayName, payload.Issue.Key)
 
-		return &eventrouter.InputEvent{
+		return []*eventrouter.InputEvent{{
 			Source:      "atlassian",
 			Type:        EventTypeCommentCreated,
 			Description: description,
 			Data:        commentBody,
 			URL:         url,
 			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
-		}, nil
+		}}, nil
+
+	case JiraEventIssueUpdated:
+		if payload.Issue == nil || payload.User == nil {
+			return nil, nil
+		}
+		added := payload.Changelog.AddedLabels()
+		if len(added) == 0 {
+			return nil, nil
+		}
+
+		accountID := payload.User.AccountID
+		displayName := payload.User.DisplayName
+		if accountID == "" {
+			return nil, nil
+		}
+
+		url := payload.Issue.BrowseURL()
+		if url == "" {
+			return nil, nil
+		}
+
+		// One event per added label so each can be routed and matched against a
+		// rule's Prefix independently.
+		events := make([]*eventrouter.InputEvent, 0, len(added))
+		for _, label := range added {
+			events = append(events, &eventrouter.InputEvent{
+				Source:      "atlassian",
+				Type:        EventTypeLabelAdded,
+				Description: fmt.Sprintf("%s added label %q to %s", displayName, label, payload.Issue.Key),
+				Data:        label,
+				URL:         url,
+				Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
+			})
+		}
+		return events, nil
 	}
 
 	return nil, nil

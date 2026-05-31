@@ -80,3 +80,70 @@ func TestIssueBrowseURL(t *testing.T) {
 		})
 	}
 }
+
+func TestChangelogAddedLabels(t *testing.T) {
+	tests := []struct {
+		name      string
+		changelog *Changelog
+		expected  []string
+	}{
+		{
+			name:      "NilChangelog",
+			changelog: nil,
+			expected:  nil,
+		},
+		{
+			name:      "NoItems",
+			changelog: &Changelog{},
+			expected:  nil,
+		},
+		{
+			name: "SingleLabelAdded",
+			changelog: &Changelog{Items: []ChangelogItem{
+				{Field: "labels", FromString: "", ToString: "xagent"},
+			}},
+			expected: []string{"xagent"},
+		},
+		{
+			name: "LabelAddedToExistingSet",
+			changelog: &Changelog{Items: []ChangelogItem{
+				{Field: "labels", FromString: "bug urgent", ToString: "bug urgent xagent"},
+			}},
+			expected: []string{"xagent"},
+		},
+		{
+			name: "MultipleLabelsAdded",
+			changelog: &Changelog{Items: []ChangelogItem{
+				{Field: "labels", FromString: "bug", ToString: "bug xagent triage"},
+			}},
+			expected: []string{"xagent", "triage"},
+		},
+		{
+			name: "LabelRemovedOnly",
+			changelog: &Changelog{Items: []ChangelogItem{
+				{Field: "labels", FromString: "bug xagent", ToString: "bug"},
+			}},
+			expected: nil,
+		},
+		{
+			name: "MixedAddAndRemove",
+			changelog: &Changelog{Items: []ChangelogItem{
+				{Field: "labels", FromString: "bug urgent", ToString: "bug xagent"},
+			}},
+			expected: []string{"xagent"},
+		},
+		{
+			name: "UnrelatedFieldIgnored",
+			changelog: &Changelog{Items: []ChangelogItem{
+				{Field: "status", FromString: "To Do", ToString: "In Progress"},
+			}},
+			expected: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.changelog.AddedLabels()
+			assert.DeepEqual(t, got, tt.expected)
+		})
+	}
+}
