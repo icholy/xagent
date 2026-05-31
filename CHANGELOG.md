@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.22.2](https://github.com/icholy/xagent/compare/v0.22.1...v0.22.2) (2026-05-31)
+
+
+### Bug Fixes
+
+* copy pnpm-workspace.yaml before webui install in server image ([155117b](https://github.com/icholy/xagent/commit/155117b7ba7b50d7921260cdda1a349a7c081878))
+
+
+### Miscellaneous
+
+* **deps:** update docker/setup-buildx-action action to v4 ([#764](https://github.com/icholy/xagent/issues/764)) ([acc1d80](https://github.com/icholy/xagent/commit/acc1d8016bef00b37f201ba5db1c568792c2ed77))
+* **deps:** update docker/setup-qemu-action action to v4 ([#767](https://github.com/icholy/xagent/issues/767)) ([e9de22f](https://github.com/icholy/xagent/commit/e9de22f001d7bc31ff0c22f749ddef0cd52f03bb))
+
 ## [0.22.1](https://github.com/icholy/xagent/compare/v0.22.0...v0.22.1) (2026-05-31)
 
 
