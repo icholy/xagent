@@ -49,13 +49,13 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// toGithubInputEvent always sets Meta to a GitHubMeta, so this
 	// assertion is safe. It panics loudly if that invariant is ever broken.
-	author := input.Meta.(GitHubMeta).Author
+	meta := input.Meta.(GitHubMeta)
 
 	// Look up xagent owner by GitHub user ID
-	user, err := h.Store.GetUserByGitHubUserID(r.Context(), nil, author.ID)
+	user, err := h.Store.GetUserByGitHubUserID(r.Context(), nil, meta.AuthorID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			slog.Info("no linked GitHub account", "github_user_id", author.ID)
+			slog.Info("no linked GitHub account", "github_user_id", meta.AuthorID)
 			fmt.Fprintf(w, "no linked account")
 			return
 		}
@@ -65,8 +65,8 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update cached username if it changed
-	if author.Username != "" && author.Username != user.GitHubUsername {
-		if err := h.Store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, author.Username); err != nil {
+	if meta.AuthorLogin != "" && meta.AuthorLogin != user.GitHubUsername {
+		if err := h.Store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, meta.AuthorLogin); err != nil {
 			slog.Warn("failed to update GitHub username", "error", err)
 		}
 	}
@@ -130,17 +130,11 @@ func (h *GitHubHandler) handleInstallationEvent(w http.ResponseWriter, r *http.R
 	}
 }
 
-// GithubUser identifies a GitHub user in their native form, before resolution
-// to an xagent user.
-type GithubUser struct {
-	ID       int64
-	Username string
-}
-
 // GitHubMeta is attached to an eventrouter.InputEvent's Meta field, carrying
 // GitHub-native identity that the router does not interpret.
 type GitHubMeta struct {
-	Author GithubUser
+	AuthorID    int64
+	AuthorLogin string
 }
 
 func toGithubInputEvent(webhookEvent any) *eventrouter.InputEvent {
@@ -167,7 +161,7 @@ func toGithubInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: description,
 			Data:        body,
 			URL:         *event.Issue.HTMLURL,
-			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Comment.User.ID, Username: login}},
+			Meta:        GitHubMeta{AuthorID: *event.Comment.User.ID, AuthorLogin: login},
 		}
 
 	case *github.PullRequestReviewCommentEvent:
@@ -188,7 +182,7 @@ func toGithubInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
 			Data:        body,
 			URL:         *event.PullRequest.HTMLURL,
-			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Comment.User.ID, Username: login}},
+			Meta:        GitHubMeta{AuthorID: *event.Comment.User.ID, AuthorLogin: login},
 		}
 
 	case *github.PullRequestReviewEvent:
@@ -207,7 +201,7 @@ func toGithubInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
 			Data:        body,
 			URL:         *event.PullRequest.HTMLURL,
-			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Review.User.ID, Username: login}},
+			Meta:        GitHubMeta{AuthorID: *event.Review.User.ID, AuthorLogin: login},
 		}
 
 	case *github.IssuesEvent:
@@ -226,7 +220,7 @@ func toGithubInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
 			URL:         *event.Issue.HTMLURL,
 			Assignee:    assigneeLogin,
-			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Sender.ID, Username: senderLogin}},
+			Meta:        GitHubMeta{AuthorID: *event.Sender.ID, AuthorLogin: senderLogin},
 		}
 
 	case *github.PullRequestEvent:
@@ -245,7 +239,7 @@ func toGithubInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
 			URL:         *event.PullRequest.HTMLURL,
 			Assignee:    assigneeLogin,
-			Meta:        GitHubMeta{Author: GithubUser{ID: *event.Sender.ID, Username: senderLogin}},
+			Meta:        GitHubMeta{AuthorID: *event.Sender.ID, AuthorLogin: senderLogin},
 		}
 	}
 

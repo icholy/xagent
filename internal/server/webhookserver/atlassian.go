@@ -74,13 +74,13 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// toAtlassianInputEvent always sets Meta to an AtlassianMeta, so this
 	// assertion is safe. It panics loudly if that invariant is ever broken.
-	accountID := input.Meta.(AtlassianMeta).Author.AccountID
+	meta := input.Meta.(AtlassianMeta)
 
 	// Look up xagent owner by Atlassian account ID
-	user, err := h.Store.GetUserByAtlassianAccountID(r.Context(), nil, accountID)
+	user, err := h.Store.GetUserByAtlassianAccountID(r.Context(), nil, meta.AuthorAccountID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			slog.Info("no linked Atlassian account", "atlassian_account_id", accountID)
+			slog.Info("no linked Atlassian account", "atlassian_account_id", meta.AuthorAccountID)
 			fmt.Fprintf(w, "no linked account")
 			return
 		}
@@ -102,17 +102,11 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "processed")
 }
 
-// AtlassianUser identifies an Atlassian user in their native form, before
-// resolution to an xagent user.
-type AtlassianUser struct {
-	AccountID   string
-	DisplayName string
-}
-
 // AtlassianMeta is attached to an eventrouter.InputEvent's Meta field, carrying
 // Atlassian-native identity that the router does not interpret.
 type AtlassianMeta struct {
-	Author AtlassianUser
+	AuthorAccountID   string
+	AuthorDisplayName string
 }
 
 func toAtlassianInputEvent(body []byte) (*eventrouter.InputEvent, error) {
@@ -147,7 +141,7 @@ func toAtlassianInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 			Description: description,
 			Data:        commentBody,
 			URL:         url,
-			Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: accountID, DisplayName: displayName}},
+			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
 		}, nil
 	}
 
