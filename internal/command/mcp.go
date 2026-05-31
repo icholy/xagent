@@ -58,35 +58,43 @@ var McpCommand = &cli.Command{
 			Token:    cmd.String("token"),
 			ClientID: clientID,
 		})
+		instructions := mcpserver.Instructions
 		var capabilities mcp.ServerCapabilities
 		if cmd.Bool("channel") {
 			capabilities.Experimental = mcpchannel.Experimental()
+			instructions += "\n\n" + mcpserver.ChannelInstructions
 		}
 		server := mcp.NewServer(&mcp.Implementation{
 			Name:    "xagent",
 			Version: "1.0.0",
 		}, &mcp.ServerOptions{
-			Instructions: mcpserver.Instructions,
+			Instructions: instructions,
 			Capabilities: &capabilities,
 		})
 		mcpserver.AddTools(server, client)
 
 		transport := mcpchannel.NewTransport(&mcp.StdioTransport{})
-		session, err := server.Connect(ctx, transport, nil)
-		if err != nil {
-			return err
-		}
+
 		if cmd.Bool("channel") {
+			// *mcpchannel.Transport satisfies mcpserver.ChannelSender. The
+			// bridge owns the per-task subscription set, the watch tools, and
+			// the mute-by-default forwarding gate; the gate logic lives in
+			// mcpserver, not here.
+			//
+			// The notification stream starts here, before Connect: with
+			// mute-by-default nothing is forwarded until the agent explicitly
+			// watches a task, which can only happen via a tool call once the
+			// session is up, so there is no race against the transport being
+			// connected.
+			ch := mcpserver.NewChannel(transport)
+			ch.AddTools(server)
 			go func() {
 				nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
 					BaseURL:  cmd.String("server"),
 					Token:    cmd.String("token"),
 					ClientID: clientID,
 					Handler: func(n model.Notification) {
-						if n.ChannelMessage == "" {
-							return
-						}
-						if err := transport.SendChannel(ctx, mcpchannel.Params{Content: n.ChannelMessage}); err != nil {
+						if err := ch.Forward(ctx, n); err != nil {
 							slog.Warn("xagent channel: failed to send", "error", err)
 						}
 					},
@@ -95,6 +103,11 @@ var McpCommand = &cli.Command{
 					slog.Warn("xagent channel: stream ended", "error", err)
 				}
 			}()
+		}
+
+		session, err := server.Connect(ctx, transport, nil)
+		if err != nil {
+			return err
 		}
 		return session.Wait()
 	},
