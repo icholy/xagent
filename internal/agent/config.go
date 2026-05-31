@@ -29,7 +29,6 @@ type Config struct {
 	Dummy      *DummyOptions        `json:"dummy,omitempty"`
 
 	// Agent-managed state
-	Setup                  bool `json:"setup,omitempty"`
 	SetupCommandsCompleted int  `json:"setup_commands_completed,omitempty"`
 	Started                bool `json:"started,omitempty"`
 }
@@ -82,6 +81,15 @@ func LoadConfig(taskID int64) (*Config, error) {
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
+	}
+	// Backward-compat: older configs used a top-level `"setup": true` bool
+	// to mark setup as fully complete. Translate it to the equivalent
+	// SetupCommandsCompleted count so the loop short-circuits correctly.
+	var legacy struct {
+		Setup bool `json:"setup"`
+	}
+	if err := json.Unmarshal(data, &legacy); err == nil && legacy.Setup && cfg.SetupCommandsCompleted == 0 {
+		cfg.SetupCommandsCompleted = len(cfg.Commands)
 	}
 	return &cfg, nil
 }

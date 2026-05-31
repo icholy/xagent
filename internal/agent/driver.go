@@ -51,7 +51,6 @@ func (d *Driver) Run(ctx context.Context) error {
 		"cwd", cfg.Cwd,
 		"commands", cfg.Commands,
 		"mcp_servers", len(cfg.McpServers),
-		"setup", cfg.Setup,
 		"setup_completed", cfg.SetupCommandsCompleted,
 		"started", cfg.Started,
 	)
@@ -105,12 +104,8 @@ func (d *Driver) Run(ctx context.Context) error {
 // setup runs the setup commands listed in cfg.Commands, resuming from
 // cfg.SetupCommandsCompleted. After each successful command, the updated
 // count is persisted via SaveConfig so a restart can pick up where the
-// previous run left off. cfg.Setup is set to true only after the last
-// command completes.
+// previous run left off.
 func (d *Driver) setup(ctx context.Context, cfg *Config) error {
-	if cfg.Setup {
-		return nil
-	}
 	// Defensive clamp: if the saved count exceeds the current command
 	// list, reset to 0 and re-run from the beginning.
 	if cfg.SetupCommandsCompleted > len(cfg.Commands) {
@@ -129,10 +124,6 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 		if err := SaveConfig(d.TaskID, cfg); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-	}
-	cfg.Setup = true
-	if err := SaveConfig(d.TaskID, cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
 	}
 	return nil
 }

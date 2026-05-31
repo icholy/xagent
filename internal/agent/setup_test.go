@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -32,19 +33,17 @@ func TestSetup_MidListFailureLeavesResumeIndex(t *testing.T) {
 	// Assert
 	assert.ErrorContains(t, err, "setup command 2 failed")
 	assert.Equal(t, cfg.SetupCommandsCompleted, 2)
-	assert.Equal(t, cfg.Setup, false)
 
 	loaded, err := LoadConfig(d.TaskID)
 	assert.NilError(t, err)
 	assert.Equal(t, loaded.SetupCommandsCompleted, 2)
-	assert.Equal(t, loaded.Setup, false)
 }
 
 func TestSetup_ResumesFromSavedIndex(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
-	marker3 := t.TempDir() + "/marker3"
-	marker4 := t.TempDir() + "/marker4"
+	marker3 := filepath.Join(t.TempDir(), "marker3")
+	marker4 := filepath.Join(t.TempDir(), "marker4")
 	cfg := &Config{
 		Commands: []string{
 			"exit 1", // would fail if re-run
@@ -61,17 +60,16 @@ func TestSetup_ResumesFromSavedIndex(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, cfg.SetupCommandsCompleted, 4)
-	assert.Equal(t, cfg.Setup, true)
 	assertFileExists(t, marker3)
 	assertFileExists(t, marker4)
 }
 
-func TestSetup_SetupTrueSkipsLoop(t *testing.T) {
+func TestSetup_AlreadyCompleteSkipsLoop(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
 	cfg := &Config{
-		Setup:    true,
-		Commands: []string{"exit 1"}, // would fail if executed
+		Commands:               []string{"exit 1"}, // would fail if executed
+		SetupCommandsCompleted: 1,
 	}
 
 	// Act
@@ -79,15 +77,14 @@ func TestSetup_SetupTrueSkipsLoop(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	assert.Equal(t, cfg.Setup, true)
-	assert.Equal(t, cfg.SetupCommandsCompleted, 0)
+	assert.Equal(t, cfg.SetupCommandsCompleted, 1)
 }
 
 func TestSetup_NoCountRunsFromZero(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
-	marker0 := t.TempDir() + "/marker0"
-	marker1 := t.TempDir() + "/marker1"
+	marker0 := filepath.Join(t.TempDir(), "marker0")
+	marker1 := filepath.Join(t.TempDir(), "marker1")
 	cfg := &Config{
 		Commands: []string{
 			"touch " + marker0,
@@ -101,12 +98,11 @@ func TestSetup_NoCountRunsFromZero(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, cfg.SetupCommandsCompleted, 2)
-	assert.Equal(t, cfg.Setup, true)
 	assertFileExists(t, marker0)
 	assertFileExists(t, marker1)
 }
 
-func TestSetup_LastCommandFailureDoesNotFlipSetup(t *testing.T) {
+func TestSetup_LastCommandFailureLeavesIncompleteCount(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
 	cfg := &Config{
@@ -119,13 +115,12 @@ func TestSetup_LastCommandFailureDoesNotFlipSetup(t *testing.T) {
 	// Assert
 	assert.ErrorContains(t, err, "setup command 1 failed")
 	assert.Equal(t, cfg.SetupCommandsCompleted, 1)
-	assert.Equal(t, cfg.Setup, false)
 }
 
 func TestSetup_OutOfRangeCountClampsToZero(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
-	marker := t.TempDir() + "/marker"
+	marker := filepath.Join(t.TempDir(), "marker")
 	cfg := &Config{
 		Commands:               []string{"touch " + marker},
 		SetupCommandsCompleted: 99,
@@ -137,8 +132,41 @@ func TestSetup_OutOfRangeCountClampsToZero(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, cfg.SetupCommandsCompleted, 1)
-	assert.Equal(t, cfg.Setup, true)
 	assertFileExists(t, marker)
+}
+
+func TestLoadConfig_LegacySetupTrueMigratesToCount(t *testing.T) {
+	// Arrange — write a legacy cfg.json with `"setup": true` and no count.
+	ConfigDir = t.TempDir()
+	legacy := []byte(`{
+		"commands": ["a", "b", "c"],
+		"setup": true
+	}`)
+	assert.NilError(t, os.WriteFile(ConfigPath(1), legacy, 0o666))
+
+	// Act
+	cfg, err := LoadConfig(1)
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, cfg.SetupCommandsCompleted, 3)
+}
+
+func TestLoadConfig_LegacySetupFalseLeavesCountZero(t *testing.T) {
+	// Arrange
+	ConfigDir = t.TempDir()
+	legacy := []byte(`{
+		"commands": ["a", "b"],
+		"setup": false
+	}`)
+	assert.NilError(t, os.WriteFile(ConfigPath(1), legacy, 0o666))
+
+	// Act
+	cfg, err := LoadConfig(1)
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, cfg.SetupCommandsCompleted, 0)
 }
 
 func assertFileExists(t *testing.T, path string) {
