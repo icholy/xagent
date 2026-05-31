@@ -156,7 +156,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 		if err != nil {
 			return err
 		}
-		prevStatus := task.Status
+		wasTerminal := task.IsTerminal()
 		task.Start()
 		if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
 			return err
@@ -174,8 +174,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
 		notification.Runner = task.PendingRunner()
-		switch prevStatus {
-		case model.TaskStatusCompleted, model.TaskStatusFailed, model.TaskStatusCancelled:
+		if wasTerminal {
 			notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s (%s)", task.ID, event.ID, event.Description, event.URL)
 		}
 		return tx.Commit()

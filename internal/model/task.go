@@ -270,17 +270,20 @@ func (t *Task) applyRunnerEventFailed() bool {
 	}
 }
 
+// IsTerminal reports whether the task is in an end state (no further
+// transitions): completed, failed, or cancelled.
+func (t *Task) IsTerminal() bool {
+	return t.Status == TaskStatusCompleted ||
+		t.Status == TaskStatusFailed ||
+		t.Status == TaskStatusCancelled
+}
+
 // CanArchive returns true if the task can be archived.
 func (t *Task) CanArchive() bool {
 	if t.Archived || t.Command != TaskCommandNone {
 		return false
 	}
-	switch t.Status {
-	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
-		return true
-	default:
-		return false
-	}
+	return t.IsTerminal()
 }
 
 // Archive marks the task as archived.
