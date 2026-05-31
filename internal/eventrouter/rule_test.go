@@ -122,6 +122,84 @@ func TestMatchRule(t *testing.T) {
 			event: InputEvent{Source: "github", Type: "issue_comment", Data: "just a comment"},
 			want:  false,
 		},
+		{
+			name:  "github assignee match",
+			rule:  model.RoutingRule{Assignee: "icholy-bot"},
+			event: InputEvent{Source: "github", Type: "pull_request_assigned", Assignee: "icholy-bot"},
+			want:  true,
+		},
+		{
+			name:  "github assignee case insensitive",
+			rule:  model.RoutingRule{Assignee: "icholy-bot"},
+			event: InputEvent{Source: "github", Type: "pull_request_assigned", Assignee: "Icholy-Bot"},
+			want:  true,
+		},
+		{
+			name:  "github assignee mismatch",
+			rule:  model.RoutingRule{Assignee: "icholy-bot"},
+			event: InputEvent{Source: "github", Type: "pull_request_assigned", Assignee: "octocat"},
+			want:  false,
+		},
+		{
+			name:  "github assignee empty on non-assignment event",
+			rule:  model.RoutingRule{Assignee: "icholy-bot"},
+			event: InputEvent{Source: "github", Type: "issue_comment", Data: "hi", Assignee: ""},
+			want:  false,
+		},
+		{
+			name:  "atlassian assignee never matches v1",
+			rule:  model.RoutingRule{Assignee: "5b10ac8d82e05b22cc7d4ef5"},
+			event: InputEvent{Source: "atlassian", Assignee: "5b10ac8d82e05b22cc7d4ef5"},
+			want:  false,
+		},
+		{
+			name:  "unknown source assignee never matches",
+			rule:  model.RoutingRule{Assignee: "user"},
+			event: InputEvent{Source: "unknown", Assignee: "user"},
+			want:  false,
+		},
+		{
+			name: "combined source type assignee all match",
+			rule: model.RoutingRule{
+				Source:   "github",
+				Type:     "pull_request_assigned",
+				Assignee: "icholy-bot",
+			},
+			event: InputEvent{
+				Source:   "github",
+				Type:     "pull_request_assigned",
+				Assignee: "icholy-bot",
+			},
+			want: true,
+		},
+		{
+			name: "combined gate type mismatch",
+			rule: model.RoutingRule{
+				Source:   "github",
+				Type:     "pull_request_assigned",
+				Assignee: "icholy-bot",
+			},
+			event: InputEvent{
+				Source:   "github",
+				Type:     "issue_assigned",
+				Assignee: "icholy-bot",
+			},
+			want: false,
+		},
+		{
+			name: "combined gate assignee mismatch",
+			rule: model.RoutingRule{
+				Source:   "github",
+				Type:     "pull_request_assigned",
+				Assignee: "icholy-bot",
+			},
+			event: InputEvent{
+				Source:   "github",
+				Type:     "pull_request_assigned",
+				Assignee: "octocat",
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

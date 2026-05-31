@@ -20,6 +20,7 @@ type InputEvent struct {
 	Data        string
 	URL         string
 	UserID      string
+	Assignee    string
 }
 
 // Router routes events to subscribed tasks via the store.

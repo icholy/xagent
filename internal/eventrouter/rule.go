@@ -23,6 +23,9 @@ func (e InputEvent) MatchRule(rule model.RoutingRule) bool {
 	if rule.Mention != "" && !e.matchMention(rule.Mention) {
 		return false
 	}
+	if rule.Assignee != "" && !e.matchAssignee(rule.Assignee) {
+		return false
+	}
 	return true
 }
 
@@ -36,6 +39,25 @@ func (e InputEvent) matchMention(mention string) bool {
 		return matched
 	case "atlassian":
 		return strings.Contains(e.Data, "[~accountid:"+mention+"]")
+	default:
+		return false
+	}
+}
+
+// matchAssignee checks whether the event's assignee matches the rule's
+// configured assignee. A rule with Assignee set only matches events whose
+// InputEvent.Assignee is non-empty (i.e. assignment events).
+func (e InputEvent) matchAssignee(assignee string) bool {
+	if e.Assignee == "" {
+		return false
+	}
+	switch e.Source {
+	case "github":
+		return strings.EqualFold(e.Assignee, assignee)
+	case "atlassian":
+		// Jira assignment matching is deferred — extractor does not emit
+		// assignment events yet.
+		return false
 	default:
 		return false
 	}

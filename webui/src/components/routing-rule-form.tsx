@@ -15,10 +15,12 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2 } from 'lucide-react'
 import {
+  assigneeCopyForSource,
   EVENT_TYPES,
   emptyRoutingRule,
   findEventType,
   findEventTypeById,
+  isAssignmentType,
   isRoutingRuleFormValid,
   legacyEventTypeOption,
   mentionCopyForSource,
@@ -53,7 +55,8 @@ export function RoutingRuleForm({
       !initialValues.source &&
       !initialValues.type &&
       !initialValues.prefix &&
-      !initialValues.mention
+      !initialValues.mention &&
+      !initialValues.assignee
     if (isUntouched) return null
     return legacyEventTypeOption(initialValues.source, initialValues.type)
   }, [initialValues])
@@ -72,6 +75,8 @@ export function RoutingRuleForm({
   }, [values.source, values.type, legacyOption])
 
   const mentionCopy = mentionCopyForSource(values.source)
+  const assigneeCopy = assigneeCopyForSource(values.source)
+  const showAssignee = isAssignmentType(values.source, values.type)
   const canSubmit = isRoutingRuleFormValid(values, selectedId !== '')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {}, { enabled: values.createTask })
@@ -153,6 +158,19 @@ export function RoutingRuleForm({
         />
         <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
       </div>
+
+      {showAssignee && (
+        <div className="space-y-2">
+          <Label htmlFor="assignee">{assigneeCopy.label}</Label>
+          <Input
+            id="assignee"
+            placeholder={assigneeCopy.placeholder}
+            value={values.assignee}
+            onChange={(e) => setValues({ ...values, assignee: e.target.value })}
+          />
+          <p className="text-muted-foreground text-xs">{assigneeCopy.help}</p>
+        </div>
+      )}
 
       <div className="space-y-4 rounded-md border p-4">
         <div className="flex items-start justify-between gap-4">

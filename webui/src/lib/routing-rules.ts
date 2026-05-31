@@ -31,12 +31,30 @@ export const EVENT_TYPES: EventTypeOption[] = [
     type: 'pull_request_review',
   },
   {
+    id: 'github:issue_assigned',
+    label: 'GitHub: Issue Assigned',
+    source: 'github',
+    type: 'issue_assigned',
+  },
+  {
+    id: 'github:pull_request_assigned',
+    label: 'GitHub: PR Assigned',
+    source: 'github',
+    type: 'pull_request_assigned',
+  },
+  {
     id: 'atlassian:comment_created',
     label: 'Jira: Issue Comment',
     source: 'atlassian',
     type: 'comment_created',
   },
 ]
+
+// Whether the selected event type is an assignment event — controls
+// visibility of the "Assigned to" form field.
+export function isAssignmentType(source: string, type: string): boolean {
+  return source === 'github' && (type === 'issue_assigned' || type === 'pull_request_assigned')
+}
 
 export function findEventType(source: string, type: string): EventTypeOption | undefined {
   return EVENT_TYPES.find((o) => o.source === source && o.type === type)
@@ -74,6 +92,12 @@ export interface MentionCopy {
   help: string
 }
 
+export interface AssigneeCopy {
+  label: string
+  placeholder: string
+  help: string
+}
+
 // Form-level shape for the routing-rule editor. Mirrors the RoutingRule proto
 // fields plus a `createTask` toggle and flattened CreateTaskAction fields so
 // the form can keep its draft state across toggling the action off and on.
@@ -82,6 +106,7 @@ export interface RoutingRuleFormValues {
   type: string
   prefix: string
   mention: string
+  assignee: string
   createTask: boolean
   createWorkspace: string
   createRunner: string
@@ -93,6 +118,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   type: '',
   prefix: '',
   mention: '',
+  assignee: '',
   createTask: false,
   createWorkspace: '',
   createRunner: '',
@@ -105,6 +131,7 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     type: rule.type,
     prefix: rule.prefix,
     mention: rule.mention,
+    assignee: rule.assignee,
     createTask: rule.create !== undefined,
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
@@ -114,13 +141,17 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
 
 // Builds a RoutingRule from the form's draft values. `create` is only set
 // when the toggle is on — otherwise it's omitted so the rule reverts to the
-// wake-only behaviour.
+// wake-only behaviour. `assignee` is only set when the selected event type
+// is an assignment event so toggling event types doesn't carry a stale
+// assignee through.
 export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
+  const assignee = isAssignmentType(values.source, values.type) ? values.assignee : ''
   return create(RoutingRuleSchema, {
     source: values.source,
     type: values.type,
     prefix: values.prefix,
     mention: values.mention,
+    assignee,
     create: values.createTask
       ? {
           workspace: values.createWorkspace,
@@ -164,6 +195,23 @@ export function mentionCopyForSource(source: string): MentionCopy {
         label: 'Mention',
         placeholder: 'Username or account id',
         help: 'Pick an event type to see the expected format.',
+      }
+  }
+}
+
+export function assigneeCopyForSource(source: string): AssigneeCopy {
+  switch (source) {
+    case 'github':
+      return {
+        label: 'Assigned to user',
+        placeholder: 'icholy-bot',
+        help: 'GitHub username (no leading @). Matches the new assignee on assignment events.',
+      }
+    default:
+      return {
+        label: 'Assigned to',
+        placeholder: 'Username or account id',
+        help: 'Pick an assignment event type to see the expected format.',
       }
   }
 }

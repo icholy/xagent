@@ -38,6 +38,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
+				eventType:      "issue_comment",
 				description:    "testuser commented on issue #1",
 				data:           "xagent: do something",
 				url:            "https://github.com/owner/repo/issues/1",
@@ -62,6 +63,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
+				eventType:      "issue_comment",
 				description:    "pruser commented on PR #2",
 				data:           "xagent: review this",
 				url:            "https://github.com/owner/repo/pull/2",
@@ -85,6 +87,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
+				eventType:      "issue_comment",
 				description:    "testuser commented on issue #1",
 				data:           "just a regular comment",
 				url:            "https://github.com/owner/repo/issues/1",
@@ -113,6 +116,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
+				eventType:      "pull_request_review_comment",
 				description:    "reviewer reviewed PR #3",
 				data:           "xagent: fix this",
 				url:            "https://github.com/owner/repo/pull/3",
@@ -136,6 +140,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
+				eventType:      "pull_request_review_comment",
 				description:    "reviewer reviewed PR #3",
 				data:           "looks good",
 				url:            "https://github.com/owner/repo/pull/3",
@@ -165,6 +170,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
+				eventType:      "pull_request_review",
 				description:    "lead reviewed PR #4",
 				data:           "xagent: please address comments",
 				url:            "https://github.com/owner/repo/pull/4",
@@ -206,6 +212,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
+				eventType:      "pull_request_review",
 				description:    "lead reviewed PR #4",
 				data:           "approved",
 				url:            "https://github.com/owner/repo/pull/4",
@@ -239,12 +246,119 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 				},
 			},
 			expected: &githubWebhookEvent{
+				eventType:      "issue_comment",
 				description:    "testuser commented on issue #1",
 				data:           "xagent: trimmed",
 				url:            "https://github.com/owner/repo/issues/1",
 				githubUserID:   123,
 				githubUsername: "testuser",
 			},
+		},
+		{
+			name: "IssuesEvent_Assigned",
+			event: &github.IssuesEvent{
+				Action: github.Ptr("assigned"),
+				Issue: &github.Issue{
+					Number:  github.Ptr(7),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/7"),
+				},
+				Assignee: &github.User{
+					Login: github.Ptr("icholy-bot"),
+				},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](999),
+					Login: github.Ptr("octocat"),
+				},
+			},
+			expected: &githubWebhookEvent{
+				eventType:      "issue_assigned",
+				description:    "octocat assigned issue #7 to @icholy-bot",
+				url:            "https://github.com/owner/repo/issues/7",
+				githubUserID:   999,
+				githubUsername: "octocat",
+				assignee:       "icholy-bot",
+			},
+		},
+		{
+			name: "IssuesEvent_WrongAction",
+			event: &github.IssuesEvent{
+				Action: github.Ptr("opened"),
+				Issue: &github.Issue{
+					Number:  github.Ptr(7),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/7"),
+				},
+				Assignee: &github.User{Login: github.Ptr("icholy-bot")},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](999),
+					Login: github.Ptr("octocat"),
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "IssuesEvent_NoSender",
+			event: &github.IssuesEvent{
+				Action: github.Ptr("assigned"),
+				Issue: &github.Issue{
+					Number:  github.Ptr(7),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/7"),
+				},
+				Assignee: &github.User{Login: github.Ptr("icholy-bot")},
+			},
+			expected: nil,
+		},
+		{
+			name: "PullRequestEvent_Assigned",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("assigned"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+				},
+				Assignee: &github.User{
+					Login: github.Ptr("icholy-bot"),
+				},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](42),
+					Login: github.Ptr("alice"),
+				},
+			},
+			expected: &githubWebhookEvent{
+				eventType:      "pull_request_assigned",
+				description:    "alice assigned PR #12 to @icholy-bot",
+				url:            "https://github.com/owner/repo/pull/12",
+				githubUserID:   42,
+				githubUsername: "alice",
+				assignee:       "icholy-bot",
+			},
+		},
+		{
+			name: "PullRequestEvent_WrongAction",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("opened"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+				},
+				Assignee: &github.User{Login: github.Ptr("icholy-bot")},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](42),
+					Login: github.Ptr("alice"),
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "PullRequestEvent_NoSender",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("assigned"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+				},
+				Assignee: &github.User{Login: github.Ptr("icholy-bot")},
+			},
+			expected: nil,
 		},
 	}
 
