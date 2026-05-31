@@ -8,13 +8,16 @@ import (
 )
 
 // MatchRule reports whether the rule matches the event.
-// Empty fields are treated as wildcards. For content matching,
-// Prefix and Mention are checked against the event's Data field.
+// Empty fields are treated as wildcards. URLPrefix matches against the
+// event's URL; Prefix and Mention are checked against the event's Data field.
 func (e InputEvent) MatchRule(rule model.RoutingRule) bool {
 	if rule.Source != "" && rule.Source != e.Source {
 		return false
 	}
 	if rule.Type != "" && rule.Type != e.Type {
+		return false
+	}
+	if rule.URLPrefix != "" && !strings.HasPrefix(e.URL, rule.URLPrefix) {
 		return false
 	}
 	if rule.Prefix != "" && !strings.HasPrefix(e.Data, rule.Prefix) {

@@ -98,6 +98,11 @@ export interface AssigneeCopy {
   help: string
 }
 
+export interface URLPrefixCopy {
+  placeholder: string
+  help: string
+}
+
 // Form-level shape for the routing-rule editor. Mirrors the RoutingRule proto
 // fields plus a `createTask` toggle and flattened CreateTaskAction fields so
 // the form can keep its draft state across toggling the action off and on.
@@ -107,6 +112,7 @@ export interface RoutingRuleFormValues {
   prefix: string
   mention: string
   assignee: string
+  urlPrefix: string
   createTask: boolean
   createWorkspace: string
   createRunner: string
@@ -119,6 +125,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   prefix: '',
   mention: '',
   assignee: '',
+  urlPrefix: '',
   createTask: false,
   createWorkspace: '',
   createRunner: '',
@@ -132,6 +139,7 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     prefix: rule.prefix,
     mention: rule.mention,
     assignee: rule.assignee,
+    urlPrefix: rule.urlPrefix,
     createTask: rule.create !== undefined,
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
@@ -154,6 +162,7 @@ export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
     prefix: isAssignment ? '' : values.prefix,
     mention: isAssignment ? '' : values.mention,
     assignee: isAssignment ? values.assignee : '',
+    urlPrefix: values.urlPrefix,
     create: values.createTask
       ? {
           workspace: values.createWorkspace,
@@ -197,6 +206,26 @@ export function mentionCopyForSource(source: string): MentionCopy {
         label: 'Mention',
         placeholder: 'Username or account id',
         help: 'Pick an event type to see the expected format.',
+      }
+  }
+}
+
+export function urlPrefixCopyForSource(source: string): URLPrefixCopy {
+  switch (source) {
+    case 'github':
+      return {
+        placeholder: 'https://github.com/owner/repo/',
+        help: 'Optional. Only fire when the event URL starts with this prefix — e.g. to scope a rule to a single repo.',
+      }
+    case 'atlassian':
+      return {
+        placeholder: 'https://your-domain.atlassian.net/browse/PROJ-',
+        help: 'Optional. Only fire when the event URL starts with this prefix — e.g. to scope a rule to a single Jira project.',
+      }
+    default:
+      return {
+        placeholder: 'https://...',
+        help: 'Optional. Only fire when the event URL starts with this prefix.',
       }
   }
 }

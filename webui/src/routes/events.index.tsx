@@ -219,6 +219,7 @@ function RoutingRulesCard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Event Type</TableHead>
+                <TableHead>URL prefix</TableHead>
                 <TableHead>Prefix</TableHead>
                 <TableHead>Mention</TableHead>
                 <TableHead>Assignee</TableHead>
@@ -231,6 +232,9 @@ function RoutingRulesCard() {
                 <TableRow key={index}>
                   <TableCell className="font-medium">
                     {eventTypeLabel(rule.source, rule.type)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground max-w-xs truncate">
+                    {rule.urlPrefix || '-'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{rule.prefix || '-'}</TableCell>
                   <TableCell className="text-muted-foreground">{rule.mention || '-'}</TableCell>

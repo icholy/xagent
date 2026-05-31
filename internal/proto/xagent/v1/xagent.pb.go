@@ -5191,6 +5191,7 @@ type RoutingRule struct {
 	Mention       string                 `protobuf:"bytes,4,opt,name=mention,proto3" json:"mention,omitempty"`
 	Create        *CreateTaskAction      `protobuf:"bytes,5,opt,name=create,proto3" json:"create,omitempty"`
 	Assignee      string                 `protobuf:"bytes,6,opt,name=assignee,proto3" json:"assignee,omitempty"`
+	UrlPrefix     string                 `protobuf:"bytes,7,opt,name=url_prefix,json=urlPrefix,proto3" json:"url_prefix,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5263,6 +5264,13 @@ func (x *RoutingRule) GetCreate() *CreateTaskAction {
 func (x *RoutingRule) GetAssignee() string {
 	if x != nil {
 		return x.Assignee
+	}
+	return ""
+}
+
+func (x *RoutingRule) GetUrlPrefix() string {
+	if x != nil {
+		return x.UrlPrefix
 	}
 	return ""
 }
@@ -5879,14 +5887,16 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"&GenerateAtlassianWebhookSecretResponse\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12\x1f\n" +
 	"\vwebhook_url\x18\x02 \x01(\tR\n" +
-	"webhookUrl\"\xbc\x01\n" +
+	"webhookUrl\"\xdb\x01\n" +
 	"\vRoutingRule\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x16\n" +
 	"\x06prefix\x18\x03 \x01(\tR\x06prefix\x12\x18\n" +
 	"\amention\x18\x04 \x01(\tR\amention\x123\n" +
 	"\x06create\x18\x05 \x01(\v2\x1b.xagent.v1.CreateTaskActionR\x06create\x12\x1a\n" +
-	"\bassignee\x18\x06 \x01(\tR\bassignee\"`\n" +
+	"\bassignee\x18\x06 \x01(\tR\bassignee\x12\x1d\n" +
+	"\n" +
+	"url_prefix\x18\a \x01(\tR\turlPrefix\"`\n" +
 	"\x10CreateTaskAction\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
 	"\x06runner\x18\x02 \x01(\tR\x06runner\x12\x16\n" +
