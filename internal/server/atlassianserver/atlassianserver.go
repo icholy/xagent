@@ -99,7 +99,7 @@ func (s *Server) OAuthLink() *oauthlink.Handler {
 
 // WebhookHandler returns the HTTP handler for Atlassian/Jira webhook events.
 func (s *Server) WebhookHandler() http.Handler {
-	return &AtlassianHandler{
+	return &WebhookHandler{
 		Router: &eventrouter.Router{Log: s.log, Store: s.store, Publisher: s.publisher},
 		Store:  s.store,
 	}

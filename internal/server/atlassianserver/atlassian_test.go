@@ -140,7 +140,7 @@ func TestToAtlassianInputEvent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			body, err := json.Marshal(tt.payload)
 			assert.NilError(t, err)
-			got, err := toAtlassianInputEvent(body)
+			got, err := toInputEvent(body)
 			assert.NilError(t, err)
 			assert.DeepEqual(t, got, tt.expected)
 		})
@@ -165,7 +165,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 			return 1, nil
 		},
 	}
-	h := &AtlassianHandler{
+	h := &WebhookHandler{
 		Router: router,
 		Store: &StoreMock{
 			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
@@ -214,7 +214,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 
 func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
 	secret := "test-webhook-secret"
-	h := &AtlassianHandler{
+	h := &WebhookHandler{
 		Store: &StoreMock{
 			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
 				return secret, nil
@@ -235,7 +235,7 @@ func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
 
 func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
 	secret := "test-webhook-secret"
-	h := &AtlassianHandler{
+	h := &WebhookHandler{
 		Store: &StoreMock{
 			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
 				return secret, nil
@@ -267,7 +267,7 @@ func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
 
 func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {
 	secret := "test-webhook-secret"
-	h := &AtlassianHandler{
+	h := &WebhookHandler{
 		Store: &StoreMock{
 			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
 				return secret, nil
@@ -289,7 +289,7 @@ func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {
 }
 
 func TestHandleAtlassianWebhookMissingOrg(t *testing.T) {
-	h := &AtlassianHandler{}
+	h := &WebhookHandler{}
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook/atlassian", bytes.NewReader([]byte("{}")))
 	rec := httptest.NewRecorder()

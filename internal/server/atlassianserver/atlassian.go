@@ -14,13 +14,13 @@ import (
 	"github.com/icholy/xagent/internal/x/atlassian"
 )
 
-// AtlassianHandler handles incoming Atlassian (Jira) webhook events.
-type AtlassianHandler struct {
+// WebhookHandler handles incoming Atlassian (Jira) webhook events.
+type WebhookHandler struct {
 	Router Router
 	Store  Store
 }
 
-func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Extract org ID from query parameter
 	orgIDStr := r.URL.Query().Get("org")
 	if orgIDStr == "" {
@@ -61,7 +61,7 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse and extract the event
-	input, err := toAtlassianInputEvent(body)
+	input, err := toInputEvent(body)
 	if err != nil {
 		slog.Error("failed to parse Atlassian webhook payload", "error", err)
 		http.Error(w, "invalid payload", http.StatusBadRequest)
@@ -72,7 +72,7 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "ignored")
 		return
 	}
-	// toAtlassianInputEvent always sets Meta to an AtlassianMeta, so this
+	// toInputEvent always sets Meta to an AtlassianMeta, so this
 	// assertion is safe. It panics loudly if that invariant is ever broken.
 	meta := input.Meta.(AtlassianMeta)
 
@@ -109,7 +109,7 @@ type AtlassianMeta struct {
 	AuthorDisplayName string
 }
 
-func toAtlassianInputEvent(body []byte) (*eventrouter.InputEvent, error) {
+func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 	payload, err := atlassian.ParseWebhook(body)
 	if err != nil {
 		return nil, err

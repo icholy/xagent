@@ -16,14 +16,14 @@ import (
 	"github.com/icholy/xagent/internal/x/githubx"
 )
 
-// GitHubHandler handles incoming GitHub App webhook events.
-type GitHubHandler struct {
+// WebhookHandler handles incoming GitHub App webhook events.
+type WebhookHandler struct {
 	Router        Router
 	Store         Store
 	WebhookSecret string
 }
 
-func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		slog.Error("failed to read webhook body", "error", err)
@@ -40,14 +40,14 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleInstallationEvent(w, r, event)
 		return
 	}
-	input := toGithubInputEvent(webhookEvent)
+	input := toInputEvent(webhookEvent)
 	if input == nil {
 		eventType := r.Header.Get("X-GitHub-Event")
 		slog.Debug("ignoring GitHub webhook event", "event_type", eventType)
 		fmt.Fprintf(w, "ignored")
 		return
 	}
-	// toGithubInputEvent always sets Meta to a GitHubMeta, so this
+	// toInputEvent always sets Meta to a GitHubMeta, so this
 	// assertion is safe. It panics loudly if that invariant is ever broken.
 	meta := input.Meta.(GitHubMeta)
 
@@ -84,7 +84,7 @@ func (h *GitHubHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "processed")
 }
 
-func (h *GitHubHandler) handleInstallationEvent(w http.ResponseWriter, r *http.Request, event *github.InstallationEvent) {
+func (h *WebhookHandler) handleInstallationEvent(w http.ResponseWriter, r *http.Request, event *github.InstallationEvent) {
 	installation := event.GetInstallation()
 	installationID := installation.GetID()
 	action := event.GetAction()
@@ -137,7 +137,7 @@ type GitHubMeta struct {
 	AuthorLogin string
 }
 
-func toGithubInputEvent(webhookEvent any) *eventrouter.InputEvent {
+func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
 		if action := event.GetAction(); action != "created" && action != "edited" {
