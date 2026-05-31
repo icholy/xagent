@@ -19,7 +19,7 @@ func newTestDriver(t *testing.T) *Driver {
 	}
 }
 
-func TestRunSetup_MidListFailureLeavesResumeIndex(t *testing.T) {
+func TestSetup_MidListFailureLeavesResumeIndex(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
 	cfg := &Config{
@@ -27,7 +27,7 @@ func TestRunSetup_MidListFailureLeavesResumeIndex(t *testing.T) {
 	}
 
 	// Act
-	err := d.runSetup(context.Background(), cfg)
+	err := d.setup(context.Background(), cfg)
 
 	// Assert
 	assert.ErrorContains(t, err, "setup command 2 failed")
@@ -40,7 +40,7 @@ func TestRunSetup_MidListFailureLeavesResumeIndex(t *testing.T) {
 	assert.Equal(t, loaded.Setup, false)
 }
 
-func TestRunSetup_ResumesFromSavedIndex(t *testing.T) {
+func TestSetup_ResumesFromSavedIndex(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
 	marker3 := t.TempDir() + "/marker3"
@@ -56,7 +56,7 @@ func TestRunSetup_ResumesFromSavedIndex(t *testing.T) {
 	}
 
 	// Act
-	err := d.runSetup(context.Background(), cfg)
+	err := d.setup(context.Background(), cfg)
 
 	// Assert
 	assert.NilError(t, err)
@@ -66,7 +66,7 @@ func TestRunSetup_ResumesFromSavedIndex(t *testing.T) {
 	assertFileExists(t, marker4)
 }
 
-func TestRunSetup_SetupTrueSkipsLoop(t *testing.T) {
+func TestSetup_SetupTrueSkipsLoop(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
 	cfg := &Config{
@@ -75,7 +75,7 @@ func TestRunSetup_SetupTrueSkipsLoop(t *testing.T) {
 	}
 
 	// Act
-	err := d.runSetup(context.Background(), cfg)
+	err := d.setup(context.Background(), cfg)
 
 	// Assert
 	assert.NilError(t, err)
@@ -83,7 +83,7 @@ func TestRunSetup_SetupTrueSkipsLoop(t *testing.T) {
 	assert.Equal(t, cfg.SetupCommandsCompleted, 0)
 }
 
-func TestRunSetup_NoCountRunsFromZero(t *testing.T) {
+func TestSetup_NoCountRunsFromZero(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
 	marker0 := t.TempDir() + "/marker0"
@@ -96,7 +96,7 @@ func TestRunSetup_NoCountRunsFromZero(t *testing.T) {
 	}
 
 	// Act
-	err := d.runSetup(context.Background(), cfg)
+	err := d.setup(context.Background(), cfg)
 
 	// Assert
 	assert.NilError(t, err)
@@ -106,7 +106,7 @@ func TestRunSetup_NoCountRunsFromZero(t *testing.T) {
 	assertFileExists(t, marker1)
 }
 
-func TestRunSetup_LastCommandFailureDoesNotFlipSetup(t *testing.T) {
+func TestSetup_LastCommandFailureDoesNotFlipSetup(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
 	cfg := &Config{
@@ -114,7 +114,7 @@ func TestRunSetup_LastCommandFailureDoesNotFlipSetup(t *testing.T) {
 	}
 
 	// Act
-	err := d.runSetup(context.Background(), cfg)
+	err := d.setup(context.Background(), cfg)
 
 	// Assert
 	assert.ErrorContains(t, err, "setup command 1 failed")
@@ -122,7 +122,7 @@ func TestRunSetup_LastCommandFailureDoesNotFlipSetup(t *testing.T) {
 	assert.Equal(t, cfg.Setup, false)
 }
 
-func TestRunSetup_OutOfRangeCountClampsToZero(t *testing.T) {
+func TestSetup_OutOfRangeCountClampsToZero(t *testing.T) {
 	// Arrange
 	d := newTestDriver(t)
 	marker := t.TempDir() + "/marker"
@@ -132,7 +132,7 @@ func TestRunSetup_OutOfRangeCountClampsToZero(t *testing.T) {
 	}
 
 	// Act
-	err := d.runSetup(context.Background(), cfg)
+	err := d.setup(context.Background(), cfg)
 
 	// Assert
 	assert.NilError(t, err)

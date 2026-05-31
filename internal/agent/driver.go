@@ -56,7 +56,7 @@ func (d *Driver) Run(ctx context.Context) error {
 		"started", cfg.Started,
 	)
 
-	if err := d.runSetup(ctx, cfg); err != nil {
+	if err := d.setup(ctx, cfg); err != nil {
 		return err
 	}
 
@@ -102,12 +102,12 @@ func (d *Driver) Run(ctx context.Context) error {
 	return nil
 }
 
-// runSetup runs the setup commands listed in cfg.Commands, resuming from
+// setup runs the setup commands listed in cfg.Commands, resuming from
 // cfg.SetupCommandsCompleted. After each successful command, the updated
 // count is persisted via SaveConfig so a restart can pick up where the
 // previous run left off. cfg.Setup is set to true only after the last
 // command completes.
-func (d *Driver) runSetup(ctx context.Context, cfg *Config) error {
+func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 	if cfg.Setup {
 		return nil
 	}
