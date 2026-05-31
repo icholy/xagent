@@ -10,18 +10,17 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/icholy/xagent/internal/x/atlassian"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
 )
 
-func TestExtractAtlassianWebhookEvent(t *testing.T) {
+func TestToAtlassianInputEvent(t *testing.T) {
 	tests := []struct {
 		name     string
 		payload  atlassian.WebhookPayload
-		expected *atlassianWebhookEvent
+		expected *eventrouter.InputEvent
 	}{
 		{
 			name: "CommentCreated",
@@ -36,12 +35,13 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
 				},
 			},
-			expected: &atlassianWebhookEvent{
-				eventType:          "comment_created",
-				description:        "Test User commented on PROJ-123",
-				data:               "xagent: do something",
-				url:                "https://mycompany.atlassian.net/browse/PROJ-123",
-				atlassianAccountID: "abc123",
+			expected: &eventrouter.InputEvent{
+				Source:      "atlassian",
+				Type:        "comment_created",
+				Description: "Test User commented on PROJ-123",
+				Data:        "xagent: do something",
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
+				Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: "abc123", DisplayName: "Test User"}},
 			},
 		},
 		{
@@ -57,12 +57,13 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
 				},
 			},
-			expected: &atlassianWebhookEvent{
-				eventType:          "comment_created",
-				description:        "Test User commented on PROJ-123",
-				data:               "just a regular comment",
-				url:                "https://mycompany.atlassian.net/browse/PROJ-123",
-				atlassianAccountID: "abc123",
+			expected: &eventrouter.InputEvent{
+				Source:      "atlassian",
+				Type:        "comment_created",
+				Description: "Test User commented on PROJ-123",
+				Data:        "just a regular comment",
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
+				Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: "abc123", DisplayName: "Test User"}},
 			},
 		},
 		{
@@ -124,12 +125,13 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/1",
 				},
 			},
-			expected: &atlassianWebhookEvent{
-				eventType:          "comment_created",
-				description:        "Test User commented on PROJ-1",
-				data:               "xagent: trimmed",
-				url:                "https://mycompany.atlassian.net/browse/PROJ-1",
-				atlassianAccountID: "abc123",
+			expected: &eventrouter.InputEvent{
+				Source:      "atlassian",
+				Type:        "comment_created",
+				Description: "Test User commented on PROJ-1",
+				Data:        "xagent: trimmed",
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-1",
+				Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: "abc123", DisplayName: "Test User"}},
 			},
 		},
 	}
@@ -138,9 +140,9 @@ func TestExtractAtlassianWebhookEvent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			body, err := json.Marshal(tt.payload)
 			assert.NilError(t, err)
-			got, err := extractAtlassianWebhookEvent(body)
+			got, err := toAtlassianInputEvent(body)
 			assert.NilError(t, err)
-			assert.DeepEqual(t, got, tt.expected, cmp.AllowUnexported(atlassianWebhookEvent{}))
+			assert.DeepEqual(t, got, tt.expected)
 		})
 	}
 }
@@ -206,6 +208,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 		Data:        "xagent: please fix the tests",
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
 		UserID:      "user-1",
+		Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: accountID, DisplayName: "Test User"}},
 	})
 }
 

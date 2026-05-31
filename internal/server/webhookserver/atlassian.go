@@ -61,23 +61,26 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse and extract the event
-	extracted, err := extractAtlassianWebhookEvent(body)
+	input, err := toAtlassianInputEvent(body)
 	if err != nil {
 		slog.Error("failed to parse Atlassian webhook payload", "error", err)
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	if extracted == nil {
+	if input == nil {
 		slog.Debug("ignoring Atlassian webhook event")
 		fmt.Fprintf(w, "ignored")
 		return
 	}
+	// toAtlassianInputEvent always sets Meta to an AtlassianMeta, so this
+	// assertion is safe. It panics loudly if that invariant is ever broken.
+	accountID := input.Meta.(AtlassianMeta).Author.AccountID
 
 	// Look up xagent owner by Atlassian account ID
-	user, err := h.Store.GetUserByAtlassianAccountID(r.Context(), nil, extracted.atlassianAccountID)
+	user, err := h.Store.GetUserByAtlassianAccountID(r.Context(), nil, accountID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			slog.Info("no linked Atlassian account", "atlassian_account_id", extracted.atlassianAccountID)
+			slog.Info("no linked Atlassian account", "atlassian_account_id", accountID)
 			fmt.Fprintf(w, "no linked account")
 			return
 		}
@@ -87,34 +90,32 @@ func (h *AtlassianHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Route event to subscribed tasks
-	input := eventrouter.InputEvent{
-		Source:      "atlassian",
-		Type:        extracted.eventType,
-		Description: extracted.description,
-		Data:        extracted.data,
-		URL:         extracted.url,
-		UserID:      user.ID,
-	}
-	totalRouted, err := h.Router.Route(r.Context(), input)
+	input.UserID = user.ID
+	totalRouted, err := h.Router.Route(r.Context(), *input)
 	if err != nil {
 		slog.Error("failed to route event", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	slog.Info("Atlassian webhook processed", "url", extracted.url, "tasks_routed", totalRouted)
+	slog.Info("Atlassian webhook processed", "url", input.URL, "tasks_routed", totalRouted)
 	fmt.Fprintf(w, "processed")
 }
 
-type atlassianWebhookEvent struct {
-	eventType          string
-	description        string
-	data               string
-	url                string
-	atlassianAccountID string
+// AtlassianUser identifies an Atlassian user in their native form, before
+// resolution to an xagent user.
+type AtlassianUser struct {
+	AccountID   string
+	DisplayName string
 }
 
-func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
+// AtlassianMeta is attached to an eventrouter.InputEvent's Meta field, carrying
+// Atlassian-native identity that the router does not interpret.
+type AtlassianMeta struct {
+	Author AtlassianUser
+}
+
+func toAtlassianInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 	payload, err := atlassian.ParseWebhook(body)
 	if err != nil {
 		return nil, err
@@ -140,12 +141,13 @@ func extractAtlassianWebhookEvent(body []byte) (*atlassianWebhookEvent, error) {
 
 		description := fmt.Sprintf("%s commented on %s", displayName, payload.Issue.Key)
 
-		return &atlassianWebhookEvent{
-			eventType:          payload.WebhookEvent,
-			description:        description,
-			data:               commentBody,
-			url:                url,
-			atlassianAccountID: accountID,
+		return &eventrouter.InputEvent{
+			Source:      "atlassian",
+			Type:        payload.WebhookEvent,
+			Description: description,
+			Data:        commentBody,
+			URL:         url,
+			Meta:        AtlassianMeta{Author: AtlassianUser{AccountID: accountID, DisplayName: displayName}},
 		}, nil
 	}
 

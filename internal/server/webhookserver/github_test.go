@@ -15,7 +15,7 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func TestExtractGitHubWebhookEvent(t *testing.T) {
+func TestToGithubInputEvent(t *testing.T) {
 	tests := []struct {
 		name     string
 		event    any
@@ -455,7 +455,7 @@ func TestExtractGitHubWebhookEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractGitHubWebhookEvent(tt.event)
+			got := toGithubInputEvent(tt.event)
 			assert.DeepEqual(t, got, tt.expected)
 		})
 	}
