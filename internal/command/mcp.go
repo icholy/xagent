@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/icholy/xagent/internal/mcpbridge"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
@@ -58,38 +59,44 @@ var McpCommand = &cli.Command{
 			Token:    cmd.String("token"),
 			ClientID: clientID,
 		})
+		instructions := mcpserver.Instructions
 		var capabilities mcp.ServerCapabilities
 		if cmd.Bool("channel") {
 			capabilities.Experimental = mcpchannel.Experimental()
+			instructions += "\n\n" + mcpbridge.Instructions
 		}
 		server := mcp.NewServer(&mcp.Implementation{
 			Name:    "xagent",
 			Version: "1.0.0",
 		}, &mcp.ServerOptions{
-			Instructions: mcpserver.Instructions,
+			Instructions: instructions,
 			Capabilities: &capabilities,
 		})
 		mcpserver.AddTools(server, client)
 
 		transport := mcpchannel.NewTransport(&mcp.StdioTransport{})
+
+		// *mcpchannel.Transport satisfies mcpbridge.ChannelSender. When
+		// channels are enabled the bridge owns the per-task subscription
+		// set, the watch tools, and the mute-by-default forwarding gate;
+		// the gate logic lives in internal/mcpbridge, not here.
+		var ch *mcpbridge.Channel
+		if cmd.Bool("channel") {
+			ch = mcpbridge.NewChannel(transport)
+			ch.AddTools(server)
+		}
+
 		session, err := server.Connect(ctx, transport, nil)
 		if err != nil {
 			return err
 		}
-		if cmd.Bool("channel") {
+		if ch != nil {
 			go func() {
 				nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
 					BaseURL:  cmd.String("server"),
 					Token:    cmd.String("token"),
 					ClientID: clientID,
-					Handler: func(n model.Notification) {
-						if n.ChannelMessage == "" {
-							return
-						}
-						if err := transport.SendChannel(ctx, mcpchannel.Params{Content: n.ChannelMessage}); err != nil {
-							slog.Warn("xagent channel: failed to send", "error", err)
-						}
-					},
+					Handler:  func(n model.Notification) { ch.Forward(ctx, n) },
 				})
 				if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					slog.Warn("xagent channel: stream ended", "error", err)
