@@ -13,6 +13,7 @@ require (
 	github.com/docker/cli v29.5.0+incompatible
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.2
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-github/v68 v68.0.0
 	github.com/google/uuid v1.6.0
