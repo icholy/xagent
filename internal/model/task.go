@@ -270,17 +270,22 @@ func (t *Task) applyRunnerEventFailed() bool {
 	}
 }
 
+// IsDone reports whether the task has finished its run: completed, failed,
+// or cancelled. A done task can still be restarted via Start/Restart, so
+// this isn't an absorbing state — just a snapshot that the current run
+// reached an end.
+func (t *Task) IsDone() bool {
+	return t.Status == TaskStatusCompleted ||
+		t.Status == TaskStatusFailed ||
+		t.Status == TaskStatusCancelled
+}
+
 // CanArchive returns true if the task can be archived.
 func (t *Task) CanArchive() bool {
 	if t.Archived || t.Command != TaskCommandNone {
 		return false
 	}
-	switch t.Status {
-	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
-		return true
-	default:
-		return false
-	}
+	return t.IsDone()
 }
 
 // Archive marks the task as archived.

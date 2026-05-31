@@ -376,6 +376,27 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 	}
 }
 
+func TestTask_IsDone(t *testing.T) {
+	tests := []struct {
+		status TaskStatus
+		want   bool
+	}{
+		{TaskStatusPending, false},
+		{TaskStatusRunning, false},
+		{TaskStatusRestarting, false},
+		{TaskStatusCancelling, false},
+		{TaskStatusCompleted, true},
+		{TaskStatusFailed, true},
+		{TaskStatusCancelled, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.status.String(), func(t *testing.T) {
+			task := Task{Status: tt.status}
+			assert.Equal(t, task.IsDone(), tt.want)
+		})
+	}
+}
+
 func TestTask_Archive(t *testing.T) {
 	tests := []struct {
 		name   string
