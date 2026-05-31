@@ -47,7 +47,7 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 	// cached auto-refreshing installation transport so the reaction is
 	// attributed to the App and repeated calls skip re-minting the token.
 	// WithHTTPClient only errors on a nil client, which never happens here.
-	client, _ := github.NewClient(github.WithHTTPClient(s.tokens.HTTPClient(org.GitHubInstallationID)))
+	client, _ := github.NewClient(github.WithHTTPClient(s.tokens.Client(org.GitHubInstallationID)))
 
 	// Pick the emoji from the routing outcome: a created task gets 🚀, a woken
 	// task 👀, and an event that matched a rule but created or woke nothing 😕.
