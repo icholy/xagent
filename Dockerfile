@@ -2,7 +2,7 @@
 FROM --platform=$BUILDPLATFORM node:25-alpine AS webui
 WORKDIR /app/webui
 RUN npm install -g pnpm@11.5.0
-COPY webui/package.json webui/pnpm-lock.yaml ./
+COPY webui/package.json webui/pnpm-lock.yaml webui/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY webui/ ./
 RUN pnpm exec vite build
