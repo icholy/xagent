@@ -4,7 +4,7 @@ import (
 	"crypto/rsa"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // ParsePrivateKey parses a PEM-encoded RSA private key, tolerating keys that a

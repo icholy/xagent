@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Scopes grant tasks additional capabilities beyond their own task data.
