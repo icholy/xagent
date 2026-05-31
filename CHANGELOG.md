@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.23.1](https://github.com/icholy/xagent/compare/v0.23.0...v0.23.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* **githubx:** build installation transports from pre-parsed private key ([#804](https://github.com/icholy/xagent/issues/804)) ([16b79fe](https://github.com/icholy/xagent/commit/16b79fe4914257e52e73863f0a35d927bec44536))
+
+
+### Miscellaneous
+
+* move github comment reactions proposal to implemented ([2cb722d](https://github.com/icholy/xagent/commit/2cb722d23cb1334c1b433412229b644d4150538a))
+
 ## [0.23.0](https://github.com/icholy/xagent/compare/v0.22.2...v0.23.0) (2026-05-31)
 
 
