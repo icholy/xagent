@@ -281,7 +281,8 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.PullRequestReviewEvent{
 				Action: github.Ptr("submitted"),
 				Review: &github.PullRequestReview{
-					Body: github.Ptr("xagent: please address comments"),
+					NodeID: github.Ptr("PRR_node123"),
+					Body:   github.Ptr("xagent: please address comments"),
 					User: &github.User{
 						ID:    github.Ptr[int64](101),
 						Login: github.Ptr("lead"),
@@ -297,14 +298,15 @@ func TestToGithubInputEvent(t *testing.T) {
 				},
 			},
 			// Review submissions have no reactable comment, so the comment
-			// coordinates stay zero even though the repo is present.
+			// coordinates stay zero; the review's GraphQL node ID is the
+			// reactable target instead.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_review",
 				Description: "lead reviewed PR #4",
 				Data:        "xagent: please address comments",
 				URL:         "https://github.com/owner/repo/pull/4",
-				Meta:        GitHubMeta{AuthorID: 101, AuthorLogin: "lead"},
+				Meta:        GitHubMeta{AuthorID: 101, AuthorLogin: "lead", ReviewNodeID: "PRR_node123"},
 			},
 		},
 		{
