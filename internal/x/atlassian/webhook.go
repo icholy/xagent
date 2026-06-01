@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+// Webhook-event strings sent by Jira Cloud, matched on
+// WebhookPayload.WebhookEvent.
+const (
+	WebhookEventCommentCreated = "comment_created"
+	WebhookEventIssueUpdated   = "jira:issue_updated"
+)
+
 // WebhookPayload represents the relevant fields of a Jira Cloud webhook payload.
 type WebhookPayload struct {
 	WebhookEvent string     `json:"webhookEvent"`

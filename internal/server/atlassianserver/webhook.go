@@ -113,13 +113,6 @@ type AtlassianMeta struct {
 	AuthorDisplayName string
 }
 
-// Webhook-event strings sent by Jira Cloud, matched on
-// atlassian.WebhookPayload.WebhookEvent.
-const (
-	webhookEventCommentCreated = "comment_created"
-	webhookEventIssueUpdated   = "jira:issue_updated"
-)
-
 // Event-type strings set on eventrouter.InputEvent.Type by toInputEvents. They
 // form a contract between the extractor (producer) and any consumer that
 // dispatches on InputEvent.Type.
@@ -139,7 +132,7 @@ func toInputEvents(body []byte) ([]eventrouter.InputEvent, error) {
 	}
 
 	switch payload.WebhookEvent {
-	case webhookEventCommentCreated:
+	case atlassian.WebhookEventCommentCreated:
 		if payload.Comment == nil || payload.Issue == nil {
 			return nil, nil
 		}
@@ -167,7 +160,7 @@ func toInputEvents(body []byte) ([]eventrouter.InputEvent, error) {
 			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
 		}}, nil
 
-	case webhookEventIssueUpdated:
+	case atlassian.WebhookEventIssueUpdated:
 		added := payload.AddedLabels()
 		if len(added) == 0 || payload.Issue == nil || payload.User == nil {
 			return nil, nil
