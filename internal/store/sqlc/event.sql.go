@@ -75,43 +75,6 @@ func (q *Queries) DeleteEventTasks(ctx context.Context, eventID int64) error {
 	return err
 }
 
-const findEventsByURL = `-- name: FindEventsByURL :many
-SELECT id, description, data, url, org_id, created_at
-FROM events
-WHERE url = $1
-ORDER BY created_at DESC
-`
-
-func (q *Queries) FindEventsByURL(ctx context.Context, url string) ([]Event, error) {
-	rows, err := q.db.QueryContext(ctx, findEventsByURL, url)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Event{}
-	for rows.Next() {
-		var i Event
-		if err := rows.Scan(
-			&i.ID,
-			&i.Description,
-			&i.Data,
-			&i.Url,
-			&i.OrgID,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getEvent = `-- name: GetEvent :one
 SELECT id, description, data, url, org_id, created_at
 FROM events

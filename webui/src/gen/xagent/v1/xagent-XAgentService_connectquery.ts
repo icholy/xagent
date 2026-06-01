@@ -90,11 +90,6 @@ export const createLink = XAgentService.method.createLink;
 export const listLinks = XAgentService.method.listLinks;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.FindLinksByURL
- */
-export const findLinksByURL = XAgentService.method.findLinksByURL;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.ListEvents
  */
 export const listEvents = XAgentService.method.listEvents;

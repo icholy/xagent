@@ -53,14 +53,6 @@ func (s *Store) ListEvents(ctx context.Context, tx *sql.Tx, limit int, orgID int
 	return toModelEvents(rows), nil
 }
 
-func (s *Store) FindEventsByURL(ctx context.Context, tx *sql.Tx, url string) ([]*model.Event, error) {
-	rows, err := s.q(tx).FindEventsByURL(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-	return toModelEvents(rows), nil
-}
-
 func (s *Store) DeleteEvent(ctx context.Context, tx *sql.Tx, id int64, orgID int64) error {
 	return s.WithTx(ctx, tx, func(tx *sql.Tx) error {
 		q := sqlc.New(tx)

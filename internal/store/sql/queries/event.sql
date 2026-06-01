@@ -18,12 +18,6 @@ WHERE org_id = $1
 ORDER BY created_at DESC
 LIMIT $2;
 
--- name: FindEventsByURL :many
-SELECT id, description, data, url, org_id, created_at
-FROM events
-WHERE url = $1
-ORDER BY created_at DESC;
-
 -- name: DeleteEventTasks :exec
 DELETE FROM event_tasks WHERE event_id = $1;
 

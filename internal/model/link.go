@@ -9,25 +9,27 @@ import (
 
 // Link represents a link between a task and an external resource.
 type Link struct {
-	ID        int64     `json:"id"`
-	TaskID    int64     `json:"task_id"`
-	Relevance string    `json:"relevance"`
-	URL       string    `json:"url"`
-	Title     string    `json:"title"`
-	Subscribe bool      `json:"subscribe"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         int64     `json:"id"`
+	TaskID     int64     `json:"task_id"`
+	Relevance  string    `json:"relevance"`
+	URL        string    `json:"url"`
+	RoutingURL string    `json:"routing_url"`
+	Title      string    `json:"title"`
+	Subscribe  bool      `json:"subscribe"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // Proto converts a Link to its protobuf representation.
 func (l *Link) Proto() *xagentv1.TaskLink {
 	return &xagentv1.TaskLink{
-		Id:        l.ID,
-		TaskId:    l.TaskID,
-		Relevance: l.Relevance,
-		Url:       l.URL,
-		Title:     l.Title,
-		Subscribe: l.Subscribe,
-		CreatedAt: timestamppb.New(l.CreatedAt),
+		Id:         l.ID,
+		TaskId:     l.TaskID,
+		Relevance:  l.Relevance,
+		Url:        l.URL,
+		RoutingUrl: l.RoutingURL,
+		Title:      l.Title,
+		Subscribe:  l.Subscribe,
+		CreatedAt:  timestamppb.New(l.CreatedAt),
 	}
 }
 
@@ -38,12 +40,13 @@ func LinkFromProto(pb *xagentv1.TaskLink) *Link {
 		createdAt = pb.CreatedAt.AsTime()
 	}
 	return &Link{
-		ID:        pb.Id,
-		TaskID:    pb.TaskId,
-		Relevance: pb.Relevance,
-		URL:       pb.Url,
-		Title:     pb.Title,
-		Subscribe: pb.Subscribe,
-		CreatedAt: createdAt,
+		ID:         pb.Id,
+		TaskID:     pb.TaskId,
+		Relevance:  pb.Relevance,
+		URL:        pb.Url,
+		RoutingURL: pb.RoutingUrl,
+		Title:      pb.Title,
+		Subscribe:  pb.Subscribe,
+		CreatedAt:  createdAt,
 	}
 }

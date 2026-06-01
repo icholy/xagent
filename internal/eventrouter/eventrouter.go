@@ -264,12 +264,13 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		}
 		taskID = task.ID
 		if err := r.Store.CreateLink(ctx, tx, &model.Link{
-			TaskID:    task.ID,
-			URL:       input.URL,
-			Title:     input.Description,
-			Relevance: "trigger",
-			Subscribe: true,
-			CreatedAt: time.Now().UTC(),
+			TaskID:     task.ID,
+			URL:        input.URL,
+			RoutingURL: model.RoutingURL(input.URL),
+			Title:      input.Description,
+			Relevance:  "trigger",
+			Subscribe:  true,
+			CreatedAt:  time.Now().UTC(),
 		}); err != nil {
 			return err
 		}

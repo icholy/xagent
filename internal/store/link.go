@@ -10,12 +10,13 @@ import (
 
 func (s *Store) CreateLink(ctx context.Context, tx *sql.Tx, link *model.Link) error {
 	id, err := s.q(tx).CreateLink(ctx, sqlc.CreateLinkParams{
-		TaskID:    link.TaskID,
-		Relevance: link.Relevance,
-		Url:       link.URL,
-		Title:     link.Title,
-		Subscribe: link.Subscribe,
-		CreatedAt: link.CreatedAt,
+		TaskID:     link.TaskID,
+		Relevance:  link.Relevance,
+		Url:        link.URL,
+		RoutingUrl: link.RoutingURL,
+		Title:      link.Title,
+		Subscribe:  link.Subscribe,
+		CreatedAt:  link.CreatedAt,
 	})
 	if err != nil {
 		return err
@@ -39,23 +40,12 @@ func (s *Store) DeleteLink(ctx context.Context, tx *sql.Tx, id int64) error {
 	return s.q(tx).DeleteLink(ctx, id)
 }
 
-func (s *Store) FindLinksByURL(ctx context.Context, tx *sql.Tx, url string, orgID int64) ([]*model.Link, error) {
-	rows, err := s.q(tx).FindLinksByURL(ctx, sqlc.FindLinksByURLParams{
-		Url:   url,
-		OrgID: orgID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return toModelLinks(rows), nil
-}
-
-// FindSubscribedLinksForOrgs returns subscribed links matching the URL,
+// FindSubscribedLinksForOrgs returns subscribed links matching the routing URL,
 // scoped to the given orgs, grouped by org ID.
-func (s *Store) FindSubscribedLinksForOrgs(ctx context.Context, tx *sql.Tx, url string, orgIDs []int64) (map[int64][]*model.Link, error) {
+func (s *Store) FindSubscribedLinksForOrgs(ctx context.Context, tx *sql.Tx, routingURL string, orgIDs []int64) (map[int64][]*model.Link, error) {
 	rows, err := s.q(tx).FindSubscribedLinksForOrgs(ctx, sqlc.FindSubscribedLinksForOrgsParams{
-		Url:    url,
-		OrgIds: orgIDs,
+		RoutingUrl: routingURL,
+		OrgIds:     orgIDs,
 	})
 	if err != nil {
 		return nil, err
@@ -63,13 +53,14 @@ func (s *Store) FindSubscribedLinksForOrgs(ctx context.Context, tx *sql.Tx, url 
 	result := make(map[int64][]*model.Link)
 	for _, row := range rows {
 		result[row.OrgID] = append(result[row.OrgID], &model.Link{
-			ID:        row.ID,
-			TaskID:    row.TaskID,
-			Relevance: row.Relevance,
-			URL:       row.Url,
-			Title:     row.Title,
-			Subscribe: row.Subscribe,
-			CreatedAt: row.CreatedAt,
+			ID:         row.ID,
+			TaskID:     row.TaskID,
+			Relevance:  row.Relevance,
+			URL:        row.Url,
+			RoutingURL: row.RoutingUrl,
+			Title:      row.Title,
+			Subscribe:  row.Subscribe,
+			CreatedAt:  row.CreatedAt,
 		})
 	}
 	return result, nil
@@ -79,13 +70,14 @@ func toModelLinks(rows []sqlc.TaskLink) []*model.Link {
 	links := make([]*model.Link, len(rows))
 	for i, row := range rows {
 		links[i] = &model.Link{
-			ID:        row.ID,
-			TaskID:    row.TaskID,
-			Relevance: row.Relevance,
-			URL:       row.Url,
-			Title:     row.Title,
-			Subscribe: row.Subscribe,
-			CreatedAt: row.CreatedAt,
+			ID:         row.ID,
+			TaskID:     row.TaskID,
+			Relevance:  row.Relevance,
+			URL:        row.Url,
+			RoutingURL: row.RoutingUrl,
+			Title:      row.Title,
+			Subscribe:  row.Subscribe,
+			CreatedAt:  row.CreatedAt,
 		}
 	}
 	return links

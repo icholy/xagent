@@ -61,9 +61,6 @@ var _ Client = &ClientMock{}
 //			DeleteOrgFunc: func(contextMoqParam context.Context, deleteOrgRequest *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error) {
 //				panic("mock out the DeleteOrg method")
 //			},
-//			FindLinksByURLFunc: func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
-//				panic("mock out the FindLinksByURL method")
-//			},
 //			GenerateAtlassianWebhookSecretFunc: func(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {
 //				panic("mock out the GenerateAtlassianWebhookSecret method")
 //			},
@@ -208,9 +205,6 @@ type ClientMock struct {
 
 	// DeleteOrgFunc mocks the DeleteOrg method.
 	DeleteOrgFunc func(contextMoqParam context.Context, deleteOrgRequest *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error)
-
-	// FindLinksByURLFunc mocks the FindLinksByURL method.
-	FindLinksByURLFunc func(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error)
 
 	// GenerateAtlassianWebhookSecretFunc mocks the GenerateAtlassianWebhookSecret method.
 	GenerateAtlassianWebhookSecretFunc func(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error)
@@ -407,13 +401,6 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// DeleteOrgRequest is the deleteOrgRequest argument value.
 			DeleteOrgRequest *xagentv1.DeleteOrgRequest
-		}
-		// FindLinksByURL holds details about calls to the FindLinksByURL method.
-		FindLinksByURL []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// FindLinksByURLRequest is the findLinksByURLRequest argument value.
-			FindLinksByURLRequest *xagentv1.FindLinksByURLRequest
 		}
 		// GenerateAtlassianWebhookSecret holds details about calls to the GenerateAtlassianWebhookSecret method.
 		GenerateAtlassianWebhookSecret []struct {
@@ -654,7 +641,6 @@ type ClientMock struct {
 	lockDeleteEvent                    sync.RWMutex
 	lockDeleteKey                      sync.RWMutex
 	lockDeleteOrg                      sync.RWMutex
-	lockFindLinksByURL                 sync.RWMutex
 	lockGenerateAtlassianWebhookSecret sync.RWMutex
 	lockGetEvent                       sync.RWMutex
 	lockGetOrgSettings                 sync.RWMutex
@@ -1190,42 +1176,6 @@ func (mock *ClientMock) DeleteOrgCalls() []struct {
 	mock.lockDeleteOrg.RLock()
 	calls = mock.calls.DeleteOrg
 	mock.lockDeleteOrg.RUnlock()
-	return calls
-}
-
-// FindLinksByURL calls FindLinksByURLFunc.
-func (mock *ClientMock) FindLinksByURL(contextMoqParam context.Context, findLinksByURLRequest *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
-	if mock.FindLinksByURLFunc == nil {
-		panic("ClientMock.FindLinksByURLFunc: method is nil but Client.FindLinksByURL was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam       context.Context
-		FindLinksByURLRequest *xagentv1.FindLinksByURLRequest
-	}{
-		ContextMoqParam:       contextMoqParam,
-		FindLinksByURLRequest: findLinksByURLRequest,
-	}
-	mock.lockFindLinksByURL.Lock()
-	mock.calls.FindLinksByURL = append(mock.calls.FindLinksByURL, callInfo)
-	mock.lockFindLinksByURL.Unlock()
-	return mock.FindLinksByURLFunc(contextMoqParam, findLinksByURLRequest)
-}
-
-// FindLinksByURLCalls gets all the calls that were made to FindLinksByURL.
-// Check the length with:
-//
-//	len(mockedClient.FindLinksByURLCalls())
-func (mock *ClientMock) FindLinksByURLCalls() []struct {
-	ContextMoqParam       context.Context
-	FindLinksByURLRequest *xagentv1.FindLinksByURLRequest
-} {
-	var calls []struct {
-		ContextMoqParam       context.Context
-		FindLinksByURLRequest *xagentv1.FindLinksByURLRequest
-	}
-	mock.lockFindLinksByURL.RLock()
-	calls = mock.calls.FindLinksByURL
-	mock.lockFindLinksByURL.RUnlock()
 	return calls
 }
 
