@@ -9,6 +9,7 @@ import (
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/shurcooL/githubv4"
 )
 
 // DefaultAppTokenCacheSize bounds the number of per-installation transports retained.
@@ -110,4 +111,12 @@ func (c *AppTokenCache) Token(ctx context.Context, installationID int64) (string
 //	gql := githubv4.NewClient(cache.Client(id))
 func (c *AppTokenCache) Client(installationID int64) *http.Client {
 	return &http.Client{Transport: c.transport(installationID)}
+}
+
+// GraphQLClient returns a shurcooL/githubv4 GraphQL client authenticated as the
+// installation, backed by the same cached auto-refreshing transport as Client.
+// It is the GraphQL counterpart to Client for callers that hit the GraphQL API
+// (e.g. AddReaction) rather than the REST API.
+func (c *AppTokenCache) GraphQLClient(installationID int64) *githubv4.Client {
+	return githubv4.NewClient(c.Client(installationID))
 }
