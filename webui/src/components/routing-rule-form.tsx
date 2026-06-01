@@ -25,8 +25,9 @@ import {
   isRoutingRuleFormValid,
   legacyEventTypeOption,
   mentionCopyForSource,
-  prefixCopyForEventType,
+  prefixCopy,
   urlPrefixCopyForSource,
+  valueCopyForEventType,
   type RoutingRuleFormValues,
 } from '@/lib/routing-rules'
 
@@ -60,7 +61,8 @@ export function RoutingRuleForm({
       !initialValues.prefix &&
       !initialValues.mention &&
       !initialValues.assignee &&
-      !initialValues.urlPrefix
+      !initialValues.urlPrefix &&
+      !initialValues.value
     if (isUntouched) return null
     return legacyEventTypeOption(initialValues.source, initialValues.type)
   }, [initialValues])
@@ -81,12 +83,12 @@ export function RoutingRuleForm({
   const mentionCopy = mentionCopyForSource(values.source)
   const assigneeCopy = assigneeCopyForSource(values.source)
   const urlPrefixCopy = urlPrefixCopyForSource(values.source)
-  const prefixCopy = prefixCopyForEventType(values.source, values.type)
+  const valueCopy = valueCopyForEventType(values.source, values.type)
   // Assignment events have no message body, so prefix/mention can't match —
   // hide those fields and show the assignee field instead.
   const isAssignment = isAssignmentType(values.source, values.type)
-  // Label events have no body to mention in — the prefix field is repurposed
-  // as the label filter, so show prefix but hide the mention field.
+  // Label events have no body — hide prefix/mention and show the Value field
+  // (the label-to-match) instead.
   const isLabel = isLabelType(values.source, values.type)
   const canSubmit = isRoutingRuleFormValid(values, selectedId !== '')
 
@@ -156,7 +158,7 @@ export function RoutingRuleForm({
         <p className="text-muted-foreground text-xs">{urlPrefixCopy.help}</p>
       </div>
 
-      {!isAssignment && (
+      {!isAssignment && !isLabel && (
         <div className="space-y-2">
           <Label htmlFor="prefix">{prefixCopy.label}</Label>
           <Input
@@ -166,6 +168,19 @@ export function RoutingRuleForm({
             onChange={(e) => setValues({ ...values, prefix: e.target.value })}
           />
           <p className="text-muted-foreground text-xs">{prefixCopy.help}</p>
+        </div>
+      )}
+
+      {isLabel && (
+        <div className="space-y-2">
+          <Label htmlFor="value">{valueCopy.label}</Label>
+          <Input
+            id="value"
+            placeholder={valueCopy.placeholder}
+            value={values.value}
+            onChange={(e) => setValues({ ...values, value: e.target.value })}
+          />
+          <p className="text-muted-foreground text-xs">{valueCopy.help}</p>
         </div>
       )}
 

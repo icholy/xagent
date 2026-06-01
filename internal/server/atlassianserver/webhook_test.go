@@ -152,8 +152,8 @@ func TestToAtlassianInputEvents(t *testing.T) {
 			expected: []eventrouter.InputEvent{{
 				Source:      "atlassian",
 				Type:        "label_added",
-				Description: `Test User added label "xagent" to PROJ-7`,
-				Data:        "xagent",
+				Description: `Test User added label(s) "xagent" to PROJ-7`,
+				Values:      []string{"xagent"},
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-7",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			}},
@@ -173,24 +173,14 @@ func TestToAtlassianInputEvents(t *testing.T) {
 					},
 				},
 			},
-			expected: []eventrouter.InputEvent{
-				{
-					Source:      "atlassian",
-					Type:        "label_added",
-					Description: `Test User added label "xagent" to PROJ-8`,
-					Data:        "xagent",
-					URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
-					Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-				},
-				{
-					Source:      "atlassian",
-					Type:        "label_added",
-					Description: `Test User added label "urgent" to PROJ-8`,
-					Data:        "urgent",
-					URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
-					Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-				},
-			},
+			expected: []eventrouter.InputEvent{{
+				Source:      "atlassian",
+				Type:        "label_added",
+				Description: `Test User added label(s) "xagent", "urgent" to PROJ-8`,
+				Values:      []string{"xagent", "urgent"},
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
+				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
+			}},
 		},
 		{
 			name: "IssueUpdatedNoLabelChange",
@@ -365,21 +355,12 @@ func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
 	assert.Equal(t, rec.Body.String(), "processed")
 
 	calls := router.RouteCalls()
-	assert.Equal(t, len(calls), 2)
+	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
 		Source:      "atlassian",
 		Type:        "label_added",
-		Description: `Test User added label "xagent" to PROJ-10`,
-		Data:        "xagent",
-		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
-		UserID:      "user-1",
-		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
-	})
-	assert.DeepEqual(t, calls[1].Input, eventrouter.InputEvent{
-		Source:      "atlassian",
-		Type:        "label_added",
-		Description: `Test User added label "urgent" to PROJ-10`,
-		Data:        "urgent",
+		Description: `Test User added label(s) "xagent", "urgent" to PROJ-10`,
+		Values:      []string{"xagent", "urgent"},
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
 		UserID:      "user-1",
 		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},

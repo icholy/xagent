@@ -177,21 +177,27 @@ func toInputEvents(body []byte) ([]eventrouter.InputEvent, error) {
 			return nil, nil
 		}
 
-		// Emit one event per added label so routing rules can match a specific
-		// label via the Data prefix.
-		events := make([]eventrouter.InputEvent, 0, len(added))
-		for _, label := range added {
-			events = append(events, eventrouter.InputEvent{
-				Source:      "atlassian",
-				Type:        EventTypeLabelAdded,
-				Description: fmt.Sprintf("%s added label %q to %s", displayName, label, payload.Issue.Key),
-				Data:        label,
-				URL:         url,
-				Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
-			})
-		}
-		return events, nil
+		// Emit a single event carrying all added labels in Values so routing
+		// rules can match a specific label via RoutingRule.Value (membership).
+		return []eventrouter.InputEvent{{
+			Source:      "atlassian",
+			Type:        EventTypeLabelAdded,
+			Description: fmt.Sprintf("%s added label(s) %s to %s", displayName, strings.Join(quote(added), ", "), payload.Issue.Key),
+			Values:      added,
+			URL:         url,
+			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
+		}}, nil
 	}
 
 	return nil, nil
+}
+
+// quote returns a copy of labels with each element wrapped in double quotes,
+// for inclusion in an event description.
+func quote(labels []string) []string {
+	out := make([]string, len(labels))
+	for i, l := range labels {
+		out[i] = strconv.Quote(l)
+	}
+	return out
 }
