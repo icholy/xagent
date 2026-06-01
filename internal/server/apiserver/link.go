@@ -21,15 +21,15 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
 	}
-	routingURL := req.RoutingUrl
-	if routingURL == "" {
-		routingURL = model.RoutingURL(req.Url)
+	routingKey := req.RoutingKey
+	if routingKey == "" {
+		routingKey = model.RoutingKey(req.Url)
 	}
 	link := &model.Link{
 		TaskID:     req.TaskId,
 		Relevance:  req.Relevance,
 		URL:        req.Url,
-		RoutingURL: routingURL,
+		RoutingKey: routingKey,
 		Title:      req.Title,
 		Subscribe:  req.Subscribe,
 		CreatedAt:  time.Now(),

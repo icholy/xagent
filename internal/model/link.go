@@ -13,7 +13,7 @@ type Link struct {
 	TaskID     int64     `json:"task_id"`
 	Relevance  string    `json:"relevance"`
 	URL        string    `json:"url"`
-	RoutingURL string    `json:"routing_url"`
+	RoutingKey string    `json:"routing_key"`
 	Title      string    `json:"title"`
 	Subscribe  bool      `json:"subscribe"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -26,7 +26,7 @@ func (l *Link) Proto() *xagentv1.TaskLink {
 		TaskId:     l.TaskID,
 		Relevance:  l.Relevance,
 		Url:        l.URL,
-		RoutingUrl: l.RoutingURL,
+		RoutingKey: l.RoutingKey,
 		Title:      l.Title,
 		Subscribe:  l.Subscribe,
 		CreatedAt:  timestamppb.New(l.CreatedAt),
@@ -44,7 +44,7 @@ func LinkFromProto(pb *xagentv1.TaskLink) *Link {
 		TaskID:     pb.TaskId,
 		Relevance:  pb.Relevance,
 		URL:        pb.Url,
-		RoutingURL: pb.RoutingUrl,
+		RoutingKey: pb.RoutingKey,
 		Title:      pb.Title,
 		Subscribe:  pb.Subscribe,
 		CreatedAt:  createdAt,

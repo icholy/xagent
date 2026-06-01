@@ -259,8 +259,8 @@ message TaskLink {
   string title = 5;
   bool subscribe = 6;
   google.protobuf.Timestamp created_at = 7;
-  // routing_url is a read-only routing key derived from url by the server.
-  string routing_url = 8;
+  // routing_key is a read-only routing key derived from url by the server.
+  string routing_key = 8;
 }
 
 message CreateLinkRequest {
@@ -269,9 +269,9 @@ message CreateLinkRequest {
   string url = 3;
   string title = 4;
   bool subscribe = 5;
-  // routing_url overrides the server-derived routing key. When empty, the
-  // server derives it from url via model.RoutingURL.
-  string routing_url = 6;
+  // routing_key overrides the server-derived routing key. When empty, the
+  // server derives it from url via model.RoutingKey.
+  string routing_key = 6;
 }
 
 message CreateLinkResponse {

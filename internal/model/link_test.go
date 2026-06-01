@@ -14,7 +14,7 @@ func TestLinkProtoRoundTrip(t *testing.T) {
 		TaskID:     42,
 		Relevance:  "related PR",
 		URL:        "https://github.com/o/r/pull/5#issuecomment-9",
-		RoutingURL: "https://github.com/o/r/pull/5",
+		RoutingKey: "https://github.com/o/r/pull/5",
 		Title:      "Fix bug",
 		Subscribe:  true,
 		CreatedAt:  time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC),

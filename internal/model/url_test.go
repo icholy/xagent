@@ -6,7 +6,7 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func TestRoutingURL(t *testing.T) {
+func TestRoutingKey(t *testing.T) {
 	tests := []struct {
 		name string
 		raw  string
@@ -56,7 +56,7 @@ func TestRoutingURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, RoutingURL(tt.raw), tt.want)
+			assert.Equal(t, RoutingKey(tt.raw), tt.want)
 		})
 	}
 }
