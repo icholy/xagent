@@ -92,15 +92,15 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Route events to subscribed tasks
-	for i := range inputs {
-		inputs[i].UserID = user.ID
-		routed, err := h.Router.Route(r.Context(), inputs[i])
+	for _, input := range inputs {
+		input.UserID = user.ID
+		routed, err := h.Router.Route(r.Context(), input)
 		if err != nil {
 			slog.Error("failed to route event", "error", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		slog.Info("Atlassian webhook processed", "url", inputs[i].URL, "type", inputs[i].Type, "tasks_routed", routed)
+		slog.Info("Atlassian webhook processed", "url", input.URL, "type", input.Type, "tasks_routed", routed)
 	}
 
 	fmt.Fprintf(w, "processed")
