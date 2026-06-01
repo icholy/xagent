@@ -16,11 +16,8 @@ type RoutingRule struct {
 	Mention   string            `json:"mention,omitempty"`
 	Assignee  string            `json:"assignee,omitempty"`
 	URLPrefix string            `json:"url_prefix,omitempty"`
-	// Value is matched against the event's discrete value tokens
-	// (InputEvent.Values), e.g. Jira labels. A rule matches when Value is one
-	// of the event's values; empty is a wildcard.
-	Value  string            `json:"value,omitempty"`
-	Create *CreateTaskAction `json:"create,omitempty"`
+	Value     string            `json:"value,omitempty"`
+	Create    *CreateTaskAction `json:"create,omitempty"`
 }
 
 // CreateTaskAction configures a routing rule to create a new task on
