@@ -2,6 +2,7 @@ package eventrouter
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/icholy/xagent/internal/model"
@@ -9,7 +10,8 @@ import (
 
 // MatchRule reports whether the rule matches the event.
 // Empty fields are treated as wildcards. URLPrefix matches against the
-// event's URL; Prefix and Mention are checked against the event's Data field.
+// event's URL; Prefix and Mention are checked against the event's Data field;
+// Value is checked for membership in the event's Values.
 func (e InputEvent) MatchRule(rule model.RoutingRule) bool {
 	if rule.Source != "" && rule.Source != e.Source {
 		return false
@@ -21,6 +23,9 @@ func (e InputEvent) MatchRule(rule model.RoutingRule) bool {
 		return false
 	}
 	if rule.Prefix != "" && !strings.HasPrefix(e.Data, rule.Prefix) {
+		return false
+	}
+	if rule.Value != "" && !slices.Contains(e.Values, rule.Value) {
 		return false
 	}
 	if rule.Mention != "" && !e.matchMention(rule.Mention) {

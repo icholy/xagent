@@ -21,6 +21,10 @@ type InputEvent struct {
 	URL         string
 	UserID      string
 	Assignee    string
+	// Values is a bag of discrete matchable tokens the event provides (e.g.
+	// added Jira labels). RoutingRule.Value matches by membership. This is
+	// internal/transient — it is not part of the proto and is not persisted.
+	Values []string
 	// Meta carries source-specific data that the router does not interpret. It
 	// lets webhook handlers attach native identity (e.g. the GitHub author)
 	// without leaking source-specific types into eventrouter.

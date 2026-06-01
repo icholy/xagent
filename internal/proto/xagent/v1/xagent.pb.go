@@ -5184,14 +5184,18 @@ func (x *GenerateAtlassianWebhookSecretResponse) GetWebhookUrl() string {
 }
 
 type RoutingRule struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Prefix        string                 `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	Mention       string                 `protobuf:"bytes,4,opt,name=mention,proto3" json:"mention,omitempty"`
-	Create        *CreateTaskAction      `protobuf:"bytes,5,opt,name=create,proto3" json:"create,omitempty"`
-	Assignee      string                 `protobuf:"bytes,6,opt,name=assignee,proto3" json:"assignee,omitempty"`
-	UrlPrefix     string                 `protobuf:"bytes,7,opt,name=url_prefix,json=urlPrefix,proto3" json:"url_prefix,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Source    string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Type      string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Prefix    string                 `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	Mention   string                 `protobuf:"bytes,4,opt,name=mention,proto3" json:"mention,omitempty"`
+	Create    *CreateTaskAction      `protobuf:"bytes,5,opt,name=create,proto3" json:"create,omitempty"`
+	Assignee  string                 `protobuf:"bytes,6,opt,name=assignee,proto3" json:"assignee,omitempty"`
+	UrlPrefix string                 `protobuf:"bytes,7,opt,name=url_prefix,json=urlPrefix,proto3" json:"url_prefix,omitempty"`
+	// Matched against the event's discrete value tokens (e.g. Jira labels). A
+	// rule matches when this value is present in the event's values; empty is a
+	// wildcard.
+	Value         string `protobuf:"bytes,8,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5271,6 +5275,13 @@ func (x *RoutingRule) GetAssignee() string {
 func (x *RoutingRule) GetUrlPrefix() string {
 	if x != nil {
 		return x.UrlPrefix
+	}
+	return ""
+}
+
+func (x *RoutingRule) GetValue() string {
+	if x != nil {
+		return x.Value
 	}
 	return ""
 }
@@ -5898,7 +5909,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"&GenerateAtlassianWebhookSecretResponse\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12\x1f\n" +
 	"\vwebhook_url\x18\x02 \x01(\tR\n" +
-	"webhookUrl\"\xdb\x01\n" +
+	"webhookUrl\"\xf1\x01\n" +
 	"\vRoutingRule\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x16\n" +
@@ -5907,7 +5918,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x06create\x18\x05 \x01(\v2\x1b.xagent.v1.CreateTaskActionR\x06create\x12\x1a\n" +
 	"\bassignee\x18\x06 \x01(\tR\bassignee\x12\x1d\n" +
 	"\n" +
-	"url_prefix\x18\a \x01(\tR\turlPrefix\"\xa0\x01\n" +
+	"url_prefix\x18\a \x01(\tR\turlPrefix\x12\x14\n" +
+	"\x05value\x18\b \x01(\tR\x05value\"\xa0\x01\n" +
 	"\x10CreateTaskAction\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
 	"\x06runner\x18\x02 \x01(\tR\x06runner\x12\x16\n" +

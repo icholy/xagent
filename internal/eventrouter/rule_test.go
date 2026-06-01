@@ -201,6 +201,56 @@ func TestMatchRule(t *testing.T) {
 			want: true,
 		},
 		{
+			name:  "value match",
+			rule:  model.RoutingRule{Value: "xagent"},
+			event: InputEvent{Values: []string{"xagent", "urgent"}},
+			want:  true,
+		},
+		{
+			name:  "value no match",
+			rule:  model.RoutingRule{Value: "xagent"},
+			event: InputEvent{Values: []string{"bug", "urgent"}},
+			want:  false,
+		},
+		{
+			name:  "empty value is a wildcard",
+			rule:  model.RoutingRule{},
+			event: InputEvent{Values: []string{"xagent"}},
+			want:  true,
+		},
+		{
+			name:  "value with empty event values no match",
+			rule:  model.RoutingRule{Value: "xagent"},
+			event: InputEvent{Values: nil},
+			want:  false,
+		},
+		{
+			name:  "value requires exact membership not substring",
+			rule:  model.RoutingRule{Value: "agent"},
+			event: InputEvent{Values: []string{"xagent"}},
+			want:  false,
+		},
+		{
+			name: "combined source type value all match",
+			rule: model.RoutingRule{Source: "atlassian", Type: "label_added", Value: "xagent"},
+			event: InputEvent{
+				Source: "atlassian",
+				Type:   "label_added",
+				Values: []string{"xagent"},
+			},
+			want: true,
+		},
+		{
+			name: "combined value mismatch",
+			rule: model.RoutingRule{Source: "atlassian", Type: "label_added", Value: "xagent"},
+			event: InputEvent{
+				Source: "atlassian",
+				Type:   "label_added",
+				Values: []string{"bug"},
+			},
+			want: false,
+		},
+		{
 			name: "combined source type assignee all match",
 			rule: model.RoutingRule{
 				Source:   "github",

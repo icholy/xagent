@@ -170,6 +170,7 @@ function ruleMatchBadges(rule: RoutingRule): string[] {
   if (rule.prefix) labels.push(`prefix:${rule.prefix}`)
   if (rule.mention) labels.push(`mention:${rule.mention}`)
   if (rule.assignee) labels.push(`assignee:${rule.assignee}`)
+  if (rule.value) labels.push(`value:${rule.value}`)
   return labels
 }
 

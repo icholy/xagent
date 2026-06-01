@@ -537,6 +537,10 @@ message RoutingRule {
   CreateTaskAction create = 5;
   string assignee = 6;
   string url_prefix = 7;
+  // Matched against the event's discrete value tokens (e.g. Jira labels). A
+  // rule matches when this value is present in the event's values; empty is a
+  // wildcard.
+  string value = 8;
 }
 
 message CreateTaskAction {

@@ -64,8 +64,8 @@ export function isAssignmentType(source: string, type: string): boolean {
 }
 
 // Whether the selected event type is a label event. Label events have no
-// message body to mention in, so the form hides the mention field and
-// repurposes the prefix field as the label filter.
+// message body to mention in, so the form hides the prefix and mention fields
+// and exposes the Value field as the label-to-match.
 export function isLabelType(source: string, type: string): boolean {
   return source === 'atlassian' && type === 'label_added'
 }
@@ -123,6 +123,12 @@ export interface PrefixCopy {
   help: string
 }
 
+export interface ValueCopy {
+  label: string
+  placeholder: string
+  help: string
+}
+
 // Form-level shape for the routing-rule editor. Mirrors the RoutingRule proto
 // fields plus a `createTask` toggle and flattened CreateTaskAction fields so
 // the form can keep its draft state across toggling the action off and on.
@@ -133,6 +139,7 @@ export interface RoutingRuleFormValues {
   mention: string
   assignee: string
   urlPrefix: string
+  value: string
   createTask: boolean
   createWorkspace: string
   createRunner: string
@@ -149,6 +156,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   mention: '',
   assignee: '',
   urlPrefix: '',
+  value: '',
   createTask: false,
   createWorkspace: '',
   createRunner: '',
@@ -164,6 +172,7 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     mention: rule.mention,
     assignee: rule.assignee,
     urlPrefix: rule.urlPrefix,
+    value: rule.value,
     createTask: rule.create !== undefined,
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
@@ -176,20 +185,21 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
 // when the toggle is on — otherwise it's omitted so the rule reverts to the
 // wake-only behaviour. Assignment events have no message body, so when the
 // selected event type is an assignment one we drop prefix/mention; for
-// non-assignment types we drop assignee. Label events have no body to mention
-// in, so we drop mention but keep prefix (the label filter). This keeps the
-// form's draft state usable across event-type toggles without persisting
-// fields the rule can't actually match on.
+// non-assignment types we drop assignee. Label events have no body, so we drop
+// prefix/mention and use Value as the label-to-match instead; non-label events
+// drop value. This keeps the form's draft state usable across event-type
+// toggles without persisting fields the rule can't actually match on.
 export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
   const isAssignment = isAssignmentType(values.source, values.type)
   const isLabel = isLabelType(values.source, values.type)
   return create(RoutingRuleSchema, {
     source: values.source,
     type: values.type,
-    prefix: isAssignment ? '' : values.prefix,
+    prefix: isAssignment || isLabel ? '' : values.prefix,
     mention: isAssignment || isLabel ? '' : values.mention,
     assignee: isAssignment ? values.assignee : '',
     urlPrefix: values.urlPrefix,
+    value: isLabel ? values.value : '',
     create: values.createTask
       ? {
           workspace: values.createWorkspace,
@@ -258,21 +268,29 @@ export function urlPrefixCopyForSource(source: string): URLPrefixCopy {
   }
 }
 
-// Copy for the prefix field, which doubles as the label filter on label
-// events. For label events the prefix is matched against the added label's
-// value; for message events it's matched against the start of the event body.
-export function prefixCopyForEventType(source: string, type: string): PrefixCopy {
+// Copy for the prefix field, which is matched against the start of the event
+// body. Label events have no body and use the Value field instead, so this is
+// constant across the event types that show the prefix field.
+export const prefixCopy: PrefixCopy = {
+  label: 'Message starts with',
+  placeholder: 'Optional — e.g. /xagent',
+  help: 'Leave blank to match any message. Otherwise the rule only fires when the event body starts with this string.',
+}
+
+// Copy for the Value field, matched by membership against the event's value
+// tokens. For label events the value is the label-to-match.
+export function valueCopyForEventType(source: string, type: string): ValueCopy {
   if (isLabelType(source, type)) {
     return {
       label: 'Label',
       placeholder: 'Optional — e.g. xagent',
-      help: 'Leave blank to match any added label. Otherwise the rule only fires when the added label starts with this value.',
+      help: 'Leave blank to match any added label. Otherwise the rule only fires when this exact label is among those added.',
     }
   }
   return {
-    label: 'Message starts with',
-    placeholder: 'Optional — e.g. /xagent',
-    help: 'Leave blank to match any message. Otherwise the rule only fires when the event body starts with this string.',
+    label: 'Value',
+    placeholder: 'Optional',
+    help: 'Leave blank to match any value. Otherwise the rule only fires when this value is present in the event.',
   }
 }
 

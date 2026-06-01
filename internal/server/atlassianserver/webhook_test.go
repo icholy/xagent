@@ -20,7 +20,7 @@ func TestToAtlassianInputEvents(t *testing.T) {
 	tests := []struct {
 		name     string
 		payload  atlassian.WebhookPayload
-		expected []eventrouter.InputEvent
+		expected *eventrouter.InputEvent
 	}{
 		{
 			name: "CommentCreated",
@@ -35,14 +35,14 @@ func TestToAtlassianInputEvents(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
 				},
 			},
-			expected: []eventrouter.InputEvent{{
+			expected: &eventrouter.InputEvent{
 				Source:      "atlassian",
 				Type:        "comment_created",
 				Description: "Test User commented on PROJ-123",
 				Data:        "xagent: do something",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-			}},
+			},
 		},
 		{
 			name: "NoXAgentPrefix",
@@ -57,14 +57,14 @@ func TestToAtlassianInputEvents(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
 				},
 			},
-			expected: []eventrouter.InputEvent{{
+			expected: &eventrouter.InputEvent{
 				Source:      "atlassian",
 				Type:        "comment_created",
 				Description: "Test User commented on PROJ-123",
 				Data:        "just a regular comment",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-			}},
+			},
 		},
 		{
 			name: "NilComment",
@@ -125,14 +125,14 @@ func TestToAtlassianInputEvents(t *testing.T) {
 					Self: "https://mycompany.atlassian.net/rest/api/2/issue/1",
 				},
 			},
-			expected: []eventrouter.InputEvent{{
+			expected: &eventrouter.InputEvent{
 				Source:      "atlassian",
 				Type:        "comment_created",
 				Description: "Test User commented on PROJ-1",
 				Data:        "xagent: trimmed",
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-1",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-			}},
+			},
 		},
 		{
 			name: "LabelAdded",
@@ -149,14 +149,14 @@ func TestToAtlassianInputEvents(t *testing.T) {
 					},
 				},
 			},
-			expected: []eventrouter.InputEvent{{
+			expected: &eventrouter.InputEvent{
 				Source:      "atlassian",
 				Type:        "label_added",
-				Description: `Test User added label "xagent" to PROJ-7`,
-				Data:        "xagent",
+				Description: `Test User added label(s) "xagent" to PROJ-7`,
+				Values:      []string{"xagent"},
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-7",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-			}},
+			},
 		},
 		{
 			name: "MultipleLabelsAdded",
@@ -173,23 +173,13 @@ func TestToAtlassianInputEvents(t *testing.T) {
 					},
 				},
 			},
-			expected: []eventrouter.InputEvent{
-				{
-					Source:      "atlassian",
-					Type:        "label_added",
-					Description: `Test User added label "xagent" to PROJ-8`,
-					Data:        "xagent",
-					URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
-					Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-				},
-				{
-					Source:      "atlassian",
-					Type:        "label_added",
-					Description: `Test User added label "urgent" to PROJ-8`,
-					Data:        "urgent",
-					URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
-					Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
-				},
+			expected: &eventrouter.InputEvent{
+				Source:      "atlassian",
+				Type:        "label_added",
+				Description: `Test User added label(s) "xagent", "urgent" to PROJ-8`,
+				Values:      []string{"xagent", "urgent"},
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
+				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			},
 		},
 		{
@@ -248,7 +238,7 @@ func TestToAtlassianInputEvents(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			body, err := json.Marshal(tt.payload)
 			assert.NilError(t, err)
-			got, err := toInputEvents(body)
+			got, err := toInputEvent(body)
 			assert.NilError(t, err)
 			assert.DeepEqual(t, got, tt.expected)
 		})
@@ -365,21 +355,12 @@ func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
 	assert.Equal(t, rec.Body.String(), "processed")
 
 	calls := router.RouteCalls()
-	assert.Equal(t, len(calls), 2)
+	assert.Equal(t, len(calls), 1)
 	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
 		Source:      "atlassian",
 		Type:        "label_added",
-		Description: `Test User added label "xagent" to PROJ-10`,
-		Data:        "xagent",
-		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
-		UserID:      "user-1",
-		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
-	})
-	assert.DeepEqual(t, calls[1].Input, eventrouter.InputEvent{
-		Source:      "atlassian",
-		Type:        "label_added",
-		Description: `Test User added label "urgent" to PROJ-10`,
-		Data:        "urgent",
+		Description: `Test User added label(s) "xagent", "urgent" to PROJ-10`,
+		Values:      []string{"xagent", "urgent"},
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
 		UserID:      "user-1",
 		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},

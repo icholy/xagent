@@ -16,6 +16,7 @@ type RoutingRule struct {
 	Mention   string            `json:"mention,omitempty"`
 	Assignee  string            `json:"assignee,omitempty"`
 	URLPrefix string            `json:"url_prefix,omitempty"`
+	Value     string            `json:"value,omitempty"`
 	Create    *CreateTaskAction `json:"create,omitempty"`
 }
 
@@ -65,6 +66,7 @@ func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 		Mention:   r.Mention,
 		Assignee:  r.Assignee,
 		UrlPrefix: r.URLPrefix,
+		Value:     r.Value,
 	}
 	if r.Create != nil {
 		pb.Create = r.Create.Proto()
@@ -81,6 +83,7 @@ func RoutingRuleFromProto(pb *xagentv1.RoutingRule) RoutingRule {
 		Mention:   pb.Mention,
 		Assignee:  pb.Assignee,
 		URLPrefix: pb.UrlPrefix,
+		Value:     pb.Value,
 		Create:    CreateTaskActionFromProto(pb.Create),
 	}
 }
