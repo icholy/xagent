@@ -50,6 +50,81 @@ func TestVerifyWebhook(t *testing.T) {
 	}
 }
 
+func TestAddedLabels(t *testing.T) {
+	tests := []struct {
+		name     string
+		payload  WebhookPayload
+		expected []string
+	}{
+		{
+			name: "SingleLabelAdded",
+			payload: WebhookPayload{
+				Changelog: &Changelog{
+					Items: []ChangelogItem{
+						{Field: "labels", FromString: "", ToString: "xagent"},
+					},
+				},
+			},
+			expected: []string{"xagent"},
+		},
+		{
+			name: "LabelAddedToExisting",
+			payload: WebhookPayload{
+				Changelog: &Changelog{
+					Items: []ChangelogItem{
+						{Field: "labels", FromString: "bug urgent", ToString: "bug urgent xagent"},
+					},
+				},
+			},
+			expected: []string{"xagent"},
+		},
+		{
+			name: "MultipleLabelsAdded",
+			payload: WebhookPayload{
+				Changelog: &Changelog{
+					Items: []ChangelogItem{
+						{Field: "labels", FromString: "bug", ToString: "bug xagent urgent"},
+					},
+				},
+			},
+			expected: []string{"xagent", "urgent"},
+		},
+		{
+			name: "LabelRemovedOnly",
+			payload: WebhookPayload{
+				Changelog: &Changelog{
+					Items: []ChangelogItem{
+						{Field: "labels", FromString: "bug xagent", ToString: "bug"},
+					},
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "OtherFieldChange",
+			payload: WebhookPayload{
+				Changelog: &Changelog{
+					Items: []ChangelogItem{
+						{Field: "status", FromString: "To Do", ToString: "In Progress"},
+					},
+				},
+			},
+			expected: nil,
+		},
+		{
+			name:     "NoChangelog",
+			payload:  WebhookPayload{},
+			expected: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.payload.AddedLabels()
+			assert.DeepEqual(t, got, tt.expected)
+		})
+	}
+}
+
 func TestIssueBrowseURL(t *testing.T) {
 	tests := []struct {
 		name     string
