@@ -136,17 +136,24 @@ type GitHubMeta struct {
 	AuthorID    int64
 	AuthorLogin string
 
-	// Owner and Repo locate the repository for GitHub's Reactions API. CommentID
-	// identifies the comment reacted to for issue_comment and
+	// Owner and Repo locate the repository for GitHub's REST Reactions API.
+	// CommentID identifies the comment reacted to for issue_comment and
 	// pull_request_review_comment events; Number identifies the issue/PR reacted
 	// to for issue_assigned and pull_request_assigned events. Comment events set
-	// Owner/Repo/CommentID, assignment events set Owner/Repo/Number, and review
-	// submissions leave all of them zero (no reactable target). Consumers key off
-	// InputEvent.Type, not these fields, to decide whether and how to react.
-	Owner     string
-	Repo      string
-	CommentID int64
-	Number    int
+	// Owner/Repo/CommentID and assignment events set Owner/Repo/Number.
+	//
+	// ReviewNodeID is the review's GraphQL node ID, set for pull_request_review
+	// events. The REST Reactions API has no endpoint for a review summary, so
+	// those reactions go through the GraphQL addReaction mutation keyed by this
+	// ID; Owner/Repo/CommentID/Number stay zero for reviews.
+	//
+	// Consumers key off InputEvent.Type, not these fields, to decide whether and
+	// how to react.
+	Owner        string
+	Repo         string
+	CommentID    int64
+	Number       int
+	ReviewNodeID string
 }
 
 // Event-type strings set on eventrouter.InputEvent.Type by toInputEvent. They
@@ -236,7 +243,11 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
 			Data:        body,
 			URL:         *event.PullRequest.HTMLURL,
-			Meta:        GitHubMeta{AuthorID: *event.Review.User.ID, AuthorLogin: login},
+			Meta: GitHubMeta{
+				AuthorID:     *event.Review.User.ID,
+				AuthorLogin:  login,
+				ReviewNodeID: event.GetReview().GetNodeID(),
+			},
 		}
 
 	case *github.IssuesEvent:
