@@ -510,6 +510,97 @@ func TestToGithubInputEvent(t *testing.T) {
 			},
 			expected: nil,
 		},
+		{
+			name: "IssuesEvent_Labeled",
+			event: &github.IssuesEvent{
+				Action: github.Ptr("labeled"),
+				Issue: &github.Issue{
+					Number:  github.Ptr(7),
+					NodeID:  github.Ptr("I_node7"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/7"),
+				},
+				Label: &github.Label{Name: github.Ptr("xagent")},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](999),
+					Login: github.Ptr("octocat"),
+				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "label_added",
+				Description: `octocat labeled issue #7 "xagent"`,
+				Values:      []string{"xagent"},
+				URL:         "https://github.com/owner/repo/issues/7",
+				Meta: GitHubMeta{
+					AuthorID:    999,
+					AuthorLogin: "octocat",
+					NodeID:      "I_node7",
+				},
+			},
+		},
+		{
+			name: "IssuesEvent_Labeled_NoLabel",
+			event: &github.IssuesEvent{
+				Action: github.Ptr("labeled"),
+				Issue: &github.Issue{
+					Number:  github.Ptr(7),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/7"),
+				},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](999),
+					Login: github.Ptr("octocat"),
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "PullRequestEvent_Labeled",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("labeled"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					NodeID:  github.Ptr("PR_node12"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+				},
+				Label: &github.Label{Name: github.Ptr("needs-review")},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](42),
+					Login: github.Ptr("alice"),
+				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "label_added",
+				Description: `alice labeled PR #12 "needs-review"`,
+				Values:      []string{"needs-review"},
+				URL:         "https://github.com/owner/repo/pull/12",
+				Meta: GitHubMeta{
+					AuthorID:    42,
+					AuthorLogin: "alice",
+					NodeID:      "PR_node12",
+				},
+			},
+		},
+		{
+			name: "PullRequestEvent_Labeled_NoSender",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("labeled"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+				},
+				Label: &github.Label{Name: github.Ptr("needs-review")},
+			},
+			expected: nil,
+		},
 	}
 
 	for _, tt := range tests {

@@ -155,6 +155,7 @@ const (
 	EventTypePullRequestReview        = "pull_request_review"
 	EventTypeIssueAssigned            = "issue_assigned"
 	EventTypePullRequestAssigned      = "pull_request_assigned"
+	EventTypeLabelAdded               = "label_added"
 )
 
 func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
@@ -237,50 +238,102 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 		}
 
 	case *github.IssuesEvent:
-		if event.GetAction() != "assigned" ||
-			event.Issue == nil || event.Issue.HTMLURL == nil ||
-			event.Assignee == nil || event.Assignee.Login == nil ||
-			event.Sender == nil || event.Sender.ID == nil {
-			return nil
+		switch event.GetAction() {
+		case "assigned":
+			if event.Issue == nil || event.Issue.HTMLURL == nil ||
+				event.Assignee == nil || event.Assignee.Login == nil ||
+				event.Sender == nil || event.Sender.ID == nil {
+				return nil
+			}
+			senderLogin := event.Sender.GetLogin()
+			assigneeLogin := event.Assignee.GetLogin()
+			number := event.Issue.GetNumber()
+			return &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        EventTypeIssueAssigned,
+				Description: fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
+				URL:         *event.Issue.HTMLURL,
+				Assignee:    assigneeLogin,
+				Meta: GitHubMeta{
+					AuthorID:    *event.Sender.ID,
+					AuthorLogin: senderLogin,
+					NodeID:      event.GetIssue().GetNodeID(),
+				},
+			}
+		case "labeled":
+			if event.Issue == nil || event.Issue.HTMLURL == nil ||
+				event.Label == nil || event.Label.Name == nil ||
+				event.Sender == nil || event.Sender.ID == nil {
+				return nil
+			}
+			senderLogin := event.Sender.GetLogin()
+			label := event.Label.GetName()
+			number := event.Issue.GetNumber()
+			// GitHub fires a separate "labeled" delivery per label, so Values
+			// carries the single added label for RoutingRule.Value membership.
+			return &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        EventTypeLabelAdded,
+				Description: fmt.Sprintf("%s labeled issue #%d %q", senderLogin, number, label),
+				Values:      []string{label},
+				URL:         *event.Issue.HTMLURL,
+				Meta: GitHubMeta{
+					AuthorID:    *event.Sender.ID,
+					AuthorLogin: senderLogin,
+					NodeID:      event.GetIssue().GetNodeID(),
+				},
+			}
 		}
-		senderLogin := event.Sender.GetLogin()
-		assigneeLogin := event.Assignee.GetLogin()
-		number := event.Issue.GetNumber()
-		return &eventrouter.InputEvent{
-			Source:      "github",
-			Type:        EventTypeIssueAssigned,
-			Description: fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
-			URL:         *event.Issue.HTMLURL,
-			Assignee:    assigneeLogin,
-			Meta: GitHubMeta{
-				AuthorID:    *event.Sender.ID,
-				AuthorLogin: senderLogin,
-				NodeID:      event.GetIssue().GetNodeID(),
-			},
-		}
+		return nil
 
 	case *github.PullRequestEvent:
-		if event.GetAction() != "assigned" ||
-			event.PullRequest == nil || event.PullRequest.HTMLURL == nil ||
-			event.Assignee == nil || event.Assignee.Login == nil ||
-			event.Sender == nil || event.Sender.ID == nil {
-			return nil
+		switch event.GetAction() {
+		case "assigned":
+			if event.PullRequest == nil || event.PullRequest.HTMLURL == nil ||
+				event.Assignee == nil || event.Assignee.Login == nil ||
+				event.Sender == nil || event.Sender.ID == nil {
+				return nil
+			}
+			senderLogin := event.Sender.GetLogin()
+			assigneeLogin := event.Assignee.GetLogin()
+			number := event.PullRequest.GetNumber()
+			return &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        EventTypePullRequestAssigned,
+				Description: fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
+				URL:         *event.PullRequest.HTMLURL,
+				Assignee:    assigneeLogin,
+				Meta: GitHubMeta{
+					AuthorID:    *event.Sender.ID,
+					AuthorLogin: senderLogin,
+					NodeID:      event.GetPullRequest().GetNodeID(),
+				},
+			}
+		case "labeled":
+			if event.PullRequest == nil || event.PullRequest.HTMLURL == nil ||
+				event.Label == nil || event.Label.Name == nil ||
+				event.Sender == nil || event.Sender.ID == nil {
+				return nil
+			}
+			senderLogin := event.Sender.GetLogin()
+			label := event.Label.GetName()
+			number := event.PullRequest.GetNumber()
+			// GitHub fires a separate "labeled" delivery per label, so Values
+			// carries the single added label for RoutingRule.Value membership.
+			return &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        EventTypeLabelAdded,
+				Description: fmt.Sprintf("%s labeled PR #%d %q", senderLogin, number, label),
+				Values:      []string{label},
+				URL:         *event.PullRequest.HTMLURL,
+				Meta: GitHubMeta{
+					AuthorID:    *event.Sender.ID,
+					AuthorLogin: senderLogin,
+					NodeID:      event.GetPullRequest().GetNodeID(),
+				},
+			}
 		}
-		senderLogin := event.Sender.GetLogin()
-		assigneeLogin := event.Assignee.GetLogin()
-		number := event.PullRequest.GetNumber()
-		return &eventrouter.InputEvent{
-			Source:      "github",
-			Type:        EventTypePullRequestAssigned,
-			Description: fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
-			URL:         *event.PullRequest.HTMLURL,
-			Assignee:    assigneeLogin,
-			Meta: GitHubMeta{
-				AuthorID:    *event.Sender.ID,
-				AuthorLogin: senderLogin,
-				NodeID:      event.GetPullRequest().GetNodeID(),
-			},
-		}
+		return nil
 	}
 
 	return nil
