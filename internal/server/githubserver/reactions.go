@@ -33,23 +33,22 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 	if org.GitHubInstallationID == 0 {
 		return nil
 	}
+
+	// Pick the emoji from the routing outcome: a created task gets 🚀, a woken
+	// task 👀, and an event that matched a rule but created or woke nothing 😕.
+	var content githubv4.ReactionContent
+	switch {
+	case outcome.Created:
+		content = githubv4.ReactionContentRocket
+	case len(outcome.TaskIDs) > 0:
+		content = githubv4.ReactionContentEyes
+	default:
+		content = githubv4.ReactionContentConfused
+	}
+
 	// The GraphQL client is authenticated as the App's bot identity, backed by
 	// the cached auto-refreshing installation transport so the reaction is
 	// attributed to the App and repeated calls skip re-minting the token.
-	client := s.tokens.GraphQLClient(org.GitHubInstallationID)
-	return githubx.AddReaction(ctx, client, meta.NodeID, reactionContent(outcome))
-}
-
-// reactionContent maps a routing outcome to the GraphQL reaction enum: a created
-// task gets 🚀, a woken task 👀, and an event that matched a rule but created or
-// woke nothing 😕.
-func reactionContent(outcome eventrouter.RouteOutcome) githubv4.ReactionContent {
-	switch {
-	case outcome.Created:
-		return githubv4.ReactionContentRocket
-	case len(outcome.TaskIDs) > 0:
-		return githubv4.ReactionContentEyes
-	default:
-		return githubv4.ReactionContentConfused
-	}
+	client := githubv4.NewClient(s.tokens.Client(org.GitHubInstallationID))
+	return githubx.AddReaction(ctx, client, meta.NodeID, content)
 }
