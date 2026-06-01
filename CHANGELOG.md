@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.1](https://github.com/icholy/xagent/compare/v0.24.0...v0.24.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **githubserver:** react to PR review summaries via GraphQL ([#832](https://github.com/icholy/xagent/issues/832)) ([d918951](https://github.com/icholy/xagent/commit/d918951ac9c1c29c58104c78f7db4bd8aaa70c5c))
+* **webui:** restore routing rules table with separate labels column ([#830](https://github.com/icholy/xagent/issues/830)) ([e14edeb](https://github.com/icholy/xagent/commit/e14edeba3602f795f3d6d224d21afd8531a04f24))
+
 ## [0.24.0](https://github.com/icholy/xagent/compare/v0.23.1...v0.24.0) (2026-05-31)
 
 
