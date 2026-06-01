@@ -9,10 +9,7 @@ import (
 	"github.com/icholy/xagent/internal/x/githubx"
 )
 
-// react adds a reaction to the resource that triggered the outcome. It is a
-// plain synchronous function: it does the work and returns an error. It owns no
-// concurrency or lifetime policy — the WebhookHandler glue runs it in a
-// goroutine and logs the error.
+// react adds a reaction to the resource that triggered the outcome.
 //
 // Every reactable GitHub event carries the global node ID of its reactable
 // target in GitHubMeta.NodeID — the comment for comment events, the review
