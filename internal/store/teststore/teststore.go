@@ -41,7 +41,7 @@ type Org struct {
 // LinkOptions configures a link created with a task.
 type LinkOptions struct {
 	URL        string
-	RoutingURL string
+	RoutingKey string
 	Title      string
 	Subscribe  bool
 }
@@ -75,7 +75,7 @@ func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *mode
 		link := &model.Link{
 			TaskID:     task.ID,
 			URL:        url,
-			RoutingURL: cmp.Or(lo.RoutingURL, url),
+			RoutingKey: cmp.Or(lo.RoutingKey, url),
 			Title:      cmp.Or(lo.Title, "test link"),
 			Subscribe:  lo.Subscribe,
 			CreatedAt:  time.Now(),

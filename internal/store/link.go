@@ -13,7 +13,7 @@ func (s *Store) CreateLink(ctx context.Context, tx *sql.Tx, link *model.Link) er
 		TaskID:     link.TaskID,
 		Relevance:  link.Relevance,
 		Url:        link.URL,
-		RoutingUrl: link.RoutingURL,
+		RoutingKey: link.RoutingKey,
 		Title:      link.Title,
 		Subscribe:  link.Subscribe,
 		CreatedAt:  link.CreatedAt,
@@ -40,11 +40,11 @@ func (s *Store) DeleteLink(ctx context.Context, tx *sql.Tx, id int64) error {
 	return s.q(tx).DeleteLink(ctx, id)
 }
 
-// FindSubscribedLinksForOrgs returns subscribed links matching the routing URL,
+// FindSubscribedLinksForOrgs returns subscribed links matching the routing key,
 // scoped to the given orgs, grouped by org ID.
-func (s *Store) FindSubscribedLinksForOrgs(ctx context.Context, tx *sql.Tx, routingURL string, orgIDs []int64) (map[int64][]*model.Link, error) {
+func (s *Store) FindSubscribedLinksForOrgs(ctx context.Context, tx *sql.Tx, routingKey string, orgIDs []int64) (map[int64][]*model.Link, error) {
 	rows, err := s.q(tx).FindSubscribedLinksForOrgs(ctx, sqlc.FindSubscribedLinksForOrgsParams{
-		RoutingUrl: routingURL,
+		RoutingKey: routingKey,
 		OrgIds:     orgIDs,
 	})
 	if err != nil {
@@ -57,7 +57,7 @@ func (s *Store) FindSubscribedLinksForOrgs(ctx context.Context, tx *sql.Tx, rout
 			TaskID:     row.TaskID,
 			Relevance:  row.Relevance,
 			URL:        row.Url,
-			RoutingURL: row.RoutingUrl,
+			RoutingKey: row.RoutingKey,
 			Title:      row.Title,
 			Subscribe:  row.Subscribe,
 			CreatedAt:  row.CreatedAt,
@@ -74,7 +74,7 @@ func toModelLinks(rows []sqlc.TaskLink) []*model.Link {
 			TaskID:     row.TaskID,
 			Relevance:  row.Relevance,
 			URL:        row.Url,
-			RoutingURL: row.RoutingUrl,
+			RoutingKey: row.RoutingKey,
 			Title:      row.Title,
 			Subscribe:  row.Subscribe,
 			CreatedAt:  row.CreatedAt,

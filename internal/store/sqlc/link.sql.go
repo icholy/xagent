@@ -13,7 +13,7 @@ import (
 )
 
 const createLink = `-- name: CreateLink :one
-INSERT INTO task_links (task_id, relevance, url, routing_url, title, subscribe, created_at)
+INSERT INTO task_links (task_id, relevance, url, routing_key, title, subscribe, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id
 `
@@ -22,7 +22,7 @@ type CreateLinkParams struct {
 	TaskID     int64     `json:"task_id"`
 	Relevance  string    `json:"relevance"`
 	Url        string    `json:"url"`
-	RoutingUrl string    `json:"routing_url"`
+	RoutingKey string    `json:"routing_key"`
 	Title      string    `json:"title"`
 	Subscribe  bool      `json:"subscribe"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -33,7 +33,7 @@ func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (int64, 
 		arg.TaskID,
 		arg.Relevance,
 		arg.Url,
-		arg.RoutingUrl,
+		arg.RoutingKey,
 		arg.Title,
 		arg.Subscribe,
 		arg.CreatedAt,
@@ -53,16 +53,16 @@ func (q *Queries) DeleteLink(ctx context.Context, id int64) error {
 }
 
 const findSubscribedLinksForOrgs = `-- name: FindSubscribedLinksForOrgs :many
-SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_url, t.org_id
+SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_key, t.org_id
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.routing_url = $1 AND l.subscribe = TRUE AND t.archived = FALSE
+WHERE l.routing_key = $1 AND l.subscribe = TRUE AND t.archived = FALSE
   AND t.org_id = ANY($2::BIGINT[])
 ORDER BY t.org_id, l.created_at DESC
 `
 
 type FindSubscribedLinksForOrgsParams struct {
-	RoutingUrl string  `json:"routing_url"`
+	RoutingKey string  `json:"routing_key"`
 	OrgIds     []int64 `json:"org_ids"`
 }
 
@@ -74,12 +74,12 @@ type FindSubscribedLinksForOrgsRow struct {
 	Title      string    `json:"title"`
 	Subscribe  bool      `json:"subscribe"`
 	CreatedAt  time.Time `json:"created_at"`
-	RoutingUrl string    `json:"routing_url"`
+	RoutingKey string    `json:"routing_key"`
 	OrgID      int64     `json:"org_id"`
 }
 
 func (q *Queries) FindSubscribedLinksForOrgs(ctx context.Context, arg FindSubscribedLinksForOrgsParams) ([]FindSubscribedLinksForOrgsRow, error) {
-	rows, err := q.db.QueryContext(ctx, findSubscribedLinksForOrgs, arg.RoutingUrl, pq.Array(arg.OrgIds))
+	rows, err := q.db.QueryContext(ctx, findSubscribedLinksForOrgs, arg.RoutingKey, pq.Array(arg.OrgIds))
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (q *Queries) FindSubscribedLinksForOrgs(ctx context.Context, arg FindSubscr
 			&i.Title,
 			&i.Subscribe,
 			&i.CreatedAt,
-			&i.RoutingUrl,
+			&i.RoutingKey,
 			&i.OrgID,
 		); err != nil {
 			return nil, err
@@ -112,7 +112,7 @@ func (q *Queries) FindSubscribedLinksForOrgs(ctx context.Context, arg FindSubscr
 }
 
 const listLinksByTask = `-- name: ListLinksByTask :many
-SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_url
+SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_key
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
 WHERE l.task_id = $1 AND t.org_id = $2
@@ -141,7 +141,7 @@ func (q *Queries) ListLinksByTask(ctx context.Context, arg ListLinksByTaskParams
 			&i.Title,
 			&i.Subscribe,
 			&i.CreatedAt,
-			&i.RoutingUrl,
+			&i.RoutingKey,
 		); err != nil {
 			return nil, err
 		}

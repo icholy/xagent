@@ -189,7 +189,7 @@ CREATE TABLE public.task_links (
     title text DEFAULT ''::text NOT NULL,
     subscribe boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    routing_url text DEFAULT ''::text NOT NULL
+    routing_key text DEFAULT ''::text NOT NULL
 );
 
 
@@ -499,10 +499,10 @@ CREATE INDEX idx_orgs_owner ON public.orgs USING btree (owner);
 
 
 --
--- Name: idx_task_links_routing_url; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_task_links_routing_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_task_links_routing_url ON public.task_links USING btree (routing_url);
+CREATE INDEX idx_task_links_routing_key ON public.task_links USING btree (routing_key);
 
 
 --

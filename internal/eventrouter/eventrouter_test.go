@@ -861,9 +861,9 @@ func TestRouteAssignmentCreatesTaskAndLink(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(links[org.OrgID]), 1)
 	assert.Equal(t, links[org.OrgID][0].URL, url)
-	// The router derives routing_url so the created link is matchable; for an
+	// The router derives routing_key so the created link is matchable; for an
 	// already-canonical URL it equals url.
-	assert.Equal(t, links[org.OrgID][0].RoutingURL, url)
+	assert.Equal(t, links[org.OrgID][0].RoutingKey, url)
 }
 
 func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {

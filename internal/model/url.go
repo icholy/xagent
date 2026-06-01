@@ -17,7 +17,7 @@ func TaskURL(baseURL string, taskID, orgID int64) string {
 	return fmt.Sprintf("%s/ui/tasks/%d?org=%d", baseURL, taskID, orgID)
 }
 
-// RoutingURL reduces a recognized resource URL to a stable routing key, so two
+// RoutingKey reduces a recognized resource URL to a stable routing key, so two
 // URLs that point at the same logical resource — a comment vs. its issue, or an
 // API URL vs. its web URL — produce the same key. Only recognized URLs (GitHub
 // issues/PRs and Jira issues, in both their web and API forms) are normalized;
@@ -29,7 +29,7 @@ func TaskURL(baseURL string, taskID, orgID int64) string {
 //	api.github.com/repos/o/r/pulls/5                  -> github.com/o/r/pull/5
 //	site.atlassian.net/browse/X-1?focusedCommentId=2  -> site.atlassian.net/browse/X-1
 //	site.atlassian.net/rest/api/2/issue/X-1           -> site.atlassian.net/browse/X-1
-func RoutingURL(raw string) string {
+func RoutingKey(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return raw

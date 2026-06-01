@@ -96,7 +96,7 @@ type TaskLink struct {
 	Title      string    `json:"title"`
 	Subscribe  bool      `json:"subscribe"`
 	CreatedAt  time.Time `json:"created_at"`
-	RoutingUrl string    `json:"routing_url"`
+	RoutingKey string    `json:"routing_key"`
 }
 
 type User struct {

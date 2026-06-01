@@ -1,0 +1,3 @@
+allowBuilds:
+  '@bufbuild/buf': set this to true or false
+  isolated-vm: set this to true or false

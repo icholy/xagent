@@ -37,7 +37,7 @@ func TestCreateLink(t *testing.T) {
 	assert.Equal(t, resp.Link.Subscribe, true)
 }
 
-func TestCreateLink_DerivesRoutingURL(t *testing.T) {
+func TestCreateLink_DerivesRoutingKey(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
@@ -50,7 +50,7 @@ func TestCreateLink_DerivesRoutingURL(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Act - no routing_url supplied, so the server derives it from url
+	// Act - no routing_key supplied, so the server derives it from url
 	resp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId: taskResp.Task.Id,
 		Url:    "https://github.com/example/repo/pull/123#issuecomment-9",
@@ -59,10 +59,10 @@ func TestCreateLink_DerivesRoutingURL(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, resp.Link.Url, "https://github.com/example/repo/pull/123#issuecomment-9")
-	assert.Equal(t, resp.Link.RoutingUrl, "https://github.com/example/repo/pull/123")
+	assert.Equal(t, resp.Link.RoutingKey, "https://github.com/example/repo/pull/123")
 }
 
-func TestCreateLink_RoutingURLOverride(t *testing.T) {
+func TestCreateLink_RoutingKeyOverride(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
@@ -75,16 +75,16 @@ func TestCreateLink_RoutingURLOverride(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Act - explicit routing_url is used verbatim, not derived from url
+	// Act - explicit routing_key is used verbatim, not derived from url
 	resp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
 		TaskId:     taskResp.Task.Id,
 		Url:        "https://github.com/example/repo/pull/123#issuecomment-9",
-		RoutingUrl: "https://example.com/custom",
+		RoutingKey: "https://example.com/custom",
 	})
 
 	// Assert
 	assert.NilError(t, err)
-	assert.Equal(t, resp.Link.RoutingUrl, "https://example.com/custom")
+	assert.Equal(t, resp.Link.RoutingKey, "https://example.com/custom")
 }
 
 func TestCreateLink_Permissions(t *testing.T) {

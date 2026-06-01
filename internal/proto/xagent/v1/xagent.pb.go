@@ -2012,8 +2012,8 @@ type TaskLink struct {
 	Title     string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
 	Subscribe bool                   `protobuf:"varint,6,opt,name=subscribe,proto3" json:"subscribe,omitempty"`
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	// routing_url is a read-only routing key derived from url by the server.
-	RoutingUrl    string `protobuf:"bytes,8,opt,name=routing_url,json=routingUrl,proto3" json:"routing_url,omitempty"`
+	// routing_key is a read-only routing key derived from url by the server.
+	RoutingKey    string `protobuf:"bytes,8,opt,name=routing_key,json=routingKey,proto3" json:"routing_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2097,9 +2097,9 @@ func (x *TaskLink) GetCreatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *TaskLink) GetRoutingUrl() string {
+func (x *TaskLink) GetRoutingKey() string {
 	if x != nil {
-		return x.RoutingUrl
+		return x.RoutingKey
 	}
 	return ""
 }
@@ -2111,9 +2111,9 @@ type CreateLinkRequest struct {
 	Url       string                 `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
 	Title     string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
 	Subscribe bool                   `protobuf:"varint,5,opt,name=subscribe,proto3" json:"subscribe,omitempty"`
-	// routing_url overrides the server-derived routing key. When empty, the
-	// server derives it from url via model.RoutingURL.
-	RoutingUrl    string `protobuf:"bytes,6,opt,name=routing_url,json=routingUrl,proto3" json:"routing_url,omitempty"`
+	// routing_key overrides the server-derived routing key. When empty, the
+	// server derives it from url via model.RoutingKey.
+	RoutingKey    string `protobuf:"bytes,6,opt,name=routing_key,json=routingKey,proto3" json:"routing_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2183,9 +2183,9 @@ func (x *CreateLinkRequest) GetSubscribe() bool {
 	return false
 }
 
-func (x *CreateLinkRequest) GetRoutingUrl() string {
+func (x *CreateLinkRequest) GetRoutingKey() string {
 	if x != nil {
-		return x.RoutingUrl
+		return x.RoutingKey
 	}
 	return ""
 }
@@ -5671,16 +5671,16 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\tsubscribe\x18\x06 \x01(\bR\tsubscribe\x129\n" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1f\n" +
-	"\vrouting_url\x18\b \x01(\tR\n" +
-	"routingUrl\"\xb1\x01\n" +
+	"\vrouting_key\x18\b \x01(\tR\n" +
+	"routingKey\"\xb1\x01\n" +
 	"\x11CreateLinkRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x1c\n" +
 	"\trelevance\x18\x02 \x01(\tR\trelevance\x12\x10\n" +
 	"\x03url\x18\x03 \x01(\tR\x03url\x12\x14\n" +
 	"\x05title\x18\x04 \x01(\tR\x05title\x12\x1c\n" +
 	"\tsubscribe\x18\x05 \x01(\bR\tsubscribe\x12\x1f\n" +
-	"\vrouting_url\x18\x06 \x01(\tR\n" +
-	"routingUrl\"=\n" +
+	"\vrouting_key\x18\x06 \x01(\tR\n" +
+	"routingKey\"=\n" +
 	"\x12CreateLinkResponse\x12'\n" +
 	"\x04link\x18\x01 \x01(\v2\x13.xagent.v1.TaskLinkR\x04link\"+\n" +
 	"\x10ListLinksRequest\x12\x17\n" +
