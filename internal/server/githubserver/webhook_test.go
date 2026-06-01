@@ -26,8 +26,9 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
-					ID:   github.Ptr[int64](555),
-					Body: github.Ptr("xagent: do something"),
+					ID:     github.Ptr[int64](555),
+					NodeID: github.Ptr("IC_node555"),
+					Body:   github.Ptr("xagent: do something"),
 					User: &github.User{
 						ID:    github.Ptr[int64](123),
 						Login: github.Ptr("testuser"),
@@ -51,9 +52,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Meta: GitHubMeta{
 					AuthorID:    123,
 					AuthorLogin: "testuser",
-					Owner:       "owner",
-					Repo:        "repo",
-					CommentID:   555,
+					NodeID:      "IC_node555",
 				},
 			},
 		},
@@ -62,8 +61,9 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
-					ID:   github.Ptr[int64](556),
-					Body: github.Ptr("xagent: review this"),
+					ID:     github.Ptr[int64](556),
+					NodeID: github.Ptr("IC_node556"),
+					Body:   github.Ptr("xagent: review this"),
 					User: &github.User{
 						ID:    github.Ptr[int64](456),
 						Login: github.Ptr("pruser"),
@@ -88,9 +88,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Meta: GitHubMeta{
 					AuthorID:    456,
 					AuthorLogin: "pruser",
-					Owner:       "owner",
-					Repo:        "repo",
-					CommentID:   556,
+					NodeID:      "IC_node556",
 				},
 			},
 		},
@@ -172,8 +170,9 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.PullRequestReviewCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.PullRequestComment{
-					ID:   github.Ptr[int64](777),
-					Body: github.Ptr("xagent: fix this"),
+					ID:     github.Ptr[int64](777),
+					NodeID: github.Ptr("PRRC_node777"),
+					Body:   github.Ptr("xagent: fix this"),
 					User: &github.User{
 						ID:    github.Ptr[int64](789),
 						Login: github.Ptr("reviewer"),
@@ -197,9 +196,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Meta: GitHubMeta{
 					AuthorID:    789,
 					AuthorLogin: "reviewer",
-					Owner:       "owner",
-					Repo:        "repo",
-					CommentID:   777,
+					NodeID:      "PRRC_node777",
 				},
 			},
 		},
@@ -297,16 +294,15 @@ func TestToGithubInputEvent(t *testing.T) {
 					Owner: &github.User{Login: github.Ptr("owner")},
 				},
 			},
-			// Review submissions have no reactable comment, so the comment
-			// coordinates stay zero; the review's GraphQL node ID is the
-			// reactable target instead.
+			// The reactable target is the review summary, addressed by its
+			// GraphQL node ID.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_review",
 				Description: "lead reviewed PR #4",
 				Data:        "xagent: please address comments",
 				URL:         "https://github.com/owner/repo/pull/4",
-				Meta:        GitHubMeta{AuthorID: 101, AuthorLogin: "lead", ReviewNodeID: "PRR_node123"},
+				Meta:        GitHubMeta{AuthorID: 101, AuthorLogin: "lead", NodeID: "PRR_node123"},
 			},
 		},
 		{
@@ -392,6 +388,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Action: github.Ptr("assigned"),
 				Issue: &github.Issue{
 					Number:  github.Ptr(7),
+					NodeID:  github.Ptr("I_node7"),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/7"),
 				},
 				Assignee: &github.User{
@@ -406,8 +403,8 @@ func TestToGithubInputEvent(t *testing.T) {
 					Owner: &github.User{Login: github.Ptr("owner")},
 				},
 			},
-			// Assignments have no reactable comment, so CommentID stays zero, but
-			// Owner/Repo/Number locate the issue for the Reactions API.
+			// The reactable target is the issue itself, addressed by its GraphQL
+			// node ID.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "issue_assigned",
@@ -417,9 +414,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Meta: GitHubMeta{
 					AuthorID:    999,
 					AuthorLogin: "octocat",
-					Owner:       "owner",
-					Repo:        "repo",
-					Number:      7,
+					NodeID:      "I_node7",
 				},
 			},
 		},
@@ -457,6 +452,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Action: github.Ptr("assigned"),
 				PullRequest: &github.PullRequest{
 					Number:  github.Ptr(12),
+					NodeID:  github.Ptr("PR_node12"),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
 				},
 				Assignee: &github.User{
@@ -471,8 +467,8 @@ func TestToGithubInputEvent(t *testing.T) {
 					Owner: &github.User{Login: github.Ptr("owner")},
 				},
 			},
-			// Assignments have no reactable comment, so CommentID stays zero, but
-			// Owner/Repo/Number locate the PR for the Reactions API.
+			// The reactable target is the PR itself, addressed by its GraphQL
+			// node ID.
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_assigned",
@@ -482,9 +478,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Meta: GitHubMeta{
 					AuthorID:    42,
 					AuthorLogin: "alice",
-					Owner:       "owner",
-					Repo:        "repo",
-					Number:      12,
+					NodeID:      "PR_node12",
 				},
 			},
 		},

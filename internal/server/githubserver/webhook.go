@@ -136,24 +136,14 @@ type GitHubMeta struct {
 	AuthorID    int64
 	AuthorLogin string
 
-	// Owner and Repo locate the repository for GitHub's REST Reactions API.
-	// CommentID identifies the comment reacted to for issue_comment and
-	// pull_request_review_comment events; Number identifies the issue/PR reacted
-	// to for issue_assigned and pull_request_assigned events. Comment events set
-	// Owner/Repo/CommentID and assignment events set Owner/Repo/Number.
-	//
-	// ReviewNodeID is the review's GraphQL node ID, set for pull_request_review
-	// events. The REST Reactions API has no endpoint for a review summary, so
-	// those reactions go through the GraphQL addReaction mutation keyed by this
-	// ID; Owner/Repo/CommentID/Number stay zero for reviews.
-	//
-	// Consumers key off InputEvent.Type, not these fields, to decide whether and
-	// how to react.
-	Owner        string
-	Repo         string
-	CommentID    int64
-	Number       int
-	ReviewNodeID string
+	// NodeID is the GraphQL global node ID of this event's reactable target: the
+	// comment for issue_comment and pull_request_review_comment events, the
+	// review summary for pull_request_review events, and the issue/PR for
+	// issue_assigned and pull_request_assigned events. All reactions go through
+	// the GraphQL addReaction mutation, which accepts any reactable node
+	// uniformly, so this single ID is all react needs regardless of event type.
+	// It is empty when the event has no reactable target.
+	NodeID string
 }
 
 // Event-type strings set on eventrouter.InputEvent.Type by toInputEvent. They
@@ -194,9 +184,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Meta: GitHubMeta{
 				AuthorID:    *event.Comment.User.ID,
 				AuthorLogin: login,
-				Owner:       event.GetRepo().GetOwner().GetLogin(),
-				Repo:        event.GetRepo().GetName(),
-				CommentID:   event.GetComment().GetID(),
+				NodeID:      event.GetComment().GetNodeID(),
 			},
 		}
 
@@ -221,9 +209,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Meta: GitHubMeta{
 				AuthorID:    *event.Comment.User.ID,
 				AuthorLogin: login,
-				Owner:       event.GetRepo().GetOwner().GetLogin(),
-				Repo:        event.GetRepo().GetName(),
-				CommentID:   event.GetComment().GetID(),
+				NodeID:      event.GetComment().GetNodeID(),
 			},
 		}
 
@@ -244,9 +230,9 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Data:        body,
 			URL:         *event.PullRequest.HTMLURL,
 			Meta: GitHubMeta{
-				AuthorID:     *event.Review.User.ID,
-				AuthorLogin:  login,
-				ReviewNodeID: event.GetReview().GetNodeID(),
+				AuthorID:    *event.Review.User.ID,
+				AuthorLogin: login,
+				NodeID:      event.GetReview().GetNodeID(),
 			},
 		}
 
@@ -269,9 +255,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Meta: GitHubMeta{
 				AuthorID:    *event.Sender.ID,
 				AuthorLogin: senderLogin,
-				Owner:       event.GetRepo().GetOwner().GetLogin(),
-				Repo:        event.GetRepo().GetName(),
-				Number:      number,
+				NodeID:      event.GetIssue().GetNodeID(),
 			},
 		}
 
@@ -294,9 +278,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Meta: GitHubMeta{
 				AuthorID:    *event.Sender.ID,
 				AuthorLogin: senderLogin,
-				Owner:       event.GetRepo().GetOwner().GetLogin(),
-				Repo:        event.GetRepo().GetName(),
-				Number:      number,
+				NodeID:      event.GetPullRequest().GetNodeID(),
 			},
 		}
 	}
