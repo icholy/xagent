@@ -79,9 +79,6 @@ const (
 	XAgentServiceCreateLinkProcedure = "/xagent.v1.XAgentService/CreateLink"
 	// XAgentServiceListLinksProcedure is the fully-qualified name of the XAgentService's ListLinks RPC.
 	XAgentServiceListLinksProcedure = "/xagent.v1.XAgentService/ListLinks"
-	// XAgentServiceFindLinksByURLProcedure is the fully-qualified name of the XAgentService's
-	// FindLinksByURL RPC.
-	XAgentServiceFindLinksByURLProcedure = "/xagent.v1.XAgentService/FindLinksByURL"
 	// XAgentServiceListEventsProcedure is the fully-qualified name of the XAgentService's ListEvents
 	// RPC.
 	XAgentServiceListEventsProcedure = "/xagent.v1.XAgentService/ListEvents"
@@ -183,7 +180,6 @@ type XAgentServiceClient interface {
 	ListLogs(context.Context, *v1.ListLogsRequest) (*v1.ListLogsResponse, error)
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
 	ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error)
-	FindLinksByURL(context.Context, *v1.FindLinksByURLRequest) (*v1.FindLinksByURLResponse, error)
 	ListEvents(context.Context, *v1.ListEventsRequest) (*v1.ListEventsResponse, error)
 	CreateEvent(context.Context, *v1.CreateEventRequest) (*v1.CreateEventResponse, error)
 	GetEvent(context.Context, *v1.GetEventRequest) (*v1.GetEventResponse, error)
@@ -326,12 +322,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceListLinksProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("ListLinks")),
-			connect.WithClientOptions(opts...),
-		),
-		findLinksByURL: connect.NewClient[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse](
-			httpClient,
-			baseURL+XAgentServiceFindLinksByURLProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("FindLinksByURL")),
 			connect.WithClientOptions(opts...),
 		),
 		listEvents: connect.NewClient[v1.ListEventsRequest, v1.ListEventsResponse](
@@ -530,7 +520,6 @@ type xAgentServiceClient struct {
 	listLogs                       *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
 	createLink                     *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
 	listLinks                      *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
-	findLinksByURL                 *connect.Client[v1.FindLinksByURLRequest, v1.FindLinksByURLResponse]
 	listEvents                     *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
 	createEvent                    *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
 	getEvent                       *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
@@ -709,15 +698,6 @@ func (c *xAgentServiceClient) CreateLink(ctx context.Context, req *v1.CreateLink
 // ListLinks calls xagent.v1.XAgentService.ListLinks.
 func (c *xAgentServiceClient) ListLinks(ctx context.Context, req *v1.ListLinksRequest) (*v1.ListLinksResponse, error) {
 	response, err := c.listLinks.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// FindLinksByURL calls xagent.v1.XAgentService.FindLinksByURL.
-func (c *xAgentServiceClient) FindLinksByURL(ctx context.Context, req *v1.FindLinksByURLRequest) (*v1.FindLinksByURLResponse, error) {
-	response, err := c.findLinksByURL.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -1004,7 +984,6 @@ type XAgentServiceHandler interface {
 	ListLogs(context.Context, *v1.ListLogsRequest) (*v1.ListLogsResponse, error)
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
 	ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error)
-	FindLinksByURL(context.Context, *v1.FindLinksByURLRequest) (*v1.FindLinksByURLResponse, error)
 	ListEvents(context.Context, *v1.ListEventsRequest) (*v1.ListEventsResponse, error)
 	CreateEvent(context.Context, *v1.CreateEventRequest) (*v1.CreateEventResponse, error)
 	GetEvent(context.Context, *v1.GetEventRequest) (*v1.GetEventResponse, error)
@@ -1143,12 +1122,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceListLinksProcedure,
 		svc.ListLinks,
 		connect.WithSchema(xAgentServiceMethods.ByName("ListLinks")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceFindLinksByURLHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceFindLinksByURLProcedure,
-		svc.FindLinksByURL,
-		connect.WithSchema(xAgentServiceMethods.ByName("FindLinksByURL")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceListEventsHandler := connect.NewUnaryHandlerSimple(
@@ -1361,8 +1334,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceCreateLinkHandler.ServeHTTP(w, r)
 		case XAgentServiceListLinksProcedure:
 			xAgentServiceListLinksHandler.ServeHTTP(w, r)
-		case XAgentServiceFindLinksByURLProcedure:
-			xAgentServiceFindLinksByURLHandler.ServeHTTP(w, r)
 		case XAgentServiceListEventsProcedure:
 			xAgentServiceListEventsHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateEventProcedure:
@@ -1496,10 +1467,6 @@ func (UnimplementedXAgentServiceHandler) CreateLink(context.Context, *v1.CreateL
 
 func (UnimplementedXAgentServiceHandler) ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListLinks is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) FindLinksByURL(context.Context, *v1.FindLinksByURLRequest) (*v1.FindLinksByURLResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.FindLinksByURL is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) ListEvents(context.Context, *v1.ListEventsRequest) (*v1.ListEventsResponse, error) {

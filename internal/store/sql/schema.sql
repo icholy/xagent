@@ -1,7 +1,7 @@
-\restrict 0s5gHfhZLxMwak4EkoiRiu2q63gHZViMSrvaLQT8PCdnzUCm6P8VaaLq4MWHqE2
+\restrict MwUVzQHKmd91lvf0e6J08jfpxknEhIWzKjdNFWjcWck6fGfSPuuxkNTWdEQTwbQ
 
 -- Dumped from database version 17.10
--- Dumped by pg_dump version 17.10 (Debian 17.10-1.pgdg12+1)
+-- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -188,7 +188,8 @@ CREATE TABLE public.task_links (
     url text NOT NULL,
     title text DEFAULT ''::text NOT NULL,
     subscribe boolean DEFAULT false NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    routing_url text DEFAULT ''::text NOT NULL
 );
 
 
@@ -456,13 +457,6 @@ CREATE INDEX idx_events_org_id ON public.events USING btree (org_id);
 
 
 --
--- Name: idx_events_url; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_events_url ON public.events USING btree (url);
-
-
---
 -- Name: idx_keys_org_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -505,6 +499,13 @@ CREATE INDEX idx_orgs_owner ON public.orgs USING btree (owner);
 
 
 --
+-- Name: idx_task_links_routing_url; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_task_links_routing_url ON public.task_links USING btree (routing_url);
+
+
+--
 -- Name: idx_task_links_task_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -512,10 +513,10 @@ CREATE INDEX idx_task_links_task_id ON public.task_links USING btree (task_id);
 
 
 --
--- Name: idx_task_links_url; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_tasks_archive_due; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_task_links_url ON public.task_links USING btree (url);
+CREATE INDEX idx_tasks_archive_due ON public.tasks USING btree (updated_at) WHERE ((archived = false) AND (archive_after <> 0));
 
 
 --
@@ -523,13 +524,6 @@ CREATE INDEX idx_task_links_url ON public.task_links USING btree (url);
 --
 
 CREATE INDEX idx_tasks_archived ON public.tasks USING btree (archived);
-
-
---
--- Name: idx_tasks_archive_due; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_tasks_archive_due ON public.tasks USING btree (updated_at) WHERE ((archived = false) AND (archive_after <> 0));
 
 
 --
@@ -695,7 +689,7 @@ ALTER TABLE ONLY public.task_links
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 0s5gHfhZLxMwak4EkoiRiu2q63gHZViMSrvaLQT8PCdnzUCm6P8VaaLq4MWHqE2
+\unrestrict MwUVzQHKmd91lvf0e6J08jfpxknEhIWzKjdNFWjcWck6fGfSPuuxkNTWdEQTwbQ
 
 
 --
@@ -706,4 +700,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20240101000001'),
     ('20260517000001'),
     ('20260517174647'),
-    ('20260523000001');
+    ('20260523000001'),
+    ('20260601000001');

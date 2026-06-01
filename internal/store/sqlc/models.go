@@ -89,13 +89,14 @@ type Task struct {
 }
 
 type TaskLink struct {
-	ID        int64     `json:"id"`
-	TaskID    int64     `json:"task_id"`
-	Relevance string    `json:"relevance"`
-	Url       string    `json:"url"`
-	Title     string    `json:"title"`
-	Subscribe bool      `json:"subscribe"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         int64     `json:"id"`
+	TaskID     int64     `json:"task_id"`
+	Relevance  string    `json:"relevance"`
+	Url        string    `json:"url"`
+	Title      string    `json:"title"`
+	Subscribe  bool      `json:"subscribe"`
+	CreatedAt  time.Time `json:"created_at"`
+	RoutingUrl string    `json:"routing_url"`
 }
 
 type User struct {

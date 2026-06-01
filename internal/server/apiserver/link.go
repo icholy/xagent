@@ -59,14 +59,3 @@ func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) 
 		Links: model.ProtoMap(links),
 	}, nil
 }
-
-func (s *Server) FindLinksByURL(ctx context.Context, req *xagentv1.FindLinksByURLRequest) (*xagentv1.FindLinksByURLResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	links, err := s.store.FindLinksByURL(ctx, nil, req.Url, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return &xagentv1.FindLinksByURLResponse{
-		Links: model.ProtoMap(links),
-	}, nil
-}
