@@ -49,12 +49,25 @@ export const EVENT_TYPES: EventTypeOption[] = [
     source: 'atlassian',
     type: 'comment_created',
   },
+  {
+    id: 'atlassian:label_added',
+    label: 'Jira: Label Added',
+    source: 'atlassian',
+    type: 'label_added',
+  },
 ]
 
 // Whether the selected event type is an assignment event — controls
 // visibility of the "Assigned to" form field.
 export function isAssignmentType(source: string, type: string): boolean {
   return source === 'github' && (type === 'issue_assigned' || type === 'pull_request_assigned')
+}
+
+// Whether the selected event type is a label event. Label events have no
+// message body to mention in, so the form hides the mention field and
+// repurposes the prefix field as the label filter.
+export function isLabelType(source: string, type: string): boolean {
+  return source === 'atlassian' && type === 'label_added'
 }
 
 export function findEventType(source: string, type: string): EventTypeOption | undefined {
@@ -100,6 +113,12 @@ export interface AssigneeCopy {
 }
 
 export interface URLPrefixCopy {
+  placeholder: string
+  help: string
+}
+
+export interface PrefixCopy {
+  label: string
   placeholder: string
   help: string
 }
@@ -157,16 +176,18 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
 // when the toggle is on — otherwise it's omitted so the rule reverts to the
 // wake-only behaviour. Assignment events have no message body, so when the
 // selected event type is an assignment one we drop prefix/mention; for
-// non-assignment types we drop assignee. This keeps the form's draft state
-// usable across event-type toggles without persisting fields the rule can't
-// actually match on.
+// non-assignment types we drop assignee. Label events have no body to mention
+// in, so we drop mention but keep prefix (the label filter). This keeps the
+// form's draft state usable across event-type toggles without persisting
+// fields the rule can't actually match on.
 export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
   const isAssignment = isAssignmentType(values.source, values.type)
+  const isLabel = isLabelType(values.source, values.type)
   return create(RoutingRuleSchema, {
     source: values.source,
     type: values.type,
     prefix: isAssignment ? '' : values.prefix,
-    mention: isAssignment ? '' : values.mention,
+    mention: isAssignment || isLabel ? '' : values.mention,
     assignee: isAssignment ? values.assignee : '',
     urlPrefix: values.urlPrefix,
     create: values.createTask
@@ -234,6 +255,24 @@ export function urlPrefixCopyForSource(source: string): URLPrefixCopy {
         placeholder: 'https://...',
         help: 'Optional. Only fire when the event URL starts with this prefix.',
       }
+  }
+}
+
+// Copy for the prefix field, which doubles as the label filter on label
+// events. For label events the prefix is matched against the added label's
+// value; for message events it's matched against the start of the event body.
+export function prefixCopyForEventType(source: string, type: string): PrefixCopy {
+  if (isLabelType(source, type)) {
+    return {
+      label: 'Label',
+      placeholder: 'Optional — e.g. xagent',
+      help: 'Leave blank to match any added label. Otherwise the rule only fires when the added label starts with this value.',
+    }
+  }
+  return {
+    label: 'Message starts with',
+    placeholder: 'Optional — e.g. /xagent',
+    help: 'Leave blank to match any message. Otherwise the rule only fires when the event body starts with this string.',
   }
 }
 
