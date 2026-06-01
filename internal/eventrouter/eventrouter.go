@@ -97,12 +97,16 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, nil
 	}
 
-	// Link lookup runs only for orgs that have a matching rule.
+	// Link lookup runs only for orgs that have a matching rule. Links are stored
+	// with routing_key = model.RoutingKey(url), so derive the key the same way:
+	// a non-canonical event URL (a comment URL, an API URL) resolves to the same
+	// key as the stored link.
 	orgIDs := make([]int64, 0, len(matched))
 	for orgID := range matched {
 		orgIDs = append(orgIDs, orgID)
 	}
-	linksByOrg, err := r.links(ctx, input.URL, orgIDs)
+	key := model.RoutingKey(input.URL)
+	linksByOrg, err := r.links(ctx, key, orgIDs)
 	if err != nil {
 		return 0, err
 	}
@@ -159,13 +163,13 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	return n, nil
 }
 
-// links queries subscribed links matching the URL, scoped to the given orgs,
-// grouped by org ID. Subscribe-filtering happens in SQL.
-func (r *Router) links(ctx context.Context, url string, orgIDs []int64) (map[int64][]*model.Link, error) {
-	if url == "" || len(orgIDs) == 0 {
+// links queries subscribed links matching the routing key, scoped to the given
+// orgs, grouped by org ID. Subscribe-filtering happens in SQL.
+func (r *Router) links(ctx context.Context, key string, orgIDs []int64) (map[int64][]*model.Link, error) {
+	if key == "" || len(orgIDs) == 0 {
 		return nil, nil
 	}
-	return r.Store.FindSubscribedLinksForOrgs(ctx, nil, url, orgIDs)
+	return r.Store.FindSubscribedLinksForOrgs(ctx, nil, key, orgIDs)
 }
 
 func (r *Router) publish(ctx context.Context, n model.Notification) {

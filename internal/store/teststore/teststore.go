@@ -75,7 +75,7 @@ func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *mode
 		link := &model.Link{
 			TaskID:     task.ID,
 			URL:        url,
-			RoutingKey: cmp.Or(lo.RoutingKey, url),
+			RoutingKey: cmp.Or(lo.RoutingKey, model.RoutingKey(url)),
 			Title:      cmp.Or(lo.Title, "test link"),
 			Subscribe:  lo.Subscribe,
 			CreatedAt:  time.Now(),
