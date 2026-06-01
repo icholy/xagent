@@ -21,9 +21,11 @@ import {
   findEventType,
   findEventTypeById,
   isAssignmentType,
+  isLabelType,
   isRoutingRuleFormValid,
   legacyEventTypeOption,
   mentionCopyForSource,
+  prefixCopyForEventType,
   urlPrefixCopyForSource,
   type RoutingRuleFormValues,
 } from '@/lib/routing-rules'
@@ -79,9 +81,13 @@ export function RoutingRuleForm({
   const mentionCopy = mentionCopyForSource(values.source)
   const assigneeCopy = assigneeCopyForSource(values.source)
   const urlPrefixCopy = urlPrefixCopyForSource(values.source)
+  const prefixCopy = prefixCopyForEventType(values.source, values.type)
   // Assignment events have no message body, so prefix/mention can't match —
   // hide those fields and show the assignee field instead.
   const isAssignment = isAssignmentType(values.source, values.type)
+  // Label events have no body to mention in — the prefix field is repurposed
+  // as the label filter, so show prefix but hide the mention field.
+  const isLabel = isLabelType(values.source, values.type)
   const canSubmit = isRoutingRuleFormValid(values, selectedId !== '')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {}, { enabled: values.createTask })
@@ -151,32 +157,29 @@ export function RoutingRuleForm({
       </div>
 
       {!isAssignment && (
-        <>
-          <div className="space-y-2">
-            <Label htmlFor="prefix">Message starts with</Label>
-            <Input
-              id="prefix"
-              placeholder="Optional — e.g. /xagent"
-              value={values.prefix}
-              onChange={(e) => setValues({ ...values, prefix: e.target.value })}
-            />
-            <p className="text-muted-foreground text-xs">
-              Leave blank to match any message. Otherwise the rule only fires when the event body
-              starts with this string.
-            </p>
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="prefix">{prefixCopy.label}</Label>
+          <Input
+            id="prefix"
+            placeholder={prefixCopy.placeholder}
+            value={values.prefix}
+            onChange={(e) => setValues({ ...values, prefix: e.target.value })}
+          />
+          <p className="text-muted-foreground text-xs">{prefixCopy.help}</p>
+        </div>
+      )}
 
-          <div className="space-y-2">
-            <Label htmlFor="mention">{mentionCopy.label}</Label>
-            <Input
-              id="mention"
-              placeholder={mentionCopy.placeholder}
-              value={values.mention}
-              onChange={(e) => setValues({ ...values, mention: e.target.value })}
-            />
-            <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
-          </div>
-        </>
+      {!isAssignment && !isLabel && (
+        <div className="space-y-2">
+          <Label htmlFor="mention">{mentionCopy.label}</Label>
+          <Input
+            id="mention"
+            placeholder={mentionCopy.placeholder}
+            value={values.mention}
+            onChange={(e) => setValues({ ...values, mention: e.target.value })}
+          />
+          <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
+        </div>
       )}
 
       {isAssignment && (
