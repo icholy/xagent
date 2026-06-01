@@ -2105,12 +2105,15 @@ func (x *TaskLink) GetRoutingUrl() string {
 }
 
 type CreateLinkRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        int64                  `protobuf:"varint,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	Relevance     string                 `protobuf:"bytes,2,opt,name=relevance,proto3" json:"relevance,omitempty"`
-	Url           string                 `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
-	Title         string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
-	Subscribe     bool                   `protobuf:"varint,5,opt,name=subscribe,proto3" json:"subscribe,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	TaskId    int64                  `protobuf:"varint,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Relevance string                 `protobuf:"bytes,2,opt,name=relevance,proto3" json:"relevance,omitempty"`
+	Url       string                 `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
+	Title     string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	Subscribe bool                   `protobuf:"varint,5,opt,name=subscribe,proto3" json:"subscribe,omitempty"`
+	// routing_url overrides the server-derived routing key. When empty, the
+	// server derives it from url via model.RoutingURL.
+	RoutingUrl    string `protobuf:"bytes,6,opt,name=routing_url,json=routingUrl,proto3" json:"routing_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2178,6 +2181,13 @@ func (x *CreateLinkRequest) GetSubscribe() bool {
 		return x.Subscribe
 	}
 	return false
+}
+
+func (x *CreateLinkRequest) GetRoutingUrl() string {
+	if x != nil {
+		return x.RoutingUrl
+	}
+	return ""
 }
 
 type CreateLinkResponse struct {
@@ -5662,13 +5672,15 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1f\n" +
 	"\vrouting_url\x18\b \x01(\tR\n" +
-	"routingUrl\"\x90\x01\n" +
+	"routingUrl\"\xb1\x01\n" +
 	"\x11CreateLinkRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x1c\n" +
 	"\trelevance\x18\x02 \x01(\tR\trelevance\x12\x10\n" +
 	"\x03url\x18\x03 \x01(\tR\x03url\x12\x14\n" +
 	"\x05title\x18\x04 \x01(\tR\x05title\x12\x1c\n" +
-	"\tsubscribe\x18\x05 \x01(\bR\tsubscribe\"=\n" +
+	"\tsubscribe\x18\x05 \x01(\bR\tsubscribe\x12\x1f\n" +
+	"\vrouting_url\x18\x06 \x01(\tR\n" +
+	"routingUrl\"=\n" +
 	"\x12CreateLinkResponse\x12'\n" +
 	"\x04link\x18\x01 \x01(\v2\x13.xagent.v1.TaskLinkR\x04link\"+\n" +
 	"\x10ListLinksRequest\x12\x17\n" +

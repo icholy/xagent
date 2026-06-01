@@ -1,18 +1,6 @@
 -- name: CreateLink :one
--- routing_url defaults to url when the caller doesn't supply one, mirroring the
--- migration's `routing_url = url` backfill. Until callers derive it (see
--- proposals/draft/link-routing-url.md §2) this keeps FindSubscribedLinksForOrgs
--- matching exactly as it did before the column existed.
 INSERT INTO task_links (task_id, relevance, url, routing_url, title, subscribe, created_at)
-VALUES (
-    sqlc.arg(task_id),
-    sqlc.arg(relevance),
-    sqlc.arg(url),
-    COALESCE(NULLIF(sqlc.arg(routing_url)::text, ''), sqlc.arg(url)),
-    sqlc.arg(title),
-    sqlc.arg(subscribe),
-    sqlc.arg(created_at)
-)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id;
 
 -- name: ListLinksByTask :many

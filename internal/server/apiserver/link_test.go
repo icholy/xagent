@@ -37,6 +37,56 @@ func TestCreateLink(t *testing.T) {
 	assert.Equal(t, resp.Link.Subscribe, true)
 }
 
+func TestCreateLink_DerivesRoutingURL(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task with Link",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	// Act - no routing_url supplied, so the server derives it from url
+	resp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId: taskResp.Task.Id,
+		Url:    "https://github.com/example/repo/pull/123#issuecomment-9",
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, resp.Link.Url, "https://github.com/example/repo/pull/123#issuecomment-9")
+	assert.Equal(t, resp.Link.RoutingUrl, "https://github.com/example/repo/pull/123")
+}
+
+func TestCreateLink_RoutingURLOverride(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task with Link",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+
+	// Act - explicit routing_url is used verbatim, not derived from url
+	resp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId:     taskResp.Task.Id,
+		Url:        "https://github.com/example/repo/pull/123#issuecomment-9",
+		RoutingUrl: "https://example.com/custom",
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, resp.Link.RoutingUrl, "https://example.com/custom")
+}
+
 func TestCreateLink_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange

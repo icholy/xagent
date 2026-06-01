@@ -14,15 +14,7 @@ import (
 
 const createLink = `-- name: CreateLink :one
 INSERT INTO task_links (task_id, relevance, url, routing_url, title, subscribe, created_at)
-VALUES (
-    $1,
-    $2,
-    $3,
-    COALESCE(NULLIF($4::text, ''), $3),
-    $5,
-    $6,
-    $7
-)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id
 `
 
@@ -36,10 +28,6 @@ type CreateLinkParams struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// routing_url defaults to url when the caller doesn't supply one, mirroring the
-// migration's `routing_url = url` backfill. Until callers derive it (see
-// proposals/draft/link-routing-url.md §2) this keeps FindSubscribedLinksForOrgs
-// matching exactly as it did before the column existed.
 func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, createLink,
 		arg.TaskID,
