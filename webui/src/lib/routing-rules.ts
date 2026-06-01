@@ -44,6 +44,12 @@ export const EVENT_TYPES: EventTypeOption[] = [
     type: 'pull_request_assigned',
   },
   {
+    id: 'github:label_added',
+    label: 'GitHub: Label Added',
+    source: 'github',
+    type: 'label_added',
+  },
+  {
     id: 'atlassian:comment_created',
     label: 'Jira: Issue Comment',
     source: 'atlassian',
@@ -65,9 +71,10 @@ export function isAssignmentType(source: string, type: string): boolean {
 
 // Whether the selected event type is a label event. Label events have no
 // message body to mention in, so the form hides the prefix and mention fields
-// and exposes the Value field as the label-to-match.
-export function isLabelType(source: string, type: string): boolean {
-  return source === 'atlassian' && type === 'label_added'
+// and exposes the Value field as the label-to-match. Both GitHub and Jira emit
+// the same source-scoped `label_added` type, so this is keyed on type alone.
+export function isLabelType(_source: string, type: string): boolean {
+  return type === 'label_added'
 }
 
 export function findEventType(source: string, type: string): EventTypeOption | undefined {
