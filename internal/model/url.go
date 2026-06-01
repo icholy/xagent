@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -33,93 +34,52 @@ func RoutingURL(raw string) string {
 	if err != nil {
 		return raw
 	}
+	// url.Parse strips the fragment (#issuecomment-…) and query
+	// (?focusedCommentId=…), so the matching only has to reason about u.Path.
 	switch {
 	case u.Host == "github.com":
-		if key, ok := githubWebRoutingURL(u); ok {
-			return key
+		// /{owner}/{repo}/{issues|pull}/{n}[/...] — trailing segments
+		// (/files, /commits/…) and fragments are already dropped.
+		if m := githubWebRe.FindStringSubmatch(u.Path); m != nil {
+			return fmt.Sprintf("https://github.com/%s/%s/%s/%s", m[1], m[2], m[3], m[4])
 		}
 	case u.Host == "api.github.com":
-		if key, ok := githubAPIRoutingURL(u); ok {
-			return key
+		// /repos/{owner}/{repo}/{issues|pulls}/{n} maps to the web key.
+		// Comment URLs (/issues/comments/{id}) lack the parent number, so
+		// \d+ won't match and they fall through unchanged.
+		if m := githubAPIRe.FindStringSubmatch(u.Path); m != nil {
+			kind := m[3]
+			if kind == "pulls" {
+				kind = "pull"
+			}
+			return fmt.Sprintf("https://github.com/%s/%s/%s/%s", m[1], m[2], kind, m[4])
 		}
 	case strings.HasSuffix(u.Host, ".atlassian.net"):
-		if key, ok := jiraRoutingURL(u); ok {
-			return key
+		if key, ok := jiraKey(u.Path); ok {
+			return fmt.Sprintf("https://%s/browse/%s", u.Host, key)
 		}
 	}
 	return raw
 }
 
-// githubWebRoutingURL reduces a github.com web URL of the form
-// /{owner}/{repo}/{issues|pull}/{n}[/...] to its canonical resource URL,
-// dropping fragments and trailing path segments (/files, /commits/…).
-func githubWebRoutingURL(u *url.URL) (string, bool) {
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) < 4 {
-		return "", false
-	}
-	owner, repo, kind, number := parts[0], parts[1], parts[2], parts[3]
-	if kind != "issues" && kind != "pull" {
-		return "", false
-	}
-	if !isAllDigits(number) {
-		return "", false
-	}
-	return fmt.Sprintf("https://github.com/%s/%s/%s/%s", owner, repo, kind, number), true
-}
+var (
+	githubWebRe = regexp.MustCompile(`^/([^/]+)/([^/]+)/(issues|pull)/(\d+)`)
+	githubAPIRe = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/(issues|pulls)/(\d+)`)
+	jiraAPIRe   = regexp.MustCompile(`^/rest/api/\d+/issue/([^/]+)`)
+	digitsRe    = regexp.MustCompile(`^\d+$`)
+)
 
-// githubAPIRoutingURL reduces an api.github.com URL of the form
-// /repos/{owner}/{repo}/{issues|pulls}/{n} to the matching web resource URL.
-// API comment URLs that don't embed the parent number can't be reduced.
-func githubAPIRoutingURL(u *url.URL) (string, bool) {
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) < 5 || parts[0] != "repos" {
-		return "", false
-	}
-	owner, repo, kind, number := parts[1], parts[2], parts[3], parts[4]
-	var webKind string
-	switch kind {
-	case "issues":
-		webKind = "issues"
-	case "pulls":
-		webKind = "pull"
-	default:
-		return "", false
-	}
-	if !isAllDigits(number) {
-		return "", false
-	}
-	return fmt.Sprintf("https://github.com/%s/%s/%s/%s", owner, repo, webKind, number), true
-}
-
-// jiraRoutingURL reduces a *.atlassian.net browse URL (dropping query params
-// like focusedCommentId) or a REST API issue URL to the canonical browse URL.
-// API URLs that use a numeric issue id can't be mapped to a key without a
-// lookup, so they're left unchanged.
-func jiraRoutingURL(u *url.URL) (string, bool) {
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) >= 2 && parts[0] == "browse" {
-		return fmt.Sprintf("https://%s/browse/%s", u.Host, parts[1]), true
-	}
-	if len(parts) >= 5 && parts[0] == "rest" && parts[1] == "api" && parts[3] == "issue" {
-		key := parts[4]
-		if isAllDigits(key) {
-			return "", false
+// jiraKey extracts the issue key from a Jira browse path (/browse/{KEY}) or a
+// REST API issue path (/rest/api/{v}/issue/{KEY}). API URLs that use a numeric
+// issue id can't be mapped to a key without a lookup, so they're rejected.
+func jiraKey(path string) (string, bool) {
+	if rest := strings.TrimPrefix(path, "/browse/"); rest != path {
+		if key, _, _ := strings.Cut(rest, "/"); key != "" {
+			return key, true
 		}
-		return fmt.Sprintf("https://%s/browse/%s", u.Host, key), true
+	}
+	if m := jiraAPIRe.FindStringSubmatch(path); m != nil && !digitsRe.MatchString(m[1]) {
+		return m[1], true
 	}
 	return "", false
-}
-
-// isAllDigits reports whether s is non-empty and consists solely of ASCII digits.
-func isAllDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
 }
