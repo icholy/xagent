@@ -27,6 +27,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RelativeTime } from '@/components/relative-time'
 import { GithubIcon } from '@/components/github-icon'
+import { AtlassianIcon } from '@/components/atlassian-icon'
 import {
   Cable,
   Check,
@@ -470,7 +471,7 @@ function AtlassianAccountCard() {
         ) : account ? (
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5" />
+              <AtlassianIcon className="h-5 w-5" />
               <span className="font-medium">
                 {account.atlassianUsername || account.atlassianAccountId}
               </span>
@@ -492,7 +493,7 @@ function AtlassianAccountCard() {
         ) : (
           <a href="/atlassian/login">
             <Button>
-              <ExternalLink className="h-4 w-4" />
+              <AtlassianIcon className="h-4 w-4" />
               Link Atlassian Account
             </Button>
           </a>
