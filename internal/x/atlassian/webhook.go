@@ -68,6 +68,7 @@ func (p *WebhookPayload) AddedLabels() []string {
 
 // Comment represents a Jira issue comment from a webhook payload.
 type Comment struct {
+	ID     string `json:"id"`
 	Body   string `json:"body"`
 	Author User   `json:"author"`
 }
