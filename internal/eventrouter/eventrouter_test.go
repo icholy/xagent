@@ -47,6 +47,40 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 	assert.Equal(t, updated.Status, model.TaskStatusPending)
 }
 
+func TestRouteNonCanonicalURLMatchesByRoutingKey(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a subscribed link stored under the canonical issue key. The
+	// incoming event carries a non-canonical comment URL — the router must
+	// derive the same routing key from it to match. A raw-URL lookup would miss.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	canonical := "https://github.com/o/r/issues/5"
+	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: canonical, Subscribe: true}},
+	})
+	r := &Router{
+		Log:   slog.Default(),
+		Store: s,
+	}
+
+	// Act: event URL is the comment permalink, not the canonical issue URL.
+	n, err := r.Route(t.Context(), InputEvent{
+		Source: "github",
+		Data:   "xagent: fix tests",
+		URL:    "https://github.com/o/r/issues/5#issuecomment-9",
+		UserID: org.UserID,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusPending)
+}
+
 func TestRouteMultipleOrgs(t *testing.T) {
 	t.Parallel()
 
