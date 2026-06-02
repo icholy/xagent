@@ -5,7 +5,7 @@ Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside remote sa
 ## Features
 
 - **Self-hosted runners** - Run agents on your own infrastructure inside Docker containers
-- **Third-party integrations** - Interact with agents via GitHub and Jira comments
+- **Third-party integrations** - Drive agents from GitHub and Jira activity (comments, reviews, assignments, labels)
 - **MCP server** - Create and manage tasks from Claude Code, Cursor, or any MCP client
 
 ## Web UI
@@ -124,7 +124,21 @@ go build            # Build main binary only
 
 ## Events
 
-Agents can attach **links** to their tasks for external resources they create (PRs, Jira issues, etc.). Links created with `subscribe=true` act as subscriptions. When someone comments on the resource, the agent is automatically restarted to respond.
+External activity on GitHub and Jira is delivered to xagent as **events**. Webhook
+handlers emit events for GitHub issue/PR comments, PR reviews, PR review comments,
+issue/PR assignments, and label additions, plus Jira comments and label additions.
+
+**Subscriptions.** Agents attach **links** to their tasks for external resources
+they create (PRs, Jira issues, etc.). A link created with `subscribe=true` acts as a
+subscription: when a new event matches the link's resource, the subscribed task is
+woken and restarted to respond.
+
+**Routing rules.** Each org has routing rules that decide what happens to an
+incoming event. A rule matches on the event's source and type, a prefix or @mention
+in the body, the assignee, a URL prefix, and label/value membership — empty fields
+are wildcards. When a rule matches, xagent either **wakes** the subscribed task(s)
+for that resource, or — if the rule has a *create* action — spins up a **brand-new
+task** in a configured workspace. Rules are managed in the Web UI.
 
 ![Events](images/events.svg)
 
