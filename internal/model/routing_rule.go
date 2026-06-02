@@ -18,12 +18,7 @@ type RoutingRule struct {
 	URLPrefix string            `json:"url_prefix,omitempty"`
 	Value     string            `json:"value,omitempty"`
 	Create    *CreateTaskAction `json:"create,omitempty"`
-	// Wakeup controls whether a matched rule restarts (wakes) the linked
-	// task(s). When false, the rule attaches the event and emits a channel
-	// notification but does NOT restart the task(s). UI-created rules default to
-	// true; the zero value (false) means a rule loaded without this field set
-	// stops waking until it is re-saved.
-	Wakeup bool `json:"wakeup,omitempty"`
+	Wakeup    bool              `json:"wakeup,omitempty"`
 }
 
 // CreateTaskAction configures a routing rule to create a new task on

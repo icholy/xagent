@@ -187,9 +187,9 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 // agent channel silent (PR #725's gate) for already-running / already-queued
 // tasks while the FE still receives the same notification.
 //
-// When wake is false (a rule that opted out via Wakeup{Enable: false}), it
-// leaves the task untouched — no task.Start(), no audit log — but still emits
-// a channel notification unconditionally so the event isn't silently swallowed.
+// When wake is false (a rule with Wakeup: false), it leaves the task untouched
+// — no task.Start(), no audit log — but still emits a channel notification
+// unconditionally so the event isn't silently swallowed.
 func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event, wake bool) error {
 	notification := model.Notification{
 		Type:  "change",
@@ -200,14 +200,14 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event, w
 		if err := r.Store.AddEventTask(ctx, tx, event.ID, taskID); err != nil {
 			return err
 		}
-		notification.Resources = []model.NotificationResource{
-			{Action: "updated", Type: "task", ID: taskID},
-			{Action: "updated", Type: "event", ID: event.ID},
-		}
 		if !wake {
 			// No-wake path: the event is attached and the FE is notified, but the
 			// task is not restarted. Emit a channel message unconditionally —
 			// otherwise the event would reach the task with no signal at all.
+			notification.Resources = []model.NotificationResource{
+				{Action: "updated", Type: "task", ID: taskID},
+				{Action: "updated", Type: "event", ID: event.ID},
+			}
 			notification.ChannelMessage = fmt.Sprintf("Task %d: %s (%s)", taskID, event.Description, event.URL)
 			return tx.Commit()
 		}
@@ -227,8 +227,11 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event, w
 		}); err != nil {
 			return err
 		}
-		notification.Resources = append(notification.Resources,
-			model.NotificationResource{Action: "appended", Type: "task_logs", ID: task.ID})
+		notification.Resources = []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: task.ID},
+			{Action: "updated", Type: "event", ID: event.ID},
+			{Action: "appended", Type: "task_logs", ID: task.ID},
+		}
 		notification.Runner = task.PendingRunner()
 		if wasDone {
 			notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s (%s)", task.ID, event.ID, event.Description, event.URL)
