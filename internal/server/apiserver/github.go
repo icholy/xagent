@@ -11,7 +11,6 @@ import (
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
@@ -68,27 +67,10 @@ func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkG
 	return &xagentv1.LinkGitHubInstallationResponse{}, nil
 }
 
+// CreateGitHubToken is intentionally not implemented on the server. Minting
+// installation tokens from the xagent GitHub App granted runners too much
+// access to someone else's app, so the real implementation now lives in the
+// runner proxy using user-owned credentials. See issue #806.
 func (s *Server) CreateGitHubToken(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
-	caller := apiauth.Caller(ctx)
-	if caller == nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
-	}
-	if s.github == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("GitHub integration is not configured on this server"))
-	}
-	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if org.GitHubInstallationID == 0 {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no GitHub App installation linked to this organization"))
-	}
-	tok, err := s.github.CreateInstallationToken(ctx, org.GitHubInstallationID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return &xagentv1.CreateGitHubTokenResponse{
-		Token:     tok.Token,
-		ExpiresAt: timestamppb.New(tok.ExpiresAt),
-	}, nil
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("CreateGitHubToken is not implemented on the server; use the runner proxy"))
 }
