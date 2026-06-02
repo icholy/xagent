@@ -61,9 +61,10 @@ type Router struct {
 	OnRouteOutcome func(ctx context.Context, outcome RouteOutcome)
 }
 
-// defaultRules is the fallback when an org has no custom routing rules configured.
+// defaultRules is the fallback when an org has no custom routing rules
+// configured. Wakeup is explicit since the bool zero value does not wake.
 var defaultRules = []model.RoutingRule{
-	{Prefix: "xagent:"},
+	{Prefix: "xagent:", Wakeup: true},
 }
 
 // Route evaluates routing rules for every org the user belongs to. For each
@@ -130,7 +131,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 				r.Log.Error("failed to create event", "org_id", orgID, "error", err)
 				continue
 			}
-			wake := rule.ShouldWake()
+			wake := rule.Wakeup
 			seen := map[int64]bool{}
 			for _, link := range links {
 				if seen[link.TaskID] {
