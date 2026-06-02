@@ -68,6 +68,7 @@ func (p *WebhookPayload) AddedLabels() []string {
 
 // Comment represents a Jira issue comment from a webhook payload.
 type Comment struct {
+	ID     string `json:"id"`
 	Body   string `json:"body"`
 	Author User   `json:"author"`
 }
@@ -107,6 +108,18 @@ func (i *Issue) BrowseURL() string {
 		return ""
 	}
 	return i.Self[:idx] + "/browse/" + i.Key
+}
+
+// CommentBrowseURL returns the browse URL focused on a specific comment, e.g.
+// https://site.atlassian.net/browse/X-1?focusedCommentId=10001. Returns the
+// plain browse URL when commentID is empty, and "" when the browse URL can't
+// be derived.
+func (i *Issue) CommentBrowseURL(commentID string) string {
+	base := i.BrowseURL()
+	if base == "" || commentID == "" {
+		return base
+	}
+	return base + "?focusedCommentId=" + commentID
 }
 
 // SignWebhook computes the HMAC-SHA256 signature for a webhook payload.

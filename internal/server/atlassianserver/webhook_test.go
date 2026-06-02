@@ -27,6 +27,7 @@ func TestToAtlassianInputEvents(t *testing.T) {
 			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_created",
 				Comment: &atlassian.Comment{
+					ID:     "10001",
 					Body:   "xagent: do something",
 					Author: atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
 				},
@@ -40,7 +41,7 @@ func TestToAtlassianInputEvents(t *testing.T) {
 				Type:        "comment_created",
 				Description: "Test User commented on PROJ-123",
 				Data:        "xagent: do something",
-				URL:         "https://mycompany.atlassian.net/browse/PROJ-123",
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-123?focusedCommentId=10001",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			},
 		},
@@ -117,6 +118,7 @@ func TestToAtlassianInputEvents(t *testing.T) {
 			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_created",
 				Comment: &atlassian.Comment{
+					ID:     "20002",
 					Body:   "  xagent: trimmed",
 					Author: atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
 				},
@@ -130,7 +132,7 @@ func TestToAtlassianInputEvents(t *testing.T) {
 				Type:        "comment_created",
 				Description: "Test User commented on PROJ-1",
 				Data:        "xagent: trimmed",
-				URL:         "https://mycompany.atlassian.net/browse/PROJ-1",
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-1?focusedCommentId=20002",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			},
 		},
@@ -281,6 +283,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 	payload := atlassian.WebhookPayload{
 		WebhookEvent: "comment_created",
 		Comment: &atlassian.Comment{
+			ID:     "30003",
 			Body:   "xagent: please fix the tests",
 			Author: atlassian.User{AccountID: accountID, DisplayName: "Test User"},
 		},
@@ -304,7 +307,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 		Type:        "comment_created",
 		Description: "Test User commented on PROJ-10",
 		Data:        "xagent: please fix the tests",
-		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
+		URL:         "https://mycompany.atlassian.net/browse/PROJ-10?focusedCommentId=30003",
 		UserID:      "user-1",
 		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
 	})

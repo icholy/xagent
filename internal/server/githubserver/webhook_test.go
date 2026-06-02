@@ -26,9 +26,10 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
-					ID:     github.Ptr[int64](555),
-					NodeID: github.Ptr("IC_node555"),
-					Body:   github.Ptr("xagent: do something"),
+					ID:      github.Ptr[int64](555),
+					NodeID:  github.Ptr("IC_node555"),
+					Body:    github.Ptr("xagent: do something"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1#issuecomment-555"),
 					User: &github.User{
 						ID:    github.Ptr[int64](123),
 						Login: github.Ptr("testuser"),
@@ -48,7 +49,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "issue_comment",
 				Description: "testuser commented on issue #1",
 				Data:        "xagent: do something",
-				URL:         "https://github.com/owner/repo/issues/1",
+				URL:         "https://github.com/owner/repo/issues/1#issuecomment-555",
 				Meta: GitHubMeta{
 					AuthorID:    123,
 					AuthorLogin: "testuser",
@@ -61,9 +62,10 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
-					ID:     github.Ptr[int64](556),
-					NodeID: github.Ptr("IC_node556"),
-					Body:   github.Ptr("xagent: review this"),
+					ID:      github.Ptr[int64](556),
+					NodeID:  github.Ptr("IC_node556"),
+					Body:    github.Ptr("xagent: review this"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/2#issuecomment-556"),
 					User: &github.User{
 						ID:    github.Ptr[int64](456),
 						Login: github.Ptr("pruser"),
@@ -84,7 +86,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "issue_comment",
 				Description: "pruser commented on PR #2",
 				Data:        "xagent: review this",
-				URL:         "https://github.com/owner/repo/pull/2",
+				URL:         "https://github.com/owner/repo/pull/2#issuecomment-556",
 				Meta: GitHubMeta{
 					AuthorID:    456,
 					AuthorLogin: "pruser",
@@ -97,7 +99,8 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
-					Body: github.Ptr("just a regular comment"),
+					Body:    github.Ptr("just a regular comment"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1#issuecomment-600"),
 					User: &github.User{
 						ID:    github.Ptr[int64](123),
 						Login: github.Ptr("testuser"),
@@ -113,7 +116,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "issue_comment",
 				Description: "testuser commented on issue #1",
 				Data:        "just a regular comment",
-				URL:         "https://github.com/owner/repo/issues/1",
+				URL:         "https://github.com/owner/repo/issues/1#issuecomment-600",
 				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
 			},
 		},
@@ -127,7 +130,8 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("edited"),
 				Comment: &github.IssueComment{
-					Body: github.Ptr("xagent: do something"),
+					Body:    github.Ptr("xagent: do something"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1#issuecomment-601"),
 					User: &github.User{
 						ID:    github.Ptr[int64](123),
 						Login: github.Ptr("testuser"),
@@ -143,7 +147,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "issue_comment",
 				Description: "testuser commented on issue #1",
 				Data:        "xagent: do something",
-				URL:         "https://github.com/owner/repo/issues/1",
+				URL:         "https://github.com/owner/repo/issues/1#issuecomment-601",
 				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
 			},
 		},
@@ -170,9 +174,10 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.PullRequestReviewCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.PullRequestComment{
-					ID:     github.Ptr[int64](777),
-					NodeID: github.Ptr("PRRC_node777"),
-					Body:   github.Ptr("xagent: fix this"),
+					ID:      github.Ptr[int64](777),
+					NodeID:  github.Ptr("PRRC_node777"),
+					Body:    github.Ptr("xagent: fix this"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3#discussion_r777"),
 					User: &github.User{
 						ID:    github.Ptr[int64](789),
 						Login: github.Ptr("reviewer"),
@@ -192,7 +197,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_review_comment",
 				Description: "reviewer reviewed PR #3",
 				Data:        "xagent: fix this",
-				URL:         "https://github.com/owner/repo/pull/3",
+				URL:         "https://github.com/owner/repo/pull/3#discussion_r777",
 				Meta: GitHubMeta{
 					AuthorID:    789,
 					AuthorLogin: "reviewer",
@@ -205,7 +210,8 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.PullRequestReviewCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.PullRequestComment{
-					Body: github.Ptr("looks good"),
+					Body:    github.Ptr("looks good"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3#discussion_r800"),
 					User: &github.User{
 						ID:    github.Ptr[int64](789),
 						Login: github.Ptr("reviewer"),
@@ -221,7 +227,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_review_comment",
 				Description: "reviewer reviewed PR #3",
 				Data:        "looks good",
-				URL:         "https://github.com/owner/repo/pull/3",
+				URL:         "https://github.com/owner/repo/pull/3#discussion_r800",
 				Meta:        GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
 			},
 		},
@@ -235,7 +241,8 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.PullRequestReviewCommentEvent{
 				Action: github.Ptr("edited"),
 				Comment: &github.PullRequestComment{
-					Body: github.Ptr("xagent: fix this"),
+					Body:    github.Ptr("xagent: fix this"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3#discussion_r801"),
 					User: &github.User{
 						ID:    github.Ptr[int64](789),
 						Login: github.Ptr("reviewer"),
@@ -251,7 +258,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_review_comment",
 				Description: "reviewer reviewed PR #3",
 				Data:        "xagent: fix this",
-				URL:         "https://github.com/owner/repo/pull/3",
+				URL:         "https://github.com/owner/repo/pull/3#discussion_r801",
 				Meta:        GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
 			},
 		},
@@ -278,8 +285,9 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.PullRequestReviewEvent{
 				Action: github.Ptr("submitted"),
 				Review: &github.PullRequestReview{
-					NodeID: github.Ptr("PRR_node123"),
-					Body:   github.Ptr("xagent: please address comments"),
+					NodeID:  github.Ptr("PRR_node123"),
+					Body:    github.Ptr("xagent: please address comments"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4#pullrequestreview-123"),
 					User: &github.User{
 						ID:    github.Ptr[int64](101),
 						Login: github.Ptr("lead"),
@@ -301,7 +309,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_review",
 				Description: "lead reviewed PR #4",
 				Data:        "xagent: please address comments",
-				URL:         "https://github.com/owner/repo/pull/4",
+				URL:         "https://github.com/owner/repo/pull/4#pullrequestreview-123",
 				Meta:        GitHubMeta{AuthorID: 101, AuthorLogin: "lead", NodeID: "PRR_node123"},
 			},
 		},
@@ -327,7 +335,8 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.PullRequestReviewEvent{
 				Action: github.Ptr("submitted"),
 				Review: &github.PullRequestReview{
-					Body: github.Ptr("approved"),
+					Body:    github.Ptr("approved"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/4#pullrequestreview-200"),
 					User: &github.User{
 						ID:    github.Ptr[int64](101),
 						Login: github.Ptr("lead"),
@@ -343,7 +352,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_review",
 				Description: "lead reviewed PR #4",
 				Data:        "approved",
-				URL:         "https://github.com/owner/repo/pull/4",
+				URL:         "https://github.com/owner/repo/pull/4#pullrequestreview-200",
 				Meta:        GitHubMeta{AuthorID: 101, AuthorLogin: "lead"},
 			},
 		},
@@ -362,7 +371,8 @@ func TestToGithubInputEvent(t *testing.T) {
 			event: &github.IssueCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.IssueComment{
-					Body: github.Ptr("  xagent: trimmed"),
+					Body:    github.Ptr("  xagent: trimmed"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1#issuecomment-602"),
 					User: &github.User{
 						ID:    github.Ptr[int64](123),
 						Login: github.Ptr("testuser"),
@@ -378,7 +388,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "issue_comment",
 				Description: "testuser commented on issue #1",
 				Data:        "xagent: trimmed",
-				URL:         "https://github.com/owner/repo/issues/1",
+				URL:         "https://github.com/owner/repo/issues/1#issuecomment-602",
 				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
 			},
 		},
@@ -648,7 +658,8 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	payload := github.IssueCommentEvent{
 		Action: github.Ptr("created"),
 		Comment: &github.IssueComment{
-			Body: github.Ptr("xagent: please fix the tests"),
+			Body:    github.Ptr("xagent: please fix the tests"),
+			HTMLURL: github.Ptr("https://github.com/owner/repo/pull/10#issuecomment-1000"),
 			User: &github.User{
 				ID:    github.Ptr(ghUserID),
 				Login: github.Ptr("testuser"),
@@ -674,7 +685,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		Type:        "issue_comment",
 		Description: "testuser commented on PR #10",
 		Data:        "xagent: please fix the tests",
-		URL:         "https://github.com/owner/repo/pull/10",
+		URL:         "https://github.com/owner/repo/pull/10#issuecomment-1000",
 		UserID:      "user-1",
 		Meta:        GitHubMeta{AuthorID: ghUserID, AuthorLogin: "testuser"},
 	})
@@ -798,7 +809,8 @@ func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {
 	payload := github.IssueCommentEvent{
 		Action: github.Ptr("created"),
 		Comment: &github.IssueComment{
-			Body: github.Ptr("xagent: test"),
+			Body:    github.Ptr("xagent: test"),
+			HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1#issuecomment-2000"),
 			User: &github.User{
 				ID:    github.Ptr[int64](999999),
 				Login: github.Ptr("unknown"),

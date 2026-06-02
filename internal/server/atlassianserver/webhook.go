@@ -139,7 +139,10 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 			return nil, nil
 		}
 
-		url := payload.Issue.BrowseURL()
+		// The expressive trigger URL is the comment itself, focused via the
+		// browse URL's query param when the comment id is available. The router
+		// derives the parent issue routing key from it via model.RoutingKey.
+		url := payload.Issue.CommentBrowseURL(payload.Comment.ID)
 		if url == "" {
 			return nil, nil
 		}

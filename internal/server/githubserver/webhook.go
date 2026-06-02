@@ -165,7 +165,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			return nil
 		}
 		if event.Comment == nil || event.Issue == nil ||
-			event.Comment.Body == nil || event.Issue.HTMLURL == nil ||
+			event.Comment.Body == nil || event.Comment.HTMLURL == nil ||
 			event.Comment.User == nil || event.Comment.User.ID == nil {
 			return nil
 		}
@@ -181,7 +181,9 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Type:        EventTypeIssueComment,
 			Description: description,
 			Data:        body,
-			URL:         *event.Issue.HTMLURL,
+			// The expressive trigger URL is the comment itself; the router
+			// derives the parent routing key from it via model.RoutingKey.
+			URL: *event.Comment.HTMLURL,
 			Meta: GitHubMeta{
 				AuthorID:    *event.Comment.User.ID,
 				AuthorLogin: login,
@@ -194,7 +196,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			return nil
 		}
 		if event.Comment == nil || event.PullRequest == nil ||
-			event.Comment.Body == nil || event.PullRequest.HTMLURL == nil ||
+			event.Comment.Body == nil || event.Comment.HTMLURL == nil ||
 			event.Comment.User == nil || event.Comment.User.ID == nil {
 			return nil
 		}
@@ -206,7 +208,9 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Type:        EventTypePullRequestReviewComment,
 			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
 			Data:        body,
-			URL:         *event.PullRequest.HTMLURL,
+			// The expressive trigger URL is the review comment itself; the
+			// router derives the parent PR routing key via model.RoutingKey.
+			URL: *event.Comment.HTMLURL,
 			Meta: GitHubMeta{
 				AuthorID:    *event.Comment.User.ID,
 				AuthorLogin: login,
@@ -217,7 +221,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 	case *github.PullRequestReviewEvent:
 		if event.Action == nil || *event.Action != "submitted" ||
 			event.Review == nil || event.PullRequest == nil ||
-			event.Review.Body == nil || event.PullRequest.HTMLURL == nil ||
+			event.Review.Body == nil || event.Review.HTMLURL == nil ||
 			event.Review.User == nil || event.Review.User.ID == nil {
 			return nil
 		}
@@ -229,7 +233,9 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Type:        EventTypePullRequestReview,
 			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
 			Data:        body,
-			URL:         *event.PullRequest.HTMLURL,
+			// The expressive trigger URL is the review itself; the router
+			// derives the parent PR routing key via model.RoutingKey.
+			URL: *event.Review.HTMLURL,
 			Meta: GitHubMeta{
 				AuthorID:    *event.Review.User.ID,
 				AuthorLogin: login,
