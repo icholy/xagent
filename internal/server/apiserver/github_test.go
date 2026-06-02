@@ -2,10 +2,6 @@ package apiserver
 
 import (
 	"context"
-	cryptorand "crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"math/rand/v2"
 	"strconv"
 	"testing"
@@ -13,7 +9,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
@@ -139,56 +134,16 @@ func TestLinkGitHubInstallation_SenderMismatch(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
-func TestCreateGitHubToken_Unauthenticated(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{
-		Store:  teststore.New(t),
-		GitHub: newTestGitHub(t),
-	})
-	_, err := srv.CreateGitHubToken(context.Background(), &xagentv1.CreateGitHubTokenRequest{})
-	assert.Equal(t, connect.CodeOf(err), connect.CodeUnauthenticated)
-}
-
-func TestCreateGitHubToken_GitHubNotConfigured(t *testing.T) {
+// CreateGitHubToken no longer mints tokens on the server; it always reports
+// Unimplemented. The real implementation now lives in the runner proxy (#806).
+func TestCreateGitHubToken_Unimplemented(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
 	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)
 
 	_, err := srv.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
-	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
-	assert.ErrorContains(t, err, "GitHub integration is not configured")
-}
-
-func TestCreateGitHubToken_NoInstallation(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{
-		Store:  teststore.New(t),
-		GitHub: newTestGitHub(t),
-	})
-	org := teststore.CreateOrg(t, srv.store, nil)
-	ctx := createCtx(t, org)
-
-	_, err := srv.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
-	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
-	assert.ErrorContains(t, err, "no GitHub App installation")
-}
-
-// newTestGitHub returns a githubserver.Server built from a freshly generated
-// RSA key so githubserver.New's eager PEM parse succeeds.
-func newTestGitHub(t *testing.T) *githubserver.Server {
-	t.Helper()
-	key, err := rsa.GenerateKey(cryptorand.Reader, 2048)
-	assert.NilError(t, err)
-	pemBytes := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
-	})
-	gh, err := githubserver.New(githubserver.Options{
-		Config: &githubserver.Config{AppID: "12345", PrivateKey: pemBytes},
-	})
-	assert.NilError(t, err)
-	return gh
+	assert.Equal(t, connect.CodeOf(err), connect.CodeUnimplemented)
 }
 
 // Sanity check: the store's clear method removes a previously set installation.
