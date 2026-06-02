@@ -155,6 +155,7 @@ const (
 	EventTypePullRequestReview        = "pull_request_review"
 	EventTypeIssueAssigned            = "issue_assigned"
 	EventTypePullRequestAssigned      = "pull_request_assigned"
+	EventTypePullRequestClosed        = "pull_request_closed"
 	EventTypeLabelAdded               = "label_added"
 )
 
@@ -332,6 +333,36 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Description: fmt.Sprintf("%s labeled PR #%d %q", senderLogin, number, label),
 				Values:      []string{label},
 				URL:         *event.PullRequest.HTMLURL,
+				Meta: GitHubMeta{
+					AuthorID:    *event.Sender.ID,
+					AuthorLogin: senderLogin,
+					NodeID:      event.GetPullRequest().GetNodeID(),
+				},
+			}
+		case "closed":
+			if event.PullRequest == nil || event.PullRequest.HTMLURL == nil ||
+				event.Sender == nil || event.Sender.ID == nil {
+				return nil
+			}
+			senderLogin := event.Sender.GetLogin()
+			number := event.PullRequest.GetNumber()
+			// GitHub fires "closed" for both merges and plain closes; the merge
+			// state goes in Data so a routing rule can target merges via
+			// Prefix=merged if desired.
+			data := "closed"
+			verb := "closed"
+			if event.PullRequest.GetMerged() {
+				data = "merged"
+				verb = "merged"
+			}
+			return &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        EventTypePullRequestClosed,
+				Description: fmt.Sprintf("%s %s PR #%d", senderLogin, verb, number),
+				Data:        data,
+				// model.RoutingKey reduces this PR URL to the canonical /pull/N,
+				// matching the link the agent created when it opened the PR.
+				URL: *event.PullRequest.HTMLURL,
 				Meta: GitHubMeta{
 					AuthorID:    *event.Sender.ID,
 					AuthorLogin: senderLogin,
