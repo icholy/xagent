@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/icholy/xagent/compare/v1.1.0...v1.1.1) (2026-06-02)
+
+
+### Bug Fixes
+
+* **webui:** hide routing rules Filters and Action columns on small screens ([#870](https://github.com/icholy/xagent/issues/870)) ([43da2c8](https://github.com/icholy/xagent/commit/43da2c84bc2b70ef510cdac770dfaa6635101aa9))
+
 ## [1.1.0](https://github.com/icholy/xagent/compare/v1.0.0...v1.1.0) (2026-06-02)
 
 
