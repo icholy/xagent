@@ -22,6 +22,7 @@ import {
   isArchivedTask,
 } from '@/lib/task'
 import { ArchivedBadge } from '@/components/archived-badge'
+import { ArchiveButton } from '@/components/archive-button'
 import {
   Table,
   TableBody,
@@ -157,10 +158,12 @@ function TaskDetail() {
             </Button>
           )}
           {canArchiveTask(task) && (
-            <Button variant="outline" size="sm" onClick={handleArchive} disabled={isMutating}>
-              {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Archive
-            </Button>
+            <ArchiveButton
+              task={task}
+              onArchive={handleArchive}
+              pending={archiveMutation.isPending}
+              disabled={isMutating}
+            />
           )}
           {canUnarchiveTask(task) && (
             <Button variant="outline" size="sm" onClick={handleUnarchive} disabled={isMutating}>
@@ -396,15 +399,11 @@ function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) 
       </TableCell>
       <TableCell>
         {canArchiveTask(task) && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleArchive}
-            disabled={archiveMutation.isPending}
-          >
-            {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Archive
-          </Button>
+          <ArchiveButton
+            task={task}
+            onArchive={handleArchive}
+            pending={archiveMutation.isPending}
+          />
         )}
       </TableCell>
     </TableRow>

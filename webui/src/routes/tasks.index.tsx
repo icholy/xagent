@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { StatusBadge } from '@/components/status-badge'
+import { ArchiveButton } from '@/components/archive-button'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -22,7 +23,7 @@ import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { Plus, Search, Loader2, X } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/tasks/')({
@@ -174,15 +175,11 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
       </TableCell>
       <TableCell className="hidden md:table-cell">
         {canArchiveTask(task) && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleArchive}
-            disabled={archiveMutation.isPending}
-          >
-            {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Archive
-          </Button>
+          <ArchiveButton
+            task={task}
+            onArchive={handleArchive}
+            pending={archiveMutation.isPending}
+          />
         )}
       </TableCell>
     </TableRow>
