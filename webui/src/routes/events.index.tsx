@@ -232,7 +232,7 @@ function RoutingRulesCard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Event Type</TableHead>
-                <TableHead>Labels</TableHead>
+                <TableHead>Filters</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead></TableHead>
               </TableRow>
