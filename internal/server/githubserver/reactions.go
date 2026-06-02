@@ -23,24 +23,31 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 	if !ok || meta.NodeID == "" {
 		return nil
 	}
-	org, err := s.store.GetOrg(ctx, nil, outcome.OrgID)
-	if err != nil {
-		return err
-	}
-	if org.GitHubInstallationID == 0 {
-		return nil
-	}
 
 	// Pick the emoji from the routing outcome: a created task gets 🚀, a woken
-	// task 👀, and an event that matched a rule but created or woke nothing 😕.
+	// task 👀, and an event that matched a waking rule but woke nothing 😕. A
+	// matched-only non-waking rule (Wakeup: false, no create action) is passive
+	// by design — doing nothing for an unlinked resource is its intended
+	// behavior, not a misconfiguration — so reacting 😕 to every such event
+	// (e.g. every closed PR in the repo) would be noise; stay silent instead.
 	var content githubv4.ReactionContent
 	switch {
 	case outcome.Created:
 		content = githubv4.ReactionContentRocket
 	case len(outcome.TaskIDs) > 0:
 		content = githubv4.ReactionContentEyes
-	default:
+	case outcome.Rule.Wakeup:
 		content = githubv4.ReactionContentConfused
+	default:
+		return nil
+	}
+
+	org, err := s.store.GetOrg(ctx, nil, outcome.OrgID)
+	if err != nil {
+		return err
+	}
+	if org.GitHubInstallationID == 0 {
+		return nil
 	}
 
 	// The GraphQL client is authenticated as the App's bot identity, backed by
