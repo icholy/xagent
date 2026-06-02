@@ -257,13 +257,15 @@ function RoutingRulesCard() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    {rule.create ? (
-                      <Badge variant="secondary">create</Badge>
-                    ) : rule.wakeup ? (
-                      <span className="text-muted-foreground whitespace-nowrap">wake only</span>
-                    ) : (
-                      <span className="text-muted-foreground whitespace-nowrap">notify only</span>
-                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {rule.wakeup && <Badge variant="secondary">wake</Badge>}
+                      {rule.create && <Badge variant="secondary">create</Badge>}
+                      {!rule.wakeup && !rule.create && (
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          None
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
