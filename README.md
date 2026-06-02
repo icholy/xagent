@@ -5,7 +5,7 @@ Runs coding agents (Claude Code, Codex, Cursor, GitHub Copilot) inside remote sa
 ## Features
 
 - **Self-hosted runners** - Run agents on your own infrastructure inside Docker containers
-- **Third-party integrations** - Interact with agents via GitHub and Jira comments
+- **Third-party integrations** - Interact with agents via GitHub and Jira events
 - **MCP server** - Create and manage tasks from Claude Code, Cursor, or any MCP client
 
 ## Web UI
@@ -124,7 +124,7 @@ go build            # Build main binary only
 
 ## Events
 
-Agents can attach **links** to their tasks for external resources they create (PRs, Jira issues, etc.). Links created with `subscribe=true` act as subscriptions. When someone comments on the resource, the agent is automatically restarted to respond.
+Agents can attach **links** to their tasks for external resources they create (PRs, Jira issues, etc.). Links created with `subscribe=true` act as subscriptions. When a new event occurs on the resource, the agent is automatically restarted to respond.
 
 ![Events](images/events.svg)
 
