@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0](https://github.com/icholy/xagent/compare/v1.0.0...v1.1.0) (2026-06-02)
+
+
+### Features
+
+* **webui:** add Atlassian icon to settings page ([#859](https://github.com/icholy/xagent/issues/859)) ([9e8729a](https://github.com/icholy/xagent/commit/9e8729a84e1bddeac8202a1582cb82096a841d86))
+* **webui:** show auto-archive countdown on archive button ([#868](https://github.com/icholy/xagent/issues/868)) ([2018c26](https://github.com/icholy/xagent/commit/2018c26afe66529a78cf0e41bf68178ab04382f5)), closes [#865](https://github.com/icholy/xagent/issues/865)
+
+
+### Bug Fixes
+
+* don't react 😕 for matched-only events on non-waking rules ([#867](https://github.com/icholy/xagent/issues/867)) ([6f4875a](https://github.com/icholy/xagent/commit/6f4875a71dec7f0c71b171b25bf76e6f3ded802a))
+* mount postgres volume at /var/lib/postgresql for pg18 ([#869](https://github.com/icholy/xagent/issues/869)) ([d37b2ba](https://github.com/icholy/xagent/commit/d37b2ba3ae3769a773a663b0daedff7283568c76))
+* show both wake and create badges in routing rule action column ([#858](https://github.com/icholy/xagent/issues/858)) ([dcd972e](https://github.com/icholy/xagent/commit/dcd972ef588d9cd2376c69486069ace5166642f1))
+* **webui:** rename routing rules Labels column to Filters ([#862](https://github.com/icholy/xagent/issues/862)) ([2a13d08](https://github.com/icholy/xagent/commit/2a13d082a20879d80b2d695196b8d93fbdd194a9))
+
 ## [1.0.0](https://github.com/icholy/xagent/compare/v0.24.1...v1.0.0) (2026-06-02)
 
 
