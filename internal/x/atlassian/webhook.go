@@ -110,6 +110,18 @@ func (i *Issue) BrowseURL() string {
 	return i.Self[:idx] + "/browse/" + i.Key
 }
 
+// CommentBrowseURL returns the browse URL focused on a specific comment, e.g.
+// https://site.atlassian.net/browse/X-1?focusedCommentId=10001. Returns the
+// plain browse URL when commentID is empty, and "" when the browse URL can't
+// be derived.
+func (i *Issue) CommentBrowseURL(commentID string) string {
+	base := i.BrowseURL()
+	if base == "" || commentID == "" {
+		return base
+	}
+	return base + "?focusedCommentId=" + commentID
+}
+
 // SignWebhook computes the HMAC-SHA256 signature for a webhook payload.
 // Returns the signature in "sha256=<hex>" format.
 func SignWebhook(body []byte, secret string) string {

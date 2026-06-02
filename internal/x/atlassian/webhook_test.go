@@ -155,3 +155,46 @@ func TestIssueBrowseURL(t *testing.T) {
 		})
 	}
 }
+
+func TestIssueCommentBrowseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		issue     Issue
+		commentID string
+		expected  string
+	}{
+		{
+			name: "WithCommentID",
+			issue: Issue{
+				Key:  "PROJ-123",
+				Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+			},
+			commentID: "10001",
+			expected:  "https://mycompany.atlassian.net/browse/PROJ-123?focusedCommentId=10001",
+		},
+		{
+			name: "EmptyCommentID",
+			issue: Issue{
+				Key:  "PROJ-123",
+				Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+			},
+			commentID: "",
+			expected:  "https://mycompany.atlassian.net/browse/PROJ-123",
+		},
+		{
+			name: "UnparseableSelf",
+			issue: Issue{
+				Key:  "PROJ-123",
+				Self: "invalid-url",
+			},
+			commentID: "10001",
+			expected:  "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.issue.CommentBrowseURL(tt.commentID)
+			assert.Equal(t, got, tt.expected)
+		})
+	}
+}
