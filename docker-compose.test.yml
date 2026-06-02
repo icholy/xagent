@@ -8,7 +8,7 @@ services:
       PGPORT: "5433"
     network_mode: host
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U xagent -p 5433"]
       interval: 5s
