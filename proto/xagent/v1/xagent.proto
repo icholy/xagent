@@ -269,9 +269,7 @@ message CreateLinkRequest {
   string url = 3;
   string title = 4;
   bool subscribe = 5;
-  // routing_key overrides the server-derived routing key. When empty, the
-  // server derives it from url via model.RoutingKey.
-  string routing_key = 6;
+  reserved 6;
 }
 
 message CreateLinkResponse {
