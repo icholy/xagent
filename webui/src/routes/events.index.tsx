@@ -232,8 +232,8 @@ function RoutingRulesCard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Event Type</TableHead>
-                <TableHead>Filters</TableHead>
-                <TableHead>Action</TableHead>
+                <TableHead className="hidden md:table-cell">Filters</TableHead>
+                <TableHead className="hidden md:table-cell">Action</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -243,7 +243,7 @@ function RoutingRulesCard() {
                   <TableCell className="font-medium whitespace-nowrap">
                     {eventTypeLabel(rule.source, rule.type)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <div className="flex flex-wrap gap-1">
                       {ruleMatchBadges(rule).map((label) => (
                         <Badge
@@ -256,7 +256,7 @@ function RoutingRulesCard() {
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <div className="flex flex-wrap gap-1">
                       {rule.wakeup && <Badge variant="secondary">wake</Badge>}
                       {rule.create && <Badge variant="secondary">create</Badge>}
