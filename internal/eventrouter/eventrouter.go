@@ -131,14 +131,13 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 				r.Log.Error("failed to create event", "org_id", orgID, "error", err)
 				continue
 			}
-			wake := rule.Wakeup
 			seen := map[int64]bool{}
 			for _, link := range links {
 				if seen[link.TaskID] {
 					continue
 				}
 				seen[link.TaskID] = true
-				if err := r.attach(ctx, link.TaskID, event, wake); err != nil {
+				if err := r.attach(ctx, link.TaskID, event, rule.Wakeup); err != nil {
 					r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
 					continue
 				}
