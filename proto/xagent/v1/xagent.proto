@@ -535,6 +535,10 @@ message RoutingRule {
   // rule matches when this value is present in the event's values; empty is a
   // wildcard.
   string value = 8;
+  // Controls whether a matched rule restarts (wakes) the linked task(s). When
+  // false, the rule attaches the event and notifies the task(s) but does NOT
+  // restart them. UI-created rules default to true.
+  bool wakeup = 9;
 }
 
 message CreateTaskAction {

@@ -5116,7 +5116,11 @@ type RoutingRule struct {
 	// Matched against the event's discrete value tokens (e.g. Jira labels). A
 	// rule matches when this value is present in the event's values; empty is a
 	// wildcard.
-	Value         string `protobuf:"bytes,8,opt,name=value,proto3" json:"value,omitempty"`
+	Value string `protobuf:"bytes,8,opt,name=value,proto3" json:"value,omitempty"`
+	// Controls whether a matched rule restarts (wakes) the linked task(s). When
+	// false, the rule attaches the event and notifies the task(s) but does NOT
+	// restart them. UI-created rules default to true.
+	Wakeup        bool `protobuf:"varint,9,opt,name=wakeup,proto3" json:"wakeup,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5205,6 +5209,13 @@ func (x *RoutingRule) GetValue() string {
 		return x.Value
 	}
 	return ""
+}
+
+func (x *RoutingRule) GetWakeup() bool {
+	if x != nil {
+		return x.Wakeup
+	}
+	return false
 }
 
 type CreateTaskAction struct {
@@ -5828,7 +5839,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"&GenerateAtlassianWebhookSecretResponse\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12\x1f\n" +
 	"\vwebhook_url\x18\x02 \x01(\tR\n" +
-	"webhookUrl\"\xf1\x01\n" +
+	"webhookUrl\"\x89\x02\n" +
 	"\vRoutingRule\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x16\n" +
@@ -5838,7 +5849,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\bassignee\x18\x06 \x01(\tR\bassignee\x12\x1d\n" +
 	"\n" +
 	"url_prefix\x18\a \x01(\tR\turlPrefix\x12\x14\n" +
-	"\x05value\x18\b \x01(\tR\x05value\"\xa0\x01\n" +
+	"\x05value\x18\b \x01(\tR\x05value\x12\x16\n" +
+	"\x06wakeup\x18\t \x01(\bR\x06wakeup\"\xa0\x01\n" +
 	"\x10CreateTaskAction\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
 	"\x06runner\x18\x02 \x01(\tR\x06runner\x12\x16\n" +

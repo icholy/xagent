@@ -61,9 +61,10 @@ type Router struct {
 	OnRouteOutcome func(ctx context.Context, outcome RouteOutcome)
 }
 
-// defaultRules is the fallback when an org has no custom routing rules configured.
+// defaultRules is the fallback when an org has no custom routing rules
+// configured. Wakeup is explicit since the bool zero value does not wake.
 var defaultRules = []model.RoutingRule{
-	{Prefix: "xagent:"},
+	{Prefix: "xagent:", Wakeup: true},
 }
 
 // Route evaluates routing rules for every org the user belongs to. For each
@@ -136,7 +137,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 					continue
 				}
 				seen[link.TaskID] = true
-				if err := r.attach(ctx, link.TaskID, event); err != nil {
+				if err := r.attach(ctx, link.TaskID, event, rule.Wakeup); err != nil {
 					r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
 					continue
 				}
@@ -175,13 +176,20 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 	}
 }
 
-// attach associates an event with a task, starts the task, logs the action,
-// and publishes a change notification. The wake ChannelMessage is set only
-// when the attach restarts a task that had finished its run (IsDone); an
-// empty ChannelMessage keeps the agent channel silent (PR #725's gate) for
-// already-running / already-queued tasks while the FE still receives the
-// same notification.
-func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) error {
+// attach associates an event with a task and publishes a change notification.
+// Both wake modes share the event-attach + publish; they differ only on
+// whether the task is restarted.
+//
+// When wake is true (the default behavior), it starts the task, logs the
+// action, and sets the wake ChannelMessage only when the attach restarts a
+// task that had finished its run (IsDone); an empty ChannelMessage keeps the
+// agent channel silent (PR #725's gate) for already-running / already-queued
+// tasks while the FE still receives the same notification.
+//
+// When wake is false (a rule with Wakeup: false), it leaves the task untouched
+// — no task.Start(), no audit log — but still emits a channel notification
+// unconditionally so the event isn't silently swallowed.
+func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event, wake bool) error {
 	notification := model.Notification{
 		Type:  "change",
 		OrgID: event.OrgID,
@@ -190,6 +198,17 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := r.Store.AddEventTask(ctx, tx, event.ID, taskID); err != nil {
 			return err
+		}
+		if !wake {
+			// No-wake path: the event is attached and the FE is notified, but the
+			// task is not restarted. Emit a channel message unconditionally —
+			// otherwise the event would reach the task with no signal at all.
+			notification.Resources = []model.NotificationResource{
+				{Action: "updated", Type: "task", ID: taskID},
+				{Action: "updated", Type: "event", ID: event.ID},
+			}
+			notification.ChannelMessage = fmt.Sprintf("Task %d: %s (%s)", taskID, event.Description, event.URL)
+			return tx.Commit()
 		}
 		task, err := r.Store.GetTaskForUpdate(ctx, tx, taskID, event.OrgID)
 		if err != nil {

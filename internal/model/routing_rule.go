@@ -18,6 +18,7 @@ type RoutingRule struct {
 	URLPrefix string            `json:"url_prefix,omitempty"`
 	Value     string            `json:"value,omitempty"`
 	Create    *CreateTaskAction `json:"create,omitempty"`
+	Wakeup    bool              `json:"wakeup,omitempty"`
 }
 
 // CreateTaskAction configures a routing rule to create a new task on
@@ -67,6 +68,7 @@ func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 		Assignee:  r.Assignee,
 		UrlPrefix: r.URLPrefix,
 		Value:     r.Value,
+		Wakeup:    r.Wakeup,
 	}
 	if r.Create != nil {
 		pb.Create = r.Create.Proto()
@@ -85,5 +87,6 @@ func RoutingRuleFromProto(pb *xagentv1.RoutingRule) RoutingRule {
 		URLPrefix: pb.UrlPrefix,
 		Value:     pb.Value,
 		Create:    CreateTaskActionFromProto(pb.Create),
+		Wakeup:    pb.Wakeup,
 	}
 }

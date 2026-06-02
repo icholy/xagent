@@ -153,6 +153,9 @@ export interface RoutingRuleFormValues {
   assignee: string
   urlPrefix: string
   value: string
+  // Whether a matched rule wakes (restarts) the linked task(s). Defaults to
+  // true for new rules; unchecking it sends wakeup: false.
+  wakeup: boolean
   createTask: boolean
   createWorkspace: string
   createRunner: string
@@ -170,6 +173,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   assignee: '',
   urlPrefix: '',
   value: '',
+  wakeup: true,
   createTask: false,
   createWorkspace: '',
   createRunner: '',
@@ -186,6 +190,7 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     assignee: rule.assignee,
     urlPrefix: rule.urlPrefix,
     value: rule.value,
+    wakeup: rule.wakeup,
     createTask: rule.create !== undefined,
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
@@ -213,6 +218,7 @@ export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
     assignee: isAssignment ? values.assignee : '',
     urlPrefix: values.urlPrefix,
     value: isLabel ? values.value : '',
+    wakeup: values.wakeup,
     create: values.createTask
       ? {
           workspace: values.createWorkspace,

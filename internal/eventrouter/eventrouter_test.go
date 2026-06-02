@@ -311,6 +311,97 @@ func TestRouter_AttachToRunningTaskStaysSilent(t *testing.T) {
 	assert.Equal(t, len(calls[0].N.Resources), 3)
 }
 
+func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a matching rule that opts out of waking via Wakeup{Enable:false},
+	// and a done task subscribed to the event URL.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	url := "https://github.com/owner/repo/pull/1#issuecomment-1"
+	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Runner:    "r",
+		Workspace: "w",
+		Status:    model.TaskStatusCompleted,
+		Links:     []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{Source: "github", Wakeup: false},
+	}))
+	pub := &pubsub.PublisherMock{
+		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
+	}
+	r := &Router{Log: slog.Default(), Store: s, Publisher: pub}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source:      "github",
+		Description: "PR comment from alice",
+		Data:        "anything",
+		URL:         url,
+		UserID:      org.UserID,
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	// The task is NOT restarted — its status stays done.
+	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
+
+	// The event was still attached to the task.
+	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(events), 1)
+
+	// A channel notification is published unconditionally so the event isn't
+	// silently swallowed, even though the task wasn't restarted.
+	calls := pub.PublishCalls()
+	assert.Equal(t, len(calls), 1)
+	msg := calls[0].N.ChannelMessage
+	assert.Assert(t, msg != "", "expected non-empty ChannelMessage, got empty")
+	assert.Assert(t, strings.Contains(msg, "PR comment from alice"), "expected description in message: %q", msg)
+	assert.Assert(t, strings.Contains(msg, url), "expected URL in message: %q", msg)
+}
+
+func TestRouteWakeEnabledRestartsTask(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: same setup but with Wakeup:true — the task IS restarted, the
+	// current behavior.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
+	url := "https://github.com/owner/repo/pull/1#issuecomment-1"
+	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Runner:    "r",
+		Workspace: "w",
+		Status:    model.TaskStatusCompleted,
+		Links:     []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{Source: "github", Wakeup: true},
+	}))
+	r := &Router{Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), InputEvent{
+		Source:      "github",
+		Description: "PR comment from alice",
+		Data:        "anything",
+		URL:         url,
+		UserID:      org.UserID,
+	})
+
+	// Assert: the task was restarted.
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusPending)
+}
+
 func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	t.Parallel()
 
@@ -514,6 +605,7 @@ func TestRouteSecondEventWakesCreatedTask(t *testing.T) {
 	url := "https://github.com/owner/repo/issues/1"
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
 		Source: "github",
+		Wakeup: true,
 		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 	}})
 	assert.NilError(t, err)
@@ -914,7 +1006,7 @@ func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
 			Assignee: "icholy-bot",
 			Create:   &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 		},
-		{Source: "github", Type: "issue_comment", Prefix: "xagent:"},
+		{Source: "github", Type: "issue_comment", Prefix: "xagent:", Wakeup: true},
 	})
 	assert.NilError(t, err)
 	r := &Router{Log: slog.Default(), Store: s}

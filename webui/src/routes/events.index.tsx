@@ -259,8 +259,10 @@ function RoutingRulesCard() {
                   <TableCell>
                     {rule.create ? (
                       <Badge variant="secondary">create</Badge>
-                    ) : (
+                    ) : rule.wakeup ? (
                       <span className="text-muted-foreground whitespace-nowrap">wake only</span>
+                    ) : (
+                      <span className="text-muted-foreground whitespace-nowrap">notify only</span>
                     )}
                   </TableCell>
                   <TableCell>
