@@ -36,7 +36,7 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 		content = githubv4.ReactionContentRocket
 	case len(outcome.TaskIDs) > 0:
 		content = githubv4.ReactionContentEyes
-	case outcome.Rule != nil && outcome.Rule.Wakeup:
+	case outcome.Rule.Wakeup:
 		content = githubv4.ReactionContentConfused
 	default:
 		return nil
