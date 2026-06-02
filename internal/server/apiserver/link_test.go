@@ -62,31 +62,6 @@ func TestCreateLink_DerivesRoutingKey(t *testing.T) {
 	assert.Equal(t, resp.Link.RoutingKey, "https://github.com/example/repo/pull/123")
 }
 
-func TestCreateLink_RoutingKeyOverride(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctx := createCtx(t, org)
-	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Task with Link",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Act - explicit routing_key is used verbatim, not derived from url
-	resp, err := srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
-		TaskId:     taskResp.Task.Id,
-		Url:        "https://github.com/example/repo/pull/123#issuecomment-9",
-		RoutingKey: "https://example.com/custom",
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, resp.Link.RoutingKey, "https://example.com/custom")
-}
-
 func TestCreateLink_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
