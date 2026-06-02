@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // Instructions is the prompt shown to MCP clients describing what the
@@ -124,17 +126,19 @@ func (h *handlers) listWorkspaces(ctx context.Context, req *mcp.CallToolRequest,
 }
 
 type createTaskInput struct {
-	Name        string `json:"name,omitempty" jsonschema:"A short name for the task"`
-	Workspace   string `json:"workspace" jsonschema:"The workspace to run the task in"`
-	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
-	Runner      string `json:"runner" jsonschema:"Runner ID to target"`
+	Name         string `json:"name,omitempty" jsonschema:"A short name for the task"`
+	Workspace    string `json:"workspace" jsonschema:"The workspace to run the task in"`
+	Instruction  string `json:"instruction" jsonschema:"The instruction text for the task"`
+	Runner       string `json:"runner" jsonschema:"Runner ID to target"`
+	ArchiveAfter int64  `json:"archive_after_seconds,omitempty" jsonschema:"Auto-archive the task this many seconds after it reaches a terminal status. 0 (default) = never; negative = archive immediately; positive = delay."`
 }
 
 func (h *handlers) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
 	resp, err := h.service.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      input.Name,
-		Workspace: input.Workspace,
-		Runner:    input.Runner,
+		Name:         input.Name,
+		Workspace:    input.Workspace,
+		Runner:       input.Runner,
+		ArchiveAfter: durationpb.New(time.Duration(input.ArchiveAfter) * time.Second),
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction},
 		},
@@ -252,16 +256,22 @@ func (h *handlers) listTasks(ctx context.Context, req *mcp.CallToolRequest, inpu
 }
 
 type updateTaskInput struct {
-	ID          int64  `json:"id" jsonschema:"The task ID to update"`
-	Instruction string `json:"instruction" jsonschema:"Instruction text to add to the task"`
-	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue, Jira ticket)"`
-	Start       bool   `json:"start,omitempty" jsonschema:"Start the task (non-interrupting if already running)"`
+	ID           int64  `json:"id" jsonschema:"The task ID to update"`
+	Instruction  string `json:"instruction" jsonschema:"Instruction text to add to the task"`
+	URL          string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue, Jira ticket)"`
+	Start        bool   `json:"start,omitempty" jsonschema:"Start the task (non-interrupting if already running)"`
+	ArchiveAfter *int64 `json:"archive_after_seconds,omitempty" jsonschema:"Set the auto-archive timeout in seconds. Omit to leave the existing value untouched. 0 = never; negative = archive immediately; positive = delay."`
 }
 
 func (h *handlers) updateTask(ctx context.Context, req *mcp.CallToolRequest, input updateTaskInput) (*mcp.CallToolResult, any, error) {
+	var archiveAfter *durationpb.Duration
+	if input.ArchiveAfter != nil {
+		archiveAfter = durationpb.New(time.Duration(*input.ArchiveAfter) * time.Second)
+	}
 	_, err := h.service.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:    input.ID,
-		Start: input.Start,
+		Id:           input.ID,
+		Start:        input.Start,
+		ArchiveAfter: archiveAfter,
 		AddInstructions: []*xagentv1.Instruction{
 			{Text: input.Instruction, Url: input.URL},
 		},
