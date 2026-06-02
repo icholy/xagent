@@ -261,9 +261,7 @@ function RoutingRulesCard() {
                       {rule.wakeup && <Badge variant="secondary">wake</Badge>}
                       {rule.create && <Badge variant="secondary">create</Badge>}
                       {!rule.wakeup && !rule.create && (
-                        <span className="text-muted-foreground whitespace-nowrap">
-                          None
-                        </span>
+                        <span className="text-muted-foreground whitespace-nowrap">None</span>
                       )}
                     </div>
                   </TableCell>
