@@ -214,7 +214,7 @@ function RoutingRulesCard() {
           <Link to="/routing/new" search={{ org: orgId }}>
             <Button>
               <Plus className="h-4 w-4" />
-              Add Rule
+              Rule
             </Button>
           </Link>
         </CardAction>
