@@ -611,6 +611,82 @@ func TestToGithubInputEvent(t *testing.T) {
 			},
 			expected: nil,
 		},
+		{
+			name: "PullRequestEvent_Closed_Merged",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("closed"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					NodeID:  github.Ptr("PR_node12"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+					Merged:  github.Ptr(true),
+				},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](42),
+					Login: github.Ptr("alice"),
+				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_closed",
+				Description: "alice merged PR #12",
+				Data:        "merged",
+				URL:         "https://github.com/owner/repo/pull/12",
+				Meta: GitHubMeta{
+					AuthorID:    42,
+					AuthorLogin: "alice",
+					NodeID:      "PR_node12",
+				},
+			},
+		},
+		{
+			name: "PullRequestEvent_Closed_NotMerged",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("closed"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					NodeID:  github.Ptr("PR_node12"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+					Merged:  github.Ptr(false),
+				},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](42),
+					Login: github.Ptr("alice"),
+				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_closed",
+				Description: "alice closed PR #12",
+				Data:        "closed",
+				URL:         "https://github.com/owner/repo/pull/12",
+				Meta: GitHubMeta{
+					AuthorID:    42,
+					AuthorLogin: "alice",
+					NodeID:      "PR_node12",
+				},
+			},
+		},
+		{
+			name: "PullRequestEvent_Closed_NoSender",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("closed"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+					Merged:  github.Ptr(true),
+				},
+			},
+			expected: nil,
+		},
 	}
 
 	for _, tt := range tests {
