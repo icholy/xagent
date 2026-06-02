@@ -106,7 +106,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		orgIDs = append(orgIDs, orgID)
 	}
 	key := model.RoutingKey(input.URL)
-	linksByOrg, err := r.links(ctx, key, orgIDs)
+	linksByOrg, err := r.Store.FindSubscribedLinksForOrgs(ctx, nil, key, orgIDs)
 	if err != nil {
 		return 0, err
 	}
@@ -161,15 +161,6 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		}
 	}
 	return n, nil
-}
-
-// links queries subscribed links matching the routing key, scoped to the given
-// orgs, grouped by org ID. Subscribe-filtering happens in SQL.
-func (r *Router) links(ctx context.Context, key string, orgIDs []int64) (map[int64][]*model.Link, error) {
-	if key == "" || len(orgIDs) == 0 {
-		return nil, nil
-	}
-	return r.Store.FindSubscribedLinksForOrgs(ctx, nil, key, orgIDs)
 }
 
 func (r *Router) publish(ctx context.Context, n model.Notification) {
