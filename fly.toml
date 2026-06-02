@@ -20,7 +20,11 @@ primary_region = "yyz"
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 2
+  # Must stay at 1: the notification system uses in-process pubsub, so a second
+  # machine would miss notifications published on the other (publish on machine
+  # A never reaches subscribers on machine B). Do NOT scale this up until the
+  # pubsub is distributed (e.g. Postgres LISTEN/NOTIFY).
+  min_machines_running = 1
 
   [http_service.concurrency]
     type = "requests"
