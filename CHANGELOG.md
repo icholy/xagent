@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.0.0](https://github.com/icholy/xagent/compare/v0.24.1...v1.0.0) (2026-06-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* existing persisted rules deserialize with the bool zero value (false) and stop waking until re-saved. This is intended. The in-code defaultRules fallback sets Wakeup: true explicitly so default routing keeps waking. UI-created rules default the toggle to checked.
+
+### Features
+
+* add link routing_url schema, model, and proto ([#848](https://github.com/icholy/xagent/issues/848)) ([128f7ee](https://github.com/icholy/xagent/commit/128f7eee522d7a97bc8e068719e6b86a84c8458d))
+* add RoutingRule Wakeup struct to opt out of waking linked tasks ([#855](https://github.com/icholy/xagent/issues/855)) ([ae22ab5](https://github.com/icholy/xagent/commit/ae22ab5a2109df6cf228b4a063286055977edbb0))
+* **atlassian:** emit label_added events from issue_updated webhooks ([#840](https://github.com/icholy/xagent/issues/840)) ([4478c8b](https://github.com/icholy/xagent/commit/4478c8b49ace904aa13687056f69cebf3eeea751))
+* **atlassian:** parse label changes from issue_updated webhooks ([#838](https://github.com/icholy/xagent/issues/838)) ([809d4cc](https://github.com/icholy/xagent/commit/809d4cc1bf521a4552127ad4b146c6326c9eb2a2))
+* **eventrouter:** add generic Value membership routing match ([#846](https://github.com/icholy/xagent/issues/846)) ([9de90ef](https://github.com/icholy/xagent/commit/9de90ef58f64b54f4934d85ef7cdbe181051ded6))
+* github pull_request_closed routing event ([#854](https://github.com/icholy/xagent/issues/854)) ([8d7568f](https://github.com/icholy/xagent/commit/8d7568f62bb9c78ac2eb5787a4b561f440fd4bef))
+* **githubserver:** add label_added event routing ([#847](https://github.com/icholy/xagent/issues/847)) ([bf3dd00](https://github.com/icholy/xagent/commit/bf3dd00707baa4e6a9326cbfb6454eca8313457b))
+* **model:** add RoutingURL function for event routing ([#839](https://github.com/icholy/xagent/issues/839)) ([23e44bb](https://github.com/icholy/xagent/commit/23e44bb91af64761a6c8d224c2ab1805794f38e9))
+* route links by derived routing key ([#850](https://github.com/icholy/xagent/issues/850)) ([d36e02d](https://github.com/icholy/xagent/commit/d36e02dd12169444d01e41528e39c5285971910d))
+* webhooks emit expressive trigger URL ([#851](https://github.com/icholy/xagent/issues/851)) ([72a041d](https://github.com/icholy/xagent/commit/72a041d30fab1bf2366ac8516cd54ed2900bde7d))
+* **webui:** add atlassian:label_added event type ([#845](https://github.com/icholy/xagent/issues/845)) ([01e80c5](https://github.com/icholy/xagent/commit/01e80c50492898fafad38b08048a8222975430ee))
+
+
+### Miscellaneous
+
+* **deps:** update dependency flyctl to v0.4.55 ([#841](https://github.com/icholy/xagent/issues/841)) ([5b7a024](https://github.com/icholy/xagent/commit/5b7a024006a62baabcd4e8b2ba92753609a6d764))
+* **deps:** update dependency typescript-eslint to v8.60.0 ([#842](https://github.com/icholy/xagent/issues/842)) ([4e360ff](https://github.com/icholy/xagent/commit/4e360ffcc86ff5799ee754971ad9b20ff054a30d))
+* drop routing_key from CreateLink RPC ([#852](https://github.com/icholy/xagent/issues/852)) ([c8ce76e](https://github.com/icholy/xagent/commit/c8ce76ef8bbbe6d5e266cfc8e6942e6d8e1f4efd))
+* enable the archiver ([5c0cf5b](https://github.com/icholy/xagent/commit/5c0cf5b9dce5b29d5d735cddc9be9b895567f85c))
+* **fly:** pin min_machines_running to 1 for in-process pubsub ([76b1ce7](https://github.com/icholy/xagent/commit/76b1ce73136f72d4b07a0023559a5d849d90f027))
+* generalize README event wording from comments to events ([03b16cc](https://github.com/icholy/xagent/commit/03b16cc0b006ceedad615da0088071f014a9be04))
+* **githubserver:** react via GraphQL for all event types ([#834](https://github.com/icholy/xagent/issues/834)) ([4284be3](https://github.com/icholy/xagent/commit/4284be3f7574a07aca7685fdbd78c71269c21f86))
+* **githubserver:** remove redundant comments in react ([#837](https://github.com/icholy/xagent/issues/837)) ([0ce157f](https://github.com/icholy/xagent/commit/0ce157f242aac277cf81776a1c1168bdad152d4a))
+* move atlassian label routing proposal to implemented ([81e2d8d](https://github.com/icholy/xagent/commit/81e2d8d6de557df6f4d088ec45fb9ef1461321fb))
+* move link routing url proposal to implemented ([ee31e6d](https://github.com/icholy/xagent/commit/ee31e6d11abd6822f38f347e38ee8207c9466e7b))
+* rename RoutingURL to RoutingKey ([#849](https://github.com/icholy/xagent/issues/849)) ([9d0ef1c](https://github.com/icholy/xagent/commit/9d0ef1ca51efa3db581640377353d117d6c8a811))
+* stub server CreateGitHubToken as unimplemented ([#853](https://github.com/icholy/xagent/issues/853)) ([6c2e6e8](https://github.com/icholy/xagent/commit/6c2e6e8f9f2dbd42ea1b45a00885d69ac9e758bc))
+
 ## [0.24.1](https://github.com/icholy/xagent/compare/v0.24.0...v0.24.1) (2026-06-01)
 
 
