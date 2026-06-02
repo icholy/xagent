@@ -18,6 +18,42 @@ type RoutingRule struct {
 	URLPrefix string            `json:"url_prefix,omitempty"`
 	Value     string            `json:"value,omitempty"`
 	Create    *CreateTaskAction `json:"create,omitempty"`
+	// Wakeup controls whether a matched rule restarts (wakes) the linked
+	// task(s). A nil Wakeup is treated as Enable: true — i.e. wake, the current
+	// behavior — so existing rules keep working unchanged.
+	Wakeup *Wakeup `json:"wakeup,omitempty"`
+}
+
+// Wakeup configures whether a matched routing rule wakes the linked task(s).
+// Modeled as an extensible nested struct (like CreateTaskAction) so filter
+// fields can be added later.
+type Wakeup struct {
+	// Enable, when false, means the rule attaches the event and emits a channel
+	// notification but does NOT restart the linked task(s).
+	Enable bool `json:"enable"`
+}
+
+// ShouldWake reports whether a matched rule should wake (restart) the linked
+// task(s). A nil Wakeup defaults to waking, preserving the original behavior.
+func (r RoutingRule) ShouldWake() bool {
+	return r.Wakeup == nil || r.Wakeup.Enable
+}
+
+// Proto converts a Wakeup to its protobuf representation.
+func (w *Wakeup) Proto() *xagentv1.Wakeup {
+	return &xagentv1.Wakeup{
+		Enable: w.Enable,
+	}
+}
+
+// WakeupFromProto converts a protobuf Wakeup to the model type.
+func WakeupFromProto(pb *xagentv1.Wakeup) *Wakeup {
+	if pb == nil {
+		return nil
+	}
+	return &Wakeup{
+		Enable: pb.Enable,
+	}
 }
 
 // CreateTaskAction configures a routing rule to create a new task on
@@ -71,6 +107,9 @@ func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 	if r.Create != nil {
 		pb.Create = r.Create.Proto()
 	}
+	if r.Wakeup != nil {
+		pb.Wakeup = r.Wakeup.Proto()
+	}
 	return pb
 }
 
@@ -85,5 +124,6 @@ func RoutingRuleFromProto(pb *xagentv1.RoutingRule) RoutingRule {
 		URLPrefix: pb.UrlPrefix,
 		Value:     pb.Value,
 		Create:    CreateTaskActionFromProto(pb.Create),
+		Wakeup:    WakeupFromProto(pb.Wakeup),
 	}
 }

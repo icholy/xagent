@@ -130,13 +130,14 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 				r.Log.Error("failed to create event", "org_id", orgID, "error", err)
 				continue
 			}
+			wake := rule.ShouldWake()
 			seen := map[int64]bool{}
 			for _, link := range links {
 				if seen[link.TaskID] {
 					continue
 				}
 				seen[link.TaskID] = true
-				if err := r.attach(ctx, link.TaskID, event); err != nil {
+				if err := r.attach(ctx, link.TaskID, event, wake); err != nil {
 					r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
 					continue
 				}
@@ -175,13 +176,20 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 	}
 }
 
-// attach associates an event with a task, starts the task, logs the action,
-// and publishes a change notification. The wake ChannelMessage is set only
-// when the attach restarts a task that had finished its run (IsDone); an
-// empty ChannelMessage keeps the agent channel silent (PR #725's gate) for
-// already-running / already-queued tasks while the FE still receives the
-// same notification.
-func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) error {
+// attach associates an event with a task and publishes a change notification.
+// Both wake modes share the event-attach + publish; they differ only on
+// whether the task is restarted.
+//
+// When wake is true (the default behavior), it starts the task, logs the
+// action, and sets the wake ChannelMessage only when the attach restarts a
+// task that had finished its run (IsDone); an empty ChannelMessage keeps the
+// agent channel silent (PR #725's gate) for already-running / already-queued
+// tasks while the FE still receives the same notification.
+//
+// When wake is false (a rule that opted out via Wakeup{Enable: false}), it
+// leaves the task untouched — no task.Start(), no audit log — but still emits
+// a channel notification unconditionally so the event isn't silently swallowed.
+func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event, wake bool) error {
 	notification := model.Notification{
 		Type:  "change",
 		OrgID: event.OrgID,
@@ -190,6 +198,17 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := r.Store.AddEventTask(ctx, tx, event.ID, taskID); err != nil {
 			return err
+		}
+		notification.Resources = []model.NotificationResource{
+			{Action: "updated", Type: "task", ID: taskID},
+			{Action: "updated", Type: "event", ID: event.ID},
+		}
+		if !wake {
+			// No-wake path: the event is attached and the FE is notified, but the
+			// task is not restarted. Emit a channel message unconditionally —
+			// otherwise the event would reach the task with no signal at all.
+			notification.ChannelMessage = fmt.Sprintf("Task %d: %s (%s)", taskID, event.Description, event.URL)
+			return tx.Commit()
 		}
 		task, err := r.Store.GetTaskForUpdate(ctx, tx, taskID, event.OrgID)
 		if err != nil {
@@ -207,11 +226,8 @@ func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event) e
 		}); err != nil {
 			return err
 		}
-		notification.Resources = []model.NotificationResource{
-			{Action: "updated", Type: "task", ID: task.ID},
-			{Action: "updated", Type: "event", ID: event.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
-		}
+		notification.Resources = append(notification.Resources,
+			model.NotificationResource{Action: "appended", Type: "task_logs", ID: task.ID})
 		notification.Runner = task.PendingRunner()
 		if wasDone {
 			notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s (%s)", task.ID, event.ID, event.Description, event.URL)

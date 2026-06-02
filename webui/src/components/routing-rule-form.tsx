@@ -213,6 +213,23 @@ export function RoutingRuleForm({
       <div className="space-y-4 rounded-md border p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
+            <Label htmlFor="wakeup">Wake up linked tasks</Label>
+            <p className="text-muted-foreground text-xs">
+              When the rule matches, restart the subscribed task(s) so they process the event. Turn
+              this off to attach the event and notify the task(s) without restarting them.
+            </p>
+          </div>
+          <Switch
+            id="wakeup"
+            checked={values.wakeup}
+            onCheckedChange={(checked) => setValues({ ...values, wakeup: checked })}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-md border p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
             <Label htmlFor="create-task">Create a task</Label>
             <p className="text-muted-foreground text-xs">
               When the rule matches and no subscribed task is found, create a new task in the

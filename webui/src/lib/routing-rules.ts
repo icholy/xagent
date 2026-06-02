@@ -147,6 +147,9 @@ export interface RoutingRuleFormValues {
   assignee: string
   urlPrefix: string
   value: string
+  // Whether a matched rule wakes (restarts) the linked task(s). Defaults to
+  // true — unchecking it sends Wakeup{Enable: false}.
+  wakeup: boolean
   createTask: boolean
   createWorkspace: string
   createRunner: string
@@ -164,6 +167,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   assignee: '',
   urlPrefix: '',
   value: '',
+  wakeup: true,
   createTask: false,
   createWorkspace: '',
   createRunner: '',
@@ -180,6 +184,9 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     assignee: rule.assignee,
     urlPrefix: rule.urlPrefix,
     value: rule.value,
+    // A nil/absent Wakeup means wake (the default), so the toggle shows checked
+    // for existing rules; an explicit Wakeup{Enable: false} unchecks it.
+    wakeup: rule.wakeup ? rule.wakeup.enable : true,
     createTask: rule.create !== undefined,
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
@@ -207,6 +214,9 @@ export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
     assignee: isAssignment ? values.assignee : '',
     urlPrefix: values.urlPrefix,
     value: isLabel ? values.value : '',
+    // Wake is the default, so only send the Wakeup struct when the toggle is
+    // off (opt-out). Omitting it keeps the rule on the nil = wake path.
+    wakeup: values.wakeup ? undefined : { enable: false },
     create: values.createTask
       ? {
           workspace: values.createWorkspace,

@@ -535,6 +535,16 @@ message RoutingRule {
   // rule matches when this value is present in the event's values; empty is a
   // wildcard.
   string value = 8;
+  // Controls whether a matched rule restarts (wakes) the linked task(s). Unset
+  // is treated as enabled — i.e. wake, the current behavior — so existing rules
+  // keep working unchanged.
+  Wakeup wakeup = 9;
+}
+
+message Wakeup {
+  // When false, a matched rule attaches the event and notifies linked task(s)
+  // but does NOT restart them. Unset/true means wake (the default behavior).
+  bool enable = 1;
 }
 
 message CreateTaskAction {

@@ -22,9 +22,23 @@ func TestRoutingRuleProtoRoundTrip(t *testing.T) {
 			Prompt:       "do the thing",
 			ArchiveAfter: time.Hour,
 		},
+		Wakeup: &Wakeup{Enable: false},
 	}
 	got := RoutingRuleFromProto(rule.Proto())
 	assert.DeepEqual(t, got, rule)
+}
+
+func TestRoutingRuleProtoRoundTripWakeupEnabled(t *testing.T) {
+	rule := RoutingRule{Source: "github", Wakeup: &Wakeup{Enable: true}}
+	got := RoutingRuleFromProto(rule.Proto())
+	assert.DeepEqual(t, got, rule)
+}
+
+func TestRoutingRuleShouldWake(t *testing.T) {
+	// A nil Wakeup preserves the original behavior: wake.
+	assert.Equal(t, RoutingRule{}.ShouldWake(), true)
+	assert.Equal(t, RoutingRule{Wakeup: &Wakeup{Enable: true}}.ShouldWake(), true)
+	assert.Equal(t, RoutingRule{Wakeup: &Wakeup{Enable: false}}.ShouldWake(), false)
 }
 
 func TestRoutingRuleProtoRoundTripValueOnly(t *testing.T) {
