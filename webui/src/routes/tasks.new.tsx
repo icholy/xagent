@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import { createTask, listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
@@ -18,19 +18,49 @@ import {
 } from '@/components/ui/select'
 import { durationFromHours } from '@/lib/duration'
 
+/** Search params allow external systems to deep-link to a pre-populated form. */
+interface NewTaskSearch {
+  name?: string
+  runner?: string
+  workspace?: string
+  prompt?: string
+  archiveAfter?: string
+}
+
+function validateSearch(search: Record<string, unknown>): NewTaskSearch {
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined)
+  return {
+    name: str(search.name),
+    runner: str(search.runner),
+    workspace: str(search.workspace),
+    prompt: str(search.prompt),
+    archiveAfter: str(search.archiveAfter),
+  }
+}
+
 export const Route = createFileRoute('/tasks/new')({
+  validateSearch,
   component: NewTaskPage,
 })
 
 function NewTaskPage() {
   const navigate = useNavigate()
   const orgId = useOrgId()
+  const search = Route.useSearch()
 
-  const [name, setName] = useState('')
+  const [name, setName] = useState(search.name ?? '')
   const [runner, setRunner] = useOrgLocalStorage('xagent-last-runner', '')
   const [workspace, setWorkspace] = useOrgLocalStorage('xagent-last-workspace', '')
-  const [instruction, setInstruction] = useState('')
-  const [archiveAfter, setArchiveAfter] = useState<string>('') // empty = never
+  const [instruction, setInstruction] = useState(search.prompt ?? '')
+  const [archiveAfter, setArchiveAfter] = useState<string>(search.archiveAfter ?? '') // empty = never
+
+  // Deep-link params override the persisted runner/workspace. Applied once on
+  // mount so the user can still change the selections afterwards.
+  useEffect(() => {
+    if (search.runner) setRunner(search.runner)
+    if (search.workspace) setWorkspace(search.workspace)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { data: workspacesData } = useQuery(listWorkspaces, {})
 
