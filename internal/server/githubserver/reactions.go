@@ -24,20 +24,17 @@ func (s *Server) react(ctx context.Context, outcome eventrouter.RouteOutcome) er
 		return nil
 	}
 
-	// Pick the emoji from the routing outcome: a created task gets 🚀, a woken
-	// task 👀, and an event that matched a waking rule but woke nothing 😕. A
-	// matched-only non-waking rule (Wakeup: false, no create action) is passive
-	// by design — doing nothing for an unlinked resource is its intended
-	// behavior, not a misconfiguration — so reacting 😕 to every such event
-	// (e.g. every closed PR in the repo) would be noise; stay silent instead.
+	// Pick the emoji from the routing outcome: a created task gets 🚀 and a woken
+	// task 👀. Anything else stays silent: a waking rule that matched but woke
+	// nothing happens routinely in valid setups (e.g. a rule that fans out to
+	// whichever tasks are subscribed), and a matched-only non-waking rule is
+	// passive by design, so reacting to either would just be noise.
 	var content githubv4.ReactionContent
 	switch {
 	case outcome.Created:
 		content = githubv4.ReactionContentRocket
 	case len(outcome.TaskIDs) > 0:
 		content = githubv4.ReactionContentEyes
-	case outcome.Rule.Wakeup:
-		content = githubv4.ReactionContentConfused
 	default:
 		return nil
 	}
