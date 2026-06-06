@@ -29,12 +29,6 @@ type Target struct {
 // Set is a caller's held scopes. Authorize is an OR across them.
 type Set []Scope
 
-// segMatch reports whether seg is a member of the segment's allowed
-// alternatives. "*" is a member that matches any single segment.
-func segMatch(alts []string, seg string) bool {
-	return slices.Contains(alts, "*") || slices.Contains(alts, seg)
-}
-
 // Matches reports whether the scope authorizes the target. The operation paths
 // must have the same number of segments (each segment matches exactly one), and
 // every predicate key in the scope must be satisfied (AND across keys). An
@@ -44,8 +38,9 @@ func (s Scope) Matches(t Target) bool {
 	if len(s.Op) != len(t.Op) {
 		return false
 	}
-	for i := range s.Op {
-		if !segMatch(s.Op[i], t.Op[i]) {
+	for i, alts := range s.Op {
+		// "*" is a member that matches any single segment.
+		if !slices.Contains(alts, "*") && !slices.Contains(alts, t.Op[i]) {
 			return false
 		}
 	}
