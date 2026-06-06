@@ -27,14 +27,14 @@ type ScopeOptions struct {
 // minter's responsibility.
 func Scopes(opts ScopeOptions) authscope.Scopes {
 	scopes := authscope.Scopes{
-		authscope.Make(authscope.OpTaskRead, authscope.WithTaskID(opts.TaskID)),
-		authscope.Make(authscope.OpTaskWrite, authscope.WithTaskID(opts.TaskID)),
+		authscope.New(authscope.OpTaskRead, authscope.WithTaskID(opts.TaskID)),
+		authscope.New(authscope.OpTaskWrite, authscope.WithTaskID(opts.TaskID)),
 	}
 	if slices.Contains(opts.Capabilities, CapabilityChildTasks) {
 		scopes = append(scopes,
-			authscope.Make(authscope.OpTaskRead, authscope.WithTaskParent(opts.TaskID)),
-			authscope.Make(authscope.OpTaskWrite, authscope.WithTaskParent(opts.TaskID)),
-			authscope.Make(authscope.OpTaskCreate,
+			authscope.New(authscope.OpTaskRead, authscope.WithTaskParent(opts.TaskID)),
+			authscope.New(authscope.OpTaskWrite, authscope.WithTaskParent(opts.TaskID)),
+			authscope.New(authscope.OpTaskCreate,
 				authscope.WithTaskParent(opts.TaskID),
 				authscope.WithTaskWorkspace(opts.Workspace),
 				authscope.WithTaskRunner(opts.Runner),
@@ -42,7 +42,7 @@ func Scopes(opts ScopeOptions) authscope.Scopes {
 		)
 	}
 	if slices.Contains(opts.Capabilities, CapabilityGitHubToken) {
-		scopes = append(scopes, authscope.Make(authscope.OpGitHubTokenCreate))
+		scopes = append(scopes, authscope.New(authscope.OpGitHubTokenCreate))
 	}
 	return scopes
 }
