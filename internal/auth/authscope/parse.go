@@ -24,7 +24,8 @@ func Parse(s string) (Scope, error) {
 		return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
 	}
 	if !hasPred {
-		return Scope{Op: op, Preds: map[string]string{}}, nil
+		// A nil Preds map is fine: ranging over it in Matches is a no-op.
+		return Scope{Op: op}, nil
 	}
 	preds, err := parsePreds(predRaw)
 	if err != nil {

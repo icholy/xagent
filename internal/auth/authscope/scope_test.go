@@ -247,7 +247,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "no predicates",
 			in:   "github_token.create",
-			want: Scope{Op: [][]string{{"github_token"}, {"create"}}, Preds: map[string]string{}},
+			want: Scope{Op: [][]string{{"github_token"}, {"create"}}},
 		},
 		{
 			name: "empty predicate object",
@@ -282,7 +282,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "wildcard segment",
 			in:   "task.*",
-			want: Scope{Op: [][]string{{"task"}, {"*"}}, Preds: map[string]string{}},
+			want: Scope{Op: [][]string{{"task"}, {"*"}}},
 		},
 		{
 			name: "first colon split with colons inside json",
