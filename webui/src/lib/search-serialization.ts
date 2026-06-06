@@ -10,9 +10,7 @@ import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-rout
 // Registering `org: String` keeps org a string on parse and emits it bare on
 // stringify, producing clean ?org=1 URLs.
 
-export function createParseSearch(
-  parsers: Record<string, (value: unknown) => unknown>,
-) {
+export function createParseSearch(parsers: Record<string, (value: unknown) => unknown>) {
   return (searchStr: string) => {
     const parsed = defaultParseSearch(searchStr) as Record<string, unknown>
     for (const key in parsers) {
@@ -24,9 +22,7 @@ export function createParseSearch(
   }
 }
 
-export function createStringifySearch(
-  stringifiers: Record<string, (value: unknown) => string>,
-) {
+export function createStringifySearch(stringifiers: Record<string, (value: unknown) => string>) {
   return (search: Record<string, unknown>) => {
     const rest = { ...search }
     const parts: string[] = []
