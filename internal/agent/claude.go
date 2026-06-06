@@ -132,7 +132,11 @@ func (a *ClaudeAgent) handleStreamEvent(data []byte) bool {
 					a.log.Info("text", "content", block.Text)
 				}
 			case "tool_use":
-				a.log.Info("tool", "name", block.Name)
+				// block.Input is an already-decoded object; redact the bulky
+				// content-bearing fields Claude Code produces before summarizing.
+				input, _ := block.Input.(map[string]any)
+				input = redact(input, "old_string", "new_string", "content")
+				a.log.Info("tool", "name", block.Name, "summary", summarizeInput(input))
 			}
 		}
 	case "user":
