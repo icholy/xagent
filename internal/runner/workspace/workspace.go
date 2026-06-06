@@ -84,10 +84,10 @@ type Workspace struct {
 	Container   Container `yaml:"container"`
 	Agent       Agent     `yaml:"agent"`
 	Commands    []string  `yaml:"commands"`
-	// Scopes grant agents in this workspace additional capabilities, such as
-	// "github_token" to issue GitHub App installation tokens. No scopes are
+	// Capabilities grant agents in this workspace additional capabilities, such
+	// as "github_token" to issue GitHub App installation tokens. None are
 	// granted unless explicitly listed.
-	Scopes []string `yaml:"scopes"`
+	Capabilities []string `yaml:"capabilities"`
 }
 
 type Agent struct {
@@ -150,9 +150,9 @@ func (w *Workspace) Validate() error {
 	if err := w.Agent.Validate(); err != nil {
 		return fmt.Errorf("agent: %w", err)
 	}
-	for _, scope := range w.Scopes {
-		if !agentauth.ValidCapability(scope) {
-			return fmt.Errorf("unknown scope %q", scope)
+	for _, capability := range w.Capabilities {
+		if !agentauth.ValidCapability(capability) {
+			return fmt.Errorf("unknown capability %q", capability)
 		}
 	}
 	return nil
@@ -307,7 +307,7 @@ func (w *Workspace) AgentConfig() agent.Config {
 		Verbose:      w.Agent.Verbose,
 		McpServers:   make(map[string]agent.McpServer),
 		Commands:     w.Commands,
-		Capabilities: w.Scopes,
+		Capabilities: w.Capabilities,
 	}
 	if w.Agent.Claude != nil {
 		cfg.Claude = &agent.ClaudeOptions{
