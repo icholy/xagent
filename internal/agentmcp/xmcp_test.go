@@ -112,7 +112,10 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	filter := NewAgentFilter(client)
 	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
 	srv := NewServer(filter, task, []string{agentauth.ScopeChildTasks})
-	session := setupTestSession(t, srv, taskClaims(parentTaskID, agentauth.ScopeChildTasks))
+	session := setupTestSession(t, srv, &agentauth.TaskClaims{
+		TaskID: parentTaskID,
+		Scopes: agentauth.TaskScopes(parentTaskID, "test-workspace", "test-runner", []string{agentauth.ScopeChildTasks}),
+	})
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "update_child_task",
