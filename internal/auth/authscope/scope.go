@@ -95,7 +95,7 @@ func (s Scope) Matches(t Target) bool {
 		}
 	}
 	for key, want := range s.Preds {
-		got, ok := attrValue(t.Attrs, key)
+		got, ok := t.Attr(key)
 		if !ok || got != want {
 			return false
 		}
@@ -103,11 +103,11 @@ func (s Scope) Matches(t Target) bool {
 	return true
 }
 
-// attrValue returns the value of the first attr with the given name. Targets are
-// only built by the typed Targeter values, which never emit a duplicate name, so
+// Attr returns the value of the first attr with the given name. Targets are only
+// built by the typed Targeter values, which never emit a duplicate name, so
 // first-match-wins needs no guard.
-func attrValue(attrs []Attr, name string) (string, bool) {
-	for _, a := range attrs {
+func (t Target) Attr(name string) (string, bool) {
+	for _, a := range t.Attrs {
 		if a.Name == name {
 			return a.Value, true
 		}
