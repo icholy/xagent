@@ -111,12 +111,15 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	// Wrap client with AgentFilter to enforce authorization
 	filter := NewAgentFilter(client)
 	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
-	srv := NewServer(filter, task, []string{agentauth.ScopeChildTasks})
+	srv := NewServer(filter, task, []string{agentauth.CapabilityChildTasks})
 	session := setupTestSession(t, srv, &agentauth.TaskClaims{
-		TaskID:    parentTaskID,
-		Workspace: "test-workspace",
-		Runner:    "test-runner",
-		Scopes:    []string{agentauth.ScopeChildTasks},
+		TaskID: parentTaskID,
+		Scopes: agentauth.Scopes(agentauth.ScopeOptions{
+			TaskID:       parentTaskID,
+			Workspace:    "test-workspace",
+			Runner:       "test-runner",
+			Capabilities: []string{agentauth.CapabilityChildTasks},
+		}),
 	})
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -145,7 +148,7 @@ func TestGetGitHubToken(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.ScopeGitHubToken})
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.CapabilityGitHubToken})
 	session := setupTestSession(t, srv, nil)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -169,7 +172,7 @@ func TestGetGitHubToken_Error(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.ScopeGitHubToken})
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.CapabilityGitHubToken})
 	session := setupTestSession(t, srv, nil)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -184,7 +187,7 @@ func TestGetGitHubToken_Error(t *testing.T) {
 	assert.Assert(t, strings.Contains(text.Text, "no installation linked"), "expected error message, got: %s", text.Text)
 }
 
-func TestChildTaskTools_NotRegisteredWithoutScope(t *testing.T) {
+func TestChildTaskTools_NotRegisteredWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{}
 
 	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, nil)
@@ -200,14 +203,14 @@ func TestChildTaskTools_NotRegisteredWithoutScope(t *testing.T) {
 		"list_child_task_logs": true,
 	}
 	for _, tool := range tools.Tools {
-		assert.Assert(t, !gated[tool.Name], "%s should not be registered without child_tasks scope", tool.Name)
+		assert.Assert(t, !gated[tool.Name], "%s should not be registered without the child-tasks capability", tool.Name)
 	}
 }
 
-func TestGetGitHubToken_NotRegisteredWithoutScope(t *testing.T) {
+func TestGetGitHubToken_NotRegisteredWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
-			t.Fatal("tool must not be callable when scope is absent")
+			t.Fatal("tool must not be callable when the capability is absent")
 			return nil, nil
 		},
 	}
@@ -218,7 +221,7 @@ func TestGetGitHubToken_NotRegisteredWithoutScope(t *testing.T) {
 	tools, err := session.ListTools(t.Context(), nil)
 	assert.NilError(t, err)
 	for _, tool := range tools.Tools {
-		assert.Assert(t, tool.Name != "get_github_token", "get_github_token should not be registered without scope")
+		assert.Assert(t, tool.Name != "get_github_token", "get_github_token should not be registered without the capability")
 	}
 }
 

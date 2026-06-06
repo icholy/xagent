@@ -4,43 +4,42 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
-	"slices"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/icholy/xagent/internal/auth/authscope"
 )
 
-// Scopes grant tasks additional capabilities beyond their own task data.
+// Capability flags grant tasks additional capabilities beyond their own task
+// data. They are workspace-level capabilities, not authscope grammar scopes.
 const (
-	// ScopeGitHubToken allows issuing GitHub App installation tokens via the
-	// CreateGitHubToken RPC.
-	ScopeGitHubToken = "github_token"
-	// ScopeChildTasks allows creating, listing, updating, and reading logs of
-	// child tasks.
-	ScopeChildTasks = "child_tasks"
+	// CapabilityGitHubToken allows issuing GitHub App installation tokens via
+	// the CreateGitHubToken RPC.
+	CapabilityGitHubToken = "github_token"
+	// CapabilityChildTasks allows creating, listing, updating, and reading logs
+	// of child tasks.
+	CapabilityChildTasks = "child_tasks"
 )
 
-// ValidScope reports whether scope is a recognized capability scope.
-func ValidScope(scope string) bool {
-	switch scope {
-	case ScopeGitHubToken, ScopeChildTasks:
+// ValidCapability reports whether capability is a recognized capability flag.
+func ValidCapability(capability string) bool {
+	switch capability {
+	case CapabilityGitHubToken, CapabilityChildTasks:
 		return true
 	default:
 		return false
 	}
 }
 
-// TaskClaims contains the JWT claims for a task's identity.
+// TaskClaims contains the JWT claims for a task's identity. Scopes holds the
+// task's authorization; it serializes to/from the wire as an array of
+// grammar strings (see authscope.Scopes) so the on-wire token is unchanged.
 type TaskClaims struct {
 	jwt.RegisteredClaims
-	TaskID    int64    `json:"task_id"`
-	Workspace string   `json:"workspace"`
-	Runner    string   `json:"runner"`
-	Scopes    []string `json:"scopes,omitempty"`
-}
-
-// HasScope reports whether the claims include the given capability scope.
-func (c *TaskClaims) HasScope(scope string) bool {
-	return slices.Contains(c.Scopes, scope)
+	TaskID    int64            `json:"task_id"`
+	Workspace string           `json:"workspace"`
+	Runner    string           `json:"runner"`
+	Scopes    authscope.Scopes `json:"scopes,omitempty"`
 }
 
 // CreatePrivateKey generates a new Ed25519 private key.

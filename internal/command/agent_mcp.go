@@ -44,8 +44,8 @@ var AgentMcpCommand = &cli.Command{
 			Required: true,
 		},
 		&cli.StringSliceFlag{
-			Name:  "scope",
-			Usage: "Capability scope granted to the task (repeatable)",
+			Name:  "capability",
+			Usage: "Capability granted to the task (repeatable)",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -60,7 +60,7 @@ var AgentMcpCommand = &cli.Command{
 			Runner:    cmd.String("runner"),
 			Workspace: cmd.String("workspace"),
 		}
-		agentmcp.NewServer(client, task, cmd.StringSlice("scope")).AddTools(server)
+		agentmcp.NewServer(client, task, cmd.StringSlice("capability")).AddTools(server)
 
 		return server.Run(ctx, &mcp.StdioTransport{})
 	},

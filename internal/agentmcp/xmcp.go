@@ -19,21 +19,21 @@ import (
 )
 
 type Server struct {
-	client xagentclient.Client
-	task   *model.Task
-	scopes []string
+	client       xagentclient.Client
+	task         *model.Task
+	capabilities []string
 }
 
-func NewServer(client xagentclient.Client, task *model.Task, scopes []string) *Server {
+func NewServer(client xagentclient.Client, task *model.Task, capabilities []string) *Server {
 	return &Server{
-		client: client,
-		task:   task,
-		scopes: scopes,
+		client:       client,
+		task:         task,
+		capabilities: capabilities,
 	}
 }
 
-func (s *Server) hasScope(scope string) bool {
-	return slices.Contains(s.scopes, scope)
+func (s *Server) hasCapability(capability string) bool {
+	return slices.Contains(s.capabilities, capability)
 }
 
 func (s *Server) log(ctx context.Context, format string, args ...any) {
@@ -69,7 +69,7 @@ func (s *Server) AddTools(server *mcp.Server) {
 		Description: "Update the current task's name",
 	}, s.updateMyTask)
 
-	if s.hasScope(agentauth.ScopeChildTasks) {
+	if s.hasCapability(agentauth.CapabilityChildTasks) {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "create_child_task",
 			Description: "Create a child task of the current task",
@@ -91,7 +91,7 @@ func (s *Server) AddTools(server *mcp.Server) {
 		}, s.listChildTaskLogs)
 	}
 
-	if s.hasScope(agentauth.ScopeGitHubToken) {
+	if s.hasCapability(agentauth.CapabilityGitHubToken) {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "get_github_token",
 			Description: "Get a short-lived GitHub App installation token for the current org. Fallback for shell-outs (e.g. a one-off `gh` invocation) that need a raw GITHUB_TOKEN — primary GitHub access goes through git (credential helper) and the github MCP server.",

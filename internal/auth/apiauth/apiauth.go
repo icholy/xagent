@@ -32,15 +32,9 @@ type UserInfo struct {
 	Email    string
 	Name     string
 	OrgID    int64
-	Type     string        // Auth type: one of AuthType* constants
-	ClientID string        // Per-tab client identifier from X-Client-ID header
-	Scopes   authscope.Set // Capabilities held by the caller within OrgID
-}
-
-// Authorize reports whether the caller's scopes authorize the target. It is a
-// convenience wrapper over Scopes.Authorize; nothing gates requests on it yet.
-func (u *UserInfo) Authorize(t authscope.Target) bool {
-	return u.Scopes.Authorize(t)
+	Type     string           // Auth type: one of AuthType* constants
+	ClientID string           // Per-tab client identifier from X-Client-ID header
+	Scopes   authscope.Scopes // Capabilities held by the caller within OrgID
 }
 
 // DisplayName returns the best available display name for the user.
@@ -226,10 +220,6 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	scopes, err := authscope.ParseSet(claims.Scopes)
-	if err != nil {
-		return nil, err
-	}
 	return &UserInfo{
 		ID:       claims.Subject,
 		Email:    claims.Email,
@@ -237,7 +227,7 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 		OrgID:    claims.OrgID,
 		Type:     AuthTypeApp,
 		ClientID: r.Header.Get("X-Client-ID"),
-		Scopes:   scopes,
+		Scopes:   claims.Scopes,
 	}, nil
 }
 

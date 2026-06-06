@@ -14,19 +14,19 @@ var ConfigDir = "/tmp/xagent"
 
 type Config struct {
 	// Runner-provided
-	Type       string               `json:"type,omitempty"`
-	Cwd        string               `json:"cwd,omitempty"`
-	Prompt     string               `json:"prompt,omitempty"`
-	Verbose    bool                 `json:"verbose,omitempty"`
-	McpServers map[string]McpServer `json:"mcp_servers,omitempty"`
-	Commands   []string             `json:"commands,omitempty"`
-	Scopes     []string             `json:"scopes,omitempty"`
-	Claude     *ClaudeOptions       `json:"claude,omitempty"`
-	Codex      *CodexOptions        `json:"codex,omitempty"`
-	Copilot    *CopilotOptions      `json:"copilot,omitempty"`
-	Cursor     *CursorOptions       `json:"cursor,omitempty"`
-	Sloppy     *SloppyOptions       `json:"sloppy,omitempty"`
-	Dummy      *DummyOptions        `json:"dummy,omitempty"`
+	Type         string               `json:"type,omitempty"`
+	Cwd          string               `json:"cwd,omitempty"`
+	Prompt       string               `json:"prompt,omitempty"`
+	Verbose      bool                 `json:"verbose,omitempty"`
+	McpServers   map[string]McpServer `json:"mcp_servers,omitempty"`
+	Commands     []string             `json:"commands,omitempty"`
+	Capabilities []string             `json:"capabilities,omitempty"`
+	Claude       *ClaudeOptions       `json:"claude,omitempty"`
+	Codex        *CodexOptions        `json:"codex,omitempty"`
+	Copilot      *CopilotOptions      `json:"copilot,omitempty"`
+	Cursor       *CursorOptions       `json:"cursor,omitempty"`
+	Sloppy       *SloppyOptions       `json:"sloppy,omitempty"`
+	Dummy        *DummyOptions        `json:"dummy,omitempty"`
 
 	// Agent-managed state
 	SetupCommandsCompleted int  `json:"setup_commands_completed,omitempty"`
@@ -61,8 +61,8 @@ func (m *McpServer) Validate() error {
 	return nil
 }
 
-func (c *Config) hasScope(scope string) bool {
-	return slices.Contains(c.Scopes, scope)
+func (c *Config) hasCapability(capability string) bool {
+	return slices.Contains(c.Capabilities, capability)
 }
 
 func ConfigPath(taskID int64) string {

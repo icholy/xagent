@@ -3,6 +3,7 @@ package authscope
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -11,9 +12,9 @@ import (
 //	seg1.seg2.…:{json-predicates}
 //
 // The string is split on the FIRST colon: the operation path is colon-free, so
-// everything left of it is the path (split on "." into segments, each split on
-// "|" into the set of alternatives) and everything right of it is a JSON object
-// of predicates. The ":{…}" suffix is optional; absent ⇒ empty predicates.
+// everything left of it is the path (split on "." into segments) and everything
+// right of it is a JSON object of predicates. The ":{…}" suffix is optional;
+// absent ⇒ empty predicates.
 //
 // Predicate values must be JSON strings; numbers, booleans, arrays, and objects
 // are rejected. (Set-valued predicates can be added later if needed.)
@@ -24,7 +25,7 @@ func Parse(s string) (Scope, error) {
 		return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
 	}
 	if !hasPred {
-		// A nil Preds map is fine: ranging over it in Matches is a no-op.
+		// A nil Preds map is fine: ranging over it when matching is a no-op.
 		return Scope{Op: op}, nil
 	}
 	preds, err := parsePreds(predRaw)
@@ -34,13 +35,13 @@ func Parse(s string) (Scope, error) {
 	return Scope{Op: op, Preds: preds}, nil
 }
 
-// ParseSet parses each scope string and collects them into a Set, failing on
-// the first malformed scope. A nil or empty input yields an empty Set.
-func ParseSet(scopes []string) (Set, error) {
+// ParseScopes parses each scope string and collects them into a Scopes, failing on
+// the first malformed scope. A nil or empty input yields an empty Scopes.
+func ParseScopes(scopes []string) (Scopes, error) {
 	if len(scopes) == 0 {
 		return nil, nil
 	}
-	set := make(Set, len(scopes))
+	set := make(Scopes, len(scopes))
 	for i, s := range scopes {
 		parsed, err := Parse(s)
 		if err != nil {
@@ -51,25 +52,40 @@ func ParseSet(scopes []string) (Set, error) {
 	return set, nil
 }
 
-// parseOp splits the operation path into segments, each into its set of
-// "|"-separated alternatives. Empty segments and empty alternatives are
-// rejected.
-func parseOp(opRaw string) ([][]string, error) {
-	segs := strings.Split(opRaw, ".")
-	op := make([][]string, len(segs))
-	for i, seg := range segs {
-		if seg == "" {
-			return nil, fmt.Errorf("empty segment")
-		}
-		alts := strings.Split(seg, "|")
-		for _, a := range alts {
-			if a == "" {
-				return nil, fmt.Errorf("empty alternative in segment %q", seg)
-			}
-		}
-		op[i] = alts
+// MarshalJSON encodes the scopes as an array of their wire-grammar strings, so
+// the on-wire form is a plain []string and stays back-compatible with tokens
+// minted before Scopes was a first-class type.
+func (scopes Scopes) MarshalJSON() ([]byte, error) {
+	strs := make([]string, len(scopes))
+	for i, s := range scopes {
+		strs[i] = s.String()
 	}
-	return op, nil
+	return json.Marshal(strs)
+}
+
+// UnmarshalJSON decodes an array of wire-grammar strings and parses each into a
+// Scope, reusing ParseScopes.
+func (scopes *Scopes) UnmarshalJSON(data []byte) error {
+	var strs []string
+	if err := json.Unmarshal(data, &strs); err != nil {
+		return err
+	}
+	parsed, err := ParseScopes(strs)
+	if err != nil {
+		return err
+	}
+	*scopes = parsed
+	return nil
+}
+
+// parseOp splits the operation path into its dot-separated segments. Empty
+// segments are rejected.
+func parseOp(opRaw string) ([]string, error) {
+	segs := strings.Split(opRaw, ".")
+	if slices.Contains(segs, "") {
+		return nil, fmt.Errorf("empty segment")
+	}
+	return segs, nil
 }
 
 // parsePreds unmarshals the predicate object. The top level must be a JSON
@@ -94,11 +110,7 @@ func parsePreds(s string) (map[string]string, error) {
 // round-trip through Parse(s.String()). Predicate keys are emitted in sorted
 // order.
 func (s Scope) String() string {
-	segs := make([]string, len(s.Op))
-	for i, alts := range s.Op {
-		segs[i] = strings.Join(alts, "|")
-	}
-	path := strings.Join(segs, ".")
+	path := strings.Join(s.Op, ".")
 	if len(s.Preds) == 0 {
 		return path
 	}

@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/icholy/xagent/internal/agentmcp"
 	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/xagentclient"
-	"github.com/icholy/xagent/internal/agentmcp"
 )
 
 // AgentProxy manages a single Unix socket proxy for all tasks.
@@ -77,14 +77,20 @@ func (p *AgentProxy) Start() error {
 	return nil
 }
 
-// TaskToken creates a signed JWT for the given task. scopes grant the task
-// additional capabilities (see agentauth scope constants).
-func (p *AgentProxy) TaskToken(task *model.Task, scopes []string) (string, error) {
+// TaskToken creates a signed JWT for the given task. capabilities are the
+// workspace's enabled capability flags (see agentauth capability constants); they are
+// reshaped into the grammar scope set carried by the token.
+func (p *AgentProxy) TaskToken(task *model.Task, capabilities []string) (string, error) {
 	return agentauth.SignToken(p.privateKey, &agentauth.TaskClaims{
 		TaskID:    task.ID,
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
-		Scopes:    scopes,
+		Scopes: agentauth.Scopes(agentauth.ScopeOptions{
+			TaskID:       task.ID,
+			Workspace:    task.Workspace,
+			Runner:       task.Runner,
+			Capabilities: capabilities,
+		}),
 	})
 }
 

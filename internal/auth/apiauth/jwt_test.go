@@ -13,7 +13,7 @@ func TestAppClaimsScopesRoundTrip(t *testing.T) {
 	key, err := CreateAppPrivateKey()
 	assert.NilError(t, err)
 	claims := NewAppClaims(&UserInfo{ID: "u1", OrgID: 7})
-	assert.DeepEqual(t, claims.Scopes, []string{authscope.AdminScope})
+	assert.DeepEqual(t, claims.Scopes, authscope.Admin())
 
 	// Act: sign then verify, mirroring the mint → verify path.
 	token, err := SignAppToken(key, claims)
@@ -21,14 +21,9 @@ func TestAppClaimsScopesRoundTrip(t *testing.T) {
 	verified, err := VerifyAppToken(key, token)
 	assert.NilError(t, err)
 
-	// Assert: the scopes claim survives and parses into a Set that authorizes
-	// any target, exactly as authenticate populates UserInfo.Scopes.
-	assert.DeepEqual(t, verified.Scopes, []string{authscope.AdminScope})
-	set, err := authscope.ParseSet(verified.Scopes)
-	assert.NilError(t, err)
-	user := &UserInfo{Scopes: set}
-	assert.Assert(t, user.Authorize(authscope.Target{
-		Op:    []string{"task", "write"},
-		Attrs: map[string]string{"id": "1"},
-	}))
+	// Assert: the scopes claim survives JWT round-trip and allows any operation,
+	// exactly as authenticate populates UserInfo.Scopes.
+	assert.DeepEqual(t, verified.Scopes, authscope.Admin())
+	user := &UserInfo{Scopes: verified.Scopes}
+	assert.Assert(t, user.Scopes.Allow(authscope.OpTaskWrite, authscope.StringAttr("id", "1")))
 }

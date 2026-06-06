@@ -137,13 +137,13 @@ var promptTemplate = template.Must(template.New("prompt").Parse(promptText))
 func (c *Config) prompt() (string, error) {
 	var b strings.Builder
 	err := promptTemplate.Execute(&b, struct {
-		Started            bool
-		HasChildTasksScope bool
-		Prompt             string
+		Started                 bool
+		HasChildTasksCapability bool
+		Prompt                  string
 	}{
-		Started:            c.Started,
-		HasChildTasksScope: c.hasScope(agentauth.ScopeChildTasks),
-		Prompt:             c.Prompt,
+		Started:                 c.Started,
+		HasChildTasksCapability: c.hasCapability(agentauth.CapabilityChildTasks),
+		Prompt:                  c.Prompt,
 	})
 	if err != nil {
 		return "", err

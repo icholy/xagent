@@ -388,7 +388,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	}
 
 	// Generate JWT for this task
-	token, err := r.proxy.TaskToken(task, ws.Scopes)
+	token, err := r.proxy.TaskToken(task, ws.Capabilities)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -423,8 +423,8 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		"--workspace", task.Workspace,
 		"--token", token,
 	}
-	for _, scope := range ws.Scopes {
-		mcpArgs = append(mcpArgs, "--scope", scope)
+	for _, capability := range ws.Capabilities {
+		mcpArgs = append(mcpArgs, "--capability", capability)
 	}
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
