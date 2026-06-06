@@ -3,7 +3,6 @@ package scope
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -16,15 +15,15 @@ import (
 // "|" into the set of alternatives) and everything right of it is a JSON object
 // of predicates. The ":{…}" suffix is optional; absent ⇒ empty predicates.
 //
-// Predicate values are normalized to sets of strings: a JSON scalar becomes a
-// singleton set, a JSON array becomes the set of its stringified elements.
+// Predicate values must be JSON strings; numbers, booleans, arrays, and objects
+// are rejected. (Set-valued predicates can be added later if needed.)
 func Parse(s string) (Scope, error) {
 	path, predStr, hasColon := strings.Cut(s, ":")
 	op, err := parsePath(path)
 	if err != nil {
 		return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
 	}
-	preds := map[string][]string{}
+	preds := map[string]string{}
 	if hasColon {
 		preds, err = parsePreds(predStr)
 		if err != nil {
@@ -55,76 +54,27 @@ func parsePath(path string) ([][]string, error) {
 	return op, nil
 }
 
-// parsePreds unmarshals the predicate object and normalizes every value to a
-// set of strings. The top level must be a JSON object; scalars become singleton
-// sets and arrays become the set of their stringified elements.
-func parsePreds(s string) (map[string][]string, error) {
+// parsePreds unmarshals the predicate object. The top level must be a JSON
+// object whose values are all strings; unmarshalling into map[string]string
+// rejects any non-string value.
+func parsePreds(s string) (map[string]string, error) {
 	dec := json.NewDecoder(strings.NewReader(s))
-	dec.UseNumber()
-	var raw map[string]any
-	if err := dec.Decode(&raw); err != nil {
+	var preds map[string]string
+	if err := dec.Decode(&preds); err != nil {
 		return nil, fmt.Errorf("predicates: %w", err)
 	}
 	if dec.More() {
 		return nil, fmt.Errorf("predicates: trailing data")
 	}
-	if raw == nil {
+	if preds == nil {
 		return nil, fmt.Errorf("predicates must be a JSON object")
-	}
-	preds := make(map[string][]string, len(raw))
-	for k, v := range raw {
-		set, err := normValue(v)
-		if err != nil {
-			return nil, fmt.Errorf("predicate %q: %w", k, err)
-		}
-		preds[k] = set
 	}
 	return preds, nil
 }
 
-// normValue normalizes a JSON predicate value to a set of strings. Arrays
-// become the set of their stringified elements; scalars become singleton sets.
-// An empty array is rejected as an empty alternative set.
-func normValue(v any) ([]string, error) {
-	if arr, ok := v.([]any); ok {
-		if len(arr) == 0 {
-			return nil, fmt.Errorf("empty value set")
-		}
-		out := make([]string, len(arr))
-		for i, e := range arr {
-			s, err := scalarString(e)
-			if err != nil {
-				return nil, err
-			}
-			out[i] = s
-		}
-		return out, nil
-	}
-	s, err := scalarString(v)
-	if err != nil {
-		return nil, err
-	}
-	return []string{s}, nil
-}
-
-// scalarString stringifies a JSON scalar (string, number, or bool). Any other
-// type (null, object, nested array) is rejected.
-func scalarString(v any) (string, error) {
-	switch x := v.(type) {
-	case string:
-		return x, nil
-	case json.Number:
-		return x.String(), nil
-	case bool:
-		return strconv.FormatBool(x), nil
-	default:
-		return "", fmt.Errorf("invalid value type %T", v)
-	}
-}
-
 // String returns the wire form of the scope, the inverse of Parse. Scopes
-// round-trip through Parse(s.String()). Predicate values are always emitted as
-// JSON arrays of strings with keys in sorted order.
+// round-trip through Parse(s.String()). Predicate keys are emitted in sorted
+// order.
 func (s Scope) String() string {
 	segs := make([]string, len(s.Op))
 	for i, alts := range s.Op {
@@ -141,7 +91,7 @@ func (s Scope) String() string {
 // ValidScope reports whether s is a structurally valid scope. Validation is
 // purely syntactic: it knows nothing about any operation taxonomy or attribute
 // names, only that the scope parses (non-empty segments, non-empty
-// alternatives, a well-formed predicate object).
+// alternatives, a well-formed object of string-valued predicates).
 func ValidScope(s string) bool {
 	_, err := Parse(s)
 	return err == nil

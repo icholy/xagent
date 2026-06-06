@@ -83,43 +83,43 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name:   "absent key in scope is unconstrained",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{"id": {"42"}}},
+			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
 			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "42", "parent": "7"}},
 			want:   true,
 		},
 		{
 			name:   "star value is unconstrained even when attr present",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{"id": {"*"}}},
+			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "*"}},
 			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "99"}},
 			want:   true,
 		},
 		{
 			name:   "star value is unconstrained even when attr absent",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{"id": {"*"}}},
+			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "*"}},
 			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{}},
 			want:   true,
 		},
 		{
 			name:   "missing target attribute denies",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{"id": {"42"}}},
+			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
 			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{}},
 			want:   false,
 		},
 		{
-			name:   "membership within key matches",
-			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string][]string{"workspace": {"X", "Y"}}},
-			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{"workspace": "Y"}},
+			name:   "value match",
+			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "X"}},
+			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{"workspace": "X"}},
 			want:   true,
 		},
 		{
-			name:   "membership within key non-member denied",
-			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string][]string{"workspace": {"X", "Y"}}},
+			name:   "value mismatch denied",
+			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "X"}},
 			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{"workspace": "Z"}},
 			want:   false,
 		},
 		{
 			name:  "AND across keys all match",
-			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string][]string{"parent": {"42"}, "workspace": {"ws"}}},
+			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
 			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{
 				"parent": "42", "workspace": "ws",
 			}},
@@ -127,7 +127,7 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name:  "AND across keys one fails",
-			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string][]string{"parent": {"42"}, "workspace": {"ws"}}},
+			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
 			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{
 				"parent": "42", "workspace": "other",
 			}},
@@ -135,7 +135,7 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name:   "AND across keys one key missing from target",
-			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string][]string{"parent": {"42"}, "workspace": {"ws"}}},
+			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
 			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{"parent": "42"}},
 			want:   false,
 		},
@@ -155,8 +155,8 @@ func TestMatches(t *testing.T) {
 func TestAuthorize_OwnTask(t *testing.T) {
 	t.Parallel()
 	set := Set{
-		mustParse(t, `task.read:{"id":42}`),
-		mustParse(t, `task.read:{"parent":42}`),
+		mustParse(t, `task.read:{"id":"42"}`),
+		mustParse(t, `task.read:{"parent":"42"}`),
 	}
 	tests := []struct {
 		name  string
@@ -180,7 +180,7 @@ func TestAuthorize_OwnTask(t *testing.T) {
 // fully-constrained scope ANDs all three attributes.
 func TestAuthorize_CreateConjunction(t *testing.T) {
 	t.Parallel()
-	set := Set{mustParse(t, `task.create:{"parent":42,"workspace":"ws","runner":"rn"}`)}
+	set := Set{mustParse(t, `task.create:{"parent":"42","workspace":"ws","runner":"rn"}`)}
 
 	ok := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: map[string]string{
 		"parent": "42", "workspace": "ws", "runner": "rn",
@@ -194,24 +194,6 @@ func TestAuthorize_CreateConjunction(t *testing.T) {
 	assert.Equal(t, denied, false)
 }
 
-// TestAuthorize_CreateSetValued reproduces the §6a set-valued create scope:
-// "child of 42 in workspace X or Y on runner rn".
-func TestAuthorize_CreateSetValued(t *testing.T) {
-	t.Parallel()
-	set := Set{mustParse(t, `task.create:{"parent":42,"workspace":["X","Y"],"runner":"rn"}`)}
-
-	for _, ws := range []string{"X", "Y"} {
-		ok := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: map[string]string{
-			"parent": "42", "workspace": ws, "runner": "rn",
-		}})
-		assert.Equal(t, ok, true)
-	}
-	denied := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: map[string]string{
-		"parent": "42", "workspace": "Z", "runner": "rn",
-	}})
-	assert.Equal(t, denied, false)
-}
-
 // TestAuthorize_SplitConjunctionIsHole documents the §6a failure mode: splitting
 // the create conjunction across separate scopes and ORing them leaves the
 // unconstrained attributes as holes. This is a regression guard against ever
@@ -219,7 +201,7 @@ func TestAuthorize_CreateSetValued(t *testing.T) {
 func TestAuthorize_SplitConjunctionIsHole(t *testing.T) {
 	t.Parallel()
 	set := Set{
-		mustParse(t, `task.create:{"parent":42}`),
+		mustParse(t, `task.create:{"parent":"42"}`),
 		mustParse(t, `task.create:{"workspace":"ws"}`),
 	}
 	// parent matches the first scope, which leaves workspace/runner unconstrained.
@@ -265,57 +247,47 @@ func TestParse(t *testing.T) {
 		{
 			name: "no predicates",
 			in:   "github_token.create",
-			want: Scope{Op: [][]string{{"github_token"}, {"create"}}, Preds: map[string][]string{}},
+			want: Scope{Op: [][]string{{"github_token"}, {"create"}}, Preds: map[string]string{}},
 		},
 		{
 			name: "empty predicate object",
 			in:   "task.read:{}",
-			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{}},
+			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{}},
 		},
 		{
-			name: "number scalar normalizes to singleton",
-			in:   `task.read:{"id":42}`,
-			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{"id": {"42"}}},
-		},
-		{
-			name: "string scalar normalizes to singleton",
+			name: "string value",
 			in:   `task.create:{"workspace":"X"}`,
-			want: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string][]string{"workspace": {"X"}}},
+			want: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "X"}},
 		},
 		{
-			name: "bool scalar normalizes to singleton",
-			in:   `task.read:{"flag":true}`,
-			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{"flag": {"true"}}},
+			name: "numeric id as string",
+			in:   `task.read:{"id":"42"}`,
+			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
 		},
 		{
-			name: "string array normalizes to set",
-			in:   `task.create:{"workspace":["X","Y"]}`,
-			want: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string][]string{"workspace": {"X", "Y"}}},
-		},
-		{
-			name: "number array stringifies each element",
-			in:   `task.read:{"ids":[1,2,3]}`,
-			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{"ids": {"1", "2", "3"}}},
-		},
-		{
-			name: "star value preserved as member",
+			name: "star value preserved",
 			in:   `task.write:{"id":"*"}`,
-			want: Scope{Op: [][]string{{"task"}, {"write"}}, Preds: map[string][]string{"id": {"*"}}},
+			want: Scope{Op: [][]string{{"task"}, {"write"}}, Preds: map[string]string{"id": "*"}},
+		},
+		{
+			name: "multiple predicate keys",
+			in:   `task.create:{"parent":"42","workspace":"ws","runner":"rn"}`,
+			want: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws", "runner": "rn"}},
 		},
 		{
 			name: "path alternation parsed at parse time",
-			in:   `task.read|write:{"id":1}`,
-			want: Scope{Op: [][]string{{"task"}, {"read", "write"}}, Preds: map[string][]string{"id": {"1"}}},
+			in:   `task.read|write:{"id":"1"}`,
+			want: Scope{Op: [][]string{{"task"}, {"read", "write"}}, Preds: map[string]string{"id": "1"}},
 		},
 		{
 			name: "wildcard segment",
 			in:   "task.*",
-			want: Scope{Op: [][]string{{"task"}, {"*"}}, Preds: map[string][]string{}},
+			want: Scope{Op: [][]string{{"task"}, {"*"}}, Preds: map[string]string{}},
 		},
 		{
 			name: "first colon split with colons inside json",
 			in:   `task.read:{"url":"http://example.com:8080/p"}`,
-			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string][]string{"url": {"http://example.com:8080/p"}}},
+			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"url": "http://example.com:8080/p"}},
 		},
 	}
 	for _, tt := range tests {
@@ -335,7 +307,7 @@ func TestParse_Errors(t *testing.T) {
 		in   string
 	}{
 		{"empty string", ""},
-		{"empty path with predicates", `:{"id":1}`},
+		{"empty path with predicates", `:{"id":"1"}`},
 		{"empty segment middle", "task..read"},
 		{"trailing dot", "task."},
 		{"leading dot", ".task"},
@@ -347,10 +319,10 @@ func TestParse_Errors(t *testing.T) {
 		{"null predicates", "task.read:null"},
 		{"array predicates", "task.read:[1,2]"},
 		{"scalar predicates", "task.read:42"},
-		{"empty value set", `task.read:{"id":[]}`},
-		{"nested object value", `task.read:{"a":{"b":1}}`},
-		{"nested array value", `task.read:{"a":[[1]]}`},
-		{"null value", `task.read:{"a":null}`},
+		{"number value", `task.read:{"id":42}`},
+		{"bool value", `task.read:{"flag":true}`},
+		{"array value", `task.create:{"workspace":["X","Y"]}`},
+		{"nested object value", `task.read:{"a":{"b":"c"}}`},
 		{"trailing data after object", `task.read:{}garbage`},
 	}
 	for _, tt := range tests {
@@ -380,9 +352,9 @@ func TestString(t *testing.T) {
 			want:  "task.read|write",
 		},
 		{
-			name:  "predicates emitted as sorted string arrays",
-			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string][]string{"workspace": {"X", "Y"}, "parent": {"42"}}},
-			want:  `task.create:{"parent":["42"],"workspace":["X","Y"]}`,
+			name:  "predicates emitted with sorted keys",
+			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "ws", "parent": "42"}},
+			want:  `task.create:{"parent":"42","workspace":"ws"}`,
 		},
 	}
 	for _, tt := range tests {
@@ -400,9 +372,9 @@ func TestRoundTrip(t *testing.T) {
 		"task.*",
 		"*.*",
 		"github_token.create",
-		`task.read|write:{"id":1}`,
+		`task.read|write:{"id":"1"}`,
 		`task.write:{"id":"*"}`,
-		`task.create:{"parent":42,"workspace":["X","Y"],"runner":"rn"}`,
+		`task.create:{"parent":"42","workspace":"ws","runner":"rn"}`,
 		`task.read:{"url":"http://example.com:8080/p"}`,
 	}
 	for _, in := range inputs {
@@ -422,7 +394,7 @@ func TestValidScope(t *testing.T) {
 		"task.*",
 		"*.*",
 		"task.read|write",
-		`task.create:{"parent":42,"workspace":["X","Y"],"runner":"rn"}`,
+		`task.create:{"parent":"42","workspace":"ws","runner":"rn"}`,
 		"github_token.create",
 	}
 	for _, s := range valid {
@@ -435,7 +407,8 @@ func TestValidScope(t *testing.T) {
 		"task.create|",
 		"task.|update",
 		`task.read:{nope}`,
-		`task.read:{"id":[]}`,
+		`task.read:{"id":42}`,
+		`task.read:{"workspace":["X","Y"]}`,
 		"task.read:null",
 	}
 	for _, s := range invalid {
