@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
-	"slices"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -29,18 +28,15 @@ func ValidScope(scope string) bool {
 	}
 }
 
-// TaskClaims contains the JWT claims for a task's identity.
+// TaskClaims contains the JWT claims for a task's identity. Scopes holds the
+// task's authorization as authscope grammar strings (built by TaskScopes and
+// parsed back into an authscope.Set by the agent filter).
 type TaskClaims struct {
 	jwt.RegisteredClaims
 	TaskID    int64    `json:"task_id"`
 	Workspace string   `json:"workspace"`
 	Runner    string   `json:"runner"`
 	Scopes    []string `json:"scopes,omitempty"`
-}
-
-// HasScope reports whether the claims include the given capability scope.
-func (c *TaskClaims) HasScope(scope string) bool {
-	return slices.Contains(c.Scopes, scope)
 }
 
 // CreatePrivateKey generates a new Ed25519 private key.

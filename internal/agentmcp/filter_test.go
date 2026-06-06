@@ -11,6 +11,17 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+// taskClaims builds task claims whose scopes are minted through the shared
+// agentauth.TaskScopes helper, so tests exercise the same scope-building path as
+// the runner's real token minting. capabilities are the workspace capability
+// flags (agentauth.ScopeChildTasks / agentauth.ScopeGitHubToken).
+func taskClaims(taskID int64, capabilities ...string) *agentauth.TaskClaims {
+	return &agentauth.TaskClaims{
+		TaskID: taskID,
+		Scopes: agentauth.TaskScopes(taskID, "test-workspace", "test-runner", capabilities),
+	}
+}
+
 func TestAgentFilter_SubmitRunnerEvents_Forwarded(t *testing.T) {
 	var forwarded *xagentv1.SubmitRunnerEventsRequest
 	client := &xagentclient.ClientMock{
@@ -21,7 +32,7 @@ func TestAgentFilter_SubmitRunnerEvents_Forwarded(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	req := &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{TaskId: 42, Event: "started"},
@@ -45,7 +56,7 @@ func TestAgentFilter_SubmitRunnerEvents_MismatchedTaskID(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	req := &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{TaskId: 99, Event: "started"},
@@ -65,7 +76,7 @@ func TestAgentFilter_SubmitRunnerEvents_BatchMismatchAllOrNothing(t *testing.T) 
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	req := &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{TaskId: 42, Event: "started"},
@@ -85,7 +96,7 @@ func TestAgentFilter_CreateGitHubToken_Allowed(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42, Scopes: []string{agentauth.ScopeGitHubToken}})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42, agentauth.ScopeGitHubToken))
 	resp, err := filter.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
 	assert.NilError(t, err)
 	assert.Equal(t, resp.Token, "ghs_token")
@@ -101,7 +112,7 @@ func TestAgentFilter_CreateGitHubToken_Denied(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
@@ -114,7 +125,7 @@ func TestAgentFilter_ListChildTasks_Allowed(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42, Scopes: []string{agentauth.ScopeChildTasks}})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42, agentauth.ScopeChildTasks))
 	_, err := filter.ListChildTasks(ctx, &xagentv1.ListChildTasksRequest{ParentId: 42})
 	assert.NilError(t, err)
 	assert.Equal(t, len(client.ListChildTasksCalls()), 1)
@@ -129,7 +140,7 @@ func TestAgentFilter_ListChildTasks_Denied(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.ListChildTasks(ctx, &xagentv1.ListChildTasksRequest{ParentId: 42})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
@@ -143,11 +154,7 @@ func TestAgentFilter_CreateTask_Denied(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{
-		TaskID:    42,
-		Workspace: "test-workspace",
-		Runner:    "test-runner",
-	})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Parent:    42,
 		Workspace: "test-workspace",
@@ -167,7 +174,7 @@ func TestAgentFilter_UpdateTask_OwnTaskAllowedWithoutScope(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: 42})
 	assert.NilError(t, err)
 	assert.Equal(t, len(client.UpdateTaskCalls()), 1)
@@ -185,7 +192,7 @@ func TestAgentFilter_UpdateTask_ChildDeniedWithoutScope(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{Id: 99})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
@@ -198,7 +205,7 @@ func TestAgentFilter_GetTask_OwnTaskAllowedWithoutScope(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.GetTask(ctx, &xagentv1.GetTaskRequest{Id: 42})
 	assert.NilError(t, err)
 }
@@ -211,7 +218,7 @@ func TestAgentFilter_GetTask_ChildDeniedWithoutScope(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.GetTask(ctx, &xagentv1.GetTaskRequest{Id: 99})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
@@ -224,7 +231,7 @@ func TestAgentFilter_ListLogs_OwnTaskAllowedWithoutScope(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.ListLogs(ctx, &xagentv1.ListLogsRequest{TaskId: 42})
 	assert.NilError(t, err)
 	assert.Equal(t, len(client.ListLogsCalls()), 1)
@@ -242,7 +249,7 @@ func TestAgentFilter_ListLogs_ChildDeniedWithoutScope(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.ListLogs(ctx, &xagentv1.ListLogsRequest{TaskId: 99})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
@@ -255,7 +262,7 @@ func TestAgentFilter_GetTaskDetails_OwnTaskAllowedWithoutScope(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: 42})
 	assert.NilError(t, err)
 }
@@ -268,7 +275,7 @@ func TestAgentFilter_GetTaskDetails_ChildDeniedWithoutScope(t *testing.T) {
 	}
 	filter := NewAgentFilter(client)
 
-	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{TaskID: 42})
+	ctx := agentauth.ContextWithClaims(t.Context(), taskClaims(42))
 	_, err := filter.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: 99})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
