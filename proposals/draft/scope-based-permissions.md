@@ -86,6 +86,17 @@ runner from the workspace config (`AgentProxy.TaskToken`,
 One model: an authenticated **caller carries a set of scopes**, and a single
 **scope evaluator** decides every request. Org stays a separate axis.
 
+The design has two cleanly separated layers, and keeping them separate is the
+single most important property:
+
+- A **generic matching engine** (`internal/auth/scope`) that assigns *no
+  meaning* to operation segments or predicate keys. It is a pure pattern matcher
+  over `(operation-path, attributes)`.
+- An **application layer** (the per-RPC mapping in the handlers/interceptor) that
+  owns the entire operation taxonomy — what the segments mean, which attributes
+  exist, how a request becomes a `Target`. This is the *only* place domain
+  knowledge lives.
+
 ### 1. `Caller.Scopes` — the unifying abstraction
 
 Add a scope set to the authenticated caller:
@@ -126,92 +137,142 @@ below) with an `Authorize(target)` method. It lives in a new package,
 
 Org remains a **separate tenancy axis**. The token/caller still carries
 `org_id`; handlers still constrain their store queries to that org exactly as
-today (`caller.OrgID`). **A scope never crosses orgs.** Scopes express intra-org
-capability only.
+today (`caller.OrgID`). **A scope never crosses orgs, and an org id is never
+encoded in a scope.** Scopes express intra-org capability only.
 
 Concretely: a request is authorized iff *both* hold:
 
 1. **Tenancy:** the target resource belongs to `caller.OrgID` (enforced by the
    existing `...(ctx, nil, ..., caller.OrgID)` store calls — unchanged), and
-2. **Capability:** some held scope authorizes the action on that target (new).
+2. **Capability:** some held scope authorizes the operation on that target (new).
 
 This keeps the org check where it already is and well-tested, and means the
 scope grammar never has to encode org IDs. Cross-org access remains impossible
 by construction even if a scope is mis-minted.
 
-### 3. Scope grammar — resource/attribute-parameterized capabilities
+### 3. The engine is semantically agnostic (design principle)
 
-A scope is an **action** on a **resource type**, optionally constrained by a
-conjunction of **attribute predicates**:
+The matching engine assigns **no meaning** to operation segments or predicate
+keys. There is no `resource`/`verb`/`action` concept *inside the engine* —
+those are an application convention, not an engine feature.
 
-```
-action:resource[.field:value][,field:value...]
-```
+- **Engine** = a generic pattern-matcher over `(operation-path, attributes)`:
+  segment-wise glob on the path, plus attribute-set membership on the
+  predicates. It does not know that a segment is a "resource" or that an
+  attribute is named `parent`.
+- **Application** = owns the operation taxonomy and the per-RPC mapping that
+  builds a `Target`. This is the *only* place that knows what the segments mean
+  (e.g. that one segment names a resource, that an attribute is named `parent`,
+  that creating a task involves `workspace`/`runner`).
 
-- `action` ∈ `{read, write, create, *}` (verb taxonomy — see Open Questions).
-- `resource` is a resource type: `task`, `github_token`, … (see taxonomy below).
-- Zero or more `field:value` predicates constrain *which* instances of the
-  resource the scope covers. `*` is a wildcard in **any** position (action,
-  resource, field-value).
-
-Worked vocabulary:
-
-| Scope | Meaning |
-|---|---|
-| `read:task.id:123` | read the task with id 123 |
-| `read:task.parent:123` | read any task whose `parent` is 123 (child access, resolved against the loaded row) |
-| `write:task.id:123` | write the task with id 123 |
-| `create:github_token` | issue a GitHub token (a plain capability, no resource instance) |
-| `create:task.parent:123,workspace:X,runner:Y` | create a task **iff** parent=123 **and** workspace=X **and** runner=Y |
-| `*:task.id:*` | any action on any task (task-domain admin) |
-| `*:*:*` | global admin within the org |
-
-The multi-predicate form (`create:task.parent:123,workspace:X,runner:Y`) is a
-**single scope carrying a conjunction**. This is the crux of correct CREATE
-handling — see §4.
-
-#### String form and parsed form
-
-Wire form is the string above (compact, fits a JWT claim or a DB column).
-Parsed form:
+Engine form (fully generic, no domain types):
 
 ```go
 // internal/auth/scope
 type Scope struct {
-    Action   string            // "read", "write", "create", or "*"
-    Resource string            // "task", "github_token", or "*"
-    Preds    map[string]string // field -> required value; value may be "*"
+    Op    []string            // operation-path segments; "*" matches exactly one segment
+    Preds map[string][]string // attribute key -> set of allowed values ("*" = unconstrained)
 }
 
 type Target struct {
-    Action   string
-    Resource string
-    Attrs    map[string]string // concrete attributes of the request/row
+    Op    []string          // concrete operation-path segments
+    Attrs map[string]string // concrete attributes of the request or loaded row
 }
 
 func (s Scope) Matches(t Target) bool
 func (set Set) Authorize(t Target) bool
 ```
 
-`TaskClaims.Scopes` migrates from `["child_tasks","github_token"]` to the
-grammar (see §5 for the exact mapping). `scope.Set` parses the strings once at
-token-verification time.
+Because the engine is agnostic, the operation taxonomy below
+(`task.read`, `task.create`, `github_token.create`, …) is an **illustrative
+application convention** chosen for this codebase, not part of the engine. The
+proposal uses a `resource.action` segment order to match the examples; the
+engine would work identically with any segmentation.
 
-### 4. Evaluation semantics: AND within a scope, OR across scopes
+### 4. Wire syntax: dot-path, optional JSON predicate object
 
-> A request is authorized if **some** held scope's predicate fully matches the
-> target (**OR across the caller's held scopes**); a scope matches only if
-> **all** of its internal predicates match the target (**AND within the
-> scope**).
+A scope string is a **dot-delimited operation path**, then a `:`, then a **JSON
+object** of predicates:
+
+```
+seg1.seg2.…:{json-predicates}
+```
+
+- **Parse by splitting on the first colon.** This is unambiguous even though the
+  JSON contains colons: the operation path is colon-free, so everything left of
+  the first colon is the path (split on `.` into `Op` segments) and everything
+  right of it is the predicate object (`json.Unmarshal`).
+- The `:{…}` suffix is **optional**; absent ⇒ empty predicates (`{}`). A
+  capability with no instance is just its path, e.g. `github_token.create`.
+
+Worked vocabulary (illustrative `resource.action` convention):
+
+| Scope | Meaning |
+|---|---|
+| `task.read:{"id":123}` | read the task with id 123 |
+| `task.read:{"parent":123}` | read any task whose `parent` is 123 (child access, resolved against the loaded row) |
+| `task.write:{"id":123}` | write the task with id 123 |
+| `github_token.create` | issue a GitHub token (no instance; predicates `{}`) |
+| `task.create:{"parent":123,"workspace":"X","runner":"Y"}` | create a task **iff** parent=123 **and** workspace=X **and** runner=Y |
+| `task.create:{"parent":42,"workspace":["X","Y"],"runner":"rn"}` | create a child of 42 in workspace X **or** Y on runner rn |
+| `task.*` | any action on a task instance (task-domain admin) |
+| `*.*` | global admin within the org (any 2-segment operation, any instance) |
+
+Predicate values are normalized to **sets of strings** at parse time: a JSON
+scalar (`42`, `"X"`, `true`) becomes a singleton set (`["42"]`, `["X"]`,
+`["true"]`); a JSON array becomes the set of its stringified elements. The
+target's `Attrs` are likewise stringified by the handler when it builds the
+`Target`. Keeping everything as strings makes the matcher uniform and total.
+
+Earlier drafts of this proposal used a different grammar
+(`action:resource.field:value` with comma-separated conjunctions, and
+field/value baked into the path); that form is **dropped entirely** in favor of
+the dot-path + JSON-object form above.
+
+### 5. Predicates are set-valued; AND across keys, OR (membership) within a key
+
+Each predicate key constrains one attribute; its value is a **set** of allowed
+values (scalars normalized to singletons). A scope matches a target only if, for
+**every** key in the scope's object, the target's attribute is a **member** of
+that key's allowed set:
+
+- **AND across keys** — every key in the scope must match.
+- **Set membership within a single key** — a disjunction over that one
+  attribute's allowed values.
+- `"*"` (or `["*"]`) as a value, **or an absent key**, ⇒ unconstrained for that
+  attribute. An empty object `{}` ⇒ matches any instance of the operation.
+
+It is important that within-key disjunction is **not** OR-across-keys.
+OR-across-keys would be *attribute smuggling*: a token could satisfy a
+multi-attribute operation by matching only one of its attributes (the CREATE
+escalation in §6a). What we have is standard per-attribute set membership, which
+stays sound: every constrained attribute must independently hold.
+
+Set-valued predicates add **no expressiveness** over holding several
+fully-constrained scopes — both encode the same DNF. They are purely a
+**compactness optimization** to avoid combinatorial blow-up in the token: "this
+agent may create children in 2 workspaces on 3 runners" is one scope with set
+values, not 6 separate scopes (and not a token that bloats as the cross-product
+grows).
 
 ```go
+func segMatch(pattern, seg string) bool { return pattern == "*" || pattern == seg }
+
 func (s Scope) Matches(t Target) bool {
-    if !wild(s.Action, t.Action) || !wild(s.Resource, t.Resource) {
+    if len(s.Op) != len(t.Op) { // "*" matches exactly one segment; lengths must agree
         return false
     }
-    for field, want := range s.Preds { // AND within the scope
-        got, ok := t.Attrs[field]
-        if !ok || !wild(want, got) {
+    for i := range s.Op {
+        if !segMatch(s.Op[i], t.Op[i]) {
+            return false
+        }
+    }
+    for key, allowed := range s.Preds { // AND across keys
+        if slices.Contains(allowed, "*") {
+            continue // unconstrained attribute
+        }
+        got, ok := t.Attrs[key]
+        if !ok || !slices.Contains(allowed, got) { // membership within the key (a disjunction)
             return false
         }
     }
@@ -219,53 +280,80 @@ func (s Scope) Matches(t Target) bool {
 }
 
 func (set Set) Authorize(t Target) bool {
-    for _, s := range set { // OR across scopes
+    for _, s := range set { // OR across the caller's held scopes
         if s.Matches(t) {
             return true
         }
     }
     return false
 }
-
-func wild(pattern, value string) bool { return pattern == "*" || pattern == value }
 ```
 
-This single rule has to satisfy four requirements simultaneously. Each is worked
-through below, with the failure modes that motivate the AND-within / OR-across
-split.
+#### Wildcards on the operation path
 
-#### (a) CREATE needs a conjunction — kept *inside one scope*
+- `*` matches **exactly one** segment — no greedy tail. So `task.*` matches
+  `task.read` and `task.write` but not `task` or `task.a.b`, and `*.*` matches
+  exactly the 2-segment operations.
+- `**` is **reserved and unspecified** for now. It is the future escape hatch if
+  we ever need subtree (depth-independent) matching; this proposal does not spec
+  its semantics.
+- Because attribute values live in the predicate object (not in the path),
+  operation paths stay **shallow**. Admin and migration grants are therefore
+  expressed at the application's chosen operation arity (here, `*.*` for the
+  2-segment taxonomy). Genuinely depth-independent admin is the `**` future-work
+  case, not something we need today.
+
+### 6. Evaluation semantics: AND within a scope, OR across scopes
+
+Framed as DNF: **each scope is one conjunctive clause** (segment matches AND
+per-key memberships), and **the held set is the disjunction** of those clauses.
+`Authorize` is true iff some clause is satisfied. This single rule has to
+satisfy four requirements simultaneously; each is worked through below with the
+failure mode that motivates the AND-within / OR-across split.
+
+#### (a) CREATE needs a conjunction — kept *inside one scope*, minter fully constrains
 
 `CreateTask` today requires **four** things at once (`filter.go:83-91`):
 `child_tasks` present, `parent == claims.TaskID`, `workspace == claims.Workspace`,
-`runner == claims.Runner`. In the new model the agent token holds:
+`runner == claims.Runner`. In the new model the agent token holds a single,
+**fully-constrained** scope:
 
 ```
-create:task.parent:42,workspace:ws,runner:rn
+task.create:{"parent":42,"workspace":"ws","runner":"rn"}
 ```
 
 and the `CreateTask` handler builds the target from the *request*:
 
 ```
-Target{Action:"create", Resource:"task",
-       Attrs:{parent:"<req.Parent>", workspace:"<req.Workspace>", runner:"<req.Runner>"}}
+Target{Op:["task","create"],
+       Attrs:{"parent":"<req.Parent>", "workspace":"<req.Workspace>", "runner":"<req.Runner>"}}
 ```
 
-`Matches` returns true only if **all three** predicates hold — exactly the
-current behavior.
+`Matches` returns true only if **all three** keys hold — exactly the current
+behavior. The "allow N workspaces" case uses a set value rather than multiple
+scopes:
+
+```
+task.create:{"parent":42,"workspace":["X","Y"],"runner":"rn"}
+```
+
+**The minter is responsible for emitting a fully-constrained predicate object.**
+It must enumerate every access-relevant attribute of the create operation. An
+absent key is *unconstrained* — i.e. a hole — so completeness is mandatory at
+mint time. We explicitly do **not** have the server derive missing attributes
+(e.g. defaulting `workspace`/`runner` from the caller's task): the server-derive
+approach would put "which attributes must be constrained" knowledge back into
+the handler, which is exactly what §6d forbids. Completeness lives in the minter.
 
 **Failure mode if we instead split the conjunction into separate scopes** —
-`["create:task.parent:42", "create:task.workspace:ws", "create:task.runner:rn"]`
-— and OR across them: a `CreateTask` target would match
-`create:task.parent:42` on its own (the other scopes don't have to match; OR
-only needs one). A caller could then create a task with `parent=42` but an
-**arbitrary workspace/runner**, escalating out of its sandbox. The conjunction
-*must* live inside a single scope so that ORing across the caller's scopes can
-never relax it.
-
-This is why the grammar has a multi-predicate form at all: it lets the AND that
-CREATE needs be expressed without the evaluator ever having to AND *across*
-scope strings.
+`["task.create:{\"parent\":42}", "task.create:{\"workspace\":\"ws\"}", "task.create:{\"runner\":\"rn\"}"]`
+— and OR across them: a `CreateTask` target matches
+`task.create:{"parent":42}` on its own, because that scope leaves `workspace`
+and `runner` unconstrained (absent keys). A caller could then create a task with
+`parent=42` but an **arbitrary workspace/runner**, escalating out of its
+sandbox. The conjunction *must* live inside a single scope's object so that
+ORing across the caller's scopes can never relax it. (This is the same hazard as
+OR-across-keys in §5, viewed from the scope-set level.)
 
 #### (b) Relationship / child access is naturally disjunctive — *across scopes*
 
@@ -273,77 +361,84 @@ scope strings.
 (`filter.go:118-127`). That is a genuine OR, and it maps to two scopes:
 
 ```
-read:task.id:42          # own task
-read:task.parent:42      # any direct child of 42
+task.read:{"id":42}        # own task
+task.read:{"parent":42}    # any direct child of 42
 ```
 
 `GetTask` loads the row (it already does — `p.client.GetTask`), then builds:
 
 ```
-Target{Action:"read", Resource:"task", Attrs:{id:"<row.Id>", parent:"<row.Parent>"}}
+Target{Op:["task","read"], Attrs:{"id":"<row.Id>", "parent":"<row.Parent>"}}
 ```
 
-- Own task (`row.Id==42`): matches `read:task.id:42`. ✅
-- Child (`row.Parent==42`): matches `read:task.parent:42`. ✅
+- Own task (`row.Id==42`): matches `task.read:{"id":42}` (the `parent` key is
+  absent there ⇒ unconstrained). ✅
+- Child (`row.Parent==42`): matches `task.read:{"parent":42}` (the `id` key
+  absent ⇒ unconstrained). ✅
 - Unrelated task: matches neither → denied. ✅
 
 OR-across-scopes is exactly right here. The `parent` predicate is **resolved
 against the loaded row at request time**, which is how relationship access works
-without the evaluator needing a graph: the handler fetches the row (scoped to
-the caller's org), then asks the evaluator about the row's attributes.
+without the engine needing a graph: the handler fetches the row (scoped to the
+caller's org), then asks the engine about the row's attributes.
 
 **Failure mode if we instead require AND across all held scopes:** a caller
-holding both `read:task.id:42` and `read:task.parent:42` could read *nothing* —
-its own task fails the `parent:42` scope, and a child fails the `id:42` scope, so
-no single target satisfies both. Pure-AND-across-scopes breaks the moment a
-caller holds more than one grant. Scopes must be **additive** (OR), which is the
-standard capability-model semantics.
+holding both `task.read:{"id":42}` and `task.read:{"parent":42}` could read
+*nothing* — its own task fails the `parent:42` scope, and a child fails the
+`id:42` scope, so no single target satisfies both. Pure-AND-across-scopes breaks
+the moment a caller holds more than one grant. Scopes must be **additive** (OR),
+which is the standard capability-model semantics.
 
 #### (c) Wildcard admin subsumes everything narrower
 
-`*:task.id:*` must cover own task **and** children, because a child is still a
-task matched by `id:*`:
+`task.*` must cover own task **and** children, because a child is still a task
+instance:
 
-- Child target `Attrs:{id:99, parent:42}` vs scope `*:task.id:*`: action `*`✓,
-  resource `task`✓, predicate `id:*` matches `99`✓ → allowed.
+- Child target `Attrs:{"id":"99","parent":"42"}` vs scope `task.*` (predicates
+  `{}`): op `task.*` matches `task.read`/`task.write`✓, empty predicates match
+  any instance✓ → allowed.
 
-And `*:*:*` matches any target (`Preds` empty, action/resource wild). Because
-matching is OR-across-scopes, holding a broad scope **plus** narrow ones is
-always ≥ the narrow ones alone — admin can never be *less* than a sub-grant.
-This is the property that lets Migration grant `*:*:*` to existing callers and
-preserve today's omnipotence exactly.
+And `*.*` matches any 2-segment operation with any instance. Because matching is
+OR-across-scopes, holding a broad scope **plus** narrow ones is always ≥ the
+narrow ones alone — admin can never be *less* than a sub-grant. This is the
+property that lets Migration grant `*.*` to existing callers and preserve
+today's omnipotence exactly.
 
 #### (d) Handlers must not need per-RPC "which attributes are required" knowledge
 
-The danger is that the evaluator pushes model knowledge back into handlers. We
-avoid it by splitting responsibilities cleanly:
+The danger is that the engine pushes model knowledge back into handlers. The
+agnostic-engine split (§3) prevents it:
 
-- The **handler** only describes *what the request is*: it emits a `Target`
-  with the action, resource, and the concrete attributes of the request (for
-  create) or the loaded row (for read/write). It does **not** know which
-  predicates a scope "should" constrain.
-- The **scope** declares which predicates *it* constrains; the evaluator ANDs
-  exactly those.
+- The **handler** only describes *what the request is*: it emits a `Target` with
+  the operation path and the concrete attributes of the request (for create) or
+  the loaded row (for read/write). It does **not** know which predicates a scope
+  "should" constrain.
+- The **scope** declares which keys *it* constrains; the engine ANDs exactly
+  those and treats absent keys as unconstrained.
 
 So `CreateTask` always emits `Attrs:{parent, workspace, runner}` regardless of
-what scopes exist. A token scoped `create:task.parent:42,workspace:ws,runner:rn`
-constrains all three; a hypothetical `create:task.parent:42` would constrain
+what scopes exist. A token scoped `task.create:{"parent":42,"workspace":"ws","runner":"rn"}`
+constrains all three; a hypothetical `task.create:{"parent":42}` would constrain
 only `parent` — **the handler code is identical either way.** The "which
-attributes matter" decision lives entirely in the minted scope string, not in
-the handler.
+attributes matter" decision lives entirely in the minted scope object, not in
+the handler. Combined with §6a's rule that the minter must fully constrain, this
+means correctness is the minter's responsibility and the handler stays
+domain-light.
 
-The failure mode we are avoiding is the "separate ANDed scope strings" design
-from (a): there, to be safe, the *handler* would have to know "for create, the
-caller must hold a parent-scope AND a workspace-scope AND a runner-scope" and
-check three memberships — leaking the constraint model into every create
-handler. The conjunctive-single-scope grammar keeps that knowledge in the token.
+The failure mode we are avoiding is the "separate scopes" / "server-derive"
+design: there, to be safe, the *handler* would have to know "for create, the
+caller must hold a parent-scope AND a workspace-scope AND a runner-scope" (or
+derive the missing ones) and check three things — leaking the constraint model
+into every create handler. The conjunctive single-scope object keeps that
+knowledge in the token.
 
-### 5. Default-deny + RPC → required-permission mapping
+### 7. Default-deny + RPC → required-permission mapping
 
-Authorization becomes a **single interceptor** plus, for relationship/state
-checks, a thin per-handler `Target` builder. Default is **deny**: an RPC with no
-mapping, or a target no held scope matches, is rejected with
-`connect.CodePermissionDenied`.
+Authorization becomes a **single evaluator call** plus, for relationship/state
+checks, a thin per-handler `Target` builder. This per-RPC mapping **is the
+application taxonomy** — the only place where operation segments and attribute
+names have meaning. Default is **deny**: an RPC with no mapping, or a target no
+held scope matches, is rejected with `connect.CodePermissionDenied`.
 
 Each RPC declares the permission it requires. Two shapes:
 
@@ -359,36 +454,34 @@ Re-expressing the **current `AgentFilter`** rules (the existing tests in
 
 | RPC | Target | Today's rule reproduced |
 |---|---|---|
-| `CreateLink`, `UploadLogs` | `write:task.id:<req.TaskId>` | `req.TaskId == claims.TaskID` via `write:task.id:42` |
-| `SubmitRunnerEvents` | per-event `write:task.id:<ev.TaskId>`, **all** must pass | all-or-nothing batch (`filter.go:67`) |
-| `GetTask`, `GetTaskDetails`, `ListLogs` | `read:task.id:<row.id>` OR `read:task.parent:<row.parent>` | own-or-child; child requires the `read:task.parent:42` scope, absent ⇒ child denied |
-| `UpdateTask` | `write:task.id:<row.id>` OR `write:task.parent:<row.parent>` | own-or-child; plus archived guard (§ below) |
-| `CreateTask` | `create:task.parent:<req.Parent>,workspace:<req.Workspace>,runner:<req.Runner>` | four-way conjunction |
-| `ListChildTasks` | `read:task.parent:<req.ParentId>` | parent match + `child_tasks` |
-| `CreateGitHubToken` | `create:github_token` | `github_token` scope |
+| `CreateLink`, `UploadLogs` | `Op:[task,write] Attrs:{id:req.TaskId}` | `req.TaskId == claims.TaskID` via `task.write:{"id":42}` |
+| `SubmitRunnerEvents` | per-event `Op:[task,write] Attrs:{id:ev.TaskId}`, **all** must pass | all-or-nothing batch (`filter.go:67`) |
+| `GetTask`, `GetTaskDetails`, `ListLogs` | `Op:[task,read] Attrs:{id:row.id, parent:row.parent}` | own (`task.read:{"id":42}`) OR child (`task.read:{"parent":42}`); child scope absent ⇒ child denied |
+| `UpdateTask` | `Op:[task,write] Attrs:{id:row.id, parent:row.parent}` | own/child as above + archived guard (§ below) |
+| `CreateTask` | `Op:[task,create] Attrs:{parent:req.Parent, workspace:req.Workspace, runner:req.Runner}` | four-way conjunction via one fully-constrained scope |
+| `ListChildTasks` | `Op:[task,read] Attrs:{parent:req.ParentId}` | parent match + `child_tasks` |
+| `CreateGitHubToken` | `Op:[github_token,create] Attrs:{}` | `github_token` scope |
 
 The old task scopes therefore map to:
 
 - `child_tasks` ⇒ the token gains the child-relationship scopes
-  `read:task.parent:<self>`, `write:task.parent:<self>`,
-  `create:task.parent:<self>,workspace:<ws>,runner:<rn>`, and
-  `read:task.parent:<self>` for `ListChildTasks`.
-- `github_token` ⇒ `create:github_token`.
-- The always-present own-task access ⇒ `read:task.id:<self>`,
-  `write:task.id:<self>`.
+  `task.read:{"parent":<self>}`, `task.write:{"parent":<self>}`, and
+  `task.create:{"parent":<self>,"workspace":<ws>,"runner":<rn>}`.
+- `github_token` ⇒ `github_token.create`.
+- The always-present own-task access ⇒ `task.read:{"id":<self>}`,
+  `task.write:{"id":<self>}`.
 
 Re-expressing the **current org-scoping** (the API callers): users, sessions,
 and `xat_` keys are omnipotent within their org today. In the model that is
-`*:*:*` (see Migration). The org tenancy check is untouched; `*:*:*` only
-satisfies the *capability* half, so behavior is identical. Narrowing those
-grants later (e.g. a read-only key = `read:*:*`) is future work, not this
-proposal.
+`*.*` (see Migration). The org tenancy check is untouched; `*.*` only satisfies
+the *capability* half, so behavior is identical. Narrowing those grants later
+(e.g. a read-only key = `*.read`) is future work, not this proposal.
 
-Because both the agent path and the API path now compute a `Target` and call
-the same `scope.Set.Authorize`, the two enforcement styles collapse into one.
+Because both the agent path and the API path now compute a `Target` and call the
+same `scope.Set.Authorize`, the two enforcement styles collapse into one.
 `AgentFilter`'s hand-written per-RPC checks are replaced by target builders that
-feed the shared evaluator; the server can additionally run the same evaluator,
-so task isolation is no longer dependent on the runner-side filter being in the
+feed the shared engine; the server can additionally run the same evaluator, so
+task isolation is no longer dependent on the runner-side filter being in the
 path.
 
 ### State-based checks coexist as request-time guards
@@ -400,15 +493,15 @@ not a property a token can be scoped to. These remain ordinary request-time
 guards, evaluated **after** scope authorization passes:
 
 ```go
-// 1. capability: scope evaluator authorizes write:task.id:<row.id> (or parent)
+// 1. capability: scope evaluator authorizes Op:[task,write] for the row (own or parent)
 // 2. state guard: if row.Archived { return PermissionDenied("cannot update archived task") }
 ```
 
 Scope evaluation answers "may this caller, in principle, write this task?"; the
 state guard answers "is the task currently in a writable state?" They are
 orthogonal and both must pass. Keeping state guards out of the grammar keeps the
-grammar pure (a function of the token and the target's *identity* attributes,
-not its lifecycle), which is what makes it exhaustively testable.
+engine pure (a function of the token and the target's *identity* attributes, not
+its lifecycle), which is what makes it exhaustively testable.
 
 ## Migration
 
@@ -421,28 +514,28 @@ convert checks. Narrowing real permissions is a separate, later effort.
 
 ### Phase 0 — Define the model, no enforcement
 
-- Add `internal/auth/scope` (`Scope`, `Set`, `Target`, parser, `Authorize`)
-  with exhaustive table tests. No caller consults it yet.
+- Add `internal/auth/scope` (`Scope`, `Set`, `Target`, the first-colon parser,
+  `Matches`/`Authorize`) with exhaustive table tests. No caller consults it yet.
 - Add `Scopes scope.Set` to `apiauth.UserInfo` (unparsed/empty for now).
-- Define the admin wildcard constant `*:*:*`.
+- Define the admin wildcard constant `*.*`.
 
 No behavioral change; pure addition.
 
 ### Phase 1 — Grant admin to every existing caller
 
-Populate `Caller.Scopes` so that *every* current caller holds `*:*:*` **before**
+Populate `Caller.Scopes` so that *every* current caller holds `*.*` **before**
 anything requires scopes:
 
-- **Cookie sessions:** `Auth.User` / `attachUserInfo` set `Scopes = {*:*:*}`.
-- **App JWTs:** `NewAppClaims` (`jwt.go:26`) adds `Scopes: ["*:*:*"]`; mint at
+- **Cookie sessions:** `Auth.User` / `attachUserInfo` set `Scopes = {*.*}`.
+- **App JWTs:** `NewAppClaims` (`jwt.go:26`) adds `Scopes: ["*.*"]`; mint at
   `HandleToken`. Old already-issued JWTs are short-lived (`AppTokenTTL = 5m`,
   `jwt.go:23`), so they age out within minutes — but the evaluator must also
   treat **absence of a scopes claim on a user/app/key caller as full access**
   during the transition (a compatibility shim), so even an in-flight tokenless
   caller is unaffected.
 - **`xat_` keys:** add a nullable `scopes` column to the key table; backfill all
-  existing rows to `*:*:*`; `StoreKeyValidator.ValidateKey` returns it. New keys
-  default to `*:*:*` until the UI grows scope selection.
+  existing rows to `*.*`; `StoreKeyValidator.ValidateKey` returns it. New keys
+  default to `*.*` until the UI grows scope selection.
 
 The "absent scopes ⇒ full access for user/app/key callers" shim is the safety
 net that makes Phase 1 and Phase 2 independently shippable. Task callers are
@@ -450,17 +543,18 @@ net that makes Phase 1 and Phase 2 independently shippable. Task callers are
 
 ### Phase 2 — Convert enforcement to the evaluator (dual-running)
 
-With everyone holding `*:*:*`, convert checks one surface at a time; each
-conversion is a no-op because `*:*:*` authorizes everything:
+With everyone holding `*.*`, convert checks one surface at a time; each
+conversion is a no-op because `*.*` authorizes everything:
 
 1. **`AgentFilter` → evaluator.** Reshape `TaskClaims.Scopes` minting
-   (`runner/proxy.go:82`) into the grammar (§5 mapping). Replace each
-   hand-written check in `filter.go` with a `Target` builder + `Authorize`.
-   `filter_test.go` must pass unchanged (it is the behavioral spec). Keep the
-   archived guard as a post-scope state check.
+   (`runner/proxy.go:82`) into the grammar (§7 mapping), with the minter fully
+   constraining create scopes. Replace each hand-written check in `filter.go`
+   with a `Target` builder + `Authorize`. `filter_test.go` must pass unchanged
+   (it is the behavioral spec). Keep the archived guard as a post-scope state
+   check.
 2. **API handlers → evaluator.** Add the authorization interceptor for
    request-only targets and per-handler `Target` builders for row-dependent
-   ones, alongside the untouched org-scoping store calls. With `*:*:*` granted,
+   ones, alongside the untouched org-scoping store calls. With `*.*` granted,
    every existing call still passes.
 
 Both paths now call the same `scope.Set.Authorize`. The two enforcement styles
@@ -470,12 +564,12 @@ solely on the runner-side filter.
 ### Phase 3 — Remove the compatibility shim
 
 Once all callers provably carry explicit scopes (keys backfilled, JWTs/sessions
-minting `*:*:*`, task tokens on the grammar), delete the "absent ⇒ full access"
+minting `*.*`, task tokens on the grammar), delete the "absent ⇒ full access"
 shim. From here, default-deny is real: a caller with no scopes can do nothing.
 
 ### Phase 4 (future, out of scope) — Narrow grants
 
-Only now does anyone's *effective* access change: read-only keys (`read:*:*`),
+Only now does anyone's *effective* access change: read-only keys (`*.read`),
 workspace-scoped keys, per-resource grants, UI for choosing scopes at key
 creation. This proposal deliberately stops at "everything is on the model and
 nobody's access changed."
@@ -484,88 +578,99 @@ nobody's access changed."
 
 | Credential | Storage | Minted by |
 |---|---|---|
-| `xat_` key | new `scopes` column on key row | `CreateKey` (`apiserver/key.go:14`); backfilled `*:*:*` in migration |
+| `xat_` key | new `scopes` column on key row | `CreateKey` (`apiserver/key.go:14`); backfilled `*.*` in migration |
 | App JWT | `scopes` claim in `AppClaims` | `HandleToken` → `NewAppClaims` |
 | Cookie session | not persisted; computed per request | `Auth.User` / `attachUserInfo` |
-| Task token | `Scopes` claim in `TaskClaims` (exists) | `AgentProxy.TaskToken` from workspace `Scopes` |
+| Task token | `Scopes` claim in `TaskClaims` (exists) | `AgentProxy.TaskToken` from workspace `Scopes` (minter fully constrains) |
 
 ## Trade-offs
 
-**Uniformity & flexibility vs. security-critical string logic.** A scope/ABAC
-matching engine is more flexible (per-resource, per-instance grants) and uniform
-(one evaluator, no caller-type branching) than today's two ad-hoc styles. The
-cost is that authorization becomes **string-pattern logic in the trust path** —
-exactly the kind of code where an off-by-one in wildcard handling is a privilege
-escalation. Mitigations:
+**Uniformity & flexibility vs. security-critical string logic.** A generic
+matching engine is more flexible (per-resource, per-instance, set-valued grants)
+and uniform (one evaluator, no caller-type branching) than today's two ad-hoc
+styles. The cost is that authorization becomes **pattern logic in the trust
+path** — exactly the kind of code where an off-by-one in wildcard or membership
+handling is a privilege escalation. Mitigations:
 
-- **Exhaustive table tests** for `scope` are mandatory, covering: every
-  action/resource/wildcard combination; empty `Preds`; missing target attribute
-  (must deny, not match — note the `ok` check in `Matches`); the four §4 worked
-  scenarios as regression tests; and the `filter_test.go` cases re-expressed.
+- **Exhaustive table tests** for `scope` are mandatory, covering: segment-count
+  mismatch; `*` single-segment matching (and that it does *not* span segments);
+  empty `Preds` matching any instance; absent key vs `"*"` value (both
+  unconstrained); scalar→singleton and array normalization; missing target
+  attribute (must deny, not match — the `ok` check in `Matches`); first-colon
+  split with colons inside the JSON; the four §6 worked scenarios as regression
+  tests; and the `filter_test.go` cases re-expressed.
 - **`AgentFilter` tests are a frozen behavioral spec** — they must pass through
   Phases 2–3 unchanged.
-- **Minting discipline.** The grammar has sharp edges. `write:task.id:*` is
-  *org-wide admin over tasks*, not "one task" — a wildcard in the wrong position
-  silently widens a grant. Defenses: a `ValidScope` validator (the existing one,
-  `agentauth/token.go:23`, generalizes) that rejects unknown actions/resources;
+- **Minting discipline.** The grammar has sharp edges. `task.write:{"id":"*"}`
+  (or `task.write` with empty predicates) is *org-wide admin over tasks*, not
+  "one task" — a wildcard value, or a forgotten predicate key, silently widens a
+  grant. Because an absent key is unconstrained, an **incomplete create object
+  is a hole**, not a deny. Defenses: a `ValidScope` validator (the existing one,
+  `agentauth/token.go:23`, generalizes) that rejects unknown operation paths;
   minting helpers (`scope.OwnTask(id)`, `scope.ChildTasks(id, ws, rn)`) so
-  call-sites never hand-assemble wildcard strings; and a lint/test that the only
-  place `*:*:*` is produced is the migration/admin path.
+  call-sites never hand-assemble scope strings or JSON; and a lint/test that the
+  only place `*.*` (or any empty-predicate wildcard) is produced is the
+  migration/admin path.
+
+**Generic engine + application mapping vs. a domain-typed evaluator.** Making the
+engine semantically agnostic (no resource/verb concept) keeps all domain
+knowledge in one auditable place (the per-RPC mapping) and lets the engine be
+tested as pure string logic. The cost is a small indirection: reading a scope
+string in isolation doesn't tell you what `task.read` *means* without the
+mapping. We accept this; the mapping is the spec.
 
 **One evaluator vs. keeping two styles.** Unifying means the server can finally
 enforce task isolation itself instead of depending on the runner-side
 `AgentFilter` being in the request path. The downside is a single evaluator is a
 single point of failure — countered by the test burden above.
 
-**Grammar richness vs. simplicity.** A flat `action:resource` capability set
-(no predicates) would be far simpler but cannot express "own task or child" or
-the create conjunction without either (a) per-RPC handler knowledge or (b)
-unsafe OR-splitting. The attribute predicates are the minimum needed to move
-*all* current rules into the token; we are not adding generality beyond what the
-existing rules require.
+**Set-valued predicates vs. multiple scopes.** Set values add no expressiveness
+(same DNF as multiple fully-constrained scopes); they exist only to stop tokens
+bloating with the cross-product of allowed workspaces × runners. The cost is one
+more thing the matcher and minter must get right (membership, normalization),
+justified by keeping JWTs small.
 
 **ABAC-in-token vs. policy engine (e.g. OPA/Cedar).** A full external policy
 engine is more powerful but is a large dependency and a new operational surface
 for a system whose entire authz need is "own task, children, org admin, a couple
-capabilities." A ~100-line evaluator with exhaustive tests is proportionate;
+capabilities." A small generic engine with exhaustive tests is proportionate;
 revisit if grants get genuinely policy-shaped.
 
 ## Open Questions
 
-1. **Exact string form of conjunctive scopes.** The draft uses
-   `create:task.parent:42,workspace:ws,runner:rn`. Alternatives:
-   `create:task{parent=42,workspace=ws,runner=rn}` (clearer grouping, needs a
-   real parser) or a structured JSON claim for JWTs with the string form only
-   for the DB column. Comma-separated is the simplest to parse but makes
-   literal commas in values illegal (not currently an issue — values are ids and
-   identifiers).
+1. **Operation-path convention.** The engine is agnostic, so the segment order
+   and arity are the application's choice. This proposal uses `resource.action`
+   (`task.read`, `github_token.create`) at arity 2, which makes `*.*` the admin
+   grant. `action.resource` would work identically. Worth fixing the convention
+   (and documenting it next to the per-RPC mapping) before implementation so all
+   minters agree.
 
-2. **Resource/verb taxonomy granularity.** Does `write:task.id:123` grant *all*
-   write-ish ops on/under that task — links, logs, events, update, cancel,
-   archive — or do we need finer resource types (`link`, `log`, `event`)? Today
-   `AgentFilter` treats `CreateLink`/`UploadLogs` as "write the task"
+2. **Resource/verb taxonomy granularity.** Does `task.write:{"id":123}` grant
+   *all* write-ish ops on/under that task — links, logs, events, update, cancel,
+   archive — or do we need finer resource segments (`link`, `log`, `event`)?
+   Today `AgentFilter` treats `CreateLink`/`UploadLogs` as "write the task"
    (`req.TaskId == claims.TaskID`), which argues for the coarse reading
-   (sub-resources inherit the task's write scope). But a read-only key that may
+   (sub-resources inherit the task's write op). But a read-only key that may
    read tasks yet not append logs would need the finer split. Proposed default:
    start coarse (`task` covers its sub-resources), introduce `link`/`log`/`event`
-   resources only when a use case needs the distinction — the grammar already
-   supports adding resource types without changing the evaluator.
+   resources only when a use case needs the distinction — the agnostic engine
+   already supports adding operation segments without any engine change.
 
 3. **Verb set.** Is `{read, write, create}` enough, or do destructive/lifecycle
-   ops (`delete`, `cancel`, `archive`, `restart`) deserve their own verbs rather
-   than folding into `write`? Finer verbs enable "can restart but not archive"
-   but multiply the scopes every admin must hold. Leaning toward folding
-   lifecycle into `write` initially.
+   ops (`delete`, `cancel`, `archive`, `restart`) deserve their own action
+   segments rather than folding into `write`? Finer verbs enable "can restart but
+   not archive" but multiply the scopes every admin must hold. Leaning toward
+   folding lifecycle into `write` initially.
 
-4. **How admin breadth is expressed across all resources.** `*:*:*` is global
-   admin; `*:task.id:*` is task-domain admin. Is a middle tier needed (e.g.
-   "admin over tasks and their sub-resources but not keys/orgs")? If sub-resources
-   are folded under `task` (Q2), `*:task.id:*` already covers it; if not, admin
-   needs an enumerated set, which is the argument for keeping the taxonomy coarse.
+4. **Depth-independent admin (`**`).** With a fixed 2-segment taxonomy, `*.*`
+   covers everything and no subtree wildcard is needed. If the taxonomy ever
+   grows variable-depth operation paths, admin grants would have to enumerate
+   each arity (`*.*`, `*.*.*`, …) unless we specify `**`. `**` is reserved now;
+   specifying it is deferred until a variable-depth taxonomy actually exists.
 
 5. **Org-membership role vs. scopes.** Org membership has a `role` column
    (`owner`/member, `OrgMember.Role`, set in `StoreUserResolver.Provision`).
-   Does role map to a scope set (owner ⇒ `*:*:*`, member ⇒ something narrower),
-   or stay an orthogonal concept consulted by org-management RPCs
-   (`AddOrgMember`, `DeleteOrg`)? This proposal leaves role as-is (Phase 1 grants
-   all members `*:*:*`); reconciling role with scopes is part of Phase 4.
+   Does role map to a scope set (owner ⇒ `*.*`, member ⇒ something narrower), or
+   stay an orthogonal concept consulted by org-management RPCs (`AddOrgMember`,
+   `DeleteOrg`)? This proposal leaves role as-is (Phase 1 grants all members
+   `*.*`); reconciling role with scopes is part of Phase 4.
