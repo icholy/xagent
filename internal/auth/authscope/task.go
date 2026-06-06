@@ -6,7 +6,7 @@ package authscope
 // Scopes.Allow.
 
 // Operation paths, as segment slices. The single source of truth for each
-// operation: scope creation (the runner's token minter, agentauth.TaskScopes)
+// operation: scope creation (the runner's token minter, agentauth.Scopes)
 // and Allow lookups share these, so the two can't drift. Treat them as
 // immutable — never mutate a returned slice. A wildcard operation would be
 // expressed the same way, e.g. var OpTaskAny = []string{"task", "*"}.

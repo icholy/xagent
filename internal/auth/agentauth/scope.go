@@ -6,8 +6,17 @@ import (
 	"github.com/icholy/xagent/internal/auth/authscope"
 )
 
-// TaskScopes builds the scopes granted to a task token from the task's identity
-// and the workspace's enabled capabilities (CapabilityChildTasks,
+// ScopeOptions describes the task identity and workspace capabilities a token's
+// scopes are minted from.
+type ScopeOptions struct {
+	TaskID       int64
+	Workspace    string
+	Runner       string
+	Capabilities []string
+}
+
+// Scopes builds the scopes granted to a task token from the task's identity and
+// the workspace's enabled capabilities (CapabilityChildTasks,
 // CapabilityGitHubToken). Every task always gets read and write on its own id;
 // the child-tasks capability adds read and write on its children plus a
 // fully-constrained create scope; the github-token capability adds
@@ -16,23 +25,23 @@ import (
 // The create scope is fully constrained here (parent, workspace, and runner all
 // present) because an absent predicate key is unconstrained: completeness is the
 // minter's responsibility.
-func TaskScopes(taskID int64, workspace, runner string, capabilities []string) authscope.Scopes {
+func Scopes(opts ScopeOptions) authscope.Scopes {
 	scopes := authscope.Scopes{
-		authscope.Make(authscope.OpTaskRead, authscope.WithTaskID(taskID)),
-		authscope.Make(authscope.OpTaskWrite, authscope.WithTaskID(taskID)),
+		authscope.Make(authscope.OpTaskRead, authscope.WithTaskID(opts.TaskID)),
+		authscope.Make(authscope.OpTaskWrite, authscope.WithTaskID(opts.TaskID)),
 	}
-	if slices.Contains(capabilities, CapabilityChildTasks) {
+	if slices.Contains(opts.Capabilities, CapabilityChildTasks) {
 		scopes = append(scopes,
-			authscope.Make(authscope.OpTaskRead, authscope.WithTaskParent(taskID)),
-			authscope.Make(authscope.OpTaskWrite, authscope.WithTaskParent(taskID)),
+			authscope.Make(authscope.OpTaskRead, authscope.WithTaskParent(opts.TaskID)),
+			authscope.Make(authscope.OpTaskWrite, authscope.WithTaskParent(opts.TaskID)),
 			authscope.Make(authscope.OpTaskCreate,
-				authscope.WithTaskParent(taskID),
-				authscope.WithTaskWorkspace(workspace),
-				authscope.WithTaskRunner(runner),
+				authscope.WithTaskParent(opts.TaskID),
+				authscope.WithTaskWorkspace(opts.Workspace),
+				authscope.WithTaskRunner(opts.Runner),
 			),
 		)
 	}
-	if slices.Contains(capabilities, CapabilityGitHubToken) {
+	if slices.Contains(opts.Capabilities, CapabilityGitHubToken) {
 		scopes = append(scopes, authscope.Make(authscope.OpGitHubTokenCreate))
 	}
 	return scopes

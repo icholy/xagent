@@ -85,7 +85,12 @@ func (p *AgentProxy) TaskToken(task *model.Task, capabilities []string) (string,
 		TaskID:    task.ID,
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
-		Scopes:    agentauth.TaskScopes(task.ID, task.Workspace, task.Runner, capabilities),
+		Scopes: agentauth.Scopes(agentauth.ScopeOptions{
+			TaskID:       task.ID,
+			Workspace:    task.Workspace,
+			Runner:       task.Runner,
+			Capabilities: capabilities,
+		}),
 	})
 }
 

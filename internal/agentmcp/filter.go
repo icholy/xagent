@@ -14,7 +14,7 @@ import (
 // AgentFilter implements XAgentServiceHandler and enforces task-scoped access
 // control via the authscope engine. Each RPC names the operation and attributes
 // it needs and checks them against the caller's scopes; those scopes are minted
-// by the runner (see agentauth.TaskScopes) and only ever grant access to the
+// by the runner (see agentauth.Scopes) and only ever grant access to the
 // agent's own task or, when the workspace enables it, its direct children.
 // Claims must be present in context (injected by agentauth.Middleware).
 type AgentFilter struct {
