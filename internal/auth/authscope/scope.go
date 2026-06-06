@@ -12,8 +12,9 @@ import "slices"
 
 // Scope is a single capability pattern. Op is the operation path, where each
 // segment holds the set of allowed alternatives ("*" is a member that matches
-// any segment). Preds maps an attribute key to its allowed value ("*" means
-// unconstrained). An empty Preds matches any instance of the operation.
+// any segment). Preds maps an attribute key to its single allowed value. An
+// absent key is unconstrained, so an empty Preds matches any instance of the
+// operation; there is no predicate wildcard (a "*" value is matched literally).
 type Scope struct {
 	Op    [][]string
 	Preds map[string]string
@@ -31,9 +32,9 @@ type Set []Scope
 
 // Matches reports whether the scope authorizes the target. The operation paths
 // must have the same number of segments (each segment matches exactly one), and
-// every predicate key in the scope must be satisfied (AND across keys). An
-// absent key or a "*" value is unconstrained; a constrained key whose attribute
-// is missing from the target denies.
+// every predicate key in the scope must equal the target's attribute (AND across
+// keys). An absent key is unconstrained; a key whose attribute is missing from
+// the target, or whose value differs, denies.
 func (s Scope) Matches(t Target) bool {
 	if len(s.Op) != len(t.Op) {
 		return false
@@ -45,11 +46,7 @@ func (s Scope) Matches(t Target) bool {
 		}
 	}
 	for key, want := range s.Preds {
-		if want == "*" {
-			continue
-		}
-		got, ok := t.Attrs[key]
-		if !ok || got != want {
+		if got, ok := t.Attrs[key]; !ok || got != want {
 			return false
 		}
 	}

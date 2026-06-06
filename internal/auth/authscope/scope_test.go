@@ -88,15 +88,15 @@ func TestMatches(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "star value is unconstrained even when attr present",
+			name:   "star value is matched literally not as a wildcard",
 			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "*"}},
 			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "99"}},
-			want:   true,
+			want:   false,
 		},
 		{
-			name:   "star value is unconstrained even when attr absent",
+			name:   "star value matches a literal star attribute",
 			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "*"}},
-			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{}},
+			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "*"}},
 			want:   true,
 		},
 		{
@@ -265,7 +265,7 @@ func TestParse(t *testing.T) {
 			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
 		},
 		{
-			name: "star value preserved",
+			name: "star value parsed as a literal string",
 			in:   `task.write:{"id":"*"}`,
 			want: Scope{Op: [][]string{{"task"}, {"write"}}, Preds: map[string]string{"id": "*"}},
 		},
