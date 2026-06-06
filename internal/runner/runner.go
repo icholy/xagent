@@ -424,7 +424,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		"--token", token,
 	}
 	for _, capability := range ws.Capabilities {
-		mcpArgs = append(mcpArgs, "--scope", capability)
+		mcpArgs = append(mcpArgs, "--capability", capability)
 	}
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
