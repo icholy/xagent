@@ -389,8 +389,9 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 			Name:     ctx.UserInfo.Name,
 			Type:     AuthTypeCookie,
 			ClientID: r.Header.Get("X-Client-ID"),
-			// Cookie sessions are omnipotent within their org today; grant the
-			// admin wildcard so behavior is unchanged once enforcement lands.
+			// TODO: revisit permissions for cookie auth. Cookie sessions are
+			// omnipotent within their org today, so grant the admin wildcard for
+			// now to keep behavior unchanged once enforcement lands.
 			Scopes: authscope.Admin(),
 		}
 	}
