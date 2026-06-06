@@ -1,4 +1,8 @@
-package agent
+// Package toollog renders decoded tool-call inputs into compact, log-friendly
+// summaries. It is a pure, dependency-free utility imported by the agent
+// stream parsers (claude.go, codex.go, cursor.go); it knows nothing about
+// specific tools or field names.
+package toollog
 
 import (
 	"fmt"
@@ -14,18 +18,18 @@ const (
 	// maxSummaryLen caps the length (in runes) of the whole summary line.
 	maxSummaryLen = 200
 	// truncatedPlaceholder replaces bulky field values that a provider redacts
-	// at its call site before handing the input to summarizeInput.
+	// at its call site before handing the input to Summarize.
 	truncatedPlaceholder = "<truncated>"
 )
 
-// summarizeInput renders a tool call's decoded input object as a short,
+// Summarize renders a tool call's decoded input object as a short,
 // single-line, human-readable summary. It knows nothing about specific tools
 // or field names: it walks the map in sorted key order, renders key=value per
 // field with type-aware formatting, collapses whitespace/newlines to a single
 // space, and applies per-value and overall length limits. It returns "" when
 // there is nothing useful to render, so the log line falls back to just the
 // tool name.
-func summarizeInput(input map[string]any) string {
+func Summarize(input map[string]any) string {
 	if len(input) == 0 {
 		return ""
 	}
@@ -49,11 +53,11 @@ func summarizeInput(input map[string]any) string {
 	return truncateRunes(strings.Join(pairs, " "), maxSummaryLen)
 }
 
-// redact replaces the given keys, when present, with the bulky-field
+// Redact replaces the given keys, when present, with the bulky-field
 // placeholder. Callers pass the field names they know are bulky, which keeps
 // all tool-specific field knowledge at the provider call site rather than in
 // the name-agnostic summarizer.
-func redact(input map[string]any, keys ...string) map[string]any {
+func Redact(input map[string]any, keys ...string) map[string]any {
 	for _, k := range keys {
 		if _, ok := input[k]; ok {
 			input[k] = truncatedPlaceholder

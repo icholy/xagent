@@ -1,4 +1,4 @@
-package agent
+package toollog
 
 import (
 	"strings"
@@ -93,7 +93,7 @@ func TestSummarizeInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := summarizeInput(tt.input)
+			got := Summarize(tt.input)
 			assert.Equal(t, got, tt.want)
 		})
 	}
@@ -105,7 +105,7 @@ func TestSummarizeInput_PerValueTruncation(t *testing.T) {
 	long := strings.Repeat("x", maxValueLen+50)
 
 	// Act
-	got := summarizeInput(map[string]any{"v": long})
+	got := Summarize(map[string]any{"v": long})
 
 	// Assert
 	want := "v=" + strings.Repeat("x", maxValueLen) + "…"
@@ -122,7 +122,7 @@ func TestSummarizeInput_OverallTruncation(t *testing.T) {
 	}
 
 	// Act
-	got := summarizeInput(input)
+	got := Summarize(input)
 
 	// Assert
 	r := []rune(got)
@@ -160,7 +160,7 @@ func TestRedact(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := redact(tt.input, tt.keys...)
+			got := Redact(tt.input, tt.keys...)
 			assert.DeepEqual(t, got, tt.want)
 		})
 	}

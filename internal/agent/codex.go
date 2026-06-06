@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/icholy/xagent/internal/agent/toollog"
 )
 
 // CodexAgent implements Agent using OpenAI Codex CLI.
@@ -201,7 +203,7 @@ func (a *CodexAgent) handleStreamEvent(data []byte) bool {
 				if event.Item.Arguments != "" {
 					_ = json.Unmarshal([]byte(event.Item.Arguments), &input)
 				}
-				a.log.Info("tool", "name", event.Item.Name, "summary", summarizeInput(input))
+				a.log.Info("tool", "name", event.Item.Name, "summary", toollog.Summarize(input))
 			}
 		case "function_call_output":
 			a.log.Debug("tool_result", "status", event.Item.Status)

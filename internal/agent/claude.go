@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/icholy/xagent/internal/agent/toollog"
 )
 
 // ClaudeAgent implements Agent using Claude Code CLI.
@@ -135,8 +137,8 @@ func (a *ClaudeAgent) handleStreamEvent(data []byte) bool {
 				// block.Input is an already-decoded object; redact the bulky
 				// content-bearing fields Claude Code produces before summarizing.
 				input, _ := block.Input.(map[string]any)
-				input = redact(input, "old_string", "new_string", "content")
-				a.log.Info("tool", "name", block.Name, "summary", summarizeInput(input))
+				input = toollog.Redact(input, "old_string", "new_string", "content")
+				a.log.Info("tool", "name", block.Name, "summary", toollog.Summarize(input))
 			}
 		}
 	case "user":

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/icholy/xagent/internal/agent/toollog"
 )
 
 // CursorAgent implements Agent using the Cursor Agent CLI.
@@ -234,8 +236,8 @@ func (a *CursorAgent) handleStreamEvent(data []byte) bool {
 		}
 		// Cursor nests the actual arguments under an "args" object inside the
 		// set sub-object; redact the bulky content fields before summarizing.
-		args := redact(cursorToolArgs(raw), "old_string", "new_string", "content", "fileText", "contents")
-		a.log.Info("tool", "name", toolName, "subtype", event.Subtype, "call_id", event.CallID, "summary", summarizeInput(args))
+		args := toollog.Redact(cursorToolArgs(raw), "old_string", "new_string", "content", "fileText", "contents")
+		a.log.Info("tool", "name", toolName, "subtype", event.Subtype, "call_id", event.CallID, "summary", toollog.Summarize(args))
 	case "result":
 		if event.IsError {
 			a.log.Error("result", "is_error", true)
