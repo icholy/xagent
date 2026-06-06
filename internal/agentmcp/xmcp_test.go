@@ -111,10 +111,10 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	// Wrap client with AgentFilter to enforce authorization
 	filter := NewAgentFilter(client)
 	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
-	srv := NewServer(filter, task, []string{agentauth.ScopeChildTasks})
+	srv := NewServer(filter, task, []string{agentauth.CapabilityChildTasks})
 	session := setupTestSession(t, srv, &agentauth.TaskClaims{
 		TaskID: parentTaskID,
-		Scopes: agentauth.TaskScopes(parentTaskID, "test-workspace", "test-runner", []string{agentauth.ScopeChildTasks}),
+		Scopes: agentauth.TaskScopes(parentTaskID, "test-workspace", "test-runner", []string{agentauth.CapabilityChildTasks}),
 	})
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -143,7 +143,7 @@ func TestGetGitHubToken(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.ScopeGitHubToken})
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.CapabilityGitHubToken})
 	session := setupTestSession(t, srv, nil)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -167,7 +167,7 @@ func TestGetGitHubToken_Error(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.ScopeGitHubToken})
+	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.CapabilityGitHubToken})
 	session := setupTestSession(t, srv, nil)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{

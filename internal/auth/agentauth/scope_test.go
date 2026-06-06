@@ -21,7 +21,7 @@ func TestTaskScopes_OwnTaskOnly(t *testing.T) {
 }
 
 func TestTaskScopes_ChildTasks(t *testing.T) {
-	scopes := TaskScopes(42, "ws", "rn", []string{ScopeChildTasks})
+	scopes := TaskScopes(42, "ws", "rn", []string{CapabilityChildTasks})
 
 	assert.Assert(t, scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(99), authscope.WithTaskParent(42)))
 	assert.Assert(t, scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(99), authscope.WithTaskParent(42)))
@@ -38,7 +38,7 @@ func TestTaskScopes_ChildTasks(t *testing.T) {
 }
 
 func TestTaskScopes_GitHubToken(t *testing.T) {
-	scopes := TaskScopes(42, "ws", "rn", []string{ScopeGitHubToken})
+	scopes := TaskScopes(42, "ws", "rn", []string{CapabilityGitHubToken})
 
 	assert.Assert(t, scopes.Allow(authscope.OpGitHubTokenCreate))
 	assert.Assert(t, !scopes.Allow(authscope.OpTaskCreate, authscope.WithTaskParent(42), authscope.WithTaskWorkspace("ws"), authscope.WithTaskRunner("rn")))

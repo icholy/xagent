@@ -142,7 +142,7 @@ func (c *Config) prompt() (string, error) {
 		Prompt             string
 	}{
 		Started:            c.Started,
-		HasChildTasksScope: c.hasScope(agentauth.ScopeChildTasks),
+		HasChildTasksScope: c.hasCapability(agentauth.CapabilityChildTasks),
 		Prompt:             c.Prompt,
 	})
 	if err != nil {

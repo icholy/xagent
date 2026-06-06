@@ -18,7 +18,7 @@ func TestConfigPrompt_WithoutChildTasksScope(t *testing.T) {
 }
 
 func TestConfigPrompt_WithChildTasksScope(t *testing.T) {
-	cfg := &Config{Scopes: []string{agentauth.ScopeChildTasks}}
+	cfg := &Config{Capabilities: []string{agentauth.CapabilityChildTasks}}
 	got, err := cfg.prompt()
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(got, "Use xagent:update_child_task to delegate work to child tasks."))

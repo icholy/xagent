@@ -10,20 +10,21 @@ import (
 	"github.com/icholy/xagent/internal/auth/authscope"
 )
 
-// Scopes grant tasks additional capabilities beyond their own task data.
+// Capability flags grant tasks additional capabilities beyond their own task
+// data. They are workspace-level capabilities, not authscope grammar scopes.
 const (
-	// ScopeGitHubToken allows issuing GitHub App installation tokens via the
-	// CreateGitHubToken RPC.
-	ScopeGitHubToken = "github_token"
-	// ScopeChildTasks allows creating, listing, updating, and reading logs of
-	// child tasks.
-	ScopeChildTasks = "child_tasks"
+	// CapabilityGitHubToken allows issuing GitHub App installation tokens via
+	// the CreateGitHubToken RPC.
+	CapabilityGitHubToken = "github_token"
+	// CapabilityChildTasks allows creating, listing, updating, and reading logs
+	// of child tasks.
+	CapabilityChildTasks = "child_tasks"
 )
 
-// ValidScope reports whether scope is a recognized capability scope.
-func ValidScope(scope string) bool {
-	switch scope {
-	case ScopeGitHubToken, ScopeChildTasks:
+// ValidCapability reports whether capability is a recognized capability flag.
+func ValidCapability(capability string) bool {
+	switch capability {
+	case CapabilityGitHubToken, CapabilityChildTasks:
 		return true
 	default:
 		return false

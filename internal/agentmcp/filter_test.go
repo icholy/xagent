@@ -96,7 +96,7 @@ func TestAgentFilter_CreateGitHubToken_Allowed(t *testing.T) {
 
 	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{
 		TaskID: 42,
-		Scopes: agentauth.TaskScopes(42, "test-workspace", "test-runner", []string{agentauth.ScopeGitHubToken}),
+		Scopes: agentauth.TaskScopes(42, "test-workspace", "test-runner", []string{agentauth.CapabilityGitHubToken}),
 	})
 	resp, err := filter.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
 	assert.NilError(t, err)
@@ -131,7 +131,7 @@ func TestAgentFilter_ListChildTasks_Allowed(t *testing.T) {
 
 	ctx := agentauth.ContextWithClaims(t.Context(), &agentauth.TaskClaims{
 		TaskID: 42,
-		Scopes: agentauth.TaskScopes(42, "test-workspace", "test-runner", []string{agentauth.ScopeChildTasks}),
+		Scopes: agentauth.TaskScopes(42, "test-workspace", "test-runner", []string{agentauth.CapabilityChildTasks}),
 	})
 	_, err := filter.ListChildTasks(ctx, &xagentv1.ListChildTasksRequest{ParentId: 42})
 	assert.NilError(t, err)

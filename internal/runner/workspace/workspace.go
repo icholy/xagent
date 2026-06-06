@@ -151,7 +151,7 @@ func (w *Workspace) Validate() error {
 		return fmt.Errorf("agent: %w", err)
 	}
 	for _, scope := range w.Scopes {
-		if !agentauth.ValidScope(scope) {
+		if !agentauth.ValidCapability(scope) {
 			return fmt.Errorf("unknown scope %q", scope)
 		}
 	}
@@ -301,13 +301,13 @@ func (c *Config) Get(name string) (*Workspace, error) {
 // AgentConfig converts the workspace agent configuration into an agent.Config.
 func (w *Workspace) AgentConfig() agent.Config {
 	cfg := agent.Config{
-		Type:       w.Agent.Type,
-		Cwd:        w.Agent.Cwd,
-		Prompt:     w.Agent.Prompt,
-		Verbose:    w.Agent.Verbose,
-		McpServers: make(map[string]agent.McpServer),
-		Commands:   w.Commands,
-		Scopes:     w.Scopes,
+		Type:         w.Agent.Type,
+		Cwd:          w.Agent.Cwd,
+		Prompt:       w.Agent.Prompt,
+		Verbose:      w.Agent.Verbose,
+		McpServers:   make(map[string]agent.McpServer),
+		Commands:     w.Commands,
+		Capabilities: w.Scopes,
 	}
 	if w.Agent.Claude != nil {
 		cfg.Claude = &agent.ClaudeOptions{

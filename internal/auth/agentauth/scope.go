@@ -7,10 +7,11 @@ import (
 )
 
 // TaskScopes builds the scopes granted to a task token from the task's identity
-// and the workspace's enabled capabilities (ScopeChildTasks, ScopeGitHubToken).
-// Every task always gets read and write on its own id; the child-tasks
-// capability adds read and write on its children plus a fully-constrained create
-// scope; the github-token capability adds github_token.create.
+// and the workspace's enabled capabilities (CapabilityChildTasks,
+// CapabilityGitHubToken). Every task always gets read and write on its own id;
+// the child-tasks capability adds read and write on its children plus a
+// fully-constrained create scope; the github-token capability adds
+// github_token.create.
 //
 // The create scope is fully constrained here (parent, workspace, and runner all
 // present) because an absent predicate key is unconstrained: completeness is the
@@ -20,7 +21,7 @@ func TaskScopes(taskID int64, workspace, runner string, capabilities []string) a
 		authscope.Make(authscope.OpTaskRead, authscope.WithTaskID(taskID)),
 		authscope.Make(authscope.OpTaskWrite, authscope.WithTaskID(taskID)),
 	}
-	if slices.Contains(capabilities, ScopeChildTasks) {
+	if slices.Contains(capabilities, CapabilityChildTasks) {
 		scopes = append(scopes,
 			authscope.Make(authscope.OpTaskRead, authscope.WithTaskParent(taskID)),
 			authscope.Make(authscope.OpTaskWrite, authscope.WithTaskParent(taskID)),
@@ -31,7 +32,7 @@ func TaskScopes(taskID int64, workspace, runner string, capabilities []string) a
 			),
 		)
 	}
-	if slices.Contains(capabilities, ScopeGitHubToken) {
+	if slices.Contains(capabilities, CapabilityGitHubToken) {
 		scopes = append(scopes, authscope.Make(authscope.OpGitHubTokenCreate))
 	}
 	return scopes
