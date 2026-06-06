@@ -38,7 +38,7 @@ When `a.verbose` is set, the parsing is bypassed entirely and every raw line is
 logged verbatim. The summarization work described here only applies to the
 non-verbose path.
 
-Two of the six agents do **not** parse a structured stream and are out of scope:
+Two of the agents do **not** parse a structured stream and are out of scope:
 
 - `CopilotAgent` (`internal/agent/copilot.go`) runs `copilot --silent` and logs
   each raw stdout line.
@@ -114,156 +114,135 @@ case "tool_call":
 
 ## Tool-call event structure per provider
 
-The three providers expose the tool input differently, which is the main reason
-a shared summarizer needs a small per-provider adapter at the call site.
+The three providers expose the tool input differently, which is the reason each
+needs a small decode adapter at the call site before handing a `map[string]any`
+to the shared summarizer. **No provider's specific field names are assumed by
+the shared utility** — see the design below.
 
 ### Claude Code (`stream-json`)
 
 A `tool_use` content block carries `name` (string) and `input` (an arbitrary
-JSON object), already decoded into the `Input any` field. For well-known tools
-the input keys are stable:
-
-| Tool         | Key input fields                              |
-|--------------|-----------------------------------------------|
-| `Bash`       | `command`, `description`                      |
-| `Read`       | `file_path`, `offset`, `limit`                |
-| `Edit`       | `file_path`, `old_string`, `new_string`       |
-| `Write`      | `file_path`, `content`                        |
-| `Grep`       | `pattern`, `path`, `glob`, `output_mode`      |
-| `Glob`       | `pattern`, `path`                             |
-| `LS`         | `path`                                        |
-| `WebFetch`   | `url`, `prompt`                               |
-| `WebSearch`  | `query`                                       |
-| `Task`       | `description`, `subagent_type`                |
-| `TodoWrite`  | `todos` (array)                               |
-
-MCP tools arrive with a name of the form `mcp__<server>__<tool>` and an
-arbitrary input object whose shape is defined by that server.
+JSON object), already decoded into the `Input any` field. The input keys vary
+per tool and are a Claude-Code-specific convention; the shared summarizer does
+not depend on them.
 
 ### Codex (`--json`)
 
 A `function_call` item carries `name` (string) and `arguments` — a **JSON
 string** (not a decoded object), per the existing `Arguments string` field in
-`codex.go`. Summarization must `json.Unmarshal([]byte(arguments), &m)` first,
-then reuse the same generic object summarizer. Codex's built-in tools include a
-`shell` function whose arguments contain a `command` array.
+`codex.go`. The adapter `json.Unmarshal([]byte(arguments), &m)` into a
+`map[string]any` first. Codex's `shell` tool, for example, carries a `command`
+that is an **array**, not a string — which is exactly why the generic renderer
+(not a string-field special case) is the right tool for the job.
 
 ### Cursor (`stream-json`)
 
 A `tool_call` event carries a `tool_call` object with exactly one of
 `readToolCall` / `writeToolCall` / `editToolCall` / `bashToolCall` set, each a
 `*json.RawMessage`. Cursor nests the actual arguments under an `args` object
-inside each sub-object. The set sub-object can be unmarshalled to a small map
-and the relevant field extracted (e.g. `args.command`, `args.path`).
+inside each sub-object. The adapter unmarshals the single set sub-object and
+extracts its `args` map.
+
+The takeaway: the three providers disagree on naming and nesting, so anything
+keyed on specific field names (`file_path`, `command`, `pattern`, …) would only
+fire for one provider. A purely generic renderer is the only thing that behaves
+consistently across all three.
 
 ## Design
 
-### A shared, provider-agnostic summarizer
+### A single generic, name-agnostic summarizer
 
-Add a new file `internal/agent/toolsummary.go` containing one pure, dependency-
-free function plus helpers:
+Add a new file `internal/agent/toolsummary.go` containing one pure,
+dependency-free function:
 
 ```go
-// summarizeToolInput returns a short, human-readable, single-line summary of a
-// tool call's input. name is the tool name (may be an MCP name of the form
-// mcp__server__tool). input is the decoded argument object (map[string]any),
-// or nil if unavailable. The returned string never contains newlines and is
-// length-limited.
-func summarizeToolInput(name string, input map[string]any) string
+// summarizeInput renders a tool call's decoded input object as a short,
+// single-line, human-readable summary. It knows nothing about specific tools
+// or field names: it walks the map in sorted key order, renders key=value per
+// field with type-aware formatting, collapses whitespace/newlines to a single
+// space, and applies per-value and overall length limits. Returns "" when
+// there is nothing useful to render.
+func summarizeInput(input map[string]any) string
 ```
 
-Each agent keeps its provider-specific decoding at the call site and funnels
-into this one function:
+It is **fully generic**: no per-tool branches, no list of well-known field
+names, no MCP-name parsing.
 
-- **Claude**: `block.Input` is already `any`; assert to `map[string]any` and
-  pass through.
+Rendering rules:
+
+1. Iterate keys in **sorted order** (alphabetical), so output is deterministic
+   and does not depend on Go map iteration order. This also keeps it
+   table-testable.
+2. For each key render `key=value`, formatting the value by type:
+   - **string**: collapse whitespace to single spaces, quote only if it
+     contains a space, truncate to the per-value limit.
+   - **number / bool**: rendered as-is.
+   - **array**: a string/number/bool array is joined with spaces (so Codex's
+     `command: ["go", "test", "./..."]` reads as `command="go test ./..."`);
+     any other array renders as `[n items]`.
+   - **object**: `{…}` (not expanded), to keep the summary one line.
+   - **null**: the key is skipped.
+3. Join the pairs with a single space and apply the overall length limit.
+
+Because objects and non-scalar arrays are never expanded, the output is bounded
+regardless of how deep or large the input is.
+
+### Per-provider decode + bulky-field redaction at the call site
+
+Each agent keeps its provider-specific decoding at its `handleStreamEvent` call
+site, **and is also the only place that knows which of its own fields are
+bulky**. Before calling `summarizeInput`, the provider replaces its known
+bulky values with the literal string `<truncated>`:
+
+- **Claude**: `block.Input` is already `any`; assert to `map[string]any`. Blank
+  out the large content-bearing fields it knows it produces — `old_string`,
+  `new_string`, `content` — by setting each present key to `"<truncated>"`.
+  Then call `summarizeInput`.
 - **Codex**: `json.Unmarshal([]byte(event.Item.Arguments), &m)` into a
-  `map[string]any`, then pass `m`. The Codex tool name (`shell`) maps onto the
-  generic path; `command` (array) is handled by the array renderer below.
-- **Cursor**: unmarshal the single set `*json.RawMessage` into a small struct
-  `{ Args map[string]any }` and pass `Args` with the derived name (`read`,
-  `write`, `edit`, `bash`).
+  `map[string]any`, redact any of its own bulky fields the same way (if any),
+  then call `summarizeInput`.
+- **Cursor**: unmarshal the single set `*json.RawMessage`, pull out its `args`
+  map, redact its own bulky fields (e.g. write contents) the same way, then
+  call `summarizeInput`.
+
+This keeps the **only** code that knows tool-specific field names located in
+the provider that actually produces those fields, and keeps the shared utility
+purely generic. A field the provider does not anticipate is still safe: the
+generic renderer's array/object collapsing and length caps bound it regardless.
 
 The log call then becomes:
 
 ```go
-summary := summarizeToolInput(name, input)
+summary := summarizeInput(input)
 a.log.Info("tool", "name", name, "summary", summary)
 ```
 
-Keeping `name` as its own attribute preserves the existing structured field;
-`summary` is the new human-readable detail. (Alternatively the summary can be
-folded into a single message — see Trade-offs.)
-
-### Special-cased well-known tools
-
-`summarizeToolInput` switches on a normalized (case-insensitive) tool name for
-the common tools and pulls out the single most informative field:
-
-| Tool                     | Summary                                    | Example output                         |
-|--------------------------|--------------------------------------------|----------------------------------------|
-| `Bash` / `shell`         | the command                                | `npm test -- -run=TestFoo`             |
-| `Read` / `LS`            | the path                                   | `internal/agent/claude.go`             |
-| `Edit`                   | the path                                   | `internal/agent/claude.go`             |
-| `Write`                  | the path (never the content)               | `proposals/draft/foo.md`               |
-| `Grep`                   | pattern, with path/glob if present         | `handleStreamEvent in *.go`            |
-| `Glob`                   | the pattern                                | `**/*.go`                              |
-| `WebFetch`               | the url                                    | `https://example.com/x`                |
-| `WebSearch`              | the query                                  | `connect rpc streaming`                |
-| `Task`                   | subagent type + description                | `[explore] find the parser`            |
-| `TodoWrite`              | count of todos                             | `5 todos`                              |
-
-`Edit`/`Write` deliberately ignore `old_string`/`new_string`/`content` because
-those are large and unhelpful in a one-line log.
+`name` stays its own structured slog attribute (so anything that greps for
+`name=` keeps working); `summary` is the new human-readable detail. When
+`summarizeInput` returns `""`, the line is effectively just `tool name=…`,
+matching today's behavior — so there is no regression for tools with no useful
+arguments.
 
 ### MCP tools
 
-Names matching `mcp__<server>__<tool>` are detected by prefix. The summary
-renders the friendly `server/tool` plus a generic object summary of the
-arguments:
-
-```
-xagent/create_link  url=https://… title="My PR"
-```
-
-The server/tool split makes MCP calls readable without hardcoding any server's
-schema, and the generic object summary (below) covers the arguments.
-
-### Generic fallback for arbitrary input
-
-For any tool not special-cased (including all MCP tools and unknown built-ins),
-render the argument object compactly:
-
-1. Iterate keys in a **stable order** (sort alphabetically; this avoids relying
-   on Go map iteration order and keeps output deterministic for tests).
-2. For each key, render `key=value` where the value is formatted by type:
-   - **string**: quoted only if it contains spaces; truncated (see limits).
-   - **number/bool**: as-is.
-   - **array**: `command`-style string arrays are joined with spaces; other
-     arrays render as `[n items]`.
-   - **object**: `{…}` (not expanded) to keep one line.
-   - **null**: skipped.
-3. Join pairs with a single space, then apply the overall length limit.
-
-Skipping objects/large arrays from expansion keeps the line bounded regardless
-of input depth.
+MCP tools require **no special handling**. The full tool name (whatever the
+provider emits, e.g. `mcp__xagent__create_link`) is already carried in the
+`name` attribute and is perfectly readable as-is. The arguments are an ordinary
+input object and flow through `summarizeInput` like any other tool. There is no
+name parsing or `server/tool` splitting.
 
 ### Length, redaction, and multi-line handling
 
-Centralize these rules in the summarizer so every provider behaves identically:
+Centralize the size rules in the summarizer so every provider behaves
+identically:
 
-- **Single line**: replace any `\r?\n` (and runs of whitespace) in a value with
-  a single space, so a multi-line `command` or `pattern` collapses to one line.
-- **Per-value truncation**: cap each rendered value at ~120 runes, appending an
-  ellipsis (`…`) when truncated. Truncate on rune boundaries, not bytes, to
-  avoid splitting UTF-8.
+- **Single line**: collapse any `\r?\n` and runs of whitespace in a value to a
+  single space.
+- **Per-value truncation**: cap each rendered value at ~120 runes, appending
+  `…` when truncated. Truncate on rune boundaries, not bytes.
 - **Overall cap**: cap the whole summary at ~200 runes with a trailing `…`.
-- **Redact bulky fields by omission**: large content-bearing fields
-  (`content`, `old_string`, `new_string`, `todos`, base64-looking blobs) are
-  never rendered as values — they are either replaced by the special-case path
-  (path only) or rendered as `[n items]` / `{…}` by the generic renderer.
-- **Empty summary**: if there's nothing useful to show, return `""` and the log
-  line falls back to just the name (current behavior), so we never regress.
+- **Bulky fields**: handled by the provider adapter (replaced with
+  `<truncated>` before the map is passed in), not by the shared utility.
 
 Suggested constants (tunable):
 
@@ -285,61 +264,60 @@ tool name=Grep
 tool name=mcp__xagent__create_link
 ```
 
-After:
+After (generic `key=value` rendering, bulky fields pre-redacted by the
+provider):
 
 ```
-tool name=Bash summary="go test ./internal/agent/ -run TestSummarize"
-tool name=Read summary=internal/agent/claude.go
-tool name=Grep summary="handleStreamEvent in *.go"
-tool name=mcp__xagent__create_link summary="xagent/create_link url=https://github.com/… title=\"Add summaries\""
+tool name=Bash summary="command=\"go test ./internal/agent/\" description=\"run agent tests\""
+tool name=Read summary=file_path=internal/agent/claude.go
+tool name=Edit summary="file_path=internal/agent/claude.go new_string=<truncated> old_string=<truncated>"
+tool name=Grep summary="glob=*.go pattern=handleStreamEvent"
+tool name=mcp__xagent__create_link summary="subscribe=true title=\"Add summaries\" url=https://github.com/…"
 ```
 
 ### Testing
 
-`summarizeToolInput` is a pure function over `(name, map[string]any)` and is
-trivially table-testable per the `testing` skill — one case per well-known
-tool, MCP detection, the generic fallback, array/object handling, truncation,
-and multi-line collapsing. No container or DB is required. The deterministic
-key ordering makes generic-fallback output stable to assert on.
+`summarizeInput` is a pure function over `map[string]any` and is directly
+table-testable per the `testing` skill — string/number/bool/array/object
+rendering, sorted key order, whitespace/newline collapsing, per-value and
+overall truncation, and the empty-input (`""`) case. The sorted key ordering
+makes the output deterministic to assert on. No container or DB is required.
+The provider adapters' bulky-field redaction can be covered with a small case
+per provider if desired.
 
 ## Trade-offs
 
-- **Shared summarizer vs. per-agent logic.** A single `summarizeToolInput`
-  keeps formatting, truncation, and redaction consistent across providers and
-  is independently testable. The cost is a thin per-agent decode adapter
-  (Claude already has a decoded object; Codex needs a JSON-string unmarshal;
-  Cursor needs to reach into its typed sub-object). This is preferred over
-  duplicating formatting in three `handleStreamEvent`s.
+- **Generic-only vs. per-tool special-casing.** A purely generic renderer is
+  the only approach that behaves consistently across Claude, Codex, and Cursor,
+  because their field names and nesting differ (Codex's `command` is an array,
+  Cursor nests under `args`). It is also far simpler — one function, no tables,
+  no name parsing — and trivially testable. The cost is slightly noisier lines
+  for some tools (e.g. `Bash` shows `command=… description=…` instead of just
+  the command). This is an acceptable trade for consistency and zero reliance
+  on provider-specific conventions, and is the recommended approach.
+
+- **Bulky-field redaction at the call site vs. in the utility.** Putting the
+  `<truncated>` substitution in each provider adapter keeps the shared utility
+  free of any field-name knowledge and puts the knowledge where the fields are
+  actually produced. The alternative (a hardcoded list of bulky field names in
+  the shared function) would re-introduce exactly the cross-provider coupling
+  this design avoids. Recommended: redact at the call site.
 
 - **Separate `summary` attribute vs. folded message.** Keeping `name` and
   `summary` as distinct slog attributes preserves the existing structured
-  `name` field (anything downstream that greps for `name=` keeps working) and
-  is the recommended approach. Folding into a single message
-  (`a.log.Info("tool", "summary", "Bash: go test …")`) reads marginally nicer
-  in a raw text log but loses the structured name. Recommendation: keep both
-  attributes.
+  `name` field and is recommended over folding both into a single message
+  string.
 
-- **Special-casing vs. pure generic.** A pure generic renderer would need zero
-  per-tool knowledge, but produces noisier lines (e.g. `Bash` would show
-  `command=… description=…` instead of just the command). Special-casing the
-  ~10 common tools yields the cleanest output where it matters most; the
-  generic fallback guarantees every other tool (and every MCP tool) is still
-  summarized. Recommendation: special-case the common tools, generic-fallback
-  everything else.
-
-- **Truncation length.** Longer caps show more context but make the log harder
-  to scan and bloat stored log rows. The ~120/200 rune caps are a starting
-  point and can be tuned; they are centralized so a single change adjusts all
-  providers.
+- **Truncation length.** The ~120/200 rune caps are a starting point and can be
+  tuned; they are centralized so a single change adjusts all providers.
 
 ## Open questions
 
-1. Should the summary be a separate slog attribute (`summary=…`) or folded into
-   the message? (Proposal recommends separate.)
+1. Are the ~120/200 rune caps the right defaults for the Web UI's log column
+   width, or should they be larger?
 2. Should `verbose` mode also emit summaries, or remain fully raw? (Proposal
    leaves verbose untouched — raw lines only.)
-3. Are the ~120/200 rune caps the right defaults for the Web UI's log column
-   width, or should they be larger?
-4. Cursor's `args` nesting and exact field names should be confirmed against a
+3. Cursor's `args` nesting and exact field names should be confirmed against a
    live `stream-json` capture before implementation, since the current parser
-   only inspects which sub-object is set, not its contents.
+   only inspects which sub-object is set, not its contents. (This only affects
+   the adapter's extraction/redaction, not the generic utility.)
