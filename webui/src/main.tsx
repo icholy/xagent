@@ -8,6 +8,7 @@ import { routeTree } from './routeTree.gen'
 import { AuthTransport } from './lib/transport'
 import { NotificationSSE } from './lib/notification-sse'
 import { ServicesProvider } from './lib/services'
+import { createParseSearch, createStringifySearch } from './lib/search-serialization'
 import './index.css'
 
 const clientId = crypto.randomUUID()
@@ -26,6 +27,8 @@ const router = createRouter({
   context: { queryClient, auth },
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0,
+  parseSearch: createParseSearch({ org: String }),
+  stringifySearch: createStringifySearch({ org: String }),
 })
 
 auth.onOrgChange((orgId, internal) => {

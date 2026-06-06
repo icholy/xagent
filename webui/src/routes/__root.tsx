@@ -48,7 +48,9 @@ const ReactQueryDevtools = import.meta.env.DEV
 type RootSearch = { org?: string }
 
 function validateSearch(search: Record<string, unknown>): RootSearch {
-  return { org: typeof search.org === 'string' ? search.org : undefined }
+  // parseSearch coerces org to a string when present, so this is a pass-through.
+  const org = search.org
+  return { org: org == null ? undefined : String(org) }
 }
 
 function beforeLoad({
