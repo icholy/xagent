@@ -1,30 +1,28 @@
-// Package authscope implements a generic, semantically agnostic scope-matching
-// engine for authorization. It assigns no meaning to operation segments or
-// predicate keys: a scope is a pattern over an (operation-path, attributes)
-// pair, and a target is the concrete operation-path and attributes an
-// application builds per request. The application layer owns the operation
-// taxonomy; this package only matches patterns.
+// Package authscope implements a scope-matching engine for authorization: a
+// scope is a pattern over an (operation-path, attributes) pair, and a caller
+// checks a concrete operation-path and attributes against the scopes it holds.
+// The matching engine (Scope, Scopes, Allow) is taxonomy-agnostic; the concrete
+// task-caller taxonomy it is used with — operation paths, attribute keys, and
+// the WithTask* attribute constructors — lives in task.go.
 //
 // See proposals/draft/scope-based-permissions.md for the design.
 package authscope
 
 import (
-	"slices"
 	"strconv"
-	"strings"
 )
 
-// Scope is a single capability pattern. Op is the operation path, where each
-// segment holds the set of allowed alternatives ("*" is a member that matches
-// any segment). Preds maps an attribute key to its single allowed value. An
-// absent key is unconstrained, so an empty Preds matches any instance of the
-// operation; there is no predicate wildcard (a "*" value is matched literally).
+// Scope is a single capability pattern. Op is the operation path; each segment
+// is a single token, or "*" to match any one segment. Preds maps an attribute
+// key to its single allowed value. An absent key is unconstrained, so an empty
+// Preds matches any instance of the operation; there is no predicate wildcard (a
+// "*" value is matched literally).
 type Scope struct {
-	Op    [][]string
+	Op    []string
 	Preds map[string]string
 }
 
-// Attr is a single concrete attribute of a target: an application attribute key
+// Attr is a single concrete attribute of a request: an application attribute key
 // and its value, already stringified.
 type Attr struct {
 	Name  string
@@ -42,33 +40,8 @@ func StringAttr(name, v string) Attr {
 	return Attr{Name: name, Value: v}
 }
 
-// Target is the concrete operation path and attributes of a request, built by
-// the application and tested against a Scope.
-type Target struct {
-	Op    []string
-	Attrs []Attr
-}
-
-// MakeTarget builds a Target from a dot-delimited operation path and its
-// attributes. The op is split on "." into concrete segments.
-func MakeTarget(op string, attrs ...Attr) Target {
-	return Target{Op: strings.Split(op, "."), Attrs: attrs}
-}
-
-// Targeter is implemented by anything that can produce a Target. It is the
-// construction seam: typed, domain-specific target values implement it so call
-// sites don't assemble Target literals by hand. Matching still operates on the
-// concrete Target, so the algorithm is unchanged.
-type Targeter interface {
-	Target() Target
-}
-
-// Target satisfies Targeter by returning itself, so a plain Target value flows
-// through wherever a Targeter is expected.
-func (t Target) Target() Target { return t }
-
-// Set is a caller's held scopes. Authorize is an OR across them.
-type Set []Scope
+// Scopes is a caller's held scopes. Allow is an OR across them.
+type Scopes []Scope
 
 // AdminScope is the global-admin wildcard grant: any two-segment operation on
 // any instance. It is the capability half of today's omnipotent-within-org
@@ -76,33 +49,46 @@ type Set []Scope
 // arity (two segments), not on what the segments mean.
 const AdminScope = "*.*"
 
-// Admin returns a Set containing only AdminScope, the global-admin grant.
-func Admin() Set {
+// Admin returns a Scopes containing only AdminScope, the global-admin grant.
+func Admin() Scopes {
 	s, err := Parse(AdminScope)
 	if err != nil {
 		// AdminScope is a compile-time constant and always parses.
 		panic(err)
 	}
-	return Set{s}
+	return Scopes{s}
 }
 
-// Matches reports whether the scope authorizes the target. The operation paths
-// must have the same number of segments (each segment matches exactly one), and
-// every predicate key in the scope must equal the target's attribute (AND across
-// keys). An absent key is unconstrained; a key whose attribute is missing from
-// the target, or whose value differs, denies.
-func (s Scope) Matches(t Target) bool {
-	if len(s.Op) != len(t.Op) {
+// Allow reports whether any held scope permits operation op — the segments of a
+// path, such as OpTaskWrite — on a request described by attrs. A scope permits
+// it when its operation pattern covers op (same number of segments; each segment
+// matches, with "*" matching any) and every predicate the scope constrains
+// equals the corresponding attr (AND across keys). An absent predicate key is
+// unconstrained; a constrained key whose attr is missing from attrs, or differs,
+// denies.
+func (scopes Scopes) Allow(op []string, attrs ...Attr) bool {
+	for _, s := range scopes {
+		if s.allow(op, attrs) {
+			return true
+		}
+	}
+	return false
+}
+
+// allow reports whether the single scope permits the operation segments and
+// attributes.
+func (s Scope) allow(op []string, attrs []Attr) bool {
+	if len(s.Op) != len(op) {
 		return false
 	}
-	for i, alts := range s.Op {
-		// "*" is a member that matches any single segment.
-		if !slices.Contains(alts, "*") && !slices.Contains(alts, t.Op[i]) {
+	for i, seg := range s.Op {
+		// "*" matches any single segment.
+		if seg != "*" && seg != op[i] {
 			return false
 		}
 	}
 	for key, want := range s.Preds {
-		got, ok := t.Attr(key)
+		got, ok := attrValue(attrs, key)
 		if !ok || got != want {
 			return false
 		}
@@ -110,27 +96,14 @@ func (s Scope) Matches(t Target) bool {
 	return true
 }
 
-// Attr returns the value of the first attr with the given name. Targets are only
-// built by the typed Targeter values, which never emit a duplicate name, so
+// attrValue returns the value of the first attr with the given name. Callers
+// build attrs from the typed Attr constructors and never repeat a name, so
 // first-match-wins needs no guard.
-func (t Target) Attr(name string) (string, bool) {
-	for _, a := range t.Attrs {
+func attrValue(attrs []Attr, name string) (string, bool) {
+	for _, a := range attrs {
 		if a.Name == name {
 			return a.Value, true
 		}
 	}
 	return "", false
-}
-
-// Authorize reports whether any held scope matches the target. It accepts a
-// Targeter so typed target values can be passed directly; a plain Target value
-// satisfies Targeter and flows through unchanged.
-func (set Set) Authorize(tr Targeter) bool {
-	t := tr.Target()
-	for _, s := range set {
-		if s.Matches(t) {
-			return true
-		}
-	}
-	return false
 }

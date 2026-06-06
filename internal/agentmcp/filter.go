@@ -12,11 +12,11 @@ import (
 )
 
 // AgentFilter implements XAgentServiceHandler and enforces task-scoped access
-// control via the authscope engine. Each RPC builds a typed target and
-// authorizes it against the caller's scope set; the set is minted by the runner
-// (see agentauth.TaskScopes) and only ever grants access to the agent's own task
-// or, when the workspace enables it, its direct children. Claims must be present
-// in context (injected by agentauth.Middleware).
+// control via the authscope engine. Each RPC names the operation and attributes
+// it needs and checks them against the caller's scopes; those scopes are minted
+// by the runner (see agentauth.TaskScopes) and only ever grant access to the
+// agent's own task or, when the workspace enables it, its direct children.
+// Claims must be present in context (injected by agentauth.Middleware).
 type AgentFilter struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
 	client xagentv1connect.XAgentServiceClient
@@ -29,9 +29,9 @@ func NewAgentFilter(client xagentv1connect.XAgentServiceClient) *AgentFilter {
 	}
 }
 
-// scopes returns the caller's parsed scope set, or PermissionDenied if no claims
+// scopes returns the caller's parsed scopes, or PermissionDenied if no claims
 // are present or the minted scopes are malformed.
-func (p *AgentFilter) scopes(ctx context.Context) (authscope.Set, error) {
+func (p *AgentFilter) scopes(ctx context.Context) (authscope.Scopes, error) {
 	claims, ok := agentauth.ClaimsFromContext(ctx)
 	if !ok {
 		return nil, errPermissionDenied("missing agent token")
@@ -52,7 +52,8 @@ func (p *AgentFilter) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRe
 	if err != nil {
 		return nil, err
 	}
-	if !scopes.Authorize(agentauth.TaskWrite{ID: req.TaskId}) {
+	allowed := scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId))
+	if !allowed {
 		return nil, errPermissionDenied("can only create links for own task")
 	}
 	return p.client.CreateLink(ctx, req)
@@ -63,7 +64,8 @@ func (p *AgentFilter) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRe
 	if err != nil {
 		return nil, err
 	}
-	if !scopes.Authorize(agentauth.TaskWrite{ID: req.TaskId}) {
+	allowed := scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId))
+	if !allowed {
 		return nil, errPermissionDenied("can only upload logs for own task")
 	}
 	return p.client.UploadLogs(ctx, req)
@@ -76,7 +78,8 @@ func (p *AgentFilter) SubmitRunnerEvents(ctx context.Context, req *xagentv1.Subm
 	}
 	// All-or-nothing: every event must authorize before any is forwarded.
 	for _, ev := range req.Events {
-		if !scopes.Authorize(agentauth.TaskWrite{ID: ev.TaskId}) {
+		allowed := scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(ev.TaskId))
+		if !allowed {
 			return nil, errPermissionDenied("can only submit events for own task")
 		}
 	}
@@ -88,12 +91,12 @@ func (p *AgentFilter) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRe
 	if err != nil {
 		return nil, err
 	}
-	target := agentauth.TaskCreate{
-		Parent:    req.Parent,
-		Workspace: req.Workspace,
-		Runner:    req.Runner,
-	}
-	if !scopes.Authorize(target) {
+	allowed := scopes.Allow(authscope.OpTaskCreate,
+		authscope.WithTaskParent(req.Parent),
+		authscope.WithTaskWorkspace(req.Workspace),
+		authscope.WithTaskRunner(req.Runner),
+	)
+	if !allowed {
 		return nil, errPermissionDenied("can only create child tasks of own task")
 	}
 	return p.client.CreateTask(ctx, req)
@@ -104,7 +107,8 @@ func (p *AgentFilter) ListChildTasks(ctx context.Context, req *xagentv1.ListChil
 	if err != nil {
 		return nil, err
 	}
-	if !scopes.Authorize(agentauth.ChildList{Parent: req.ParentId}) {
+	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskParent(req.ParentId))
+	if !allowed {
 		return nil, errPermissionDenied("can only list children of own task")
 	}
 	return p.client.ListChildTasks(ctx, req)
@@ -119,7 +123,8 @@ func (p *AgentFilter) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest)
 	if err != nil {
 		return nil, err
 	}
-	if !scopes.Authorize(agentauth.TaskReadRow{ID: resp.Task.Id, Parent: resp.Task.Parent}) {
+	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(resp.Task.Id), authscope.WithTaskParent(resp.Task.Parent))
+	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
 	return resp, nil
@@ -134,7 +139,8 @@ func (p *AgentFilter) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskD
 	if err != nil {
 		return nil, err
 	}
-	if !scopes.Authorize(agentauth.TaskReadRow{ID: details.Task.Id, Parent: details.Task.Parent}) {
+	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(details.Task.Id), authscope.WithTaskParent(details.Task.Parent))
+	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
 	return details, nil
@@ -149,7 +155,8 @@ func (p *AgentFilter) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRe
 	if err != nil {
 		return nil, err
 	}
-	if !scopes.Authorize(agentauth.TaskWriteRow{ID: resp.Task.Id, Parent: resp.Task.Parent}) {
+	allowed := scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(resp.Task.Id), authscope.WithTaskParent(resp.Task.Parent))
+	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
 	// State guard: scope authorizes the write in principle, but an archived task
@@ -168,12 +175,14 @@ func (p *AgentFilter) ListLogs(ctx context.Context, req *xagentv1.ListLogsReques
 	// Own-task fast path: authorize by id alone (matches task.read:{id:self})
 	// so reading own logs needs no row load. Only the child case has to resolve
 	// the row's parent.
-	if !scopes.Authorize(agentauth.TaskRead{ID: req.TaskId}) {
+	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.TaskId))
+	if !allowed {
 		resp, err := p.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: req.TaskId})
 		if err != nil {
 			return nil, err
 		}
-		if !scopes.Authorize(agentauth.TaskReadRow{ID: resp.Task.Id, Parent: resp.Task.Parent}) {
+		allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(resp.Task.Id), authscope.WithTaskParent(resp.Task.Parent))
+		if !allowed {
 			return nil, errPermissionDenied("task is not a child of the current task")
 		}
 	}
@@ -185,7 +194,8 @@ func (p *AgentFilter) CreateGitHubToken(ctx context.Context, req *xagentv1.Creat
 	if err != nil {
 		return nil, err
 	}
-	if !scopes.Authorize(agentauth.GitHubTokenCreate{}) {
+	allowed := scopes.Allow(authscope.OpGitHubTokenCreate)
+	if !allowed {
 		return nil, errPermissionDenied("github token issuance is disabled for this workspace")
 	}
 	return p.client.CreateGitHubToken(ctx, req)

@@ -32,15 +32,16 @@ type UserInfo struct {
 	Email    string
 	Name     string
 	OrgID    int64
-	Type     string        // Auth type: one of AuthType* constants
-	ClientID string        // Per-tab client identifier from X-Client-ID header
-	Scopes   authscope.Set // Capabilities held by the caller within OrgID
+	Type     string           // Auth type: one of AuthType* constants
+	ClientID string           // Per-tab client identifier from X-Client-ID header
+	Scopes   authscope.Scopes // Capabilities held by the caller within OrgID
 }
 
-// Authorize reports whether the caller's scopes authorize the target. It is a
-// convenience wrapper over Scopes.Authorize; nothing gates requests on it yet.
-func (u *UserInfo) Authorize(t authscope.Target) bool {
-	return u.Scopes.Authorize(t)
+// Allow reports whether the caller's scopes permit the operation op on a
+// request described by attrs. It is a convenience wrapper over Scopes.Allow;
+// nothing gates requests on it yet.
+func (u *UserInfo) Allow(op []string, attrs ...authscope.Attr) bool {
+	return u.Scopes.Allow(op, attrs...)
 }
 
 // DisplayName returns the best available display name for the user.

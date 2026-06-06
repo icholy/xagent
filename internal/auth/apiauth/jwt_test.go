@@ -21,11 +21,11 @@ func TestAppClaimsScopesRoundTrip(t *testing.T) {
 	verified, err := VerifyAppToken(key, token)
 	assert.NilError(t, err)
 
-	// Assert: the scopes claim survives and parses into a Set that authorizes
-	// any target, exactly as authenticate populates UserInfo.Scopes.
+	// Assert: the scopes claim survives and parses into Scopes that allow any
+	// operation, exactly as authenticate populates UserInfo.Scopes.
 	assert.DeepEqual(t, verified.Scopes, []string{authscope.AdminScope})
 	set, err := authscope.ParseSet(verified.Scopes)
 	assert.NilError(t, err)
 	user := &UserInfo{Scopes: set}
-	assert.Assert(t, user.Authorize(authscope.MakeTarget("task.write", authscope.StringAttr("id", "1"))))
+	assert.Assert(t, user.Allow(authscope.OpTaskWrite, authscope.StringAttr("id", "1")))
 }

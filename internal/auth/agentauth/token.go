@@ -30,7 +30,7 @@ func ValidScope(scope string) bool {
 
 // TaskClaims contains the JWT claims for a task's identity. Scopes holds the
 // task's authorization as authscope grammar strings (built by TaskScopes and
-// parsed back into an authscope.Set by the agent filter).
+// parsed back into authscope.Scopes by the agent filter).
 type TaskClaims struct {
 	jwt.RegisteredClaims
 	TaskID    int64    `json:"task_id"`

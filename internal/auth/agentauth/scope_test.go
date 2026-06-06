@@ -11,39 +11,39 @@ func TestTaskScopes_OwnTaskOnly(t *testing.T) {
 	scopes, err := authscope.ParseSet(TaskScopes(42, "ws", "rn", nil))
 	assert.NilError(t, err)
 
-	assert.Assert(t, scopes.Authorize(TaskRead{ID: 42}))
-	assert.Assert(t, scopes.Authorize(TaskWrite{ID: 42}))
+	assert.Assert(t, scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(42)))
+	assert.Assert(t, scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(42)))
 
 	// No child, create, or github-token capability without the flags.
-	assert.Assert(t, !scopes.Authorize(TaskReadRow{ID: 99, Parent: 42}))
-	assert.Assert(t, !scopes.Authorize(TaskWriteRow{ID: 99, Parent: 42}))
-	assert.Assert(t, !scopes.Authorize(TaskCreate{Parent: 42, Workspace: "ws", Runner: "rn"}))
-	assert.Assert(t, !scopes.Authorize(GitHubTokenCreate{}))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(99), authscope.WithTaskParent(42)))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(99), authscope.WithTaskParent(42)))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskCreate, authscope.WithTaskParent(42), authscope.WithTaskWorkspace("ws"), authscope.WithTaskRunner("rn")))
+	assert.Assert(t, !scopes.Allow(authscope.OpGitHubTokenCreate))
 }
 
 func TestTaskScopes_ChildTasks(t *testing.T) {
 	scopes, err := authscope.ParseSet(TaskScopes(42, "ws", "rn", []string{ScopeChildTasks}))
 	assert.NilError(t, err)
 
-	assert.Assert(t, scopes.Authorize(TaskReadRow{ID: 99, Parent: 42}))
-	assert.Assert(t, scopes.Authorize(TaskWriteRow{ID: 99, Parent: 42}))
-	assert.Assert(t, scopes.Authorize(TaskCreate{Parent: 42, Workspace: "ws", Runner: "rn"}))
+	assert.Assert(t, scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(99), authscope.WithTaskParent(42)))
+	assert.Assert(t, scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(99), authscope.WithTaskParent(42)))
+	assert.Assert(t, scopes.Allow(authscope.OpTaskCreate, authscope.WithTaskParent(42), authscope.WithTaskWorkspace("ws"), authscope.WithTaskRunner("rn")))
 
 	// Create is fully constrained: a different workspace, runner, or parent is denied.
-	assert.Assert(t, !scopes.Authorize(TaskCreate{Parent: 42, Workspace: "other", Runner: "rn"}))
-	assert.Assert(t, !scopes.Authorize(TaskCreate{Parent: 42, Workspace: "ws", Runner: "other"}))
-	assert.Assert(t, !scopes.Authorize(TaskCreate{Parent: 7, Workspace: "ws", Runner: "rn"}))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskCreate, authscope.WithTaskParent(42), authscope.WithTaskWorkspace("other"), authscope.WithTaskRunner("rn")))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskCreate, authscope.WithTaskParent(42), authscope.WithTaskWorkspace("ws"), authscope.WithTaskRunner("other")))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskCreate, authscope.WithTaskParent(7), authscope.WithTaskWorkspace("ws"), authscope.WithTaskRunner("rn")))
 
 	// Unrelated task (neither own nor child) stays denied.
-	assert.Assert(t, !scopes.Authorize(TaskReadRow{ID: 7, Parent: 8}))
-	assert.Assert(t, !scopes.Authorize(GitHubTokenCreate{}))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(7), authscope.WithTaskParent(8)))
+	assert.Assert(t, !scopes.Allow(authscope.OpGitHubTokenCreate))
 }
 
 func TestTaskScopes_GitHubToken(t *testing.T) {
 	scopes, err := authscope.ParseSet(TaskScopes(42, "ws", "rn", []string{ScopeGitHubToken}))
 	assert.NilError(t, err)
 
-	assert.Assert(t, scopes.Authorize(GitHubTokenCreate{}))
-	assert.Assert(t, !scopes.Authorize(TaskCreate{Parent: 42, Workspace: "ws", Runner: "rn"}))
-	assert.Assert(t, !scopes.Authorize(TaskReadRow{ID: 99, Parent: 42}))
+	assert.Assert(t, scopes.Allow(authscope.OpGitHubTokenCreate))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskCreate, authscope.WithTaskParent(42), authscope.WithTaskWorkspace("ws"), authscope.WithTaskRunner("rn")))
+	assert.Assert(t, !scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(99), authscope.WithTaskParent(42)))
 }

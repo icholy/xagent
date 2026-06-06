@@ -13,210 +13,202 @@ func mustParse(t *testing.T, s string) Scope {
 	return sc
 }
 
-func TestMatches(t *testing.T) {
+func TestAllow(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name   string
-		scope  Scope
-		target Target
-		want   bool
+		name  string
+		scope Scope
+		op    []string
+		attrs []Attr
+		want  bool
 	}{
 		{
-			name:   "exact path no preds",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}},
-			target: MakeTarget("task.read"),
-			want:   true,
+			name:  "exact path no preds",
+			scope: Scope{Op: []string{"task", "read"}},
+			op:    []string{"task", "read"},
+			want:  true,
 		},
 		{
-			name:   "segment count mismatch scope longer",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}},
-			target: MakeTarget("task"),
-			want:   false,
+			name:  "segment count mismatch scope longer",
+			scope: Scope{Op: []string{"task", "read"}},
+			op:    []string{"task"},
+			want:  false,
 		},
 		{
-			name:   "segment count mismatch scope shorter",
-			scope:  Scope{Op: [][]string{{"task"}}},
-			target: MakeTarget("task.read"),
-			want:   false,
+			name:  "segment count mismatch scope shorter",
+			scope: Scope{Op: []string{"task"}},
+			op:    []string{"task", "read"},
+			want:  false,
 		},
 		{
-			name:   "wildcard matches exactly one segment",
-			scope:  Scope{Op: [][]string{{"task"}, {"*"}}},
-			target: MakeTarget("task.read"),
-			want:   true,
+			name:  "wildcard matches exactly one segment",
+			scope: Scope{Op: []string{"task", "*"}},
+			op:    []string{"task", "read"},
+			want:  true,
 		},
 		{
-			name:   "wildcard does not span multiple segments",
-			scope:  Scope{Op: [][]string{{"task"}, {"*"}}},
-			target: MakeTarget("task.a.b"),
-			want:   false,
+			name:  "wildcard does not span multiple segments",
+			scope: Scope{Op: []string{"task", "*"}},
+			op:    []string{"task", "a", "b"},
+			want:  false,
 		},
 		{
-			name:   "single wildcard does not match two segments",
-			scope:  Scope{Op: [][]string{{"*"}}},
-			target: MakeTarget("task.read"),
-			want:   false,
+			name:  "single wildcard does not match two segments",
+			scope: Scope{Op: []string{"*"}},
+			op:    []string{"task", "read"},
+			want:  false,
 		},
 		{
-			name:   "alternation member matches",
-			scope:  Scope{Op: [][]string{{"task"}, {"create", "update"}}},
-			target: MakeTarget("task.update"),
-			want:   true,
+			name:  "empty preds matches any instance",
+			scope: Scope{Op: []string{"task", "read"}},
+			op:    []string{"task", "read"},
+			attrs: []Attr{StringAttr("id", "99"), StringAttr("parent", "42")},
+			want:  true,
 		},
 		{
-			name:   "alternation non-member denied",
-			scope:  Scope{Op: [][]string{{"task"}, {"create", "update"}}},
-			target: MakeTarget("task.delete"),
-			want:   false,
+			name:  "absent key in scope is unconstrained",
+			scope: Scope{Op: []string{"task", "read"}, Preds: map[string]string{"id": "42"}},
+			op:    []string{"task", "read"},
+			attrs: []Attr{StringAttr("id", "42"), StringAttr("parent", "7")},
+			want:  true,
 		},
 		{
-			name:   "alternation with star is wildcard (a|b|* == *)",
-			scope:  Scope{Op: [][]string{{"task"}, {"a", "b", "*"}}},
-			target: MakeTarget("task.zzz"),
-			want:   true,
+			name:  "star value is matched literally not as a wildcard",
+			scope: Scope{Op: []string{"task", "read"}, Preds: map[string]string{"id": "*"}},
+			op:    []string{"task", "read"},
+			attrs: []Attr{StringAttr("id", "99")},
+			want:  false,
 		},
 		{
-			name:   "empty preds matches any instance",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}},
-			target: MakeTarget("task.read", StringAttr("id", "99"), StringAttr("parent", "42")),
-			want:   true,
+			name:  "star value matches a literal star attribute",
+			scope: Scope{Op: []string{"task", "read"}, Preds: map[string]string{"id": "*"}},
+			op:    []string{"task", "read"},
+			attrs: []Attr{StringAttr("id", "*")},
+			want:  true,
 		},
 		{
-			name:   "absent key in scope is unconstrained",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
-			target: MakeTarget("task.read", StringAttr("id", "42"), StringAttr("parent", "7")),
-			want:   true,
+			name:  "missing attribute denies",
+			scope: Scope{Op: []string{"task", "read"}, Preds: map[string]string{"id": "42"}},
+			op:    []string{"task", "read"},
+			want:  false,
 		},
 		{
-			name:   "star value is matched literally not as a wildcard",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "*"}},
-			target: MakeTarget("task.read", StringAttr("id", "99")),
-			want:   false,
+			name:  "value match",
+			scope: Scope{Op: []string{"task", "create"}, Preds: map[string]string{"workspace": "X"}},
+			op:    []string{"task", "create"},
+			attrs: []Attr{StringAttr("workspace", "X")},
+			want:  true,
 		},
 		{
-			name:   "star value matches a literal star attribute",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "*"}},
-			target: MakeTarget("task.read", StringAttr("id", "*")),
-			want:   true,
+			name:  "value mismatch denied",
+			scope: Scope{Op: []string{"task", "create"}, Preds: map[string]string{"workspace": "X"}},
+			op:    []string{"task", "create"},
+			attrs: []Attr{StringAttr("workspace", "Z")},
+			want:  false,
 		},
 		{
-			name:   "missing target attribute denies",
-			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
-			target: MakeTarget("task.read"),
-			want:   false,
+			name:  "AND across keys all match",
+			scope: Scope{Op: []string{"task", "create"}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
+			op:    []string{"task", "create"},
+			attrs: []Attr{StringAttr("parent", "42"), StringAttr("workspace", "ws")},
+			want:  true,
 		},
 		{
-			name:   "value match",
-			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "X"}},
-			target: MakeTarget("task.create", StringAttr("workspace", "X")),
-			want:   true,
+			name:  "AND across keys one fails",
+			scope: Scope{Op: []string{"task", "create"}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
+			op:    []string{"task", "create"},
+			attrs: []Attr{StringAttr("parent", "42"), StringAttr("workspace", "other")},
+			want:  false,
 		},
 		{
-			name:   "value mismatch denied",
-			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "X"}},
-			target: MakeTarget("task.create", StringAttr("workspace", "Z")),
-			want:   false,
-		},
-		{
-			name:   "AND across keys all match",
-			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
-			target: MakeTarget("task.create", StringAttr("parent", "42"), StringAttr("workspace", "ws")),
-			want:   true,
-		},
-		{
-			name:   "AND across keys one fails",
-			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
-			target: MakeTarget("task.create", StringAttr("parent", "42"), StringAttr("workspace", "other")),
-			want:   false,
-		},
-		{
-			name:   "AND across keys one key missing from target",
-			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
-			target: MakeTarget("task.create", StringAttr("parent", "42")),
-			want:   false,
+			name:  "AND across keys one key missing",
+			scope: Scope{Op: []string{"task", "create"}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
+			op:    []string{"task", "create"},
+			attrs: []Attr{StringAttr("parent", "42")},
+			want:  false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := tt.scope.Matches(tt.target)
+			got := Scopes{tt.scope}.Allow(tt.op, tt.attrs...)
 			assert.Equal(t, got, tt.want)
 		})
 	}
 }
 
-// TestAuthorize_OwnTask reproduces the §6b own-task / child-via-parent scenario:
+// TestAllow_OwnTask reproduces the §6b own-task / child-via-parent scenario:
 // a caller holding both own-task and child scopes can read its own task and any
 // direct child, but not an unrelated task.
-func TestAuthorize_OwnTask(t *testing.T) {
+func TestAllow_OwnTask(t *testing.T) {
 	t.Parallel()
-	set := Set{
-		mustParse(t, `task.read:{"id":"42"}`),
-		mustParse(t, `task.read:{"parent":"42"}`),
+	set := Scopes{
+		mustParse(t, `task.read:{"task.id":"42"}`),
+		mustParse(t, `task.read:{"task.parent":"42"}`),
 	}
 	tests := []struct {
 		name  string
 		attrs []Attr
 		want  bool
 	}{
-		{"own task", []Attr{StringAttr("id", "42"), StringAttr("parent", "7")}, true},
-		{"direct child", []Attr{StringAttr("id", "99"), StringAttr("parent", "42")}, true},
-		{"unrelated task", []Attr{StringAttr("id", "5"), StringAttr("parent", "7")}, false},
+		{"own task", []Attr{WithTaskID(42), WithTaskParent(7)}, true},
+		{"direct child", []Attr{WithTaskID(99), WithTaskParent(42)}, true},
+		{"unrelated task", []Attr{WithTaskID(5), WithTaskParent(7)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := set.Authorize(MakeTarget("task.read", tt.attrs...))
+			got := set.Allow(OpTaskRead, tt.attrs...)
 			assert.Equal(t, got, tt.want)
 		})
 	}
 }
 
-// TestAuthorize_CreateConjunction reproduces the §6a create scenario: a single
+// TestAllow_CreateConjunction reproduces the §6a create scenario: a single
 // fully-constrained scope ANDs all three attributes.
-func TestAuthorize_CreateConjunction(t *testing.T) {
+func TestAllow_CreateConjunction(t *testing.T) {
 	t.Parallel()
-	set := Set{mustParse(t, `task.create:{"parent":"42","workspace":"ws","runner":"rn"}`)}
+	set := Scopes{mustParse(t, `task.create:{"task.parent":"42","task.workspace":"ws","task.runner":"rn"}`)}
 
-	ok := set.Authorize(MakeTarget("task.create", StringAttr("parent", "42"), StringAttr("workspace", "ws"), StringAttr("runner", "rn")))
+	ok := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("ws"), WithTaskRunner("rn"))
 	assert.Equal(t, ok, true)
 
 	// Wrong workspace is denied even though parent and runner match.
-	denied := set.Authorize(MakeTarget("task.create", StringAttr("parent", "42"), StringAttr("workspace", "evil"), StringAttr("runner", "rn")))
+	denied := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("evil"), WithTaskRunner("rn"))
 	assert.Equal(t, denied, false)
 }
 
-// TestAuthorize_SplitConjunctionIsHole documents the §6a failure mode: splitting
+// TestAllow_SplitConjunctionIsHole documents the §6a failure mode: splitting
 // the create conjunction across separate scopes and ORing them leaves the
 // unconstrained attributes as holes. This is a regression guard against ever
 // minting create scopes that way.
-func TestAuthorize_SplitConjunctionIsHole(t *testing.T) {
+func TestAllow_SplitConjunctionIsHole(t *testing.T) {
 	t.Parallel()
-	set := Set{
-		mustParse(t, `task.create:{"parent":"42"}`),
-		mustParse(t, `task.create:{"workspace":"ws"}`),
+	set := Scopes{
+		mustParse(t, `task.create:{"task.parent":"42"}`),
+		mustParse(t, `task.create:{"task.workspace":"ws"}`),
 	}
 	// parent matches the first scope, which leaves workspace/runner unconstrained.
-	escalated := set.Authorize(MakeTarget("task.create", StringAttr("parent", "42"), StringAttr("workspace", "evil"), StringAttr("runner", "evil")))
+	escalated := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("evil"), WithTaskRunner("evil"))
 	assert.Equal(t, escalated, true)
 }
 
-// TestAuthorize_WildcardAdmin reproduces the §6c wildcard scenarios.
-func TestAuthorize_WildcardAdmin(t *testing.T) {
+// TestAllow_WildcardAdmin reproduces the §6c wildcard scenarios.
+func TestAllow_WildcardAdmin(t *testing.T) {
 	t.Parallel()
 
 	// task.* covers any action on a task instance, including a child.
-	taskAdmin := Set{mustParse(t, `task.*`)}
-	assert.Equal(t, taskAdmin.Authorize(MakeTarget("task.write", StringAttr("id", "99"), StringAttr("parent", "42"))), true)
+	taskAdmin := Scopes{mustParse(t, `task.*`)}
+	assert.Equal(t, taskAdmin.Allow(OpTaskWrite, WithTaskID(99), WithTaskParent(42)), true)
 	// ...but not a different resource.
-	assert.Equal(t, taskAdmin.Authorize(MakeTarget("github_token.create")), false)
+	assert.Equal(t, taskAdmin.Allow(OpGitHubTokenCreate), false)
 
 	// *.* covers any 2-segment operation with any instance.
-	admin := Set{mustParse(t, `*.*`)}
-	assert.Equal(t, admin.Authorize(MakeTarget("github_token.create")), true)
-	assert.Equal(t, admin.Authorize(MakeTarget("task.read", StringAttr("id", "1"))), true)
+	admin := Scopes{mustParse(t, `*.*`)}
+	assert.Equal(t, admin.Allow(OpGitHubTokenCreate), true)
+	assert.Equal(t, admin.Allow(OpTaskRead, WithTaskID(1)), true)
 	// ...but not a 3-segment operation: * matches exactly one segment.
-	assert.Equal(t, admin.Authorize(MakeTarget("task.read.extra")), false)
+	assert.Equal(t, admin.Allow([]string{"task", "read", "extra"}), false)
 }
 
 func TestParse(t *testing.T) {
@@ -229,47 +221,42 @@ func TestParse(t *testing.T) {
 		{
 			name: "no predicates",
 			in:   "github_token.create",
-			want: Scope{Op: [][]string{{"github_token"}, {"create"}}},
+			want: Scope{Op: []string{"github_token", "create"}},
 		},
 		{
 			name: "empty predicate object",
 			in:   "task.read:{}",
-			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{}},
+			want: Scope{Op: []string{"task", "read"}, Preds: map[string]string{}},
 		},
 		{
 			name: "string value",
 			in:   `task.create:{"workspace":"X"}`,
-			want: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "X"}},
+			want: Scope{Op: []string{"task", "create"}, Preds: map[string]string{"workspace": "X"}},
 		},
 		{
 			name: "numeric id as string",
 			in:   `task.read:{"id":"42"}`,
-			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
+			want: Scope{Op: []string{"task", "read"}, Preds: map[string]string{"id": "42"}},
 		},
 		{
 			name: "star value parsed as a literal string",
 			in:   `task.write:{"id":"*"}`,
-			want: Scope{Op: [][]string{{"task"}, {"write"}}, Preds: map[string]string{"id": "*"}},
+			want: Scope{Op: []string{"task", "write"}, Preds: map[string]string{"id": "*"}},
 		},
 		{
 			name: "multiple predicate keys",
 			in:   `task.create:{"parent":"42","workspace":"ws","runner":"rn"}`,
-			want: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws", "runner": "rn"}},
-		},
-		{
-			name: "path alternation parsed at parse time",
-			in:   `task.read|write:{"id":"1"}`,
-			want: Scope{Op: [][]string{{"task"}, {"read", "write"}}, Preds: map[string]string{"id": "1"}},
+			want: Scope{Op: []string{"task", "create"}, Preds: map[string]string{"parent": "42", "workspace": "ws", "runner": "rn"}},
 		},
 		{
 			name: "wildcard segment",
 			in:   "task.*",
-			want: Scope{Op: [][]string{{"task"}, {"*"}}},
+			want: Scope{Op: []string{"task", "*"}},
 		},
 		{
 			name: "first colon split with colons inside json",
 			in:   `task.read:{"url":"http://example.com:8080/p"}`,
-			want: Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"url": "http://example.com:8080/p"}},
+			want: Scope{Op: []string{"task", "read"}, Preds: map[string]string{"url": "http://example.com:8080/p"}},
 		},
 	}
 	for _, tt := range tests {
@@ -293,9 +280,6 @@ func TestParse_Errors(t *testing.T) {
 		{"empty segment middle", "task..read"},
 		{"trailing dot", "task."},
 		{"leading dot", ".task"},
-		{"empty alternative trailing", "task.create|"},
-		{"empty alternative leading", "task.|update"},
-		{"empty alternative middle", "task.create||update"},
 		{"bad json", `task.read:{nope}`},
 		{"trailing colon without json", "task.read:"},
 		{"null predicates", "task.read:null"},
@@ -325,17 +309,12 @@ func TestString(t *testing.T) {
 	}{
 		{
 			name:  "no predicates omits colon",
-			scope: Scope{Op: [][]string{{"github_token"}, {"create"}}},
+			scope: Scope{Op: []string{"github_token", "create"}},
 			want:  "github_token.create",
 		},
 		{
-			name:  "alternation joined with pipe",
-			scope: Scope{Op: [][]string{{"task"}, {"read", "write"}}},
-			want:  "task.read|write",
-		},
-		{
 			name:  "predicates emitted with sorted keys",
-			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "ws", "parent": "42"}},
+			scope: Scope{Op: []string{"task", "create"}, Preds: map[string]string{"workspace": "ws", "parent": "42"}},
 			want:  `task.create:{"parent":"42","workspace":"ws"}`,
 		},
 	}
@@ -354,7 +333,6 @@ func TestRoundTrip(t *testing.T) {
 		"task.*",
 		"*.*",
 		"github_token.create",
-		`task.read|write:{"id":"1"}`,
 		`task.write:{"id":"*"}`,
 		`task.create:{"parent":"42","workspace":"ws","runner":"rn"}`,
 		`task.read:{"url":"http://example.com:8080/p"}`,
@@ -375,7 +353,6 @@ func TestValidScope(t *testing.T) {
 		"task.read",
 		"task.*",
 		"*.*",
-		"task.read|write",
 		`task.create:{"parent":"42","workspace":"ws","runner":"rn"}`,
 		"github_token.create",
 	}
@@ -386,8 +363,6 @@ func TestValidScope(t *testing.T) {
 		"",
 		"task.",
 		"task..read",
-		"task.create|",
-		"task.|update",
 		`task.read:{nope}`,
 		`task.read:{"id":42}`,
 		`task.read:{"workspace":["X","Y"]}`,
@@ -400,13 +375,13 @@ func TestValidScope(t *testing.T) {
 
 func TestAdmin(t *testing.T) {
 	t.Parallel()
-	// Admin authorizes any 2-segment operation, on any instance.
+	// Admin allows any 2-segment operation, on any instance.
 	set := Admin()
-	assert.Assert(t, set.Authorize(MakeTarget("task.read", StringAttr("id", "1"))))
-	assert.Assert(t, set.Authorize(MakeTarget("github_token.create")))
+	assert.Assert(t, set.Allow(OpTaskRead, WithTaskID(1)))
+	assert.Assert(t, set.Allow(OpGitHubTokenCreate))
 	// But not operations of a different arity.
-	assert.Assert(t, !set.Authorize(MakeTarget("task")))
-	assert.Assert(t, !set.Authorize(MakeTarget("task.read.x")))
+	assert.Assert(t, !set.Allow([]string{"task"}))
+	assert.Assert(t, !set.Allow([]string{"task", "read", "x"}))
 }
 
 func TestParseSet(t *testing.T) {
@@ -420,7 +395,7 @@ func TestParseSet(t *testing.T) {
 	set, err = ParseSet([]string{"task.read", "github_token.create"})
 	assert.NilError(t, err)
 	assert.Equal(t, len(set), 2)
-	assert.Assert(t, set.Authorize(MakeTarget("task.read")))
+	assert.Assert(t, set.Allow(OpTaskRead))
 
 	// A malformed scope fails the whole parse.
 	_, err = ParseSet([]string{"task.read", "task."})
