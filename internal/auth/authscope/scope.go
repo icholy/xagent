@@ -13,12 +13,19 @@ import (
 )
 
 // Scope is a single capability pattern. Op is the operation path; each segment
-// is a single token, or "*" to match any one segment. Preds maps an attribute
-// key to its single allowed value. An absent key is unconstrained, so an empty
-// Preds matches any instance of the operation; there is no predicate wildcard (a
-// "*" value is matched literally).
+// is a single token, or "*" to match any one segment.
 type Scope struct {
-	Op    []string
+	Op []string
+	// Preds are constraints that only ever NARROW the grant: each key pins an
+	// attribute to a single allowed value, so adding a predicate can only shrink
+	// the set of requests the scope matches, never widen it. A key that is absent
+	// is unconstrained (any value of that attribute is allowed), so an empty Preds
+	// is the broadest grant for the operation and matches any instance.
+	//
+	// Matching tests these predicates against the request's attributes — never the
+	// reverse. The scope decides what it constrains; attributes the scope does not
+	// mention are ignored, and a constrained key the request omits fails to match.
+	// There is no predicate wildcard: a "*" value is matched literally.
 	Preds map[string]string
 }
 
