@@ -27,6 +27,18 @@ type Target struct {
 	Attrs map[string]string
 }
 
+// Targeter is implemented by anything that can produce a Target. It is the
+// construction seam: typed, domain-specific target values implement it so call
+// sites don't assemble Target literals by hand. Matching still operates on the
+// concrete Target, so the algorithm is unchanged.
+type Targeter interface {
+	Target() Target
+}
+
+// Target satisfies Targeter by returning itself, so a plain Target value flows
+// through wherever a Targeter is expected.
+func (t Target) Target() Target { return t }
+
 // Set is a caller's held scopes. Authorize is an OR across them.
 type Set []Scope
 
@@ -69,8 +81,11 @@ func (s Scope) Matches(t Target) bool {
 	return true
 }
 
-// Authorize reports whether any held scope matches the target.
-func (set Set) Authorize(t Target) bool {
+// Authorize reports whether any held scope matches the target. It accepts a
+// Targeter so typed target values can be passed directly; a plain Target value
+// satisfies Targeter and flows through unchanged.
+func (set Set) Authorize(tr Targeter) bool {
+	t := tr.Target()
 	for _, s := range set {
 		if s.Matches(t) {
 			return true
