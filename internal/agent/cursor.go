@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/icholy/xagent/internal/agent/toollog"
 )
 
 // CursorAgent implements Agent using the Cursor Agent CLI.
@@ -206,17 +208,27 @@ func (a *CursorAgent) handleStreamEvent(data []byte) bool {
 	case "tool_call":
 		// Determine tool name from whichever field is set
 		toolName := "unknown"
+		var raw *json.RawMessage
 		switch {
 		case event.ToolCall.ReadToolCall != nil:
-			toolName = "read"
+			toolName, raw = "read", event.ToolCall.ReadToolCall
 		case event.ToolCall.WriteToolCall != nil:
-			toolName = "write"
+			toolName, raw = "write", event.ToolCall.WriteToolCall
 		case event.ToolCall.EditToolCall != nil:
-			toolName = "edit"
+			toolName, raw = "edit", event.ToolCall.EditToolCall
 		case event.ToolCall.BashToolCall != nil:
-			toolName = "bash"
+			toolName, raw = "bash", event.ToolCall.BashToolCall
 		}
-		a.log.Info("tool", "name", toolName, "subtype", event.Subtype, "call_id", event.CallID)
+		// Cursor nests the actual arguments under an "args" object inside the
+		// set sub-object; pull it out, then redact bulky content before summarizing.
+		var sub struct {
+			Args map[string]any `json:"args"`
+		}
+		if raw != nil {
+			_ = json.Unmarshal(*raw, &sub)
+		}
+		args := toollog.Redact(sub.Args, "old_string", "new_string", "content", "fileText", "contents")
+		a.log.Info("tool", "name", toolName, "subtype", event.Subtype, "call_id", event.CallID, "summary", toollog.Summarize(args))
 	case "result":
 		if event.IsError {
 			a.log.Error("result", "is_error", true)
