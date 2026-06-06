@@ -13,13 +13,8 @@ func TestUserInfoAuthorize_Admin(t *testing.T) {
 	user := &UserInfo{Scopes: authscope.Admin()}
 
 	// Act & Assert: admin authorizes any 2-segment target.
-	assert.Assert(t, user.Authorize(authscope.Target{
-		Op:    []string{"task", "read"},
-		Attrs: []authscope.Attr{authscope.StringAttr("id", "1")},
-	}))
-	assert.Assert(t, user.Authorize(authscope.Target{
-		Op: []string{"github_token", "create"},
-	}))
+	assert.Assert(t, user.Authorize(authscope.MakeTarget("task.read", authscope.StringAttr("id", "1"))))
+	assert.Assert(t, user.Authorize(authscope.MakeTarget("github_token.create")))
 }
 
 func TestUserInfoAuthorize_NoScopes(t *testing.T) {
@@ -28,5 +23,5 @@ func TestUserInfoAuthorize_NoScopes(t *testing.T) {
 	user := &UserInfo{}
 
 	// Act & Assert: an empty set authorizes nothing.
-	assert.Assert(t, !user.Authorize(authscope.Target{Op: []string{"task", "read"}}))
+	assert.Assert(t, !user.Authorize(authscope.MakeTarget("task.read")))
 }
