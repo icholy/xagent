@@ -7,7 +7,7 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func TestTaskScopes_OwnTaskOnly(t *testing.T) {
+func TestScopes_OwnTaskOnly(t *testing.T) {
 	scopes := Scopes(ScopeOptions{
 		TaskID:    42,
 		Workspace: "ws",
@@ -24,7 +24,7 @@ func TestTaskScopes_OwnTaskOnly(t *testing.T) {
 	assert.Assert(t, !scopes.Allow(authscope.OpGitHubTokenCreate))
 }
 
-func TestTaskScopes_ChildTasks(t *testing.T) {
+func TestScopes_ChildTasks(t *testing.T) {
 	scopes := Scopes(ScopeOptions{
 		TaskID:       42,
 		Workspace:    "ws",
@@ -46,7 +46,7 @@ func TestTaskScopes_ChildTasks(t *testing.T) {
 	assert.Assert(t, !scopes.Allow(authscope.OpGitHubTokenCreate))
 }
 
-func TestTaskScopes_GitHubToken(t *testing.T) {
+func TestScopes_GitHubToken(t *testing.T) {
 	scopes := Scopes(ScopeOptions{
 		TaskID:       42,
 		Workspace:    "ws",

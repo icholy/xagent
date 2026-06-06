@@ -78,7 +78,7 @@ func (p *AgentProxy) Start() error {
 }
 
 // TaskToken creates a signed JWT for the given task. capabilities are the
-// workspace's enabled capability flags (see agentauth scope constants); they are
+// workspace's enabled capability flags (see agentauth capability constants); they are
 // reshaped into the grammar scope set carried by the token.
 func (p *AgentProxy) TaskToken(task *model.Task, capabilities []string) (string, error) {
 	return agentauth.SignToken(p.privateKey, &agentauth.TaskClaims{

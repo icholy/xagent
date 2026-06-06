@@ -167,7 +167,7 @@ func TestAgentFilter_ListChildTasks_Allowed(t *testing.T) {
 func TestAgentFilter_ListChildTasks_Denied(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		ListChildTasksFunc: func(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
-			t.Fatal("underlying client must not be called when child_tasks scope is absent")
+			t.Fatal("underlying client must not be called when the child-tasks capability is absent")
 			return nil, nil
 		},
 	}
@@ -188,7 +188,7 @@ func TestAgentFilter_ListChildTasks_Denied(t *testing.T) {
 func TestAgentFilter_CreateTask_Denied(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		CreateTaskFunc: func(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
-			t.Fatal("underlying client must not be called when child_tasks scope is absent")
+			t.Fatal("underlying client must not be called when the child-tasks capability is absent")
 			return nil, nil
 		},
 	}
@@ -210,7 +210,7 @@ func TestAgentFilter_CreateTask_Denied(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
-func TestAgentFilter_UpdateTask_OwnTaskAllowedWithoutScope(t *testing.T) {
+func TestAgentFilter_UpdateTask_OwnTaskAllowedWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: 42}}, nil
@@ -234,13 +234,13 @@ func TestAgentFilter_UpdateTask_OwnTaskAllowedWithoutScope(t *testing.T) {
 	assert.Equal(t, len(client.UpdateTaskCalls()), 1)
 }
 
-func TestAgentFilter_UpdateTask_ChildDeniedWithoutScope(t *testing.T) {
+func TestAgentFilter_UpdateTask_ChildDeniedWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: 99, Parent: 42}}, nil
 		},
 		UpdateTaskFunc: func(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
-			t.Fatal("underlying client must not be called when child_tasks scope is absent")
+			t.Fatal("underlying client must not be called when the child-tasks capability is absent")
 			return nil, nil
 		},
 	}
@@ -258,7 +258,7 @@ func TestAgentFilter_UpdateTask_ChildDeniedWithoutScope(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
-func TestAgentFilter_GetTask_OwnTaskAllowedWithoutScope(t *testing.T) {
+func TestAgentFilter_GetTask_OwnTaskAllowedWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: 42}}, nil
@@ -278,7 +278,7 @@ func TestAgentFilter_GetTask_OwnTaskAllowedWithoutScope(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-func TestAgentFilter_GetTask_ChildDeniedWithoutScope(t *testing.T) {
+func TestAgentFilter_GetTask_ChildDeniedWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: 99, Parent: 42}}, nil
@@ -298,7 +298,7 @@ func TestAgentFilter_GetTask_ChildDeniedWithoutScope(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
-func TestAgentFilter_ListLogs_OwnTaskAllowedWithoutScope(t *testing.T) {
+func TestAgentFilter_ListLogs_OwnTaskAllowedWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		ListLogsFunc: func(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
 			return &xagentv1.ListLogsResponse{}, nil
@@ -319,13 +319,13 @@ func TestAgentFilter_ListLogs_OwnTaskAllowedWithoutScope(t *testing.T) {
 	assert.Equal(t, len(client.ListLogsCalls()), 1)
 }
 
-func TestAgentFilter_ListLogs_ChildDeniedWithoutScope(t *testing.T) {
+func TestAgentFilter_ListLogs_ChildDeniedWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: 99, Parent: 42}}, nil
 		},
 		ListLogsFunc: func(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
-			t.Fatal("underlying client must not be called when child_tasks scope is absent")
+			t.Fatal("underlying client must not be called when the child-tasks capability is absent")
 			return nil, nil
 		},
 	}
@@ -343,7 +343,7 @@ func TestAgentFilter_ListLogs_ChildDeniedWithoutScope(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
-func TestAgentFilter_GetTaskDetails_OwnTaskAllowedWithoutScope(t *testing.T) {
+func TestAgentFilter_GetTaskDetails_OwnTaskAllowedWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		GetTaskDetailsFunc: func(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 			return &xagentv1.GetTaskDetailsResponse{Task: &xagentv1.Task{Id: 42}}, nil
@@ -363,7 +363,7 @@ func TestAgentFilter_GetTaskDetails_OwnTaskAllowedWithoutScope(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-func TestAgentFilter_GetTaskDetails_ChildDeniedWithoutScope(t *testing.T) {
+func TestAgentFilter_GetTaskDetails_ChildDeniedWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		GetTaskDetailsFunc: func(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 			return &xagentv1.GetTaskDetailsResponse{Task: &xagentv1.Task{Id: 99, Parent: 42}}, nil

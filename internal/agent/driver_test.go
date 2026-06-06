@@ -8,16 +8,16 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func TestConfigPrompt_WithoutChildTasksScope(t *testing.T) {
+func TestConfigPrompt_WithoutChildTasksCapability(t *testing.T) {
 	cfg := &Config{}
 	got, err := cfg.prompt()
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(got, "xagent:get_my_task"))
-	assert.Assert(t, !strings.Contains(got, "update_child_task"), "child task tools should not be mentioned without scope")
-	assert.Assert(t, !strings.Contains(got, "create_child_task"), "child task tools should not be mentioned without scope")
+	assert.Assert(t, !strings.Contains(got, "update_child_task"), "child task tools should not be mentioned without the child-tasks capability")
+	assert.Assert(t, !strings.Contains(got, "create_child_task"), "child task tools should not be mentioned without the child-tasks capability")
 }
 
-func TestConfigPrompt_WithChildTasksScope(t *testing.T) {
+func TestConfigPrompt_WithChildTasksCapability(t *testing.T) {
 	cfg := &Config{Capabilities: []string{agentauth.CapabilityChildTasks}}
 	got, err := cfg.prompt()
 	assert.NilError(t, err)
