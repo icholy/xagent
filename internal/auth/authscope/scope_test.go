@@ -415,3 +415,32 @@ func TestValidScope(t *testing.T) {
 		assert.Assert(t, !ValidScope(s), "expected %q to be invalid", s)
 	}
 }
+
+func TestAdmin(t *testing.T) {
+	t.Parallel()
+	// Admin authorizes any 2-segment operation, on any instance.
+	set := Admin()
+	assert.Assert(t, set.Authorize(Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "1"}}))
+	assert.Assert(t, set.Authorize(Target{Op: []string{"github_token", "create"}}))
+	// But not operations of a different arity.
+	assert.Assert(t, !set.Authorize(Target{Op: []string{"task"}}))
+	assert.Assert(t, !set.Authorize(Target{Op: []string{"task", "read", "x"}}))
+}
+
+func TestParseSet(t *testing.T) {
+	t.Parallel()
+	// Empty input yields an empty set.
+	set, err := ParseSet(nil)
+	assert.NilError(t, err)
+	assert.Equal(t, len(set), 0)
+
+	// Each string parses into the set.
+	set, err = ParseSet([]string{"task.read", "github_token.create"})
+	assert.NilError(t, err)
+	assert.Equal(t, len(set), 2)
+	assert.Assert(t, set.Authorize(Target{Op: []string{"task", "read"}}))
+
+	// A malformed scope fails the whole parse.
+	_, err = ParseSet([]string{"task.read", "task."})
+	assert.ErrorContains(t, err, "empty segment")
+}

@@ -34,6 +34,23 @@ func Parse(s string) (Scope, error) {
 	return Scope{Op: op, Preds: preds}, nil
 }
 
+// ParseSet parses each scope string and collects them into a Set, failing on
+// the first malformed scope. A nil or empty input yields an empty Set.
+func ParseSet(scopes []string) (Set, error) {
+	if len(scopes) == 0 {
+		return nil, nil
+	}
+	set := make(Set, len(scopes))
+	for i, s := range scopes {
+		parsed, err := Parse(s)
+		if err != nil {
+			return nil, err
+		}
+		set[i] = parsed
+	}
+	return set, nil
+}
+
 // parseOp splits the operation path into segments, each into its set of
 // "|"-separated alternatives. Empty segments and empty alternatives are
 // rejected.
