@@ -170,7 +170,7 @@ Engine form (fully generic, no domain types):
 ```go
 // internal/auth/scope
 type Scope struct {
-    Op    []string            // operation-path segments; "*" matches exactly one segment
+    Op    [][]string          // segment i -> allowed alternatives ("*" is a member for wildcard)
     Preds map[string][]string // attribute key -> set of allowed values ("*" = unconstrained)
 }
 
@@ -182,6 +182,13 @@ type Target struct {
 func (s Scope) Matches(t Target) bool
 func (set Set) Authorize(t Target) bool
 ```
+
+Both the path and the predicates support **"one of a set"** at every position —
+path segments via `|` alternation (§4), predicate attributes via JSON arrays
+(§5). They are two encodings of the same idea only because the path is a flat
+string and the predicates are JSON. Each segment of `Op` parses into a set of
+allowed alternatives, exactly as a predicate scalar normalizes to a singleton
+set; `"*"` is simply a member of that set.
 
 Because the engine is agnostic, the operation taxonomy below
 (`task.read`, `task.create`, `github_token.create`, …) is an **illustrative
@@ -204,6 +211,11 @@ seg1.seg2.…:{json-predicates}
   right of it is the predicate object (`json.Unmarshal`).
 - The `:{…}` suffix is **optional**; absent ⇒ empty predicates (`{}`). A
   capability with no instance is just its path, e.g. `github_token.create`.
+- **A segment may list `|`-separated alternatives**, e.g. `task.create|update`
+  matches when the second segment is `create` **or** `update`. Alternation is
+  split into a set at parse time (`Op[i] = ["create","update"]`), so the matcher
+  does plain membership and never splits strings in the hot path. `*` is just a
+  member of that set (`a|b|*` ≡ `*`).
 
 Worked vocabulary (illustrative `resource.action` convention):
 
@@ -215,6 +227,7 @@ Worked vocabulary (illustrative `resource.action` convention):
 | `github_token.create` | issue a GitHub token (no instance; predicates `{}`) |
 | `task.create:{"parent":123,"workspace":"X","runner":"Y"}` | create a task **iff** parent=123 **and** workspace=X **and** runner=Y |
 | `task.create:{"parent":42,"workspace":["X","Y"],"runner":"rn"}` | create a child of 42 in workspace X **or** Y on runner rn |
+| `task.read\|write:{"id":123}` | read **or** write task 123 (path alternation) |
 | `task.*` | any action on a task instance (task-domain admin) |
 | `*.*` | global admin within the org (any 2-segment operation, any instance) |
 
@@ -256,10 +269,13 @@ values, not 6 separate scopes (and not a token that bloats as the cross-product
 grows).
 
 ```go
-func segMatch(pattern, seg string) bool { return pattern == "*" || pattern == seg }
+// alts is the parsed set of alternatives for one segment; "*" is a member for wildcard.
+func segMatch(alts []string, seg string) bool {
+    return slices.Contains(alts, "*") || slices.Contains(alts, seg)
+}
 
 func (s Scope) Matches(t Target) bool {
-    if len(s.Op) != len(t.Op) { // "*" matches exactly one segment; lengths must agree
+    if len(s.Op) != len(t.Op) { // each segment matches exactly one; lengths must agree
         return false
     }
     for i := range s.Op {
@@ -302,6 +318,33 @@ func (set Set) Authorize(t Target) bool {
   expressed at the application's chosen operation arity (here, `*.*` for the
   2-segment taxonomy). Genuinely depth-independent admin is the `**` future-work
   case, not something we need today.
+
+#### Alternation on the operation path (`|`)
+
+A path segment may list `|`-separated alternatives. It is the path-side mirror of
+array-valued predicates: **every position supports "one of a set"** — path
+segments via `|`, predicate attributes via JSON arrays. The two encodings exist
+only because the path is a flat string and predicates are JSON.
+
+- **Split at parse time, not during evaluation.** `task.create|update` parses to
+  `Op = [["task"], ["create","update"]]`; the matcher does plain membership
+  (`segMatch` above) and never calls `strings.Split` in the hot path. `*` is
+  simply a member of the alternative set, identical to how `"*"` works in a
+  predicate value (`a|b|*` ≡ `*`).
+- **Sound for the same reason set-valued predicates are.** `|` is
+  **within-position** alternation (one segment, one of N) — never cross-position
+  — so the positional AND across segments is preserved. There is no
+  segment/attribute smuggling, exactly as within-key membership is not
+  OR-across-keys (§5 intro).
+- **No new expressiveness.** `task.create|update:{}` is equivalent to holding
+  `task.create:{}` plus `task.update:{}` — the same DNF. Like array predicates,
+  it is purely a compactness optimization, here for the path (e.g. "read or
+  write this task" is one scope, not two).
+- **`|` is path-only.** Predicate values already express "one of a set" via JSON
+  arrays; adding `|` there would be a redundant second encoding *and* would
+  collide with user-controlled strings (a workspace or runner literally named
+  `a|b`). Path segments are app-defined operation constants, so `|` is
+  delimiter-safe there but not in predicate values.
 
 ### 6. Evaluation semantics: AND within a scope, OR across scopes
 
@@ -438,7 +481,17 @@ Authorization becomes a **single evaluator call** plus, for relationship/state
 checks, a thin per-handler `Target` builder. This per-RPC mapping **is the
 application taxonomy** — the only place where operation segments and attribute
 names have meaning. Default is **deny**: an RPC with no mapping, or a target no
-held scope matches, is rejected with `connect.CodePermissionDenied`.
+held scope matches, is rejected with `connect.CodePermissionDenied`. (This
+default-deny on *unmapped* RPCs is what the migration's RPC-side shim
+temporarily relaxes for non-task callers — see Migration; the end state is
+default-deny for everyone.)
+
+The table below maps only the 7 RPCs that `AgentFilter` covers today. The full
+service (`proto/xagent/v1/xagent.proto`) has ~50 RPCs — org admin, key
+management, routing rules, workspace registration, events, and so on. Mapping
+*all* of them is the bulk of the Phase 2 work; until an RPC has a `Target`
+builder it is "unmapped," which the migration handles explicitly rather than
+silently denying.
 
 Each RPC declares the permission it requires. Two shapes:
 
@@ -537,35 +590,70 @@ anything requires scopes:
   existing rows to `*.*`; `StoreKeyValidator.ValidateKey` returns it. New keys
   default to `*.*` until the UI grows scope selection.
 
-The "absent scopes ⇒ full access for user/app/key callers" shim is the safety
-net that makes Phase 1 and Phase 2 independently shippable. Task callers are
-*not* covered by the shim — they already carry explicit scopes and always have.
+This **caller-side shim** ("absent scopes ⇒ full access for user/app/key
+callers") is one of two safety nets that keep Phase 2 a true no-op. Task callers
+are *not* covered by it — they already carry explicit scopes and always have. On
+its own, though, the caller-side shim is **not sufficient**: it relaxes the
+*scope* check, but a caller holding `*.*` still gets denied by an RPC that has no
+`Target` builder yet (default-deny on unmapped RPCs, §7). That gap is closed by
+the RPC-side shim in Phase 2.
 
 ### Phase 2 — Convert enforcement to the evaluator (dual-running)
 
-With everyone holding `*.*`, convert checks one surface at a time; each
-conversion is a no-op because `*.*` authorizes everything:
+The interceptor is installed with a **symmetric RPC-side shim** that mirrors the
+caller-side one, so that Phase 2 is a true no-op while RPCs are mapped
+incrementally rather than in a single flag-day:
+
+> During Phase 2, an **unmapped** RPC (no `Target` builder) ⇒ **allow for
+> non-task callers**. Task callers stay default-deny for unmapped RPCs — they
+> were always an explicit allowlist (`AgentFilter` only ever implemented a fixed
+> set), so "unmapped ⇒ deny" is already their status quo and must not be
+> loosened.
+
+With both shims in place, every existing call still passes: a user/key/app
+caller that hits a not-yet-mapped RPC is allowed by the RPC-side shim, and one
+that hits a mapped RPC is allowed by the caller-side shim (it holds `*.*`, or no
+scopes ⇒ full access). Convert one surface at a time underneath:
 
 1. **`AgentFilter` → evaluator.** Reshape `TaskClaims.Scopes` minting
    (`runner/proxy.go:82`) into the grammar (§7 mapping), with the minter fully
    constraining create scopes. Replace each hand-written check in `filter.go`
    with a `Target` builder + `Authorize`. `filter_test.go` must pass unchanged
    (it is the behavioral spec). Keep the archived guard as a post-scope state
-   check.
-2. **API handlers → evaluator.** Add the authorization interceptor for
-   request-only targets and per-handler `Target` builders for row-dependent
-   ones, alongside the untouched org-scoping store calls. With `*.*` granted,
-   every existing call still passes.
+   check. (The agent path was already a closed allowlist, so it is mapped in one
+   go — the RPC-side shim never applies to task callers.)
+2. **API handlers → evaluator.** Map the full service: add the authorization
+   interceptor (request-only targets) and per-handler `Target` builders
+   (row-dependent ones), alongside the untouched org-scoping store calls. Each
+   RPC that gains a mapping stops relying on the RPC-side shim and starts being
+   evaluated for real — still a no-op because callers hold `*.*`. The shim is
+   what lets this happen RPC-by-RPC across multiple PRs instead of all at once.
 
 Both paths now call the same `scope.Set.Authorize`. The two enforcement styles
 are unified; the server can enforce task-level scopes itself rather than relying
 solely on the runner-side filter.
 
-### Phase 3 — Remove the compatibility shim
+### Phase 3 — Remove both compatibility shims
 
 Once all callers provably carry explicit scopes (keys backfilled, JWTs/sessions
-minting `*.*`, task tokens on the grammar), delete the "absent ⇒ full access"
-shim. From here, default-deny is real: a caller with no scopes can do nothing.
+minting `*.*`, task tokens on the grammar) **and** the whole service is mapped
+(no RPC lacks a `Target` builder), delete **both** shims together:
+
+- the **caller-side** shim ("absent scopes ⇒ full access"), and
+- the **RPC-side** shim ("unmapped ⇒ allow non-task callers").
+
+They must come out together: removing only one re-introduces the gap (an
+unmapped RPC would deny a `*.*` holder, or a scopeless caller would be denied on
+a mapped RPC). After this, default-deny is real for everyone — a caller with no
+scopes, or a request to an RPC with no mapping, can do nothing.
+
+**Alternative considered — flag-day mapping.** Instead of the RPC-side shim,
+Phase 2 could map the *entire* service before enabling the interceptor at all.
+That removes one transient shim but couples "turn on enforcement" to "every one
+of ~50 RPCs is mapped and reviewed" in a single change — a large, risky PR with
+no incremental fallback. The symmetric shim trades a short-lived, clearly-scoped
+allowance (unmapped ⇒ allow non-task callers, removed in Phase 3) for the
+ability to land mappings PR-by-PR. We take the shim.
 
 ### Phase 4 (future, out of scope) — Narrow grants
 
@@ -594,6 +682,7 @@ handling is a privilege escalation. Mitigations:
 
 - **Exhaustive table tests** for `scope` are mandatory, covering: segment-count
   mismatch; `*` single-segment matching (and that it does *not* span segments);
+  `|` alternation (membership, `a|b|*` ≡ `*`, rejection of empty alternatives);
   empty `Preds` matching any instance; absent key vs `"*"` value (both
   unconstrained); scalar→singleton and array normalization; missing target
   attribute (must deny, not match — the `ok` check in `Matches`); first-colon
@@ -606,7 +695,8 @@ handling is a privilege escalation. Mitigations:
   "one task" — a wildcard value, or a forgotten predicate key, silently widens a
   grant. Because an absent key is unconstrained, an **incomplete create object
   is a hole**, not a deny. Defenses: a `ValidScope` validator (the existing one,
-  `agentauth/token.go:23`, generalizes) that rejects unknown operation paths;
+  `agentauth/token.go:23`, generalizes) that rejects unknown operation paths and
+  malformed alternation (empty alternatives like `create|` or `|update`);
   minting helpers (`scope.OwnTask(id)`, `scope.ChildTasks(id, ws, rn)`) so
   call-sites never hand-assemble scope strings or JSON; and a lint/test that the
   only place `*.*` (or any empty-predicate wildcard) is produced is the
