@@ -19,13 +19,7 @@ import (
 // Predicate values are normalized to sets of strings: a JSON scalar becomes a
 // singleton set, a JSON array becomes the set of its stringified elements.
 func Parse(s string) (Scope, error) {
-	path := s
-	predStr := ""
-	hasColon := false
-	if i := strings.IndexByte(s, ':'); i >= 0 {
-		hasColon = true
-		path, predStr = s[:i], s[i+1:]
-	}
+	path, predStr, hasColon := strings.Cut(s, ":")
 	op, err := parsePath(path)
 	if err != nil {
 		return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
