@@ -4,17 +4,26 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
 // TaskURL returns the user-facing UI URL for a task, including the org query
 // parameter so deep links resolve to the correct org for users with
 // multiple memberships.
+//
+// The org value is encoded as a JSON-quoted string (e.g. org=%221%22, the
+// encoding of org="1") rather than a bare number. The Web UI uses TanStack
+// Router, which JSON-parses every search-param value; its validateSearch only
+// keeps org when it parses back to a string. A bare org=1 parses as the number
+// 1, fails that check, and the user is bounced back to their default org (see
+// issue #880). Emitting the quoted form round-trips back to the string "1".
 func TaskURL(baseURL string, taskID, orgID int64) string {
 	if baseURL == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s/ui/tasks/%d?org=%d", baseURL, taskID, orgID)
+	query := url.Values{"org": {strconv.Quote(strconv.FormatInt(orgID, 10))}}
+	return fmt.Sprintf("%s/ui/tasks/%d?%s", baseURL, taskID, query.Encode())
 }
 
 // RoutingKey reduces a recognized resource URL to a stable routing key, so two

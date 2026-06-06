@@ -6,6 +6,27 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+func TestTaskURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		baseURL string
+		taskID  int64
+		orgID   int64
+		want    string
+	}{
+		// org is JSON-quoted then URL-encoded: "7" -> %227%22, so the
+		// TanStack frontend parses it back to the string "7" (issue #880).
+		{"basic", "https://xagent.example.com", 42, 7, "https://xagent.example.com/ui/tasks/42?org=%227%22"},
+		{"multi-digit org", "https://xagent.choly.ca", 804, 123, "https://xagent.choly.ca/ui/tasks/804?org=%22123%22"},
+		{"empty base url", "", 42, 7, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, TaskURL(tt.baseURL, tt.taskID, tt.orgID), tt.want)
+		})
+	}
+}
+
 func TestRoutingKey(t *testing.T) {
 	tests := []struct {
 		name string
