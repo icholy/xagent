@@ -169,21 +169,6 @@ func (a *CursorAgent) findBin() (string, error) {
 	return "", fmt.Errorf("cursor agent CLI not found (install: curl -fsSL https://cursor.com/install | bash)")
 }
 
-// cursorToolArgs unmarshals a Cursor tool-call sub-object and returns its
-// nested "args" map. It returns nil when raw is nil or cannot be decoded.
-func cursorToolArgs(raw *json.RawMessage) map[string]any {
-	if raw == nil {
-		return nil
-	}
-	var sub struct {
-		Args map[string]any `json:"args"`
-	}
-	if err := json.Unmarshal(*raw, &sub); err != nil {
-		return nil
-	}
-	return sub.Args
-}
-
 func (a *CursorAgent) handleStreamEvent(data []byte) bool {
 	var event struct {
 		Type      string `json:"type"`
@@ -235,8 +220,14 @@ func (a *CursorAgent) handleStreamEvent(data []byte) bool {
 			toolName, raw = "bash", event.ToolCall.BashToolCall
 		}
 		// Cursor nests the actual arguments under an "args" object inside the
-		// set sub-object; redact the bulky content fields before summarizing.
-		args := toollog.Redact(cursorToolArgs(raw), "old_string", "new_string", "content", "fileText", "contents")
+		// set sub-object; pull it out, then redact bulky content before summarizing.
+		var sub struct {
+			Args map[string]any `json:"args"`
+		}
+		if raw != nil {
+			_ = json.Unmarshal(*raw, &sub)
+		}
+		args := toollog.Redact(sub.Args, "old_string", "new_string", "content", "fileText", "contents")
 		a.log.Info("tool", "name", toolName, "subtype", event.Subtype, "call_id", event.CallID, "summary", toollog.Summarize(args))
 	case "result":
 		if event.IsError {
