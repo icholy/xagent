@@ -82,10 +82,7 @@ func taskScope(action string, preds map[string]string) string {
 type TaskRead struct{ ID int64 }
 
 func (t TaskRead) Target() authscope.Target {
-	return authscope.Target{
-		Op:    []string{SegTask, SegRead},
-		Attrs: []authscope.Attr{authscope.Int64Attr(AttrID, t.ID)},
-	}
+	return authscope.MakeTarget(SegTask+"."+SegRead, authscope.Int64Attr(AttrID, t.ID))
 }
 
 // TaskReadRow authorizes reading a loaded task row, against both its id (own)
@@ -93,23 +90,18 @@ func (t TaskRead) Target() authscope.Target {
 type TaskReadRow struct{ ID, Parent int64 }
 
 func (t TaskReadRow) Target() authscope.Target {
-	return authscope.Target{
-		Op: []string{SegTask, SegRead},
-		Attrs: []authscope.Attr{
-			authscope.Int64Attr(AttrID, t.ID),
-			authscope.Int64Attr(AttrParent, t.Parent),
-		},
-	}
+	return authscope.MakeTarget(
+		SegTask+"."+SegRead,
+		authscope.Int64Attr(AttrID, t.ID),
+		authscope.Int64Attr(AttrParent, t.Parent),
+	)
 }
 
 // TaskWrite authorizes writing a task by id alone (own-task request cases).
 type TaskWrite struct{ ID int64 }
 
 func (t TaskWrite) Target() authscope.Target {
-	return authscope.Target{
-		Op:    []string{SegTask, SegWrite},
-		Attrs: []authscope.Attr{authscope.Int64Attr(AttrID, t.ID)},
-	}
+	return authscope.MakeTarget(SegTask+"."+SegWrite, authscope.Int64Attr(AttrID, t.ID))
 }
 
 // TaskWriteRow authorizes writing a loaded task row, against both its id (own)
@@ -117,13 +109,11 @@ func (t TaskWrite) Target() authscope.Target {
 type TaskWriteRow struct{ ID, Parent int64 }
 
 func (t TaskWriteRow) Target() authscope.Target {
-	return authscope.Target{
-		Op: []string{SegTask, SegWrite},
-		Attrs: []authscope.Attr{
-			authscope.Int64Attr(AttrID, t.ID),
-			authscope.Int64Attr(AttrParent, t.Parent),
-		},
-	}
+	return authscope.MakeTarget(
+		SegTask+"."+SegWrite,
+		authscope.Int64Attr(AttrID, t.ID),
+		authscope.Int64Attr(AttrParent, t.Parent),
+	)
 }
 
 // TaskCreate authorizes creating a task; the predicate set is fully constrained
@@ -135,29 +125,24 @@ type TaskCreate struct {
 }
 
 func (t TaskCreate) Target() authscope.Target {
-	return authscope.Target{
-		Op: []string{SegTask, SegCreate},
-		Attrs: []authscope.Attr{
-			authscope.Int64Attr(AttrParent, t.Parent),
-			authscope.StringAttr(AttrWorkspace, t.Workspace),
-			authscope.StringAttr(AttrRunner, t.Runner),
-		},
-	}
+	return authscope.MakeTarget(
+		SegTask+"."+SegCreate,
+		authscope.Int64Attr(AttrParent, t.Parent),
+		authscope.StringAttr(AttrWorkspace, t.Workspace),
+		authscope.StringAttr(AttrRunner, t.Runner),
+	)
 }
 
 // ChildList authorizes listing the children of a parent task ({parent} only).
 type ChildList struct{ Parent int64 }
 
 func (t ChildList) Target() authscope.Target {
-	return authscope.Target{
-		Op:    []string{SegTask, SegRead},
-		Attrs: []authscope.Attr{authscope.Int64Attr(AttrParent, t.Parent)},
-	}
+	return authscope.MakeTarget(SegTask+"."+SegRead, authscope.Int64Attr(AttrParent, t.Parent))
 }
 
 // GitHubTokenCreate authorizes issuing a GitHub token (no instance).
 type GitHubTokenCreate struct{}
 
 func (GitHubTokenCreate) Target() authscope.Target {
-	return authscope.Target{Op: []string{SegGitHubToken, SegCreate}}
+	return authscope.MakeTarget(SegGitHubToken + "." + SegCreate)
 }

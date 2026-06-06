@@ -11,6 +11,7 @@ package authscope
 import (
 	"slices"
 	"strconv"
+	"strings"
 )
 
 // Scope is a single capability pattern. Op is the operation path, where each
@@ -46,6 +47,12 @@ func StringAttr(name, v string) Attr {
 type Target struct {
 	Op    []string
 	Attrs []Attr
+}
+
+// MakeTarget builds a Target from a dot-delimited operation path and its
+// attributes. The op is split on "." into concrete segments.
+func MakeTarget(op string, attrs ...Attr) Target {
+	return Target{Op: strings.Split(op, "."), Attrs: attrs}
 }
 
 // Targeter is implemented by anything that can produce a Target. It is the
