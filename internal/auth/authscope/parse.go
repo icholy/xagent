@@ -52,6 +52,32 @@ func ParseScopes(scopes []string) (Scopes, error) {
 	return set, nil
 }
 
+// MarshalJSON encodes the scopes as an array of their wire-grammar strings, so
+// the on-wire form is a plain []string and stays back-compatible with tokens
+// minted before Scopes was a first-class type.
+func (scopes Scopes) MarshalJSON() ([]byte, error) {
+	strs := make([]string, len(scopes))
+	for i, s := range scopes {
+		strs[i] = s.String()
+	}
+	return json.Marshal(strs)
+}
+
+// UnmarshalJSON decodes an array of wire-grammar strings and parses each into a
+// Scope, reusing ParseScopes.
+func (scopes *Scopes) UnmarshalJSON(data []byte) error {
+	var strs []string
+	if err := json.Unmarshal(data, &strs); err != nil {
+		return err
+	}
+	parsed, err := ParseScopes(strs)
+	if err != nil {
+		return err
+	}
+	*scopes = parsed
+	return nil
+}
+
 // parseOp splits the operation path into its dot-separated segments. Empty
 // segments are rejected.
 func parseOp(opRaw string) ([]string, error) {

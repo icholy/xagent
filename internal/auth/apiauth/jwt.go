@@ -15,11 +15,11 @@ import (
 // AppClaims contains the JWT claims for an app-issued token.
 type AppClaims struct {
 	jwt.RegisteredClaims
-	Email  string   `json:"email"`
-	Name   string   `json:"name"`
-	OrgID  int64    `json:"org_id"`
-	Role   string   `json:"role,omitempty"`
-	Scopes []string `json:"scopes,omitempty"`
+	Email  string           `json:"email"`
+	Name   string           `json:"name"`
+	OrgID  int64            `json:"org_id"`
+	Role   string           `json:"role,omitempty"`
+	Scopes authscope.Scopes `json:"scopes,omitempty"`
 }
 
 // AppTokenTTL is the default time-to-live for app JWTs.
@@ -39,7 +39,7 @@ func NewAppClaims(user *UserInfo) *AppClaims {
 		OrgID: user.OrgID,
 		// App JWTs are omnipotent within their org today; mint the admin
 		// wildcard so behavior is unchanged once enforcement lands.
-		Scopes: []string{authscope.AdminScope},
+		Scopes: authscope.Admin(),
 	}
 }
 

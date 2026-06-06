@@ -29,18 +29,15 @@ func NewAgentFilter(client xagentv1connect.XAgentServiceClient) *AgentFilter {
 	}
 }
 
-// scopes returns the caller's parsed scopes, or PermissionDenied if no claims
-// are present or the minted scopes are malformed.
+// scopes returns the caller's scopes, or PermissionDenied if no claims are
+// present. The scopes are already parsed during JWT verification (see
+// authscope.Scopes), so this just unwraps them from the claims.
 func (p *AgentFilter) scopes(ctx context.Context) (authscope.Scopes, error) {
 	claims, ok := agentauth.ClaimsFromContext(ctx)
 	if !ok {
 		return nil, errPermissionDenied("missing agent token")
 	}
-	scopes, err := authscope.ParseScopes(claims.Scopes)
-	if err != nil {
-		return nil, errPermissionDenied("invalid token scopes")
-	}
-	return scopes, nil
+	return claims.Scopes, nil
 }
 
 func (p *AgentFilter) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {

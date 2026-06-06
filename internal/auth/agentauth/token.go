@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/icholy/xagent/internal/auth/authscope"
 )
 
 // Scopes grant tasks additional capabilities beyond their own task data.
@@ -29,14 +31,14 @@ func ValidScope(scope string) bool {
 }
 
 // TaskClaims contains the JWT claims for a task's identity. Scopes holds the
-// task's authorization as authscope grammar strings (built by TaskScopes and
-// parsed back into authscope.Scopes by the agent filter).
+// task's authorization; it serializes to/from the wire as an array of
+// grammar strings (see authscope.Scopes) so the on-wire token is unchanged.
 type TaskClaims struct {
 	jwt.RegisteredClaims
-	TaskID    int64    `json:"task_id"`
-	Workspace string   `json:"workspace"`
-	Runner    string   `json:"runner"`
-	Scopes    []string `json:"scopes,omitempty"`
+	TaskID    int64            `json:"task_id"`
+	Workspace string           `json:"workspace"`
+	Runner    string           `json:"runner"`
+	Scopes    authscope.Scopes `json:"scopes,omitempty"`
 }
 
 // CreatePrivateKey generates a new Ed25519 private key.

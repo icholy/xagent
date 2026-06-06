@@ -227,10 +227,6 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	scopes, err := authscope.ParseScopes(claims.Scopes)
-	if err != nil {
-		return nil, err
-	}
 	return &UserInfo{
 		ID:       claims.Subject,
 		Email:    claims.Email,
@@ -238,7 +234,7 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 		OrgID:    claims.OrgID,
 		Type:     AuthTypeApp,
 		ClientID: r.Header.Get("X-Client-ID"),
-		Scopes:   scopes,
+		Scopes:   claims.Scopes,
 	}, nil
 }
 

@@ -40,6 +40,20 @@ func StringAttr(name, v string) Attr {
 	return Attr{Name: name, Value: v}
 }
 
+// Make builds a Scope from an operation path and its attributes, folding the
+// attrs into the Preds map. Preds is left nil when there are no attrs, so a
+// built scope is structurally identical to a parsed one.
+func Make(op []string, attrs ...Attr) Scope {
+	if len(attrs) == 0 {
+		return Scope{Op: op}
+	}
+	preds := make(map[string]string, len(attrs))
+	for _, a := range attrs {
+		preds[a.Name] = a.Value
+	}
+	return Scope{Op: op, Preds: preds}
+}
+
 // Scopes is a caller's held scopes. Allow is an OR across them.
 type Scopes []Scope
 
