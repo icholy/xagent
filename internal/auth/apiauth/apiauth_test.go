@@ -13,8 +13,8 @@ func TestUserInfoAllow_Admin(t *testing.T) {
 	user := &UserInfo{Scopes: authscope.Admin()}
 
 	// Act & Assert: admin allows any 2-segment operation.
-	assert.Assert(t, user.Allow(authscope.OpTaskRead, authscope.StringAttr("id", "1")))
-	assert.Assert(t, user.Allow(authscope.OpGitHubTokenCreate))
+	assert.Assert(t, user.Scopes.Allow(authscope.OpTaskRead, authscope.StringAttr("id", "1")))
+	assert.Assert(t, user.Scopes.Allow(authscope.OpGitHubTokenCreate))
 }
 
 func TestUserInfoAllow_NoScopes(t *testing.T) {
@@ -23,5 +23,5 @@ func TestUserInfoAllow_NoScopes(t *testing.T) {
 	user := &UserInfo{}
 
 	// Act & Assert: an empty set allows nothing.
-	assert.Assert(t, !user.Allow(authscope.OpTaskRead))
+	assert.Assert(t, !user.Scopes.Allow(authscope.OpTaskRead))
 }

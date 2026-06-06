@@ -37,13 +37,6 @@ type UserInfo struct {
 	Scopes   authscope.Scopes // Capabilities held by the caller within OrgID
 }
 
-// Allow reports whether the caller's scopes permit the operation op on a
-// request described by attrs. It is a convenience wrapper over Scopes.Allow;
-// nothing gates requests on it yet.
-func (u *UserInfo) Allow(op []string, attrs ...authscope.Attr) bool {
-	return u.Scopes.Allow(op, attrs...)
-}
-
 // DisplayName returns the best available display name for the user.
 func (u *UserInfo) DisplayName() string {
 	if u.Name != "" {

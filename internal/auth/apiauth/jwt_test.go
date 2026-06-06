@@ -25,5 +25,5 @@ func TestAppClaimsScopesRoundTrip(t *testing.T) {
 	// exactly as authenticate populates UserInfo.Scopes.
 	assert.DeepEqual(t, verified.Scopes, authscope.Admin())
 	user := &UserInfo{Scopes: verified.Scopes}
-	assert.Assert(t, user.Allow(authscope.OpTaskWrite, authscope.StringAttr("id", "1")))
+	assert.Assert(t, user.Scopes.Allow(authscope.OpTaskWrite, authscope.StringAttr("id", "1")))
 }
