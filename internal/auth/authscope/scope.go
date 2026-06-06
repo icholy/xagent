@@ -1,4 +1,4 @@
-// Package scope implements a generic, semantically agnostic scope-matching
+// Package authscope implements a generic, semantically agnostic scope-matching
 // engine for authorization. It assigns no meaning to operation segments or
 // predicate keys: a scope is a pattern over an (operation-path, attributes)
 // pair, and a target is the concrete operation-path and attributes an
@@ -6,7 +6,7 @@
 // taxonomy; this package only matches patterns.
 //
 // See proposals/draft/scope-based-permissions.md for the design.
-package scope
+package authscope
 
 import "slices"
 
