@@ -35,9 +35,9 @@ func Parse(s string) (Scope, error) {
 	return Scope{Op: op, Preds: preds}, nil
 }
 
-// ParseSet parses each scope string and collects them into a Scopes, failing on
+// ParseScopes parses each scope string and collects them into a Scopes, failing on
 // the first malformed scope. A nil or empty input yields an empty Scopes.
-func ParseSet(scopes []string) (Scopes, error) {
+func ParseScopes(scopes []string) (Scopes, error) {
 	if len(scopes) == 0 {
 		return nil, nil
 	}

@@ -227,7 +227,7 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	scopes, err := authscope.ParseSet(claims.Scopes)
+	scopes, err := authscope.ParseScopes(claims.Scopes)
 	if err != nil {
 		return nil, err
 	}

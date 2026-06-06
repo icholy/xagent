@@ -36,7 +36,7 @@ func (p *AgentFilter) scopes(ctx context.Context) (authscope.Scopes, error) {
 	if !ok {
 		return nil, errPermissionDenied("missing agent token")
 	}
-	scopes, err := authscope.ParseSet(claims.Scopes)
+	scopes, err := authscope.ParseScopes(claims.Scopes)
 	if err != nil {
 		return nil, errPermissionDenied("invalid token scopes")
 	}

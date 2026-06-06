@@ -8,7 +8,7 @@ import (
 )
 
 func TestTaskScopes_OwnTaskOnly(t *testing.T) {
-	scopes, err := authscope.ParseSet(TaskScopes(42, "ws", "rn", nil))
+	scopes, err := authscope.ParseScopes(TaskScopes(42, "ws", "rn", nil))
 	assert.NilError(t, err)
 
 	assert.Assert(t, scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(42)))
@@ -22,7 +22,7 @@ func TestTaskScopes_OwnTaskOnly(t *testing.T) {
 }
 
 func TestTaskScopes_ChildTasks(t *testing.T) {
-	scopes, err := authscope.ParseSet(TaskScopes(42, "ws", "rn", []string{ScopeChildTasks}))
+	scopes, err := authscope.ParseScopes(TaskScopes(42, "ws", "rn", []string{ScopeChildTasks}))
 	assert.NilError(t, err)
 
 	assert.Assert(t, scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(99), authscope.WithTaskParent(42)))
@@ -40,7 +40,7 @@ func TestTaskScopes_ChildTasks(t *testing.T) {
 }
 
 func TestTaskScopes_GitHubToken(t *testing.T) {
-	scopes, err := authscope.ParseSet(TaskScopes(42, "ws", "rn", []string{ScopeGitHubToken}))
+	scopes, err := authscope.ParseScopes(TaskScopes(42, "ws", "rn", []string{ScopeGitHubToken}))
 	assert.NilError(t, err)
 
 	assert.Assert(t, scopes.Allow(authscope.OpGitHubTokenCreate))
