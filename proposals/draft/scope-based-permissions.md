@@ -475,201 +475,358 @@ derive the missing ones) and check three things — leaking the constraint model
 into every create handler. The conjunctive single-scope object keeps that
 knowledge in the token.
 
-### 7. Default-deny + RPC → required-permission mapping
+### Engine as built (PR #902) — reconciling §3–§6 with what shipped
 
-Authorization becomes a **single evaluator call** plus, for relationship/state
-checks, a thin per-handler `Target` builder. This per-RPC mapping **is the
-application taxonomy** — the only place where operation segments and attribute
-names have meaning. Default is **deny**: an RPC with no mapping, or a target no
-held scope matches, is rejected with `connect.CodePermissionDenied`. (This
-default-deny on *unmapped* RPCs is what the migration's RPC-side shim
-temporarily relaxes for non-task callers — see Migration; the end state is
-default-deny for everyone.)
+§3–§6 above describe the *target* design. The engine that actually landed
+(`internal/auth/authscope`, PR #902) is a deliberately smaller subset, and the
+rest of this proposal is written against it, not against the earlier prose:
 
-The table below maps only the 7 RPCs that `AgentFilter` covers today. The full
-service (`proto/xagent/v1/xagent.proto`) has ~50 RPCs — org admin, key
-management, routing rules, workspace registration, events, and so on. Mapping
-*all* of them is the bulk of the Phase 2 work; until an RPC has a `Target`
-builder it is "unmapped," which the migration handles explicitly rather than
-silently denying.
+- The package is `internal/auth/authscope` (not `internal/auth/scope`), the
+  caller's held set is `authscope.Scopes` (not `scope.Set`), and
+  `apiauth.UserInfo.Scopes authscope.Scopes` **already exists** (added in #902).
+- The evaluator is `func (scopes authscope.Scopes) Allow(op []string, attrs ...authscope.Attr) bool`.
+  There is **no** `Target`/`Authorize`/`Set` type — the handler *is* the target
+  builder: it passes the operation path and the request/row attributes straight
+  to `Allow`.
+- Operation paths are exported `[]string` vars (`authscope.OpTaskRead`,
+  `OpTaskWrite`, `OpTaskCreate`, `OpGitHubTokenCreate` in `task.go`). A `Scope`'s
+  `Op` is `[]string`; `"*"` matches any one segment. `AdminScope = "*.*"` and
+  `authscope.Admin()` return the two-segment wildcard.
+- Attributes are namespaced typed constructors (`authscope.WithTaskID`,
+  `WithTaskParent`, `WithTaskWorkspace`, `WithTaskRunner`), built on
+  `Int64Attr`/`StringAttr`. Keys are `"task.id"`, `"task.parent"`, etc.
+- Scopes are built with `authscope.New(op, attrs...)` and **self-serialize**:
+  `authscope.Scopes` marshals to/from a JSON `[]string` of wire-grammar strings,
+  so a token's `scopes` claim is unchanged on the wire.
+- **Predicates are single-valued** (`map[string]string`); `Parse` rejects JSON
+  numbers, booleans, and arrays. The **set-valued predicates and `|` path
+  alternation** discussed in §4–§6 are *not implemented* (a `parse.go` comment
+  flags set values as "can be added later"). Where §6a says "allow N workspaces
+  uses a set value," the shipped engine instead needs **N fully-constrained
+  scopes** (one per workspace) — a token-size cost, not a correctness one. The
+  mapping below uses only single-valued predicates.
+- **Workspace capability flags** (`agentauth.CapabilityChildTasks`,
+  `CapabilityGitHubToken`) are *not* grammar scopes. They are the workspace-level
+  inputs the runner's minter, `agentauth.Scopes(ScopeOptions{...})`, turns into
+  the task token's scopes. Keep this distinction: capabilities are config; scopes
+  are the evaluated grant.
 
-Each RPC declares the permission it requires. Two shapes:
+The agent-caller half of this proposal is **already enforced**:
+`internal/agentmcp.AgentFilter` checks every agent RPC with
+`scopes.Allow(...)`, loading the row first when an attribute (the task's
+`parent`) comes from the stored entity (`GetTask`, `UpdateTask`, the child-leg
+of `ListLogs`). The remainder of this document specifies the *API-caller* half —
+the full `XAgentService` as called by users, `xat_` keys, app JWTs, and cookie
+sessions — which today has **no** capability check at all (only org scoping).
 
-1. **Request-only targets** — everything needed is in the request (or is a plain
-   capability). Checked in an interceptor before the handler runs.
-2. **Row-dependent targets** — the predicate references attributes of a stored
-   row (e.g. `task.parent`). The row must be loaded (org-scoped) first, then the
-   target is evaluated. These stay close to the handler (the handler already
-   loads the row today), but call the shared `scope.Set.Authorize`.
+### 7. RPC → required-permission mapping (full `XAgentService`)
 
-Re-expressing the **current `AgentFilter`** rules (the existing tests in
-`internal/agentmcp/filter_test.go` are the behavioral spec to preserve):
+This per-RPC mapping **is the application taxonomy** — the only place operation
+segments and attribute names carry meaning. Authorization for an API caller is
+two independent gates, both of which must pass:
 
-| RPC | Target | Today's rule reproduced |
-|---|---|---|
-| `CreateLink`, `UploadLogs` | `Op:[task,write] Attrs:{id:req.TaskId}` | `req.TaskId == claims.TaskID` via `task.write:{"id":42}` |
-| `SubmitRunnerEvents` | per-event `Op:[task,write] Attrs:{id:ev.TaskId}`, **all** must pass | all-or-nothing batch (`filter.go:67`) |
-| `GetTask`, `GetTaskDetails`, `ListLogs` | `Op:[task,read] Attrs:{id:row.id, parent:row.parent}` | own (`task.read:{"id":42}`) OR child (`task.read:{"parent":42}`); child scope absent ⇒ child denied |
-| `UpdateTask` | `Op:[task,write] Attrs:{id:row.id, parent:row.parent}` | own/child as above + archived guard (§ below) |
-| `CreateTask` | `Op:[task,create] Attrs:{parent:req.Parent, workspace:req.Workspace, runner:req.Runner}` | four-way conjunction via one fully-constrained scope |
-| `ListChildTasks` | `Op:[task,read] Attrs:{parent:req.ParentId}` | parent match + `child_tasks` |
-| `CreateGitHubToken` | `Op:[github_token,create] Attrs:{}` | `github_token` scope |
+1. **Tenancy (unchanged):** the target belongs to `caller.OrgID`, enforced by the
+   existing `s.store.…(ctx, nil, …, caller.OrgID)` calls. Cross-org access is
+   impossible regardless of scope.
+2. **Capability (new):** `caller.Scopes.Allow(op, attrs…)` returns true.
 
-The old task scopes therefore map to:
+Each RPC is one of two shapes, exactly as on the agent side:
 
-- `child_tasks` ⇒ the token gains the child-relationship scopes
-  `task.read:{"parent":<self>}`, `task.write:{"parent":<self>}`, and
-  `task.create:{"parent":<self>,"workspace":<ws>,"runner":<rn>}`.
-- `github_token` ⇒ `github_token.create`.
-- The always-present own-task access ⇒ `task.read:{"id":<self>}`,
-  `task.write:{"id":<self>}`.
+- **Request-only** — every attribute is in the request (or the op is a bare
+  capability). Checkable *before* the handler runs.
+- **Row-dependent** — a predicate references a stored attribute (a task's
+  `parent`, an org's `owner`). The row must be loaded org-scoped *first*, then
+  `Allow` is called — mirroring `AgentFilter.GetTask`/`UpdateTask`.
 
-Re-expressing the **current org-scoping** (the API callers): users, sessions,
-and `xat_` keys are omnipotent within their org today. In the model that is
-`*.*` (see Migration). The org tenancy check is untouched; `*.*` only satisfies
-the *capability* half, so behavior is identical. Narrowing those grants later
-(e.g. a read-only key = `*.read`) is future work, not this proposal.
+#### New `Op*` paths and attribute keys the taxonomy needs
 
-Because both the agent path and the API path now compute a `Target` and call the
-same `scope.Set.Authorize`, the two enforcement styles collapse into one.
-`AgentFilter`'s hand-written per-RPC checks are replaced by target builders that
-feed the shared engine; the server can additionally run the same evaluator, so
-task isolation is no longer dependent on the runner-side filter being in the
-path.
+Beyond the task-caller set already in `task.go`, the full service needs (names
+illustrative; same `resource.action` convention):
+
+```go
+// operation paths (add alongside OpTask*/OpGitHubTokenCreate)
+OpEventRead      = []string{"event", "read"}
+OpEventWrite     = []string{"event", "write"}   // delete + add/remove task fold into write
+OpEventCreate    = []string{"event", "create"}
+OpWorkspaceRead  = []string{"workspace", "read"}
+OpWorkspaceWrite = []string{"workspace", "write"} // register + clear
+OpKeyRead        = []string{"key", "read"}
+OpKeyCreate      = []string{"key", "create"}
+OpKeyWrite       = []string{"key", "write"}     // delete folds into write
+OpOrgRead        = []string{"org", "read"}      // settings, members, routing-rule reads
+OpOrgWrite       = []string{"org", "write"}     // members, settings, routing-rules, GH-installation link
+OpOrgCreate      = []string{"org", "create"}
+OpOrgDelete      = []string{"org", "delete"}
+OpAccountWrite   = []string{"account", "write"} // unlink GitHub/Atlassian — user-identity axis
+
+// attribute keys (add alongside AttrTask*)
+AttrEventID         = "event.id"
+AttrWorkspaceRunner = "workspace.runner"
+AttrKeyID           = "key.id"
+```
+
+Lifecycle and sub-resource verbs are folded coarsely (Open Questions #2/#3):
+`Archive`/`Unarchive`/`Cancel`/`Restart` are `task.write`; links and logs inherit
+their task's op; `routing_rule`/settings reads and writes are `org.read`/
+`org.write`. Splitting any of these out later needs no engine change — just new
+`Op*` vars.
+
+#### The full table
+
+| RPC | Operation | Attributes | Shape | Notes |
+|---|---|---|---|---|
+| `Ping` | — | — | exempt | no caller data; interceptor allowlists it |
+| `GetProfile` | — | — | exempt | the caller's own identity/orgs; gated by *authenticated user*, not an org scope (see "identity axis" below) |
+| `ListTasks` | `task.read` | — | request-only | full-org list ⇒ needs an unconstrained `task.read` (`*.*` qualifies); a `{task.id:N}`-only scope does **not** authorize a list |
+| `ListRunnerTasks` | `task.read` | — | request-only | filtered by `req.Runner` but returns tasks; treat as org read |
+| `ListChildTasks` | `task.read` | `task.parent=req.ParentId` | request-only | identical to `AgentFilter.ListChildTasks` |
+| `CreateTask` | `task.create` | `task.parent=req.Parent`, `task.workspace=req.Workspace`, `task.runner=req.Runner` | request-only | `req.Parent==0` for a top-level task; minter must fully constrain (§6a) |
+| `GetTask` | `task.read` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | own (`{id}`) OR child (`{parent}`) |
+| `GetTaskDetails` | `task.read` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | as `GetTask` |
+| `UpdateTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | + archived state guard (below) |
+| `ArchiveTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | lifecycle ⇒ write |
+| `UnarchiveTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | |
+| `CancelTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | |
+| `RestartTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | |
+| `UploadLogs` | `task.write` | `task.id=req.TaskId` | request-only | as `AgentFilter` |
+| `ListLogs` | `task.read` | `task.id=req.TaskId`, then `{id,parent}` of row | **hybrid** | own-task fast path by id, child leg loads row — copy `AgentFilter.ListLogs` |
+| `CreateLink` | `task.write` | `task.id=req.TaskId` | request-only | as `AgentFilter` |
+| `ListLinks` | `task.read` | `task.id=req.TaskId` | request-only | id-only; child-scoped read would need a row-load (note) |
+| `ListEvents` | `event.read` | — | request-only | full-org list |
+| `CreateEvent` | `event.create` | — | request-only | |
+| `GetEvent` | `event.read` | `event.id=req.Id` | request-only | |
+| `DeleteEvent` | `event.write` | `event.id=req.Id` | request-only | |
+| `AddEventTask` | `event.write` **and** `task.write` | `event.id=req.EventId`; `task.id=req.TaskId` | request-only | **two** `Allow` calls, both must pass (mirrors the dual `HasEvent`/`HasTask`) |
+| `RemoveEventTask` | `event.write` **and** `task.write` | `event.id=req.EventId`; `task.id=req.TaskId` | request-only | as above |
+| `ListEventTasks` | `event.read` | `event.id=req.EventId` | request-only | |
+| `ListEventsByTask` | `task.read` | `task.id=req.TaskId` | request-only | keyed on the task |
+| `SubmitRunnerEvents` | `task.write` | per-event `task.id=ev.TaskId` | request-only | all-or-nothing batch, exactly as `AgentFilter` |
+| `RegisterWorkspaces` | `workspace.write` | `workspace.runner=req.RunnerId` | request-only | runner-facing |
+| `ListWorkspaces` | `workspace.read` | — | request-only | |
+| `ClearWorkspaces` | `workspace.write` | `workspace.runner=req.RunnerId` (omit when empty) | request-only | empty `req.RunnerId` ⇒ org-wide clear ⇒ no instance attr ⇒ needs unconstrained `workspace.write` |
+| `CreateKey` | `key.create` | — | request-only | |
+| `ListKeys` | `key.read` | — | request-only | |
+| `DeleteKey` | `key.write` | `key.id=req.Id` | request-only | `key.id` is a string UUID |
+| `UnlinkGitHubAccount` | `account.write` | — | request-only | identity axis (caller's own user) |
+| `UnlinkAtlassianAccount` | `account.write` | — | request-only | identity axis |
+| `LinkGitHubInstallation` | `org.write` | — | **row-load** | mutates org settings; the existing "same GitHub user started the install" check stays as an identity guard |
+| `CreateOrg` | `org.create` | — | request-only | org axis (no current-org instance — see below) |
+| `ListOrgs` | `org.read` | — | request-only | cross-org by membership — org axis |
+| `DeleteOrg` | `org.delete` | — | **row-load** | + owner role guard; `req.Id` is an org id (tenancy axis), never a scope predicate |
+| `AddOrgMember` | `org.write` | — | **row-load** | + owner role guard |
+| `RemoveOrgMember` | `org.write` | — | **row-load** | + owner role guard |
+| `ListOrgMembers` | `org.read` | — | request-only | |
+| `GetOrgSettings` | `org.read` | — | request-only | |
+| `GenerateAtlassianWebhookSecret` | `org.write` | — | request-only | |
+| `GetRoutingRules` | `org.read` | — | request-only | folded into `org` (coarse) |
+| `SetRoutingRules` | `org.write` | — | request-only | folded into `org` (coarse) |
+| `CreateGitHubToken` | `github_token.create` | — | request-only | server returns `Unimplemented`; only the runner proxy / `AgentFilter` serves it |
+
+#### The identity / org axis is not "within-org"
+
+A handful of RPCs are **not** scoped within a single org and so sit awkwardly
+against the "scopes are intra-org capability" rule (§2):
+
+- **Identity-axis** (`GetProfile`, `UnlinkGitHubAccount`,
+  `UnlinkAtlassianAccount`) act on the *caller's own user*, not on org-owned
+  rows. These are governed by *being an authenticated user* (the existing
+  `RequireUserInterceptor`); the `account.write` op is a thin capability for the
+  unlinks, with no instance and no org predicate. `GetProfile` carries no scope.
+- **Org-axis** (`CreateOrg`, `ListOrgs`, `DeleteOrg`, member add/remove) act on
+  the org-tenancy axis itself. `CreateOrg` has no current-org context; `ListOrgs`
+  is intentionally cross-org (by membership); `DeleteOrg` takes an *org id* in the
+  request, and since an org id is the tenancy axis it is **never** encoded as a
+  scope predicate. The real gate on these is the **org `role`** owner-check
+  already in the handlers (`org.Owner != caller.ID`), which we keep as an
+  orthogonal guard (below). The `org.*` ops exist mainly so an admin grant covers
+  them and so Phase 3 can later narrow non-owners.
+
+Because these escape the within-org scope model, the proposal treats them as
+explicitly-tagged exemptions/coarse-capabilities rather than forcing an org id
+into a predicate. Reconciling org `role` with scopes is Open Question #5.
+
+#### Role guards and state guards coexist with scope checks
+
+Two existing kinds of check are **not** capability questions and stay as
+request-time guards evaluated *after* the scope check passes — exactly as
+`AgentFilter.UpdateTask` keeps the archived guard after its `Allow`:
+
+- **State guards** — `UpdateTask`'s `if row.Archived { … }`: mutable runtime
+  state, not a token-scopable property.
+- **Role guards** — the org-management owner check (`org.Owner != caller.ID` in
+  `DeleteOrg`/`AddOrgMember`/`RemoveOrgMember`) and `LinkGitHubInstallation`'s
+  "same GitHub user" check: these are identity/role facts resolved against loaded
+  rows. They remain where they are; scopes do not subsume them in this proposal.
+
+Keeping state and role out of the grammar keeps `authscope` a pure function of
+(scopes, op, attributes) and exhaustively testable.
+
+### 8. Enforcement mechanism: interceptor vs. per-handler
+
+Two mechanisms are available, and the right answer is to use **both**, split by
+RPC shape:
+
+**A central Connect interceptor** holds a static table from RPC procedure
+(`req.Spec().Procedure`) to `(op []string, extractor func(req) []authscope.Attr)`
+and, before the handler runs, calls `apiauth.Caller(ctx).Scopes.Allow(op, attrs…)`,
+returning `connect.CodePermissionDenied` on failure. This is ideal for the ~30
+**request-only** RPCs: the check is declarative, lives in one auditable place
+next to the taxonomy, and a new request-only RPC is one table row. It composes
+with `RequireUserInterceptor` (which still runs first and guarantees a caller).
+
+**Per-handler checks** (the `AgentFilter` pattern) are *required* for the ~12
+**row-dependent** RPCs: the interceptor cannot see a task's `parent` or an org's
+`owner` because those come from a row the handler loads. These RPCs call
+`Allow` in the handler, right after the org-scoped load — copying
+`AgentFilter.GetTask`/`UpdateTask` almost verbatim.
+
+To avoid a silent hole, the interceptor classifies **every** procedure into
+exactly one of three buckets and fails closed on anything unlisted:
+
+| Bucket | Interceptor behavior |
+|---|---|
+| request-only (has an entry) | build attrs, call `Allow`, deny on failure |
+| handler-enforced (row-dependent) | pass through; the handler **must** call `Allow` itself |
+| exempt (`Ping`, `GetProfile`) | pass through, no check |
+| *anything else* | **deny** (`CodePermissionDenied`) — default-deny on unknown procedures |
+
+Recommendation: **hybrid, interceptor-first.** A pure interceptor cannot
+authorize row-dependent RPCs; a pure per-handler approach would duplicate the
+trivial request-only check across ~30 handlers and scatter the taxonomy. The
+hybrid keeps the bulk declarative and confines hand-written checks to the dozen
+RPCs that genuinely need a loaded row — which is also exactly the set
+`AgentFilter` already demonstrates.
+
+**Interaction with org scoping.** Scopes are *within-org*; org is a separate
+axis and its enforcement does **not** move. The store calls keep taking
+`caller.OrgID`, so:
+
+- For request-only RPCs the interceptor's `Allow` only refines capability; the
+  org boundary is still applied by the handler's store call.
+- For row-dependent RPCs the org-scoped load runs first and returns `NotFound`
+  for a row in another org **before** `Allow` is ever consulted — so a scope can
+  only narrow access *inside* the caller's org and can never widen it across
+  orgs, by construction. This is why no `Op`/attribute ever encodes an org id.
 
 ### State-based checks coexist as request-time guards
 
-Some rules are not about *identity/capability* but about *resource state* and
-cannot live in a scope. The clearest is `UpdateTask`'s "cannot update archived
-task" (`filter.go:166`): whether a task is archived is mutable runtime state,
-not a property a token can be scoped to. These remain ordinary request-time
-guards, evaluated **after** scope authorization passes:
+Some rules are about *resource state*, not identity/capability, and cannot live
+in a scope. The clearest is `UpdateTask`'s "cannot update archived task"
+(`AgentFilter.UpdateTask`, and the analogous API handler): whether a task is
+archived is mutable runtime state. These remain ordinary request-time guards,
+evaluated **after** scope authorization passes:
 
 ```go
-// 1. capability: scope evaluator authorizes Op:[task,write] for the row (own or parent)
-// 2. state guard: if row.Archived { return PermissionDenied("cannot update archived task") }
+// 1. capability: scopes.Allow(authscope.OpTaskWrite, WithTaskID(row.Id), WithTaskParent(row.Parent))
+// 2. state guard: if row.Archived { return errPermissionDenied("cannot update archived task") }
 ```
 
 Scope evaluation answers "may this caller, in principle, write this task?"; the
-state guard answers "is the task currently in a writable state?" They are
-orthogonal and both must pass. Keeping state guards out of the grammar keeps the
-engine pure (a function of the token and the target's *identity* attributes, not
-its lifecycle), which is what makes it exhaustively testable.
+state guard answers "is the task currently writable?" Both must pass.
 
-## Migration
+## Migration / phasing — behavior-preserving first
 
-This is the crux: **migrate everything we have right now onto the model without
-changing anyone's effective access.** Existing user sessions and `xat_` keys
-carry no scopes and are omnipotent within their org; the moment a handler
-*requires* a scope, they break unless they already hold an admin scope. So the
-order is strict: introduce the machinery, grant admin to everyone, *then*
-convert checks. Narrowing real permissions is a separate, later effort.
+The crux is unchanged from the original draft: **get every API caller onto the
+model without changing anyone's effective access, then narrow.** What *has*
+changed is the starting line — PR #902 already shipped the engine and the
+agent-caller half — so this section is re-anchored to today's state.
 
-### Phase 0 — Define the model, no enforcement
+### Where we already are (post-#902)
 
-- Add `internal/auth/scope` (`Scope`, `Set`, `Target`, the first-colon parser,
-  `Matches`/`Authorize`) with exhaustive table tests. No caller consults it yet.
-- Add `Scopes scope.Set` to `apiauth.UserInfo` (unparsed/empty for now).
-- Define the admin wildcard constant `*.*`.
+| Caller | Carries scopes today? | Value today |
+|---|---|---|
+| Task token | **yes** — `TaskClaims.Scopes`, minted by `agentauth.Scopes` | real, fully-constrained per workspace capabilities |
+| Cookie session | **yes** — `Auth.User` sets `Scopes` | `authscope.Admin()` (`*.*`) |
+| App JWT | **yes** — `NewAppClaims` sets `Scopes` | `authscope.Admin()` (`*.*`) |
+| `xat_` API key | **no** — `StoreKeyValidator.ValidateKey` returns `UserInfo` with `Scopes == nil` | empty ⇒ would be denied everything |
+| API handlers | **no checks** — only org scoping | n/a |
 
-No behavioral change; pure addition.
+So two facts shape Phase 1: cookie/app callers *already* hold the wildcard, but
+**`xat_` keys hold nothing**, and the server performs **no** capability check
+yet. Turning on enforcement naively would lock out every `xat_` key.
 
-### Phase 1 — Grant admin to every existing caller
+### Phase 1 — land API-caller enforcement as a no-op
 
-Populate `Caller.Scopes` so that *every* current caller holds `*.*` **before**
-anything requires scopes:
+Behavior-preservation rests on a single invariant: **every API caller holds
+`authscope.Admin()`**, and `AdminScope` (`*.*`) matches any two-segment op on any
+instance — so every `Allow` in §7/§8 returns true and nothing is denied.
 
-- **Cookie sessions:** `Auth.User` / `attachUserInfo` set `Scopes = {*.*}`.
-- **App JWTs:** `NewAppClaims` (`jwt.go:26`) adds `Scopes: ["*.*"]`; mint at
-  `HandleToken`. Old already-issued JWTs are short-lived (`AppTokenTTL = 5m`,
-  `jwt.go:23`), so they age out within minutes — but the evaluator must also
-  treat **absence of a scopes claim on a user/app/key caller as full access**
-  during the transition (a compatibility shim), so even an in-flight tokenless
-  caller is unaffected.
-- **`xat_` keys:** add a nullable `scopes` column to the key table; backfill all
-  existing rows to `*.*`; `StoreKeyValidator.ValidateKey` returns it. New keys
-  default to `*.*` until the UI grows scope selection.
+Three changes, none of which denies any existing request:
 
-This **caller-side shim** ("absent scopes ⇒ full access for user/app/key
-callers") is one of two safety nets that keep Phase 2 a true no-op. Task callers
-are *not* covered by it — they already carry explicit scopes and always have. On
-its own, though, the caller-side shim is **not sufficient**: it relaxes the
-*scope* check, but a caller holding `*.*` still gets denied by an RPC that has no
-`Target` builder yet (default-deny on unmapped RPCs, §7). That gap is closed by
-the RPC-side shim in Phase 2.
+1. **Close the `xat_` key gap.** Add a nullable `scopes` column to the `keys`
+   table (new dbmate migration under `internal/store/sql/migrations/`,
+   `TEXT[]`/`JSONB` of wire-grammar strings); backfill **all existing rows to
+   `["*.*"]`**; `model.Key` gains a `Scopes authscope.Scopes`; `CreateKey`
+   defaults new keys to `*.*`; `StoreKeyValidator.ValidateKey` parses the column
+   into `UserInfo.Scopes`. As a belt-and-suspenders transitional default,
+   `ValidateKey` treats a `NULL`/empty column as `authscope.Admin()` so an
+   un-backfilled row is never locked out.
+2. **Install the authorization interceptor + per-handler checks** for the whole
+   service per §7/§8. Because the *entire* surface is mapped here, the
+   interceptor can be **default-deny on unknown procedures from day one** — there
+   is no "unmapped RPC" gap and therefore no need for the original draft's
+   RPC-side shim.
+3. **Confirm** cookie/app minting of `Admin()` (already in place from #902) and
+   that the `Ping`/`GetProfile` exemptions are listed.
 
-### Phase 2 — Convert enforcement to the evaluator (dual-running)
+**Exactly what changes:** a control-flow check is added to every handler/RPC; it
+always passes. One schema column is added and backfilled to admin. **No 403
+appears, no caller loses access, task isolation is untouched** (`AgentFilter`
+unchanged). The only *new* behavior is structural — the server can now enforce
+capabilities itself rather than relying solely on the runner-side filter.
 
-The interceptor is installed with a **symmetric RPC-side shim** that mirrors the
-caller-side one, so that Phase 2 is a true no-op while RPCs are mapped
-incrementally rather than in a single flag-day:
+### Phase 2 — mint real `xat_` key scopes (first opt-in behavior change)
 
-> During Phase 2, an **unmapped** RPC (no `Target` builder) ⇒ **allow for
-> non-task callers**. Task callers stay default-deny for unmapped RPCs — they
-> were always an explicit allowlist (`AgentFilter` only ever implemented a fixed
-> set), so "unmapped ⇒ deny" is already their status quo and must not be
-> loosened.
+Only now can a *new* credential be narrower than its org. `CreateKeyRequest`
+grows a `repeated string scopes` field and a UI affordance at key creation; the
+`scopes` column stores the chosen grant. A read-only key is `*.read` (the engine
+already supports a `*` first segment, so `*.read` matches `task.read`,
+`event.read`, `key.read`, …); a single-workspace key is several
+`task.create:{…workspace…}` scopes (no set values — §"Engine as built").
 
-With both shims in place, every existing call still passes: a user/key/app
-caller that hits a not-yet-mapped RPC is allowed by the RPC-side shim, and one
-that hits a mapped RPC is allowed by the caller-side shim (it holds `*.*`, or no
-scopes ⇒ full access). Convert one surface at a time underneath:
+**What changes:** *only* keys explicitly created with narrow scopes are now
+limited. Every pre-existing key still holds the backfilled `*.*`; sessions and
+app JWTs are untouched. This phase is purely additive/opt-in.
 
-1. **`AgentFilter` → evaluator.** Reshape `TaskClaims.Scopes` minting
-   (`runner/proxy.go:82`) into the grammar (§7 mapping), with the minter fully
-   constraining create scopes. Replace each hand-written check in `filter.go`
-   with a `Target` builder + `Authorize`. `filter_test.go` must pass unchanged
-   (it is the behavioral spec). Keep the archived guard as a post-scope state
-   check. (The agent path was already a closed allowlist, so it is mapped in one
-   go — the RPC-side shim never applies to task callers.)
-2. **API handlers → evaluator.** Map the full service: add the authorization
-   interceptor (request-only targets) and per-handler `Target` builders
-   (row-dependent ones), alongside the untouched org-scoping store calls. Each
-   RPC that gains a mapping stops relying on the RPC-side shim and starts being
-   evaluated for real — still a no-op because callers hold `*.*`. The shim is
-   what lets this happen RPC-by-RPC across multiple PRs instead of all at once.
+### Phase 3 — derive app/cookie session scopes from org role
 
-Both paths now call the same `scope.Set.Authorize`. The two enforcement styles
-are unified; the server can enforce task-level scopes itself rather than relying
-solely on the runner-side filter.
+Today `Auth.User` and `NewAppClaims` both hard-code `Admin()` (with `// TODO:
+revisit permissions for cookie auth` already in `Auth.User`). Phase 3 maps the
+org `role` (`OrgMember.Role`, `owner`/member) to a scope set — `owner ⇒ *.*`,
+member ⇒ a narrower set TBD — and mints that instead.
 
-### Phase 3 — Remove both compatibility shims
+**What changes:** non-owner members' effective access narrows for the first
+time. This is the one phase that can break an existing human user, so it is
+gated behind deciding the member scope set (Open Question #5) and ships only
+after that decision; until then both paths keep minting `Admin()`.
 
-Once all callers provably carry explicit scopes (keys backfilled, JWTs/sessions
-minting `*.*`, task tokens on the grammar) **and** the whole service is mapped
-(no RPC lacks a `Target` builder), delete **both** shims together:
+### Phase 4 — remove the transitional admin defaults
 
-- the **caller-side** shim ("absent scopes ⇒ full access"), and
-- the **RPC-side** shim ("unmapped ⇒ allow non-task callers").
+Once all keys carry explicit scopes (backfilled or chosen) and sessions/JWTs
+derive from role, drop the transitional safety nets: the `NULL`-column ⇒
+`Admin()` default in `StoreKeyValidator`, and any "absent scopes ⇒ admin"
+fallback. After this, a scopeless caller is denied — real default-deny for
+everyone. `AdminScope` remains, but only as an *explicit* grant (owners, the
+backfill), never as an implicit fallback.
 
-They must come out together: removing only one re-introduces the gap (an
-unmapped RPC would deny a `*.*` holder, or a scopeless caller would be denied on
-a mapped RPC). After this, default-deny is real for everyone — a caller with no
-scopes, or a request to an RPC with no mapping, can do nothing.
+### What is explicitly behavior-preserving vs. behavior-changing
 
-**Alternative considered — flag-day mapping.** Instead of the RPC-side shim,
-Phase 2 could map the *entire* service before enabling the interceptor at all.
-That removes one transient shim but couples "turn on enforcement" to "every one
-of ~50 RPCs is mapped and reviewed" in a single change — a large, risky PR with
-no incremental fallback. The symmetric shim trades a short-lived, clearly-scoped
-allowance (unmapped ⇒ allow non-task callers, removed in Phase 3) for the
-ability to land mappings PR-by-PR. We take the shim.
-
-### Phase 4 (future, out of scope) — Narrow grants
-
-Only now does anyone's *effective* access change: read-only keys (`*.read`),
-workspace-scoped keys, per-resource grants, UI for choosing scopes at key
-creation. This proposal deliberately stops at "everything is on the model and
-nobody's access changed."
+| Step | Changes effective access? |
+|---|---|
+| Phase 1: key `scopes` column + backfill `*.*` | **No** — every key still admin |
+| Phase 1: interceptor + per-handler checks | **No** — every caller holds `*.*`; every `Allow` passes |
+| Phase 2: narrow scopes on *new* keys | **Yes, opt-in** — only keys created narrow |
+| Phase 3: role-derived session/app scopes | **Yes** — non-owner members narrow |
+| Phase 4: remove admin fallbacks | **Yes** — scopeless callers now denied |
 
 ### Where scopes are stored & minted, per credential
 
-| Credential | Storage | Minted by |
-|---|---|---|
-| `xat_` key | new `scopes` column on key row | `CreateKey` (`apiserver/key.go:14`); backfilled `*.*` in migration |
-| App JWT | `scopes` claim in `AppClaims` | `HandleToken` → `NewAppClaims` |
-| Cookie session | not persisted; computed per request | `Auth.User` / `attachUserInfo` |
-| Task token | `Scopes` claim in `TaskClaims` (exists) | `AgentProxy.TaskToken` from workspace `Scopes` (minter fully constrains) |
+| Credential | Storage | Minted by | Status |
+|---|---|---|---|
+| `xat_` key | new `scopes` column on key row | `CreateKey` (`apiserver/key.go`); backfilled `*.*` in migration | **Phase 1** |
+| App JWT | `scopes` claim in `AppClaims` | `NewAppClaims` (`jwt.go`) | `Admin()` shipped (#902); role-derived in Phase 3 |
+| Cookie session | not persisted; computed per request | `Auth.User` (`apiauth.go`) | `Admin()` shipped (#902); role-derived in Phase 3 |
+| Task token | `Scopes` claim in `TaskClaims` (exists) | `agentauth.Scopes` from workspace capabilities | shipped (#902) |
 
 ## Trade-offs
 
@@ -680,27 +837,27 @@ styles. The cost is that authorization becomes **pattern logic in the trust
 path** — exactly the kind of code where an off-by-one in wildcard or membership
 handling is a privilege escalation. Mitigations:
 
-- **Exhaustive table tests** for `scope` are mandatory, covering: segment-count
-  mismatch; `*` single-segment matching (and that it does *not* span segments);
-  `|` alternation (membership, `a|b|*` ≡ `*`, rejection of empty alternatives);
-  empty `Preds` matching any instance; absent key vs `"*"` value (both
-  unconstrained); scalar→singleton and array normalization; missing target
-  attribute (must deny, not match — the `ok` check in `Matches`); first-colon
-  split with colons inside the JSON; the four §6 worked scenarios as regression
-  tests; and the `filter_test.go` cases re-expressed.
-- **`AgentFilter` tests are a frozen behavioral spec** — they must pass through
-  Phases 2–3 unchanged.
-- **Minting discipline.** The grammar has sharp edges. `task.write:{"id":"*"}`
-  (or `task.write` with empty predicates) is *org-wide admin over tasks*, not
-  "one task" — a wildcard value, or a forgotten predicate key, silently widens a
-  grant. Because an absent key is unconstrained, an **incomplete create object
-  is a hole**, not a deny. Defenses: a `ValidScope` validator (the existing one,
-  `agentauth/token.go:23`, generalizes) that rejects unknown operation paths and
-  malformed alternation (empty alternatives like `create|` or `|update`);
-  minting helpers (`scope.OwnTask(id)`, `scope.ChildTasks(id, ws, rn)`) so
-  call-sites never hand-assemble scope strings or JSON; and a lint/test that the
-  only place `*.*` (or any empty-predicate wildcard) is produced is the
-  migration/admin path.
+- **Exhaustive table tests** for `authscope` are mandatory and already shipped
+  (`scope_test.go`, `parse_test`-equivalents): segment-count mismatch; `*`
+  single-segment matching (and that it does *not* span segments); empty/nil
+  `Preds` matching any instance; a constrained key whose attr is missing must
+  **deny**, not match (the `ok` check in `allow`); first-colon split with colons
+  inside the JSON; `Scopes` JSON round-tripping; and the `filter_test.go` cases
+  expressed against `Allow`. Any new `Op*`/attribute added for the API surface
+  extends these tables.
+- **`AgentFilter` tests are a frozen behavioral spec** (`filter_test.go`) — they
+  passed unchanged through the #902 conversion and must keep passing as the API
+  side lands.
+- **Minting discipline.** The grammar has sharp edges. `task.write` with empty
+  predicates is *org-wide admin over tasks*, not "one task" — a forgotten
+  predicate key silently widens a grant. Because an absent key is unconstrained,
+  an **incomplete create scope is a hole**, not a deny (which is why
+  `agentauth.Scopes` fully constrains the create scope with `parent`, `workspace`,
+  *and* `runner`). Defenses: the `authscope.ValidScope` syntactic validator;
+  typed minting helpers (`authscope.New` + `WithTask*`, the per-credential minters
+  `agentauth.Scopes` / the future `CreateKey` path) so call-sites never
+  hand-assemble wire strings; and a test that the only places `*.*` is produced
+  are the admin/migration paths (`authscope.Admin()` call-sites).
 
 **Generic engine + application mapping vs. a domain-typed evaluator.** Making the
 engine semantically agnostic (no resource/verb concept) keeps all domain
@@ -714,11 +871,14 @@ enforce task isolation itself instead of depending on the runner-side
 `AgentFilter` being in the request path. The downside is a single evaluator is a
 single point of failure — countered by the test burden above.
 
-**Set-valued predicates vs. multiple scopes.** Set values add no expressiveness
-(same DNF as multiple fully-constrained scopes); they exist only to stop tokens
-bloating with the cross-product of allowed workspaces × runners. The cost is one
-more thing the matcher and minter must get right (membership, normalization),
-justified by keeping JWTs small.
+**Set-valued predicates (deferred) vs. multiple scopes.** The shipped engine has
+single-valued predicates only (`Parse` rejects arrays — see "Engine as built").
+Until set values land, "this key may use 2 workspaces" is **two**
+fully-constrained `task.create` scopes rather than one with an array value — same
+DNF, just a larger token. Set values add no expressiveness; they would only stop
+tokens bloating with the workspace × runner cross-product, at the cost of one
+more thing the matcher and minters must get right. We accept the bloat for now
+and revisit if real tokens grow large.
 
 **ABAC-in-token vs. policy engine (e.g. OPA/Cedar).** A full external policy
 engine is more powerful but is a large dependency and a new operational surface
@@ -762,5 +922,7 @@ revisit if grants get genuinely policy-shaped.
    (`owner`/member, `OrgMember.Role`, set in `StoreUserResolver.Provision`).
    Does role map to a scope set (owner ⇒ `*.*`, member ⇒ something narrower), or
    stay an orthogonal concept consulted by org-management RPCs (`AddOrgMember`,
-   `DeleteOrg`)? This proposal leaves role as-is (Phase 1 grants all members
-   `*.*`); reconciling role with scopes is part of Phase 4.
+   `DeleteOrg`)? This proposal leaves role as-is — Phase 1 grants every
+   session/JWT caller `authscope.Admin()` and keeps the existing owner-only role
+   guards — and defers reconciling role with scopes to **Phase 3** (role-derived
+   session/app scopes), the one phase that narrows a human user's access.
