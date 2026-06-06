@@ -18,14 +18,14 @@ import (
 // Predicate values must be JSON strings; numbers, booleans, arrays, and objects
 // are rejected. (Set-valued predicates can be added later if needed.)
 func Parse(s string) (Scope, error) {
-	path, predStr, hasColon := strings.Cut(s, ":")
-	op, err := parsePath(path)
+	opRaw, predRaw, hasPred := strings.Cut(s, ":")
+	op, err := parseOp(opRaw)
 	if err != nil {
 		return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
 	}
 	preds := map[string]string{}
-	if hasColon {
-		preds, err = parsePreds(predStr)
+	if hasPred {
+		preds, err = parsePreds(predRaw)
 		if err != nil {
 			return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
 		}
@@ -33,11 +33,11 @@ func Parse(s string) (Scope, error) {
 	return Scope{Op: op, Preds: preds}, nil
 }
 
-// parsePath splits the operation path into segments, each into its set of
+// parseOp splits the operation path into segments, each into its set of
 // "|"-separated alternatives. Empty segments and empty alternatives are
 // rejected.
-func parsePath(path string) ([][]string, error) {
-	segs := strings.Split(path, ".")
+func parseOp(opRaw string) ([][]string, error) {
+	segs := strings.Split(opRaw, ".")
 	op := make([][]string, len(segs))
 	for i, seg := range segs {
 		if seg == "" {
