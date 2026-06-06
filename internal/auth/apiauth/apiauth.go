@@ -226,8 +226,6 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Old already-issued JWTs carry no scopes claim; ParseSet yields an empty
-	// set, which is harmless because nothing enforces scopes yet.
 	scopes, err := authscope.ParseSet(claims.Scopes)
 	if err != nil {
 		return nil, err
