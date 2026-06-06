@@ -8,15 +8,18 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/icholy/xagent/internal/auth/authscope"
 )
 
 // AppClaims contains the JWT claims for an app-issued token.
 type AppClaims struct {
 	jwt.RegisteredClaims
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	OrgID int64  `json:"org_id"`
-	Role  string `json:"role,omitempty"`
+	Email  string   `json:"email"`
+	Name   string   `json:"name"`
+	OrgID  int64    `json:"org_id"`
+	Role   string   `json:"role,omitempty"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 // AppTokenTTL is the default time-to-live for app JWTs.
@@ -34,6 +37,9 @@ func NewAppClaims(user *UserInfo) *AppClaims {
 		Email: user.Email,
 		Name:  user.Name,
 		OrgID: user.OrgID,
+		// App JWTs are omnipotent within their org today; mint the admin
+		// wildcard so behavior is unchanged once enforcement lands.
+		Scopes: []string{authscope.AdminScope},
 	}
 }
 

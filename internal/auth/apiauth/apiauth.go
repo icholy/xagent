@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authentication"
@@ -31,8 +32,15 @@ type UserInfo struct {
 	Email    string
 	Name     string
 	OrgID    int64
-	Type     string // Auth type: one of AuthType* constants
-	ClientID string // Per-tab client identifier from X-Client-ID header
+	Type     string        // Auth type: one of AuthType* constants
+	ClientID string        // Per-tab client identifier from X-Client-ID header
+	Scopes   authscope.Set // Capabilities held by the caller within OrgID
+}
+
+// Authorize reports whether the caller's scopes authorize the target. It is a
+// convenience wrapper over Scopes.Authorize; nothing gates requests on it yet.
+func (u *UserInfo) Authorize(t authscope.Target) bool {
+	return u.Scopes.Authorize(t)
 }
 
 // DisplayName returns the best available display name for the user.
@@ -218,6 +226,12 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Old already-issued JWTs carry no scopes claim; ParseSet yields an empty
+	// set, which is harmless because nothing enforces scopes yet.
+	scopes, err := authscope.ParseSet(claims.Scopes)
+	if err != nil {
+		return nil, err
+	}
 	return &UserInfo{
 		ID:       claims.Subject,
 		Email:    claims.Email,
@@ -225,6 +239,7 @@ func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
 		OrgID:    claims.OrgID,
 		Type:     AuthTypeApp,
 		ClientID: r.Header.Get("X-Client-ID"),
+		Scopes:   scopes,
 	}, nil
 }
 
@@ -376,6 +391,9 @@ func (a *Auth) User(r *http.Request) *UserInfo {
 			Name:     ctx.UserInfo.Name,
 			Type:     AuthTypeCookie,
 			ClientID: r.Header.Get("X-Client-ID"),
+			// Cookie sessions are omnipotent within their org today; grant the
+			// admin wildcard so behavior is unchanged once enforcement lands.
+			Scopes: authscope.Admin(),
 		}
 	}
 	return nil

@@ -30,6 +30,22 @@ type Target struct {
 // Set is a caller's held scopes. Authorize is an OR across them.
 type Set []Scope
 
+// AdminScope is the global-admin wildcard grant: any two-segment operation on
+// any instance. It is the capability half of today's omnipotent-within-org
+// caller. AdminScope is taxonomy-agnostic — it depends only on the operation
+// arity (two segments), not on what the segments mean.
+const AdminScope = "*.*"
+
+// Admin returns a Set containing only AdminScope, the global-admin grant.
+func Admin() Set {
+	s, err := Parse(AdminScope)
+	if err != nil {
+		// AdminScope is a compile-time constant and always parses.
+		panic(err)
+	}
+	return Set{s}
+}
+
 // Matches reports whether the scope authorizes the target. The operation paths
 // must have the same number of segments (each segment matches exactly one), and
 // every predicate key in the scope must equal the target's attribute (AND across
