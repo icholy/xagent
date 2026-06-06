@@ -78,65 +78,61 @@ func TestMatches(t *testing.T) {
 		{
 			name:   "empty preds matches any instance",
 			scope:  Scope{Op: [][]string{{"task"}, {"read"}}},
-			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "99", "parent": "42"}},
+			target: Target{Op: []string{"task", "read"}, Attrs: []Attr{StringAttr("id", "99"), StringAttr("parent", "42")}},
 			want:   true,
 		},
 		{
 			name:   "absent key in scope is unconstrained",
 			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
-			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "42", "parent": "7"}},
+			target: Target{Op: []string{"task", "read"}, Attrs: []Attr{StringAttr("id", "42"), StringAttr("parent", "7")}},
 			want:   true,
 		},
 		{
 			name:   "star value is matched literally not as a wildcard",
 			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "*"}},
-			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "99"}},
+			target: Target{Op: []string{"task", "read"}, Attrs: []Attr{StringAttr("id", "99")}},
 			want:   false,
 		},
 		{
 			name:   "star value matches a literal star attribute",
 			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "*"}},
-			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "*"}},
+			target: Target{Op: []string{"task", "read"}, Attrs: []Attr{StringAttr("id", "*")}},
 			want:   true,
 		},
 		{
 			name:   "missing target attribute denies",
 			scope:  Scope{Op: [][]string{{"task"}, {"read"}}, Preds: map[string]string{"id": "42"}},
-			target: Target{Op: []string{"task", "read"}, Attrs: map[string]string{}},
+			target: Target{Op: []string{"task", "read"}, Attrs: []Attr{}},
 			want:   false,
 		},
 		{
 			name:   "value match",
 			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "X"}},
-			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{"workspace": "X"}},
+			target: Target{Op: []string{"task", "create"}, Attrs: []Attr{StringAttr("workspace", "X")}},
 			want:   true,
 		},
 		{
 			name:   "value mismatch denied",
 			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"workspace": "X"}},
-			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{"workspace": "Z"}},
+			target: Target{Op: []string{"task", "create"}, Attrs: []Attr{StringAttr("workspace", "Z")}},
 			want:   false,
 		},
 		{
-			name:  "AND across keys all match",
-			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
-			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{
-				"parent": "42", "workspace": "ws",
-			}},
-			want: true,
+			name:   "AND across keys all match",
+			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
+			target: Target{Op: []string{"task", "create"}, Attrs: []Attr{StringAttr("parent", "42"), StringAttr("workspace", "ws")}},
+			want:   true,
 		},
 		{
-			name:  "AND across keys one fails",
-			scope: Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
-			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{
-				"parent": "42", "workspace": "other",
-			}},
-			want: false,
+			name:   "AND across keys one fails",
+			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
+			target: Target{Op: []string{"task", "create"}, Attrs: []Attr{StringAttr("parent", "42"), StringAttr("workspace", "other")}},
+			want:   false,
 		},
 		{
 			name:   "AND across keys one key missing from target",
 			scope:  Scope{Op: [][]string{{"task"}, {"create"}}, Preds: map[string]string{"parent": "42", "workspace": "ws"}},
-			target: Target{Op: []string{"task", "create"}, Attrs: map[string]string{"parent": "42"}},
+			target: Target{Op: []string{"task", "create"}, Attrs: []Attr{StringAttr("parent", "42")}},
 			want:   false,
 		},
 	}
@@ -160,12 +156,12 @@ func TestAuthorize_OwnTask(t *testing.T) {
 	}
 	tests := []struct {
 		name  string
-		attrs map[string]string
+		attrs []Attr
 		want  bool
 	}{
-		{"own task", map[string]string{"id": "42", "parent": "7"}, true},
-		{"direct child", map[string]string{"id": "99", "parent": "42"}, true},
-		{"unrelated task", map[string]string{"id": "5", "parent": "7"}, false},
+		{"own task", []Attr{StringAttr("id", "42"), StringAttr("parent", "7")}, true},
+		{"direct child", []Attr{StringAttr("id", "99"), StringAttr("parent", "42")}, true},
+		{"unrelated task", []Attr{StringAttr("id", "5"), StringAttr("parent", "7")}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -182,15 +178,11 @@ func TestAuthorize_CreateConjunction(t *testing.T) {
 	t.Parallel()
 	set := Set{mustParse(t, `task.create:{"parent":"42","workspace":"ws","runner":"rn"}`)}
 
-	ok := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: map[string]string{
-		"parent": "42", "workspace": "ws", "runner": "rn",
-	}})
+	ok := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: []Attr{StringAttr("parent", "42"), StringAttr("workspace", "ws"), StringAttr("runner", "rn")}})
 	assert.Equal(t, ok, true)
 
 	// Wrong workspace is denied even though parent and runner match.
-	denied := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: map[string]string{
-		"parent": "42", "workspace": "evil", "runner": "rn",
-	}})
+	denied := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: []Attr{StringAttr("parent", "42"), StringAttr("workspace", "evil"), StringAttr("runner", "rn")}})
 	assert.Equal(t, denied, false)
 }
 
@@ -205,9 +197,7 @@ func TestAuthorize_SplitConjunctionIsHole(t *testing.T) {
 		mustParse(t, `task.create:{"workspace":"ws"}`),
 	}
 	// parent matches the first scope, which leaves workspace/runner unconstrained.
-	escalated := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: map[string]string{
-		"parent": "42", "workspace": "evil", "runner": "evil",
-	}})
+	escalated := set.Authorize(Target{Op: []string{"task", "create"}, Attrs: []Attr{StringAttr("parent", "42"), StringAttr("workspace", "evil"), StringAttr("runner", "evil")}})
 	assert.Equal(t, escalated, true)
 }
 
@@ -219,7 +209,7 @@ func TestAuthorize_WildcardAdmin(t *testing.T) {
 	taskAdmin := Set{mustParse(t, `task.*`)}
 	assert.Equal(t, taskAdmin.Authorize(Target{
 		Op:    []string{"task", "write"},
-		Attrs: map[string]string{"id": "99", "parent": "42"},
+		Attrs: []Attr{StringAttr("id", "99"), StringAttr("parent", "42")},
 	}), true)
 	// ...but not a different resource.
 	assert.Equal(t, taskAdmin.Authorize(Target{
@@ -231,7 +221,7 @@ func TestAuthorize_WildcardAdmin(t *testing.T) {
 	assert.Equal(t, admin.Authorize(Target{Op: []string{"github_token", "create"}}), true)
 	assert.Equal(t, admin.Authorize(Target{
 		Op:    []string{"task", "read"},
-		Attrs: map[string]string{"id": "1"},
+		Attrs: []Attr{StringAttr("id", "1")},
 	}), true)
 	// ...but not a 3-segment operation: * matches exactly one segment.
 	assert.Equal(t, admin.Authorize(Target{Op: []string{"task", "read", "extra"}}), false)
@@ -420,7 +410,7 @@ func TestAdmin(t *testing.T) {
 	t.Parallel()
 	// Admin authorizes any 2-segment operation, on any instance.
 	set := Admin()
-	assert.Assert(t, set.Authorize(Target{Op: []string{"task", "read"}, Attrs: map[string]string{"id": "1"}}))
+	assert.Assert(t, set.Authorize(Target{Op: []string{"task", "read"}, Attrs: []Attr{StringAttr("id", "1")}}))
 	assert.Assert(t, set.Authorize(Target{Op: []string{"github_token", "create"}}))
 	// But not operations of a different arity.
 	assert.Assert(t, !set.Authorize(Target{Op: []string{"task"}}))

@@ -15,7 +15,7 @@ func TestUserInfoAuthorize_Admin(t *testing.T) {
 	// Act & Assert: admin authorizes any 2-segment target.
 	assert.Assert(t, user.Authorize(authscope.Target{
 		Op:    []string{"task", "read"},
-		Attrs: map[string]string{"id": "1"},
+		Attrs: []authscope.Attr{authscope.StringAttr("id", "1")},
 	}))
 	assert.Assert(t, user.Authorize(authscope.Target{
 		Op: []string{"github_token", "create"},

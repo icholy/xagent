@@ -29,6 +29,6 @@ func TestAppClaimsScopesRoundTrip(t *testing.T) {
 	user := &UserInfo{Scopes: set}
 	assert.Assert(t, user.Authorize(authscope.Target{
 		Op:    []string{"task", "write"},
-		Attrs: map[string]string{"id": "1"},
+		Attrs: []authscope.Attr{authscope.StringAttr("id", "1")},
 	}))
 }

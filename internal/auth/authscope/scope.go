@@ -8,7 +8,10 @@
 // See proposals/draft/scope-based-permissions.md for the design.
 package authscope
 
-import "slices"
+import (
+	"slices"
+	"strconv"
+)
 
 // Scope is a single capability pattern. Op is the operation path, where each
 // segment holds the set of allowed alternatives ("*" is a member that matches
@@ -20,11 +23,29 @@ type Scope struct {
 	Preds map[string]string
 }
 
+// Attr is a single concrete attribute of a target: an application attribute key
+// and its value, already stringified.
+type Attr struct {
+	Name  string
+	Value string
+}
+
+// Int64Attr builds an Attr from an int64 value, centralizing the int->string
+// conversion so call sites never repeat strconv.FormatInt.
+func Int64Attr(name string, v int64) Attr {
+	return Attr{Name: name, Value: strconv.FormatInt(v, 10)}
+}
+
+// StringAttr builds an Attr from a string value.
+func StringAttr(name, v string) Attr {
+	return Attr{Name: name, Value: v}
+}
+
 // Target is the concrete operation path and attributes of a request, built by
 // the application and tested against a Scope.
 type Target struct {
 	Op    []string
-	Attrs map[string]string
+	Attrs []Attr
 }
 
 // Targeter is implemented by anything that can produce a Target. It is the
@@ -74,11 +95,24 @@ func (s Scope) Matches(t Target) bool {
 		}
 	}
 	for key, want := range s.Preds {
-		if got, ok := t.Attrs[key]; !ok || got != want {
+		got, ok := attrValue(t.Attrs, key)
+		if !ok || got != want {
 			return false
 		}
 	}
 	return true
+}
+
+// attrValue returns the value of the first attr with the given name. Targets are
+// only built by the typed Targeter values, which never emit a duplicate name, so
+// first-match-wins needs no guard.
+func attrValue(attrs []Attr, name string) (string, bool) {
+	for _, a := range attrs {
+		if a.Name == name {
+			return a.Value, true
+		}
+	}
+	return "", false
 }
 
 // Authorize reports whether any held scope matches the target. It accepts a

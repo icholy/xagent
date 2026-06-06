@@ -84,7 +84,7 @@ type TaskRead struct{ ID int64 }
 func (t TaskRead) Target() authscope.Target {
 	return authscope.Target{
 		Op:    []string{SegTask, SegRead},
-		Attrs: map[string]string{AttrID: strconv.FormatInt(t.ID, 10)},
+		Attrs: []authscope.Attr{authscope.Int64Attr(AttrID, t.ID)},
 	}
 }
 
@@ -95,9 +95,9 @@ type TaskReadRow struct{ ID, Parent int64 }
 func (t TaskReadRow) Target() authscope.Target {
 	return authscope.Target{
 		Op: []string{SegTask, SegRead},
-		Attrs: map[string]string{
-			AttrID:     strconv.FormatInt(t.ID, 10),
-			AttrParent: strconv.FormatInt(t.Parent, 10),
+		Attrs: []authscope.Attr{
+			authscope.Int64Attr(AttrID, t.ID),
+			authscope.Int64Attr(AttrParent, t.Parent),
 		},
 	}
 }
@@ -108,7 +108,7 @@ type TaskWrite struct{ ID int64 }
 func (t TaskWrite) Target() authscope.Target {
 	return authscope.Target{
 		Op:    []string{SegTask, SegWrite},
-		Attrs: map[string]string{AttrID: strconv.FormatInt(t.ID, 10)},
+		Attrs: []authscope.Attr{authscope.Int64Attr(AttrID, t.ID)},
 	}
 }
 
@@ -119,9 +119,9 @@ type TaskWriteRow struct{ ID, Parent int64 }
 func (t TaskWriteRow) Target() authscope.Target {
 	return authscope.Target{
 		Op: []string{SegTask, SegWrite},
-		Attrs: map[string]string{
-			AttrID:     strconv.FormatInt(t.ID, 10),
-			AttrParent: strconv.FormatInt(t.Parent, 10),
+		Attrs: []authscope.Attr{
+			authscope.Int64Attr(AttrID, t.ID),
+			authscope.Int64Attr(AttrParent, t.Parent),
 		},
 	}
 }
@@ -137,10 +137,10 @@ type TaskCreate struct {
 func (t TaskCreate) Target() authscope.Target {
 	return authscope.Target{
 		Op: []string{SegTask, SegCreate},
-		Attrs: map[string]string{
-			AttrParent:    strconv.FormatInt(t.Parent, 10),
-			AttrWorkspace: t.Workspace,
-			AttrRunner:    t.Runner,
+		Attrs: []authscope.Attr{
+			authscope.Int64Attr(AttrParent, t.Parent),
+			authscope.StringAttr(AttrWorkspace, t.Workspace),
+			authscope.StringAttr(AttrRunner, t.Runner),
 		},
 	}
 }
@@ -151,7 +151,7 @@ type ChildList struct{ Parent int64 }
 func (t ChildList) Target() authscope.Target {
 	return authscope.Target{
 		Op:    []string{SegTask, SegRead},
-		Attrs: map[string]string{AttrParent: strconv.FormatInt(t.Parent, 10)},
+		Attrs: []authscope.Attr{authscope.Int64Attr(AttrParent, t.Parent)},
 	}
 }
 
