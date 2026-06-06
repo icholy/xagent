@@ -123,7 +123,10 @@ func (p *AgentFilter) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest)
 	if err != nil {
 		return nil, err
 	}
-	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(resp.Task.Id), authscope.WithTaskParent(resp.Task.Parent))
+	allowed := scopes.Allow(authscope.OpTaskRead,
+		authscope.WithTaskID(resp.Task.Id),
+		authscope.WithTaskParent(resp.Task.Parent),
+	)
 	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
@@ -139,7 +142,10 @@ func (p *AgentFilter) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskD
 	if err != nil {
 		return nil, err
 	}
-	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(details.Task.Id), authscope.WithTaskParent(details.Task.Parent))
+	allowed := scopes.Allow(authscope.OpTaskRead,
+		authscope.WithTaskID(details.Task.Id),
+		authscope.WithTaskParent(details.Task.Parent),
+	)
 	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
@@ -155,7 +161,10 @@ func (p *AgentFilter) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRe
 	if err != nil {
 		return nil, err
 	}
-	allowed := scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(resp.Task.Id), authscope.WithTaskParent(resp.Task.Parent))
+	allowed := scopes.Allow(authscope.OpTaskWrite,
+		authscope.WithTaskID(resp.Task.Id),
+		authscope.WithTaskParent(resp.Task.Parent),
+	)
 	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
 	}
@@ -181,7 +190,10 @@ func (p *AgentFilter) ListLogs(ctx context.Context, req *xagentv1.ListLogsReques
 		if err != nil {
 			return nil, err
 		}
-		allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(resp.Task.Id), authscope.WithTaskParent(resp.Task.Parent))
+		allowed := scopes.Allow(authscope.OpTaskRead,
+			authscope.WithTaskID(resp.Task.Id),
+			authscope.WithTaskParent(resp.Task.Parent),
+		)
 		if !allowed {
 			return nil, errPermissionDenied("task is not a child of the current task")
 		}
