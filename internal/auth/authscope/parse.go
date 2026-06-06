@@ -23,12 +23,12 @@ func Parse(s string) (Scope, error) {
 	if err != nil {
 		return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
 	}
-	preds := map[string]string{}
-	if hasPred {
-		preds, err = parsePreds(predRaw)
-		if err != nil {
-			return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
-		}
+	if !hasPred {
+		return Scope{Op: op, Preds: map[string]string{}}, nil
+	}
+	preds, err := parsePreds(predRaw)
+	if err != nil {
+		return Scope{}, fmt.Errorf("parse scope %q: %w", s, err)
 	}
 	return Scope{Op: op, Preds: preds}, nil
 }
