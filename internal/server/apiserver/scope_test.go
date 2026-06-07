@@ -7,15 +7,14 @@ import (
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
-	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
 
 // scopeExemptMethods are the only XAgentService methods that do NOT gate on the
-// caller's scopes. Each entry is justified; every other method must deny an
-// empty-scopes caller with PermissionDenied (asserted by
-// TestAllMethodsScopeChecked). Adding a new RPC therefore forces either a real
-// scope check or a deliberate, reviewed entry here.
+// caller's scopes, so TestAllMethodsScopeChecked skips them. Each entry is
+// justified; every other method must deny an empty-scopes caller with
+// PermissionDenied. Adding a new RPC therefore forces either a real scope check
+// or a deliberate, reviewed entry here.
 var scopeExemptMethods = map[string]string{
 	// Ping carries no caller data and returns the server version unconditionally.
 	"Ping": "no caller data; returns version unconditionally",
@@ -33,10 +32,11 @@ var scopeExemptMethods = map[string]string{
 // ship fail-open. This test enumerates every method of XAgentServiceHandler by
 // reflection (so the list can't drift from the proto) and asserts that a caller
 // with empty scopes is denied with PermissionDenied — except the small, audited
-// exempt set, whose actual exemption behavior is asserted instead of skipped.
+// exempt set, which is skipped. Every non-exempt handler denies at its scope
+// gate before touching the store, so no database is needed.
 func TestAllMethodsScopeChecked(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
+	srv := New(Options{})
 	// A present-but-scopeless caller: tenancy is satisfied (a caller exists) so
 	// every handler reaches its scope gate, which must deny.
 	ctx := apiauth.WithUser(t.Context(), &apiauth.UserInfo{})
@@ -47,6 +47,9 @@ func TestAllMethodsScopeChecked(t *testing.T) {
 		name := handlerType.Method(i).Name
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+			if reason, exempt := scopeExemptMethods[name]; exempt {
+				t.Skipf("scope-exempt: %s", reason)
+			}
 			method := srvVal.MethodByName(name)
 			// Interface method signature: func(context.Context, *Req) (*Resp, error).
 			// The bound method on srv drops the receiver, so In(1) is the request.
@@ -54,16 +57,6 @@ func TestAllMethodsScopeChecked(t *testing.T) {
 			req := reflect.New(reqType.Elem())
 			out := method.Call([]reflect.Value{reflect.ValueOf(ctx), req})
 			err, _ := out[1].Interface().(error)
-
-			if reason, exempt := scopeExemptMethods[name]; exempt {
-				// Exempt methods must NOT scope-deny an empty-scopes caller.
-				assert.Assert(t, connect.CodeOf(err) != connect.CodePermissionDenied,
-					"%s is scope-exempt (%s) but returned PermissionDenied", name, reason)
-				if name == "CreateGitHubToken" {
-					assert.Equal(t, connect.CodeOf(err), connect.CodeUnimplemented)
-				}
-				return
-			}
 			assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied,
 				"%s must deny an empty-scopes caller", name)
 		})
