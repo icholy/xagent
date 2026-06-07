@@ -3,18 +3,20 @@ package model
 import (
 	"time"
 
+	"github.com/icholy/xagent/internal/auth/authscope"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Key represents a user-generated API key.
 type Key struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	TokenHash string     `json:"token_hash"`
-	OrgID     int64      `json:"org_id"`
-	ExpiresAt *time.Time `json:"expires_at"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	TokenHash string           `json:"token_hash"`
+	OrgID     int64            `json:"org_id"`
+	ExpiresAt *time.Time       `json:"expires_at"`
+	CreatedAt time.Time        `json:"created_at"`
+	Scopes    authscope.Scopes `json:"scopes"`
 }
 
 // IsExpired returns true if the key has an expiration time that has passed.

@@ -9,11 +9,13 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const createKey = `-- name: CreateKey :exec
-INSERT INTO keys (id, name, token_hash, expires_at, created_at, org_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO keys (id, name, token_hash, expires_at, created_at, org_id, scopes)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateKeyParams struct {
@@ -23,6 +25,7 @@ type CreateKeyParams struct {
 	ExpiresAt sql.NullTime `json:"expires_at"`
 	CreatedAt time.Time    `json:"created_at"`
 	OrgID     int64        `json:"org_id"`
+	Scopes    []string     `json:"scopes"`
 }
 
 func (q *Queries) CreateKey(ctx context.Context, arg CreateKeyParams) error {
@@ -33,6 +36,7 @@ func (q *Queries) CreateKey(ctx context.Context, arg CreateKeyParams) error {
 		arg.ExpiresAt,
 		arg.CreatedAt,
 		arg.OrgID,
+		pq.Array(arg.Scopes),
 	)
 	return err
 }
@@ -52,7 +56,7 @@ func (q *Queries) DeleteKey(ctx context.Context, arg DeleteKeyParams) error {
 }
 
 const getKey = `-- name: GetKey :one
-SELECT id, name, token_hash, org_id, expires_at, created_at
+SELECT id, name, token_hash, org_id, expires_at, created_at, scopes
 FROM keys
 WHERE id = $1 AND org_id = $2
 `
@@ -72,12 +76,13 @@ func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (Key, error) {
 		&i.OrgID,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		pq.Array(&i.Scopes),
 	)
 	return i, err
 }
 
 const getKeyByHash = `-- name: GetKeyByHash :one
-SELECT id, name, token_hash, org_id, expires_at, created_at
+SELECT id, name, token_hash, org_id, expires_at, created_at, scopes
 FROM keys
 WHERE token_hash = $1
 `
@@ -92,12 +97,13 @@ func (q *Queries) GetKeyByHash(ctx context.Context, tokenHash string) (Key, erro
 		&i.OrgID,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		pq.Array(&i.Scopes),
 	)
 	return i, err
 }
 
 const listKeys = `-- name: ListKeys :many
-SELECT id, name, token_hash, org_id, expires_at, created_at
+SELECT id, name, token_hash, org_id, expires_at, created_at, scopes
 FROM keys
 WHERE org_id = $1
 ORDER BY created_at DESC
@@ -119,6 +125,7 @@ func (q *Queries) ListKeys(ctx context.Context, orgID int64) ([]Key, error) {
 			&i.OrgID,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			pq.Array(&i.Scopes),
 		); err != nil {
 			return nil, err
 		}

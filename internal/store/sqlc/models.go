@@ -31,6 +31,7 @@ type Key struct {
 	OrgID     int64        `json:"org_id"`
 	ExpiresAt sql.NullTime `json:"expires_at"`
 	CreatedAt time.Time    `json:"created_at"`
+	Scopes    []string     `json:"scopes"`
 }
 
 type Log struct {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
@@ -27,6 +28,26 @@ func TestCreateKey(t *testing.T) {
 	assert.Assert(t, resp.Key.Id != "")
 	assert.Assert(t, resp.RawToken != "")
 	assert.Assert(t, apiauth.IsKey(resp.RawToken))
+}
+
+func TestCreateKeyStoresAdminScopes(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
+
+	// Act
+	resp, err := srv.CreateKey(ctx, &xagentv1.CreateKeyRequest{
+		Name: "admin-key",
+	})
+	assert.NilError(t, err)
+
+	// Assert - new keys carry the admin wildcard (*.*); there is no way to
+	// choose narrower scopes yet.
+	key, err := srv.store.GetKey(ctx, nil, resp.Key.Id, org.OrgID)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, key.Scopes, authscope.Admin())
 }
 
 func TestCreateAndListKeys(t *testing.T) {
