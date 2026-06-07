@@ -22,10 +22,16 @@ import (
 // narrow scopes. See proposals/draft/eliminate-runner-socket-proxy.md §1/§2/§7.
 func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	// Capability-presence check: minting a task token has no instance attribute, so
-	// gate on AllowOp (proposal §5/§7), not the instance-aware Allow.
-	if !caller.Scopes.AllowOp(authscope.OpTaskTokenCreate) {
+	if !caller.Scopes.Allow(authscope.OpTaskTokenCreate) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot mint task tokens"))
+	}
+	// Reject an unrecognized capability outright rather than silently dropping it:
+	// the runner and server must agree on the flag set, so an unknown flag is a bug
+	// to surface, not a grant to discard.
+	for _, c := range req.Capabilities {
+		if !agentauth.ValidCapability(c) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid capability: %q", c))
+		}
 	}
 	// Tenancy: the task must belong to the caller's org. An org-scoped read also
 	// turns another org's task into NotFound rather than leaking its existence.
@@ -42,7 +48,7 @@ func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTo
 		TaskID:       task.ID,
 		Workspace:    task.Workspace,
 		Runner:       task.Runner,
-		Capabilities: validCapabilities(req.Capabilities),
+		Capabilities: req.Capabilities,
 	})
 	token, err := apiauth.SignAppToken(s.appKey, apiauth.NewTaskTokenClaims(task.OrgID, scopes))
 	if err != nil {
@@ -50,18 +56,4 @@ func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTo
 	}
 	s.log.Info("task token minted", "task_id", task.ID, "org_id", task.OrgID)
 	return &xagentv1.CreateTaskTokenResponse{Token: token}, nil
-}
-
-// validCapabilities returns the subset of caps that are recognized capability
-// flags. An unrecognized flag can only ever grant nothing (agentauth.Scopes
-// matches by exact name), so dropping it keeps a runner from smuggling in an
-// unknown grant while staying forward-compatible with newer runners.
-func validCapabilities(caps []string) []string {
-	out := make([]string, 0, len(caps))
-	for _, c := range caps {
-		if agentauth.ValidCapability(c) {
-			out = append(out, c)
-		}
-	}
-	return out
 }

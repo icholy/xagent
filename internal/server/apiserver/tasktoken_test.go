@@ -47,6 +47,27 @@ func TestCreateTaskToken(t *testing.T) {
 	assert.DeepEqual(t, claims.Scopes, want)
 }
 
+func TestCreateTaskToken_InvalidCapability(t *testing.T) {
+	t.Parallel()
+	appKey, err := apiauth.CreateAppPrivateKey()
+	assert.NilError(t, err)
+	srv := New(Options{Store: teststore.New(t), AppKey: appKey})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{
+		Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}},
+	})
+	task := teststore.CreateTask(t, srv.store, org, &teststore.TaskOptions{
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+
+	_, err = srv.CreateTaskToken(createCtx(t, org), &xagentv1.CreateTaskTokenRequest{
+		TaskId:       task.ID,
+		Capabilities: []string{"bogus"},
+	})
+
+	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
+}
+
 func TestCreateTaskToken_Denied(t *testing.T) {
 	t.Parallel()
 	appKey, err := apiauth.CreateAppPrivateKey()
