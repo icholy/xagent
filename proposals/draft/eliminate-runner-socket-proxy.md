@@ -34,26 +34,31 @@ task; and an agent can only reach the server through a co-located runner.
 The scope work this proposal depends on just merged: every `apiserver` handler now
 performs a coarse, op-level `Scopes.Allow` check (#906), `internal/auth/authscope`
 is the shared engine, and `agentauth.Scopes(ScopeOptions{...})` already mints the
-narrow per-task scope set that `AgentFilter` enforces today. The missing piece is a
+narrow per-task scope set that `AgentFilter` enforces today. The missing pieces are a
 token the **server itself** can verify and the per-instance attribute checks #906
-deliberately deferred. This proposal supplies both.
+deliberately deferred. This proposal supplies both — and turns out to need
+remarkably little new machinery, because the task token is just a narrow app JWT.
 
 ## Design
 
 The driver and the injected `xagent` MCP server connect **directly to the C2 over
-the network**, presenting a **server-minted, server-signed task token**. The server
-verifies the token, derives the calling task's identity from it, and enforces the
-same per-task / parent-child / scope-gated permissions `AgentFilter` enforces today
-— now in-process, as the first real consumer of non-admin scopes.
+the network**, presenting a **server-minted app JWT with a reduced scope set** — an
+ordinary `apiauth` token, no new credential type. The server verifies it on the
+normal app-JWT path, gets a caller with `OrgID` + `Scopes` like any other, and the
+`apiserver` handlers enforce the same per-task / parent-child / archived rules
+`AgentFilter` enforces today — now in-process, as the first real consumer of
+non-admin scopes.
 
 Four pieces, each grounded below:
 
 1. A runner-authenticated **`CreateTaskToken`** RPC that mints the narrow token
-   (issuance moves from the runner's key to the server's).
-2. A **server-signed task token** verified as a third credential type in `apiauth`,
-   replacing `agentauth.Middleware`.
-3. **Validity gated on task state** (no expiry) — revocation for free.
-4. **Per-task enforcement in the `apiserver` handlers**, absorbing `AgentFilter`.
+   (issuance moves from the runner's key to the server's existing app key).
+2. **The token is a narrow app JWT** — no new claims type, no second key, no
+   `TaskID`. Its authority is entirely in its scopes.
+3. **Revocation via a `task.archived` scope attribute** — archiving the task denies
+   it, uniformly for reads and writes. No expiry, no token state-gating.
+4. **One post-load `Allow` per task handler**, fed by `model.Task.ScopeAttr()`,
+   absorbing `AgentFilter`.
 
 ### 1. `CreateTaskToken` — dedicated issuance RPC
 
@@ -78,11 +83,11 @@ message CreateTaskTokenResponse {
 }
 ```
 
-This is deliberately **not** a generic "downscope my token" endpoint. Driver tokens
-do not expire (§3), so a generic reducer that hands back a long-lived narrower token
-is too dangerous. `CreateTaskToken` is purpose-built: the runner supplies only
-`task_id` + the capability flags; the **server** loads the task row and derives
-`workspace`/`runner` from it, then mints the scopes via the **existing** minter:
+This is deliberately **not** a generic "downscope my token" endpoint — that would be
+too dangerous for a long-lived token (§2). `CreateTaskToken` is purpose-built: the
+runner supplies only `task_id` + the capability flags; the **server** loads the task
+row and derives `workspace`/`runner` from it, then mints the scopes via the
+**existing** minter and signs them into an app JWT with the **existing** app key:
 
 ```go
 // apiserver handler sketch — the runner cannot choose the scopes
@@ -102,7 +107,8 @@ func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTo
         Runner:       task.Runner,    // derived from the row, NOT the request
         Capabilities: capabilities(req.Capabilities), // validated via agentauth.ValidCapability
     })
-    token, err := s.taskTokens.Sign(&apiauth.TaskTokenClaims{TaskID: task.ID, Scopes: scopes})
+    // A long-lived app JWT carrying the task's org + the narrow scopes.
+    token, err := s.auth.SignTaskToken(task.OrgID, scopes) // builds AppClaims, signs with appKey
     // ...
 }
 ```
@@ -111,188 +117,200 @@ Deriving `workspace`/`runner` from the task row (not the request) is what makes 
 conjunction in the `task.create` scope trustworthy: the runner cannot widen its
 agents' sandbox by lying about workspace or runner, because it never supplies them.
 `agentauth.Scopes` already fully constrains the create scope (parent + workspace +
-runner), so completeness is the minter's responsibility exactly as today.
+runner) and — per §3 — will additionally stamp `task.archived:"false"` on every task
+scope it mints.
 
-### 2. The task token: server-signed, server-verified
+### 2. The token is a narrow app JWT
 
-`AgentProxy.TaskToken` signs `agentauth.TaskClaims` with the runner's key; the proxy
-verifies it with the same key. We replace this with a **server-held key**.
+There is **no new token type**. `CreateTaskToken` signs an ordinary `apiauth.AppClaims`
+(`internal/auth/apiauth/jwt.go`) with the **existing `appKey`** the server already
+uses for app JWTs. The only differences from a user's app JWT are the values:
 
-A new claims type lives in `apiauth` (one key system; verifiable by the server):
+- `OrgID` = the task's org (from the row).
+- `Scopes` = the narrow minted set (instead of `authscope.Admin()`).
+- A long or absent expiry (instead of the 5-minute `AppTokenTTL`), because there is
+  no proxy to refresh it — and that is fine, since revocation no longer depends on
+  expiry (§3).
+
+`NewAppClaims` hard-codes `Admin()` and the 5-minute TTL, so `CreateTaskToken` builds
+its `AppClaims` directly rather than through `NewAppClaims` (or `NewAppClaims` grows
+options for scopes + TTL). Either way the **claims struct, the signing key, and the
+verification path are all the existing app-JWT ones**:
+
+- **No `TaskTokenClaims`.** Dropped.
+- **No second `taskKey`.** The server signs with `appKey`.
+- **No `token_type` discriminator.** A task token is indistinguishable from any other
+  app JWT at the credential layer; its narrowness lives entirely in its `Scopes`.
+- **No `TaskID` claim.** The token is bound to task N purely by its scope predicates
+  (`task.read:{task.id:N,task.archived:"false"}`, etc.). Nothing in verification or
+  the handlers reads a `TaskID` — the scopes already encode which task and what may
+  be done to it.
+
+This is the literal reading of "an app token with a reduced scope set": the agent is
+a caller that holds a very small set of scopes, and everything else about it is an
+app JWT.
+
+### 3. Revocation via the `task.archived` scope attribute
+
+A task token is long-lived and there is no clock-based expiry to lean on. Revocation
+is instead a **scope predicate on the task's archived state** — not token
+state-gating, and deliberately scoped to *archived* only (no "done"/"terminal"
+notion enters the token at all).
+
+Add a `task.archived` attribute to the taxonomy (`internal/auth/authscope/task.go`):
 
 ```go
-// internal/auth/apiauth/tasktoken.go
-type TaskTokenClaims struct {
-    jwt.RegisteredClaims
-    TokenType string           `json:"token_type"` // always "task" — the dispatch discriminator
-    TaskID    int64            `json:"task_id"`
-    Scopes    authscope.Scopes `json:"scopes,omitempty"`
+const AttrTaskArchived = "task.archived"
+
+// "false" is a real value (not a zero/absent case), so it is always emitted —
+// no Ignore/omitempty handling.
+func WithTaskArchived(archived bool) Attr {
+    return StringAttr(AttrTaskArchived, strconv.FormatBool(archived)) // "true" / "false"
 }
 ```
 
-Notably the token carries **no `org_id`, no `workspace`, no `runner`, and no `exp`**:
-the org is derived from the task row at verification time (§4), and validity is
-gated on task state (§3) rather than a clock.
-
-**Signing key — recommendation: a dedicated server-held key, sibling to the app-JWT
-key.** `apiauth.Auth` already owns `appKey` (`internal/auth/apiauth/apiauth.go`) for
-app JWTs. Add a second server-owned Ed25519 key, `taskKey`, configured the same way
-(hex seed via env, generated on startup if unset). Both are *the server's* keys —
-"one key system" in the sense that matters (the server signs and verifies, unlike
-the runner-signed JWT today) — but a distinct key keeps task-token verification and
-app-JWT verification from ever being confused and lets the two rotate
-independently. The cheaper alternative (reuse `appKey`, distinguish purely by the
-`token_type` claim) is viable and noted in Trade-offs; the dispatch discriminator is
-needed either way.
-
-### 3. No expiry; validity gated on task state
-
-A driver token effectively cannot expire: tasks run arbitrarily long and there is no
-proxy to refresh a short-lived token. So instead of a clock, **the server treats a
-task token as valid only while its task is in an active state**, checked on every
-request during verification:
+**The minter stamps `task.archived:"false"` on every task scope it mints.**
+`agentauth.Scopes` adds `WithTaskArchived(false)` to each of the read/write/create
+scopes (own task and — under `child_tasks` — children):
 
 ```go
-// during apiauth verification of a task token
-if task.Archived || task.IsDone() { // model.Task.IsDone() == completed/failed/cancelled
-    return nil, errInvalidToken // 401
+authscope.New(authscope.OpTaskRead,
+    authscope.WithTaskID(opts.TaskID),
+    authscope.WithTaskArchived(false))   // task.read:{"task.id":"N","task.archived":"false"}
+// ...same for OpTaskWrite (own + child), OpTaskRead (child), OpTaskCreate.
+```
+
+**Handlers pass the task's real archived state** (§5). The match then falls out of the
+existing predicate rule (scope proposal §5: a scope matches only if every key it
+constrains equals the request's attribute):
+
+- Active task (`row.Archived == false`): the request carries `task.archived:"false"`,
+  which equals the scope's `"false"` → **allowed**.
+- Archived task (`row.Archived == true`): the request carries `task.archived:"true"`,
+  which fails the scope's `"false"` → **denied** — uniformly for **reads and
+  writes**, with no special-casing.
+
+So **"may act on archived tasks" is expressed by holding a scope *without* the
+`task.archived` constraint** — which admins and `*.*` callers do (an unconstrained
+scope ignores the attribute). There is no `task.wakeup` op and no separate
+"unarchive" capability.
+
+Net effect:
+
+- The **revocation handle is "archive the task."** Finished tasks auto-archive via
+  the existing `archive_after` timeout, so revocation is automatic for completed
+  work and manual (archive now) for anything else.
+- It **closes the unarchive-resurrect hole** for free: a leaked token calling
+  `UnarchiveTask` on an archived task is denied, because that task's
+  `task.archived:"true"` fails the token's `"false"` predicate just like any other
+  write. The token cannot resurrect itself.
+
+### 4. Verification: the existing app-JWT path
+
+Because the task token *is* an app JWT (§2), there is **no new verification path and
+no task lookup at authentication time**. `apiauth.authenticate`
+(`internal/auth/apiauth/apiauth.go`) already dispatches Bearer tokens: `xat_` prefix
+→ `ValidateKey`; otherwise → `VerifyAppToken`. A task token flows through the
+`VerifyAppToken` branch unchanged and yields a `UserInfo{OrgID, Scopes, …}` exactly
+like a user's app JWT. No `token_type` branch, no `taskKey`, no `GetActiveTask`, no
+per-request task read in the auth layer.
+
+This is the replacement for `agentauth.Middleware`: the server's normal app-JWT
+verification now covers the agent, so the runner-side middleware is deleted (§"What
+gets deleted"). The archived check is **not** here — it is a scope predicate resolved
+in the handlers against the loaded row (§3/§5), which is where the task row is
+already in hand.
+
+### 5. Handler shape: one post-load `Allow`, no pre-gate, no wrapper
+
+Each task handler does **a single authoritative check after loading the row** — the
+row it already loads to build its response:
+
+```go
+func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+    caller := apiauth.MustCaller(ctx)
+    task, err := s.store.GetTask(ctx, nil, req.Id, caller.OrgID) // tenancy (org) as today
+    if err != nil {
+        return nil, err
+    }
+    if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
+        return nil, errPermissionDenied("cannot read task")
+    }
+    // ... build response ...
 }
 ```
 
-A task is active while `Status ∈ {Pending, Running, Restarting, Cancelling}` and not
-`Archived`. This gives three things at once:
-
-- **Revocation for free.** Archiving or cancelling a task immediately invalidates
-  every token minted for it — no token blocklist, no expiry window.
-- **Closes the "leaked archived-task token un-archives itself" hole.** Because an
-  archived task fails the gate *before* any handler runs, a leaked token cannot call
-  `UnarchiveTask` (or anything else) to resurrect itself via `task.write`.
-- **Bounds the blast radius of the no-expiry tradeoff** to a task's active lifetime.
-
-Restart interaction: `IsDone()` is non-absorbing (a completed task can be
-restarted), but restart already kills the container and the runner mints a **fresh**
-token for the new run, so gating on `IsDone()` never strands a live agent. The one
-accepted edge is an agent making an API call *after* it has driven its own task to
-`completed`; the driver reports completion as its final act, so this window is
-empty in practice.
-
-Cost: one task-row read per agent request during auth. This is the same row most
-agent RPCs load anyway, and can share a request-scoped cache; it is the price of
-state-gated validity and is acceptable.
-
-### 4. Server-side verification path: a third credential in `apiauth`
-
-`apiauth.authenticate` (`internal/auth/apiauth/apiauth.go`) already dispatches Bearer
-tokens by shape: `xat_` prefix → `ValidateKey`; otherwise → `VerifyAppToken`. Task
-tokens become the **third** credential, slotting in alongside `xat_` keys and app
-JWTs and **replacing `agentauth.Middleware`** entirely:
+Centralize the task's attribute set on the model so a handler can't forget one
+(especially `archived`):
 
 ```go
-func (a *Auth) authenticate(r *http.Request) (*UserInfo, error) {
-    raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-    if !ok {
-        return nil, nil
+// internal/model/task.go — model already imports authscope (Key.Scopes), no new coupling
+func (t *Task) ScopeAttr() []authscope.Attr {
+    return []authscope.Attr{
+        authscope.WithTaskID(t.ID),
+        authscope.WithTaskParent(t.Parent),
+        authscope.WithTaskArchived(t.Archived),
     }
-    if IsKey(raw) {
-        // ... unchanged xat_ path ...
-    }
-    // Verify against the server's task key first; a task token carries
-    // token_type=="task". Fall through to the app-JWT path otherwise.
-    if claims, err := VerifyTaskToken(a.taskKey, raw); err == nil && claims.TokenType == "task" {
-        task, err := a.tasks.GetActiveTask(r.Context(), claims.TaskID) // §3 state gate + org lookup
-        if err != nil {
-            return nil, err // archived/done/missing -> 401
-        }
-        return &UserInfo{
-            OrgID:  task.OrgID,        // tenancy derived from the row
-            Type:   AuthTypeTask,      // new constant
-            Scopes: claims.Scopes,     // the narrow minted scopes
-        }, nil
-    }
-    claims, err := VerifyAppToken(a.appKey, raw)
-    // ... unchanged app path ...
 }
 ```
 
-The resulting `UserInfo` is an ordinary caller: `OrgID` from the task row, `Scopes`
-from the token. Every existing org-scoped store call (`…(ctx, nil, …, caller.OrgID)`)
-and every scope check then works **unmodified** — the task caller is just a caller
-that happens to hold a very narrow scope set. `agentauth.Middleware` is deleted;
-this verification path is its replacement, now in the server.
+This one call reproduces all of `AgentFilter`'s behavior:
 
-(`AuthTypeTask` also wants a small `AuditName()` branch so task callers are labelled
-in audit logs, mirroring the existing `AuthTypeKey` case.)
+- **Own-or-child** (scope proposal §6b) is automatic: the token holds
+  `task.read:{task.id:self,archived:false}` **and** `task.read:{task.parent:self,archived:false}`;
+  the row's `ScopeAttr()` matches the first for the agent's own task and the second
+  for a child, and neither for an unrelated task.
+- **Archived gating** (§3) rides along because `ScopeAttr()` always includes
+  `task.archived`.
+- **Create** stays request-only where there is no row yet: `CreateTask` authorizes on
+  `WithTaskParent(req.Parent)`/`WithTaskWorkspace(req.Workspace)`/`WithTaskRunner(req.Runner)`,
+  exactly as `AgentFilter.CreateTask` does today; `ListChildTasks` on
+  `WithTaskParent(req.ParentId)`.
 
-### 5. Server-side per-task enforcement: the `apiserver` absorbs `AgentFilter`
+Three rules make this safe — and they are the crux of the review:
 
-#906 landed the API-caller scope checks **coarse**: per the scope proposal §7, the
-API surface authorizes request-only and deliberately drops the own-OR-child
-`task.parent` resolution, on the reasoning that *"an API caller is not a task."* The
-task token breaks that premise — it **is** a task hitting the API surface directly.
-So the per-instance attribute checks `AgentFilter` performs now come back, **in the
-`apiserver` handlers**, as the scope proposal anticipated ("this is where those
-attributes come back, now that the agent's narrow token makes them testable").
+- **No coarse top-gate.** Do **not** add `if !Allow(OpTaskWrite) { … }` before the
+  load. It is a correctness bug for narrow callers: a scope that constrains
+  `task.id`/`task.archived` fails an attribute-less `Allow` (a constrained-but-missing
+  attribute denies — scope proposal §5), so the agent would be rejected on its **own**
+  task. Once scopes constrain row-derived attributes, there is no valid pre-load gate.
+- **No `AllowsOp` pre-filter for task ops.** A capability-only "do I hold this op at
+  all" pre-check would weaken the completeness test (below): a handler doing only
+  `AllowsOp` still denies the empty-scope probe, so a *forgotten* post-load check
+  wouldn't be caught, and a narrow wrong-instance caller could slip through. The
+  single post-load `Allow` keeps the test meaningful — forget it and the empty-scope
+  caller is allowed, failing the test. The saving (a cheap org-scoped read for a rare
+  wrong-op caller) isn't worth the lost guarantee. `AllowsOp` may exist as a primitive
+  for genuine no-instance "do I hold this capability" questions (e.g.
+  `OpTaskTokenCreate`, `OpGitHubTokenCreate`), but never as the pre-half of a task
+  check.
+- **No `authorizeTask` wrapper.** Control flow stays inline in each handler;
+  `ScopeAttr()` provides the forget-proofing, not a decorator.
 
-Concretely, the per-RPC logic from `agentmcp/filter.go` folds into the corresponding
-`apiserver` handlers. Two shapes, both already present in `AgentFilter`:
+**Consequence:** handlers that were request-only under #906 (`CreateLink`,
+`UploadLogs`, `ListLinks`, `ListLogs`, `ListEventsByTask`, …) now **load the task row**
+to supply `task.archived`, so the archived gate applies across the board. The row
+read is org-scoped (tenancy) and cheap; several of these handlers already needed the
+task for other reasons.
 
-- **Request-only top-gate** (no row needed): `CreateTask` authorizes on
-  `task.parent`/`task.workspace`/`task.runner` from the request; `ListChildTasks` on
-  `task.parent=req.ParentId`; `CreateLink`/`UploadLogs`/`SubmitRunnerEvents` on
-  `task.id` from the request. These match `AgentFilter` verbatim and are pure
-  top-of-handler checks (scope proposal §8 style).
-- **Load-then-check own-OR-child** (relationship resolved against the row):
-  `GetTask`, `GetTaskDetails`, `UpdateTask`, and `ListLogs` load the task row (which
-  they already do to build a response) and authorize against
-  `WithTaskID(row.Id)` **and** `WithTaskParent(row.Parent)` — exactly
-  `AgentFilter.GetTask`/`UpdateTask`/`ListLogs`. This is the own-OR-child
-  disjunction (scope proposal §6b): the token holds both
-  `task.read:{task.id:self}` and `task.read:{task.parent:self}`, and the row's
-  attributes match one or the other.
+**This does not change behavior for existing callers.** Users, `xat_` keys, app JWTs
+and cookie sessions hold `authscope.Admin()` (`*.*`) or coarse `task.read`/`task.write`,
+which have no instance/archived predicate and so match any `ScopeAttr()` — the added
+attributes are transparent to them and constrain only the narrow task caller. The
+empty-scopes completeness test (scope proposal §8) still holds: every task handler's
+single `Allow` denies a scopeless probe.
 
-**This does not change behavior for existing callers.** Users, `xat_` keys, app
-JWTs and cookie sessions hold `authscope.Admin()` (`*.*`) or coarse `task.read`/
-`task.write`, which match any instance regardless of attributes — so adding
-`WithTaskID(...)`/`WithTaskParent(...)` to a handler's `Allow` is transparent to
-them and only constrains the narrow task caller. The handlers that gain a row load
-(`GetTask`, `UpdateTask`, `ListLogs`) already load that row to respond, so the
-overhead is nil.
-
-`UpdateTask` keeps its **archived state guard after** the scope check, exactly as
-`AgentFilter.UpdateTask` does today — that is a state guard, not a scope check.
-
-#### `CreateGitHubToken` — the one RPC the runner does *not* just forward
-
-`CreateGitHubToken` is special: the server handler returns `Unimplemented`
-(`apiserver/github.go`, post-#806), and the live path is the runner — today
-`AgentFilter` forwards it upstream, and the [optional runner-local GitHub
-App](./split-github-app.md) draft would have the runner mint the installation token
-**locally**, resolving repo→installation before ever reaching the C2. That local
-mint is the one place the proxy does more than authorize-and-forward, and removing
-the socket removes its interception point.
-
-This proposal does not resolve the GitHub-token backend (that is the split-github-app
-proposal's job), but it must not strand it. Options, with a recommendation:
-
-- **(Recommended) Keep a minimal in-container `CreateGitHubToken` endpoint hosted by
-  the runner, reachable only for this one RPC**, while everything else goes direct.
-  But that re-introduces a (tiny) socket — contradicting the goal. Prefer instead:
-- **(Recommended) Have the driver call `CreateGitHubToken` directly on the C2**, and
-  let the **server** own the GitHub-token backend (central app, or a future
-  server-side per-org app). The runner-local app in split-github-app becomes a
-  server-side concern. This keeps the "server is the sole authority" model whole.
-- **Defer**: ship the proxy removal for every RPC *except* `CreateGitHubToken`,
-  keeping a runner-local mint path until split-github-app lands a server-side
-  backend. Cleanest sequencing but leaves a vestigial runner endpoint.
-
-Recommendation: route `CreateGitHubToken` to the server (option 2) and treat the
-runner-local GitHub App as a follow-up the split-github-app proposal owns. Flagged as
-Open Question #2.
+**`CreateGitHubToken` is a non-issue.** It already returns `Unimplemented` on the
+apiserver (`apiserver/github.go`, with a test), and `split-github-app` is still a
+draft, so the GitHub-token path is dormant — removing the proxy neither preserves nor
+breaks it. It stays `Unimplemented`; the task token carries `github_token.create` so
+the direct path works the moment a backend exists, and that backend is
+`split-github-app`'s concern. Not a blocker.
 
 ### 6. How the driver and MCP server obtain and present the token
 
-The wiring already exists — only the values change. Today
-`internal/runner/runner.go` injects, per container:
+The wiring already exists — only the values change. Today `internal/runner/runner.go`
+injects, per container:
 
 - the driver `Cmd`: `xagent driver --server <socket-url> --token <jwt>` plus
   `XAGENT_SERVER`, `XAGENT_TOKEN`, `XAGENT_TASK_ID` env;
@@ -304,7 +322,7 @@ After this change:
 
 - The runner calls `CreateTaskToken(task_id, ws.Capabilities)` on the C2 (replacing
   the local `r.proxy.TaskToken(task, ws.Capabilities)` call in `runner.create`) and
-  injects the **returned** token as `--token` / `XAGENT_TOKEN`, unchanged in shape
+  injects the **returned** app JWT as `--token` / `XAGENT_TOKEN`, unchanged in shape
   from the driver/MCP point of view.
 - `--server` / `XAGENT_SERVER` becomes the **real C2 URL** instead of
   `xagentclient.AgentSocketURL`. `xagentclient.New` already speaks both `unix://`
@@ -312,17 +330,16 @@ After this change:
 - The **socket bind mount and the socket-existence preflight are deleted** from
   `runner.create`.
 
-**Network reachability & TLS.** The container must now reach the C2 over the
-network. The runner already knows the C2 URL (its own `--server` /
-`XAGENT_SERVER`); it passes that same URL to the container. For the common
-single-host dev setup the container needs that URL to resolve from inside its
-network namespace (e.g. the compose service name, or `host.docker.internal`), which
-is a workspace networking concern (`ws.Container.Networks`) rather than a protocol
-one. Production already terminates TLS at `xagent.choly.ca`, so direct connections
-are HTTPS by default and the token rides in `Authorization: Bearer` over TLS exactly
-like every other caller — a strict improvement over the previously
-un-encrypted local Unix socket. How to default the in-container URL when the
-runner's own `--server` is loopback is Open Question #3.
+**Network reachability & TLS.** The container must now reach the C2 over the network.
+The runner already knows the C2 URL (its own `--server` / `XAGENT_SERVER`); it passes
+that same URL to the container. For the common single-host dev setup the container
+needs that URL to resolve from inside its network namespace (e.g. the compose service
+name, or `host.docker.internal`), which is a workspace networking concern
+(`ws.Container.Networks`) rather than a protocol one. Production already terminates
+TLS at `xagent.choly.ca`, so direct connections are HTTPS by default and the token
+rides in `Authorization: Bearer` over TLS exactly like every other caller — a strict
+improvement over the previously un-encrypted local Unix socket. How to default the
+in-container URL when the runner's own `--server` is loopback is Open Question #2.
 
 ### 7. What authorizes the runner to call `CreateTaskToken`
 
@@ -333,6 +350,9 @@ op to the taxonomy:
 ```go
 OpTaskTokenCreate = []string{"task_token", "create"}
 ```
+
+(This is a legitimate no-instance, capability-only op — exactly the kind of check the
+optional `AllowsOp` primitive is for.)
 
 Options for constraining it:
 
@@ -356,38 +376,51 @@ when key identities support it. This is Open Question #1.
 
 ## Migration / cutover
 
-The proxy and the direct path cannot both authorize a given container, but they can
-**coexist across containers** during rollout: the server-signed task token and the
-runner-signed JWT are different credentials, and a container is wired for exactly one
-of them at creation time. In-flight containers keep their existing wiring until they
-restart.
+The proxy and the direct path use different credentials — a runner-signed task JWT vs.
+a server-signed app JWT — and a container is wired for exactly one of them at creation
+time. In-flight containers keep their existing wiring until they restart, so the two
+can coexist across containers during rollout.
 
-**Phase 0 — server can mint and verify (no behavior change).** Land
-`CreateTaskToken`, the `taskKey`, `TaskTokenClaims`, and the third-credential path in
-`apiauth.authenticate`. Nothing calls `CreateTaskToken` yet; `agentauth.Middleware`
-and the proxy still run. Pure addition.
+**One ordering constraint dominates the phasing.** A scope that constrains
+`task.archived` *denies* any `Allow` that omits the attribute (scope proposal §5). So
+the minter's `task.archived:"false"` predicate (§3) and the handlers passing
+`task.archived` (§5) must be consistent, and — critically — the minter must **not**
+start emitting the archived predicate while the legacy `AgentFilter` path (which does
+not pass it for its request-only RPCs) is still minting tokens. The phases below
+sequence around that.
 
-**Phase 1 — fold `AgentFilter` into the `apiserver` (no behavior change).** Add the
-per-instance `task.id`/own-OR-child checks (§5) to the `apiserver` handlers. Existing
-callers hold `*.*`/coarse scopes, so every check still passes; the proxy's
-`AgentFilter` remains the live enforcer for agents. This is the riskiest correctness
-step, so it ships behind the frozen `filter_test.go` behavioral spec re-expressed
-against the `apiserver` handlers (the same tests that survived the #902 conversion).
+**Phase 0 — libraries + issuance, inert.** Add `CreateTaskToken` (signs a long-lived
+app JWT via `agentauth.Scopes`), `AttrTaskArchived`/`WithTaskArchived`, and
+`model.Task.ScopeAttr()`. The minter does **not** yet emit the archived predicate;
+nothing calls `CreateTaskToken`. The proxy/`AgentFilter` remain the live enforcer.
+Pure addition.
 
-**Phase 2 — cut new containers over to the direct path.** `runner.create` calls
-`CreateTaskToken` and injects the real C2 URL instead of the socket URL; the bind
-mount is dropped for **new** containers. Existing containers keep their socket until
-they are restarted. The proxy keeps running to serve them. Roll out to one runner,
-verify agents reach the C2 directly, then fan out.
+**Phase 1 — handlers adopt the single post-load `Allow` (behavior-preserving).** Move
+the `apiserver` task handlers to `Allow(op, task.ScopeAttr()...)` (§5), loading rows
+where they didn't. Existing callers hold `*.*`/coarse scopes, so every check still
+passes, and no task tokens exist yet — so passing `task.archived` is safe even though
+the minter doesn't emit it. This is the riskiest correctness step; it ships behind the
+frozen `filter_test.go` behavioral spec re-expressed against the handlers (the same
+tests that survived the #902 conversion) plus the empty-scopes completeness test.
+
+**Phase 2 — cutover.** Atomically: (a) the minter `agentauth.Scopes` begins emitting
+`task.archived:"false"`; (b) `runner.create` calls `CreateTaskToken` and injects the
+real C2 URL instead of the socket URL, dropping the bind mount for **new** containers.
+The archived-constrained scopes now exist **only** in direct-path app JWTs, consumed
+**only** by the §5 handlers (which pass `task.archived`). `AgentProxy.TaskToken` is no
+longer invoked for new containers; any restart of a legacy container goes through the
+direct path (restart = new container). Legacy containers still running keep their
+already-issued, pre-archived runner-signed tokens and the unchanged `AgentFilter`
+serving them. Roll out to one runner, verify, fan out.
 
 **Phase 3 — drain and remove.** Once no container references the socket (all tasks
-restarted or completed since Phase 2), delete the proxy and its key. A runner can
-report whether any of its managed containers still hold a socket mount to confirm
-the drain.
+restarted or completed since Phase 2), delete the proxy and its key (below). A runner
+can report whether any managed container still holds the legacy socket mount to confirm
+the drain (Open Question #4).
 
-Rollback at any phase is a runner-config flip: point new containers back at the
-socket URL and re-enable the proxy; the server-side additions (Phases 0–1) are inert
-when unused.
+Rollback before Phase 3 is a runner-config flip: point new containers back at the
+socket URL and re-enable the proxy. The Phase 0–1 server additions are inert when no
+narrow token is in play.
 
 ## What gets deleted
 
@@ -401,20 +434,22 @@ Once Phase 3 completes:
 - The socket bind mount and the socket-existence preflight in `runner.create`
   (`internal/runner/runner.go`), plus the `SocketPath` plumbing.
 - `internal/agentmcp/filter.go` — `AgentFilter` (its logic now lives in the
-  `apiserver` handlers; `filter_test.go` migrates to test those).
-- `internal/auth/agentauth/middleware.go` — `agentauth.Middleware` and the
-  runner-side `VerifyToken`/`SignToken` for task JWTs.
-- **The runner's task-JWT signing key**: the `--private-key` /
-  `XAGENT_PRIVATE_KEY` Ed25519 seed (`internal/command/runner.go`,
-  `configfile`) and `agentauth.CreatePrivateKey`. The runner no longer signs
-  anything — it authenticates with its `xat_` key alone.
+  `apiserver` handlers via `Allow(op, task.ScopeAttr()...)`; `filter_test.go` migrates
+  to test those handlers).
+- `internal/auth/agentauth/middleware.go` — `agentauth.Middleware`, plus the
+  runner-side `SignToken`/`VerifyToken` and the `TaskClaims` type for task JWTs (the
+  token is now an `apiauth.AppClaims`).
+- **The runner's task-JWT signing key**: the `--private-key` / `XAGENT_PRIVATE_KEY`
+  Ed25519 seed (`internal/command/runner.go`, `configfile`) and
+  `agentauth.CreatePrivateKey`. The runner no longer signs anything — it authenticates
+  with its `xat_` key alone.
+
+**No new key is introduced** (no `taskKey`): the server reuses its existing `appKey`.
 
 **Retained from `agentauth`**: `ScopeOptions`/`Scopes` (the minter, now called by the
-server in `CreateTaskToken`), the `Capability*` constants and `ValidCapability`, and
-the `TaskClaims` *scope-shaping* logic. Only the runner-side **signing/verification**
-half of `agentauth` and the proxy go away. `TaskTokenClaims` (server-signed) is the
-new carrier; whether `TaskClaims` is renamed/moved into `apiauth` or kept as a thin
-alias is an implementation detail.
+server in `CreateTaskToken`, extended to stamp `task.archived:"false"`) and the
+`Capability*` constants / `ValidCapability`. Only the runner-side signing/verification
+half of `agentauth` and the proxy go away.
 
 ## Net trust model
 
@@ -424,76 +459,73 @@ while the server owns org tenancy. The server cannot identify or authorize a tas
 its own.
 
 After: **the server is the sole authority.** It mints the task token, signs it with
-its own key, derives the task's org and identity from the authoritative task row,
-gates validity on task state, and enforces every per-task / parent-child / capability
-rule in its own handlers via `authscope`. The runner is reduced to an *orchestrator*
-that authenticates with an ordinary org-scoped `xat_` key and asks the server to mint
-tokens — it holds no signing key and makes no authorization decision. Task isolation
-becomes a **server-enforced property** rather than a consequence of forcing agents
-through a runner-side filter, and the narrow task token is the first real consumer of
-non-admin scopes.
+its own app key, derives the task's org from the authoritative task row, and enforces
+every per-task / parent-child / archived / capability rule in its own handlers via
+`authscope` — the agent is simply a caller holding a very narrow scope set. The runner
+is reduced to an *orchestrator* that authenticates with an ordinary org-scoped `xat_`
+key and asks the server to mint tokens — it holds no signing key and makes no
+authorization decision. Task isolation becomes a **server-enforced property** rather
+than a consequence of forcing agents through a runner-side filter, and the narrow task
+token is the first real consumer of non-admin scopes.
 
 ## Trade-offs
 
-**A task row read per agent request.** State-gated validity (§3) costs one task-row
-lookup at auth time. The alternative — short-lived tokens with refresh — is
-impossible without the proxy to refresh them, which is exactly what we are removing.
-The read is cacheable per request and is the row most handlers load anyway. Worth it:
-it buys revocation and closes the un-archive hole with no new bookkeeping.
+**A task row read per task handler.** Folding the archived gate into the scopes means
+every task handler loads the row to supply `task.archived` (§5). This is org-scoped
+and cheap, the row most handlers load anyway, and it is the price of one authoritative
+post-load check with no forgettable pre-gate. The alternative — a coarse op-level
+pre-gate — is a *correctness bug* for narrow callers (§5), not an optimization.
 
-**Dedicated `taskKey` vs. reusing `appKey`.** A separate server key means a second
-seed to configure and rotate, but keeps task-token verification from ever colliding
-with app-JWT verification and allows independent rotation (task tokens are
-long-lived; app JWTs are 5-minute). Reusing `appKey` with only the `token_type`
-discriminator is simpler and still "one key system," at the cost of coupling the two
-lifetimes. Recommend the dedicated key; both are server-owned, which is the property
-the issue cares about.
+**Long-lived, non-expiring token.** Driver tokens carry a long/absent expiry because
+there is no refresh path without the proxy. We accept this because revocation is
+decoupled from expiry: archiving the task (manually, or automatically via
+`archive_after`) denies the token immediately via the `task.archived` predicate. A
+fixed TTL would be strictly worse for a long-running task — it would have to exceed
+the task's runtime anyway — whereas archive-based revocation fires the instant the
+task is done.
+
+**Archived-only revocation.** The revocation lever is exactly "archive the task,"
+nothing finer. That is sufficient because the token is already task-narrow (it can
+only touch its own task and direct children), so the only revocation question is
+"should this task still be acting at all," which archived answers. Per-capability or
+time-boxed revocation would need a real refresh path we don't have.
+
+**Reusing `appKey` for agent tokens.** Agent tokens and user app JWTs are now signed
+by the same key and verified by the same path. The upside is zero new key material and
+a single, well-tested verification path; the downside is that rotating `appKey`
+invalidates every outstanding *agent* token too (every active agent must re-mint via a
+runner restart). Acceptable as an operational event; a dedicated key would decouple
+the lifetimes at the cost of the second-credential machinery we just removed. (Open
+Question #3.)
 
 **Direct network exposure.** Every container now opens a connection to the C2 rather
-than to a local socket. That is the point (operational flexibility — agents can run
-anywhere they can reach the C2), but it widens the network surface: the C2 must be
-reachable from container networks, and a leaked task token is usable from anywhere
-until its task goes terminal. Mitigations: TLS everywhere (already true in prod), the
-token is strictly task-narrow, and state-gating bounds its lifetime. Net: the trust
-model is *simpler and stronger* (one authority, server-verifiable identity) even as
-the network surface grows.
-
-**No token expiry.** Driver tokens never expire by a clock. We accept this because
-(a) there is no refresh path without the proxy, and (b) state-gating is a tighter
-bound than any fixed TTL for a long-running task — a 24h task needs a ≥24h TTL
-anyway, whereas state-gating revokes the instant the task ends.
-
-**`CreateGitHubToken` loses its runner interception point.** The one RPC where the
-runner does real work (local installation-token minting, per split-github-app) must
-move server-side or keep a vestigial runner endpoint. Resolving this is deferred to
-split-github-app; this proposal recommends routing it to the server (§5, Open
-Question #2).
+than to a local socket. That is the point (agents can run anywhere they can reach the
+C2), but it widens the network surface: the C2 must be reachable from container
+networks, and a leaked task token is usable from anywhere until its task is archived.
+Mitigations: TLS everywhere (already true in prod), the token is strictly task-narrow,
+and archiving revokes it. Net: the trust model is *simpler and stronger* (one
+authority, server-verifiable identity) even as the network surface grows.
 
 ## Open Questions
 
 1. **Runner authorization to mint (§7).** Ship the coarse `task_token.create` +
-   org-tenancy gate now, or hold for runner-id-bound keys? Recommendation: ship
-   coarse now (the minted token is strictly narrower than the runner's key, so no
+   org-tenancy gate now, or hold for runner-id-bound keys? Recommendation: ship coarse
+   now (the minted token is strictly narrower than the runner's key, so no
    escalation), add runner-id binding when key identities support it.
 
-2. **`CreateGitHubToken` backend (§5).** Route directly to the server (and have the
-   server own the GitHub-token backend, absorbing the runner-local app concept), or
-   keep a minimal runner-local mint endpoint until split-github-app lands? This
-   proposal recommends server-side and defers the mechanism to split-github-app.
+2. **In-container C2 URL defaulting (§6).** When the runner's own `--server` is a
+   loopback/compose address, what URL does the container get so it resolves from inside
+   its network namespace? Options: reuse the runner's `--server` verbatim (works when
+   both share a network), a separate `--agent-server` override, or derive from
+   `ws.Container.Networks`. Needs a default that works for the compose dev setup and
+   prod without per-workspace config.
 
-3. **In-container C2 URL defaulting (§6).** When the runner's own `--server` is a
-   loopback/compose address, what URL does the container get so it resolves from
-   inside its network namespace? Options: reuse the runner's `--server` verbatim
-   (works when both share a network), a separate `--agent-server` override, or derive
-   from `ws.Container.Networks`. Needs a default that works for the compose dev setup
-   and prod without per-workspace config.
+3. **`appKey` rotation.** Reusing `appKey` for long-lived agent tokens means rotating
+   it forces every active agent to re-mint (a runner restart). Acceptable as an
+   operational event, or do we want overlapping key acceptance (verify against current
+   + previous key) for zero-downtime rotation — which would also benefit user app JWTs?
 
-4. **`taskKey` rotation.** Long-lived task tokens are signed by `taskKey`; rotating
-   it invalidates every outstanding task token (every active agent must re-mint).
-   Acceptable as an operational "restart your agents" event, or do we need overlapping
-   key acceptance (verify against current + previous key) for zero-downtime rotation?
-
-5. **Drain detection for Phase 3 (Migration).** How does the server/runner know no
+4. **Drain detection for Phase 3 (Migration).** How does the server/runner know no
    container still depends on the socket before deleting the proxy? Proposed: the
    runner enumerates its managed containers for the legacy bind mount and reports a
    clean drain; alternatively, gate removal on "all tasks created before the Phase 2
