@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // Instructions is the prompt shown to MCP clients describing what the
@@ -20,17 +22,30 @@ const Instructions = "xagent is an async agent orchestrator that runs AI coding 
 	"Each task runs an AI coding agent with access to the codebase and configured tools.\n" +
 	"Agents attach links to their tasks for external resources they create, such as GitHub PRs or Jira issues."
 
+// Option configures the behaviour of the registered tools.
+type Option func(*handlers)
+
+// WithDefaultArchiveAfter sets the default archive_after applied to tasks
+// created via create_task when the call omits the archive_after param. See
+// Task.archive_after for the value semantics (zero/unset = never, negative
+// = archive immediately on terminal status, positive = delay).
+func WithDefaultArchiveAfter(d time.Duration) Option {
+	return func(h *handlers) {
+		h.defaultArchiveAfter = durationpb.New(d)
+	}
+}
+
 // NewServer builds an MCP server with the user-facing xagent tools
 // registered. The same setup is used by the HTTP handler and by the
 // local stdio command.
-func NewServer(service xagentv1connect.XAgentServiceHandler) *mcp.Server {
+func NewServer(service xagentv1connect.XAgentServiceHandler, opts ...Option) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "xagent",
 		Version: "1.0.0",
 	}, &mcp.ServerOptions{
 		Instructions: Instructions,
 	})
-	AddTools(server, service)
+	AddTools(server, service, opts...)
 	return server
 }
 
@@ -38,8 +53,11 @@ func NewServer(service xagentv1connect.XAgentServiceHandler) *mcp.Server {
 // Tool handlers proxy to the supplied service, which can be either an
 // in-process XAgentServiceHandler (server-side) or the generated Connect
 // client (remote) since both interfaces share the same method signatures.
-func AddTools(server *mcp.Server, service xagentv1connect.XAgentServiceHandler) {
+func AddTools(server *mcp.Server, service xagentv1connect.XAgentServiceHandler, opts ...Option) {
 	h := &handlers{service: service}
+	for _, opt := range opts {
+		opt(h)
+	}
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_workspaces",
@@ -98,6 +116,10 @@ func Handler(service xagentv1connect.XAgentServiceHandler) http.Handler {
 
 type handlers struct {
 	service xagentv1connect.XAgentServiceHandler
+	// defaultArchiveAfter is applied to create_task when the call omits the
+	// archive_after param. nil means no default is sent (server behavior
+	// unchanged).
+	defaultArchiveAfter *durationpb.Duration
 }
 
 type listWorkspacesInput struct{}
@@ -124,13 +146,22 @@ func (h *handlers) listWorkspaces(ctx context.Context, req *mcp.CallToolRequest,
 }
 
 type createTaskInput struct {
-	Name        string `json:"name,omitempty" jsonschema:"A short name for the task"`
-	Workspace   string `json:"workspace" jsonschema:"The workspace to run the task in"`
-	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
-	Runner      string `json:"runner" jsonschema:"Runner ID to target"`
+	Name         string `json:"name,omitempty" jsonschema:"A short name for the task"`
+	Workspace    string `json:"workspace" jsonschema:"The workspace to run the task in"`
+	Instruction  string `json:"instruction" jsonschema:"The instruction text for the task"`
+	Runner       string `json:"runner" jsonschema:"Runner ID to target"`
+	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Auto-archive the task this long after it reaches a terminal status, as a Go duration string (e.g. \"30m\", \"1h\"). \"0\" = never, a negative value like \"-1s\" = archive immediately on terminal status, positive = delay. When omitted, the server default is used."`
 }
 
 func (h *handlers) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
+	archiveAfter := h.defaultArchiveAfter
+	if input.ArchiveAfter != "" {
+		d, err := time.ParseDuration(input.ArchiveAfter)
+		if err != nil {
+			return errorResult("invalid archive_after %q: %v", input.ArchiveAfter, err), nil, nil
+		}
+		archiveAfter = durationpb.New(d)
+	}
 	resp, err := h.service.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Workspace: input.Workspace,
@@ -138,6 +169,7 @@ func (h *handlers) createTask(ctx context.Context, req *mcp.CallToolRequest, inp
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction},
 		},
+		ArchiveAfter: archiveAfter,
 	})
 	if err != nil {
 		return errorResult("failed to create task: %v", err), nil, nil
@@ -332,4 +364,3 @@ func jsonResult(v any) *mcp.CallToolResult {
 		},
 	}
 }
-

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -11,9 +12,9 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func setupSession(t *testing.T, client *xagentclient.ClientMock) *mcp.ClientSession {
+func setupSession(t *testing.T, client *xagentclient.ClientMock, opts ...Option) *mcp.ClientSession {
 	t.Helper()
-	srv := NewServer(client)
+	srv := NewServer(client, opts...)
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	_, err := srv.Connect(t.Context(), serverTransport, nil)
@@ -131,6 +132,109 @@ func TestCreateTask_UsesServerURL(t *testing.T) {
 		"status":    "PENDING",
 		"url":       "https://xagent.example.com/ui/tasks/42?org=7",
 	})
+}
+
+// createTaskCapture returns a ClientMock whose CreateTaskFunc records the
+// request it received and returns a minimal valid task.
+func createTaskCapture(got **xagentv1.CreateTaskRequest) *xagentclient.ClientMock {
+	return &xagentclient.ClientMock{
+		CreateTaskFunc: func(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
+			*got = req
+			return &xagentv1.CreateTaskResponse{
+				Task: &xagentv1.Task{
+					Id:        1,
+					Name:      "t",
+					Workspace: "ws",
+					Status:    xagentv1.TaskStatus_PENDING,
+				},
+			}, nil
+		},
+	}
+}
+
+func callCreateTask(t *testing.T, session *mcp.ClientSession, args map[string]any) {
+	t.Helper()
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "create_task",
+		Arguments: args,
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
+}
+
+func TestCreateTask_ForwardsArchiveAfter(t *testing.T) {
+	var got *xagentv1.CreateTaskRequest
+	session := setupSession(t, createTaskCapture(&got))
+
+	callCreateTask(t, session, map[string]any{
+		"workspace":     "ws",
+		"instruction":   "do it",
+		"runner":        "r1",
+		"archive_after": "30m",
+	})
+
+	assert.Assert(t, got.ArchiveAfter != nil)
+	assert.Equal(t, got.ArchiveAfter.AsDuration(), 30*time.Minute)
+}
+
+func TestCreateTask_AppliesServerDefaultArchiveAfter(t *testing.T) {
+	var got *xagentv1.CreateTaskRequest
+	session := setupSession(t, createTaskCapture(&got), WithDefaultArchiveAfter(time.Hour))
+
+	callCreateTask(t, session, map[string]any{
+		"workspace":   "ws",
+		"instruction": "do it",
+		"runner":      "r1",
+	})
+
+	assert.Assert(t, got.ArchiveAfter != nil)
+	assert.Equal(t, got.ArchiveAfter.AsDuration(), time.Hour)
+}
+
+func TestCreateTask_ParamOverridesDefaultArchiveAfter(t *testing.T) {
+	var got *xagentv1.CreateTaskRequest
+	session := setupSession(t, createTaskCapture(&got), WithDefaultArchiveAfter(time.Hour))
+
+	callCreateTask(t, session, map[string]any{
+		"workspace":     "ws",
+		"instruction":   "do it",
+		"runner":        "r1",
+		"archive_after": "-1s",
+	})
+
+	assert.Assert(t, got.ArchiveAfter != nil)
+	assert.Equal(t, got.ArchiveAfter.AsDuration(), -time.Second)
+}
+
+func TestCreateTask_NoArchiveAfterWhenUnset(t *testing.T) {
+	var got *xagentv1.CreateTaskRequest
+	session := setupSession(t, createTaskCapture(&got))
+
+	callCreateTask(t, session, map[string]any{
+		"workspace":   "ws",
+		"instruction": "do it",
+		"runner":      "r1",
+	})
+
+	assert.Assert(t, got.ArchiveAfter == nil, "archive_after should be unset when neither param nor default is set")
+}
+
+func TestCreateTask_InvalidArchiveAfter(t *testing.T) {
+	var got *xagentv1.CreateTaskRequest
+	session := setupSession(t, createTaskCapture(&got))
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"workspace":     "ws",
+			"instruction":   "do it",
+			"runner":        "r1",
+			"archive_after": "not-a-duration",
+		},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, result.IsError, "expected error result for invalid duration")
+	assert.Assert(t, got == nil, "CreateTask should not be called when archive_after is invalid")
 }
 
 func TestListTasks_UsesTaskURLFromResponse(t *testing.T) {
