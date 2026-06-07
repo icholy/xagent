@@ -149,7 +149,8 @@ func TestListLinks_Permissions(t *testing.T) {
 		TaskId: taskResp.Task.Id,
 	})
 
-	// Assert - User B gets empty list, not an error
+	// Assert - User B gets empty list, not an error (blanket read skips the row
+	// load; the list query is org-scoped).
 	assert.NilError(t, err)
 	assert.Equal(t, len(resp.Links), 0)
 }

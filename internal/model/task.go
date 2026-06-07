@@ -3,6 +3,7 @@ package model
 import (
 	"time"
 
+	"github.com/icholy/xagent/internal/auth/authscope"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -75,6 +76,19 @@ type Task struct {
 	// AutoArchive controls auto-archive after the task reaches a terminal
 	// status. 0 = never (default); <0 = archive immediately; >0 = delay.
 	AutoArchive time.Duration `json:"auto_archive,omitempty"`
+}
+
+// ScopeAttr returns the authscope attributes describing this task, for the
+// post-load Allow check in the apiserver task handlers. Centralizing the set
+// here keeps a handler from forgetting one (especially task.archived): own-or-
+// child matching rides on task.id/task.parent and archive-based revocation on
+// task.archived. See proposals/draft/eliminate-runner-socket-proxy.md §5.
+func (t *Task) ScopeAttr() []authscope.Attr {
+	return []authscope.Attr{
+		authscope.WithTaskID(t.ID),
+		authscope.WithTaskParent(t.Parent),
+		authscope.WithTaskArchived(t.Archived),
+	}
 }
 
 // Proto converts a Task to its protobuf representation.

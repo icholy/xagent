@@ -56,8 +56,10 @@ func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTa
 
 func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	// Coarse list read: no task.parent on the API surface (proposal §7).
-	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+	// No row exists for the listing itself; authorize directly on the requested
+	// parent so a task token can list only its own children
+	// (task.read:{task.parent:self}). No row read, so no AllowOp pre-gate.
+	if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskParent(req.ParentId)) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list tasks"))
 	}
 	tasks, err := s.store.ListTaskChildren(ctx, nil, req.ParentId, caller.OrgID)
@@ -75,7 +77,14 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskCreate) {
+	// No row exists yet, so authorize directly on the request attributes — the
+	// narrow create scope (parent/workspace/runner) a task token holds. There is no
+	// row read to fail fast before, so no AllowOp pre-gate is needed.
+	if !caller.Scopes.Allow(authscope.OpTaskCreate,
+		authscope.WithTaskParent(req.Parent),
+		authscope.WithTaskWorkspace(req.Workspace),
+		authscope.WithTaskRunner(req.Runner),
+	) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create task"))
 	}
 	// Verify parent task ownership if specified
@@ -151,7 +160,10 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 
 func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+	// Coarse, fail-fast capability gate before the DB read. AllowOp ignores
+	// predicates, so a narrow task.read:{task.id:N} holder still passes here; this
+	// only rejects callers lacking the op entirely.
+	if !caller.Scopes.AllowOp(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	task, err := s.store.GetTask(ctx, nil, req.Id, caller.OrgID)
@@ -160,6 +172,10 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// The real instance check, after the row is loaded.
+	if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	return &xagentv1.GetTaskResponse{
 		Task: task.Proto(s.baseURL),
@@ -168,7 +184,7 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 
 func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+	if !caller.Scopes.AllowOp(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	task, err := s.store.GetTask(ctx, nil, req.Id, caller.OrgID)
@@ -177,6 +193,9 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	children, _ := s.store.ListTaskChildren(ctx, nil, req.Id, caller.OrgID)
 	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, caller.OrgID)
@@ -195,7 +214,10 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	// Coarse, fail-fast capability gate before entering the transaction (AllowOp
+	// ignores predicates); the per-instance check runs inside the tx against the
+	// row it already loads.
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -209,6 +231,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
 		var changed []string
 		if req.Name != "" {
@@ -248,6 +273,11 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return tx.Commit()
 	})
 	if err != nil {
+		// The in-tx instance check returns PermissionDenied; surface it as-is
+		// rather than re-wrapping it as Internal.
+		if connect.CodeOf(err) == connect.CodePermissionDenied {
+			return nil, err
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}
@@ -260,7 +290,10 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	// Coarse, fail-fast capability gate before entering the transaction (AllowOp
+	// ignores predicates); the per-instance check runs inside the tx against the
+	// row it already loads.
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -274,6 +307,9 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
 		if !task.Archive() {
 			return fmt.Errorf("cannot archive task with status %s", task.Status)
@@ -297,6 +333,11 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return tx.Commit()
 	})
 	if err != nil {
+		// The in-tx instance check returns PermissionDenied; surface it as-is
+		// rather than re-wrapping it as Internal.
+		if connect.CodeOf(err) == connect.CodePermissionDenied {
+			return nil, err
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}
@@ -309,7 +350,10 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 
 func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	// Coarse, fail-fast capability gate before entering the transaction (AllowOp
+	// ignores predicates); the per-instance check runs inside the tx against the
+	// row it already loads.
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -323,6 +367,9 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
 		if !task.Unarchive() {
 			return fmt.Errorf("cannot unarchive task: not archived")
@@ -345,6 +392,11 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		return tx.Commit()
 	})
 	if err != nil {
+		// The in-tx instance check returns PermissionDenied; surface it as-is
+		// rather than re-wrapping it as Internal.
+		if connect.CodeOf(err) == connect.CodePermissionDenied {
+			return nil, err
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}
@@ -357,7 +409,10 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	// Coarse, fail-fast capability gate before entering the transaction (AllowOp
+	// ignores predicates); the per-instance check runs inside the tx against the
+	// row it already loads.
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -371,6 +426,9 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
 		if !task.Cancel() {
 			return fmt.Errorf("cannot cancel task with status %s", task.Status)
@@ -399,6 +457,11 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return tx.Commit()
 	})
 	if err != nil {
+		// The in-tx instance check returns PermissionDenied; surface it as-is
+		// rather than re-wrapping it as Internal.
+		if connect.CodeOf(err) == connect.CodePermissionDenied {
+			return nil, err
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}
@@ -411,7 +474,10 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 
 func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	// Coarse, fail-fast capability gate before entering the transaction (AllowOp
+	// ignores predicates); the per-instance check runs inside the tx against the
+	// row it already loads.
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -425,6 +491,9 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		task, err := s.store.GetTaskForUpdate(ctx, tx, req.Id, caller.OrgID)
 		if err != nil {
 			return err
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
 		if !task.Restart() {
 			return fmt.Errorf("cannot restart task with status %s", task.Status)
@@ -448,6 +517,11 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return tx.Commit()
 	})
 	if err != nil {
+		// The in-tx instance check returns PermissionDenied; surface it as-is
+		// rather than re-wrapping it as Internal.
+		if connect.CodeOf(err) == connect.CodePermissionDenied {
+			return nil, err
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
 		}

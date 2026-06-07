@@ -106,19 +106,22 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 	if !caller.Scopes.Allow(authscope.OpEventWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event"))
 	}
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
-	// Verify task ownership
-	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
+	// Verify task ownership and the per-instance task scope.
+	task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+	if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	// Verify event ownership
-	ok, err = s.store.HasEvent(ctx, nil, req.EventId, caller.OrgID)
+	ok, err := s.store.HasEvent(ctx, nil, req.EventId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -150,19 +153,22 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 	if !caller.Scopes.Allow(authscope.OpEventWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event"))
 	}
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
-	// Verify task ownership
-	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
+	// Verify task ownership and the per-instance task scope.
+	task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+	if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	// Verify event ownership
-	ok, err = s.store.HasEvent(ctx, nil, req.EventId, caller.OrgID)
+	ok, err := s.store.HasEvent(ctx, nil, req.EventId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -201,8 +207,23 @@ func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTask
 
 func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+	if !caller.Scopes.AllowOp(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
+	}
+	// A blanket task.read (admin/coarse) is authorized without inspecting the row,
+	// and the list query is already org-scoped. Only a predicated caller needs the
+	// row loaded to check task.id/parent/archived.
+	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+		task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+			}
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
+		}
 	}
 	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
