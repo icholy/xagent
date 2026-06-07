@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"connectrpc.com/connect"
@@ -15,7 +16,7 @@ import (
 func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite, authscope.WithWorkspaceRunner(req.RunnerId)) {
-		return nil, errPermissionDenied("cannot register workspaces")
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot register workspaces"))
 	}
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := s.store.DeleteWorkspacesByRunner(ctx, tx, req.RunnerId, caller.OrgID); err != nil {
@@ -46,7 +47,7 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpWorkspaceRead) {
-		return nil, errPermissionDenied("cannot list workspaces")
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list workspaces"))
 	}
 	workspaces, err := s.store.ListWorkspaces(ctx, nil, caller.OrgID)
 	if err != nil {
@@ -64,7 +65,7 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 		attrs = append(attrs, authscope.WithWorkspaceRunner(req.RunnerId))
 	}
 	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite, attrs...) {
-		return nil, errPermissionDenied("cannot clear workspaces")
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot clear workspaces"))
 	}
 	if req.RunnerId != "" {
 		if err := s.store.DeleteWorkspacesByRunner(ctx, nil, req.RunnerId, caller.OrgID); err != nil {

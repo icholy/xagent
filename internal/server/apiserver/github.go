@@ -20,7 +20,7 @@ func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkG
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
 	}
 	if !caller.Scopes.Allow(authscope.OpOrgWrite) {
-		return nil, errPermissionDenied("cannot write org")
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write org"))
 	}
 	if req.InstallationId == 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("installation_id is required"))

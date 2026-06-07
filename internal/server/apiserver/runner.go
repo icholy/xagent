@@ -23,12 +23,12 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 	// performing a scope check).
 	if len(req.Events) == 0 {
 		if !caller.Scopes.Allow(authscope.OpTaskWrite) {
-			return nil, errPermissionDenied("cannot submit runner events")
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 		}
 	}
 	for _, ev := range req.Events {
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(ev.TaskId)) {
-			return nil, errPermissionDenied("cannot submit runner events for task")
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events for task"))
 		}
 	}
 	for _, pbEvent := range req.Events {

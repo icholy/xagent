@@ -63,13 +63,6 @@ func (s *Server) publish(n model.Notification) {
 	}
 }
 
-// errPermissionDenied builds the PermissionDenied error every handler's
-// top-of-handler scope gate returns when the caller's scopes don't cover the
-// request (proposal §8).
-func errPermissionDenied(msg string) error {
-	return connect.NewError(connect.CodePermissionDenied, errors.New(msg))
-}
-
 func (s *Server) Ping(ctx context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
 	return &xagentv1.PingResponse{
 		Version: version.String(),

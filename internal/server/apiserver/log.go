@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest) (*xagentv1.UploadLogsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId)) {
-		return nil, errPermissionDenied("cannot write task")
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	// Verify task ownership
 	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
@@ -46,7 +47,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 func (s *Server) ListLogs(ctx context.Context, req *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.TaskId)) {
-		return nil, errPermissionDenied("cannot read task")
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	logs, err := s.store.ListLogsByTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
