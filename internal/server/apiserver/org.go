@@ -16,7 +16,8 @@ import (
 
 func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgCreate) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgCreate)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create org"))
 	}
 	if req.Name == "" {
@@ -48,7 +49,8 @@ func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) 
 
 func (s *Server) ListOrgs(ctx context.Context, req *xagentv1.ListOrgsRequest) (*xagentv1.ListOrgsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgRead) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgRead)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list orgs"))
 	}
 	orgs, err := s.store.ListOrgsByMember(ctx, nil, caller.ID)
@@ -60,7 +62,8 @@ func (s *Server) ListOrgs(ctx context.Context, req *xagentv1.ListOrgsRequest) (*
 
 func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgDelete) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgDelete)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot delete org"))
 	}
 	org, err := s.store.GetOrg(ctx, nil, req.Id)
@@ -89,7 +92,8 @@ func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) 
 
 func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberRequest) (*xagentv1.AddOrgMemberResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgWrite) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgWrite)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write org"))
 	}
 	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
@@ -139,7 +143,8 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 
 func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMemberRequest) (*xagentv1.RemoveOrgMemberResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgWrite) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgWrite)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write org"))
 	}
 	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
@@ -169,7 +174,8 @@ func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMem
 
 func (s *Server) ListOrgMembers(ctx context.Context, req *xagentv1.ListOrgMembersRequest) (*xagentv1.ListOrgMembersResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgRead) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgRead)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read org"))
 	}
 	members, err := s.store.ListOrgMembersWithUsers(ctx, nil, caller.OrgID)
@@ -181,7 +187,8 @@ func (s *Server) ListOrgMembers(ctx context.Context, req *xagentv1.ListOrgMember
 
 func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgRead) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgRead)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read org"))
 	}
 	org, err := s.store.GetOrg(ctx, nil, caller.OrgID)
@@ -204,7 +211,8 @@ func (s *Server) GetOrgSettings(ctx context.Context, req *xagentv1.GetOrgSetting
 
 func (s *Server) GenerateAtlassianWebhookSecret(ctx context.Context, req *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgWrite) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgWrite)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write org"))
 	}
 	secret, err := s.atlassian.GenerateWebhookSecret(ctx, caller.OrgID)
@@ -219,7 +227,8 @@ func (s *Server) GenerateAtlassianWebhookSecret(ctx context.Context, req *xagent
 
 func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpAccountWrite) {
+	allowed := caller.Scopes.Allow(authscope.OpAccountWrite)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write account"))
 	}
 	if err := s.store.UnlinkGitHubAccount(ctx, nil, caller.ID); err != nil {
@@ -231,7 +240,8 @@ func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGi
 
 func (s *Server) UnlinkAtlassianAccount(ctx context.Context, req *xagentv1.UnlinkAtlassianAccountRequest) (*xagentv1.UnlinkAtlassianAccountResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpAccountWrite) {
+	allowed := caller.Scopes.Allow(authscope.OpAccountWrite)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write account"))
 	}
 	if err := s.atlassian.UnlinkAccount(ctx, caller.ID); err != nil {
@@ -243,7 +253,8 @@ func (s *Server) UnlinkAtlassianAccount(ctx context.Context, req *xagentv1.Unlin
 
 func (s *Server) GetRoutingRules(ctx context.Context, req *xagentv1.GetRoutingRulesRequest) (*xagentv1.GetRoutingRulesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgRead) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgRead)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read org"))
 	}
 	rules, err := s.store.GetOrgRoutingRules(ctx, nil, caller.OrgID)
@@ -259,7 +270,8 @@ func (s *Server) GetRoutingRules(ctx context.Context, req *xagentv1.GetRoutingRu
 
 func (s *Server) SetRoutingRules(ctx context.Context, req *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgWrite) {
+	allowed := caller.Scopes.Allow(authscope.OpOrgWrite)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write org"))
 	}
 	rules := make([]model.RoutingRule, len(req.Rules))

@@ -22,7 +22,8 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be at most %d", maxLimit))
 	}
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpEventRead) {
+	allowed := caller.Scopes.Allow(authscope.OpEventRead)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list events"))
 	}
 	events, err := s.store.ListEvents(ctx, nil, limit, caller.OrgID)
@@ -36,7 +37,8 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 
 func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpEventCreate) {
+	allowed := caller.Scopes.Allow(authscope.OpEventCreate)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create event"))
 	}
 	event := &model.Event{
@@ -64,7 +66,8 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 
 func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpEventRead) {
+	allowed := caller.Scopes.Allow(authscope.OpEventRead)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read event"))
 	}
 	event, err := s.store.GetEvent(ctx, nil, req.Id, caller.OrgID)
@@ -81,7 +84,8 @@ func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*
 
 func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpEventWrite) {
+	allowed := caller.Scopes.Allow(authscope.OpEventWrite)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event"))
 	}
 	if err := s.store.DeleteEvent(ctx, nil, req.Id, caller.OrgID); err != nil {
@@ -103,8 +107,9 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 	caller := apiauth.MustCaller(ctx)
 	// Both halves must pass: write the event (coarse) and write the task it is
 	// being attached to (proposal §7).
-	if !caller.Scopes.Allow(authscope.OpEventWrite) ||
-		!caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId)) {
+	allowed := caller.Scopes.Allow(authscope.OpEventWrite) &&
+		caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId))
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event task"))
 	}
 	// Verify task ownership
@@ -145,8 +150,9 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 	caller := apiauth.MustCaller(ctx)
 	// Both halves must pass: write the event (coarse) and write the task it is
 	// being detached from (proposal §7).
-	if !caller.Scopes.Allow(authscope.OpEventWrite) ||
-		!caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId)) {
+	allowed := caller.Scopes.Allow(authscope.OpEventWrite) &&
+		caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId))
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event task"))
 	}
 	// Verify task ownership
@@ -185,7 +191,8 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 
 func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpEventRead) {
+	allowed := caller.Scopes.Allow(authscope.OpEventRead)
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read event"))
 	}
 	taskIDs, err := s.store.ListEventTasks(ctx, nil, req.EventId, caller.OrgID)
@@ -197,7 +204,8 @@ func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTask
 
 func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.TaskId)) {
+	allowed := caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.TaskId))
+	if !allowed {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID)

@@ -22,12 +22,14 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 	// from being a fail-open no-op (the completeness test relies on every RPC
 	// performing a scope check).
 	if len(req.Events) == 0 {
-		if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+		allowed := caller.Scopes.Allow(authscope.OpTaskWrite)
+		if !allowed {
 			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 		}
 	}
 	for _, ev := range req.Events {
-		if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(ev.TaskId)) {
+		allowed := caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(ev.TaskId))
+		if !allowed {
 			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events for task"))
 		}
 	}
