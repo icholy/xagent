@@ -3,15 +3,12 @@ package runner
 import (
 	"cmp"
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math"
-	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"time"
@@ -38,7 +35,7 @@ import (
 type Runner struct {
 	docker      *client.Client
 	client      xagentclient.Client
-	proxy       *AgentProxy
+	serverURL   string
 	workspaces  *workspace.Config
 	runnerID    string
 	concurrency int64
@@ -49,13 +46,16 @@ type Runner struct {
 }
 
 type Options struct {
-	Client      xagentclient.Client
-	PrivateKey  ed25519.PrivateKey
+	Client xagentclient.Client
+	// ServerURL is the C2 URL injected into containers so the driver and the
+	// injected xagent MCP server connect directly to the C2. It is the runner's
+	// own configured --server value; the container reaches the same C2 the runner
+	// does. The runner authenticates the token-minting RPC with its own xat_ key.
+	ServerURL   string
 	Workspaces  *workspace.Config
 	Concurrency int
 	RunnerID    string
 	Log         *slog.Logger
-	SocketPath  string
 	Queue       *EventQueue
 }
 
@@ -87,20 +87,10 @@ func New(opts Options) (*Runner, error) {
 
 	log := cmp.Or(opts.Log, slog.Default())
 
-	proxy := NewProxy(AgentProxyOptions{
-		Client:     opts.Client,
-		PrivateKey: opts.PrivateKey,
-		Log:        log,
-		SocketPath: opts.SocketPath,
-	})
-	if err := proxy.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start proxy: %w", err)
-	}
-
 	return &Runner{
 		docker:      docker,
 		client:      opts.Client,
-		proxy:       proxy,
+		serverURL:   opts.ServerURL,
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
 		concurrency: concurrency,
@@ -121,10 +111,7 @@ func (r *Runner) WakeC() <-chan struct{} { return r.wake }
 func (r *Runner) Wake() { r.wake.Wake() }
 
 func (r *Runner) Close() error {
-	return errors.Join(
-		r.proxy.Close(),
-		r.docker.Close(),
-	)
+	return r.docker.Close()
 }
 
 // RegisterWorkspaces sends the available workspace names to the server.
@@ -387,11 +374,18 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		return "", fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	// Generate JWT for this task
-	token, err := r.proxy.TaskToken(task, ws.Capabilities)
+	// Mint the task token via the C2 rather than signing it locally: the runner
+	// supplies only the task id and capability flags and the server derives the
+	// task's workspace/runner/org from the row and signs a narrow app JWT. The
+	// driver and injected MCP server present it directly to the C2.
+	tokenResp, err := r.client.CreateTaskToken(ctx, &xagentv1.CreateTaskTokenRequest{
+		TaskId:       task.ID,
+		Capabilities: ws.Capabilities,
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to generate token: %w", err)
+		return "", fmt.Errorf("failed to create task token: %w", err)
 	}
+	token := tokenResp.Token
 
 	r.log.Info("creating container", "task", task.ID, "image", ws.Container.Image, "workspace", task.Workspace)
 
@@ -417,7 +411,7 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	cfg := ws.AgentConfig()
 	mcpArgs := []string{
 		"tool", "agent-mcp",
-		"--server", xagentclient.AgentSocketURL,
+		"--server", r.serverURL,
 		"--task", fmt.Sprint(task.ID),
 		"--runner", task.Runner,
 		"--workspace", task.Workspace,
@@ -436,12 +430,6 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		return "", fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Verify the proxy socket exists before creating the container.
-	// Docker creates a directory if the bind mount source doesn't exist.
-	if _, err := os.Stat(r.proxy.SocketPath()); err != nil {
-		return "", fmt.Errorf("proxy socket not found: %w", err)
-	}
-
 	b := &containerbuild.Builder{
 		Docker:    r.docker,
 		Name:      fmt.Sprintf("xagent-%d", task.ID),
@@ -453,20 +441,14 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		},
 		Cmd: []string{
 			"/usr/local/bin/xagent", "driver",
-			"--server", xagentclient.AgentSocketURL,
+			"--server", r.serverURL,
 			"--task", fmt.Sprint(task.ID),
 			"--token", token,
 		},
 		Env: []string{
 			fmt.Sprintf("XAGENT_TASK_ID=%d", task.ID),
 			fmt.Sprintf("XAGENT_TOKEN=%s", token),
-			"XAGENT_SERVER=" + xagentclient.AgentSocketURL,
-		},
-		// Bind-mount the socket's parent directory rather than the socket
-		// file itself: the directory inode survives runner restarts, so the
-		// socket re-created inside it remains reachable from the container.
-		Binds: []string{
-			filepath.Dir(r.proxy.SocketPath()) + ":" + path.Dir(xagentclient.AgentSocketPath),
+			"XAGENT_SERVER=" + r.serverURL,
 		},
 		Files: []containerbuild.File{
 			{Path: "/usr/local/bin/xagent", Data: binData, Mode: 0755},
