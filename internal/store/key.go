@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
@@ -22,6 +23,7 @@ func (s *Store) CreateKey(ctx context.Context, tx *sql.Tx, key *model.Key) error
 		OrgID:     key.OrgID,
 		ExpiresAt: expiresAt,
 		CreatedAt: now,
+		Scopes:    scopeStrings(key.Scopes),
 	})
 	if err != nil {
 		return err
@@ -71,11 +73,40 @@ func toModelKey(row sqlc.Key) *model.Key {
 		TokenHash: row.TokenHash,
 		OrgID:     row.OrgID,
 		CreatedAt: row.CreatedAt,
+		Scopes:    parseScopes(row.Scopes),
 	}
 	if row.ExpiresAt.Valid {
 		key.ExpiresAt = &row.ExpiresAt.Time
 	}
 	return key
+}
+
+// scopeStrings flattens a scope set into the wire-grammar strings stored in the
+// scopes text[] column. A nil/empty set becomes a nil slice, stored as SQL NULL
+// so the column round-trips back to a nil Scopes.
+func scopeStrings(scopes authscope.Scopes) []string {
+	if len(scopes) == 0 {
+		return nil
+	}
+	strs := make([]string, len(scopes))
+	for i, s := range scopes {
+		strs[i] = s.String()
+	}
+	return strs
+}
+
+// parseScopes parses the scopes column back into a scope set. A NULL/empty column
+// yields a nil Scopes; callers apply their own default (see StoreKeyValidator). A
+// malformed entry is dropped to nil rather than failing the read.
+func parseScopes(strs []string) authscope.Scopes {
+	if len(strs) == 0 {
+		return nil
+	}
+	scopes, err := authscope.ParseScopes(strs)
+	if err != nil {
+		return nil
+	}
+	return scopes
 }
 
 func toModelKeys(rows []sqlc.Key) []*model.Key {

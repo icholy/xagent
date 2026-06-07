@@ -28,7 +28,15 @@ func (v *StoreKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*a
 	if key.IsExpired() {
 		return nil, fmt.Errorf("key expired")
 	}
-	return &apiauth.UserInfo{OrgID: key.OrgID, Name: key.Name, Type: apiauth.AuthTypeKey}, nil
+	// Scopes are populated from the keys.scopes column, which the migration
+	// defaults to the admin wildcard for every existing and future row, so no
+	// runtime default is needed here.
+	return &apiauth.UserInfo{
+		OrgID:  key.OrgID,
+		Name:   key.Name,
+		Type:   apiauth.AuthTypeKey,
+		Scopes: key.Scopes,
+	}, nil
 }
 
 // StoreUserResolver implements apiauth.UserResolver using the store.

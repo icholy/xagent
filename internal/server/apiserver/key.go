@@ -7,6 +7,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
@@ -28,6 +29,11 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 		TokenHash: apiauth.HashKey(rawKey),
 		OrgID:     caller.OrgID,
 		ExpiresAt: expiresAt,
+		// Every key is admin (*.*) for now; there is intentionally no way to
+		// choose narrower scopes yet (later phase).
+		// TODO: limit API keys to a smaller scope surface, and expose
+		// UI-configurable scopes here if a need arises.
+		Scopes: authscope.Admin(),
 	}
 	if err := s.store.CreateKey(ctx, nil, key); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

@@ -72,7 +72,8 @@ CREATE TABLE public.keys (
     token_hash text NOT NULL,
     org_id bigint NOT NULL,
     expires_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    scopes text[] DEFAULT ARRAY['*.*'::text]
 );
 
 
@@ -701,4 +702,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260517000001'),
     ('20260517174647'),
     ('20260523000001'),
-    ('20260601000001');
+    ('20260601000001'),
+    ('20260607000001');
