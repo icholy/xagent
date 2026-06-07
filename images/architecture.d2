@@ -1,6 +1,12 @@
 direction: down
 
 ui: Web UI
+usermcp: MCP Server
+
+events: External Events {
+  github: GitHub
+  jira: Jira
+}
 
 backend: Backend {
   server: XAgent Server
@@ -20,6 +26,9 @@ container: Docker Container {
 }
 
 ui -> backend.server
+usermcp -> backend.server: create / manage tasks
+events.github -> backend.server: webhook
+events.jira -> backend.server: webhook
 runner -> backend.server: fetch/update tasks, mint task token
 runner -> container: manages lifecycle (injects C2 URL + token)
 container -> backend.server: driver + MCP connect directly (task token)
