@@ -76,7 +76,7 @@ single most important property:
   meaning* to operation segments or predicate keys. It is a pure pattern matcher
   over `(operation-path, attributes)`.
 - An **application layer** (the operation taxonomy in `authscope/task.go` plus the
-  per-RPC mapping in the handlers/interceptor) that owns what the segments mean,
+  per-RPC mapping in the handlers) that owns what the segments mean,
   which attributes exist, and how a request becomes an `(op, attrs)` pair. This is
   the *only* place domain knowledge lives.
 
@@ -347,12 +347,13 @@ scopes.Allow(authscope.OpTaskRead,
   key absent ⇒ unconstrained). ✅
 - Unrelated task: matches neither → denied. ✅
 
-OR-across-scopes is exactly right. The `task.parent` predicate is **resolved
-against the loaded row at request time** — that is how relationship access works
-without the engine needing a graph: load the row (org-scoped), then ask `Allow`
-about the row's attributes. **Loading the row before the check is required whenever
-an attribute comes from the stored entity**, and is the pattern every row-dependent
-RPC follows (§7).
+OR-across-scopes is exactly right. On the **agent path**, the `task.parent`
+predicate is **resolved against the loaded row at request time** — that is how
+relationship access works without the engine needing a graph: `AgentFilter` loads
+the row (org-scoped), then asks `Allow` about the row's attributes. This own-OR-
+child, load-then-check pattern is specific to the agent caller (which *is* a task
+with children); the API-caller surface deliberately does not use it and stays
+request-only (§7).
 
 **Failure mode if we required AND across all held scopes:** a caller holding both
 `task.read:{"task.id":"42"}` and `task.read:{"task.parent":"42"}` could read
@@ -385,7 +386,15 @@ identical either way.** "Which attributes matter" lives in the minted scope, not
 the handler. Combined with §6a (the minter fully constrains), correctness is the
 minter's responsibility and the handler stays domain-light.
 
-### 7. RPC → required-permission mapping (full `XAgentService`)
+### 7. RPC → required-permission mapping (API-caller surface)
+
+This section maps the **API-caller surface** of `XAgentService` — the methods as
+called by users, `xat_` keys, app JWTs, and cookie sessions. The **agent-caller
+side is out of scope and unchanged**: `internal/agentmcp.AgentFilter`, the runner
+minter `agentauth.Scopes`, and the agent path's own-OR-child access via
+`task.parent` stay exactly as merged in PR #902. Where the agent path loads a row
+and authorizes on `task.parent`, the API surface deliberately does not — see
+below.
 
 This per-RPC mapping **is the application taxonomy** — the only place operation
 segments and attribute names carry meaning. Authorization for an API caller is
@@ -394,19 +403,31 @@ two independent gates, both of which must pass:
 1. **Tenancy (unchanged):** the target belongs to `caller.OrgID`, enforced by the
    existing `s.store.…(ctx, nil, …, caller.OrgID)` calls. Cross-org access is
    impossible regardless of scope.
-2. **Capability (new):** `caller.Scopes.Allow(op, attrs…)` returns true.
+2. **Capability (new):** `caller.Scopes.Allow(op, attrs…)` returns true, checked
+   at the **top of the handler on request data only**.
 
-Each RPC is one of two shapes, exactly as on the agent side:
+**Every API scope check is request-only.** The op and attributes are built
+entirely from the request message (and constant `Op*` paths); no handler loads a
+row to *derive* a scope attribute. Concretely:
 
-- **Request-only** — every attribute is in the request (or the op is a bare
-  capability). Checkable *before* the handler runs.
-- **Row-dependent** — a predicate references a stored attribute (a task's
-  `parent`, an org's `owner`). The row must be loaded org-scoped *first*, then
-  `Allow` is called — mirroring `AgentFilter.GetTask`/`UpdateTask`.
+- **Per-instance task RPCs** authorize on **`task.id` from the request** — a
+  single top-gate, no own-OR-child, no post-load. A caller either holds a scope
+  covering that task id (or an unconstrained `task.read`/`task.write`/`*.*`) or it
+  is denied.
+- **Collection reads** authorize on the **coarse op with no instance predicate**;
+  only an unconstrained `task.read` (or `*.*`) matches, since a request with no
+  `task.id` attribute fails any id-constrained scope (the predicate-vs-request
+  rule, §5).
+- **`task.parent` appears only in `task.create`** on the API surface (the
+  parent+workspace+runner conjunction). It is *not* used for API reads/writes.
+
+The only post-load logic anywhere on the API surface is the **org-owner role
+guards** and the **archived state guard** — and those are *not* scope checks
+(below).
 
 #### New `Op*` paths and attribute keys the taxonomy needs
 
-Beyond the task-caller set already in `task.go`, the full service needs (names
+Beyond the task-caller set already in `task.go`, the API surface needs (names
 illustrative; same `resource.action` convention):
 
 ```go
@@ -439,54 +460,69 @@ their task's op; `routing_rule`/settings reads and writes are `org.read`/
 
 #### The full table
 
-| RPC | Operation | Attributes | Shape | Notes |
-|---|---|---|---|---|
-| `Ping` | — | — | exempt | no caller data; interceptor allowlists it |
-| `GetProfile` | — | — | exempt | the caller's own identity/orgs; gated by *authenticated user*, not an org scope (see "identity axis" below) |
-| `ListTasks` | `task.read` | — | request-only | full-org list ⇒ needs an unconstrained `task.read` (`*.*` qualifies); a `{task.id:N}`-only scope does **not** authorize a list |
-| `ListRunnerTasks` | `task.read` | — | request-only | filtered by `req.Runner` but returns tasks; treat as org read |
-| `ListChildTasks` | `task.read` | `task.parent=req.ParentId` | request-only | identical to `AgentFilter.ListChildTasks` |
-| `CreateTask` | `task.create` | `task.parent=req.Parent`, `task.workspace=req.Workspace`, `task.runner=req.Runner` | request-only | `req.Parent==0` for a top-level task; minter must fully constrain (§6a) |
-| `GetTask` | `task.read` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | own (`{id}`) OR child (`{parent}`) |
-| `GetTaskDetails` | `task.read` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | as `GetTask` |
-| `UpdateTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | + archived state guard (below) |
-| `ArchiveTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | lifecycle ⇒ write |
-| `UnarchiveTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | |
-| `CancelTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | |
-| `RestartTask` | `task.write` | `task.id=row.Id`, `task.parent=row.Parent` | **row-load** | |
-| `UploadLogs` | `task.write` | `task.id=req.TaskId` | request-only | as `AgentFilter` |
-| `ListLogs` | `task.read` | `task.id=req.TaskId`, then `{id,parent}` of row | **hybrid** | own-task fast path by id, child leg loads row — copy `AgentFilter.ListLogs` |
-| `CreateLink` | `task.write` | `task.id=req.TaskId` | request-only | as `AgentFilter` |
-| `ListLinks` | `task.read` | `task.id=req.TaskId` | request-only | id-only; child-scoped read would need a row-load (note) |
-| `ListEvents` | `event.read` | — | request-only | full-org list |
-| `CreateEvent` | `event.create` | — | request-only | |
-| `GetEvent` | `event.read` | `event.id=req.Id` | request-only | |
-| `DeleteEvent` | `event.write` | `event.id=req.Id` | request-only | |
-| `AddEventTask` | `event.write` **and** `task.write` | `event.id=req.EventId`; `task.id=req.TaskId` | request-only | **two** `Allow` calls, both must pass (mirrors the dual `HasEvent`/`HasTask`) |
-| `RemoveEventTask` | `event.write` **and** `task.write` | `event.id=req.EventId`; `task.id=req.TaskId` | request-only | as above |
-| `ListEventTasks` | `event.read` | `event.id=req.EventId` | request-only | |
-| `ListEventsByTask` | `task.read` | `task.id=req.TaskId` | request-only | keyed on the task |
-| `SubmitRunnerEvents` | `task.write` | per-event `task.id=ev.TaskId` | request-only | all-or-nothing batch, exactly as `AgentFilter` |
-| `RegisterWorkspaces` | `workspace.write` | `workspace.runner=req.RunnerId` | request-only | runner-facing |
-| `ListWorkspaces` | `workspace.read` | — | request-only | |
-| `ClearWorkspaces` | `workspace.write` | `workspace.runner=req.RunnerId` (omit when empty) | request-only | empty `req.RunnerId` ⇒ org-wide clear ⇒ no instance attr ⇒ needs unconstrained `workspace.write` |
-| `CreateKey` | `key.create` | — | request-only | |
-| `ListKeys` | `key.read` | — | request-only | |
-| `DeleteKey` | `key.write` | `key.id=req.Id` | request-only | `key.id` is a string UUID |
-| `UnlinkGitHubAccount` | `account.write` | — | request-only | identity axis (caller's own user) |
-| `UnlinkAtlassianAccount` | `account.write` | — | request-only | identity axis |
-| `LinkGitHubInstallation` | `org.write` | — | **row-load** | mutates org settings; the existing "same GitHub user started the install" check stays as an identity guard |
-| `CreateOrg` | `org.create` | — | request-only | org axis (no current-org instance — see below) |
-| `ListOrgs` | `org.read` | — | request-only | cross-org by membership — org axis |
-| `DeleteOrg` | `org.delete` | — | **row-load** | + owner role guard; `req.Id` is an org id (tenancy axis), never a scope predicate |
-| `AddOrgMember` | `org.write` | — | **row-load** | + owner role guard |
-| `RemoveOrgMember` | `org.write` | — | **row-load** | + owner role guard |
-| `ListOrgMembers` | `org.read` | — | request-only | |
-| `GetOrgSettings` | `org.read` | — | request-only | |
-| `GenerateAtlassianWebhookSecret` | `org.write` | — | request-only | |
-| `GetRoutingRules` | `org.read` | — | request-only | folded into `org` (coarse) |
-| `SetRoutingRules` | `org.write` | — | request-only | folded into `org` (coarse) |
-| `CreateGitHubToken` | `github_token.create` | — | request-only | server returns `Unimplemented`; only the runner proxy / `AgentFilter` serves it |
+Every row is a single top-of-handler `Allow` on request data. "Guards after
+`Allow`" lists the non-scope checks (role / state) that the handler keeps *after*
+the scope gate.
+
+| RPC | Operation | Attributes (from request) | Guards after `Allow` |
+|---|---|---|---|
+| `Ping` | — (exempt) | — | — |
+| `GetProfile` | — (exempt) | — | caller's own identity/orgs; gated by *authenticated user* only (see "identity axis") |
+| `ListTasks` | `task.read` | — (coarse list) | — |
+| `ListRunnerTasks` | `task.read` | — (coarse list) | — |
+| `ListChildTasks` | `task.read` | — (coarse list; **no** `task.parent`) | — |
+| `CreateTask` | `task.create` | `task.parent=req.Parent`, `task.workspace=req.Workspace`, `task.runner=req.Runner` | — (`req.Parent==0` for top-level) |
+| `GetTask` | `task.read` | `task.id=req.Id` | — |
+| `GetTaskDetails` | `task.read` | `task.id=req.Id` | — |
+| `UpdateTask` | `task.write` | `task.id=req.Id` | archived state guard |
+| `ArchiveTask` | `task.write` | `task.id=req.Id` | — |
+| `UnarchiveTask` | `task.write` | `task.id=req.Id` | — |
+| `CancelTask` | `task.write` | `task.id=req.Id` | — |
+| `RestartTask` | `task.write` | `task.id=req.Id` | — |
+| `UploadLogs` | `task.write` | `task.id=req.TaskId` | — |
+| `ListLogs` | `task.read` | `task.id=req.TaskId` | — |
+| `CreateLink` | `task.write` | `task.id=req.TaskId` | — |
+| `ListLinks` | `task.read` | `task.id=req.TaskId` | — |
+| `ListEventsByTask` | `task.read` | `task.id=req.TaskId` | — |
+| `ListEvents` | `event.read` | — (coarse list) | — |
+| `CreateEvent` | `event.create` | — | — |
+| `GetEvent` | `event.read` | `event.id=req.Id` | — |
+| `DeleteEvent` | `event.write` | `event.id=req.Id` | — |
+| `AddEventTask` | `event.write` **and** `task.write` | `event.id=req.EventId`; `task.id=req.TaskId` | — (two `Allow` calls, both must pass) |
+| `RemoveEventTask` | `event.write` **and** `task.write` | `event.id=req.EventId`; `task.id=req.TaskId` | — |
+| `ListEventTasks` | `event.read` | `event.id=req.EventId` | — |
+| `SubmitRunnerEvents` | `task.write` | per-event `task.id=ev.TaskId` (all-or-nothing) | — |
+| `RegisterWorkspaces` | `workspace.write` | `workspace.runner=req.RunnerId` | — |
+| `ListWorkspaces` | `workspace.read` | — | — |
+| `ClearWorkspaces` | `workspace.write` | `workspace.runner=req.RunnerId` (omit when empty ⇒ coarse) | — |
+| `CreateKey` | `key.create` | — | — |
+| `ListKeys` | `key.read` | — | — |
+| `DeleteKey` | `key.write` | `key.id=req.Id` | — |
+| `UnlinkGitHubAccount` | `account.write` | — | — |
+| `UnlinkAtlassianAccount` | `account.write` | — | — |
+| `LinkGitHubInstallation` | `org.write` | — (coarse) | "same GitHub user started the install" identity guard |
+| `CreateOrg` | `org.create` | — | — |
+| `ListOrgs` | `org.read` | — | — |
+| `DeleteOrg` | `org.delete` | — (coarse) | owner role guard |
+| `AddOrgMember` | `org.write` | — (coarse) | owner role guard |
+| `RemoveOrgMember` | `org.write` | — (coarse) | owner role guard |
+| `ListOrgMembers` | `org.read` | — | — |
+| `GetOrgSettings` | `org.read` | — | — |
+| `GenerateAtlassianWebhookSecret` | `org.write` | — | — |
+| `GetRoutingRules` | `org.read` | — | — |
+| `SetRoutingRules` | `org.write` | — | — |
+| `CreateGitHubToken` | `github_token.create` | — | server returns `Unimplemented`; only the runner/`AgentFilter` serves it |
+
+#### Why dropping `task.parent` from the API path is sound
+
+The agent path needs own-OR-child because an agent legitimately reads/writes its
+children and is identified by *its* task id, so "is this row my child?" must be
+answered against the loaded row. An **API caller is not a task** — it is scoped by
+what its credential grants, expressed directly as task ids (or the coarse op).
+There is no "my children" relationship to resolve, so there is nothing to load:
+the request's `task.id` is the whole input to the gate. This is what lets the
+entire API surface be request-only with **zero post-load scope checks**, and it
+keeps the API and agent authorization paths cleanly separate.
 
 #### The identity / org axis is not "within-org"
 
@@ -494,101 +530,92 @@ A handful of RPCs are **not** scoped within a single org and so sit awkwardly
 against the "scopes are intra-org capability" rule (§2):
 
 - **Identity-axis** (`GetProfile`, `UnlinkGitHubAccount`,
-  `UnlinkAtlassianAccount`) act on the *caller's own user*, not on org-owned
-  rows. These are governed by *being an authenticated user* (the existing
-  `RequireUserInterceptor`); the `account.write` op is a thin capability for the
-  unlinks, with no instance and no org predicate. `GetProfile` carries no scope.
-- **Org-axis** (`CreateOrg`, `ListOrgs`, `DeleteOrg`, member add/remove) act on
-  the org-tenancy axis itself. `CreateOrg` has no current-org context; `ListOrgs`
-  is intentionally cross-org (by membership); `DeleteOrg` takes an *org id* in the
+  `UnlinkAtlassianAccount`) act on the *caller's own user*, not on org-owned rows.
+  These are governed by *being an authenticated user*; the `account.write` op is a
+  thin capability for the unlinks, with no instance and no org predicate.
+  `GetProfile` carries no scope (exempt).
+- **Org-axis** (`CreateOrg`, `ListOrgs`, `DeleteOrg`, member add/remove) act on the
+  org-tenancy axis itself. `CreateOrg` has no current-org context; `ListOrgs` is
+  intentionally cross-org (by membership); `DeleteOrg` takes an *org id* in the
   request, and since an org id is the tenancy axis it is **never** encoded as a
-  scope predicate. The real gate on these is the **org `role`** owner-check
-  already in the handlers (`org.Owner != caller.ID`), which we keep as an
-  orthogonal guard (below). The `org.*` ops exist mainly so an admin grant covers
-  them and so Phase 3 can later narrow non-owners.
+  scope predicate. The real gate on these is the **org `role`** owner-check already
+  in the handlers (`org.Owner != caller.ID`), kept as an orthogonal guard (below).
+  The coarse `org.*` ops exist mainly so an admin grant covers them and so Phase 3
+  can later narrow non-owners.
 
-Because these escape the within-org scope model, the proposal treats them as
-explicitly-tagged exemptions/coarse-capabilities rather than forcing an org id
-into a predicate. Reconciling org `role` with scopes is Open Question #5.
+Reconciling org `role` with scopes is Open Question #5.
 
-#### Role guards and state guards coexist with scope checks
+#### Role guards and state guards are not scope checks
 
-Two existing kinds of check are **not** capability questions and stay as
-request-time guards evaluated *after* the scope check passes — exactly as
-`AgentFilter.UpdateTask` keeps the archived guard after its `Allow`:
+Two existing kinds of check are **not** capability questions. They stay in the
+handler as separate checks evaluated *after* the `Allow`, exactly as
+`AgentFilter.UpdateTask` keeps its archived guard after the scope check:
 
-- **State guards** — `UpdateTask`'s `if row.Archived { … }`: mutable runtime
-  state, not a token-scopable property.
+- **State guard** — `UpdateTask`'s `if task.Archived { … }`: mutable runtime state,
+  not a token-scopable property.
 - **Role guards** — the org-management owner check (`org.Owner != caller.ID` in
   `DeleteOrg`/`AddOrgMember`/`RemoveOrgMember`) and `LinkGitHubInstallation`'s
-  "same GitHub user" check: these are identity/role facts resolved against loaded
-  rows. They remain where they are; scopes do not subsume them in this proposal.
+  "same GitHub user" check: identity/role facts resolved against loaded rows. These
+  *do* load a row, but the load is for the guard, not for the scope check — the
+  scope gate already ran at the top of the handler on request data.
 
 Keeping state and role out of the grammar keeps `authscope` a pure function of
 (scopes, op, attributes) and exhaustively testable.
 
-### 8. Enforcement mechanism: interceptor vs. per-handler
+### 8. Enforcement mechanism: explicit per-handler checks
 
-Two mechanisms are available, and the right answer is to use **both**, split by
-RPC shape:
-
-**A central Connect interceptor** holds a static table from RPC procedure
-(`req.Spec().Procedure`) to `(op []string, extractor func(req) []authscope.Attr)`
-and, before the handler runs, calls `apiauth.Caller(ctx).Scopes.Allow(op, attrs…)`,
-returning `connect.CodePermissionDenied` on failure. This is ideal for the ~30
-**request-only** RPCs: the check is declarative, lives in one auditable place
-next to the taxonomy, and a new request-only RPC is one table row. It composes
-with `RequireUserInterceptor` (which still runs first and guarantees a caller).
-
-**Per-handler checks** (the `AgentFilter` pattern) are *required* for the ~12
-**row-dependent** RPCs: the interceptor cannot see a task's `parent` or an org's
-`owner` because those come from a row the handler loads. These RPCs call
-`Allow` in the handler, right after the org-scoped load — copying
-`AgentFilter.GetTask`/`UpdateTask` almost verbatim.
-
-To avoid a silent hole, the interceptor classifies **every** procedure into
-exactly one of three buckets and fails closed on anything unlisted:
-
-| Bucket | Interceptor behavior |
-|---|---|
-| request-only (has an entry) | build attrs, call `Allow`, deny on failure |
-| handler-enforced (row-dependent) | pass through; the handler **must** call `Allow` itself |
-| exempt (`Ping`, `GetProfile`) | pass through, no check |
-| *anything else* | **deny** (`CodePermissionDenied`) — default-deny on unknown procedures |
-
-Recommendation: **hybrid, interceptor-first.** A pure interceptor cannot
-authorize row-dependent RPCs; a pure per-handler approach would duplicate the
-trivial request-only check across ~30 handlers and scatter the taxonomy. The
-hybrid keeps the bulk declarative and confines hand-written checks to the dozen
-RPCs that genuinely need a loaded row — which is also exactly the set
-`AgentFilter` already demonstrates.
-
-**Interaction with org scoping.** Scopes are *within-org*; org is a separate
-axis and its enforcement does **not** move. The store calls keep taking
-`caller.OrgID`, so:
-
-- For request-only RPCs the interceptor's `Allow` only refines capability; the
-  org boundary is still applied by the handler's store call.
-- For row-dependent RPCs the org-scoped load runs first and returns `NotFound`
-  for a row in another org **before** `Allow` is ever consulted — so a scope can
-  only narrow access *inside* the caller's org and can never widen it across
-  orgs, by construction. This is why no `Op`/attribute ever encodes an org id.
-
-### State-based checks coexist as request-time guards
-
-Some rules are about *resource state*, not identity/capability, and cannot live
-in a scope. The clearest is `UpdateTask`'s "cannot update archived task"
-(`AgentFilter.UpdateTask`, and the analogous API handler): whether a task is
-archived is mutable runtime state. These remain ordinary request-time guards,
-evaluated **after** scope authorization passes:
+**Every API handler authorizes inline, as its first statement**, against request
+data — no central interceptor and no RPC→target table:
 
 ```go
-// 1. capability: scopes.Allow(authscope.OpTaskWrite, WithTaskID(row.Id), WithTaskParent(row.Parent))
-// 2. state guard: if row.Archived { return errPermissionDenied("cannot update archived task") }
+func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+    caller := apiauth.MustCaller(ctx)
+    if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.Id)) {
+        return nil, errPermissionDenied("cannot read task")
+    }
+    // … existing org-scoped store call, unchanged …
+}
 ```
 
-Scope evaluation answers "may this caller, in principle, write this task?"; the
-state guard answers "is the task currently writable?" Both must pass.
+This mirrors the style `AgentFilter` already uses, and because §7 made every API
+scope check request-only, the op and attributes are always built straight from
+the request message right where the handler reads those fields. Role guards (the
+org-owner check) and state guards (`UpdateTask`'s archived check) remain as
+**separate checks after the `Allow`** — they are not scope checks and the
+evaluator never sees them.
+
+**Why no interceptor.** An interceptor only pays off when it can authorize from
+the request generically (a declarative RPC→op table). It would still be unable to
+own the role/state guards, so those would live in handlers anyway — leaving
+authorization split across two places. With every check now a one-line top-gate on
+request fields, a central table buys nothing over the inline call and adds a
+second mechanism to keep in sync with the proto. The inline form keeps each RPC's
+authorization next to the request fields it is built from.
+
+**The safety net is a completeness test, not a default-deny interceptor.** Without
+an interceptor there is no single chokepoint that fails closed on an unmapped
+method, so a newly added RPC that forgets its `Allow` ships **fail-open**
+(authorized for everyone). A required test closes that gap by enumerating every
+`XAgentService` method (via the generated service descriptor / handler interface)
+and asserting, for each:
+
+1. **it performs a scope check** — a caller holding **empty scopes** is denied
+   with `connect.CodePermissionDenied` (the exempt methods `Ping`/`GetProfile` are
+   an explicit, reviewed allowlist in the test); and
+2. the method is present in the test's own enumeration, so adding an RPC without
+   updating the test fails to compile / fails the test.
+
+This is the explicit-model equivalent of "fail closed on an unknown procedure":
+the compiler-plus-test guarantees no method silently ships unauthorized.
+
+**Interaction with org scoping.** Scopes are *within-org*; org is a separate axis
+and its enforcement does **not** move. The store calls keep taking `caller.OrgID`,
+so the two gates compose: the top-of-handler `Allow` refines *capability* on the
+request's ids, and the existing org-scoped store call enforces *tenancy*. A
+`task.id` belonging to another org passes the caller's `*.*`/id scope but the
+org-scoped store call returns `NotFound`, so a scope can only narrow access inside
+the caller's org and never widens it across orgs. This is why no `Op`/attribute
+ever encodes an org id.
 
 ## Migration / phasing — behavior-preserving first
 
@@ -627,12 +654,11 @@ Three changes, none of which denies any existing request:
    into `UserInfo.Scopes`. As a belt-and-suspenders transitional default,
    `ValidateKey` treats a `NULL`/empty column as `authscope.Admin()` so an
    un-backfilled row is never locked out.
-2. **Install the authorization interceptor + per-handler checks** for the whole
-   service per §7/§8. Because the *entire* surface is mapped here, the
-   interceptor is **default-deny on unknown procedures from day one** — there is
-   no "unmapped RPC" gap to paper over.
-3. **Confirm** cookie/app minting of `Admin()` (already in place from #902) and
-   that the `Ping`/`GetProfile` exemptions are listed.
+2. **Add the top-of-handler `Allow` to every API handler** per §7/§8, plus the
+   completeness test that asserts every method scope-checks (empty-scopes caller →
+   `PermissionDenied`, with `Ping`/`GetProfile` an explicit allowlist). Every
+   check still passes because every caller holds `*.*`.
+3. **Confirm** cookie/app minting of `Admin()` (already in place from #902).
 
 **Exactly what changes:** a control-flow check is added to every handler/RPC; it
 always passes. One schema column is added and backfilled to admin. **No 403
@@ -680,7 +706,7 @@ backfill), never as an implicit fallback.
 | Step | Changes effective access? |
 |---|---|
 | Phase 1: key `scopes` column + backfill `*.*` | **No** — every key still admin |
-| Phase 1: interceptor + per-handler checks | **No** — every caller holds `*.*`; every `Allow` passes |
+| Phase 1: per-handler `Allow` + completeness test | **No** — every caller holds `*.*`; every `Allow` passes |
 | Phase 2: narrow scopes on *new* keys | **Yes, opt-in** — only keys created narrow |
 | Phase 3: role-derived session/app scopes | **Yes** — non-owner members narrow |
 | Phase 4: remove admin fallbacks | **Yes** — scopeless callers now denied |
