@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -11,9 +12,9 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func setupSession(t *testing.T, client *xagentclient.ClientMock) *mcp.ClientSession {
+func setupSession(t *testing.T, client *xagentclient.ClientMock, opts ...Option) *mcp.ClientSession {
 	t.Helper()
-	srv := NewServer(client)
+	srv := NewServer(client, opts...)
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	_, err := srv.Connect(t.Context(), serverTransport, nil)
@@ -131,6 +132,91 @@ func TestCreateTask_UsesServerURL(t *testing.T) {
 		"status":    "PENDING",
 		"url":       "https://xagent.example.com/ui/tasks/42?org=7",
 	})
+}
+
+func TestCreateTask_ArchiveAfterParam(t *testing.T) {
+	// With no server default: a provided param is parsed and forwarded, and
+	// omitting it leaves archive_after unset.
+	var got *xagentv1.CreateTaskRequest
+	client := &xagentclient.ClientMock{
+		CreateTaskFunc: func(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
+			got = req
+			return &xagentv1.CreateTaskResponse{
+				Task: &xagentv1.Task{Id: 1, Workspace: "ws", Status: xagentv1.TaskStatus_PENDING},
+			}, nil
+		},
+	}
+	session := setupSession(t, client)
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"workspace":     "ws",
+			"instruction":   "do it",
+			"runner":        "r1",
+			"archive_after": "30m",
+		},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
+	assert.Assert(t, got.ArchiveAfter != nil)
+	assert.Equal(t, got.ArchiveAfter.AsDuration(), 30*time.Minute)
+
+	got = nil
+	result, err = session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"workspace":   "ws",
+			"instruction": "do it",
+			"runner":      "r1",
+		},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
+	assert.Assert(t, got.ArchiveAfter == nil, "archive_after should be unset when neither param nor default is set")
+}
+
+func TestCreateTask_DefaultArchiveAfter(t *testing.T) {
+	// With a server default: it applies when the param is omitted, and the
+	// per-call param overrides it.
+	var got *xagentv1.CreateTaskRequest
+	client := &xagentclient.ClientMock{
+		CreateTaskFunc: func(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
+			got = req
+			return &xagentv1.CreateTaskResponse{
+				Task: &xagentv1.Task{Id: 1, Workspace: "ws", Status: xagentv1.TaskStatus_PENDING},
+			}, nil
+		},
+	}
+	session := setupSession(t, client, WithDefaultArchiveAfter(time.Hour))
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"workspace":   "ws",
+			"instruction": "do it",
+			"runner":      "r1",
+		},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
+	assert.Assert(t, got.ArchiveAfter != nil)
+	assert.Equal(t, got.ArchiveAfter.AsDuration(), time.Hour)
+
+	got = nil
+	result, err = session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"workspace":     "ws",
+			"instruction":   "do it",
+			"runner":        "r1",
+			"archive_after": "-1s",
+		},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
+	assert.Assert(t, got.ArchiveAfter != nil)
+	assert.Equal(t, got.ArchiveAfter.AsDuration(), -time.Second)
 }
 
 func TestListTasks_UsesTaskURLFromResponse(t *testing.T) {
