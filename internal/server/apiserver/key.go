@@ -31,6 +31,8 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 		ExpiresAt: expiresAt,
 		// Every key is admin (*.*) for now; there is intentionally no way to
 		// choose narrower scopes yet (later phase).
+		// TODO: limit API keys to a smaller scope surface, and expose
+		// UI-configurable scopes here if a need arises.
 		Scopes: authscope.Admin(),
 	}
 	if err := s.store.CreateKey(ctx, nil, key); err != nil {
