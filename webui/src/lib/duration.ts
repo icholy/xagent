@@ -12,7 +12,7 @@ export function durationFromHours(value: string): Duration | undefined {
 }
 
 // hoursFromDuration is the inverse of durationFromHours: it renders a stored
-// Duration back to the whole-hours string the archive-after Select uses, or ''
+// Duration back to the whole-hours string the auto-archive Select uses, or ''
 // (never) when unset or non-positive.
 export function hoursFromDuration(d: Duration | undefined): string {
   if (!d) return ''

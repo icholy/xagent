@@ -58,13 +58,13 @@ func TestGetTask(t *testing.T) {
 				Url:  "https://example.com/issue/2",
 			},
 		},
-		Status:       xagentv1.TaskStatus_PENDING,
-		Command:      xagentv1.TaskCommand_START,
-		Actions:      &xagentv1.TaskActions{Cancel: true},
-		Version:      1,
-		CreatedAt:    getResp.Task.CreatedAt, // Copy timestamps since we can't predict them
-		UpdatedAt:    getResp.Task.UpdatedAt,
-		ArchiveAfter: durationpb.New(0),
+		Status:      xagentv1.TaskStatus_PENDING,
+		Command:     xagentv1.TaskCommand_START,
+		Actions:     &xagentv1.TaskActions{Cancel: true},
+		Version:     1,
+		CreatedAt:   getResp.Task.CreatedAt, // Copy timestamps since we can't predict them
+		UpdatedAt:   getResp.Task.UpdatedAt,
+		AutoArchive: durationpb.New(0),
 	}
 
 	assert.DeepEqual(t, getResp.Task, expected, protocmp.Transform())
@@ -152,13 +152,13 @@ func TestCreateTask(t *testing.T) {
 				Url:  "https://example.com/issue/1",
 			},
 		},
-		Status:       xagentv1.TaskStatus_PENDING,
-		Command:      xagentv1.TaskCommand_START,
-		Actions:      &xagentv1.TaskActions{Cancel: true},
-		Version:      1,
-		CreatedAt:    resp.Task.CreatedAt,
-		UpdatedAt:    resp.Task.UpdatedAt,
-		ArchiveAfter: durationpb.New(0),
+		Status:      xagentv1.TaskStatus_PENDING,
+		Command:     xagentv1.TaskCommand_START,
+		Actions:     &xagentv1.TaskActions{Cancel: true},
+		Version:     1,
+		CreatedAt:   resp.Task.CreatedAt,
+		UpdatedAt:   resp.Task.UpdatedAt,
+		AutoArchive: durationpb.New(0),
 	}
 	assert.DeepEqual(t, resp.Task, expected, protocmp.Transform())
 }
@@ -443,7 +443,7 @@ func TestRestartTask_Permissions(t *testing.T) {
 	assert.ErrorContains(t, err, "not found")
 }
 
-func TestCreateTask_ArchiveAfter(t *testing.T) {
+func TestCreateTask_AutoArchive(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
@@ -451,22 +451,22 @@ func TestCreateTask_ArchiveAfter(t *testing.T) {
 
 	want := 90 * time.Minute
 	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:         "With archive",
-		Runner:       "test-runner",
-		Workspace:    "test-workspace",
-		ArchiveAfter: durationpb.New(want),
+		Name:        "With archive",
+		Runner:      "test-runner",
+		Workspace:   "test-workspace",
+		AutoArchive: durationpb.New(want),
 	})
 	assert.NilError(t, err)
-	assert.Assert(t, resp.Task.ArchiveAfter != nil, "ArchiveAfter should be set on response")
-	assert.Equal(t, resp.Task.ArchiveAfter.AsDuration(), want)
+	assert.Assert(t, resp.Task.AutoArchive != nil, "AutoArchive should be set on response")
+	assert.Equal(t, resp.Task.AutoArchive.AsDuration(), want)
 
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: resp.Task.Id})
 	assert.NilError(t, err)
-	assert.Assert(t, getResp.Task.ArchiveAfter != nil)
-	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), want)
+	assert.Assert(t, getResp.Task.AutoArchive != nil)
+	assert.Equal(t, getResp.Task.AutoArchive.AsDuration(), want)
 }
 
-func TestUpdateTask_ArchiveAfter(t *testing.T) {
+func TestUpdateTask_AutoArchive(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
@@ -478,21 +478,21 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	assert.Equal(t, createResp.Task.ArchiveAfter.AsDuration(), time.Duration(0), "unset means never auto-archive")
+	assert.Equal(t, createResp.Task.AutoArchive.AsDuration(), time.Duration(0), "unset means never auto-archive")
 
 	// Set a value via Update
 	want := 24 * time.Hour
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:           createResp.Task.Id,
-		ArchiveAfter: durationpb.New(want),
+		Id:          createResp.Task.Id,
+		AutoArchive: durationpb.New(want),
 	})
 	assert.NilError(t, err)
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
-	assert.Assert(t, getResp.Task.ArchiveAfter != nil)
-	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), want)
+	assert.Assert(t, getResp.Task.AutoArchive != nil)
+	assert.Equal(t, getResp.Task.AutoArchive.AsDuration(), want)
 
-	// Omitting ArchiveAfter on Update leaves the existing value untouched.
+	// Omitting AutoArchive on Update leaves the existing value untouched.
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
 		Id:   createResp.Task.Id,
 		Name: "just a rename",
@@ -500,30 +500,30 @@ func TestUpdateTask_ArchiveAfter(t *testing.T) {
 	assert.NilError(t, err)
 	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), want, "omitted ArchiveAfter preserves existing value")
+	assert.Equal(t, getResp.Task.AutoArchive.AsDuration(), want, "omitted AutoArchive preserves existing value")
 
 	// Setting to zero reverts to "never auto-archive" (omitted on the wire).
 	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:           createResp.Task.Id,
-		ArchiveAfter: durationpb.New(0),
+		Id:          createResp.Task.Id,
+		AutoArchive: durationpb.New(0),
 	})
 	assert.NilError(t, err)
 	getResp, err = srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), time.Duration(0), "zero duration means never auto-archive")
+	assert.Equal(t, getResp.Task.AutoArchive.AsDuration(), time.Duration(0), "zero duration means never auto-archive")
 }
 
-func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
+func TestUnarchiveTask_ClearsAutoArchive(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctx := createCtx(t, org)
 
 	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:         "Auto-archive task",
-		Runner:       "test-runner",
-		Workspace:    "test-workspace",
-		ArchiveAfter: durationpb.New(time.Hour),
+		Name:        "Auto-archive task",
+		Runner:      "test-runner",
+		Workspace:   "test-workspace",
+		AutoArchive: durationpb.New(time.Hour),
 	})
 	assert.NilError(t, err)
 
@@ -537,12 +537,12 @@ func TestUnarchiveTask_ClearsArchiveAfter(t *testing.T) {
 	_, err = srv.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 
-	// Unarchive should clear archive_after so the archiver doesn't immediately re-archive.
+	// Unarchive should clear auto_archive so the archiver doesn't immediately re-archive.
 	_, err = srv.UnarchiveTask(ctx, &xagentv1.UnarchiveTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 	assert.Assert(t, !getResp.Task.Archived, "task should be unarchived")
-	assert.Equal(t, getResp.Task.ArchiveAfter.AsDuration(), time.Duration(0), "ArchiveAfter should reset to 0 (never) on unarchive")
+	assert.Equal(t, getResp.Task.AutoArchive.AsDuration(), time.Duration(0), "AutoArchive should reset to 0 (never) on unarchive")
 }

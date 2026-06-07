@@ -15,9 +15,9 @@ func TestArchiver_Tick_ArchivesEligibleTask(t *testing.T) {
 	org := teststore.CreateOrg(t, st, nil)
 
 	task := teststore.CreateTask(t, st, org, &teststore.TaskOptions{Status: model.TaskStatusCompleted})
-	// Negative archive_after means archive immediately once terminal, which
+	// Negative auto_archive means archive immediately once terminal, which
 	// keeps the test fast and deterministic.
-	task.ArchiveAfter = -time.Hour
+	task.AutoArchive = -time.Hour
 	assert.NilError(t, st.UpdateTask(t.Context(), nil, task))
 
 	a := New(Options{Store: st})
@@ -28,7 +28,7 @@ func TestArchiver_Tick_ArchivesEligibleTask(t *testing.T) {
 	assert.Assert(t, got.Archived, "task should be archived after tick")
 }
 
-func TestArchiver_Tick_SkipsTaskWithoutArchiveAfter(t *testing.T) {
+func TestArchiver_Tick_SkipsTaskWithoutAutoArchive(t *testing.T) {
 	t.Parallel()
 	st := teststore.New(t)
 	org := teststore.CreateOrg(t, st, nil)
@@ -39,7 +39,7 @@ func TestArchiver_Tick_SkipsTaskWithoutArchiveAfter(t *testing.T) {
 
 	got, err := st.GetTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
-	assert.Assert(t, !got.Archived, "task without archive_after must not be archived")
+	assert.Assert(t, !got.Archived, "task without auto_archive must not be archived")
 }
 
 func TestArchiver_Tick_SkipsNonTerminalTask(t *testing.T) {
@@ -48,7 +48,7 @@ func TestArchiver_Tick_SkipsNonTerminalTask(t *testing.T) {
 	org := teststore.CreateOrg(t, st, nil)
 
 	task := teststore.CreateTask(t, st, org, &teststore.TaskOptions{Status: model.TaskStatusRunning})
-	task.ArchiveAfter = -time.Hour
+	task.AutoArchive = -time.Hour
 	assert.NilError(t, st.UpdateTask(t.Context(), nil, task))
 
 	a := New(Options{Store: st})
@@ -65,7 +65,7 @@ func TestArchiver_Tick_SkipsTaskWithPendingCommand(t *testing.T) {
 	org := teststore.CreateOrg(t, st, nil)
 
 	task := teststore.CreateTask(t, st, org, &teststore.TaskOptions{Status: model.TaskStatusCompleted})
-	task.ArchiveAfter = -time.Hour
+	task.AutoArchive = -time.Hour
 	task.Command = model.TaskCommandRestart
 	assert.NilError(t, st.UpdateTask(t.Context(), nil, task))
 
@@ -83,7 +83,7 @@ func TestArchiver_Tick_SkipsFutureDeadline(t *testing.T) {
 	org := teststore.CreateOrg(t, st, nil)
 
 	task := teststore.CreateTask(t, st, org, &teststore.TaskOptions{Status: model.TaskStatusCompleted})
-	task.ArchiveAfter = time.Hour
+	task.AutoArchive = time.Hour
 	assert.NilError(t, st.UpdateTask(t.Context(), nil, task))
 
 	a := New(Options{Store: st})
@@ -105,7 +105,7 @@ func TestArchiver_Tick_BatchSizeBounded(t *testing.T) {
 	taskIDs := make([]int64, total)
 	for i := 0; i < total; i++ {
 		task := teststore.CreateTask(t, st, org, &teststore.TaskOptions{Status: model.TaskStatusCompleted})
-		task.ArchiveAfter = -time.Hour
+		task.AutoArchive = -time.Hour
 		assert.NilError(t, st.UpdateTask(t.Context(), nil, task))
 		taskIDs[i] = task.ID
 	}
@@ -125,17 +125,17 @@ func TestArchiver_Tick_BatchSizeBounded(t *testing.T) {
 	assert.Equal(t, archived, 2, "expected batch-size limit to bound archives per tick")
 }
 
-func TestArchiver_TickRoundTripPersistsArchiveAfter(t *testing.T) {
+func TestArchiver_TickRoundTripPersistsAutoArchive(t *testing.T) {
 	t.Parallel()
 	st := teststore.New(t)
 	org := teststore.CreateOrg(t, st, nil)
 
 	d := 42 * time.Minute
 	task := teststore.CreateTask(t, st, org, nil)
-	task.ArchiveAfter = d
+	task.AutoArchive = d
 	assert.NilError(t, st.UpdateTask(t.Context(), nil, task))
 
 	got, err := st.GetTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
-	assert.Equal(t, got.ArchiveAfter, d)
+	assert.Equal(t, got.AutoArchive, d)
 }

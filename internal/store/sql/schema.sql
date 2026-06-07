@@ -231,7 +231,7 @@ CREATE TABLE public.tasks (
     archived boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    archive_after bigint DEFAULT 0 NOT NULL
+    auto_archive bigint DEFAULT 0 NOT NULL
 );
 
 
@@ -517,7 +517,7 @@ CREATE INDEX idx_task_links_task_id ON public.task_links USING btree (task_id);
 -- Name: idx_tasks_archive_due; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_tasks_archive_due ON public.tasks USING btree (updated_at) WHERE ((archived = false) AND (archive_after <> 0));
+CREATE INDEX idx_tasks_archive_due ON public.tasks USING btree (updated_at) WHERE ((archived = false) AND (auto_archive <> 0));
 
 
 --
@@ -703,4 +703,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260517174647'),
     ('20260523000001'),
     ('20260601000001'),
-    ('20260607000001');
+    ('20260607000001'),
+    ('20260607000002');

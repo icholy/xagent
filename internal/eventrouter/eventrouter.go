@@ -267,11 +267,11 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			Instructions: []model.Instruction{{
 				Text: prompt,
 			}},
-			Status:       model.TaskStatusPending,
-			Command:      model.TaskCommandStart,
-			Version:      1,
-			OrgID:        orgID,
-			ArchiveAfter: rule.Create.ArchiveAfter,
+			Status:      model.TaskStatusPending,
+			Command:     model.TaskCommandStart,
+			Version:     1,
+			OrgID:       orgID,
+			AutoArchive: rule.Create.AutoArchive,
 		}
 		if err := r.Store.CreateTask(ctx, tx, task); err != nil {
 			return err

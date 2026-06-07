@@ -1,5 +1,5 @@
 // Package archiver runs a periodic background loop that archives terminal
-// tasks whose archive_after deadline has elapsed.
+// tasks whose auto_archive deadline has elapsed.
 //
 // The worker is a single goroutine; each tick it asks the store for a small
 // batch of due tasks and archives them through the same transactional path
@@ -27,7 +27,7 @@ const DefaultInterval = time.Minute
 // DefaultBatchSize is the maximum number of tasks archived per tick.
 const DefaultBatchSize = 100
 
-// Archiver periodically archives terminal tasks past their archive_after deadline.
+// Archiver periodically archives terminal tasks past their auto_archive deadline.
 type Archiver struct {
 	store     *store.Store
 	publisher pubsub.Publisher
@@ -126,7 +126,7 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		if err := a.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  due.ID,
 			Type:    "audit",
-			Content: "auto-archived: archive_after deadline reached",
+			Content: "auto-archived: auto_archive deadline reached",
 		}); err != nil {
 			return err
 		}

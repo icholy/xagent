@@ -25,13 +25,13 @@ const Instructions = "xagent is an async agent orchestrator that runs AI coding 
 // Option configures the behaviour of the registered tools.
 type Option func(*handlers)
 
-// WithDefaultArchiveAfter sets the default archive_after applied to tasks
-// created via create_task when the call omits the archive_after param. See
-// Task.archive_after for the value semantics (zero/unset = never, negative
+// WithDefaultAutoArchive sets the default auto_archive applied to tasks
+// created via create_task when the call omits the auto_archive param. See
+// Task.auto_archive for the value semantics (zero/unset = never, negative
 // = archive immediately on terminal status, positive = delay).
-func WithDefaultArchiveAfter(d time.Duration) Option {
+func WithDefaultAutoArchive(d time.Duration) Option {
 	return func(h *handlers) {
-		h.defaultArchiveAfter = durationpb.New(d)
+		h.defaultAutoArchive = durationpb.New(d)
 	}
 }
 
@@ -116,10 +116,10 @@ func Handler(service xagentv1connect.XAgentServiceHandler) http.Handler {
 
 type handlers struct {
 	service xagentv1connect.XAgentServiceHandler
-	// defaultArchiveAfter is applied to create_task when the call omits the
-	// archive_after param. nil means no default is sent (server behavior
+	// defaultAutoArchive is applied to create_task when the call omits the
+	// auto_archive param. nil means no default is sent (server behavior
 	// unchanged).
-	defaultArchiveAfter *durationpb.Duration
+	defaultAutoArchive *durationpb.Duration
 }
 
 type listWorkspacesInput struct{}
@@ -146,11 +146,11 @@ func (h *handlers) listWorkspaces(ctx context.Context, req *mcp.CallToolRequest,
 }
 
 type createTaskInput struct {
-	Name         string `json:"name,omitempty" jsonschema:"A short name for the task"`
-	Workspace    string `json:"workspace" jsonschema:"The workspace to run the task in"`
-	Instruction  string `json:"instruction" jsonschema:"The instruction text for the task"`
-	Runner       string `json:"runner" jsonschema:"Runner ID to target"`
-	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Auto-archive the task this long after it reaches a terminal status, as a Go duration string (e.g. \"30m\", \"1h\"). \"0\" = never, a negative value like \"-1s\" = archive immediately on terminal status, positive = delay. When omitted, the server default is used."`
+	Name        string `json:"name,omitempty" jsonschema:"A short name for the task"`
+	Workspace   string `json:"workspace" jsonschema:"The workspace to run the task in"`
+	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
+	Runner      string `json:"runner" jsonschema:"Runner ID to target"`
+	AutoArchive string `json:"auto_archive,omitempty" jsonschema:"Auto-archive the task this long after it reaches a terminal status, as a Go duration string (e.g. \"30m\", \"1h\"). \"0\" = never, a negative value like \"-1s\" = archive immediately on terminal status, positive = delay. When omitted, the server default is used."`
 }
 
 func (h *handlers) createTask(ctx context.Context, _ *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
@@ -161,14 +161,14 @@ func (h *handlers) createTask(ctx context.Context, _ *mcp.CallToolRequest, input
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction},
 		},
-		ArchiveAfter: h.defaultArchiveAfter,
+		AutoArchive: h.defaultAutoArchive,
 	}
-	if input.ArchiveAfter != "" {
-		d, err := time.ParseDuration(input.ArchiveAfter)
+	if input.AutoArchive != "" {
+		d, err := time.ParseDuration(input.AutoArchive)
 		if err != nil {
-			return errorResult("invalid archive_after %q: %v", input.ArchiveAfter, err), nil, nil
+			return errorResult("invalid auto_archive %q: %v", input.AutoArchive, err), nil, nil
 		}
-		req.ArchiveAfter = durationpb.New(d)
+		req.AutoArchive = durationpb.New(d)
 	}
 	resp, err := h.service.CreateTask(ctx, req)
 	if err != nil {

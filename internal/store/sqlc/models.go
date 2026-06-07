@@ -86,7 +86,7 @@ type Task struct {
 	Archived     bool      `json:"archived"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
-	ArchiveAfter int64     `json:"archive_after"`
+	AutoArchive  int64     `json:"auto_archive"`
 }
 
 type TaskLink struct {

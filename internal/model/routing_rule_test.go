@@ -17,10 +17,10 @@ func TestRoutingRuleProtoRoundTrip(t *testing.T) {
 		URLPrefix: "https://example.atlassian.net/browse/PROJ-",
 		Value:     "xagent",
 		Create: &CreateTaskAction{
-			Workspace:    "default",
-			Runner:       "runner-1",
-			Prompt:       "do the thing",
-			ArchiveAfter: time.Hour,
+			Workspace:   "default",
+			Runner:      "runner-1",
+			Prompt:      "do the thing",
+			AutoArchive: time.Hour,
 		},
 		Wakeup: true,
 	}

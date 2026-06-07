@@ -40,7 +40,7 @@ var TaskUpdateCommand = &cli.Command{
 			Usage:   "Add instruction to task (can be specified multiple times)",
 		},
 		&cli.DurationFlag{
-			Name:  "archive-after",
+			Name:  "auto-archive",
 			Value: 0,
 			Usage: "Set the auto-archive timeout. 0 = never (default); negative = archive immediately; positive = delay.",
 		},
@@ -59,7 +59,7 @@ var TaskUpdateCommand = &cli.Command{
 		start := cmd.Bool("start")
 		texts := cmd.StringSlice("add-instruction")
 
-		if name == "" && !start && len(texts) == 0 && !cmd.IsSet("archive-after") {
+		if name == "" && !start && len(texts) == 0 && !cmd.IsSet("auto-archive") {
 			return fmt.Errorf("nothing to update")
 		}
 
@@ -82,7 +82,7 @@ var TaskUpdateCommand = &cli.Command{
 			Name:            name,
 			Start:           start,
 			AddInstructions: instructions,
-			ArchiveAfter:    durationpb.New(cmd.Duration("archive-after")),
+			AutoArchive:     durationpb.New(cmd.Duration("auto-archive")),
 		}); err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
 		}

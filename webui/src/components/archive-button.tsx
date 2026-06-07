@@ -5,7 +5,7 @@ import { autoArchiveDeadline } from '@/lib/task'
 import { formatCountdown } from '@/lib/duration'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 
-type ArchiveTask = Pick<Task, 'status' | 'actions' | 'archived' | 'archiveAfter' | 'updatedAt'>
+type ArchiveTask = Pick<Task, 'status' | 'actions' | 'archived' | 'autoArchive' | 'updatedAt'>
 
 // useAutoArchiveCountdown returns a live-ticking, human-readable string of the
 // time until the task is auto-archived (e.g. "5m"), or null when the task isn't

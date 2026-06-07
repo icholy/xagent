@@ -162,7 +162,7 @@ export interface RoutingRuleFormValues {
   createPrompt: string
   // Whole-hours string ('' / 'never' = never) for the created task's
   // auto-archive timeout. Matches the Create Task screen's control.
-  createArchiveAfter: string
+  createAutoArchive: string
 }
 
 export const emptyRoutingRule: RoutingRuleFormValues = {
@@ -178,7 +178,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   createWorkspace: '',
   createRunner: '',
   createPrompt: '',
-  createArchiveAfter: '',
+  createAutoArchive: '',
 }
 
 export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormValues {
@@ -195,7 +195,7 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
     createPrompt: rule.create?.prompt ?? '',
-    createArchiveAfter: hoursFromDuration(rule.create?.archiveAfter),
+    createAutoArchive: hoursFromDuration(rule.create?.autoArchive),
   }
 }
 
@@ -224,7 +224,7 @@ export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
           workspace: values.createWorkspace,
           runner: values.createRunner,
           prompt: values.createPrompt,
-          archiveAfter: durationFromHours(values.createArchiveAfter),
+          autoArchive: durationFromHours(values.createAutoArchive),
         }
       : undefined,
   })

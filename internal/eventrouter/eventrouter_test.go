@@ -495,7 +495,7 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "issue_comment"))
 }
 
-func TestRouteCreateRuleAppliesArchiveAfter(t *testing.T) {
+func TestRouteCreateRuleAppliesAutoArchive(t *testing.T) {
 	t.Parallel()
 
 	// Arrange
@@ -505,9 +505,9 @@ func TestRouteCreateRuleAppliesArchiveAfter(t *testing.T) {
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
 		Source: "github",
 		Create: &model.CreateTaskAction{
-			Workspace:    "default",
-			Runner:       "test-runner",
-			ArchiveAfter: 24 * time.Hour,
+			Workspace:   "default",
+			Runner:      "test-runner",
+			AutoArchive: 24 * time.Hour,
 		},
 	}})
 	assert.NilError(t, err)
@@ -528,13 +528,13 @@ func TestRouteCreateRuleAppliesArchiveAfter(t *testing.T) {
 	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, len(tasks), 1)
-	assert.Equal(t, tasks[0].ArchiveAfter, 24*time.Hour)
+	assert.Equal(t, tasks[0].AutoArchive, 24*time.Hour)
 }
 
-func TestRouteCreateRuleDefaultsArchiveAfterToNever(t *testing.T) {
+func TestRouteCreateRuleDefaultsAutoArchiveToNever(t *testing.T) {
 	t.Parallel()
 
-	// Arrange — a create rule without ArchiveAfter leaves the task at the
+	// Arrange — a create rule without AutoArchive leaves the task at the
 	// "never auto-archive" default (zero duration).
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
@@ -561,7 +561,7 @@ func TestRouteCreateRuleDefaultsArchiveAfterToNever(t *testing.T) {
 	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, len(tasks), 1)
-	assert.Equal(t, tasks[0].ArchiveAfter, time.Duration(0))
+	assert.Equal(t, tasks[0].AutoArchive, time.Duration(0))
 }
 
 func TestRouteCreateRuleOmittedPromptUsesPreambleOnly(t *testing.T) {

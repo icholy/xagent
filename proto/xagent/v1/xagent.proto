@@ -114,7 +114,7 @@ message Task {
   //   zero (or unset): never auto-archive (default)
   //   negative:        archive immediately on terminal status
   //   positive:        archive that long after reaching terminal status
-  google.protobuf.Duration archive_after = 15;
+  google.protobuf.Duration auto_archive = 15;
 }
 
 message McpServer {
@@ -168,7 +168,7 @@ message CreateTaskRequest {
   string workspace = 3;
   repeated Instruction instructions = 4;
   string runner = 5;  // Runner ID that should handle this task
-  google.protobuf.Duration archive_after = 6;
+  google.protobuf.Duration auto_archive = 6;
 }
 
 message CreateTaskResponse {
@@ -200,9 +200,9 @@ message UpdateTaskRequest {
   reserved 3;  // Previously: restart
   repeated Instruction add_instructions = 4;
   bool start = 5;    // Start after current run finishes (non-interrupting)
-  // Unset = leave alone. See Task.archive_after for the value semantics
+  // Unset = leave alone. See Task.auto_archive for the value semantics
   // (zero = never, negative = immediate, positive = delay).
-  google.protobuf.Duration archive_after = 6;
+  google.protobuf.Duration auto_archive = 6;
 }
 
 message UpdateTaskResponse {}
@@ -558,9 +558,9 @@ message CreateTaskAction {
   string runner = 2;
   string prompt = 3;
   // Auto-archive value applied to tasks created by this rule. See
-  // Task.archive_after for the value semantics (zero/unset = never,
+  // Task.auto_archive for the value semantics (zero/unset = never,
   // negative = immediate, positive = delay).
-  google.protobuf.Duration archive_after = 4;
+  google.protobuf.Duration auto_archive = 4;
 }
 
 message GetRoutingRulesRequest {}
