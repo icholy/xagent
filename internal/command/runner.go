@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/runner"
@@ -79,11 +77,6 @@ var RunnerCommand = &cli.Command{
 			Usage:   "API key (takes priority over config file)",
 			Sources: cli.EnvVars("XAGENT_API_KEY"),
 		},
-		&cli.StringFlag{
-			Name:    "private-key",
-			Usage:   "Hex-encoded Ed25519 private key seed (takes priority over config file)",
-			Sources: cli.EnvVars("XAGENT_PRIVATE_KEY"),
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		serverAddr := cmd.String("server")
@@ -104,22 +97,13 @@ var RunnerCommand = &cli.Command{
 		}
 
 		cfg, err := configfile.Load(&configfile.Overrides{
-			Token:      cmd.String("key"),
-			PrivateKey: cmd.String("private-key"),
+			Token: cmd.String("key"),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 		if cfg.Token == "" {
 			return fmt.Errorf("not authenticated, run setup first or provide -key flag")
-		}
-		if cfg.PrivateKey == nil {
-			log.Warn("no private key configured, generating ephemeral key (containers will not be able to reconnect after runner restart)")
-			key, err := agentauth.CreatePrivateKey()
-			if err != nil {
-				return fmt.Errorf("failed to generate private key: %w", err)
-			}
-			cfg.PrivateKey = key
 		}
 
 		workspaces, err := workspace.LoadConfig(configPath, nil)
@@ -141,12 +125,10 @@ var RunnerCommand = &cli.Command{
 		r, err := runner.New(runner.Options{
 			Client:      client,
 			ServerURL:   serverAddr,
-			PrivateKey:  cfg.PrivateKey,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
 			RunnerID:    runnerID,
 			Log:         log,
-			SocketPath:  filepath.Join(os.TempDir(), "xagent", runnerID, "socket"),
 			Queue:       queue,
 		})
 		if err != nil {

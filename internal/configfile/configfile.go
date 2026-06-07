@@ -1,8 +1,6 @@
 package configfile
 
 import (
-	"crypto/ed25519"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,12 +33,11 @@ func Path() (string, error) {
 // Overrides contains values that take priority over the config file.
 // If all fields are set, the config file is not read.
 type Overrides struct {
-	Token      string
-	PrivateKey string
+	Token string
 }
 
 func (o *Overrides) complete() bool {
-	return o != nil && o.Token != "" && o.PrivateKey != ""
+	return o != nil && o.Token != ""
 }
 
 func (o *Overrides) apply(f *File) error {
@@ -49,13 +46,6 @@ func (o *Overrides) apply(f *File) error {
 	}
 	if o.Token != "" {
 		f.Token = o.Token
-	}
-	if o.PrivateKey != "" {
-		key, err := decodePrivateKey(o.PrivateKey)
-		if err != nil {
-			return fmt.Errorf("decode override private key: %w", err)
-		}
-		f.PrivateKey = key
 	}
 	return nil
 }
@@ -109,51 +99,5 @@ func Save(f *File) error {
 
 // File stores the xagent configuration.
 type File struct {
-	Token      string             `json:"token"`
-	PrivateKey ed25519.PrivateKey `json:"-"`
-}
-
-type jsonFile struct {
-	Token      string `json:"token"`
-	PrivateKey string `json:"private_key"`
-}
-
-func (f *File) MarshalJSON() ([]byte, error) {
-	jf := jsonFile{Token: f.Token}
-	if f.PrivateKey != nil {
-		jf.PrivateKey = encodePrivateKey(f.PrivateKey)
-	}
-	return json.Marshal(jf)
-}
-
-func (f *File) UnmarshalJSON(data []byte) error {
-	var jf jsonFile
-	if err := json.Unmarshal(data, &jf); err != nil {
-		return err
-	}
-	f.Token = jf.Token
-	if jf.PrivateKey != "" {
-		key, err := decodePrivateKey(jf.PrivateKey)
-		if err != nil {
-			return err
-		}
-		f.PrivateKey = key
-	}
-	return nil
-}
-
-func encodePrivateKey(key ed25519.PrivateKey) string {
-	return hex.EncodeToString(key.Seed())
-}
-
-// decodePrivateKey parses a hex-encoded Ed25519 seed.
-func decodePrivateKey(s string) (ed25519.PrivateKey, error) {
-	seed, err := hex.DecodeString(s)
-	if err != nil {
-		return nil, fmt.Errorf("decode private key hex: %w", err)
-	}
-	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("invalid seed length: got %d, want %d", len(seed), ed25519.SeedSize)
-	}
-	return ed25519.NewKeyFromSeed(seed), nil
+	Token string `json:"token"`
 }

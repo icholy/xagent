@@ -5,9 +5,9 @@ import "strconv"
 // This file defines the concrete scope taxonomy that rides on the generic
 // matching engine in scope.go: the operation paths, the namespaced attribute
 // keys, and the typed attribute constructors that call sites pass to
-// Scopes.Allow. It covers both the task-caller surface (the agent path's
-// AgentFilter and the runner minter agentauth.Scopes) and the API-caller
-// surface (the apiserver handlers); see the per-RPC mapping in
+// Scopes.Allow. It covers both the task-caller surface (the task-token minter
+// agentauth.Scopes) and the API-caller surface (the apiserver handlers, which
+// enforce per-task scopes directly); see the per-RPC mapping in
 // proposals/draft/scope-based-permissions.md §7.
 
 // Operation paths, as segment slices. The single source of truth for each
@@ -47,8 +47,8 @@ var (
 
 // Attribute keys, namespaced by resource ("task.id", not "id") so attribute
 // names stay globally unambiguous as the taxonomy grows. These are used by the
-// agent-caller surface (AgentFilter and the runner minter); the API-caller
-// handlers check the coarse op only (proposal §7).
+// task-token minter and the apiserver task handlers' per-instance Allow checks;
+// the coarse API-caller op checks ignore them (proposal §7).
 const (
 	AttrTaskID        = "task.id"
 	AttrTaskParent    = "task.parent"

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -17,13 +18,10 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func setupTestSession(t *testing.T, srv *Server, claims *agentauth.TaskClaims) *mcp.ClientSession {
+func setupTestSession(t *testing.T, srv *Server) *mcp.ClientSession {
 	t.Helper()
 
 	ctx := t.Context()
-	if claims != nil {
-		ctx = agentauth.ContextWithClaims(ctx, claims)
-	}
 
 	// Create MCP server and add tools
 	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "v1.0.0"}, nil)
@@ -66,7 +64,7 @@ func TestGetMyTask(t *testing.T) {
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	}, nil)
-	session := setupTestSession(t, srv, nil)
+	session := setupTestSession(t, srv)
 
 	// Call the tool through the MCP framework
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -94,33 +92,18 @@ func TestUpdateChildTask_ArchivedTask(t *testing.T) {
 	parentTaskID := int64(123)
 	childTaskID := int64(456)
 
+	// The C2 now enforces task-scoped access (archived tasks are denied); the MCP
+	// server forwards the call and surfaces whatever error the C2 returns.
 	client := &xagentclient.ClientMock{
-		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+		UpdateTaskFunc: func(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 			assert.Equal(t, req.Id, childTaskID)
-			return &xagentv1.GetTaskResponse{
-				Task: &xagentv1.Task{
-					Id:       childTaskID,
-					Parent:   parentTaskID,
-					Status:   xagentv1.TaskStatus_COMPLETED,
-					Archived: true,
-				},
-			}, nil
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot update archived task"))
 		},
 	}
 
-	// Wrap client with AgentFilter to enforce authorization
-	filter := NewAgentFilter(client)
 	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
-	srv := NewServer(filter, task, []string{agentauth.CapabilityChildTasks})
-	session := setupTestSession(t, srv, &agentauth.TaskClaims{
-		TaskID: parentTaskID,
-		Scopes: agentauth.Scopes(agentauth.ScopeOptions{
-			TaskID:       parentTaskID,
-			Workspace:    "test-workspace",
-			Runner:       "test-runner",
-			Capabilities: []string{agentauth.CapabilityChildTasks},
-		}),
-	})
+	srv := NewServer(client, task, []string{agentauth.CapabilityChildTasks})
+	session := setupTestSession(t, srv)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "update_child_task",
@@ -149,7 +132,7 @@ func TestGetGitHubToken(t *testing.T) {
 	}
 
 	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.CapabilityGitHubToken})
-	session := setupTestSession(t, srv, nil)
+	session := setupTestSession(t, srv)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "get_github_token",
@@ -173,7 +156,7 @@ func TestGetGitHubToken_Error(t *testing.T) {
 	}
 
 	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.CapabilityGitHubToken})
-	session := setupTestSession(t, srv, nil)
+	session := setupTestSession(t, srv)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "get_github_token",
@@ -191,7 +174,7 @@ func TestChildTaskTools_NotRegisteredWithoutCapability(t *testing.T) {
 	client := &xagentclient.ClientMock{}
 
 	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, nil)
-	session := setupTestSession(t, srv, nil)
+	session := setupTestSession(t, srv)
 
 	tools, err := session.ListTools(t.Context(), nil)
 	assert.NilError(t, err)
@@ -216,7 +199,7 @@ func TestGetGitHubToken_NotRegisteredWithoutCapability(t *testing.T) {
 	}
 
 	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, nil)
-	session := setupTestSession(t, srv, nil)
+	session := setupTestSession(t, srv)
 
 	tools, err := session.ListTools(t.Context(), nil)
 	assert.NilError(t, err)

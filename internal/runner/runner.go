@@ -3,7 +3,6 @@ package runner
 import (
 	"cmp"
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +35,6 @@ import (
 type Runner struct {
 	docker      *client.Client
 	client      xagentclient.Client
-	proxy       *AgentProxy
 	serverURL   string
 	workspaces  *workspace.Config
 	runnerID    string
@@ -54,12 +52,10 @@ type Options struct {
 	// own configured --server value; the container reaches the same C2 the runner
 	// does. The runner authenticates the token-minting RPC with its own xat_ key.
 	ServerURL   string
-	PrivateKey  ed25519.PrivateKey
 	Workspaces  *workspace.Config
 	Concurrency int
 	RunnerID    string
 	Log         *slog.Logger
-	SocketPath  string
 	Queue       *EventQueue
 }
 
@@ -91,20 +87,9 @@ func New(opts Options) (*Runner, error) {
 
 	log := cmp.Or(opts.Log, slog.Default())
 
-	proxy := NewProxy(AgentProxyOptions{
-		Client:     opts.Client,
-		PrivateKey: opts.PrivateKey,
-		Log:        log,
-		SocketPath: opts.SocketPath,
-	})
-	if err := proxy.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start proxy: %w", err)
-	}
-
 	return &Runner{
 		docker:      docker,
 		client:      opts.Client,
-		proxy:       proxy,
 		serverURL:   opts.ServerURL,
 		workspaces:  opts.Workspaces,
 		runnerID:    opts.RunnerID,
@@ -126,10 +111,7 @@ func (r *Runner) WakeC() <-chan struct{} { return r.wake }
 func (r *Runner) Wake() { r.wake.Wake() }
 
 func (r *Runner) Close() error {
-	return errors.Join(
-		r.proxy.Close(),
-		r.docker.Close(),
-	)
+	return r.docker.Close()
 }
 
 // RegisterWorkspaces sends the available workspace names to the server.

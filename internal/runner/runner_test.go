@@ -10,7 +10,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
-	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
@@ -38,8 +37,13 @@ func TestRunnerStart(t *testing.T) {
 		Version: 1,
 	}
 
-	// Create mock client
+	// Create mock client. The driver and the injected MCP server now connect to
+	// this server directly (over the host network), so it must answer the
+	// driver's startup Ping and the agent's get_my_task (GetTaskDetails).
 	mock := &xagentclient.ClientMock{
+		PingFunc: func(_ context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
+			return &xagentv1.PingResponse{}, nil
+		},
 		CreateTaskTokenFunc: func(_ context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
 			return &xagentv1.CreateTaskTokenResponse{Token: "test-token"}, nil
 		},
@@ -56,18 +60,14 @@ func TestRunnerStart(t *testing.T) {
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
-	privateKey, err := agentauth.CreatePrivateKey()
-	assert.NilError(t, err)
-
 	// Create runner. The agent connects to the C2 directly over the network, so
 	// the container shares the host network namespace (NetworkMode "host") to
 	// reach the httptest server on 127.0.0.1, and ServerURL is the same URL.
 	client := xagentclient.New(xagentclient.Options{BaseURL: ts.URL})
 	r, err := New(Options{
-		Client:     client,
-		ServerURL:  ts.URL,
-		PrivateKey: privateKey,
-		Queue:      NewEventQueue(EventQueueOptions{Client: client, Log: slog.Default()}),
+		Client:    client,
+		ServerURL: ts.URL,
+		Queue:     NewEventQueue(EventQueueOptions{Client: client, Log: slog.Default()}),
 		Workspaces: &workspace.Config{
 			Workspaces: map[string]workspace.Workspace{
 				"test": {
@@ -89,7 +89,6 @@ func TestRunnerStart(t *testing.T) {
 		},
 		Concurrency: 1,
 		RunnerID:    "test-runner",
-		SocketPath:  filepath.Join(t.TempDir(), "socket"),
 	})
 	assert.NilError(t, err)
 	t.Cleanup(func() { r.Close() })
