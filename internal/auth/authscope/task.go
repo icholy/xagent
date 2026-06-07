@@ -19,6 +19,12 @@ var (
 	OpTaskCreate        = []string{"task", "create"}
 	OpGitHubTokenCreate = []string{"github_token", "create"}
 
+	// OpTaskTokenCreate is a no-instance, capability-only op: the right to mint a
+	// narrow task token via the CreateTaskToken RPC. It has no instance attribute,
+	// so its handler gates on Scopes.AllowOp (see
+	// proposals/draft/eliminate-runner-socket-proxy.md §1/§7).
+	OpTaskTokenCreate = []string{"task_token", "create"}
+
 	// API-caller operation paths (proposal §7). Events and keys are managed
 	// coarsely — there is no instance attribute for them — so their RPCs are
 	// op-level checks. Lifecycle and sub-resource verbs fold into write.

@@ -96,9 +96,26 @@ func (scopes Scopes) Allow(op []string, attrs ...Attr) bool {
 	return false
 }
 
-// allow reports whether the single scope permits the operation segments and
-// attributes.
-func (s Scope) allow(op []string, attrs []Attr) bool {
+// AllowOp reports whether any held scope's operation path covers op, ignoring
+// predicates entirely — "do I hold any scope for this capability at all?", with no
+// concrete instance to test. A predicated scope like task.write:{"task.id":"5"}
+// still satisfies AllowOp(OpTaskWrite): it answers capability presence, not
+// instance access. Use it only for genuine no-instance capability questions (e.g.
+// OpTaskTokenCreate), never as the pre-half of an instance check — see
+// proposals/draft/eliminate-runner-socket-proxy.md §5.
+func (scopes Scopes) AllowOp(op []string) bool {
+	for _, s := range scopes {
+		if s.allowOp(op) {
+			return true
+		}
+	}
+	return false
+}
+
+// allowOp reports whether the single scope's operation path covers op: the same
+// number of segments, each matching with "*" matching any one segment. It ignores
+// Preds. allow is exactly allowOp plus the predicate loop, so the two cannot drift.
+func (s Scope) allowOp(op []string) bool {
 	if len(s.Op) != len(op) {
 		return false
 	}
@@ -107,6 +124,15 @@ func (s Scope) allow(op []string, attrs []Attr) bool {
 		if seg != "*" && seg != op[i] {
 			return false
 		}
+	}
+	return true
+}
+
+// allow reports whether the single scope permits the operation segments and
+// attributes.
+func (s Scope) allow(op []string, attrs []Attr) bool {
+	if !s.allowOp(op) {
+		return false
 	}
 	for key, want := range s.Preds {
 		got, ok := attrValue(attrs, key)

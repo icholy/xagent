@@ -135,6 +135,11 @@ export const listEventsByTask = XAgentService.method.listEventsByTask;
 export const submitRunnerEvents = XAgentService.method.submitRunnerEvents;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.CreateTaskToken
+ */
+export const createTaskToken = XAgentService.method.createTaskToken;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.RegisterWorkspaces
  */
 export const registerWorkspaces = XAgentService.method.registerWorkspaces;

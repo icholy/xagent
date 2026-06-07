@@ -211,6 +211,31 @@ func TestAllow_WildcardAdmin(t *testing.T) {
 	assert.Equal(t, admin.Allow([]string{"task", "read", "extra"}), false)
 }
 
+// TestAllowOp covers the capability-presence primitive: AllowOp matches on the
+// operation path alone and ignores predicates, so a predicated scope still answers
+// "do I hold this capability at all?" without a concrete instance to test.
+func TestAllowOp(t *testing.T) {
+	t.Parallel()
+
+	// A predicated scope satisfies AllowOp for its op even though Allow would need
+	// the matching instance attribute.
+	narrow := Scopes{mustParse(t, `task.write:{"task.id":"5"}`)}
+	assert.Equal(t, narrow.AllowOp(OpTaskWrite), true)
+	assert.Equal(t, narrow.AllowOp(OpTaskRead), false)
+	// Sanity: the same scope denies Allow for a different instance, but AllowOp
+	// (which ignores Preds) still reports the capability is held.
+	assert.Equal(t, narrow.Allow(OpTaskWrite, WithTaskID(6)), false)
+
+	// task_token.create is a no-instance capability op.
+	minter := Scopes{mustParse(t, `task_token.create`)}
+	assert.Equal(t, minter.AllowOp(OpTaskTokenCreate), true)
+	assert.Equal(t, minter.AllowOp(OpTaskCreate), false)
+
+	// Wildcards cover any op of matching arity; empty scopes hold nothing.
+	assert.Equal(t, Admin().AllowOp(OpTaskTokenCreate), true)
+	assert.Equal(t, Scopes{}.AllowOp(OpTaskTokenCreate), false)
+}
+
 func TestParse(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

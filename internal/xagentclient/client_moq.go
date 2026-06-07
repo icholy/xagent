@@ -52,6 +52,9 @@ var _ Client = &ClientMock{}
 //			CreateTaskFunc: func(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 //				panic("mock out the CreateTask method")
 //			},
+//			CreateTaskTokenFunc: func(contextMoqParam context.Context, createTaskTokenRequest *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
+//				panic("mock out the CreateTaskToken method")
+//			},
 //			DeleteEventFunc: func(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error) {
 //				panic("mock out the DeleteEvent method")
 //			},
@@ -196,6 +199,9 @@ type ClientMock struct {
 
 	// CreateTaskFunc mocks the CreateTask method.
 	CreateTaskFunc func(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error)
+
+	// CreateTaskTokenFunc mocks the CreateTaskToken method.
+	CreateTaskTokenFunc func(contextMoqParam context.Context, createTaskTokenRequest *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error)
 
 	// DeleteEventFunc mocks the DeleteEvent method.
 	DeleteEventFunc func(contextMoqParam context.Context, deleteEventRequest *xagentv1.DeleteEventRequest) (*xagentv1.DeleteEventResponse, error)
@@ -380,6 +386,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// CreateTaskRequest is the createTaskRequest argument value.
 			CreateTaskRequest *xagentv1.CreateTaskRequest
+		}
+		// CreateTaskToken holds details about calls to the CreateTaskToken method.
+		CreateTaskToken []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// CreateTaskTokenRequest is the createTaskTokenRequest argument value.
+			CreateTaskTokenRequest *xagentv1.CreateTaskTokenRequest
 		}
 		// DeleteEvent holds details about calls to the DeleteEvent method.
 		DeleteEvent []struct {
@@ -638,6 +651,7 @@ type ClientMock struct {
 	lockCreateLink                     sync.RWMutex
 	lockCreateOrg                      sync.RWMutex
 	lockCreateTask                     sync.RWMutex
+	lockCreateTaskToken                sync.RWMutex
 	lockDeleteEvent                    sync.RWMutex
 	lockDeleteKey                      sync.RWMutex
 	lockDeleteOrg                      sync.RWMutex
@@ -1068,6 +1082,42 @@ func (mock *ClientMock) CreateTaskCalls() []struct {
 	mock.lockCreateTask.RLock()
 	calls = mock.calls.CreateTask
 	mock.lockCreateTask.RUnlock()
+	return calls
+}
+
+// CreateTaskToken calls CreateTaskTokenFunc.
+func (mock *ClientMock) CreateTaskToken(contextMoqParam context.Context, createTaskTokenRequest *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
+	if mock.CreateTaskTokenFunc == nil {
+		panic("ClientMock.CreateTaskTokenFunc: method is nil but Client.CreateTaskToken was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam        context.Context
+		CreateTaskTokenRequest *xagentv1.CreateTaskTokenRequest
+	}{
+		ContextMoqParam:        contextMoqParam,
+		CreateTaskTokenRequest: createTaskTokenRequest,
+	}
+	mock.lockCreateTaskToken.Lock()
+	mock.calls.CreateTaskToken = append(mock.calls.CreateTaskToken, callInfo)
+	mock.lockCreateTaskToken.Unlock()
+	return mock.CreateTaskTokenFunc(contextMoqParam, createTaskTokenRequest)
+}
+
+// CreateTaskTokenCalls gets all the calls that were made to CreateTaskToken.
+// Check the length with:
+//
+//	len(mockedClient.CreateTaskTokenCalls())
+func (mock *ClientMock) CreateTaskTokenCalls() []struct {
+	ContextMoqParam        context.Context
+	CreateTaskTokenRequest *xagentv1.CreateTaskTokenRequest
+} {
+	var calls []struct {
+		ContextMoqParam        context.Context
+		CreateTaskTokenRequest *xagentv1.CreateTaskTokenRequest
+	}
+	mock.lockCreateTaskToken.RLock()
+	calls = mock.calls.CreateTaskToken
+	mock.lockCreateTaskToken.RUnlock()
 	return calls
 }
 
