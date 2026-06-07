@@ -93,7 +93,7 @@ row and derives `workspace`/`runner` from it, then mints the scopes via the
 // apiserver handler sketch — the runner cannot choose the scopes
 func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
     caller := apiauth.MustCaller(ctx)
-    if !caller.Scopes.Allow(authscope.OpTaskTokenCreate) { // see §7
+    if !caller.Scopes.AllowOp(authscope.OpTaskTokenCreate) { // capability-presence, no instance — see §5/§7
         return nil, errPermissionDenied("cannot mint task tokens")
     }
     // Tenancy: the task must belong to the caller's org (existing pattern).
@@ -274,16 +274,15 @@ Three rules make this safe — and they are the crux of the review:
   `task.id`/`task.archived` fails an attribute-less `Allow` (a constrained-but-missing
   attribute denies — scope proposal §5), so the agent would be rejected on its **own**
   task. Once scopes constrain row-derived attributes, there is no valid pre-load gate.
-- **No `AllowsOp` pre-filter for task ops.** A capability-only "do I hold this op at
-  all" pre-check would weaken the completeness test (below): a handler doing only
-  `AllowsOp` still denies the empty-scope probe, so a *forgotten* post-load check
-  wouldn't be caught, and a narrow wrong-instance caller could slip through. The
-  single post-load `Allow` keeps the test meaningful — forget it and the empty-scope
-  caller is allowed, failing the test. The saving (a cheap org-scoped read for a rare
-  wrong-op caller) isn't worth the lost guarantee. `AllowsOp` may exist as a primitive
-  for genuine no-instance "do I hold this capability" questions (e.g.
-  `OpTaskTokenCreate`, `OpGitHubTokenCreate`), but never as the pre-half of a task
-  check.
+- **No `AllowOp` pre-filter for task ops.** A capability-only "do I hold this op at
+  all" pre-check (the new `Scopes.AllowOp`, below) would weaken the completeness test:
+  a handler doing only `AllowOp` still denies the empty-scope probe, so a *forgotten*
+  post-load check wouldn't be caught, and a narrow wrong-instance caller could slip
+  through. The single post-load `Allow` keeps the test meaningful — forget it and the
+  empty-scope caller is allowed, failing the test. The saving (a cheap org-scoped read
+  for a rare wrong-op caller) isn't worth the lost guarantee. `AllowOp` is the right
+  tool for genuine no-instance "do I hold this capability" questions (e.g.
+  `OpTaskTokenCreate`, `OpGitHubTokenCreate`), but never the pre-half of a task check.
 - **No `authorizeTask` wrapper.** Control flow stays inline in each handler;
   `ScopeAttr()` provides the forget-proofing, not a decorator.
 
@@ -299,6 +298,65 @@ which have no instance/archived predicate and so match any `ScopeAttr()` — the
 attributes are transparent to them and constrain only the narrow task caller. The
 empty-scopes completeness test (scope proposal §8) still holds: every task handler's
 single `Allow` denies a scopeless probe.
+
+#### `Scopes.AllowOp` — the capability-presence primitive
+
+This proposal adds one method to the `authscope` engine (`internal/auth/authscope/scope.go`),
+alongside the application-level `WithTaskArchived`/`ScopeAttr` additions.
+`AllowOp` is the operation-only counterpart to `Scopes.Allow`: it reports whether any
+held scope's **operation path** covers `op`, **ignoring predicates entirely** — "do I
+hold any scope for this capability at all?", with no concrete instance to test:
+
+```go
+func (scopes Scopes) AllowOp(op []string) bool {
+    for _, s := range scopes {
+        if s.allowOp(op) { // op-segment match only, no Preds loop
+            return true
+        }
+    }
+    return false
+}
+```
+
+Spec: factor the operation-segment matching out of the existing `Scope.allow` into a
+shared `Scope.allowOp(op)` helper — the `len(s.Op) == len(op)` check plus the
+per-segment `"*"`/equality loop — so that `Scope.allow` becomes exactly
+`allowOp(op) && <predicate loop>` and the two cannot drift:
+
+```go
+func (s Scope) allowOp(op []string) bool {
+    if len(s.Op) != len(op) {
+        return false
+    }
+    for i, seg := range s.Op {
+        if seg != "*" && seg != op[i] { // "*" matches any one segment
+            return false
+        }
+    }
+    return true
+}
+
+func (s Scope) allow(op []string, attrs []Attr) bool {
+    if !s.allowOp(op) {
+        return false
+    }
+    for key, want := range s.Preds { // AND across keys — unchanged
+        got, ok := attrValue(attrs, key)
+        if !ok || got != want {
+            return false
+        }
+    }
+    return true
+}
+```
+
+Because `AllowOp` does **not** consult `Preds`, a predicated scope like
+`task.write:{"task.id":"5"}` still satisfies `AllowOp(OpTaskWrite)` — it answers
+*capability presence*, not instance access. That is exactly what the no-instance
+capability checks want: `CreateTaskToken` gates on `caller.Scopes.AllowOp(OpTaskTokenCreate)`
+(§1/§7) and `CreateGitHubToken` would gate on `AllowOp(OpGitHubTokenCreate)`. It is
+**not** used as the pre-half of a task handler check — those use the single post-load
+`Allow(op, task.ScopeAttr()...)` for the reasons above.
 
 **`CreateGitHubToken` is a non-issue.** It already returns `Unimplemented` on the
 apiserver (`apiserver/github.go`, with a test), and `split-github-app` is still a
@@ -352,7 +410,8 @@ OpTaskTokenCreate = []string{"task_token", "create"}
 ```
 
 (This is a legitimate no-instance, capability-only op — exactly the kind of check the
-optional `AllowsOp` primitive is for.)
+`Scopes.AllowOp` primitive (§5) is for; the handler gates on
+`caller.Scopes.AllowOp(OpTaskTokenCreate)`.)
 
 Options for constraining it:
 
