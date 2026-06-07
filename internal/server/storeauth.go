@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 )
@@ -29,14 +28,15 @@ func (v *StoreKeyValidator) ValidateKey(ctx context.Context, keyHash string) (*a
 	if key.IsExpired() {
 		return nil, fmt.Errorf("key expired")
 	}
-	scopes := key.Scopes
-	if len(scopes) == 0 {
-		// Transitional default: a NULL/empty scopes column (e.g. an un-backfilled
-		// row) is treated as admin so no existing key is ever locked out. Removed
-		// in a later phase once every key carries explicit scopes.
-		scopes = authscope.Admin()
-	}
-	return &apiauth.UserInfo{OrgID: key.OrgID, Name: key.Name, Type: apiauth.AuthTypeKey, Scopes: scopes}, nil
+	// Scopes are populated from the keys.scopes column, which the migration
+	// defaults to the admin wildcard for every existing and future row, so no
+	// runtime default is needed here.
+	return &apiauth.UserInfo{
+		OrgID:  key.OrgID,
+		Name:   key.Name,
+		Type:   apiauth.AuthTypeKey,
+		Scopes: key.Scopes,
+	}, nil
 }
 
 // StoreUserResolver implements apiauth.UserResolver using the store.

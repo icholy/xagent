@@ -35,26 +35,3 @@ func TestValidateKeyReturnsScopes(t *testing.T) {
 	assert.NilError(t, err)
 	assert.DeepEqual(t, info.Scopes, authscope.Scopes{readOwn})
 }
-
-func TestValidateKeyNullScopesDefaultsAdmin(t *testing.T) {
-	t.Parallel()
-	// Arrange - a key with no scopes column stored (NULL).
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	hash := uuid.NewString()
-	err := s.CreateKey(t.Context(), nil, &model.Key{
-		ID:        uuid.NewString(),
-		Name:      "unscoped",
-		TokenHash: hash,
-		OrgID:     org.OrgID,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	info, err := server.NewStoreKeyValidator(s).ValidateKey(t.Context(), hash)
-
-	// Assert - a NULL/empty column is treated as admin so the key is never
-	// locked out.
-	assert.NilError(t, err)
-	assert.DeepEqual(t, info.Scopes, authscope.Admin())
-}

@@ -1,11 +1,10 @@
 -- migrate:up
-ALTER TABLE keys ADD COLUMN scopes TEXT[];
-
--- Backfill every existing key to the admin wildcard (authscope.AdminScope) so a
--- later enforcement phase leaves their effective access unchanged. The column is
--- nullable on purpose: ValidateKey treats a NULL/empty column as Admin() too, so
--- an un-backfilled row is never locked out.
-UPDATE keys SET scopes = ARRAY['*.*'] WHERE scopes IS NULL;
+-- Default every key to the admin wildcard (authscope.AdminScope) so a later
+-- enforcement phase leaves their effective access unchanged. ADD COLUMN ...
+-- DEFAULT backfills all existing rows, and the column default covers any future
+-- insert that omits scopes, so a key never ends up without scopes and no runtime
+-- fallback is needed. The column stays nullable for the Phase 4 default-deny work.
+ALTER TABLE keys ADD COLUMN scopes TEXT[] DEFAULT ARRAY['*.*'];
 
 -- migrate:down
 ALTER TABLE keys DROP COLUMN IF EXISTS scopes;

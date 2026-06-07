@@ -73,7 +73,7 @@ CREATE TABLE public.keys (
     org_id bigint NOT NULL,
     expires_at timestamp without time zone,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    scopes text[]
+    scopes text[] DEFAULT ARRAY['*.*'::text]
 );
 
 
