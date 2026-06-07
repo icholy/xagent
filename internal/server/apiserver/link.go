@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -15,16 +16,22 @@ import (
 
 func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	// Coarse, fail-fast capability gate before the DB read (AllowOp ignores
+	// predicates); the instance check happens after the row is loaded.
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
-	// Verify task ownership
-	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
+	// Load the row (org-scoped for tenancy) so the instance check can see the
+	// task's id/parent/archived attributes.
+	task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+	if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	link := &model.Link{
 		TaskID:     req.TaskId,
@@ -57,8 +64,23 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 
 func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+	if !caller.Scopes.AllowOp(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
+	}
+	// A blanket task.read (admin/coarse) is authorized without inspecting the row,
+	// and the list query is already org-scoped. Only a predicated caller needs the
+	// row loaded to check task.id/parent/archived.
+	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+		task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+			}
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
+		}
 	}
 	links, err := s.store.ListLinksByTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {

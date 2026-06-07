@@ -1,5 +1,7 @@
 package authscope
 
+import "strconv"
+
 // This file defines the concrete scope taxonomy that rides on the generic
 // matching engine in scope.go: the operation paths, the namespaced attribute
 // keys, and the typed attribute constructors that call sites pass to
@@ -52,6 +54,7 @@ const (
 	AttrTaskParent    = "task.parent"
 	AttrTaskWorkspace = "task.workspace"
 	AttrTaskRunner    = "task.runner"
+	AttrTaskArchived  = "task.archived"
 )
 
 // WithTaskID, WithTaskParent, WithTaskWorkspace, and WithTaskRunner build the
@@ -64,3 +67,12 @@ func WithTaskParent(parent int64) Attr { return Int64Attr(AttrTaskParent, parent
 func WithTaskWorkspace(workspace string) Attr { return StringAttr(AttrTaskWorkspace, workspace) }
 
 func WithTaskRunner(runner string) Attr { return StringAttr(AttrTaskRunner, runner) }
+
+// WithTaskArchived builds the task.archived attribute. "false" is a real value
+// (not a zero/absent case), so it is always emitted as "true"/"false" — a scope
+// constraining task.archived:"false" denies a request carrying "true", which is
+// how archive-based revocation falls out of the ordinary predicate rule. See
+// proposals/draft/eliminate-runner-socket-proxy.md §3.
+func WithTaskArchived(archived bool) Attr {
+	return StringAttr(AttrTaskArchived, strconv.FormatBool(archived))
+}

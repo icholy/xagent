@@ -640,7 +640,8 @@ func TestListEventsByTask_Permissions(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Assert
+	// Assert - org A sees its event; org B gets an empty list (blanket read skips
+	// the row load; the list query is org-scoped).
 	assert.Equal(t, len(respA.Events), 1)
 	assert.Equal(t, len(respB.Events), 0)
 }

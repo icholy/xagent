@@ -16,9 +16,13 @@ import (
 
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+	// Coarse, fail-fast capability gate (AllowOp ignores predicates); each event
+	// is authorized per-instance inside its transaction against the row it loads.
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 	}
+	// Authorize per-event: a partial-batch failure is acceptable (this RPC is
+	// runner-facing, and coarse/admin callers pass every instance check anyway).
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)
 		notification := model.Notification{
@@ -36,6 +40,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			task, err := s.store.GetTaskForUpdate(ctx, tx, event.TaskID, caller.OrgID)
 			if err != nil {
 				return err
+			}
+			if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+				return connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 			}
 			applied := task.ApplyRunnerEvent(&event)
 			s.log.Info("runner event recieved",
@@ -75,6 +82,11 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return tx.Commit()
 		})
 		if err != nil {
+			// The in-tx instance check returns PermissionDenied; surface it as-is
+			// rather than re-wrapping it as Internal.
+			if connect.CodeOf(err) == connect.CodePermissionDenied {
+				return nil, err
+			}
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", event.TaskID))
 			}
