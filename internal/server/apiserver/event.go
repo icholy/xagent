@@ -106,7 +106,7 @@ func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskReq
 	if !caller.Scopes.Allow(authscope.OpEventWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event"))
 	}
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId)) {
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	// Verify task ownership
@@ -150,7 +150,7 @@ func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventT
 	if !caller.Scopes.Allow(authscope.OpEventWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event"))
 	}
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId)) {
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	// Verify task ownership
@@ -201,7 +201,7 @@ func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTask
 
 func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.TaskId)) {
+	if !caller.Scopes.Allow(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID)

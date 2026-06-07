@@ -38,17 +38,14 @@ var (
 )
 
 // Attribute keys, namespaced by resource ("task.id", not "id") so attribute
-// names stay globally unambiguous as the taxonomy grows.
+// names stay globally unambiguous as the taxonomy grows. These are used by the
+// agent-caller surface (AgentFilter and the runner minter); the API-caller
+// handlers check the coarse op only (proposal §7).
 const (
 	AttrTaskID        = "task.id"
 	AttrTaskParent    = "task.parent"
 	AttrTaskWorkspace = "task.workspace"
 	AttrTaskRunner    = "task.runner"
-
-	// AttrWorkspaceRunner scopes workspace register/clear to a single runner:
-	// a runner registering or clearing only its own workspaces is a genuine
-	// isolation boundary on the API surface (proposal §7).
-	AttrWorkspaceRunner = "workspace.runner"
 )
 
 // WithTaskID, WithTaskParent, WithTaskWorkspace, and WithTaskRunner build the
@@ -56,29 +53,8 @@ const (
 // value. Call sites pass them straight to Scopes.Allow.
 func WithTaskID(id int64) Attr { return Int64Attr(AttrTaskID, id) }
 
-// WithTaskParent builds the task.parent attribute. When ignoreZero is set and
-// parent is 0, the attribute is marked unset (see Attr.Ignore) rather than the
-// literal "0" — callers set it where a 0 parent means "no parent" (a top-level
-// task) or to guard a minted scope against an unconstrained predicate.
-func WithTaskParent(parent int64, ignoreZero bool) Attr {
-	if ignoreZero && parent == 0 {
-		return Attr{Name: AttrTaskParent, Ignore: true}
-	}
-	return Int64Attr(AttrTaskParent, parent)
-}
+func WithTaskParent(parent int64) Attr { return Int64Attr(AttrTaskParent, parent) }
 
 func WithTaskWorkspace(workspace string) Attr { return StringAttr(AttrTaskWorkspace, workspace) }
 
-// WithTaskRunner builds the task.runner attribute. When ignoreZero is set and
-// runner is empty, the attribute is marked unset (see Attr.Ignore) rather than
-// the literal "" — see WithTaskParent for when callers set it.
-func WithTaskRunner(runner string, ignoreZero bool) Attr {
-	if ignoreZero && runner == "" {
-		return Attr{Name: AttrTaskRunner, Ignore: true}
-	}
-	return StringAttr(AttrTaskRunner, runner)
-}
-
-// WithWorkspaceRunner builds the workspace.runner attribute for a workspace
-// register/clear request.
-func WithWorkspaceRunner(runner string) Attr { return StringAttr(AttrWorkspaceRunner, runner) }
+func WithTaskRunner(runner string) Attr { return StringAttr(AttrTaskRunner, runner) }

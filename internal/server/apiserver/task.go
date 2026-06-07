@@ -75,11 +75,7 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskCreate,
-		authscope.WithTaskParent(req.Parent, true),
-		authscope.WithTaskWorkspace(req.Workspace),
-		authscope.WithTaskRunner(req.Runner, false),
-	) {
+	if !caller.Scopes.Allow(authscope.OpTaskCreate) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create task"))
 	}
 	// Verify parent task ownership if specified
@@ -155,7 +151,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 
 func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.Id)) {
+	if !caller.Scopes.Allow(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	task, err := s.store.GetTask(ctx, nil, req.Id, caller.OrgID)
@@ -172,7 +168,7 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 
 func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.Id)) {
+	if !caller.Scopes.Allow(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	task, err := s.store.GetTask(ctx, nil, req.Id, caller.OrgID)
@@ -199,7 +195,7 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.Id)) {
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -264,7 +260,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 
 func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskRequest) (*xagentv1.ArchiveTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.Id)) {
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -313,7 +309,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 
 func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskRequest) (*xagentv1.UnarchiveTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.Id)) {
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -361,7 +357,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 
 func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest) (*xagentv1.CancelTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.Id)) {
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{
@@ -415,7 +411,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 
 func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.Id)) {
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	notification := model.Notification{

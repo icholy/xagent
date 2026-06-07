@@ -16,14 +16,8 @@ import (
 
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	// All-or-nothing: the caller needs task.write, and each event's task.
 	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
-	}
-	for _, ev := range req.Events {
-		if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(ev.TaskId)) {
-			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events for task"))
-		}
 	}
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)

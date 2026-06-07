@@ -34,9 +34,6 @@ type Scope struct {
 type Attr struct {
 	Name  string
 	Value string
-	// Ignore marks the attribute as unset: it carries no meaningful value and is
-	// treated as absent.
-	Ignore bool
 }
 
 // Int64Attr builds an Attr from an int64 value, centralizing the int->string
@@ -53,20 +50,12 @@ func StringAttr(name, v string) Attr {
 // New builds a Scope from an operation path and its attributes, folding the
 // attrs into the Preds map. Preds is left nil when there are no attrs, so a
 // built scope is structurally identical to a parsed one.
-//
-// New panics on an ignored attr: a scope must fully constrain every predicate it
-// lists, and folding an unset attribute into Preds would leave a hole that
-// silently widens the grant. Minters only ever pass concrete values, so this
-// guards against misuse rather than firing in practice.
 func New(op []string, attrs ...Attr) Scope {
 	if len(attrs) == 0 {
 		return Scope{Op: op}
 	}
 	preds := make(map[string]string, len(attrs))
 	for _, a := range attrs {
-		if a.Ignore {
-			panic("authscope: New called with ignored attribute " + a.Name + "; a scope must fully constrain its predicates")
-		}
 		preds[a.Name] = a.Value
 	}
 	return Scope{Op: op, Preds: preds}
@@ -128,15 +117,11 @@ func (s Scope) allow(op []string, attrs []Attr) bool {
 	return true
 }
 
-// attrValue returns the value of the first attr with the given name. Ignored
-// attrs are skipped, so they read as not provided. Callers build attrs from the
-// typed Attr constructors and never repeat a name, so first-match-wins needs no
-// guard.
+// attrValue returns the value of the first attr with the given name. Callers
+// build attrs from the typed Attr constructors and never repeat a name, so
+// first-match-wins needs no guard.
 func attrValue(attrs []Attr, name string) (string, bool) {
 	for _, a := range attrs {
-		if a.Ignore {
-			continue
-		}
 		if a.Name == name {
 			return a.Value, true
 		}

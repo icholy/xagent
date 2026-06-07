@@ -15,7 +15,7 @@ import (
 
 func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite, authscope.WithWorkspaceRunner(req.RunnerId)) {
+	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot register workspaces"))
 	}
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
@@ -58,10 +58,7 @@ func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspace
 
 func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	// A targeted clear is scoped to its runner; an org-wide clear (empty
-	// RunnerId) asserts an empty runner that only a coarse workspace.write or
-	// admin grant matches (proposal §7).
-	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite, authscope.WithWorkspaceRunner(req.RunnerId)) {
+	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot clear workspaces"))
 	}
 	if req.RunnerId != "" {
