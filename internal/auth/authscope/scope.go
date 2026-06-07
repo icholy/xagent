@@ -34,6 +34,13 @@ type Scope struct {
 type Attr struct {
 	Name  string
 	Value string
+	// Ignore marks an attribute built from a zero/unset value (e.g. a task id of
+	// 0 or an empty workspace). It is dual-use and asymmetric: on the target side
+	// (Allow) an ignored attr is treated as not provided, so a scope constraining
+	// that key is not satisfied; on the scope side (New) an ignored attr is a
+	// misuse and panics, since an unset predicate would silently widen the grant.
+	// Only the typed With* constructors set it; Int64Attr/StringAttr never do.
+	Ignore bool
 }
 
 // Int64Attr builds an Attr from an int64 value, centralizing the int->string
@@ -50,12 +57,21 @@ func StringAttr(name, v string) Attr {
 // New builds a Scope from an operation path and its attributes, folding the
 // attrs into the Preds map. Preds is left nil when there are no attrs, so a
 // built scope is structurally identical to a parsed one.
+//
+// New panics on an ignored attr (one built from a zero/unset value): a scope
+// must fully constrain every predicate it lists, and folding an unset value into
+// Preds would leave a hole that silently widens the grant. Minters only ever
+// pass concrete values, so this guards against misuse rather than firing in
+// practice.
 func New(op []string, attrs ...Attr) Scope {
 	if len(attrs) == 0 {
 		return Scope{Op: op}
 	}
 	preds := make(map[string]string, len(attrs))
 	for _, a := range attrs {
+		if a.Ignore {
+			panic("authscope: New called with ignored attribute " + a.Name + " (zero value); a scope must fully constrain its predicates")
+		}
 		preds[a.Name] = a.Value
 	}
 	return Scope{Op: op, Preds: preds}
@@ -117,11 +133,15 @@ func (s Scope) allow(op []string, attrs []Attr) bool {
 	return true
 }
 
-// attrValue returns the value of the first attr with the given name. Callers
-// build attrs from the typed Attr constructors and never repeat a name, so
-// first-match-wins needs no guard.
+// attrValue returns the value of the first attr with the given name. Ignored
+// attrs (built from zero/unset values) are skipped, so they read as not
+// provided. Callers build attrs from the typed Attr constructors and never
+// repeat a name, so first-match-wins needs no guard.
 func attrValue(attrs []Attr, name string) (string, bool) {
 	for _, a := range attrs {
+		if a.Ignore {
+			continue
+		}
 		if a.Name == name {
 			return a.Value, true
 		}

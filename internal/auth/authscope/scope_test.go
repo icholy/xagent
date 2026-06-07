@@ -211,6 +211,54 @@ func TestAllow_WildcardAdmin(t *testing.T) {
 	assert.Equal(t, admin.Allow([]string{"task", "read", "extra"}), false)
 }
 
+// TestWithAttrIgnore checks the typed With* constructors flag a zero/unset
+// argument as ignored, while concrete values are not.
+func TestWithAttrIgnore(t *testing.T) {
+	t.Parallel()
+	assert.Assert(t, WithTaskID(0).Ignore)
+	assert.Assert(t, WithTaskParent(0).Ignore)
+	assert.Assert(t, WithTaskWorkspace("").Ignore)
+	assert.Assert(t, WithTaskRunner("").Ignore)
+	assert.Assert(t, WithWorkspaceRunner("").Ignore)
+
+	assert.Assert(t, !WithTaskID(1).Ignore)
+	assert.Assert(t, !WithTaskParent(42).Ignore)
+	assert.Assert(t, !WithTaskWorkspace("ws").Ignore)
+	assert.Assert(t, !WithTaskRunner("rn").Ignore)
+	assert.Assert(t, !WithWorkspaceRunner("rn").Ignore)
+}
+
+// TestAllowIgnoresUnsetAttr checks Allow treats an ignored attr as not provided:
+// an unconstrained scope still matches, but a scope constraining that key is not
+// satisfied by the now-absent attr.
+func TestAllowIgnoresUnsetAttr(t *testing.T) {
+	t.Parallel()
+	// A coarse scope (no preds) matches even though parent is ignored.
+	coarse := Scopes{mustParse(t, "task.create")}
+	assert.Assert(t, coarse.Allow(OpTaskCreate, WithTaskParent(0), WithTaskWorkspace("ws"), WithTaskRunner("rn")))
+
+	// A coarse workspace.write matches when the runner attr is ignored, mirroring
+	// a runner-less ClearWorkspaces.
+	wsCoarse := Scopes{mustParse(t, "workspace.write")}
+	assert.Assert(t, wsCoarse.Allow(OpWorkspaceWrite, WithWorkspaceRunner("")))
+
+	// A scope constraining the ignored key is NOT satisfied by the absent attr...
+	constrained := Scopes{mustParse(t, `task.create:{"task.parent":"42"}`)}
+	assert.Assert(t, !constrained.Allow(OpTaskCreate, WithTaskParent(0)))
+	// ...but a concrete matching value still satisfies it.
+	assert.Assert(t, constrained.Allow(OpTaskCreate, WithTaskParent(42)))
+}
+
+// TestNewPanicsOnIgnoredAttr checks New rejects an ignored attr, since folding an
+// unset value into a scope's Preds would leave an unconstrained hole.
+func TestNewPanicsOnIgnoredAttr(t *testing.T) {
+	t.Parallel()
+	defer func() {
+		assert.Assert(t, recover() != nil, "expected New to panic on an ignored attr")
+	}()
+	New(OpTaskCreate, WithTaskParent(0))
+}
+
 func TestParse(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
