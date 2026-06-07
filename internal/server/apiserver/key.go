@@ -15,8 +15,7 @@ import (
 
 func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) (*xagentv1.CreateKeyResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	allowed := caller.Scopes.Allow(authscope.OpKeyCreate)
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpKeyCreate) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create key"))
 	}
 	rawKey, err := apiauth.GenerateKey()
@@ -60,8 +59,7 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 
 func (s *Server) ListKeys(ctx context.Context, req *xagentv1.ListKeysRequest) (*xagentv1.ListKeysResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	allowed := caller.Scopes.Allow(authscope.OpKeyRead)
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpKeyRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list keys"))
 	}
 	keys, err := s.store.ListKeys(ctx, nil, caller.OrgID)
@@ -75,8 +73,7 @@ func (s *Server) ListKeys(ctx context.Context, req *xagentv1.ListKeysRequest) (*
 
 func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) (*xagentv1.DeleteKeyResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	allowed := caller.Scopes.Allow(authscope.OpKeyWrite)
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpKeyWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write key"))
 	}
 	if err := s.store.DeleteKey(ctx, nil, req.Id, caller.OrgID); err != nil {

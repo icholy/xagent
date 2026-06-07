@@ -15,8 +15,7 @@ import (
 
 func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	allowed := caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId))
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(req.TaskId)) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	// Verify task ownership
@@ -58,8 +57,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 
 func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	allowed := caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.TaskId))
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskID(req.TaskId)) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
 	links, err := s.store.ListLinksByTask(ctx, nil, req.TaskId, caller.OrgID)

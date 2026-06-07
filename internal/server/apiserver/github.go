@@ -19,8 +19,7 @@ func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkG
 	if caller == nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
 	}
-	allowed := caller.Scopes.Allow(authscope.OpOrgWrite)
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpOrgWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write org"))
 	}
 	if req.InstallationId == 0 {

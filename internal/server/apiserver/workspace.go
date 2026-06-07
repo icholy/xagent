@@ -15,8 +15,7 @@ import (
 
 func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	allowed := caller.Scopes.Allow(authscope.OpWorkspaceWrite, authscope.WithWorkspaceRunner(req.RunnerId))
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite, authscope.WithWorkspaceRunner(req.RunnerId)) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot register workspaces"))
 	}
 	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
@@ -47,8 +46,7 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 
 func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	allowed := caller.Scopes.Allow(authscope.OpWorkspaceRead)
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpWorkspaceRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list workspaces"))
 	}
 	workspaces, err := s.store.ListWorkspaces(ctx, nil, caller.OrgID)
@@ -66,8 +64,7 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 	if req.RunnerId != "" {
 		attrs = append(attrs, authscope.WithWorkspaceRunner(req.RunnerId))
 	}
-	allowed := caller.Scopes.Allow(authscope.OpWorkspaceWrite, attrs...)
-	if !allowed {
+	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite, attrs...) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot clear workspaces"))
 	}
 	if req.RunnerId != "" {
