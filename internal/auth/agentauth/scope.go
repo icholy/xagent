@@ -31,13 +31,16 @@ func Scopes(opts ScopeOptions) authscope.Scopes {
 		authscope.New(authscope.OpTaskWrite, authscope.WithTaskID(opts.TaskID)),
 	}
 	if slices.Contains(opts.Capabilities, CapabilityChildTasks) {
+		// ignoreZero=true so a zero parent/runner panics in New rather than
+		// minting an unconstrained predicate; the runner always passes concrete
+		// values, so this only guards against misuse.
 		scopes = append(scopes,
-			authscope.New(authscope.OpTaskRead, authscope.WithTaskParent(opts.TaskID)),
-			authscope.New(authscope.OpTaskWrite, authscope.WithTaskParent(opts.TaskID)),
+			authscope.New(authscope.OpTaskRead, authscope.WithTaskParent(opts.TaskID, true)),
+			authscope.New(authscope.OpTaskWrite, authscope.WithTaskParent(opts.TaskID, true)),
 			authscope.New(authscope.OpTaskCreate,
-				authscope.WithTaskParent(opts.TaskID),
+				authscope.WithTaskParent(opts.TaskID, true),
 				authscope.WithTaskWorkspace(opts.Workspace),
-				authscope.WithTaskRunner(opts.Runner),
+				authscope.WithTaskRunner(opts.Runner, true),
 			),
 		)
 	}

@@ -89,9 +89,9 @@ func (p *AgentFilter) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRe
 		return nil, err
 	}
 	allowed := scopes.Allow(authscope.OpTaskCreate,
-		authscope.WithTaskParent(req.Parent),
+		authscope.WithTaskParent(req.Parent, true),
 		authscope.WithTaskWorkspace(req.Workspace),
-		authscope.WithTaskRunner(req.Runner),
+		authscope.WithTaskRunner(req.Runner, true),
 	)
 	if !allowed {
 		return nil, errPermissionDenied("can only create child tasks of own task")
@@ -104,7 +104,7 @@ func (p *AgentFilter) ListChildTasks(ctx context.Context, req *xagentv1.ListChil
 	if err != nil {
 		return nil, err
 	}
-	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskParent(req.ParentId))
+	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskParent(req.ParentId, true))
 	if !allowed {
 		return nil, errPermissionDenied("can only list children of own task")
 	}
@@ -122,7 +122,7 @@ func (p *AgentFilter) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest)
 	}
 	allowed := scopes.Allow(authscope.OpTaskRead,
 		authscope.WithTaskID(resp.Task.Id),
-		authscope.WithTaskParent(resp.Task.Parent),
+		authscope.WithTaskParent(resp.Task.Parent, true),
 	)
 	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
@@ -141,7 +141,7 @@ func (p *AgentFilter) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskD
 	}
 	allowed := scopes.Allow(authscope.OpTaskRead,
 		authscope.WithTaskID(details.Task.Id),
-		authscope.WithTaskParent(details.Task.Parent),
+		authscope.WithTaskParent(details.Task.Parent, true),
 	)
 	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
@@ -160,7 +160,7 @@ func (p *AgentFilter) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRe
 	}
 	allowed := scopes.Allow(authscope.OpTaskWrite,
 		authscope.WithTaskID(resp.Task.Id),
-		authscope.WithTaskParent(resp.Task.Parent),
+		authscope.WithTaskParent(resp.Task.Parent, true),
 	)
 	if !allowed {
 		return nil, errPermissionDenied("task is not a child of the current task")
@@ -189,7 +189,7 @@ func (p *AgentFilter) ListLogs(ctx context.Context, req *xagentv1.ListLogsReques
 		}
 		allowed := scopes.Allow(authscope.OpTaskRead,
 			authscope.WithTaskID(resp.Task.Id),
-			authscope.WithTaskParent(resp.Task.Parent),
+			authscope.WithTaskParent(resp.Task.Parent, true),
 		)
 		if !allowed {
 			return nil, errPermissionDenied("task is not a child of the current task")

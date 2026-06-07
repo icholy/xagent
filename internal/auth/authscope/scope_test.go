@@ -151,9 +151,9 @@ func TestAllow_OwnTask(t *testing.T) {
 		attrs []Attr
 		want  bool
 	}{
-		{"own task", []Attr{WithTaskID(42), WithTaskParent(7)}, true},
-		{"direct child", []Attr{WithTaskID(99), WithTaskParent(42)}, true},
-		{"unrelated task", []Attr{WithTaskID(5), WithTaskParent(7)}, false},
+		{"own task", []Attr{WithTaskID(42), WithTaskParent(7, true)}, true},
+		{"direct child", []Attr{WithTaskID(99), WithTaskParent(42, true)}, true},
+		{"unrelated task", []Attr{WithTaskID(5), WithTaskParent(7, true)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -170,11 +170,11 @@ func TestAllow_CreateConjunction(t *testing.T) {
 	t.Parallel()
 	set := Scopes{mustParse(t, `task.create:{"task.parent":"42","task.workspace":"ws","task.runner":"rn"}`)}
 
-	ok := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("ws"), WithTaskRunner("rn"))
+	ok := set.Allow(OpTaskCreate, WithTaskParent(42, true), WithTaskWorkspace("ws"), WithTaskRunner("rn", true))
 	assert.Equal(t, ok, true)
 
 	// Wrong workspace is denied even though parent and runner match.
-	denied := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("evil"), WithTaskRunner("rn"))
+	denied := set.Allow(OpTaskCreate, WithTaskParent(42, true), WithTaskWorkspace("evil"), WithTaskRunner("rn", true))
 	assert.Equal(t, denied, false)
 }
 
@@ -189,7 +189,7 @@ func TestAllow_SplitConjunctionIsHole(t *testing.T) {
 		mustParse(t, `task.create:{"task.workspace":"ws"}`),
 	}
 	// parent matches the first scope, which leaves workspace/runner unconstrained.
-	escalated := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("evil"), WithTaskRunner("evil"))
+	escalated := set.Allow(OpTaskCreate, WithTaskParent(42, true), WithTaskWorkspace("evil"), WithTaskRunner("evil", true))
 	assert.Equal(t, escalated, true)
 }
 
@@ -199,7 +199,7 @@ func TestAllow_WildcardAdmin(t *testing.T) {
 
 	// task.* covers any action on a task instance, including a child.
 	taskAdmin := Scopes{mustParse(t, `task.*`)}
-	assert.Equal(t, taskAdmin.Allow(OpTaskWrite, WithTaskID(99), WithTaskParent(42)), true)
+	assert.Equal(t, taskAdmin.Allow(OpTaskWrite, WithTaskID(99), WithTaskParent(42, true)), true)
 	// ...but not a different resource.
 	assert.Equal(t, taskAdmin.Allow(OpGitHubTokenCreate), false)
 
@@ -211,21 +211,19 @@ func TestAllow_WildcardAdmin(t *testing.T) {
 	assert.Equal(t, admin.Allow([]string{"task", "read", "extra"}), false)
 }
 
-// TestWithAttrIgnore checks the typed With* constructors flag a zero/unset
-// argument as ignored, while concrete values are not.
+// TestWithAttrIgnore checks WithTaskParent/WithTaskRunner flag a zero argument as
+// ignored only when ignoreZero is set; a concrete value never is.
 func TestWithAttrIgnore(t *testing.T) {
 	t.Parallel()
-	assert.Assert(t, WithTaskID(0).Ignore)
-	assert.Assert(t, WithTaskParent(0).Ignore)
-	assert.Assert(t, WithTaskWorkspace("").Ignore)
-	assert.Assert(t, WithTaskRunner("").Ignore)
-	assert.Assert(t, WithWorkspaceRunner("").Ignore)
-
-	assert.Assert(t, !WithTaskID(1).Ignore)
-	assert.Assert(t, !WithTaskParent(42).Ignore)
-	assert.Assert(t, !WithTaskWorkspace("ws").Ignore)
-	assert.Assert(t, !WithTaskRunner("rn").Ignore)
-	assert.Assert(t, !WithWorkspaceRunner("rn").Ignore)
+	// ignoreZero set and value zero -> ignored.
+	assert.Assert(t, WithTaskParent(0, true).Ignore)
+	assert.Assert(t, WithTaskRunner("", true).Ignore)
+	// ignoreZero set but value concrete -> not ignored.
+	assert.Assert(t, !WithTaskParent(42, true).Ignore)
+	assert.Assert(t, !WithTaskRunner("rn", true).Ignore)
+	// ignoreZero unset -> never ignored, even at the zero value.
+	assert.Assert(t, !WithTaskParent(0, false).Ignore)
+	assert.Assert(t, !WithTaskRunner("", false).Ignore)
 }
 
 // TestAllowIgnoresUnsetAttr checks Allow treats an ignored attr as not provided:
@@ -235,18 +233,16 @@ func TestAllowIgnoresUnsetAttr(t *testing.T) {
 	t.Parallel()
 	// A coarse scope (no preds) matches even though parent is ignored.
 	coarse := Scopes{mustParse(t, "task.create")}
-	assert.Assert(t, coarse.Allow(OpTaskCreate, WithTaskParent(0), WithTaskWorkspace("ws"), WithTaskRunner("rn")))
-
-	// A coarse workspace.write matches when the runner attr is ignored, mirroring
-	// a runner-less ClearWorkspaces.
-	wsCoarse := Scopes{mustParse(t, "workspace.write")}
-	assert.Assert(t, wsCoarse.Allow(OpWorkspaceWrite, WithWorkspaceRunner("")))
+	assert.Assert(t, coarse.Allow(OpTaskCreate, WithTaskParent(0, true), WithTaskWorkspace("ws"), WithTaskRunner("rn", true)))
 
 	// A scope constraining the ignored key is NOT satisfied by the absent attr...
 	constrained := Scopes{mustParse(t, `task.create:{"task.parent":"42"}`)}
-	assert.Assert(t, !constrained.Allow(OpTaskCreate, WithTaskParent(0)))
+	assert.Assert(t, !constrained.Allow(OpTaskCreate, WithTaskParent(0, true)))
 	// ...but a concrete matching value still satisfies it.
-	assert.Assert(t, constrained.Allow(OpTaskCreate, WithTaskParent(42)))
+	assert.Assert(t, constrained.Allow(OpTaskCreate, WithTaskParent(42, true)))
+	// ...and a zero with ignoreZero=false is matched as the literal "0".
+	zeroLiteral := Scopes{mustParse(t, `task.create:{"task.parent":"0"}`)}
+	assert.Assert(t, zeroLiteral.Allow(OpTaskCreate, WithTaskParent(0, false)))
 }
 
 // TestNewPanicsOnIgnoredAttr checks New rejects an ignored attr, since folding an
@@ -256,7 +252,7 @@ func TestNewPanicsOnIgnoredAttr(t *testing.T) {
 	defer func() {
 		assert.Assert(t, recover() != nil, "expected New to panic on an ignored attr")
 	}()
-	New(OpTaskCreate, WithTaskParent(0))
+	New(OpTaskCreate, WithTaskParent(0, true))
 }
 
 func TestParse(t *testing.T) {
