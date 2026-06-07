@@ -16,15 +16,9 @@ import (
 
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	// All-or-nothing: every referenced task must allow task.write before any
-	// event is applied. An empty submission carries no per-event target, so it
-	// requires the coarse task.write capability instead — this keeps the RPC
-	// from being a fail-open no-op (the completeness test relies on every RPC
-	// performing a scope check).
-	if len(req.Events) == 0 {
-		if !caller.Scopes.Allow(authscope.OpTaskWrite) {
-			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
-		}
+	// All-or-nothing: the caller needs task.write, and each event's task.
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 	}
 	for _, ev := range req.Events {
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, authscope.WithTaskID(ev.TaskId)) {
