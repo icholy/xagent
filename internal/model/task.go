@@ -82,7 +82,7 @@ type Task struct {
 // post-load Allow check in the apiserver task handlers. Centralizing the set
 // here keeps a handler from forgetting one (especially task.archived): own-or-
 // child matching rides on task.id/task.parent and archive-based revocation on
-// task.archived. See proposals/draft/eliminate-runner-socket-proxy.md §5.
+// task.archived. See proposals/implemented/eliminate-runner-socket-proxy.md §5.
 func (t *Task) ScopeAttr() []authscope.Attr {
 	return []authscope.Attr{
 		authscope.WithTaskID(t.ID),

@@ -19,7 +19,7 @@ import (
 // the authoritative task row (never the request) before minting the scopes. The
 // minted token is an ordinary apiauth.AppClaims signed with the server's app key,
 // so it verifies on the normal app-JWT path; its authority lives entirely in its
-// narrow scopes. See proposals/draft/eliminate-runner-socket-proxy.md §1/§2/§7.
+// narrow scopes. See proposals/implemented/eliminate-runner-socket-proxy.md §1/§2/§7.
 func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpTaskTokenCreate) {

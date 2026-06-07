@@ -2,7 +2,7 @@
 
 Issue: https://github.com/icholy/xagent/issues/890
 
-Builds on: [`proposals/draft/scope-based-permissions.md`](./scope-based-permissions.md)
+Builds on: [`proposals/draft/scope-based-permissions.md`](../draft/scope-based-permissions.md)
 (the `authscope` engine and API-caller enforcement landed in #902/#905/#906).
 
 ## Problem

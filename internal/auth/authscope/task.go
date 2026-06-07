@@ -24,7 +24,7 @@ var (
 	// OpTaskTokenCreate is a no-instance, capability-only op: the right to mint a
 	// narrow task token via the CreateTaskToken RPC. It has no instance attribute,
 	// so its handler gates on Scopes.AllowOp (see
-	// proposals/draft/eliminate-runner-socket-proxy.md §1/§7).
+	// proposals/implemented/eliminate-runner-socket-proxy.md §1/§7).
 	OpTaskTokenCreate = []string{"task_token", "create"}
 
 	// API-caller operation paths (proposal §7). Events and keys are managed
@@ -72,7 +72,7 @@ func WithTaskRunner(runner string) Attr { return StringAttr(AttrTaskRunner, runn
 // (not a zero/absent case), so it is always emitted as "true"/"false" — a scope
 // constraining task.archived:"false" denies a request carrying "true", which is
 // how archive-based revocation falls out of the ordinary predicate rule. See
-// proposals/draft/eliminate-runner-socket-proxy.md §3.
+// proposals/implemented/eliminate-runner-socket-proxy.md §3.
 func WithTaskArchived(archived bool) Attr {
 	return StringAttr(AttrTaskArchived, strconv.FormatBool(archived))
 }

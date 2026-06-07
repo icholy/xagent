@@ -102,7 +102,7 @@ func (scopes Scopes) Allow(op []string, attrs ...Attr) bool {
 // still satisfies AllowOp(OpTaskWrite): it answers capability presence, not
 // instance access. Use it only for genuine no-instance capability questions (e.g.
 // OpTaskTokenCreate), never as the pre-half of an instance check — see
-// proposals/draft/eliminate-runner-socket-proxy.md §5.
+// proposals/implemented/eliminate-runner-socket-proxy.md §5.
 func (scopes Scopes) AllowOp(op []string) bool {
 	for _, s := range scopes {
 		if s.allowOp(op) {

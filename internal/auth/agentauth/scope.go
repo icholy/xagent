@@ -29,7 +29,7 @@ type ScopeOptions struct {
 // Every task scope additionally constrains task.archived:"false", which is what
 // makes archiving a task revoke its token: an archived task's row carries
 // task.archived:"true", failing the "false" predicate uniformly for reads and
-// writes (see proposals/draft/eliminate-runner-socket-proxy.md §3). The handlers
+// writes (see proposals/implemented/eliminate-runner-socket-proxy.md §3). The handlers
 // pass the task's real archived state from the loaded row (via Task.ScopeAttr);
 // the request-only handlers (CreateTask, ListChildTasks) pass a literal
 // task.archived:"false" since they create/list active work and have no row.

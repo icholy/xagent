@@ -17,7 +17,7 @@ import (
 // This file migrates the behavioral spec that lived in
 // internal/agentmcp/filter_test.go (own task / direct children / archived
 // gating) onto the apiserver handlers, which now enforce per-task scopes
-// directly (proposals/draft/eliminate-runner-socket-proxy.md §3/§5, with the
+// directly (proposals/implemented/eliminate-runner-socket-proxy.md §3/§5, with the
 // two-tier AllowOp+Allow override). It also adds, for every converted handler, a
 // wrong-instance test: a caller scoped to task A must be denied on task B. That
 // is the safety net for the pre-gate design — the empty-scopes completeness test
