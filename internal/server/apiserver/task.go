@@ -56,11 +56,31 @@ func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTa
 
 func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	// No row exists for the listing itself; authorize directly on the requested
-	// parent so a task token can list only its own children
-	// (task.read:{task.parent:self}). No row read, so no AllowOp pre-gate.
-	if !caller.Scopes.Allow(authscope.OpTaskRead, authscope.WithTaskParent(req.ParentId)) {
+	if !caller.Scopes.AllowOp(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list tasks"))
+	}
+	// A blanket task.read (admin/coarse) is authorized without inspecting the row,
+	// and the list query is already org-scoped. A predicated caller (a task token)
+	// loads the parent row so the archived gate keys off the parent's real state:
+	// authorize on the requested parent id plus the parent's archived flag, NOT the
+	// parent's full ScopeAttr(). Keying on task.parent keeps this own-children-only
+	// (task.read:{task.parent:self}); keying on the parent's id would also let an
+	// agent list a direct child's children. The archived flag denies an agent whose
+	// own task has been archived.
+	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+		parent, err := s.store.GetTask(ctx, nil, req.ParentId, caller.OrgID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.ParentId))
+			}
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskRead,
+			authscope.WithTaskParent(req.ParentId),
+			authscope.WithTaskArchived(parent.Archived),
+		) {
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list tasks"))
+		}
 	}
 	tasks, err := s.store.ListTaskChildren(ctx, nil, req.ParentId, caller.OrgID)
 	if err != nil {
@@ -78,12 +98,15 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	// No row exists yet, so authorize directly on the request attributes — the
-	// narrow create scope (parent/workspace/runner) a task token holds. There is no
-	// row read to fail fast before, so no AllowOp pre-gate is needed.
+	// narrow create scope (parent/workspace/runner) a task token holds. The
+	// literal task.archived:"false" satisfies the minted scope's archived
+	// predicate: a freshly created task is never archived. There is no row read to
+	// fail fast before, so no AllowOp pre-gate is needed.
 	if !caller.Scopes.Allow(authscope.OpTaskCreate,
 		authscope.WithTaskParent(req.Parent),
 		authscope.WithTaskWorkspace(req.Workspace),
 		authscope.WithTaskRunner(req.Runner),
+		authscope.WithTaskArchived(false),
 	) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create task"))
 	}

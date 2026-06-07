@@ -40,6 +40,9 @@ func TestRunnerStart(t *testing.T) {
 
 	// Create mock client
 	mock := &xagentclient.ClientMock{
+		CreateTaskTokenFunc: func(_ context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
+			return &xagentv1.CreateTaskTokenResponse{Token: "test-token"}, nil
+		},
 		SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
@@ -56,17 +59,21 @@ func TestRunnerStart(t *testing.T) {
 	privateKey, err := agentauth.CreatePrivateKey()
 	assert.NilError(t, err)
 
-	// Create runner
+	// Create runner. The agent connects to the C2 directly over the network, so
+	// the container shares the host network namespace (NetworkMode "host") to
+	// reach the httptest server on 127.0.0.1, and ServerURL is the same URL.
 	client := xagentclient.New(xagentclient.Options{BaseURL: ts.URL})
 	r, err := New(Options{
 		Client:     client,
+		ServerURL:  ts.URL,
 		PrivateKey: privateKey,
 		Queue:      NewEventQueue(EventQueueOptions{Client: client, Log: slog.Default()}),
 		Workspaces: &workspace.Config{
 			Workspaces: map[string]workspace.Workspace{
 				"test": {
 					Container: workspace.Container{
-						Image: "alpine:latest",
+						Image:       "alpine:latest",
+						NetworkMode: "host",
 					},
 					Agent: workspace.Agent{
 						Type: "dummy",

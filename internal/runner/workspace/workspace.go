@@ -175,6 +175,11 @@ type Container struct {
 	User        string            `yaml:"user"`
 	Volumes     []string          `yaml:"volumes"`
 	Networks    []string          `yaml:"networks"`
+	// NetworkMode sets the container's Docker network mode (e.g. "host"). Empty
+	// uses the default bridge. Now that agents connect to the C2 directly over
+	// the network instead of a bind-mounted socket, a workspace can use this to
+	// control how the container reaches the C2.
+	NetworkMode string            `yaml:"network_mode"`
 	GroupAdd    []string          `yaml:"group_add"`
 	Environment map[string]string `yaml:"environment"`
 }

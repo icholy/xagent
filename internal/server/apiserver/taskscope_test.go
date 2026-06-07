@@ -188,6 +188,27 @@ func TestTaskScope_ListChildTasks_ChildGated(t *testing.T) {
 	assert.Equal(t, len(resp.Tasks), 1)
 }
 
+// ListChildTasks keys the archived gate off the parent's real state: a token
+// scoped to task N may list N's children while N is active, but is denied once N
+// is archived (the minted child-read scope constrains task.archived:"false").
+func TestTaskScope_ListChildTasks_ArchivedParentDenied(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	adminCtx, org, parent, _ := newOrgWithTasks(t, srv)
+
+	withChild := scopedCtx(t, org, taskScopes(parent.Id, agentauth.CapabilityChildTasks))
+
+	// Active parent: the token can list its children.
+	resp, err := srv.ListChildTasks(withChild, &xagentv1.ListChildTasksRequest{ParentId: parent.Id})
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Tasks), 1)
+
+	// Archived parent: the same token is denied.
+	makeArchived(t, srv, adminCtx, org, parent.Id)
+	_, err = srv.ListChildTasks(withChild, &xagentv1.ListChildTasksRequest{ParentId: parent.Id})
+	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
+}
+
 // --- Behavioral spec: archived gating ---
 //
 // In this slice the minter does not yet emit task.archived:"false" (that is
