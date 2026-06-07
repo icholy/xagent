@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"log/slog"
 
@@ -25,6 +26,10 @@ type Server struct {
 	publisher pubsub.Publisher
 	atlassian *atlassianserver.Server
 	github    *githubserver.Server
+	// appKey signs the app JWTs minted by CreateTaskToken; it is the same key the
+	// auth layer uses for every other app JWT, so the minted token verifies on the
+	// normal VerifyAppToken path.
+	appKey ed25519.PrivateKey
 }
 
 type Options struct {
@@ -34,6 +39,7 @@ type Options struct {
 	Publisher pubsub.Publisher
 	Atlassian *atlassianserver.Server
 	GitHub    *githubserver.Server
+	AppKey    ed25519.PrivateKey
 }
 
 func New(opts Options) *Server {
@@ -48,6 +54,7 @@ func New(opts Options) *Server {
 		publisher: opts.Publisher,
 		atlassian: opts.Atlassian,
 		github:    opts.GitHub,
+		appKey:    opts.AppKey,
 	}
 }
 

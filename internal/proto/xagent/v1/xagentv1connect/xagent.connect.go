@@ -105,6 +105,9 @@ const (
 	// XAgentServiceSubmitRunnerEventsProcedure is the fully-qualified name of the XAgentService's
 	// SubmitRunnerEvents RPC.
 	XAgentServiceSubmitRunnerEventsProcedure = "/xagent.v1.XAgentService/SubmitRunnerEvents"
+	// XAgentServiceCreateTaskTokenProcedure is the fully-qualified name of the XAgentService's
+	// CreateTaskToken RPC.
+	XAgentServiceCreateTaskTokenProcedure = "/xagent.v1.XAgentService/CreateTaskToken"
 	// XAgentServiceRegisterWorkspacesProcedure is the fully-qualified name of the XAgentService's
 	// RegisterWorkspaces RPC.
 	XAgentServiceRegisterWorkspacesProcedure = "/xagent.v1.XAgentService/RegisterWorkspaces"
@@ -189,6 +192,7 @@ type XAgentServiceClient interface {
 	ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
+	CreateTaskToken(context.Context, *v1.CreateTaskTokenRequest) (*v1.CreateTaskTokenResponse, error)
 	RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error)
 	ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error)
 	ClearWorkspaces(context.Context, *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error)
@@ -378,6 +382,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("SubmitRunnerEvents")),
 			connect.WithClientOptions(opts...),
 		),
+		createTaskToken: connect.NewClient[v1.CreateTaskTokenRequest, v1.CreateTaskTokenResponse](
+			httpClient,
+			baseURL+XAgentServiceCreateTaskTokenProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("CreateTaskToken")),
+			connect.WithClientOptions(opts...),
+		),
 		registerWorkspaces: connect.NewClient[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse](
 			httpClient,
 			baseURL+XAgentServiceRegisterWorkspacesProcedure,
@@ -529,6 +539,7 @@ type xAgentServiceClient struct {
 	listEventTasks                 *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
 	listEventsByTask               *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
 	submitRunnerEvents             *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
+	createTaskToken                *connect.Client[v1.CreateTaskTokenRequest, v1.CreateTaskTokenResponse]
 	registerWorkspaces             *connect.Client[v1.RegisterWorkspacesRequest, v1.RegisterWorkspacesResponse]
 	listWorkspaces                 *connect.Client[v1.ListWorkspacesRequest, v1.ListWorkspacesResponse]
 	clearWorkspaces                *connect.Client[v1.ClearWorkspacesRequest, v1.ClearWorkspacesResponse]
@@ -785,6 +796,15 @@ func (c *xAgentServiceClient) SubmitRunnerEvents(ctx context.Context, req *v1.Su
 	return nil, err
 }
 
+// CreateTaskToken calls xagent.v1.XAgentService.CreateTaskToken.
+func (c *xAgentServiceClient) CreateTaskToken(ctx context.Context, req *v1.CreateTaskTokenRequest) (*v1.CreateTaskTokenResponse, error) {
+	response, err := c.createTaskToken.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // RegisterWorkspaces calls xagent.v1.XAgentService.RegisterWorkspaces.
 func (c *xAgentServiceClient) RegisterWorkspaces(ctx context.Context, req *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error) {
 	response, err := c.registerWorkspaces.CallUnary(ctx, connect.NewRequest(req))
@@ -993,6 +1013,7 @@ type XAgentServiceHandler interface {
 	ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
+	CreateTaskToken(context.Context, *v1.CreateTaskTokenRequest) (*v1.CreateTaskTokenResponse, error)
 	RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error)
 	ListWorkspaces(context.Context, *v1.ListWorkspacesRequest) (*v1.ListWorkspacesResponse, error)
 	ClearWorkspaces(context.Context, *v1.ClearWorkspacesRequest) (*v1.ClearWorkspacesResponse, error)
@@ -1178,6 +1199,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("SubmitRunnerEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceCreateTaskTokenHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceCreateTaskTokenProcedure,
+		svc.CreateTaskToken,
+		connect.WithSchema(xAgentServiceMethods.ByName("CreateTaskToken")),
+		connect.WithHandlerOptions(opts...),
+	)
 	xAgentServiceRegisterWorkspacesHandler := connect.NewUnaryHandlerSimple(
 		XAgentServiceRegisterWorkspacesProcedure,
 		svc.RegisterWorkspaces,
@@ -1352,6 +1379,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListEventsByTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceSubmitRunnerEventsProcedure:
 			xAgentServiceSubmitRunnerEventsHandler.ServeHTTP(w, r)
+		case XAgentServiceCreateTaskTokenProcedure:
+			xAgentServiceCreateTaskTokenHandler.ServeHTTP(w, r)
 		case XAgentServiceRegisterWorkspacesProcedure:
 			xAgentServiceRegisterWorkspacesHandler.ServeHTTP(w, r)
 		case XAgentServiceListWorkspacesProcedure:
@@ -1503,6 +1532,10 @@ func (UnimplementedXAgentServiceHandler) ListEventsByTask(context.Context, *v1.L
 
 func (UnimplementedXAgentServiceHandler) SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SubmitRunnerEvents is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) CreateTaskToken(context.Context, *v1.CreateTaskTokenRequest) (*v1.CreateTaskTokenResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateTaskToken is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) RegisterWorkspaces(context.Context, *v1.RegisterWorkspacesRequest) (*v1.RegisterWorkspacesResponse, error) {

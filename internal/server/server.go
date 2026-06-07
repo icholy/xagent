@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/ed25519"
 	"log/slog"
 	"net/http"
 
@@ -44,6 +45,7 @@ type Options struct {
 	CORS          bool
 	Publisher     pubsub.Publisher
 	Notify        *notifyserver.Server
+	AppKey        ed25519.PrivateKey
 }
 
 func New(opts Options) *Server {
@@ -58,6 +60,7 @@ func New(opts Options) *Server {
 		Publisher: opts.Publisher,
 		Atlassian: opts.Atlassian,
 		GitHub:    opts.GitHub,
+		AppKey:    opts.AppKey,
 	})
 	return &Server{
 		log:       log,

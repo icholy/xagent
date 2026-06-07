@@ -34,6 +34,7 @@ service XAgentService {
   rpc ListEventTasks(ListEventTasksRequest) returns (ListEventTasksResponse);
   rpc ListEventsByTask(ListEventsByTaskRequest) returns (ListEventsByTaskResponse);
   rpc SubmitRunnerEvents(SubmitRunnerEventsRequest) returns (SubmitRunnerEventsResponse);
+  rpc CreateTaskToken(CreateTaskTokenRequest) returns (CreateTaskTokenResponse);
   rpc RegisterWorkspaces(RegisterWorkspacesRequest) returns (RegisterWorkspacesResponse);
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
   rpc ClearWorkspaces(ClearWorkspacesRequest) returns (ClearWorkspacesResponse);
@@ -366,6 +367,17 @@ message SubmitRunnerEventsRequest {
 }
 
 message SubmitRunnerEventsResponse {}
+
+message CreateTaskTokenRequest {
+  int64 task_id = 1;
+  // Workspace capability flags the runner enabled for this task
+  // (agentauth.CapabilityChildTasks, agentauth.CapabilityGitHubToken).
+  repeated string capabilities = 2;
+}
+
+message CreateTaskTokenResponse {
+  string token = 1;
+}
 
 message RegisteredWorkspace {
   string name = 1;

@@ -216,6 +216,7 @@ var ServerCommand = &cli.Command{
 			CORS:          cmd.Bool("cors"),
 			Publisher:     ps,
 			Notify:        notify,
+			AppKey:        appKey,
 		}
 		if cmd.IsSet("github-client-id") {
 			gh, err := githubserver.New(githubserver.Options{

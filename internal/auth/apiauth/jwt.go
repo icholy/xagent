@@ -43,6 +43,22 @@ func NewAppClaims(user *UserInfo) *AppClaims {
 	}
 }
 
+// NewTaskTokenClaims builds the AppClaims for a server-minted task token: an
+// ordinary app JWT carrying the task's org and a narrow scope set instead of the
+// admin wildcard. There is no expiry — revocation is the task.archived scope
+// predicate, not the clock (see proposals/draft/eliminate-runner-socket-proxy.md
+// §2/§3). The token verifies on the normal VerifyAppToken path like any other app
+// JWT; its authority lives entirely in scopes.
+func NewTaskTokenClaims(orgID int64, scopes authscope.Scopes) *AppClaims {
+	return &AppClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt: jwt.NewNumericDate(time.Now()),
+		},
+		OrgID:  orgID,
+		Scopes: scopes,
+	}
+}
+
 // CreateAppPrivateKey generates a new Ed25519 private key for signing app JWTs.
 func CreateAppPrivateKey() (ed25519.PrivateKey, error) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
