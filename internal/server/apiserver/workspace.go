@@ -59,7 +59,8 @@ func (s *Server) ListWorkspaces(ctx context.Context, req *xagentv1.ListWorkspace
 func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspacesRequest) (*xagentv1.ClearWorkspacesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	// A targeted clear is scoped to its runner; an org-wide clear (empty
-	// RunnerId) self-ignores the attr and gets the coarse check (proposal §7).
+	// RunnerId) asserts an empty runner that only a coarse workspace.write or
+	// admin grant matches (proposal §7).
 	if !caller.Scopes.Allow(authscope.OpWorkspaceWrite, authscope.WithWorkspaceRunner(req.RunnerId)) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot clear workspaces"))
 	}
