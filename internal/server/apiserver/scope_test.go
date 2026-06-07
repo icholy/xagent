@@ -10,22 +10,6 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// scopeExemptMethods are the only XAgentService methods that do NOT gate on the
-// caller's scopes, so TestAllMethodsScopeChecked skips them. Each entry is
-// justified; every other method must deny an empty-scopes caller with
-// PermissionDenied. Adding a new RPC therefore forces either a real scope check
-// or a deliberate, reviewed entry here.
-var scopeExemptMethods = map[string]string{
-	// Ping carries no caller data and returns the server version unconditionally.
-	"Ping": "no caller data; returns version unconditionally",
-	// GetProfile acts on the caller's own identity (the identity axis, not an
-	// intra-org capability); it is gated by RequireUserInterceptor, not scopes.
-	"GetProfile": "identity axis; gated by being an authenticated user, not scopes",
-	// CreateGitHubToken is intentionally Unimplemented on the API server; only
-	// the runner proxy serves it (#806).
-	"CreateGitHubToken": "API server leaves it Unimplemented; served by the runner proxy",
-}
-
 // TestAllMethodsScopeChecked is the completeness safety net for the explicit
 // per-handler enforcement model (proposal §8). There is no central default-deny
 // interceptor, so a newly added RPC that forgets its top-of-handler Allow would
@@ -36,6 +20,20 @@ var scopeExemptMethods = map[string]string{
 // gate before touching the store, so no database is needed.
 func TestAllMethodsScopeChecked(t *testing.T) {
 	t.Parallel()
+	// scopeExemptMethods are the only methods that do NOT gate on the caller's
+	// scopes, so they are skipped. Each entry is justified; every other method
+	// must deny an empty-scopes caller, so adding a new RPC forces either a real
+	// scope check or a deliberate, reviewed entry here.
+	scopeExemptMethods := map[string]string{
+		// Ping carries no caller data and returns the server version unconditionally.
+		"Ping": "no caller data; returns version unconditionally",
+		// GetProfile acts on the caller's own identity (the identity axis, not an
+		// intra-org capability); it is gated by RequireUserInterceptor, not scopes.
+		"GetProfile": "identity axis; gated by being an authenticated user, not scopes",
+		// CreateGitHubToken is intentionally Unimplemented on the API server; only
+		// the runner proxy serves it (#806).
+		"CreateGitHubToken": "API server leaves it Unimplemented; served by the runner proxy",
+	}
 	srv := New(Options{})
 	// A present-but-scopeless caller: tenancy is satisfied (a caller exists) so
 	// every handler reaches its scope gate, which must deny.
