@@ -154,23 +154,23 @@ type createTaskInput struct {
 }
 
 func (h *handlers) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
-	archiveAfter := h.defaultArchiveAfter
-	if input.ArchiveAfter != "" {
-		d, err := time.ParseDuration(input.ArchiveAfter)
-		if err != nil {
-			return errorResult("invalid archive_after %q: %v", input.ArchiveAfter, err), nil, nil
-		}
-		archiveAfter = durationpb.New(d)
-	}
-	resp, err := h.service.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	createReq := &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Workspace: input.Workspace,
 		Runner:    input.Runner,
 		Instructions: []*xagentv1.Instruction{
 			{Text: input.Instruction},
 		},
-		ArchiveAfter: archiveAfter,
-	})
+		ArchiveAfter: h.defaultArchiveAfter,
+	}
+	if input.ArchiveAfter != "" {
+		d, err := time.ParseDuration(input.ArchiveAfter)
+		if err != nil {
+			return errorResult("invalid archive_after %q: %v", input.ArchiveAfter, err), nil, nil
+		}
+		createReq.ArchiveAfter = durationpb.New(d)
+	}
+	resp, err := h.service.CreateTask(ctx, createReq)
 	if err != nil {
 		return errorResult("failed to create task: %v", err), nil, nil
 	}
