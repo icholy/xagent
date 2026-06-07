@@ -89,9 +89,10 @@ func (p *AgentFilter) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRe
 		return nil, err
 	}
 	allowed := scopes.Allow(authscope.OpTaskCreate,
-		authscope.WithTaskParent(req.Parent, true),
+		// An agent only creates children, so parent and runner are both required.
+		authscope.WithTaskParent(req.Parent, false),
 		authscope.WithTaskWorkspace(req.Workspace),
-		authscope.WithTaskRunner(req.Runner, true),
+		authscope.WithTaskRunner(req.Runner, false),
 	)
 	if !allowed {
 		return nil, errPermissionDenied("can only create child tasks of own task")
@@ -104,7 +105,7 @@ func (p *AgentFilter) ListChildTasks(ctx context.Context, req *xagentv1.ListChil
 	if err != nil {
 		return nil, err
 	}
-	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskParent(req.ParentId, true))
+	allowed := scopes.Allow(authscope.OpTaskRead, authscope.WithTaskParent(req.ParentId, false))
 	if !allowed {
 		return nil, errPermissionDenied("can only list children of own task")
 	}

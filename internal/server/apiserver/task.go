@@ -76,9 +76,10 @@ func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTask
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpTaskCreate,
+		// parent is optional (0 == top-level); runner is required.
 		authscope.WithTaskParent(req.Parent, true),
 		authscope.WithTaskWorkspace(req.Workspace),
-		authscope.WithTaskRunner(req.Runner, true),
+		authscope.WithTaskRunner(req.Runner, false),
 	) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create task"))
 	}
