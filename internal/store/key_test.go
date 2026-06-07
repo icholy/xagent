@@ -15,8 +15,7 @@ func TestCreateKeyScopesRoundTrip(t *testing.T) {
 	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
-	readOwn, err := authscope.Parse(`task.read:{"task.id":"42"}`)
-	assert.NilError(t, err)
+	readOwn := authscope.New(authscope.OpTaskRead, authscope.WithTaskID(42))
 	key := &model.Key{
 		ID:        uuid.NewString(),
 		Name:      "scoped-key",
@@ -24,7 +23,7 @@ func TestCreateKeyScopesRoundTrip(t *testing.T) {
 		OrgID:     org.OrgID,
 		Scopes:    authscope.Scopes{readOwn},
 	}
-	err = s.CreateKey(t.Context(), nil, key)
+	err := s.CreateKey(t.Context(), nil, key)
 	assert.NilError(t, err)
 
 	// Act

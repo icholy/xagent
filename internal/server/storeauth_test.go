@@ -16,10 +16,9 @@ func TestValidateKeyReturnsScopes(t *testing.T) {
 	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
-	readOwn, err := authscope.Parse(`task.read:{"task.id":"7"}`)
-	assert.NilError(t, err)
+	readOwn := authscope.New(authscope.OpTaskRead, authscope.WithTaskID(7))
 	hash := uuid.NewString()
-	err = s.CreateKey(t.Context(), nil, &model.Key{
+	err := s.CreateKey(t.Context(), nil, &model.Key{
 		ID:        uuid.NewString(),
 		Name:      "scoped",
 		TokenHash: hash,
