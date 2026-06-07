@@ -2,17 +2,22 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
 
 func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest) (*xagentv1.CreateLinkResponse, error) {
 	caller := apiauth.MustCaller(ctx)
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
+	}
 	// Verify task ownership
 	ok, err := s.store.HasTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
@@ -52,6 +57,9 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 
 func (s *Server) ListLinks(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
 	caller := apiauth.MustCaller(ctx)
+	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
+	}
 	links, err := s.store.ListLinksByTask(ctx, nil, req.TaskId, caller.OrgID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

@@ -9,6 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
@@ -17,6 +18,9 @@ func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkG
 	caller := apiauth.Caller(ctx)
 	if caller == nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
+	}
+	if !caller.Scopes.Allow(authscope.OpOrgWrite) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write org"))
 	}
 	if req.InstallationId == 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("installation_id is required"))

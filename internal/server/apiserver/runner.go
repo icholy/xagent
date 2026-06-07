@@ -9,12 +9,16 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
 
 func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	caller := apiauth.MustCaller(ctx)
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
+	}
 	for _, pbEvent := range req.Events {
 		event := model.RunnerEventFromProto(pbEvent)
 		notification := model.Notification{

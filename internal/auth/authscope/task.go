@@ -1,9 +1,12 @@
 package authscope
 
-// This file defines the concrete task-caller scope taxonomy that rides on the
-// generic matching engine in scope.go: the operation paths, the namespaced
-// attribute keys, and the typed attribute constructors that call sites pass to
-// Scopes.Allow.
+// This file defines the concrete scope taxonomy that rides on the generic
+// matching engine in scope.go: the operation paths, the namespaced attribute
+// keys, and the typed attribute constructors that call sites pass to
+// Scopes.Allow. It covers both the task-caller surface (the agent path's
+// AgentFilter and the runner minter agentauth.Scopes) and the API-caller
+// surface (the apiserver handlers); see the per-RPC mapping in
+// proposals/draft/scope-based-permissions.md §7.
 
 // Operation paths, as segment slices. The single source of truth for each
 // operation: scope creation (the runner's token minter, agentauth.Scopes)
@@ -15,10 +18,29 @@ var (
 	OpTaskWrite         = []string{"task", "write"}
 	OpTaskCreate        = []string{"task", "create"}
 	OpGitHubTokenCreate = []string{"github_token", "create"}
+
+	// API-caller operation paths (proposal §7). Events and keys are managed
+	// coarsely — there is no instance attribute for them — so their RPCs are
+	// op-level checks. Lifecycle and sub-resource verbs fold into write.
+	OpEventRead      = []string{"event", "read"}
+	OpEventWrite     = []string{"event", "write"} // delete + add/remove task fold into write
+	OpEventCreate    = []string{"event", "create"}
+	OpWorkspaceRead  = []string{"workspace", "read"}
+	OpWorkspaceWrite = []string{"workspace", "write"} // register + clear
+	OpKeyRead        = []string{"key", "read"}
+	OpKeyCreate      = []string{"key", "create"}
+	OpKeyWrite       = []string{"key", "write"} // delete folds into write (coarse, no key.id)
+	OpOrgRead        = []string{"org", "read"}  // settings, members, routing-rule reads
+	OpOrgWrite       = []string{"org", "write"} // members, settings, routing-rules, GH-installation link
+	OpOrgCreate      = []string{"org", "create"}
+	OpOrgDelete      = []string{"org", "delete"}
+	OpAccountWrite   = []string{"account", "write"} // unlink GitHub/Atlassian — user-identity axis
 )
 
 // Attribute keys, namespaced by resource ("task.id", not "id") so attribute
-// names stay globally unambiguous as the taxonomy grows.
+// names stay globally unambiguous as the taxonomy grows. These are used by the
+// agent-caller surface (AgentFilter and the runner minter); the API-caller
+// handlers check the coarse op only (proposal §7).
 const (
 	AttrTaskID        = "task.id"
 	AttrTaskParent    = "task.parent"
