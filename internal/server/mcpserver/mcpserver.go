@@ -153,8 +153,8 @@ type createTaskInput struct {
 	ArchiveAfter string `json:"archive_after,omitempty" jsonschema:"Auto-archive the task this long after it reaches a terminal status, as a Go duration string (e.g. \"30m\", \"1h\"). \"0\" = never, a negative value like \"-1s\" = archive immediately on terminal status, positive = delay. When omitted, the server default is used."`
 }
 
-func (h *handlers) createTask(ctx context.Context, req *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
-	createReq := &xagentv1.CreateTaskRequest{
+func (h *handlers) createTask(ctx context.Context, _ *mcp.CallToolRequest, input createTaskInput) (*mcp.CallToolResult, any, error) {
+	req := &xagentv1.CreateTaskRequest{
 		Name:      input.Name,
 		Workspace: input.Workspace,
 		Runner:    input.Runner,
@@ -168,9 +168,9 @@ func (h *handlers) createTask(ctx context.Context, req *mcp.CallToolRequest, inp
 		if err != nil {
 			return errorResult("invalid archive_after %q: %v", input.ArchiveAfter, err), nil, nil
 		}
-		createReq.ArchiveAfter = durationpb.New(d)
+		req.ArchiveAfter = durationpb.New(d)
 	}
-	resp, err := h.service.CreateTask(ctx, createReq)
+	resp, err := h.service.CreateTask(ctx, req)
 	if err != nil {
 		return errorResult("failed to create task: %v", err), nil, nil
 	}
