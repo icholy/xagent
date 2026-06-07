@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.2.0](https://github.com/icholy/xagent/compare/v1.1.1...v1.2.0) (2026-06-07)
+
+
+### Features
+
+* **agent:** summarize tool-call inputs in logs ([#896](https://github.com/icholy/xagent/issues/896)) ([6974425](https://github.com/icholy/xagent/commit/6974425ec9fd82d602ad191cb25d6b0100049ffb))
+* **auth:** add CreateTaskToken issuance RPC ([#909](https://github.com/icholy/xagent/issues/909)) ([f05c529](https://github.com/icholy/xagent/commit/f05c529aa346fbd5a7cdd436327d79827036a57d))
+* **auth:** carry authscope scopes on xat_ API keys ([#905](https://github.com/icholy/xagent/issues/905)) ([746c833](https://github.com/icholy/xagent/commit/746c8339bcf304708ce2beb01a50c1ac37948204))
+* **auth:** carry scopes on the authenticated caller ([#900](https://github.com/icholy/xagent/issues/900)) ([9aa16ad](https://github.com/icholy/xagent/commit/9aa16ad9615208107ee3a3700341bbd67cf26ef5))
+* **mcp:** expose task archive_after in local create_task ([#904](https://github.com/icholy/xagent/issues/904)) ([ecd9569](https://github.com/icholy/xagent/commit/ecd9569079c6fa2aac3beaa7c9c4773636c0ddbc))
+* **scope:** add generic scope-matching engine ([#897](https://github.com/icholy/xagent/issues/897)) ([54810f3](https://github.com/icholy/xagent/commit/54810f3f7331a8e9afa956e53cc6455c4562a468))
+
+
+### Bug Fixes
+
+* **deps:** update opentelemetry ([#885](https://github.com/icholy/xagent/issues/885)) ([53ffc74](https://github.com/icholy/xagent/commit/53ffc7492febbd7ecab90e0c14be1ca777dbf730))
+* emit clean org query params in task deep links ([#901](https://github.com/icholy/xagent/issues/901)) ([94a85e2](https://github.com/icholy/xagent/commit/94a85e2149566fc43fbf41e773a4d904595da770))
+* **github:** remove confused face reaction on unwoken events ([#888](https://github.com/icholy/xagent/issues/888)) ([99fdbf1](https://github.com/icholy/xagent/commit/99fdbf1f10b22b0d0deee6c355f76b03fc6f9fde))
+* **model:** json-quote org query param in TaskURL deep links ([#898](https://github.com/icholy/xagent/issues/898)) ([42805dc](https://github.com/icholy/xagent/commit/42805dcd040479e3b8b7c55e936a95e5f3d81e1e))
+* **webui:** shorten routing rules button label to "Rule" ([#873](https://github.com/icholy/xagent/issues/873)) ([bada7cf](https://github.com/icholy/xagent/commit/bada7cf13f24d0a2781ef76dcd2338d0669c5d11))
+
+
+### Miscellaneous
+
+* **auth:** convert AgentFilter to the scope engine ([#902](https://github.com/icholy/xagent/issues/902)) ([678f52c](https://github.com/icholy/xagent/commit/678f52ce75b85fcb04449ff2f7caca955ac76ba7))
+* **auth:** enforce per-task scopes in apiserver handlers ([#911](https://github.com/icholy/xagent/issues/911)) ([ed1f633](https://github.com/icholy/xagent/commit/ed1f633e240670e7ddf4b75447685f9896ee1244))
+* **deps:** update dependency @bufbuild/buf to v1.70.0 ([#877](https://github.com/icholy/xagent/issues/877)) ([82ad5a4](https://github.com/icholy/xagent/commit/82ad5a48424a82997575e8ada93685ffe3cb1aa1))
+* **deps:** update dependency date-fns to v4.4.0 ([#889](https://github.com/icholy/xagent/issues/889)) ([d13156e](https://github.com/icholy/xagent/commit/d13156ee3c7db5c78d6c127f3fb2201e8a549dac))
+* **deps:** update dependency dbmate to v2.33.0 ([#881](https://github.com/icholy/xagent/issues/881)) ([a96b6a8](https://github.com/icholy/xagent/commit/a96b6a849e47579376ebee4c33630896697b8eca))
+* **deps:** update dependency flyctl to v0.4.56 ([#875](https://github.com/icholy/xagent/issues/875)) ([b95da6a](https://github.com/icholy/xagent/commit/b95da6aaacb2653df4e98862a746c808341fc09c))
+* **deps:** update dependency flyctl to v0.4.57 ([#876](https://github.com/icholy/xagent/issues/876)) ([c00df3f](https://github.com/icholy/xagent/commit/c00df3f09b81ccc6f8907752cee0ec6509603b94))
+* **deps:** update dependency sops to v3.13.1 ([#882](https://github.com/icholy/xagent/issues/882)) ([111d193](https://github.com/icholy/xagent/commit/111d193fa348a9b6e98553f5d2b909db2c46c0a0))
+* **deps:** update module github.com/bufbuild/buf to v1.70.0 ([#883](https://github.com/icholy/xagent/issues/883)) ([bb34266](https://github.com/icholy/xagent/commit/bb34266ae9605d72465d8f70cba8a3b86d0794ee))
+* **deps:** update node.js to v25.9.0 ([#884](https://github.com/icholy/xagent/issues/884)) ([51e614b](https://github.com/icholy/xagent/commit/51e614bf507f4d1ad73229b37fa18739ed0fb910))
+* rename "archive after" to "auto archive" ([#910](https://github.com/icholy/xagent/issues/910)) ([4670a45](https://github.com/icholy/xagent/commit/4670a45f1e71bb4ad9825db4706093307033bae4))
+* **runner:** connect agents directly to the C2 ([#912](https://github.com/icholy/xagent/issues/912)) ([698c070](https://github.com/icholy/xagent/commit/698c070182ff1a76091ff3bf1f2ec2699ed8fd10))
+
 ## [1.1.1](https://github.com/icholy/xagent/compare/v1.1.0...v1.1.1) (2026-06-02)
 
 
