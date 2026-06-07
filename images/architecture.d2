@@ -20,6 +20,6 @@ container: Docker Container {
 }
 
 ui -> backend.server
-runner -> backend.server: fetch/update tasks
-runner -> container: manages lifecycle
-container.mcp -> runner: proxied to server
+runner -> backend.server: fetch/update tasks, mint task token
+runner -> container: manages lifecycle (injects C2 URL + token)
+container -> backend.server: driver + MCP connect directly (task token)
