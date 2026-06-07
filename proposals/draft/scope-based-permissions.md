@@ -439,7 +439,7 @@ OpWorkspaceRead  = []string{"workspace", "read"}
 OpWorkspaceWrite = []string{"workspace", "write"} // register + clear
 OpKeyRead        = []string{"key", "read"}
 OpKeyCreate      = []string{"key", "create"}
-OpKeyWrite       = []string{"key", "write"}     // delete folds into write
+OpKeyWrite       = []string{"key", "write"}     // delete folds into write (coarse, no key.id)
 OpOrgRead        = []string{"org", "read"}      // settings, members, routing-rule reads
 OpOrgWrite       = []string{"org", "write"}     // members, settings, routing-rules, GH-installation link
 OpOrgCreate      = []string{"org", "create"}
@@ -447,10 +447,16 @@ OpOrgDelete      = []string{"org", "delete"}
 OpAccountWrite   = []string{"account", "write"} // unlink GitHub/Atlassian — user-identity axis
 
 // attribute keys (add alongside AttrTask*)
-AttrEventID         = "event.id"
 AttrWorkspaceRunner = "workspace.runner"
-AttrKeyID           = "key.id"
 ```
+
+Events and keys are managed **coarsely** — there is no real use-case for an
+instance-scoped event or key permission — so they get no instance attribute key
+(no `event.id`, no `key.id`); their RPCs are op-level checks. `task.id` (own-task
+scoping) and `workspace.runner` (a runner registering/clearing only its own
+workspaces is a genuine isolation boundary) are the only instance predicates the
+API surface introduces, alongside the `task.create` parent+workspace+runner
+conjunction.
 
 Lifecycle and sub-resource verbs are folded coarsely (Open Questions #2/#3):
 `Archive`/`Unarchive`/`Cancel`/`Restart` are `task.write`; links and logs inherit
@@ -486,18 +492,18 @@ the scope gate.
 | `ListEventsByTask` | `task.read` | `task.id=req.TaskId` | — |
 | `ListEvents` | `event.read` | — (coarse list) | — |
 | `CreateEvent` | `event.create` | — | — |
-| `GetEvent` | `event.read` | `event.id=req.Id` | — |
-| `DeleteEvent` | `event.write` | `event.id=req.Id` | — |
-| `AddEventTask` | `event.write` **and** `task.write` | `event.id=req.EventId`; `task.id=req.TaskId` | — (two `Allow` calls, both must pass) |
-| `RemoveEventTask` | `event.write` **and** `task.write` | `event.id=req.EventId`; `task.id=req.TaskId` | — |
-| `ListEventTasks` | `event.read` | `event.id=req.EventId` | — |
+| `GetEvent` | `event.read` | — (coarse) | — |
+| `DeleteEvent` | `event.write` | — (coarse) | — |
+| `AddEventTask` | `event.write` **and** `task.write` | `task.id=req.TaskId` (event half coarse) | — (two `Allow` calls, both must pass) |
+| `RemoveEventTask` | `event.write` **and** `task.write` | `task.id=req.TaskId` (event half coarse) | — |
+| `ListEventTasks` | `event.read` | — (coarse) | — |
 | `SubmitRunnerEvents` | `task.write` | per-event `task.id=ev.TaskId` (all-or-nothing) | — |
 | `RegisterWorkspaces` | `workspace.write` | `workspace.runner=req.RunnerId` | — |
 | `ListWorkspaces` | `workspace.read` | — | — |
 | `ClearWorkspaces` | `workspace.write` | `workspace.runner=req.RunnerId` (omit when empty ⇒ coarse) | — |
 | `CreateKey` | `key.create` | — | — |
 | `ListKeys` | `key.read` | — | — |
-| `DeleteKey` | `key.write` | `key.id=req.Id` | — |
+| `DeleteKey` | `key.write` | — (coarse) | — |
 | `UnlinkGitHubAccount` | `account.write` | — | — |
 | `UnlinkAtlassianAccount` | `account.write` | — | — |
 | `LinkGitHubInstallation` | `org.write` | — (coarse) | "same GitHub user started the install" identity guard |
