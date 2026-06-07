@@ -94,7 +94,7 @@ row and derives `workspace`/`runner` from it, then mints the scopes via the
 func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
     caller := apiauth.MustCaller(ctx)
     if !caller.Scopes.AllowOp(authscope.OpTaskTokenCreate) { // capability-presence, no instance — see §5/§7
-        return nil, errPermissionDenied("cannot mint task tokens")
+        return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot mint task tokens"))
     }
     // Tenancy: the task must belong to the caller's org (existing pattern).
     task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
@@ -234,7 +234,7 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
         return nil, err
     }
     if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
-        return nil, errPermissionDenied("cannot read task")
+        return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
     }
     // ... build response ...
 }
