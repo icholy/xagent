@@ -72,9 +72,9 @@ type Task struct {
 	Archived     bool          `json:"archived"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
-	// ArchiveAfter controls auto-archive after the task reaches a terminal
+	// AutoArchive controls auto-archive after the task reaches a terminal
 	// status. 0 = never (default); <0 = archive immediately; >0 = delay.
-	ArchiveAfter time.Duration `json:"archive_after,omitempty"`
+	AutoArchive time.Duration `json:"auto_archive,omitempty"`
 }
 
 // Proto converts a Task to its protobuf representation.
@@ -97,7 +97,7 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 		Url:          TaskURL(baseURL, t.ID, t.OrgID),
 		CreatedAt:    timestamppb.New(t.CreatedAt),
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
-		ArchiveAfter: durationpb.New(t.ArchiveAfter),
+		AutoArchive:  durationpb.New(t.AutoArchive),
 		Actions: &xagentv1.TaskActions{
 			Archive:   t.CanArchive(),
 			Unarchive: t.CanUnarchive(),
@@ -134,7 +134,7 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		Archived:     pb.Archived,
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
-		ArchiveAfter: pb.ArchiveAfter.AsDuration(),
+		AutoArchive:  pb.AutoArchive.AsDuration(),
 	}
 }
 
@@ -305,7 +305,7 @@ func (t *Task) CanUnarchive() bool {
 }
 
 // Unarchive marks the task as no longer archived. Also clears any
-// archive_after timeout (sets it to 0 = never) so the archiver worker doesn't
+// auto_archive timeout (sets it to 0 = never) so the archiver worker doesn't
 // immediately re-archive the task on its next tick.
 // Returns true if the task was archived and is now unarchived.
 func (t *Task) Unarchive() bool {
@@ -313,7 +313,7 @@ func (t *Task) Unarchive() bool {
 		return false
 	}
 	t.Archived = false
-	t.ArchiveAfter = 0
+	t.AutoArchive = 0
 	return true
 }
 

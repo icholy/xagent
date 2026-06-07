@@ -29,19 +29,19 @@ type CreateTaskAction struct {
 	Workspace string `json:"workspace"`
 	Runner    string `json:"runner"`
 	Prompt    string `json:"prompt,omitempty"`
-	// ArchiveAfter is applied to the created task's auto-archive timeout.
-	// See Task.ArchiveAfter for the value semantics (0 = never, <0 =
+	// AutoArchive is applied to the created task's auto-archive timeout.
+	// See Task.AutoArchive for the value semantics (0 = never, <0 =
 	// immediate, >0 = delay).
-	ArchiveAfter time.Duration `json:"archive_after,omitempty"`
+	AutoArchive time.Duration `json:"auto_archive,omitempty"`
 }
 
 // Proto converts a CreateTaskAction to its protobuf representation.
 func (a *CreateTaskAction) Proto() *xagentv1.CreateTaskAction {
 	return &xagentv1.CreateTaskAction{
-		Workspace:    a.Workspace,
-		Runner:       a.Runner,
-		Prompt:       a.Prompt,
-		ArchiveAfter: durationpb.New(a.ArchiveAfter),
+		Workspace:   a.Workspace,
+		Runner:      a.Runner,
+		Prompt:      a.Prompt,
+		AutoArchive: durationpb.New(a.AutoArchive),
 	}
 }
 
@@ -51,10 +51,10 @@ func CreateTaskActionFromProto(pb *xagentv1.CreateTaskAction) *CreateTaskAction 
 		return nil
 	}
 	return &CreateTaskAction{
-		Workspace:    pb.Workspace,
-		Runner:       pb.Runner,
-		Prompt:       pb.Prompt,
-		ArchiveAfter: pb.ArchiveAfter.AsDuration(),
+		Workspace:   pb.Workspace,
+		Runner:      pb.Runner,
+		Prompt:      pb.Prompt,
+		AutoArchive: pb.AutoArchive.AsDuration(),
 	}
 }
 

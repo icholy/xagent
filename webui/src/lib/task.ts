@@ -4,7 +4,7 @@ import { durationToMillis } from '@/lib/duration'
 
 type TaskLike = Pick<Task, 'status' | 'actions' | 'archived'>
 type TaskWithParent = Pick<Task, 'parent'>
-type AutoArchiveTask = TaskLike & Pick<Task, 'archiveAfter' | 'updatedAt'>
+type AutoArchiveTask = TaskLike & Pick<Task, 'autoArchive' | 'updatedAt'>
 
 export function isChildTask(task: TaskWithParent): boolean {
   return task.parent !== 0n
@@ -33,13 +33,13 @@ export function isArchivedTask(task: TaskLike): boolean {
 // autoArchiveDeadline returns the time at which the task is scheduled to be
 // auto-archived, or null when it isn't. The timer only runs once a task is in a
 // terminal state, so this requires the task to be archivable (terminal and not
-// yet archived), archive_after to be positive, and updated_at (the terminal
+// yet archived), auto_archive to be positive, and updated_at (the terminal
 // timestamp) to be set.
 export function autoArchiveDeadline(task: AutoArchiveTask): Date | null {
-  if (!canArchiveTask(task) || !task.archiveAfter || !task.updatedAt) {
+  if (!canArchiveTask(task) || !task.autoArchive || !task.updatedAt) {
     return null
   }
-  const afterMs = durationToMillis(task.archiveAfter)
+  const afterMs = durationToMillis(task.autoArchive)
   if (afterMs <= 0) {
     return null
   }

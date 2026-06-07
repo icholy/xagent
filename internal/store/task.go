@@ -29,7 +29,7 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 		CreatedAt:    now,
 		UpdatedAt:    now,
 		Archived:     task.Archived,
-		ArchiveAfter: task.ArchiveAfter.Microseconds(),
+		AutoArchive:  task.AutoArchive.Microseconds(),
 	})
 	if err != nil {
 		return err
@@ -124,13 +124,13 @@ func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 		Version:      task.Version,
 		UpdatedAt:    task.UpdatedAt,
 		Archived:     task.Archived,
-		ArchiveAfter: task.ArchiveAfter.Microseconds(),
+		AutoArchive:  task.AutoArchive.Microseconds(),
 		ID:           task.ID,
 		OrgID:        task.OrgID,
 	})
 }
 
-// TaskDueForArchive identifies a task whose archive_after deadline has
+// TaskDueForArchive identifies a task whose auto_archive deadline has
 // elapsed. The version is for an optimistic concurrency check; org_id lets
 // the caller follow up with GetTaskForUpdate / UpdateTask without an extra
 // resolve step.
@@ -178,7 +178,7 @@ func toModelTask(row sqlc.Task) (*model.Task, error) {
 		Archived:     row.Archived,
 		CreatedAt:    row.CreatedAt,
 		UpdatedAt:    row.UpdatedAt,
-		ArchiveAfter: time.Duration(row.ArchiveAfter) * time.Microsecond,
+		AutoArchive:  time.Duration(row.AutoArchive) * time.Microsecond,
 	}, nil
 }
 

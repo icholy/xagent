@@ -304,12 +304,12 @@ export function RoutingRuleForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="create-archive-after">Auto-archive after</Label>
+              <Label htmlFor="create-auto-archive">Auto-archive</Label>
               <Select
-                value={values.createArchiveAfter}
-                onValueChange={(v) => setValues({ ...values, createArchiveAfter: v })}
+                value={values.createAutoArchive}
+                onValueChange={(v) => setValues({ ...values, createAutoArchive: v })}
               >
-                <SelectTrigger id="create-archive-after">
+                <SelectTrigger id="create-auto-archive">
                   <SelectValue placeholder="Never (default)" />
                 </SelectTrigger>
                 <SelectContent>

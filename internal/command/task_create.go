@@ -47,7 +47,7 @@ var TaskCreateCommand = &cli.Command{
 			Usage:   "Instruction to execute (can be specified multiple times)",
 		},
 		&cli.DurationFlag{
-			Name:  "archive-after",
+			Name:  "auto-archive",
 			Usage: "Auto-archive the task this long after it reaches a terminal status. 0 = never (default), negative = archive immediately, positive = delay (e.g. 1h, 24h).",
 		},
 	},
@@ -73,7 +73,7 @@ var TaskCreateCommand = &cli.Command{
 			Runner:       cmd.String("runner"),
 			Workspace:    cmd.String("workspace"),
 			Instructions: instructions,
-			ArchiveAfter: durationpb.New(cmd.Duration("archive-after")),
+			AutoArchive:  durationpb.New(cmd.Duration("auto-archive")),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create task: %w", err)

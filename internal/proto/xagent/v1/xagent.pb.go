@@ -369,7 +369,7 @@ type Task struct {
 	//	zero (or unset): never auto-archive (default)
 	//	negative:        archive immediately on terminal status
 	//	positive:        archive that long after reaching terminal status
-	ArchiveAfter  *durationpb.Duration `protobuf:"bytes,15,opt,name=archive_after,json=archiveAfter,proto3" json:"archive_after,omitempty"`
+	AutoArchive   *durationpb.Duration `protobuf:"bytes,15,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -502,9 +502,9 @@ func (x *Task) GetUrl() string {
 	return ""
 }
 
-func (x *Task) GetArchiveAfter() *durationpb.Duration {
+func (x *Task) GetAutoArchive() *durationpb.Duration {
 	if x != nil {
-		return x.ArchiveAfter
+		return x.AutoArchive
 	}
 	return nil
 }
@@ -1012,7 +1012,7 @@ type CreateTaskRequest struct {
 	Workspace     string                 `protobuf:"bytes,3,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Instructions  []*Instruction         `protobuf:"bytes,4,rep,name=instructions,proto3" json:"instructions,omitempty"`
 	Runner        string                 `protobuf:"bytes,5,opt,name=runner,proto3" json:"runner,omitempty"` // Runner ID that should handle this task
-	ArchiveAfter  *durationpb.Duration   `protobuf:"bytes,6,opt,name=archive_after,json=archiveAfter,proto3" json:"archive_after,omitempty"`
+	AutoArchive   *durationpb.Duration   `protobuf:"bytes,6,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1082,9 +1082,9 @@ func (x *CreateTaskRequest) GetRunner() string {
 	return ""
 }
 
-func (x *CreateTaskRequest) GetArchiveAfter() *durationpb.Duration {
+func (x *CreateTaskRequest) GetAutoArchive() *durationpb.Duration {
 	if x != nil {
-		return x.ArchiveAfter
+		return x.AutoArchive
 	}
 	return nil
 }
@@ -1339,9 +1339,9 @@ type UpdateTaskRequest struct {
 	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	AddInstructions []*Instruction         `protobuf:"bytes,4,rep,name=add_instructions,json=addInstructions,proto3" json:"add_instructions,omitempty"`
 	Start           bool                   `protobuf:"varint,5,opt,name=start,proto3" json:"start,omitempty"` // Start after current run finishes (non-interrupting)
-	// Unset = leave alone. See Task.archive_after for the value semantics
+	// Unset = leave alone. See Task.auto_archive for the value semantics
 	// (zero = never, negative = immediate, positive = delay).
-	ArchiveAfter  *durationpb.Duration `protobuf:"bytes,6,opt,name=archive_after,json=archiveAfter,proto3" json:"archive_after,omitempty"`
+	AutoArchive   *durationpb.Duration `protobuf:"bytes,6,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1404,9 +1404,9 @@ func (x *UpdateTaskRequest) GetStart() bool {
 	return false
 }
 
-func (x *UpdateTaskRequest) GetArchiveAfter() *durationpb.Duration {
+func (x *UpdateTaskRequest) GetAutoArchive() *durationpb.Duration {
 	if x != nil {
-		return x.ArchiveAfter
+		return x.AutoArchive
 	}
 	return nil
 }
@@ -5322,9 +5322,9 @@ type CreateTaskAction struct {
 	Runner    string                 `protobuf:"bytes,2,opt,name=runner,proto3" json:"runner,omitempty"`
 	Prompt    string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	// Auto-archive value applied to tasks created by this rule. See
-	// Task.archive_after for the value semantics (zero/unset = never,
+	// Task.auto_archive for the value semantics (zero/unset = never,
 	// negative = immediate, positive = delay).
-	ArchiveAfter  *durationpb.Duration `protobuf:"bytes,4,opt,name=archive_after,json=archiveAfter,proto3" json:"archive_after,omitempty"`
+	AutoArchive   *durationpb.Duration `protobuf:"bytes,4,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5380,9 +5380,9 @@ func (x *CreateTaskAction) GetPrompt() string {
 	return ""
 }
 
-func (x *CreateTaskAction) GetArchiveAfter() *durationpb.Duration {
+func (x *CreateTaskAction) GetAutoArchive() *durationpb.Duration {
 	if x != nil {
-		return x.ArchiveAfter
+		return x.AutoArchive
 	}
 	return nil
 }
@@ -5659,7 +5659,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x06cancel\x18\x02 \x01(\bR\x06cancel\x12\x18\n" +
 	"\arestart\x18\x03 \x01(\bR\arestart\x12\x14\n" +
 	"\x05start\x18\x04 \x01(\bR\x05start\x12\x1c\n" +
-	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\xc5\x04\n" +
+	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\xc3\x04\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -5677,8 +5677,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\aversion\x18\v \x01(\x03R\aversion\x120\n" +
 	"\aactions\x18\f \x01(\v2\x16.xagent.v1.TaskActionsR\aactions\x12\x1a\n" +
 	"\barchived\x18\r \x01(\bR\barchived\x12\x10\n" +
-	"\x03url\x18\x0e \x01(\tR\x03url\x12>\n" +
-	"\rarchive_after\x18\x0f \x01(\v2\x19.google.protobuf.DurationR\farchiveAfter\"\xb6\x01\n" +
+	"\x03url\x18\x0e \x01(\tR\x03url\x12<\n" +
+	"\fauto_archive\x18\x0f \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
@@ -5708,14 +5708,14 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x15ListChildTasksRequest\x12\x1b\n" +
 	"\tparent_id\x18\x01 \x01(\x03R\bparentId\"?\n" +
 	"\x16ListChildTasksResponse\x12%\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"\xf1\x01\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"\xef\x01\n" +
 	"\x11CreateTaskRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x03R\x06parent\x12\x1c\n" +
 	"\tworkspace\x18\x03 \x01(\tR\tworkspace\x12:\n" +
 	"\finstructions\x18\x04 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x16\n" +
-	"\x06runner\x18\x05 \x01(\tR\x06runner\x12>\n" +
-	"\rarchive_after\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\farchiveAfter\"9\n" +
+	"\x06runner\x18\x05 \x01(\tR\x06runner\x12<\n" +
+	"\fauto_archive\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\"9\n" +
 	"\x12CreateTaskResponse\x12#\n" +
 	"\x04task\x18\x01 \x01(\v2\x0f.xagent.v1.TaskR\x04task\" \n" +
 	"\x0eGetTaskRequest\x12\x0e\n" +
@@ -5728,13 +5728,13 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04task\x18\x01 \x01(\v2\x0f.xagent.v1.TaskR\x04task\x12+\n" +
 	"\bchildren\x18\x02 \x03(\v2\x0f.xagent.v1.TaskR\bchildren\x12(\n" +
 	"\x06events\x18\x03 \x03(\v2\x10.xagent.v1.EventR\x06events\x12)\n" +
-	"\x05links\x18\x04 \x03(\v2\x13.xagent.v1.TaskLinkR\x05links\"\xd6\x01\n" +
+	"\x05links\x18\x04 \x03(\v2\x13.xagent.v1.TaskLinkR\x05links\"\xd4\x01\n" +
 	"\x11UpdateTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12A\n" +
 	"\x10add_instructions\x18\x04 \x03(\v2\x16.xagent.v1.InstructionR\x0faddInstructions\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\bR\x05start\x12>\n" +
-	"\rarchive_after\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\farchiveAfterJ\x04\b\x03\x10\x04\"\x14\n" +
+	"\x05start\x18\x05 \x01(\bR\x05start\x12<\n" +
+	"\fauto_archive\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\vautoArchiveJ\x04\b\x03\x10\x04\"\x14\n" +
 	"\x12UpdateTaskResponse\"$\n" +
 	"\x12ArchiveTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x15\n" +
@@ -5953,12 +5953,12 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\n" +
 	"url_prefix\x18\a \x01(\tR\turlPrefix\x12\x14\n" +
 	"\x05value\x18\b \x01(\tR\x05value\x12\x16\n" +
-	"\x06wakeup\x18\t \x01(\bR\x06wakeup\"\xa0\x01\n" +
+	"\x06wakeup\x18\t \x01(\bR\x06wakeup\"\x9e\x01\n" +
 	"\x10CreateTaskAction\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
 	"\x06runner\x18\x02 \x01(\tR\x06runner\x12\x16\n" +
-	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12>\n" +
-	"\rarchive_after\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\farchiveAfter\"\x18\n" +
+	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12<\n" +
+	"\fauto_archive\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\"\x18\n" +
 	"\x16GetRoutingRulesRequest\"G\n" +
 	"\x17GetRoutingRulesResponse\x12,\n" +
 	"\x05rules\x18\x01 \x03(\v2\x16.xagent.v1.RoutingRuleR\x05rules\"F\n" +
@@ -6184,7 +6184,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	114, // 3: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 4: xagent.v1.Task.command:type_name -> xagent.v1.TaskCommand
 	5,   // 5: xagent.v1.Task.actions:type_name -> xagent.v1.TaskActions
-	115, // 6: xagent.v1.Task.archive_after:type_name -> google.protobuf.Duration
+	115, // 6: xagent.v1.Task.auto_archive:type_name -> google.protobuf.Duration
 	113, // 7: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
 	8,   // 8: xagent.v1.GetProfileResponse.profile:type_name -> xagent.v1.Profile
 	87,  // 9: xagent.v1.GetProfileResponse.orgs:type_name -> xagent.v1.Org
@@ -6194,7 +6194,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	6,   // 13: xagent.v1.ListRunnerTasksResponse.tasks:type_name -> xagent.v1.Task
 	6,   // 14: xagent.v1.ListChildTasksResponse.tasks:type_name -> xagent.v1.Task
 	4,   // 15: xagent.v1.CreateTaskRequest.instructions:type_name -> xagent.v1.Instruction
-	115, // 16: xagent.v1.CreateTaskRequest.archive_after:type_name -> google.protobuf.Duration
+	115, // 16: xagent.v1.CreateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
 	6,   // 17: xagent.v1.CreateTaskResponse.task:type_name -> xagent.v1.Task
 	6,   // 18: xagent.v1.GetTaskResponse.task:type_name -> xagent.v1.Task
 	6,   // 19: xagent.v1.GetTaskDetailsResponse.task:type_name -> xagent.v1.Task
@@ -6202,7 +6202,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	43,  // 21: xagent.v1.GetTaskDetailsResponse.events:type_name -> xagent.v1.Event
 	38,  // 22: xagent.v1.GetTaskDetailsResponse.links:type_name -> xagent.v1.TaskLink
 	4,   // 23: xagent.v1.UpdateTaskRequest.add_instructions:type_name -> xagent.v1.Instruction
-	115, // 24: xagent.v1.UpdateTaskRequest.archive_after:type_name -> google.protobuf.Duration
+	115, // 24: xagent.v1.UpdateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
 	114, // 25: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
 	33,  // 26: xagent.v1.UploadLogsRequest.entries:type_name -> xagent.v1.LogEntry
 	33,  // 27: xagent.v1.ListLogsResponse.entries:type_name -> xagent.v1.LogEntry
@@ -6233,7 +6233,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	88,  // 52: xagent.v1.AddOrgMemberResponse.member:type_name -> xagent.v1.OrgMember
 	88,  // 53: xagent.v1.ListOrgMembersResponse.members:type_name -> xagent.v1.OrgMember
 	106, // 54: xagent.v1.RoutingRule.create:type_name -> xagent.v1.CreateTaskAction
-	115, // 55: xagent.v1.CreateTaskAction.archive_after:type_name -> google.protobuf.Duration
+	115, // 55: xagent.v1.CreateTaskAction.auto_archive:type_name -> google.protobuf.Duration
 	105, // 56: xagent.v1.GetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
 	105, // 57: xagent.v1.SetRoutingRulesRequest.rules:type_name -> xagent.v1.RoutingRule
 	105, // 58: xagent.v1.SetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule

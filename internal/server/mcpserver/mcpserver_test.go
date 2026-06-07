@@ -134,9 +134,9 @@ func TestCreateTask_UsesServerURL(t *testing.T) {
 	})
 }
 
-func TestCreateTask_ArchiveAfterParam(t *testing.T) {
+func TestCreateTask_AutoArchiveParam(t *testing.T) {
 	// With no server default: a provided param is parsed and forwarded, and
-	// omitting it leaves archive_after unset.
+	// omitting it leaves auto_archive unset.
 	var got *xagentv1.CreateTaskRequest
 	client := &xagentclient.ClientMock{
 		CreateTaskFunc: func(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
@@ -151,16 +151,16 @@ func TestCreateTask_ArchiveAfterParam(t *testing.T) {
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "create_task",
 		Arguments: map[string]any{
-			"workspace":     "ws",
-			"instruction":   "do it",
-			"runner":        "r1",
-			"archive_after": "30m",
+			"workspace":    "ws",
+			"instruction":  "do it",
+			"runner":       "r1",
+			"auto_archive": "30m",
 		},
 	})
 	assert.NilError(t, err)
 	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
-	assert.Assert(t, got.ArchiveAfter != nil)
-	assert.Equal(t, got.ArchiveAfter.AsDuration(), 30*time.Minute)
+	assert.Assert(t, got.AutoArchive != nil)
+	assert.Equal(t, got.AutoArchive.AsDuration(), 30*time.Minute)
 
 	got = nil
 	result, err = session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -173,10 +173,10 @@ func TestCreateTask_ArchiveAfterParam(t *testing.T) {
 	})
 	assert.NilError(t, err)
 	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
-	assert.Assert(t, got.ArchiveAfter == nil, "archive_after should be unset when neither param nor default is set")
+	assert.Assert(t, got.AutoArchive == nil, "auto_archive should be unset when neither param nor default is set")
 }
 
-func TestCreateTask_DefaultArchiveAfter(t *testing.T) {
+func TestCreateTask_DefaultAutoArchive(t *testing.T) {
 	// With a server default: it applies when the param is omitted, and the
 	// per-call param overrides it.
 	var got *xagentv1.CreateTaskRequest
@@ -188,7 +188,7 @@ func TestCreateTask_DefaultArchiveAfter(t *testing.T) {
 			}, nil
 		},
 	}
-	session := setupSession(t, client, WithDefaultArchiveAfter(time.Hour))
+	session := setupSession(t, client, WithDefaultAutoArchive(time.Hour))
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "create_task",
@@ -200,23 +200,23 @@ func TestCreateTask_DefaultArchiveAfter(t *testing.T) {
 	})
 	assert.NilError(t, err)
 	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
-	assert.Assert(t, got.ArchiveAfter != nil)
-	assert.Equal(t, got.ArchiveAfter.AsDuration(), time.Hour)
+	assert.Assert(t, got.AutoArchive != nil)
+	assert.Equal(t, got.AutoArchive.AsDuration(), time.Hour)
 
 	got = nil
 	result, err = session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "create_task",
 		Arguments: map[string]any{
-			"workspace":     "ws",
-			"instruction":   "do it",
-			"runner":        "r1",
-			"archive_after": "-1s",
+			"workspace":    "ws",
+			"instruction":  "do it",
+			"runner":       "r1",
+			"auto_archive": "-1s",
 		},
 	})
 	assert.NilError(t, err)
 	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
-	assert.Assert(t, got.ArchiveAfter != nil)
-	assert.Equal(t, got.ArchiveAfter.AsDuration(), -time.Second)
+	assert.Assert(t, got.AutoArchive != nil)
+	assert.Equal(t, got.AutoArchive.AsDuration(), -time.Second)
 }
 
 func TestListTasks_UsesTaskURLFromResponse(t *testing.T) {

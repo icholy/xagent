@@ -30,7 +30,7 @@ function NewTaskPage() {
   const [runner, setRunner] = useOrgLocalStorage('xagent-last-runner', '')
   const [workspace, setWorkspace] = useOrgLocalStorage('xagent-last-workspace', '')
   const [instruction, setInstruction] = useState('')
-  const [archiveAfter, setArchiveAfter] = useState<string>('') // empty = never
+  const [autoArchive, setAutoArchive] = useState<string>('') // empty = never
 
   const { data: workspacesData } = useQuery(listWorkspaces, {})
 
@@ -69,7 +69,7 @@ function NewTaskPage() {
       workspace: workspace.trim(),
       parent: 0n,
       instructions: [{ text: instruction.trim(), url: '' }],
-      archiveAfter: durationFromHours(archiveAfter),
+      autoArchive: durationFromHours(autoArchive),
     })
   }
 
@@ -140,9 +140,9 @@ function NewTaskPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="archive-after">Auto-archive after (optional)</Label>
-              <Select value={archiveAfter} onValueChange={setArchiveAfter}>
-                <SelectTrigger id="archive-after">
+              <Label htmlFor="auto-archive">Auto-archive (optional)</Label>
+              <Select value={autoArchive} onValueChange={setAutoArchive}>
+                <SelectTrigger id="auto-archive">
                   <SelectValue placeholder="Never (default)" />
                 </SelectTrigger>
                 <SelectContent>
