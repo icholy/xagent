@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
@@ -130,8 +131,9 @@ func TestDeleteOrg_WithTasks(t *testing.T) {
 	createResp, err := srv.CreateOrg(ctx, &xagentv1.CreateOrgRequest{Name: "has-tasks"})
 	assert.NilError(t, err)
 	orgCtx := apiauth.WithUser(ctx, &apiauth.UserInfo{
-		ID:    apiauth.Caller(ctx).ID,
-		OrgID: createResp.Org.Id,
+		ID:     apiauth.Caller(ctx).ID,
+		OrgID:  createResp.Org.Id,
+		Scopes: authscope.Admin(),
 	})
 	_, err = srv.RegisterWorkspaces(orgCtx, &xagentv1.RegisterWorkspacesRequest{
 		RunnerId: "test-runner",

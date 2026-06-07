@@ -1,9 +1,12 @@
 package authscope
 
-// This file defines the concrete task-caller scope taxonomy that rides on the
-// generic matching engine in scope.go: the operation paths, the namespaced
-// attribute keys, and the typed attribute constructors that call sites pass to
-// Scopes.Allow.
+// This file defines the concrete scope taxonomy that rides on the generic
+// matching engine in scope.go: the operation paths, the namespaced attribute
+// keys, and the typed attribute constructors that call sites pass to
+// Scopes.Allow. It covers both the task-caller surface (the agent path's
+// AgentFilter and the runner minter agentauth.Scopes) and the API-caller
+// surface (the apiserver handlers); see the per-RPC mapping in
+// proposals/draft/scope-based-permissions.md §7.
 
 // Operation paths, as segment slices. The single source of truth for each
 // operation: scope creation (the runner's token minter, agentauth.Scopes)
@@ -15,6 +18,23 @@ var (
 	OpTaskWrite         = []string{"task", "write"}
 	OpTaskCreate        = []string{"task", "create"}
 	OpGitHubTokenCreate = []string{"github_token", "create"}
+
+	// API-caller operation paths (proposal §7). Events and keys are managed
+	// coarsely — there is no instance attribute for them — so their RPCs are
+	// op-level checks. Lifecycle and sub-resource verbs fold into write.
+	OpEventRead      = []string{"event", "read"}
+	OpEventWrite     = []string{"event", "write"} // delete + add/remove task fold into write
+	OpEventCreate    = []string{"event", "create"}
+	OpWorkspaceRead  = []string{"workspace", "read"}
+	OpWorkspaceWrite = []string{"workspace", "write"} // register + clear
+	OpKeyRead        = []string{"key", "read"}
+	OpKeyCreate      = []string{"key", "create"}
+	OpKeyWrite       = []string{"key", "write"} // delete folds into write (coarse, no key.id)
+	OpOrgRead        = []string{"org", "read"}  // settings, members, routing-rule reads
+	OpOrgWrite       = []string{"org", "write"} // members, settings, routing-rules, GH-installation link
+	OpOrgCreate      = []string{"org", "create"}
+	OpOrgDelete      = []string{"org", "delete"}
+	OpAccountWrite   = []string{"account", "write"} // unlink GitHub/Atlassian — user-identity axis
 )
 
 // Attribute keys, namespaced by resource ("task.id", not "id") so attribute
@@ -24,6 +44,11 @@ const (
 	AttrTaskParent    = "task.parent"
 	AttrTaskWorkspace = "task.workspace"
 	AttrTaskRunner    = "task.runner"
+
+	// AttrWorkspaceRunner scopes workspace register/clear to a single runner:
+	// a runner registering or clearing only its own workspaces is a genuine
+	// isolation boundary on the API surface (proposal §7).
+	AttrWorkspaceRunner = "workspace.runner"
 )
 
 // WithTaskID, WithTaskParent, WithTaskWorkspace, and WithTaskRunner build the
@@ -36,3 +61,7 @@ func WithTaskParent(parent int64) Attr { return Int64Attr(AttrTaskParent, parent
 func WithTaskWorkspace(workspace string) Attr { return StringAttr(AttrTaskWorkspace, workspace) }
 
 func WithTaskRunner(runner string) Attr { return StringAttr(AttrTaskRunner, runner) }
+
+// WithWorkspaceRunner builds the workspace.runner attribute for a workspace
+// register/clear request.
+func WithWorkspaceRunner(runner string) Attr { return StringAttr(AttrWorkspaceRunner, runner) }
