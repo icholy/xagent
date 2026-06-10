@@ -148,9 +148,22 @@ func (r *Runner) Poll(ctx context.Context) error {
 		switch task.Command {
 		case model.TaskCommandStop:
 			g.Go(func() error {
-				if err := r.Kill(ctx, task); err != nil {
+				signalled, err := r.Kill(ctx, task)
+				if err != nil {
+					// The stop command survives, so the kill is retried on
+					// the next poll.
 					r.log.Error("failed to stop task", "task", task.ID, "error", err)
+					return nil
 				}
+				if signalled {
+					// The driver owns the terminal report. If it hangs until
+					// SIGKILL, the non-zero exit triggers the monitor's
+					// "failed" instead.
+					return nil
+				}
+				// No running container to signal: there is no driver to
+				// complete the cancel, so emit "stopped" to land the task in
+				// cancelled instead of sticking in cancelling.
 				r.queue.Enqueue(model.RunnerEvent{
 					TaskID:  task.ID,
 					Event:   model.RunnerEventStopped,
@@ -160,8 +173,11 @@ func (r *Runner) Poll(ctx context.Context) error {
 			})
 		case model.TaskCommandRestart:
 			g.Go(func() error {
-				// Kill existing container if running
-				if err := r.Kill(ctx, task); err != nil {
+				// Kill existing container if running. The old run's "stopped"
+				// is rejected by the status guard while the restart command is
+				// pending, so the command survives until the new run's
+				// "started" consumes it.
+				if _, err := r.Kill(ctx, task); err != nil {
 					r.log.Error("failed to kill task for restart", "task", task.ID, "error", err)
 				}
 				// Atomically acquire a semaphore slot before starting
@@ -179,7 +195,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 					})
 					return nil
 				}
-				// The "started" event is sent by Monitor when the container starts
+				// The "started" event is submitted by the driver on startup
 				return nil
 			})
 		case model.TaskCommandStart:
@@ -217,7 +233,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 					})
 					return nil
 				}
-				// The "started" event is sent by Monitor when the container starts
+				// The "started" event is submitted by the driver on startup
 				return nil
 			})
 		}
@@ -277,28 +293,15 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 			continue
 		}
 
-		// Inspect container to get exit code
-		info, err := r.docker.ContainerInspect(ctx, c.ID)
-		if err != nil {
-			r.log.Error("failed to inspect container", "task", taskID, "error", err)
-			continue
-		}
-
+		// An exited container whose task is still running means the driver's
+		// report was lost — "failed" is the honest outcome regardless of exit
+		// code (see the driver-owned-events proposal).
+		r.log.Error("reconcile: container exited without reporting", "task", taskID)
 		// Use version 0 to bypass version check (spontaneous events)
-		exitCode := info.State.ExitCode
-		if exitCode == 0 {
-			r.log.Info("reconcile: container exited successfully", "task", taskID)
-			r.queue.Enqueue(model.RunnerEvent{
-				TaskID: taskID,
-				Event:  model.RunnerEventStopped,
-			})
-		} else {
-			r.log.Error("reconcile: container exited with error", "task", taskID, "exitCode", exitCode)
-			r.queue.Enqueue(model.RunnerEvent{
-				TaskID: taskID,
-				Event:  model.RunnerEventFailed,
-			})
-		}
+		r.queue.Enqueue(model.RunnerEvent{
+			TaskID: taskID,
+			Event:  model.RunnerEventFailed,
+		})
 	}
 
 	return nil
@@ -332,16 +335,16 @@ func (r *Runner) isRunning(ctx context.Context, task *model.Task) (bool, error) 
 	return c.State == "running", nil
 }
 
-func (r *Runner) Kill(ctx context.Context, task *model.Task) error {
+// Kill stops the task's container if it is running. It reports whether a
+// running container was signalled — in that case the driver owns the
+// terminal event report (see the driver-owned-events proposal).
+func (r *Runner) Kill(ctx context.Context, task *model.Task) (bool, error) {
 	c, ok, err := r.find(ctx, task.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if !ok {
-		return nil
-	}
-	if c.State != "running" {
-		return nil
+	if !ok || c.State != "running" {
+		return false, nil
 	}
 	r.log.Info("killing container", "task", task.ID)
 
@@ -349,23 +352,25 @@ func (r *Runner) Kill(ctx context.Context, task *model.Task) error {
 	killCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	err = dockerx.ContainerKill(killCtx, r.docker, c.ID, "SIGTERM")
-	if err == nil || errors.Is(err, dockerx.ErrNotRunning) {
-		return nil
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, dockerx.ErrNotRunning) {
+		// The container exited between the running check and the kill, so
+		// nothing was signalled.
+		return false, nil
 	}
 
 	// If SIGTERM timed out, send SIGKILL
 	if errors.Is(err, context.DeadlineExceeded) {
 		r.log.Warn("SIGTERM timed out, sending SIGKILL", "task", task.ID)
-		if err := dockerx.ContainerKill(ctx, r.docker, c.ID, "SIGKILL"); err != nil {
-			if errors.Is(err, dockerx.ErrNotRunning) {
-				return nil
-			}
-			return err
+		if err := dockerx.ContainerKill(ctx, r.docker, c.ID, "SIGKILL"); err != nil && !errors.Is(err, dockerx.ErrNotRunning) {
+			return true, err
 		}
-		return nil
+		return true, nil
 	}
 
-	return err
+	return true, err
 }
 
 func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
@@ -499,12 +504,15 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 	return nil
 }
 
-// Monitor watches for container starts and exits and sends runner events accordingly.
+// Monitor watches for container exits and reports the ones the driver
+// couldn't: a non-zero exit means the driver died without reporting its
+// outcome, so the runner emits "failed" on its behalf. Exit 0 means the
+// driver already reported (see the driver-owned-events proposal), so no
+// event is emitted.
 func (r *Runner) Monitor(ctx context.Context) error {
 	eventCh, errCh := r.docker.Events(ctx, events.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("type", "container"),
-			filters.Arg("event", "start"),
 			filters.Arg("event", "die"),
 			filters.Arg("label", "xagent=true"),
 			filters.Arg("label", "xagent.runner="+r.runnerID),
@@ -521,33 +529,19 @@ func (r *Runner) Monitor(ctx context.Context) error {
 				continue
 			}
 
-			switch event.Action {
-			case events.ActionStart:
-				r.log.Info("container started", "task", taskID)
-				// Use version 0 to bypass version check (spontaneous events)
-				r.queue.Enqueue(model.RunnerEvent{
-					TaskID: taskID,
-					Event:  model.RunnerEventStarted,
-				})
-			case events.ActionDie:
-				r.sem.Release(1)
-				r.wake.Wake()
-				// Use version 0 to bypass version check (spontaneous events)
-				exitCode := event.Actor.Attributes["exitCode"]
-				if exitCode == "0" {
-					r.log.Info("container exited successfully", "task", taskID)
-					r.queue.Enqueue(model.RunnerEvent{
-						TaskID: taskID,
-						Event:  model.RunnerEventStopped,
-					})
-				} else {
-					r.log.Error("container exited with error", "task", taskID, "exitCode", exitCode)
-					r.queue.Enqueue(model.RunnerEvent{
-						TaskID: taskID,
-						Event:  model.RunnerEventFailed,
-					})
-				}
+			r.sem.Release(1)
+			r.wake.Wake()
+			exitCode := event.Actor.Attributes["exitCode"]
+			if exitCode == "0" {
+				r.log.Info("container exited, driver already reported", "task", taskID)
+				continue
 			}
+			r.log.Error("container exited without reporting", "task", taskID, "exitCode", exitCode)
+			// Use version 0 to bypass version check (spontaneous events)
+			r.queue.Enqueue(model.RunnerEvent{
+				TaskID: taskID,
+				Event:  model.RunnerEventFailed,
+			})
 
 		case err := <-errCh:
 			return fmt.Errorf("docker events error: %w", err)

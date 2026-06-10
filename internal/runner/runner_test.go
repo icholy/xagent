@@ -39,11 +39,9 @@ func TestRunnerStart(t *testing.T) {
 
 	// Create mock client. The driver and the injected MCP server now connect to
 	// this server directly (over the host network), so it must answer the
-	// driver's startup Ping and the agent's get_my_task (GetTaskDetails).
+	// driver's started/stopped events and the agent's get_my_task
+	// (GetTaskDetails).
 	mock := &xagentclient.ClientMock{
-		PingFunc: func(_ context.Context, req *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
-			return &xagentv1.PingResponse{}, nil
-		},
 		CreateTaskTokenFunc: func(_ context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
 			return &xagentv1.CreateTaskTokenResponse{Token: "test-token"}, nil
 		},
@@ -114,4 +112,13 @@ func TestRunnerStart(t *testing.T) {
 
 	// Verify get_my_task was called
 	assert.Equal(t, len(mock.GetTaskDetailsCalls()), 1)
+
+	// Verify the driver reported its own lifecycle: started, then stopped.
+	var events []string
+	for _, call := range mock.SubmitRunnerEventsCalls() {
+		for _, e := range call.SubmitRunnerEventsRequest.Events {
+			events = append(events, e.Event)
+		}
+	}
+	assert.DeepEqual(t, events, []string{"started", "stopped"})
 }
