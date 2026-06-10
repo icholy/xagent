@@ -11,6 +11,8 @@ import (
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/runner"
+	"github.com/icholy/xagent/internal/runner/backend"
+	dockerbackend "github.com/icholy/xagent/internal/runner/backend/docker"
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -65,6 +67,12 @@ var RunnerCommand = &cli.Command{
 			Usage:   "Unique identifier for this runner (no spaces or special characters)",
 			Value:   defaultRunnerID(),
 			Sources: cli.EnvVars("XAGENT_RUNNER_ID"),
+		},
+		&cli.StringFlag{
+			Name:    "backend",
+			Usage:   "Sandbox backend (docker)",
+			Value:   "docker",
+			Sources: cli.EnvVars("XAGENT_BACKEND"),
 		},
 		&cli.BoolFlag{
 			Name:  "debug",
@@ -122,8 +130,23 @@ var RunnerCommand = &cli.Command{
 			RetryInterval: pollInterval,
 		})
 
+		var be backend.Backend
+		switch name := cmd.String("backend"); name {
+		case "docker":
+			be, err = dockerbackend.New(dockerbackend.Options{
+				RunnerID: runnerID,
+				Log:      log,
+			})
+			if err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unknown backend: %q", name)
+		}
+
 		r, err := runner.New(runner.Options{
 			Client:      client,
+			Backend:     be,
 			ServerURL:   serverAddr,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
@@ -136,7 +159,7 @@ var RunnerCommand = &cli.Command{
 		}
 		defer r.Close()
 
-		log.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "concurrency", concurrency)
+		log.Info("runner started", "server", serverAddr, "config", configPath, "poll", pollInterval, "concurrency", concurrency, "backend", cmd.String("backend"))
 
 		// Register workspaces with the server (non-fatal if it fails)
 		if err := r.RegisterWorkspaces(ctx); err != nil {

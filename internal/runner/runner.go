@@ -4,28 +4,18 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"path"
 	"regexp"
-	"strconv"
-	"time"
 
 	"connectrpc.com/connect"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"github.com/icholy/xagent/internal/runner/containerbuild"
-	"github.com/icholy/xagent/internal/runner/prebuilt"
+	"github.com/icholy/xagent/internal/runner/backend"
 	"github.com/icholy/xagent/internal/runner/workspace"
-	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/x/safesem"
 	"github.com/icholy/xagent/internal/x/wakeup"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -33,7 +23,7 @@ import (
 )
 
 type Runner struct {
-	docker      *client.Client
+	backend     backend.Backend
 	client      xagentclient.Client
 	serverURL   string
 	workspaces  *workspace.Config
@@ -47,9 +37,11 @@ type Runner struct {
 
 type Options struct {
 	Client xagentclient.Client
-	// ServerURL is the C2 URL injected into containers so the driver and the
+	// Backend is the sandbox runtime that hosts task drivers.
+	Backend backend.Backend
+	// ServerURL is the C2 URL injected into sandboxes so the driver and the
 	// injected xagent MCP server connect directly to the C2. It is the runner's
-	// own configured --server value; the container reaches the same C2 the runner
+	// own configured --server value; the sandbox reaches the same C2 the runner
 	// does. The runner authenticates the token-minting RPC with its own xat_ key.
 	ServerURL   string
 	Workspaces  *workspace.Config
@@ -73,10 +65,8 @@ func New(opts Options) (*Runner, error) {
 	if err := ValidateRunnerID(opts.RunnerID); err != nil {
 		return nil, err
 	}
-
-	docker, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create docker client: %w", err)
+	if opts.Backend == nil {
+		return nil, fmt.Errorf("backend is required")
 	}
 
 	// Use math.MaxInt64 if no limit is set (concurrency <= 0)
@@ -88,7 +78,7 @@ func New(opts Options) (*Runner, error) {
 	log := cmp.Or(opts.Log, slog.Default())
 
 	return &Runner{
-		docker:      docker,
+		backend:     opts.Backend,
 		client:      opts.Client,
 		serverURL:   opts.ServerURL,
 		workspaces:  opts.Workspaces,
@@ -111,7 +101,7 @@ func (r *Runner) WakeC() <-chan struct{} { return r.wake }
 func (r *Runner) Wake() { r.wake.Wake() }
 
 func (r *Runner) Close() error {
-	return r.docker.Close()
+	return r.backend.Close()
 }
 
 // RegisterWorkspaces sends the available workspace names to the server.
@@ -161,7 +151,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 					// "failed" instead.
 					return nil
 				}
-				// No running container to signal: there is no driver to
+				// No running sandbox to signal: there is no driver to
 				// complete the cancel, so emit "stopped" to land the task in
 				// cancelled instead of sticking in cancelling.
 				r.queue.Enqueue(model.RunnerEvent{
@@ -173,7 +163,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 			})
 		case model.TaskCommandRestart:
 			g.Go(func() error {
-				// Kill existing container if running. The old run's "stopped"
+				// Kill existing sandbox if running. The old run's "stopped"
 				// is rejected by the status guard while the restart command is
 				// pending, so the command survives until the new run's
 				// "started" consumes it.
@@ -200,25 +190,25 @@ func (r *Runner) Poll(ctx context.Context) error {
 			})
 		case model.TaskCommandStart:
 			g.Go(func() error {
-				// Don't bother checking docker if the status is still running
+				// Don't bother checking the backend if the status is still running
 				if task.Status == model.TaskStatusRunning {
 					r.log.Debug("start command: task.status=running, waiting for it to finish", "task", task.ID)
 					return nil
 				}
-				// Check if container is already running
-				running, err := r.isRunning(ctx, task)
+				// Check if the sandbox is already running
+				running, err := r.backend.Running(ctx, task.ID)
 				if err != nil {
 					r.log.Error("failed to check if task is running", "task", task.ID, "error", err)
 					return nil
 				}
 				if running {
-					// Container is running - do nothing, let it finish naturally
+					// Sandbox is running - do nothing, let it finish naturally
 					// The command will be processed when it stops
-					r.log.Debug("start command: container already running, waiting for it to finish", "task", task.ID)
+					r.log.Debug("start command: sandbox already running, waiting for it to finish", "task", task.ID)
 					return nil
 				}
 
-				// Container not running - atomically acquire a semaphore slot before starting
+				// Sandbox not running - atomically acquire a semaphore slot before starting
 				if !r.sem.TryAcquire(1) {
 					r.log.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
@@ -243,63 +233,44 @@ func (r *Runner) Poll(ctx context.Context) error {
 }
 
 func (r *Runner) Reconcile(ctx context.Context) error {
-	// Count already-running containers and set semaphore accordingly
-	runningContainers, err := r.docker.ContainerList(ctx, container.ListOptions{
-		Filters: filters.NewArgs(
-			filters.Arg("label", "xagent=true"),
-			filters.Arg("label", "xagent.runner="+r.runnerID),
-			filters.Arg("status", "running"),
-		),
-	})
+	sandboxes, err := r.backend.List(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list running containers: %w", err)
-	}
-	runningCount := int64(len(runningContainers))
-	// Set count to running containers (can exceed capacity in over-limit scenarios)
-	r.sem.Set(runningCount)
-	r.log.Info("initialized running container count", "count", runningCount)
-
-	// Find all exited xagent containers
-	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
-		All: true,
-		Filters: filters.NewArgs(
-			filters.Arg("label", "xagent=true"),
-			filters.Arg("label", "xagent.runner="+r.runnerID),
-			filters.Arg("status", "exited"),
-		),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to list containers: %w", err)
+		return fmt.Errorf("failed to list sandboxes: %w", err)
 	}
 
-	for _, c := range containers {
-		label := c.Labels["xagent.task"]
-		if label == "" {
-			continue
+	// Count already-running sandboxes and set semaphore accordingly.
+	// The count can exceed capacity in over-limit scenarios.
+	var running int64
+	for _, sb := range sandboxes {
+		if sb.State == backend.StateRunning {
+			running++
 		}
-		taskID, err := strconv.ParseInt(label, 10, 64)
-		if err != nil {
-			r.log.Error("invalid task ID in container label", "task", label, "error", err)
+	}
+	r.sem.Set(running)
+	r.log.Info("initialized running sandbox count", "count", running)
+
+	for _, sb := range sandboxes {
+		if sb.State != backend.StateExited {
 			continue
 		}
 
 		// Check if task is still running
-		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: sb.TaskID})
 		if err != nil {
-			r.log.Error("failed to get task", "task", taskID, "error", err)
+			r.log.Error("failed to get task", "task", sb.TaskID, "error", err)
 			continue
 		}
 		if task.Task.Status != xagentv1.TaskStatus_RUNNING {
 			continue
 		}
 
-		// An exited container whose task is still running means the driver's
+		// An exited sandbox whose task is still running means the driver's
 		// report was lost — "failed" is the honest outcome regardless of exit
 		// code (see the driver-owned-events proposal).
-		r.log.Error("reconcile: container exited without reporting", "task", taskID)
+		r.log.Error("reconcile: sandbox exited without reporting", "task", sb.TaskID)
 		// Use version 0 to bypass version check (spontaneous events)
 		r.queue.Enqueue(model.RunnerEvent{
-			TaskID: taskID,
+			TaskID: sb.TaskID,
 			Event:  model.RunnerEventFailed,
 		})
 	}
@@ -307,76 +278,19 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-// find returns the container for the given task.
-// Returns (container, true, nil) if found, (empty, false, nil) if not found,
-// or (empty, false, error) on error.
-func (r *Runner) find(ctx context.Context, taskID int64) (container.Summary, bool, error) {
-	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
-		All:     true,
-		Filters: filters.NewArgs(filters.Arg("label", fmt.Sprintf("xagent.task=%d", taskID))),
-	})
-	if err != nil {
-		return container.Summary{}, false, fmt.Errorf("failed to list containers: %w", err)
-	}
-	if len(containers) == 0 {
-		return container.Summary{}, false, nil
-	}
-	return containers[0], true, nil
-}
-
-func (r *Runner) isRunning(ctx context.Context, task *model.Task) (bool, error) {
-	c, ok, err := r.find(ctx, task.ID)
-	if err != nil {
-		return false, err
-	}
-	if !ok {
-		return false, nil
-	}
-	return c.State == "running", nil
-}
-
-// Kill stops the task's container if it is running. It reports whether a
-// running container was signalled — in that case the driver owns the
+// Kill stops the task's sandbox if it is running. It reports whether a
+// running sandbox was signalled — in that case the driver owns the
 // terminal event report (see the driver-owned-events proposal).
 func (r *Runner) Kill(ctx context.Context, task *model.Task) (bool, error) {
-	c, ok, err := r.find(ctx, task.ID)
-	if err != nil {
-		return false, err
-	}
-	if !ok || c.State != "running" {
-		return false, nil
-	}
-	r.log.Info("killing container", "task", task.ID)
-
-	// Try SIGTERM first with a timeout
-	killCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	err = dockerx.ContainerKill(killCtx, r.docker, c.ID, "SIGTERM")
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, dockerx.ErrNotRunning) {
-		// The container exited between the running check and the kill, so
-		// nothing was signalled.
-		return false, nil
-	}
-
-	// If SIGTERM timed out, send SIGKILL
-	if errors.Is(err, context.DeadlineExceeded) {
-		r.log.Warn("SIGTERM timed out, sending SIGKILL", "task", task.ID)
-		if err := dockerx.ContainerKill(ctx, r.docker, c.ID, "SIGKILL"); err != nil && !errors.Is(err, dockerx.ErrNotRunning) {
-			return true, err
-		}
-		return true, nil
-	}
-
-	return true, err
+	return r.backend.Stop(ctx, task.ID)
 }
 
-func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
+// spec assembles the sandbox spec for a task: the task token, the driver
+// invocation, and the agent config with the injected xagent MCP server.
+func (r *Runner) spec(ctx context.Context, task *model.Task) (*backend.Spec, error) {
 	ws, err := r.workspaces.Get(task.Workspace)
 	if err != nil {
-		return "", fmt.Errorf("failed to get workspace: %w", err)
+		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 
 	// Mint the task token via the C2 rather than signing it locally: the runner
@@ -388,29 +302,9 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 		Capabilities: ws.Capabilities,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to create task token: %w", err)
+		return nil, fmt.Errorf("failed to create task token: %w", err)
 	}
 	token := tokenResp.Token
-
-	r.log.Info("creating container", "task", task.ID, "image", ws.Container.Image, "workspace", task.Workspace)
-
-	// Ensure the image is available locally (pulls if needed).
-	info, err := dockerx.ImageEnsure(ctx, r.docker, dockerx.ImageEnsureOptions{
-		Ref:         ws.Container.Image,
-		PullOptions: image.PullOptions{RegistryAuth: dockerx.ResolveRegistryAuth(ws.Container.Image)},
-		PullProgress: func(p dockerx.PullProgress) {
-			if p.Status != "" && p.Progress == "" {
-				r.log.Info("pull", "image", ws.Container.Image, "status", p.Status)
-			}
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to ensure image: %w", err)
-	}
-	binData, err := prebuilt.ReadBinary(info.Architecture)
-	if err != nil {
-		return "", err
-	}
 
 	// Build agent config
 	cfg := ws.AgentConfig()
@@ -427,25 +321,19 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 	}
 	cfg.McpServers["xagent"] = agent.McpServer{
 		Type:    "stdio",
-		Command: "/usr/local/bin/xagent",
+		Command: backend.BinaryPath,
 		Args:    mcpArgs,
 	}
 	cfgData, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal config: %w", err)
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	b := &containerbuild.Builder{
-		Docker:    r.docker,
-		Name:      fmt.Sprintf("xagent-%d", task.ID),
+	return &backend.Spec{
+		TaskID:    task.ID,
 		Workspace: ws,
-		Labels: map[string]string{
-			"xagent":        "true",
-			"xagent.task":   fmt.Sprint(task.ID),
-			"xagent.runner": r.runnerID,
-		},
 		Cmd: []string{
-			"/usr/local/bin/xagent", "driver",
+			backend.BinaryPath, "driver",
 			"--server", r.serverURL,
 			"--task", fmt.Sprint(task.ID),
 			"--token", token,
@@ -455,141 +343,68 @@ func (r *Runner) create(ctx context.Context, task *model.Task) (string, error) {
 			fmt.Sprintf("XAGENT_TOKEN=%s", token),
 			"XAGENT_SERVER=" + r.serverURL,
 		},
-		Files: []containerbuild.File{
-			{Path: "/usr/local/bin/xagent", Data: binData, Mode: 0755},
+		Files: []backend.File{
 			// Allow non-root agents to write to this directory.
 			{Path: path.Dir(agent.ConfigPath(task.ID)), Mode: 0777, Dir: true},
 			{Path: agent.ConfigPath(task.ID), Data: cfgData, Mode: 0666},
 		},
-	}
-
-	return b.Build(ctx)
+	}, nil
 }
 
 func (r *Runner) Start(ctx context.Context, task *model.Task) error {
-	c, ok, err := r.find(ctx, task.ID)
+	spec, err := r.spec(ctx, task)
 	if err != nil {
 		return err
 	}
-
-	var containerID string
-	if ok {
-		r.log.Info("starting existing container", "task", task.ID, "name", fmt.Sprintf("xagent-%d", task.ID))
-		containerID = c.ID
-
-		// Refresh any network attachments whose endpoint ID has drifted
-		// from the live network — e.g. after `docker compose down && up`.
-		ws, err := r.workspaces.Get(task.Workspace)
-		if err != nil {
-			return fmt.Errorf("failed to get workspace: %w", err)
-		}
-		repaired, err := dockerx.RepairNetworks(ctx, r.docker, containerID, ws.Container.Networks)
-		if err != nil {
-			return fmt.Errorf("failed to repair network attachment: %w", err)
-		}
-		if len(repaired) > 0 {
-			r.log.Warn("repaired stale network attachments",
-				"task", task.ID, "container", containerID, "networks", repaired)
-		}
-	} else {
-		containerID, err = r.create(ctx, task)
-		if err != nil {
-			return err
-		}
-	}
-
-	if err := r.docker.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("failed to start container: %w", err)
-	}
-	return nil
+	return r.backend.Start(ctx, spec)
 }
 
-// Monitor watches for container exits and reports the ones the driver
+// Monitor watches for sandbox exits and reports the ones the driver
 // couldn't: a non-zero exit means the driver died without reporting its
 // outcome, so the runner emits "failed" on its behalf. Exit 0 means the
 // driver already reported (see the driver-owned-events proposal), so no
 // event is emitted.
 func (r *Runner) Monitor(ctx context.Context) error {
-	eventCh, errCh := r.docker.Events(ctx, events.ListOptions{
-		Filters: filters.NewArgs(
-			filters.Arg("type", "container"),
-			filters.Arg("event", "die"),
-			filters.Arg("label", "xagent=true"),
-			filters.Arg("label", "xagent.runner="+r.runnerID),
-		),
-	})
-
-	for {
-		select {
-		case event := <-eventCh:
-			taskIDStr := event.Actor.Attributes["xagent.task"]
-			taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-			if err != nil {
-				r.log.Error("invalid task ID in container event", "task", taskIDStr, "error", err)
-				continue
-			}
-
-			r.sem.Release(1)
-			r.wake.Wake()
-			exitCode := event.Actor.Attributes["exitCode"]
-			if exitCode == "0" {
-				r.log.Info("container exited, driver already reported", "task", taskID)
-				continue
-			}
-			r.log.Error("container exited without reporting", "task", taskID, "exitCode", exitCode)
-			// Use version 0 to bypass version check (spontaneous events)
-			r.queue.Enqueue(model.RunnerEvent{
-				TaskID: taskID,
-				Event:  model.RunnerEventFailed,
-			})
-
-		case err := <-errCh:
-			return fmt.Errorf("docker events error: %w", err)
-
-		case <-ctx.Done():
-			return ctx.Err()
+	return r.backend.Watch(ctx, func(exit backend.Exit) {
+		r.sem.Release(1)
+		r.wake.Wake()
+		if exit.ExitCode == 0 {
+			r.log.Info("sandbox exited, driver already reported", "task", exit.TaskID)
+			return
 		}
-	}
+		r.log.Error("sandbox exited without reporting", "task", exit.TaskID, "exitCode", exit.ExitCode)
+		// Use version 0 to bypass version check (spontaneous events)
+		r.queue.Enqueue(model.RunnerEvent{
+			TaskID: exit.TaskID,
+			Event:  model.RunnerEventFailed,
+		})
+	})
 }
 
-// Prune removes containers for archived tasks.
+// Prune removes sandboxes for archived tasks.
 func (r *Runner) Prune(ctx context.Context) error {
-	// List all stopped xagent containers
-	containers, err := r.docker.ContainerList(ctx, container.ListOptions{
-		All: true,
-		Filters: filters.NewArgs(
-			filters.Arg("label", "xagent=true"),
-			filters.Arg("label", "xagent.runner="+r.runnerID),
-			filters.Arg("status", "exited"),
-		),
-	})
+	sandboxes, err := r.backend.List(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list containers: %w", err)
+		return fmt.Errorf("failed to list sandboxes: %w", err)
 	}
 
-	// Check each container's task status and remove if archived
-	for _, c := range containers {
-		label := c.Labels["xagent.task"]
-		if label == "" {
-			continue
-		}
-		taskID, err := strconv.ParseInt(label, 10, 64)
-		if err != nil {
-			r.log.Error("invalid task ID in container label", "xagent.task", label, "error", err)
+	// Check each exited sandbox's task status and remove if archived
+	for _, sb := range sandboxes {
+		if sb.State != backend.StateExited {
 			continue
 		}
 		// Fetch task
-		resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+		resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: sb.TaskID})
 		if err != nil && connect.CodeOf(err) != connect.CodeNotFound {
-			r.log.Error("failed to get task", "task", taskID, "error", err)
+			r.log.Error("failed to get task", "task", sb.TaskID, "error", err)
 			continue
 		}
-		// Remove container if task is archived or deleted
+		// Remove sandbox if task is archived or deleted
 		if connect.CodeOf(err) == connect.CodeNotFound || resp.Task.Archived {
-			if err := r.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
-				r.log.Error("failed to remove container", "task", taskID, "error", err)
+			if err := r.backend.Remove(ctx, sb.TaskID); err != nil {
+				r.log.Error("failed to remove sandbox", "task", sb.TaskID, "error", err)
 			} else {
-				r.log.Info("container removed", "task", taskID)
+				r.log.Info("sandbox removed", "task", sb.TaskID)
 			}
 		}
 	}
