@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.0](https://github.com/icholy/xagent/compare/v1.2.0...v1.3.0) (2026-06-10)
+
+
+### Features
+
+* move ownership of task lifecycle events into the driver ([#934](https://github.com/icholy/xagent/issues/934)) ([e87c84f](https://github.com/icholy/xagent/commit/e87c84f7a4d5996dd3fa6739e9ece1ac7dbe25b5))
+
+
+### Miscellaneous
+
+* add MCP server and GitHub/Jira webhooks to architecture diagram ([08037f9](https://github.com/icholy/xagent/commit/08037f94b17ce351690900014778c592ac37ccbb))
+* **deps:** update tanstack-router monorepo ([#929](https://github.com/icholy/xagent/issues/929)) ([989158d](https://github.com/icholy/xagent/commit/989158d5d051299174c565711b3eee2b475f317c))
+* **deps:** update typescript native preview to v7.0.0-dev.20260527.2 ([#930](https://github.com/icholy/xagent/issues/930)) ([111e291](https://github.com/icholy/xagent/commit/111e291a8687059c15321a86017803555970df90))
+* move eliminate-runner-socket-proxy proposal to implemented ([86ab487](https://github.com/icholy/xagent/commit/86ab487bec28fcb75b89489580083bec3ec91b67))
+* update architecture diagram for direct C2 connection ([67e7aa4](https://github.com/icholy/xagent/commit/67e7aa40c3606f0f451d46a6f5af1c45f5458b2a))
+* **webui:** add Vitest harness with first test case ([#927](https://github.com/icholy/xagent/issues/927)) ([bedf362](https://github.com/icholy/xagent/commit/bedf36289c1595a9a8a8e69c736e2e064827338b))
+* **webui:** test AuthTransport with MSW ([#928](https://github.com/icholy/xagent/issues/928)) ([d9c3978](https://github.com/icholy/xagent/commit/d9c39784189226322836978b9fe4bd762c93151c))
+
 ## [1.2.0](https://github.com/icholy/xagent/compare/v1.1.1...v1.2.0) (2026-06-07)
 
 
