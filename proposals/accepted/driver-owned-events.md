@@ -10,19 +10,21 @@ Today the runner emits all `RunnerEvent`s (`started`, `stopped`, `failed`) on be
 
 The driver process (`internal/agent/driver.go`) is the entity actually running the agent and knows *exactly* what happened — success, agent error, setup error, graceful stop — but currently only communicates through its exit code, which the runner re-interprets via Docker.
 
-This proposal moves the source of truth for `started` / `stopped` / `failed` into the driver, with the runner's Docker monitor retained as a backup for cases where the driver process can't report (OOM, SIGKILL, image-pull failure, etc.).
+This proposal moves the source of truth for `started` / `stopped` / `failed` into the driver. The runner speaks only when the driver can't: when no container exists, or when the driver died without reporting.
 
 ## Design
 
 ### Invariant
 
-The driver returns non-zero **only when it could not report its outcome itself**. If it successfully submits a `stopped` or `failed` event and gets an ack, it exits 0.
+The driver returns non-zero **only when it could not report its outcome itself**. If it successfully submits a `stopped` or `failed` event and gets an ack, it exits 0. If any terminal submit fails — including `stopped` — it exits non-zero.
+
+The exit code is therefore a single bit meaning "did the driver report?", and the runner's monitor reads it as exactly that: exit 0 → the outcome is already recorded, emit nothing; exit non-zero → the outcome was lost, emit `failed`.
 
 ### Authorization
 
 No new authorization surface is needed. The driver already talks directly to the C2 with a task-scoped JWT (see proposals/implemented/eliminate-runner-socket-proxy.md), and `SubmitRunnerEvents` authorizes each event against the loaded task row — the task token's `task.write` scope only matches the driver's own task.
 
-Driver-emitted events use `Version: 0` (same convention as the runner's monitor — spontaneous events bypass the version check).
+Driver-emitted events use `Version: 0` (same convention as today's monitor — spontaneous events bypass the version check).
 
 ### Driver event ownership
 
@@ -32,7 +34,7 @@ Driver-emitted events use `Version: 0` (same convention as the runner's monitor 
 | `failed` | Setup command failure; agent error from `a.Prompt`. |
 | `stopped` | Clean agent completion; the `agent.ErrStop` cancellation path (SIGTERM — for both stop and restart). |
 
-The driver **waits for ack** on every submit (the `SubmitRunnerEvents` handler in `internal/server/apiserver/runner.go` commits the DB transaction before returning, so a nil error means the state transition is durable). The ack decides the exit code: acked → exit 0; not acked → exit non-zero so the monitor's fallback fires.
+The driver **waits for ack** on every submit (the `SubmitRunnerEvents` handler in `internal/server/apiserver/runner.go` commits the DB transaction before returning, so a nil error means the state transition is durable). The ack decides the exit code per the invariant.
 
 Events are submitted on a context that survives the SIGTERM cancellation — the terminal events go out *after* the run context is torn down — bounded by the client's HTTP timeout.
 
@@ -53,35 +55,30 @@ Because the same container is restarted (a recreate only happens if the containe
 
 An earlier revision of this proposal kept the driver alive across restarts with a SIGHUP-triggered in-place reload (cancel the agent run, re-emit `started`, re-prompt — the container never stops). It was dropped: two racing signals forced layered cancellation contexts, a reload-then-stop override, concurrent-SIGHUP gating, a SIGHUP-at-natural-completion self-heal path, and a driver-side unwind timeout — all to save one container stop/start (~1–2s, same container, no setup re-run) on the restart happy path. The failure outcomes were identical in both designs (a hung agent lands in `failed` either way), so the simpler model wins.
 
-### Runner responsibilities after the change
+### The runner speaks only when the driver can't
 
-**The runner is unchanged.**
+Every remaining runner emit covers a case where no driver exists or the driver died without reporting:
 
-- `runner.Monitor` keeps subscribing to docker `start` / `die` events. Its emits are no-ops in the happy path because the status-guarded `Task.ApplyRunnerEvent` state machine ignores redundant transitions. The monitor exists for processes that died before they could speak (OOM, SIGKILL, exec failure).
-- `runner.Poll` keeps its emits: the stop branch's `stopped` becomes a backup, and the dispatch-failure `failed` emits (image pull fails, `r.Start` fails) remain authoritative — no container exists, so the driver can't report these.
-- `runner.Kill` / `runner.Reconcile` are unchanged — by definition no driver is running when the runner restarts and finds an already-exited container.
+- **`runner.Monitor`** subscribes only to docker `die` events (the `start` subscription and its `started` emit are removed — the driver's `started` replaces them). Exit non-zero → emit `failed`: the driver died without reporting. Exit 0 → emit **nothing**: by the invariant, the outcome is already recorded. The `die` handler keeps its semaphore-release / wake-up bookkeeping either way.
+- **`runner.Poll`**'s stop branch emits `stopped` only when there was **no running container to signal** — a stop command for an already-dead container has no driver to complete it, and without the emit the task would be stuck in `cancelling`. When a container was signalled, the driver owns the report (and if it hangs, SIGKILL → non-zero exit → the monitor's `failed`). `Kill` reports whether it signalled a running container.
+- **`runner.Poll`**'s dispatch-failure emits (`failed` when the image pull or `r.Start` fails) are unchanged — no container exists, so the driver can't report these.
+- **`runner.Reconcile`** emits `failed` for any exited container whose task is still `running`, regardless of exit code. By the invariant, an exit-0 container whose task is still `running` means the driver's report was lost — `failed` is the honest outcome. (Today's exit-code mapping to `stopped`/`failed` goes away.)
+
+A side effect of removing the stop branch's unconditional `stopped`: a cancel whose driver hangs until SIGKILL now lands **deterministically** in `failed`. Today that outcome races the runner's `stopped` (→ `cancelled`) against the monitor's `failed`, and either can win.
 
 ### Why duplicates are safe
 
-The state machine in `internal/model/task.go` is status-guarded:
+Duplicate events become rare (the monitor no longer mirrors every exit), but races can still produce them — e.g. a container that exits between the stop branch's "is it running?" check and the kill, where both the dying driver and the runner emit `stopped`. The state machine in `internal/model/task.go` is status-guarded, so duplicates remain harmless:
 
 - `applyRunnerEventStarted` only transitions from `pending` / `restarting` / `running` *with* a `start` or `restart` command. A second `started` after the first hits a state with `command=none` and returns `false`.
 - `applyRunnerEventStopped` only transitions from `running` / `cancelling`. A subsequent `stopped` after the task moved to `completed` / `cancelled` / `failed` falls through to `default` and returns `false`.
 - `applyRunnerEventFailed` only transitions from non-terminal states. Same idempotency.
 
-So driver-emit + monitor-emit duplicates are harmless.
-
 ### The "exit before ack" race
 
-If the driver tries to emit `failed` but exits before the RPC completes:
+In the old model, a driver that died before its `failed` event was delivered could exit 0, and the monitor's exit-0 `stopped` fallback would silently mark the task `completed`. That race is now structurally impossible: there is no exit-0 fallback. An unacked terminal submit exits non-zero, and the only thing the monitor ever emits on `die` is `failed`.
 
-1. Driver process exits (exit code TBD).
-2. Container dies. Docker emits `die`.
-3. Monitor sees exit code:
-   - If exit non-zero → emits `failed`. State machine accepts. Correct.
-   - If exit 0 → emits `stopped`. State machine moves `running` → `completed`. **Failure silently swallowed.**
-
-Mitigation: the driver must **wait for ack** before deciding what exit code to use. If the ack landed, exit 0 is safe. If not, exit non-zero so the monitor's `failed` fallback fires.
+The trade-off: a successful run whose `stopped` ack fails (C2 briefly unreachable at the moment of completion) lands in `failed` rather than `completed` — an explicit "the report was lost" rather than a silent wrong answer. If false `failed`s show up in practice, the driver can retry the submit briefly before giving up.
 
 ---
 
@@ -110,8 +107,7 @@ sequenceDiagram
     S-->>D: ack (status=completed)
     D-->>D: exit 0
     M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup]
-    Note over S: state=completed,<br/>guard rejects → no-op
+    Note over M: driver already reported<br/>→ no event
 ```
 
 ### 2. Agent error (driver reports failure)
@@ -130,8 +126,7 @@ sequenceDiagram
     S-->>D: ack (status=failed)
     D-->>D: exit 0
     M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup]
-    Note over S: state=failed,<br/>guard rejects → no-op
+    Note over M: driver already reported<br/>→ no event
 ```
 
 ### 3. Driver crash (process dies before reporting)
@@ -145,8 +140,8 @@ sequenceDiagram
 
     D->>S: SubmitRunnerEvents(started)
     S-->>D: ack
-    D->>D: panic / OOM kill / SIGKILL
-    Note over D: process exits non-zero<br/>no event emitted
+    D->>D: panic / OOM kill / SIGKILL<br/>or terminal submit not acked
+    Note over D: process exits non-zero<br/>outcome not recorded
     M->>M: docker die exitCode≠0
     M->>S: SubmitRunnerEvents(failed)
     Note over S: state=running → failed<br/>(guard accepts)
@@ -169,14 +164,16 @@ sequenceDiagram
     R->>S: ListRunnerTasks
     S-->>R: [task command=stop]
     R->>D: SIGTERM
+    Note over R: container was signalled<br/>→ runner emits nothing
     D->>D: ctx canceled (ErrStop)
     D->>S: SubmitRunnerEvents(stopped)
     S-->>D: ack (status=cancelled)
     D-->>D: exit 0
     M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup]
-    Note over S: state=cancelled,<br/>guard rejects → no-op
+    Note over M: driver already reported<br/>→ no event
 ```
+
+> If the container is **not** running when the stop command is processed, there is no driver to complete the cancel: the stop branch emits `stopped` itself (version=task.Version) so the task reaches `cancelled` instead of sticking in `cancelling`.
 
 ### 5. Cancel timeout (SIGKILL fallback)
 
@@ -199,7 +196,7 @@ sequenceDiagram
     Note over S: cancelling → failed<br/>(state machine accepts<br/>failed from cancelling)
 ```
 
-> **Open question:** today this lands in `failed` rather than `cancelled`. Acceptable, but worth confirming.
+> This lands in `failed` rather than `cancelled` — and now deterministically so. Today the runner's unconditional `stopped` races the monitor's `failed` and either can win; with the stop branch silent after signalling a live container, `failed` is the only possible outcome. A hung cancel is a failure worth surfacing.
 
 ### 6. Restart (kill + start the same container)
 
@@ -224,7 +221,7 @@ sequenceDiagram
     Note over S: restarting+restart →<br/>guard rejects → no-op
     S-->>D1: ack
     D1-->>D1: exit 0
-    M->>S: SubmitRunnerEvents(stopped) [backup, no-op]
+    Note over M: exit 0 → no event
     R->>R: start same container
     D2->>S: SubmitRunnerEvents(started)
     Note over S: restarting+restart →<br/>running+none
@@ -290,7 +287,7 @@ sequenceDiagram
     S-->>D: ack
     D-->>D: exit 0
     M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup, no-op]
+    Note over M: driver already reported<br/>→ no event
 ```
 
 ---
@@ -300,8 +297,12 @@ sequenceDiagram
 - `internal/agent/driver.go`:
   - Drop `client.Ping`; emit `started` on entry and wait for the ack.
   - Emit `failed` on setup error / agent error, `stopped` on clean completion and on the `agent.ErrStop` path.
-  - Wait for the ack before choosing the exit code: acked → exit 0; not acked → return the error so the monitor's `failed` fallback fires. The `stopped` emits are ack-indifferent for the exit code — the monitor's exit-0 fallback lands on the same `stopped`.
+  - Every terminal submit's ack decides the exit code: acked → exit 0; not acked → exit non-zero so the monitor's `failed` fires. This includes `stopped` — there is no exit-0 fallback anymore.
   - Submit events on a context that survives the SIGTERM cancellation.
-- `internal/runner/runner.go`: unchanged. `Monitor`, `Poll`, and `Reconcile` keep all their emits as backups.
+- `internal/runner/runner.go`:
+  - `Monitor`: subscribe only to `die`; emit `failed` on non-zero exit, nothing on exit 0. Drop the `start` subscription and the `started` / exit-0 `stopped` emits. Keep the semaphore-release / wake-up bookkeeping on `die`.
+  - `Poll` stop branch: `Kill` reports whether it signalled a running container; emit `stopped` only when it didn't.
+  - `Poll` dispatch-failure `failed` emits: unchanged.
+  - `Reconcile`: emit `failed` for any exited container whose task is still `running`, regardless of exit code.
 - No protocol/schema changes. No state-machine changes. No new signals.
 - Driver-emitted events use `Version: 0`.
