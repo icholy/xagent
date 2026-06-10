@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/icholy/xagent/compare/v1.3.0...v1.4.0) (2026-06-10)
+
+
+### Features
+
+* **runner:** abstract the sandbox runtime behind a backend interface ([#937](https://github.com/icholy/xagent/issues/937)) ([75bb3bf](https://github.com/icholy/xagent/commit/75bb3bf1ed04006be9c7cce151ac8111d87a2ec9))
+
+
+### Miscellaneous
+
+* **deps:** update typescript-eslint monorepo to v8.60.1 ([#931](https://github.com/icholy/xagent/issues/931)) ([004a064](https://github.com/icholy/xagent/commit/004a064ed07c1c0258c291886d0ddfbfb5712c29))
+
 ## [1.3.0](https://github.com/icholy/xagent/compare/v1.2.0...v1.3.0) (2026-06-10)
 
 
