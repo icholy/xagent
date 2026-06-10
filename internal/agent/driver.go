@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"text/template"
 
 	"github.com/icholy/xagent/internal/auth/agentauth"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 )
@@ -23,7 +25,16 @@ type Driver struct {
 	Log    *slog.Logger
 }
 
+// Run executes the task and reports its outcome to the server. The driver
+// owns the started / stopped / failed runner events (see the
+// driver-owned-events proposal); it returns an error only when it could not
+// report the outcome itself, so the runner's monitor reads the exit code as
+// a single bit meaning "did the driver report?".
 func (d *Driver) Run(ctx context.Context) error {
+	// Events are submitted on the parent context, which survives the SIGTERM
+	// cancellation below — the terminal events go out after the run context
+	// is torn down, bounded by the client's HTTP timeout.
+	eventCtx := ctx
 
 	// Set up SIGTERM handler to cancel with ErrStop
 	ctx, cancel := context.WithCancelCause(ctx)
@@ -36,11 +47,48 @@ func (d *Driver) Run(ctx context.Context) error {
 	}()
 	defer signal.Stop(sigCh)
 
-	// Make sure the server is reachable
-	if _, err := d.Client.Ping(ctx, &xagentv1.PingRequest{}); err != nil {
-		return fmt.Errorf("failed to ping server: %w", err)
+	// Report started: replaces the startup ping — an acked submit proves the
+	// connection, token, server, and DB are all healthy.
+	if err := d.submit(eventCtx, model.RunnerEventStarted); err != nil {
+		return err
 	}
 
+	err := d.run(ctx)
+	if err != nil && context.Cause(ctx) == ErrStop {
+		d.Log.Info("agent stopped gracefully")
+		err = nil
+	}
+	event := model.RunnerEventStopped
+	if err != nil {
+		d.Log.Error("task failed", "error", err)
+		event = model.RunnerEventFailed
+	}
+	// The terminal ack decides the exit code: acked means the outcome is
+	// durably recorded and the driver exits 0 even on agent failure; a lost
+	// report exits non-zero so the monitor's "failed" fires.
+	if serr := d.submit(eventCtx, event); serr != nil {
+		return errors.Join(err, serr)
+	}
+	return nil
+}
+
+// submit reports a runner event for the driver's task and waits for the ack.
+// The SubmitRunnerEvents handler commits the transaction before returning,
+// so a nil error means the state transition is durable.
+func (d *Driver) submit(ctx context.Context, event model.RunnerEventType) error {
+	// Version 0 bypasses the version check (spontaneous events).
+	re := model.RunnerEvent{TaskID: d.TaskID, Event: event}
+	_, err := d.Client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{re.Proto()},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to submit %s event: %w", event, err)
+	}
+	return nil
+}
+
+// run executes the setup commands and the agent prompt.
+func (d *Driver) run(ctx context.Context) error {
 	// Load config
 	cfg, err := LoadConfig(d.TaskID)
 	if err != nil {
@@ -84,10 +132,6 @@ func (d *Driver) Run(ctx context.Context) error {
 	}
 
 	if err := a.Prompt(ctx, prompt, cfg.Started); err != nil {
-		if context.Cause(ctx) == ErrStop {
-			d.Log.Info("agent stopped gracefully")
-			return nil
-		}
 		return err
 	}
 
