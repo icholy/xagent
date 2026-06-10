@@ -40,13 +40,22 @@ func ContainerWait(ctx context.Context, client ContainerWaiter, containerID stri
 	}
 }
 
-// ContainerKill kills a container with the specified signal and waits for it to stop.
-// It returns ErrNotRunning if the container was not running.
-func ContainerKill(ctx context.Context, client ContainerKiller, containerID string, signal string) error {
+// ContainerSignal sends a signal to a running container without waiting for
+// it to stop. It returns ErrNotRunning if the container was not running.
+func ContainerSignal(ctx context.Context, client ContainerKiller, containerID string, signal string) error {
 	if err := client.ContainerKill(ctx, containerID, signal); err != nil {
 		if cerrdefs.IsConflict(err) && strings.Contains(err.Error(), "is not running") {
 			return ErrNotRunning
 		}
+		return err
+	}
+	return nil
+}
+
+// ContainerKill kills a container with the specified signal and waits for it to stop.
+// It returns ErrNotRunning if the container was not running.
+func ContainerKill(ctx context.Context, client ContainerKiller, containerID string, signal string) error {
+	if err := ContainerSignal(ctx, client, containerID, signal); err != nil {
 		return err
 	}
 	return ContainerWait(ctx, client, containerID, container.WaitConditionNotRunning)

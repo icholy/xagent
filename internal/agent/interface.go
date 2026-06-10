@@ -18,6 +18,11 @@ import (
 // to distinguish a graceful stop from other errors.
 var ErrStop = errors.New("stop")
 
+// ErrReload is a sentinel cancellation cause, like ErrStop, used to signal an
+// in-place reload: the current agent run is cancelled, and the driver starts a
+// new run for the updated task in the same process.
+var ErrReload = errors.New("reload")
+
 // Agent type constants.
 const (
 	TypeClaude  = "claude"

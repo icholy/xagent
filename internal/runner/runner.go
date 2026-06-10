@@ -11,7 +11,6 @@ import (
 	"path"
 	"regexp"
 	"strconv"
-	"time"
 
 	"connectrpc.com/connect"
 	"github.com/docker/docker/api/types/container"
@@ -160,11 +159,20 @@ func (r *Runner) Poll(ctx context.Context) error {
 			})
 		case model.TaskCommandRestart:
 			g.Go(func() error {
-				// Kill existing container if running
-				if err := r.Kill(ctx, task); err != nil {
-					r.log.Error("failed to kill task for restart", "task", task.ID, "error", err)
+				// In-place reload: SIGHUP the running driver. It cancels the
+				// current agent run, emits "started" (clearing the restart
+				// command), and starts a new run without the container ever
+				// stopping.
+				reloaded, err := r.Reload(ctx, task)
+				if err != nil {
+					r.log.Error("failed to reload task", "task", task.ID, "error", err)
+					return nil // retried on the next poll
 				}
-				// Atomically acquire a semaphore slot before starting
+				if reloaded {
+					return nil
+				}
+				// Container not running: fall back to recreate-and-start.
+				// Atomically acquire a semaphore slot before starting.
 				if !r.sem.TryAcquire(1) {
 					r.log.Debug("concurrency limit reached, skipping task", "task", task.ID, "limit", r.concurrency)
 					return nil
@@ -179,7 +187,8 @@ func (r *Runner) Poll(ctx context.Context) error {
 					})
 					return nil
 				}
-				// The "started" event is sent by Monitor when the container starts
+				// The "started" event is sent by the driver once it's up
+				// (the Monitor's start event is the backup).
 				return nil
 			})
 		case model.TaskCommandStart:
@@ -332,6 +341,28 @@ func (r *Runner) isRunning(ctx context.Context, task *model.Task) (bool, error) 
 	return c.State == "running", nil
 }
 
+// Reload sends SIGHUP to the container's PID 1 (the driver), telling it to
+// cancel the current agent run and start a new one in place. It reports
+// whether a running container was signalled; if not, the caller falls back
+// to recreate-and-start.
+func (r *Runner) Reload(ctx context.Context, task *model.Task) (bool, error) {
+	c, ok, err := r.find(ctx, task.ID)
+	if err != nil {
+		return false, err
+	}
+	if !ok || c.State != "running" {
+		return false, nil
+	}
+	r.log.Info("reloading container", "task", task.ID)
+	if err := dockerx.ContainerSignal(ctx, r.docker, c.ID, "SIGHUP"); err != nil {
+		if errors.Is(err, dockerx.ErrNotRunning) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *Runner) Kill(ctx context.Context, task *model.Task) error {
 	c, ok, err := r.find(ctx, task.ID)
 	if err != nil {
@@ -345,8 +376,10 @@ func (r *Runner) Kill(ctx context.Context, task *model.Task) error {
 	}
 	r.log.Info("killing container", "task", task.ID)
 
-	// Try SIGTERM first with a timeout
-	killCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// Try SIGTERM first with a timeout. The driver applies the same timeout
+	// to the agent's unwind (agent.StopTimeout), so a hung agent exits
+	// non-zero on its own at roughly the moment we'd SIGKILL it.
+	killCtx, cancel := context.WithTimeout(ctx, agent.StopTimeout)
 	defer cancel()
 	err = dockerx.ContainerKill(killCtx, r.docker, c.ID, "SIGTERM")
 	if err == nil || errors.Is(err, dockerx.ErrNotRunning) {

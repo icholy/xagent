@@ -450,6 +450,38 @@ sequenceDiagram
 
 ---
 
+## Implementation notes
+
+The implementation deviates from the design above in a few places:
+
+- **No `AgentFilter` changes.** The socket proxy and its filter were removed
+  (see proposals/implemented/eliminate-runner-socket-proxy.md) before this
+  proposal was implemented. The driver talks to the C2 directly with a
+  task-scoped JWT whose `task.write` scope already constrains
+  `SubmitRunnerEvents` to the driver's own task — no new authorization
+  surface was needed.
+- **`Kill` + `Reload` instead of a parameterized `Signal`.** Stop and reload
+  have different wait semantics (SIGTERM waits for exit and escalates to
+  SIGKILL; SIGHUP must not wait — the container stays up), so the runner
+  keeps `Kill` unchanged and adds `Reload`, which reports whether a running
+  container was signalled so `Poll` can fall back to recreate-and-start.
+- **The unwind timeout covers stop too.** The driver bounds how long a
+  cancelled run may take to return (`agent.StopTimeout`, shared with
+  `runner.Kill`) regardless of whether the cancel cause was `ErrStop` or
+  `ErrReload`, and exits non-zero without reporting if it fires.
+- **SIGHUP before the first run is a plain start.** A reload that arrives
+  while setup commands are still running (setup is only interruptible by
+  stop) is honored by re-arming the run context and emitting `started`,
+  keeping the original bootstrap prompt — there is no agent session to
+  reload yet, so `resume=true` would be wrong.
+- **No `reloading` flag.** Layered contexts make it unnecessary: SIGTERM
+  cancels a stop context that parents every run context (so a stop always
+  wins over an in-progress reload), and the run context is re-armed before
+  `started` is emitted so a racing SIGHUP cancels the new run instead of
+  being lost. Duplicate SIGHUPs against an already-cancelled run context are
+  no-ops, and the extra pass through the reload branch is rejected by the
+  server's status guard.
+
 ## Migration notes
 
 - `internal/command/driver.go`:
