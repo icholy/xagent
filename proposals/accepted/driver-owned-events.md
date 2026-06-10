@@ -8,144 +8,77 @@ Today the runner emits all `RunnerEvent`s (`started`, `stopped`, `failed`) on be
 - `runner.Poll` emits `failed` / `stopped` when a command (start / restart / stop) fails to dispatch.
 - `runner.Reconcile` scans exited containers at runner startup and emits the corresponding event.
 
-The driver process (`internal/command/driver.go`) is the entity actually running the agent and knows *exactly* what happened — success, agent error, setup error, graceful stop — but currently only communicates through its exit code, which the runner re-interprets via Docker.
+The driver process (`internal/agent/driver.go`) is the entity actually running the agent and knows *exactly* what happened — success, agent error, setup error, graceful stop — but currently only communicates through its exit code, which the runner re-interprets via Docker.
 
-This proposal moves the source of truth for `started` / `stopped` / `failed` into the driver, with the runner's Docker monitor retained as a backup for cases where the driver process can't report (OOM, SIGKILL, image-pull failure, etc.).
+This proposal moves the source of truth for `started` / `stopped` / `failed` into the driver. The runner speaks only when the driver can't: when no container exists, or when the driver died without reporting.
 
 ## Design
 
 ### Invariant
 
-The driver returns non-zero **only when it could not report its outcome itself**. If it successfully submits a `stopped` or `failed` event and gets an ack, it exits 0.
+The driver returns non-zero **only when it could not report its outcome itself**. If it successfully submits a `stopped` or `failed` event and gets an ack, it exits 0. If any terminal submit fails — including `stopped` — it exits non-zero.
 
-### AgentFilter exposes `SubmitRunnerEvents`
+The exit code is therefore a single bit meaning "did the driver report?", and the runner's monitor reads it as exactly that: exit 0 → the outcome is already recorded, emit nothing; exit non-zero → the outcome was lost, emit `failed`.
 
-`internal/agentmcp/filter.go` currently routes task-scoped operations from the driver's JWT to the real server. Add:
+### Authorization
 
-```go
-func (p *AgentFilter) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
-    claims, err := p.claims(ctx)
-    if err != nil {
-        return nil, err
-    }
-    for _, ev := range req.Events {
-        if ev.TaskId != claims.TaskID {
-            return nil, errPermissionDenied("can only submit events for own task")
-        }
-    }
-    return p.client.SubmitRunnerEvents(ctx, req)
-}
-```
+No new authorization surface is needed. The driver already talks directly to the C2 with a task-scoped JWT (see proposals/implemented/eliminate-runner-socket-proxy.md), and `SubmitRunnerEvents` authorizes each event against the loaded task row — the task token's `task.write` scope only matches the driver's own task.
 
-Driver-emitted events use `Version: 0` (same convention as the runner's monitor — spontaneous events bypass the version check).
+Driver-emitted events use `Version: 0` (same convention as today's monitor — spontaneous events bypass the version check).
 
 ### Driver event ownership
 
 | Event | When the driver emits it |
 |---|---|
-| `started` | Immediately on entry (replaces `client.Ping`), and again after every SIGHUP reload. If the first submit succeeds, the socket, JWT, server, and DB are all healthy — no separate ping needed. |
-| `failed` | Setup command failure (`driver.go:78-92`); agent error from `a.Prompt`. |
-| `stopped` | Clean agent completion; `agent.ErrStop` cancellation path. |
+| `started` | Immediately on entry (replaces `client.Ping`). If the submit succeeds, the connection, token, server, and DB are all healthy — no separate ping needed. |
+| `failed` | Setup command failure; agent error from `a.Prompt`. |
+| `stopped` | Clean agent completion; the `agent.ErrStop` cancellation path (SIGTERM — for both stop and restart). |
 
-The driver **waits for ack** on every submit (the `SubmitRunnerEvents` handler in `internal/server/apiserver/runner.go` commits the DB transaction before returning, so a nil error means the state transition is durable).
+The driver **waits for ack** on every submit (the `SubmitRunnerEvents` handler in `internal/server/apiserver/runner.go` commits the DB transaction before returning, so a nil error means the state transition is durable). The ack decides the exit code per the invariant.
 
-### Restart: in-place reload via SIGHUP
+Events are submitted on a context that survives the SIGTERM cancellation — the terminal events go out *after* the run context is torn down — bounded by the client's HTTP timeout.
 
-The driver becomes a long-lived process with two signal semantics:
+### Restart: the state machine already routes `stopped`
 
-- **SIGTERM → stop**: cancel agent with `agent.ErrStop`, emit `stopped`, exit 0.
-- **SIGHUP → reload**: cancel agent with `agent.ErrReload`, re-fetch task via the existing "task was updated" bootstrap prompt, emit `started` (clears `running+restart` → `running+none`), run a new agent loop. **The driver process and the container stay alive across reloads.**
+Restart keeps today's mechanics: the runner kills the container (SIGTERM) and starts the **same container** again. The driver doesn't need to know whether a SIGTERM means stop or restart, because the status-guarded state machine in `internal/model/task.go` disambiguates:
 
-This eliminates the container recreate cost on restart, removes the `Poll` re-entry window (the container never enters a created-but-not-running state during a restart), and avoids the pre-existing "stuck-in-failed after SIGKILL-during-restart" edge case (the container doesn't die during a restart at all).
+- Under `cancelling+stop`, the driver's `stopped` lands the task in `cancelled`.
+- Under `restarting+restart` (or `pending+restart` from a terminal state), `stopped` falls through the status guard and is **ignored** — the command survives, the runner's restart branch starts the container again, and the new run's `started` clears the command (`→ running+none`).
 
-Sketch:
+So the driver treats every SIGTERM identically: cancel the agent with `ErrStop`, emit `stopped`, wait for the ack, exit 0.
 
-```go
-ctx, cancel := context.WithCancelCause(parentCtx)
-sigCh := make(chan os.Signal, 1)
-signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGHUP)
-go func() {
-    for sig := range sigCh {
-        switch sig {
-        case syscall.SIGTERM:
-            cancel(agent.ErrStop)
-        case syscall.SIGHUP:
-            // ignored if a reload is already in progress
-            cancel(agent.ErrReload)
-        }
-    }
-}()
+The ack-wait also serializes event ordering for free: the old run's `stopped` is durably applied before its process exits, and `runner.Kill` waits for the container to exit before `runner.Start` runs — so `stopped` always lands before the next run's `started`.
 
-emit(started)
-for {
-    err := a.Prompt(ctx, prompt, cfg.Started)
-    switch context.Cause(ctx) {
-    case agent.ErrStop:
-        emit(stopped); return nil
-    case agent.ErrReload:
-        ctx, cancel = context.WithCancelCause(parentCtx)
-        prompt = reloadPrompt; cfg.Started = true
-        emit(started)
-        continue
-    }
-    if err != nil { emit(failed); return err }
-    emit(stopped); return nil
-}
-```
+Because the same container is restarted (a recreate only happens if the container was removed), the filesystem persists: setup state (`SetupCommandsCompleted`) carries over and setup commands are not re-run.
 
-**PID 1 caveat:** the kernel ignores default-action signals delivered to PID 1, so the explicit `signal.Notify` registration is mandatory — SIGHUP without a handler is silently dropped.
+#### Why not an in-place reload?
 
-**Reload-hang safety net:** reuse the existing 30s SIGTERM→SIGKILL timeout from `runner.Kill` driver-side. If `a.Prompt` doesn't return within the timeout after `ErrReload`, the driver exits non-zero — the monitor's `failed` fallback then catches it.
+An earlier revision of this proposal kept the driver alive across restarts with a SIGHUP-triggered in-place reload (cancel the agent run, re-emit `started`, re-prompt — the container never stops). It was dropped: two racing signals forced layered cancellation contexts, a reload-then-stop override, concurrent-SIGHUP gating, a SIGHUP-at-natural-completion self-heal path, and a driver-side unwind timeout — all to save one container stop/start (~1–2s, same container, no setup re-run) on the restart happy path. The failure outcomes were identical in both designs (a hung agent lands in `failed` either way), so the simpler model wins.
 
-**Concurrent-SIGHUP handling:** while a reload is in progress, further SIGHUPs are ignored (gated by a `reloading` flag set by the main loop, cleared once `emit(started)` completes for the new agent).
+### The runner speaks only when the driver can't
 
-**Reload-then-stop race:** SIGTERM arriving during an in-progress reload wins — it cancels with `ErrStop`, the partially-set-up new agent context is abandoned, driver emits `stopped` and exits.
+Every remaining runner emit covers a case where no driver exists or the driver died without reporting:
 
-**SIGHUP-at-natural-completion race:** if SIGHUP arrives at the same moment the agent returns success, the driver doesn't go back to handle it — it emits `stopped` and exits. The runner's next `Poll` sees `running+restart` still set and the container not running, and falls into the recreate-and-start path. Self-heals.
+- **`runner.Monitor`** subscribes only to docker `die` events (the `start` subscription and its `started` emit are removed — the driver's `started` replaces them). Exit non-zero → emit `failed`: the driver died without reporting. Exit 0 → emit **nothing**: by the invariant, the outcome is already recorded. The `die` handler keeps its semaphore-release / wake-up bookkeeping either way.
+- **`runner.Poll`**'s stop branch emits `stopped` only when there was **no running container to signal** — a stop command for an already-dead container has no driver to complete it, and without the emit the task would be stuck in `cancelling`. When a container was signalled, the driver owns the report (and if it hangs, SIGKILL → non-zero exit → the monitor's `failed`). `Kill` reports whether it signalled a running container.
+- **`runner.Poll`**'s dispatch-failure emits (`failed` when the image pull or `r.Start` fails) are unchanged — no container exists, so the driver can't report these.
+- **`runner.Reconcile`** emits `failed` for any exited container whose task is still `running`, regardless of exit code. By the invariant, an exit-0 container whose task is still `running` means the driver's report was lost — `failed` is the honest outcome. (Today's exit-code mapping to `stopped`/`failed` goes away.)
 
-### Driver run-loop state machine
-
-The driver's run loop is an NFA with three live (in-flight) states, distinguished by which cancel — if any — has been issued for the current agent run:
-
-![Driver reload state machine](../images/reload-state-machine.svg)
-
-- **Running** — a run is in flight and no cancel has been issued. It exits to `Done`/`Failed` on natural completion, or moves to `Reloading`/`Stopping` on a signal.
-- **Reloading** — `cancel(ErrReload)` has been issued (SIGHUP) and the run is unwinding. When it returns, the loop resumes with the reload prompt.
-- **Stopping** — `cancel(ErrStop)` has been issued (SIGTERM) and the run is unwinding to a graceful stop.
-
-Two races fall out of the topology:
-
-- **Reload-then-stop:** reload has no stored bit (just a one-shot cancel), so a SIGTERM arriving during `Reloading` transitions to `Stopping` and wins.
-- **The nil race** (dashed edges): if a run returns `nil` at the same instant a signal lands, the completed work is honored and the outcome is `Done` — a late cancel does not discard a genuinely finished run.
-
-### Runner responsibilities after the change
-
-- **`runner.Monitor`** keeps subscribing to docker `start` / `die` events. Its emits are no-ops in the happy path because the status-guarded `Task.ApplyRunnerEvent` state machine ignores redundant transitions. The monitor exists for processes that died before they could speak (OOM, SIGKILL, exec failure).
-- **`runner.Poll`** for the `restart` command no longer kills + recreates the container. Instead it sends SIGHUP to the running container's PID 1. If the container isn't running, it falls back to today's recreate-and-start path. `Poll` still emits `failed` for command-time dispatch failures (image pull fails, `r.Start` fails) — no container exists, so the driver can't report these.
-- **`runner.Kill`** splits into a parameterized `r.Signal(task, signal)`: stop sends SIGTERM, restart sends SIGHUP.
-- **`runner.Reconcile`** is unchanged — by definition no driver is running when the runner restarts and finds an already-exited container.
+A side effect of removing the stop branch's unconditional `stopped`: a cancel whose driver hangs until SIGKILL now lands **deterministically** in `failed`. Today that outcome races the runner's `stopped` (→ `cancelled`) against the monitor's `failed`, and either can win.
 
 ### Why duplicates are safe
 
-The state machine in `internal/model/task.go` is status-guarded:
+Duplicate events become rare (the monitor no longer mirrors every exit), but races can still produce them — e.g. a container that exits between the stop branch's "is it running?" check and the kill, where both the dying driver and the runner emit `stopped`. The state machine in `internal/model/task.go` is status-guarded, so duplicates remain harmless:
 
 - `applyRunnerEventStarted` only transitions from `pending` / `restarting` / `running` *with* a `start` or `restart` command. A second `started` after the first hits a state with `command=none` and returns `false`.
 - `applyRunnerEventStopped` only transitions from `running` / `cancelling`. A subsequent `stopped` after the task moved to `completed` / `cancelled` / `failed` falls through to `default` and returns `false`.
 - `applyRunnerEventFailed` only transitions from non-terminal states. Same idempotency.
 
-So driver-emit + monitor-emit duplicates are harmless.
-
 ### The "exit before ack" race
 
-If the driver tries to emit `failed` but exits before the RPC completes:
+In the old model, a driver that died before its `failed` event was delivered could exit 0, and the monitor's exit-0 `stopped` fallback would silently mark the task `completed`. That race is now structurally impossible: there is no exit-0 fallback. An unacked terminal submit exits non-zero, and the only thing the monitor ever emits on `die` is `failed`.
 
-1. Driver process exits (exit code TBD).
-2. Container dies. Docker emits `die`.
-3. Monitor sees exit code:
-   - If exit non-zero → emits `failed`. State machine accepts. Correct.
-   - If exit 0 → emits `stopped`. State machine moves `running` → `completed`. **Failure silently swallowed.**
-
-Mitigation: the driver must **wait for ack** before deciding what exit code to use. If the ack landed, exit 0 is safe. If not, exit non-zero so the monitor's `failed` fallback fires.
+The trade-off: a successful run whose `stopped` ack fails (C2 briefly unreachable at the moment of completion) lands in `failed` rather than `completed` — an explicit "the report was lost" rather than a silent wrong answer. If false `failed`s show up in practice, the driver can retry the submit briefly before giving up.
 
 ---
 
@@ -174,8 +107,7 @@ sequenceDiagram
     S-->>D: ack (status=completed)
     D-->>D: exit 0
     M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup]
-    Note over S: state=completed,<br/>guard rejects → no-op
+    Note over M: driver already reported<br/>→ no event
 ```
 
 ### 2. Agent error (driver reports failure)
@@ -194,8 +126,7 @@ sequenceDiagram
     S-->>D: ack (status=failed)
     D-->>D: exit 0
     M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup]
-    Note over S: state=failed,<br/>guard rejects → no-op
+    Note over M: driver already reported<br/>→ no event
 ```
 
 ### 3. Driver crash (process dies before reporting)
@@ -209,8 +140,8 @@ sequenceDiagram
 
     D->>S: SubmitRunnerEvents(started)
     S-->>D: ack
-    D->>D: panic / OOM kill / SIGKILL
-    Note over D: process exits non-zero<br/>no event emitted
+    D->>D: panic / OOM kill / SIGKILL<br/>or terminal submit not acked
+    Note over D: process exits non-zero<br/>outcome not recorded
     M->>M: docker die exitCode≠0
     M->>S: SubmitRunnerEvents(failed)
     Note over S: state=running → failed<br/>(guard accepts)
@@ -233,14 +164,16 @@ sequenceDiagram
     R->>S: ListRunnerTasks
     S-->>R: [task command=stop]
     R->>D: SIGTERM
+    Note over R: container was signalled<br/>→ runner emits nothing
     D->>D: ctx canceled (ErrStop)
     D->>S: SubmitRunnerEvents(stopped)
     S-->>D: ack (status=cancelled)
     D-->>D: exit 0
     M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup]
-    Note over S: state=cancelled,<br/>guard rejects → no-op
+    Note over M: driver already reported<br/>→ no event
 ```
+
+> If the container is **not** running when the stop command is processed, there is no driver to complete the cancel: the stop branch emits `stopped` itself (version=task.Version) so the task reaches `cancelled` instead of sticking in `cancelling`.
 
 ### 5. Cancel timeout (SIGKILL fallback)
 
@@ -263,9 +196,9 @@ sequenceDiagram
     Note over S: cancelling → failed<br/>(state machine accepts<br/>failed from cancelling)
 ```
 
-> **Open question:** today this lands in `failed` rather than `cancelled`. Acceptable, but worth confirming.
+> This lands in `failed` rather than `cancelled` — and now deterministically so. Today the runner's unconditional `stopped` races the monitor's `failed` and either can win; with the stop branch silent after signalling a live container, `failed` is the only possible outcome. A hung cancel is a failure worth surfacing.
 
-### 6. Restart (happy path, SIGHUP in-place reload)
+### 6. Restart (kill + start the same container)
 
 ```mermaid
 sequenceDiagram
@@ -273,146 +206,55 @@ sequenceDiagram
     participant U as User
     participant S as Server
     participant R as Runner
-    participant D as Driver (container, long-lived)
-    participant A as Agent subprocess
+    participant D1 as Driver (old run)
+    participant D2 as Driver (new run)
     participant M as Docker Monitor
 
     Note over S: status=running, command=none
-    Note over D,A: agent currently running
     U->>S: restart task
-    Note over S: status=running,<br/>command=restart, version++
-
+    Note over S: status=restarting,<br/>command=restart, version++
     R->>S: ListRunnerTasks
     S-->>R: [task command=restart]
-    R->>D: SIGHUP (container is running)
-    D->>D: signal handler: cancel(ErrReload)<br/>reloading=true
-    D->>A: ctx canceled → kill subprocess
-    A-->>D: exit
-    Note over D: a.Prompt returns,<br/>cause = ErrReload
-    D->>D: fresh ctx, reload prompt
-    D->>S: SubmitRunnerEvents(started)
-    Note over S: running+restart →<br/>running+none
-    S-->>D: ack
-    D->>D: reloading=false
-    D->>A: spawn new agent subprocess
-    Note over M: no docker event fires<br/>(container stayed up)
+    R->>D1: SIGTERM (Kill)
+    D1->>D1: ctx canceled (ErrStop)
+    D1->>S: SubmitRunnerEvents(stopped)
+    Note over S: restarting+restart →<br/>guard rejects → no-op
+    S-->>D1: ack
+    D1-->>D1: exit 0
+    Note over M: exit 0 → no event
+    R->>R: start same container
+    D2->>S: SubmitRunnerEvents(started)
+    Note over S: restarting+restart →<br/>running+none
+    S-->>D2: ack
 ```
 
-> The old agent's `stopped` is **not emitted** during a reload — the driver knows the cancellation cause is `ErrReload`, so it skips straight to emitting `started` for the new agent. No wasted RPC, no race with the state machine.
+> The driver's `stopped` under a pending restart is rejected by the status guard, so the restart command survives until the new run's `started` consumes it. Restart from a terminal state (`completed` / `failed` / `cancelled` → `pending+restart`) is the same flow minus the kill: the container has already exited, so `Poll` just starts it.
 
-### 7. Restart fallback (container not running)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User
-    participant S as Server
-    participant R as Runner
-    participant D as Driver (new container)
-    participant M as Docker Monitor
-
-    Note over S: status=completed, command=none<br/>container=exited
-    U->>S: restart task
-    Note over S: status=running,<br/>command=restart
-
-    R->>S: ListRunnerTasks
-    S-->>R: [task command=restart]
-    R->>R: container not running →<br/>recreate-and-start
-    D->>S: SubmitRunnerEvents(started)
-    Note over S: running+restart →<br/>running+none
-    S-->>D: ack
-    D->>D: run setup + agent
-```
-
-> When the container has already exited (task completed/failed/cancelled then restarted), `Poll`'s restart branch can't SIGHUP a non-running process — it falls back to today's recreate-and-start path. Setup commands re-run if `cfg.Setup` was reset by container removal.
-
-### 8. Reload hangs (driver-side timeout)
+### 7. Restart races natural completion
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant S as Server
     participant R as Runner
-    participant D as Driver
-    participant A as Agent subprocess
-    participant M as Docker Monitor
+    participant D1 as Driver (old run)
+    participant D2 as Driver (new run)
 
-    Note over S: status=running, command=restart
-    R->>D: SIGHUP
-    D->>D: cancel(ErrReload)
-    D->>A: ctx canceled
-    Note over A: hung — doesn't exit
-    D->>D: 30s reload timeout
-    D-->>D: exit non-zero
-    M->>M: docker die exitCode≠0
-    M->>S: SubmitRunnerEvents(failed)
-    Note over S: running+restart → failed<br/>(monitor fallback)
-
-    Note over R: next Poll<br/>container not running,<br/>command back to none after failed
+    Note over S: status=restarting, command=restart
+    Note over D1: agent completes naturally<br/>before SIGTERM arrives
+    D1->>S: SubmitRunnerEvents(stopped)
+    Note over S: restarting+restart →<br/>guard rejects → no-op
+    S-->>D1: ack
+    D1-->>D1: exit 0
+    R->>R: Kill: container already exited
+    R->>R: start same container
+    D2->>S: SubmitRunnerEvents(started)
+    Note over S: restarting+restart →<br/>running+none
 ```
 
-> If the agent subprocess refuses to die within the reuse of the existing SIGTERM→SIGKILL timeout, the driver exits non-zero. The monitor's `failed` fallback catches it. The task ends up in `failed` rather than running — an explicit "we tried to restart and the agent wouldn't let go" signal rather than a silent stuck state.
+> No special handling: a `stopped` from a natural completion and a `stopped` from the restart's SIGTERM are routed identically by the status guard.
 
-### 9. Reload-then-stop race (SIGTERM wins)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User
-    participant S as Server
-    participant R as Runner
-    participant D as Driver
-    participant A as Agent subprocess
-    participant M as Docker Monitor
-
-    U->>S: restart task
-    R->>D: SIGHUP
-    D->>D: cancel(ErrReload), reloading=true
-    D->>A: ctx canceled
-    Note over D,A: mid-reload
-    U->>S: stop task
-    R->>D: SIGTERM
-    D->>D: cancel(ErrStop)<br/>(overrides ErrReload)
-    A-->>D: exit
-    Note over D: a.Prompt returns,<br/>cause = ErrStop<br/>(latest cancel cause wins)
-    D->>S: SubmitRunnerEvents(stopped)
-    S-->>D: ack
-    Note over S: cancelling+stop → cancelled
-    D-->>D: exit 0
-    M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup, no-op]
-```
-
-> `context.WithCancelCause` records the *first* cancel cause and ignores subsequent ones, so SIGHUP-then-SIGTERM would leave the cause as `ErrReload` — wrong. The signal handler needs an explicit override: if `ErrStop` arrives while a reload is in progress, replace the context entirely or use a layered context so SIGTERM always wins. This is the "tricky but doable" piece.
-
-### 10. SIGHUP at natural completion (driver ignores it)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant S as Server
-    participant R as Runner
-    participant D as Driver
-    participant M as Docker Monitor
-
-    Note over S: status=running, command=restart
-    Note over D: agent completes naturally
-    Note over D: a.Prompt returns nil,<br/>cause = nil
-    R->>D: SIGHUP (race, arrives too late)
-    Note over D: main loop already past<br/>the cancel-cause switch<br/>→ proceeds to exit
-    D->>S: SubmitRunnerEvents(stopped)
-    Note over S: running+restart → stopped<br/>falls through → no-op<br/>(state stays running+restart)
-    S-->>D: ack
-    D-->>D: exit 0
-    M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup, no-op]
-
-    Note over R: next Poll<br/>command=restart still set,<br/>container not running →<br/>recreate-and-start path
-```
-
-> The driver doesn't try to be clever about late SIGHUPs. The state at the server is still `running+restart` (because the driver's `stopped` is ignored under `restart`), so the runner's next `Poll` sees the unfinished restart, sees no container, and falls back to recreate-and-start. Self-healing.
-
-### 11. Image pull / dispatch failure (runner still emits)
+### 8. Image pull / dispatch failure (runner still emits)
 
 ```mermaid
 sequenceDiagram
@@ -429,7 +271,7 @@ sequenceDiagram
     Note over M: no container ever existed,<br/>monitor sees nothing
 ```
 
-### 12. Setup-command failure (driver emits before exiting)
+### 9. Setup-command failure (driver emits before exiting)
 
 ```mermaid
 sequenceDiagram
@@ -445,26 +287,22 @@ sequenceDiagram
     S-->>D: ack
     D-->>D: exit 0
     M->>M: docker die exitCode=0
-    M->>S: SubmitRunnerEvents(stopped) [backup, no-op]
+    Note over M: driver already reported<br/>→ no event
 ```
 
 ---
 
 ## Migration notes
 
-- `internal/command/driver.go`:
-  - Drop `client.Ping`.
-  - Restructure into an agent-restart loop with `signal.Notify` for both SIGTERM and SIGHUP.
-  - Emit `started` after constructing the client and again after every reload.
-  - Emit `failed` on setup error / agent error, `stopped` on clean exit and on `agent.ErrStop`.
-  - Skip emitting `stopped` when the cancel cause is `ErrReload` — emit `started` for the new agent instead.
-  - Driver-side reload timeout (reuse the 30s SIGTERM→SIGKILL constant from `runner.Kill`): if the agent subprocess doesn't exit within the timeout after `ErrReload`, exit non-zero so the monitor's `failed` fallback fires.
-- `internal/agent/interface.go`: add `ErrReload` sentinel alongside `ErrStop`.
-- `internal/agentmcp/filter.go`: expose `SubmitRunnerEvents` constrained to `claims.TaskID`.
+- `internal/agent/driver.go`:
+  - Drop `client.Ping`; emit `started` on entry and wait for the ack.
+  - Emit `failed` on setup error / agent error, `stopped` on clean completion and on the `agent.ErrStop` path.
+  - Every terminal submit's ack decides the exit code: acked → exit 0; not acked → exit non-zero so the monitor's `failed` fires. This includes `stopped` — there is no exit-0 fallback anymore.
+  - Submit events on a context that survives the SIGTERM cancellation.
 - `internal/runner/runner.go`:
-  - Rename / parameterize `Kill` into `Signal(task, signal)`. Stop sends SIGTERM, restart sends SIGHUP.
-  - Restart-command branch in `Poll`: if container is running, send SIGHUP; if not, fall back to recreate-and-start.
-  - Keep `Monitor` listening to both `start` and `die` for the cases where the driver couldn't report.
-  - Keep all `Poll` and `Reconcile` emits.
-- No protocol/schema changes. No state-machine changes.
+  - `Monitor`: subscribe only to `die`; emit `failed` on non-zero exit, nothing on exit 0. Drop the `start` subscription and the `started` / exit-0 `stopped` emits. Keep the semaphore-release / wake-up bookkeeping on `die`.
+  - `Poll` stop branch: `Kill` reports whether it signalled a running container; emit `stopped` only when it didn't.
+  - `Poll` dispatch-failure `failed` emits: unchanged.
+  - `Reconcile`: emit `failed` for any exited container whose task is still `running`, regardless of exit code.
+- No protocol/schema changes. No state-machine changes. No new signals.
 - Driver-emitted events use `Version: 0`.
