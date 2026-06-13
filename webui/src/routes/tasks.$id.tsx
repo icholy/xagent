@@ -37,7 +37,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
+import { TaskTimeline } from '@/components/task-timeline'
+import { MOCK_TIMELINE } from '@/lib/mock-timeline'
 import { Plus, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/tasks/$id')({
@@ -56,7 +59,7 @@ function TaskDetail() {
   const orgId = useOrgId()
   const { id } = Route.useParams()
   const taskId = BigInt(id)
-  const [instruction, setInstruction] = useState('')
+  const [view, setView] = useState<'timeline' | 'classic'>('timeline')
 
   const { data, isLoading, error, refetch } = useQuery(
     getTaskDetails,
@@ -66,7 +69,6 @@ function TaskDetail() {
 
   const { data: logsData } = useQuery(listLogs, { taskId }, { refetchInterval: 60000 })
 
-  const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
   const removeEventMutation = useMutation(removeEventTask, { onSuccess: () => refetch() })
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => refetch() })
   const unarchiveMutation = useMutation(unarchiveTask, { onSuccess: () => refetch() })
@@ -87,17 +89,6 @@ function TaskDetail() {
 
   const handleRestart = async () => {
     await restartMutation.mutateAsync({ id: taskId })
-  }
-
-  const handleAddInstruction = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!instruction.trim()) return
-    await updateMutation.mutateAsync({
-      id: taskId,
-      start: true,
-      addInstructions: [{ text: instruction, url: '' }],
-    })
-    setInstruction('')
   }
 
   const handleUnlinkEvent = async (eventId: bigint) => {
@@ -144,7 +135,24 @@ function TaskDetail() {
     <div className="container mx-auto py-8 px-4 space-y-6">
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-md border p-0.5">
+            {(['timeline', 'classic'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={cn(
+                  'rounded px-3 py-1 text-xs capitalize transition-colors',
+                  view === v
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
           {canCancelTask(task) && (
             <Button variant="destructive" size="sm" onClick={handleCancel} disabled={isMutating}>
               {cancelMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -221,7 +229,7 @@ function TaskDetail() {
         </div>
       </div>
 
-      {/* Links */}
+      {/* Links (pinned in both views) */}
       {links.length > 0 && (
         <div className="rounded-lg border p-6">
           <h2 className="text-lg font-semibold mb-4">Links</h2>
@@ -229,66 +237,112 @@ function TaskDetail() {
         </div>
       )}
 
-      {/* Instructions */}
-      <div className="rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-4">Instructions</h2>
-        {task.instructions.length === 0 ? (
-          <p className="text-muted-foreground">No instructions</p>
-        ) : (
-          <div className="space-y-3">
-            {task.instructions.map((inst, index) => (
-              <InstructionCard key={index} text={inst.text} url={inst.url} />
-            ))}
+      {view === 'timeline' ? (
+        <>
+          {/* Experimental unified activity timeline (mock data) */}
+          <div className="rounded-lg border p-6">
+            <h2 className="text-lg font-semibold mb-4">Activity</h2>
+            <TaskTimeline items={MOCK_TIMELINE} />
+            {!isArchivedTask(task) && (
+              <div className="mt-6 border-t pt-4">
+                <AddInstruction taskId={taskId} onAdded={refetch} />
+              </div>
+            )}
           </div>
-        )}
-        {!isArchivedTask(task) && (
-          <form onSubmit={handleAddInstruction} className="space-y-4 pt-4 mt-4 border-t">
-            <Textarea
-              placeholder="Enter a new instruction..."
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              required
-            />
-            <div className="flex justify-start">
-              <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                Instruction
-              </Button>
+
+          {children.length > 0 && (
+            <div className="rounded-lg border p-6">
+              <h2 className="text-lg font-semibold mb-4">Child Tasks</h2>
+              <ChildTasksTable tasks={children} onUpdate={refetch} />
             </div>
-          </form>
-        )}
-      </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Instructions */}
+          <div className="rounded-lg border p-6">
+            <h2 className="text-lg font-semibold mb-4">Instructions</h2>
+            {task.instructions.length === 0 ? (
+              <p className="text-muted-foreground">No instructions</p>
+            ) : (
+              <div className="space-y-3">
+                {task.instructions.map((inst, index) => (
+                  <InstructionCard key={index} text={inst.text} url={inst.url} />
+                ))}
+              </div>
+            )}
+            {!isArchivedTask(task) && (
+              <div className="pt-4 mt-4 border-t">
+                <AddInstruction taskId={taskId} onAdded={refetch} />
+              </div>
+            )}
+          </div>
 
-      {/* Child Tasks */}
-      {children.length > 0 && (
-        <div className="rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Child Tasks</h2>
-          <ChildTasksTable tasks={children} onUpdate={refetch} />
-        </div>
+          {/* Child Tasks */}
+          {children.length > 0 && (
+            <div className="rounded-lg border p-6">
+              <h2 className="text-lg font-semibold mb-4">Child Tasks</h2>
+              <ChildTasksTable tasks={children} onUpdate={refetch} />
+            </div>
+          )}
+
+          {/* Events */}
+          {events.length > 0 && (
+            <div className="rounded-lg border p-6">
+              <h2 className="text-lg font-semibold mb-4">Events</h2>
+              <EventsTable
+                events={events}
+                onUnlink={handleUnlinkEvent}
+                isUnlinking={removeEventMutation.isPending}
+              />
+            </div>
+          )}
+
+          {/* Logs */}
+          <div className="rounded-lg border p-6">
+            <h2 className="text-lg font-semibold mb-4">Logs</h2>
+            <LogsTable logs={logs} />
+          </div>
+        </>
       )}
-
-      {/* Events */}
-      {events.length > 0 && (
-        <div className="rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Events</h2>
-          <EventsTable
-            events={events}
-            onUnlink={handleUnlinkEvent}
-            isUnlinking={removeEventMutation.isPending}
-          />
-        </div>
-      )}
-
-      {/* Logs */}
-      <div className="rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-4">Logs</h2>
-        <LogsTable logs={logs} />
-      </div>
     </div>
+  )
+}
+
+function AddInstruction({ taskId, onAdded }: { taskId: bigint; onAdded: () => void }) {
+  const [instruction, setInstruction] = useState('')
+  const updateMutation = useMutation(updateTask, { onSuccess: () => onAdded() })
+
+  const handleAddInstruction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!instruction.trim()) return
+    await updateMutation.mutateAsync({
+      id: taskId,
+      start: true,
+      addInstructions: [{ text: instruction, url: '' }],
+    })
+    setInstruction('')
+  }
+
+  return (
+    <form onSubmit={handleAddInstruction} className="space-y-4">
+      <Textarea
+        placeholder="Enter a new instruction..."
+        value={instruction}
+        onChange={(e) => setInstruction(e.target.value)}
+        required
+      />
+      <div className="flex justify-start">
+        <Button type="submit" disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+          Instruction
+        </Button>
+      </div>
+    </form>
   )
 }
 
