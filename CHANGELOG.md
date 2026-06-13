@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/icholy/xagent/compare/v1.4.0...v2.0.0) (2026-06-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* removes the ListChildTasks RPC, the child_tasks token capability, and the Task.parent / GetTaskDetailsResponse.children fields.
+
+### Miscellaneous
+
+* remove child tasks ([#954](https://github.com/icholy/xagent/issues/954)) ([6602667](https://github.com/icholy/xagent/commit/6602667804b22404561f07ba448ba586345d155a))
+
 ## [1.4.0](https://github.com/icholy/xagent/compare/v1.3.0...v1.4.0) (2026-06-10)
 
 
