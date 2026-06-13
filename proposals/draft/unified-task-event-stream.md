@@ -270,24 +270,26 @@ projections.
 
 ### Rollout
 
-Phased, dual-write first so nothing breaks at once:
+Existing tasks are **not** migrated — there is no backfill, so old tasks carry
+no stream history, and any tasks in flight at cutover are drained or re-created
+rather than translated. That removes the need for a dual-write transition and
+lets writes and reads cut straight over.
 
 1. **Schema.** Add the `task_events` migration
    (next sequence after `20260607000002_task_auto_archive.sql`). Regenerate
-   `sqlc`. No reads change yet.
-2. **Dual-write.** At every mutation site that today writes
-   instructions/logs/events/links/status, also append the corresponding
-   `task_events` row in the same transaction. The `TaskChange` value type from
-   the sibling proposal is the natural constructor for `lifecycle` rows.
-3. **Migrate reads.** Point the brief, `get_my_task`, and the #918 timeline at
-   `ListTaskEvents`.
-4. **Backfill + retire.** Backfill `task_events` from existing
-   `instructions`/`events`/`event_tasks`/`task_links`/semantic `logs`. Drop
-   `tasks.instructions` (instructions are now stream events; the initial
-   instruction is the first `instruction` event appended by `CreateTask`) and
-   `event_tasks`. Keep `events` (org-level webhook record, used for routing-rule
-   evaluation before any task subscribes) and `task_links` (subscription
-   index). Narrow `logs` to the verbose channel.
+   `sqlc`. Additive and safe; nothing reads or writes it yet.
+2. **Cut over writes and reads.** In one deploy: change every mutation site
+   that today writes instructions/logs/events/links/status to append the
+   corresponding `task_events` row in the same transaction (the `TaskChange`
+   value type from the sibling proposal is the natural constructor for
+   `lifecycle` rows), and point the brief, `get_my_task`, and the #918 timeline
+   at `ListTaskEvents`. Writes and reads flip together — with no backfill there
+   is no old data to read back.
+3. **Retire.** Drop `tasks.instructions` (instructions are now stream events;
+   the initial instruction is the first `instruction` event appended by
+   `CreateTask`) and `event_tasks`. Keep `events` (org-level webhook record,
+   used for routing-rule evaluation before any task subscribes) and `task_links`
+   (subscription index). Narrow `logs` to the verbose channel.
 
 ## Trade-offs
 
@@ -331,7 +333,7 @@ Phased, dual-write first so nothing breaks at once:
   agent, but anything that wants "the task's instructions" outside a run (e.g.
   list views, search) would scan the stream. A denormalized
   `tasks.first_instruction` or a kept column as a projection is cheap insurance
-  — decide during step 4.
+  — decide during the retire step.
 
 - **Status fold ownership.** Should `Task.ApplyRunnerEvent` (and `Start` /
   `Restart` / `Cancel`) keep mutating `status` directly with the event appended
