@@ -41,13 +41,15 @@ stream, and folds the `TaskChange` work in as the `lifecycle` event type.
 
 ## Design
 
-### The stream: `task_events`
+### The stream: `events`
 
 A single append-only table is the source of truth for everything that happens
 to a task. Order is the stream; the `id` (a `BIGSERIAL`) is the ordering key.
+It reuses the `events` name freed by dropping the old org-level `events` table
+and its `event_tasks` join (see Rollout).
 
 ```sql
-CREATE TABLE public.task_events (
+CREATE TABLE public.events (
     id         bigint  NOT NULL,                       -- BIGSERIAL; stream order
     task_id    bigint  NOT NULL,
     org_id     bigint  NOT NULL,
@@ -56,8 +58,8 @@ CREATE TABLE public.task_events (
     payload    jsonb   NOT NULL,                        -- type-specific (see below)
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-CREATE INDEX idx_task_events_task_id_id ON public.task_events (task_id, id);
-CREATE INDEX idx_task_events_org_id     ON public.task_events (org_id);
+CREATE INDEX idx_events_task_id_id ON public.events (task_id, id);
+CREATE INDEX idx_events_org_id     ON public.events (org_id);   -- powers the org event feed
 ```
 
 The whole model reduces to two verbs:
@@ -82,7 +84,7 @@ stored.
 | `type`        | direction *(derived)* | `wake` (default) | Replaces today                                    |
 | ------------- | --------------------- | ---------------- | ------------------------------------------------- |
 | `instruction` | `to_agent`            | `true`           | `tasks.instructions` JSON + `command=start`       |
-| `external`    | `to_agent`            | per routing rule | `events` + `event_tasks` fan-out                  |
+| `external`    | `to_agent`            | per routing rule | org-level `events` + `event_tasks` fan-out        |
 | `report`      | `from_agent`          | `false`          | `logs` rows with `type='llm'` (the `report` tool) |
 | `lifecycle`   | `about_task`          | `false`          | `RunnerEvent` fold + `audit`/`info` log rows      |
 | `link`        | `about_task`          | `false`          | `task_links` row creation                         |
@@ -107,8 +109,8 @@ exactly as `Task.Start()` does today (`internal/model/task.go:416`).
 // instruction  — was model.Instruction + actor
 { "text": "rebase onto main", "url": "https://github.com/.../pull/481", "actor": {"kind":"user","name":"icholy"} }
 
-// external     — references the org-level events row; copies render fields
-{ "event_id": 17, "description": "PR comment from alice on #481", "url": "https://github.com/.../481#issuecomment-…", "data": "{…webhook…}" }
+// external     — self-contained; the org event feed reads these by org_id
+{ "description": "PR comment from alice on #481", "url": "https://github.com/.../481#issuecomment-…", "data": "{…webhook…}" }
 
 // report       — the agent's report tool (was logs type='llm')
 { "content": "Opened PR #952 with the migration." }
@@ -129,7 +131,7 @@ designed the closed set of "things that happened to a task": `Created`,
 exactly the `lifecycle` event `payload.kind` values here. The two proposals
 converge:
 
-- `TaskChange`'s "single structured fact" *is* a `lifecycle` task_event.
+- `TaskChange`'s "single structured fact" *is* a `lifecycle` event.
 - Its `Log()` projection becomes the timeline rendering of the event (no more
   canned `container exited successfully`; the `to_status` in the payload says
   whether the container completed, re-queued, or was cancelled).
@@ -178,7 +180,7 @@ The agent's brief — what a run is handed — is just the task's to-agent event
 the `instruction` and `external` types:
 
 ```sql
-SELECT * FROM task_events
+SELECT * FROM events
 WHERE task_id = $1 AND type IN ('instruction', 'external')
 ORDER BY id;
 ```
@@ -216,9 +218,9 @@ scope, plus own-or-child matching via `Task.ScopeAttr`).
 The issue flags the volume problem: `report`s are semantic and low-volume;
 per-tool-call `mcp` logs and any future raw stdout/transcript streaming are
 orders of magnitude higher. Putting megabytes of transcript chunks into
-`task_events` would bloat the stream that the brief renderer and timeline scan.
+`events` would bloat the stream that the brief renderer and timeline scan.
 
-**Recommendation: keep a separate verbose channel.** `task_events` holds the
+**Recommendation: keep a separate verbose channel.** `events` holds the
 five semantic types. The existing `logs` table is retained but narrowed to the
 **verbose channel** — `mcp` tool-call logs (the subject of
 `proposals/draft/richer-tool-call-logs.md`) and any future raw transcript. The
@@ -232,19 +234,22 @@ semantic log types migrate out:
   container failures
 
 The brief renderer never touches `logs`. The #918 timeline does a cheap
-ordered union of `task_events` (always shown) and `logs` (collapsible /
+ordered union of `events` (always shown) and `logs` (collapsible /
 filterable "noise" tier), which is exactly the density/filtering control that
 issue asks for. The alternative — one table with a `volume` discriminator — is
 discussed under Trade-offs.
 
 ### API / proto changes
 
-`proto/xagent/v1/xagent.proto` gains a `TaskEvent` message and stream-shaped
-RPCs; the per-channel RPCs (`UploadLogs`, `ListLogs`, `ListEventsByTask`,
-`AddEventTask`/`RemoveEventTask`) collapse into them.
+`proto/xagent/v1/xagent.proto` redefines `Event` as the stream row and adds
+stream-shaped RPCs. The old org-level event RPCs and the per-channel log/fan-out
+RPCs collapse into them: `ListEvents` is re-pointed at the stream (it can scope
+by `org_id` for the feed or `task_id` for a timeline), and `GetEvent`,
+`CreateEvent`, `UploadLogs`, `ListLogs`, `ListEventsByTask`,
+`AddEventTask`/`RemoveEventTask` go away.
 
 ```proto
-message TaskEvent {
+message Event {
   int64 id = 1;
   int64 task_id = 2;
   string type = 3;       // instruction|report|external|lifecycle|link
@@ -253,13 +258,14 @@ message TaskEvent {
   google.protobuf.Timestamp created_at = 6;
 }
 
-// Append one from-agent/to-agent event. report = AppendTaskEvent(type=report);
-// adding an instruction to a child = AppendTaskEvent(type=instruction) on the child.
-rpc AppendTaskEvent(AppendTaskEventRequest) returns (AppendTaskEventResponse);
+// Append one event. report = AppendEvent(type=report);
+// adding an instruction to a child = AppendEvent(type=instruction) on the child.
+rpc AppendEvent(AppendEventRequest) returns (AppendEventResponse);
 
-// Read a task's stream. Powers get_my_task, the brief (type in instruction,
-// external), and the #918 timeline. Optional type filter.
-rpc ListTaskEvents(ListTaskEventsRequest) returns (ListTaskEventsResponse);
+// Read the stream. Scoped by task_id (a task's timeline / the brief, the latter
+// filtered to type in instruction, external) or by org_id (the org event feed,
+// filtered to type=external). Optional type filter.
+rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
 ```
 
 `SubmitRunnerEvents` is unchanged on the wire (the runner still submits
@@ -272,24 +278,22 @@ projections.
 
 Existing tasks are **not** migrated — there is no backfill, so old tasks carry
 no stream history, and any tasks in flight at cutover are drained or re-created
-rather than translated. That removes the need for a dual-write transition and
-lets writes and reads cut straight over.
+rather than translated. Reusing the freed `events` name means the old and new
+`events` tables can't coexist, so the schema change and the code cutover ship
+together rather than as separate additive steps.
 
-1. **Schema.** Add the `task_events` migration
-   (next sequence after `20260607000002_task_auto_archive.sql`). Regenerate
-   `sqlc`. Additive and safe; nothing reads or writes it yet.
-2. **Cut over writes and reads.** In one deploy: change every mutation site
-   that today writes instructions/logs/events/links/status to append the
-   corresponding `task_events` row in the same transaction (the `TaskChange`
-   value type from the sibling proposal is the natural constructor for
-   `lifecycle` rows), and point the brief, `get_my_task`, and the #918 timeline
-   at `ListTaskEvents`. Writes and reads flip together — with no backfill there
-   is no old data to read back.
-3. **Retire.** Drop `tasks.instructions` (instructions are now stream events;
-   the initial instruction is the first `instruction` event appended by
-   `CreateTask`) and `event_tasks`. Keep `events` (org-level webhook record,
-   used for routing-rule evaluation before any task subscribes) and `task_links`
-   (subscription index). Narrow `logs` to the verbose channel.
+1. **Schema.** One migration (next sequence after
+   `20260607000002_task_auto_archive.sql`) drops the old org-level `events`,
+   `event_tasks`, and `tasks.instructions`; creates the new `events` stream
+   table under the reused name; and narrows `logs` to the verbose channel. Keep
+   `task_links` (the subscription index). Regenerate `sqlc`.
+2. **Cutover.** In the same deploy, re-point every mutation site that today
+   writes instructions/logs/events/links/status to append the corresponding
+   `events` row in the same transaction (the `TaskChange` value type from the
+   sibling proposal is the natural constructor for `lifecycle` rows), and point
+   the brief, `get_my_task`, the org event feed (`ListEvents`, now org-scoped
+   over the stream), and the #918 timeline at `ListEvents`. The initial
+   instruction becomes the first `instruction` event appended by `CreateTask`.
 
 ## Trade-offs
 
@@ -333,7 +337,7 @@ lets writes and reads cut straight over.
   agent, but anything that wants "the task's instructions" outside a run (e.g.
   list views, search) would scan the stream. A denormalized
   `tasks.first_instruction` or a kept column as a projection is cheap insurance
-  — decide during the retire step.
+  — decide when writing the cutover migration.
 
 - **Status fold ownership.** Should `Task.ApplyRunnerEvent` (and `Start` /
   `Restart` / `Cancel`) keep mutating `status` directly with the event appended
@@ -341,15 +345,17 @@ lets writes and reads cut straight over.
   that both appends and projects, so the projection can never drift from the
   stream? The latter is cleaner but a larger refactor of `internal/model/task.go`.
 
-- **External-event fan-out storage.** One org-level webhook that matches N
-  subscribed tasks currently inserts N `event_tasks` rows. Under the stream it
-  appends N `external` events (one per task's stream). That is more rows but
-  removes the join and gives each task its own self-contained stream.
-  Acceptable, but worth confirming the fan-out volume (mass-subscribed repos)
-  is bounded.
+- **External-event fan-out volume.** One org-level webhook matching N subscribed
+  tasks now appends N `external` events (one per task's stream) instead of one
+  org-level `events` row + N `event_tasks` join rows. That drops the join and
+  the separate org-level table; the org event feed instead reads `events WHERE
+  org_id = ? AND type = 'external'` over the `idx_events_org_id` index. The same
+  occurrence therefore appears once per subscribed task in the feed — accepted
+  duplication (see Design). Worth confirming the fan-out volume (mass-subscribed
+  repos) stays bounded.
 
 - **Relationship to #945 (C2-hosted agent MCP).** With the agent contract
   reduced to append/read-stream over the task token, the C2-hosted MCP server
   (#945) and a bring-your-own-agent both implement the same two verbs. Should
-  `AppendTaskEvent`/`ListTaskEvents` be the *public* agent contract, with the
+  `AppendEvent`/`ListEvents` be the *public* agent contract, with the
   MCP tools as one client of it? Likely yes, but that is #945's call.
