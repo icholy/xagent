@@ -211,14 +211,41 @@ the stream:
 | `get_my_task`            | `GetTaskDetails` (4 joins)              | `ListEvents` (this task, brief)                           |
 | `report`                 | `UploadLogs` type=`llm`                 | `AppendEvent` (`report`)                                  |
 | `create_link`            | `CreateLink`                            | `AppendEvent` (`link`) — handler upserts `task_links`     |
-| `create_child_task`      | `CreateTask`                            | `CreateTask` seeding the child's stream with `instruction`|
-| `update_child_task`      | `UpdateTask(start=true)`                | `AppendEvent` (`instruction`, `wake`) on the child        |
-| `list_child_task_logs`   | `ListLogs`                              | `ListEvents` (child)                                      |
 
-"Child interaction" is "create / append to / read the child's stream," with the
-same task-token scopes as today (`task.write`, own-or-child via
-`Task.ScopeAttr`) — now applied per event `type` in the `AppendEvent` handler
-rather than per RPC (see Open Questions).
+The child-task tools (`create_child_task`, `update_child_task`,
+`list_child_task_logs`) go away with the child-tasks feature itself (#940).
+Those rows are the *stream operations* each remaining tool performs;
+`AppendEvent`/`ListEvents`/`CreateTask` (defined under API / proto changes) are
+the **general** (`XAgentService`) surface, while the agent reaches the same
+stream through its own surface. Who may append what — and why the agent can't
+forge events — is the AuthZ section.
+
+### AuthZ
+
+Two surfaces, two authorization models.
+
+**General surface (`XAgentService`).** `AppendEvent` / `ListEvents` /
+`CreateTask` serve admin, user, and API-key callers, authorized by the existing
+op-level `authscope` engine (`task.read` / `task.write` / `task.create`).
+`lifecycle` and `external` are not user-appendable: the runner appends
+`lifecycle` via `SubmitRunnerEvents` and `eventrouter` appends `external`, both
+server-internal.
+
+**Agent surface.** Agent authorization is #915's problem, designed in #939
+(`agent-rpc-surface`); this proposal defers to it. The agent does not call the
+general verbs. It calls a dedicated, identity-scoped `AgentService` where "my
+task" is resolved from the token (no `task_id` parameter) and each method fixes
+its event type — `Report` appends a `report`, `CreateMyLink` a `link`, the
+driver's `ReportMyTaskEvent` a `lifecycle`. So the agent never holds a generic
+`AppendEvent`, and the "can't forge `lifecycle`/`external`" guarantee is
+*structural* — those types are simply absent from its surface — rather than a
+`type` check in a shared handler (an earlier draft gated `AppendEvent` by type;
+the surface split is the better answer).
+
+Removing child tasks (#940) collapses this further: with no children there is no
+own-or-child matching anywhere. The agent only ever touches its own task, and
+its entire write surface is `report` and `link` — it never appends
+`instruction`, `wake`, `lifecycle`, or `external`.
 
 ### Raw output vs. semantic events
 
@@ -249,12 +276,14 @@ discussed under Trade-offs.
 ### API / proto changes
 
 `proto/xagent/v1/xagent.proto` redefines `Event` as the stream row and reduces
-the agent surface to three event-shaped RPCs: `CreateTask` (create the task +
-seed its stream), `AppendEvent` (append to an existing stream), and `ListEvents`
-(read, scoped by `task_id` or `org_id`). The old per-channel and org-event RPCs
-— `GetEvent`, `CreateEvent`, `ListEventsByTask`, `AddEventTask`/`RemoveEventTask`,
-`UploadLogs`, `ListLogs`, `CreateLink`, and the add-instruction-and-restart path
-of `UpdateTask` — fold into these or go away.
+the **general** read/write surface to three event-shaped RPCs: `CreateTask`
+(create the task + seed its stream), `AppendEvent` (append to an existing
+stream), and `ListEvents` (read, scoped by `task_id` or `org_id`). The old
+per-channel and org-event RPCs — `GetEvent`, `CreateEvent`, `ListEventsByTask`,
+`AddEventTask`/`RemoveEventTask`, `UploadLogs`, `ListLogs`, `CreateLink`, and the
+add-instruction-and-restart path of `UpdateTask` — fold into these or go away.
+The *agent* does not call these directly; it uses the identity-scoped
+`AgentService` (#939), whose methods append/read events on the token's own task.
 
 ```proto
 message Event {
@@ -266,15 +295,13 @@ message Event {
   google.protobuf.Timestamp created_at = 6;
 }
 
-// Create a task and seed its stream. The task entity (workspace, runner,
-// parent, …) can't be an append — a stream needs a task to belong to — but the
-// seed is a list of events, typically one `instruction`, so creation is
-// event-shaped too. The seed list goes through the same type-keyed authz as
-// AppendEvent.
+// Create a task and seed its stream. The task entity (workspace, runner, …)
+// can't be an append — a stream needs a task to belong to — but the seed is a
+// list of events, typically one `instruction`, so creation is event-shaped too.
 rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);  // task fields + repeated Event events
 
 // Append one event to an existing stream. report = AppendEvent(type=report);
-// add an instruction to a child = AppendEvent(type=instruction, wake) on the child.
+// a user adding an instruction = AppendEvent(type=instruction, wake).
 rpc AppendEvent(AppendEventRequest) returns (AppendEventResponse);
 
 // Read a stream. Scoped by task_id (a task's timeline / the brief, the latter
@@ -285,15 +312,16 @@ rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
 
 `CreateTask` stays a distinct RPC because a stream needs a task to belong to —
 but instead of a magic "first instruction" field it takes a list of initial
-events to seed the stream (typically one `instruction`). Every other write is
-`AppendEvent`: `create_link` is `AppendEvent(link)` (the handler upserts the
-`task_links` projection), and "add instruction + restart" is
-`AppendEvent(instruction, wake)` (the handler sets `command=start`). `lifecycle`
-and `external` are never accepted from the public verbs — `SubmitRunnerEvents`
-(unchanged on the wire) and `eventrouter` append them internally. Both
-`CreateTask`'s seed list and `AppendEvent` apply the type-keyed authz from Open
-Questions: `report`/`link`/`instruction` per the caller's scope and target task,
-`lifecycle`/`external` rejected.
+events to seed the stream (typically one `instruction`). On the write side,
+`create_link` becomes `AppendEvent(link)` (the handler upserts the `task_links`
+projection) and "add instruction + restart" becomes `AppendEvent(instruction,
+wake)` (the handler sets `command=start`). `lifecycle` and `external` are never
+user-appendable — `SubmitRunnerEvents` (unchanged on the wire) and `eventrouter`
+append them internally. The general surface is authorized by the existing
+op-level scopes (the user-facing `authscope` engine); the *agent's* access — and
+the forge-proof "agent can't append `lifecycle`/`external`" guarantee — comes
+from the dedicated identity-scoped `AgentService` in #939 (see The agent
+contract), not from a type-check in the shared `AppendEvent` handler.
 
 ### Rollout
 
@@ -364,27 +392,10 @@ together rather than as separate additive steps.
 
 ## Open Questions
 
-- **Authz when the surface collapses to two verbs.** Two generic verbs are the
-  contract (the side-effecting RPCs fold in: the `AppendEvent` handler does the
-  `task_links` upsert for `link` and the `command=start` wake for `wake`, keyed
-  off the event). The open part is authorization. Today it is *structural* — an
-  agent can't forge a `lifecycle` or `external` event because no RPC lets it;
-  the RPC surface is the boundary, and a task token carries only `task.read` /
-  `task.write` on its own id, plus parent-scoped read/write with the
-  `child_tasks` capability (`agentauth/scope.go`). A single `AppendEvent` gated
-  only on `task.write` + own-or-child `ScopeAttr` matching (`apiserver/link.go`)
-  would let an agent append *any* type to a task it can write — including fake
-  status transitions and fake webhooks. So authz must move from "which RPC
-  exists" to a per-event policy keyed off `type` (and `wake`) against the target
-  task:
-    - `report`, `link` → `task.write` on own task (agent-allowed).
-    - `instruction` → `task.write` on the target; for a task token that is
-      children only (the `child_tasks` capability's parent-scoped write), with
-      `wake` riding the same grant.
-    - `lifecycle`, `external` → server/runner/router only, appended internally
-      by `SubmitRunnerEvents` / `eventrouter`; never through the public verb.
-  The verb stays generic; the public `AppendEvent` handler whitelists types by
-  caller — the same place it applies the type-keyed side-effects. The trade:
-  the old RPC surface gave per-op authz for free, whereas one handler branching
-  on `type` is a single spot to get a privilege check wrong. Nail down the exact
-  `type`→op mapping before implementing.
+- **Merge order with #939.** The agent-surface design composes with this
+  proposal (see AuthZ), but #939 (`agent-rpc-surface`) was written against
+  today's storage, so its method bodies — `Report` (a `type=llm` log upload),
+  `CreateMyLink` (a `task_links` row), `ReportMyTaskEvent` (lifecycle via the old
+  `SubmitRunnerEvents` fold) — become event appends if both land (`report`,
+  `link`, `lifecycle` events respectively). Whichever merges second rebases onto
+  the other.
