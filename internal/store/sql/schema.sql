@@ -20,16 +20,6 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: event_tasks; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.event_tasks (
-    event_id bigint NOT NULL,
-    task_id bigint NOT NULL
-);
-
-
---
 -- Name: events; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -39,7 +29,8 @@ CREATE TABLE public.events (
     data text NOT NULL,
     url text DEFAULT ''::text NOT NULL,
     org_id bigint NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    task_id bigint NOT NULL
 );
 
 
@@ -347,14 +338,6 @@ ALTER TABLE ONLY public.workspaces ALTER COLUMN id SET DEFAULT nextval('public.w
 
 
 --
--- Name: event_tasks event_tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.event_tasks
-    ADD CONSTRAINT event_tasks_pkey PRIMARY KEY (event_id, task_id);
-
-
---
 -- Name: events events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -443,17 +426,17 @@ ALTER TABLE ONLY public.workspaces
 
 
 --
--- Name: idx_event_tasks_task_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_event_tasks_task_id ON public.event_tasks USING btree (task_id);
-
-
---
 -- Name: idx_events_org_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_events_org_id ON public.events USING btree (org_id);
+
+
+--
+-- Name: idx_events_task_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_events_task_id ON public.events USING btree (task_id);
 
 
 --
@@ -583,27 +566,19 @@ CREATE INDEX idx_workspaces_runner_id ON public.workspaces USING btree (runner_i
 
 
 --
--- Name: event_tasks event_tasks_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.event_tasks
-    ADD CONSTRAINT event_tasks_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE;
-
-
---
--- Name: event_tasks event_tasks_task_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.event_tasks
-    ADD CONSTRAINT event_tasks_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id) ON DELETE CASCADE;
-
-
---
 -- Name: events fk_events_org_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.events
     ADD CONSTRAINT fk_events_org_id FOREIGN KEY (org_id) REFERENCES public.orgs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: events fk_events_task_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.events
+    ADD CONSTRAINT fk_events_task_id FOREIGN KEY (task_id) REFERENCES public.tasks(id) ON DELETE CASCADE;
 
 
 --
@@ -697,4 +672,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260601000001'),
     ('20260607000001'),
     ('20260607000002'),
-    ('20260613000001');
+    ('20260613000001'),
+    ('20260613120000');

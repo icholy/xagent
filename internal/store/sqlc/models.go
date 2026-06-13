@@ -17,11 +17,7 @@ type Event struct {
 	Url         string    `json:"url"`
 	OrgID       int64     `json:"org_id"`
 	CreatedAt   time.Time `json:"created_at"`
-}
-
-type EventTask struct {
-	EventID int64 `json:"event_id"`
-	TaskID  int64 `json:"task_id"`
+	TaskID      int64     `json:"task_id"`
 }
 
 type Key struct {

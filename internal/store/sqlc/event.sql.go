@@ -10,24 +10,9 @@ import (
 	"time"
 )
 
-const addEventTask = `-- name: AddEventTask :exec
-INSERT INTO event_tasks (event_id, task_id) VALUES ($1, $2)
-ON CONFLICT DO NOTHING
-`
-
-type AddEventTaskParams struct {
-	EventID int64 `json:"event_id"`
-	TaskID  int64 `json:"task_id"`
-}
-
-func (q *Queries) AddEventTask(ctx context.Context, arg AddEventTaskParams) error {
-	_, err := q.db.ExecContext(ctx, addEventTask, arg.EventID, arg.TaskID)
-	return err
-}
-
 const createEvent = `-- name: CreateEvent :one
-INSERT INTO events (description, data, url, created_at, org_id)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO events (description, data, url, created_at, org_id, task_id)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id
 `
 
@@ -37,6 +22,7 @@ type CreateEventParams struct {
 	Url         string    `json:"url"`
 	CreatedAt   time.Time `json:"created_at"`
 	OrgID       int64     `json:"org_id"`
+	TaskID      int64     `json:"task_id"`
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (int64, error) {
@@ -46,6 +32,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (int64
 		arg.Url,
 		arg.CreatedAt,
 		arg.OrgID,
+		arg.TaskID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -66,17 +53,8 @@ func (q *Queries) DeleteEvent(ctx context.Context, arg DeleteEventParams) error 
 	return err
 }
 
-const deleteEventTasks = `-- name: DeleteEventTasks :exec
-DELETE FROM event_tasks WHERE event_id = $1
-`
-
-func (q *Queries) DeleteEventTasks(ctx context.Context, eventID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEventTasks, eventID)
-	return err
-}
-
 const getEvent = `-- name: GetEvent :one
-SELECT id, description, data, url, org_id, created_at
+SELECT id, description, data, url, org_id, created_at, task_id
 FROM events
 WHERE id = $1 AND org_id = $2
 `
@@ -96,63 +74,13 @@ func (q *Queries) GetEvent(ctx context.Context, arg GetEventParams) (Event, erro
 		&i.Url,
 		&i.OrgID,
 		&i.CreatedAt,
+		&i.TaskID,
 	)
 	return i, err
 }
 
-const hasEvent = `-- name: HasEvent :one
-SELECT EXISTS(SELECT 1 FROM events WHERE id = $1 AND org_id = $2)
-`
-
-type HasEventParams struct {
-	ID    int64 `json:"id"`
-	OrgID int64 `json:"org_id"`
-}
-
-func (q *Queries) HasEvent(ctx context.Context, arg HasEventParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasEvent, arg.ID, arg.OrgID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const listEventTasks = `-- name: ListEventTasks :many
-SELECT et.task_id
-FROM event_tasks et
-JOIN tasks t ON et.task_id = t.id
-WHERE et.event_id = $1 AND t.org_id = $2
-`
-
-type ListEventTasksParams struct {
-	EventID int64 `json:"event_id"`
-	OrgID   int64 `json:"org_id"`
-}
-
-func (q *Queries) ListEventTasks(ctx context.Context, arg ListEventTasksParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listEventTasks, arg.EventID, arg.OrgID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var task_id int64
-		if err := rows.Scan(&task_id); err != nil {
-			return nil, err
-		}
-		items = append(items, task_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listEvents = `-- name: ListEvents :many
-SELECT id, description, data, url, org_id, created_at
+SELECT id, description, data, url, org_id, created_at, task_id
 FROM events
 WHERE org_id = $1
 ORDER BY created_at DESC
@@ -180,6 +108,7 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 			&i.Url,
 			&i.OrgID,
 			&i.CreatedAt,
+			&i.TaskID,
 		); err != nil {
 			return nil, err
 		}
@@ -195,12 +124,10 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 }
 
 const listEventsByTask = `-- name: ListEventsByTask :many
-SELECT e.id, e.description, e.data, e.url, e.org_id, e.created_at
-FROM events e
-JOIN event_tasks et ON e.id = et.event_id
-JOIN tasks t ON et.task_id = t.id
-WHERE et.task_id = $1 AND t.org_id = $2
-ORDER BY e.created_at DESC
+SELECT id, description, data, url, org_id, created_at, task_id
+FROM events
+WHERE task_id = $1 AND org_id = $2
+ORDER BY created_at DESC
 `
 
 type ListEventsByTaskParams struct {
@@ -224,6 +151,7 @@ func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskPara
 			&i.Url,
 			&i.OrgID,
 			&i.CreatedAt,
+			&i.TaskID,
 		); err != nil {
 			return nil, err
 		}
@@ -236,18 +164,4 @@ func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskPara
 		return nil, err
 	}
 	return items, nil
-}
-
-const removeEventTask = `-- name: RemoveEventTask :exec
-DELETE FROM event_tasks WHERE event_id = $1 AND task_id = $2
-`
-
-type RemoveEventTaskParams struct {
-	EventID int64 `json:"event_id"`
-	TaskID  int64 `json:"task_id"`
-}
-
-func (q *Queries) RemoveEventTask(ctx context.Context, arg RemoveEventTaskParams) error {
-	_, err := q.db.ExecContext(ctx, removeEventTask, arg.EventID, arg.TaskID)
-	return err
 }

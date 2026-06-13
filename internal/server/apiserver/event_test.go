@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -10,18 +11,41 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+// orgWithWorkspace creates an org that has a runner/workspace pair, which is a
+// prerequisite for creating the tasks that events are now scoped to.
+func orgWithWorkspace(t *testing.T, srv *Server) *teststore.Org {
+	t.Helper()
+	return teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{
+		Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}},
+	})
+}
+
+// createTestTask creates a task to own the events under test.
+func createTestTask(t *testing.T, srv *Server, ctx context.Context) int64 {
+	t.Helper()
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Test Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	return resp.Task.Id
+}
+
 func TestCreateEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
+	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
 
 	// Act
 	resp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "PR comment added",
 		Data:        `{"comment": "LGTM"}`,
 		Url:         "https://github.com/example/repo/pull/123",
+		TaskId:      taskID,
 	})
 
 	// Assert
@@ -31,21 +55,42 @@ func TestCreateEvent(t *testing.T) {
 		Description: "PR comment added",
 		Data:        `{"comment": "LGTM"}`,
 		Url:         "https://github.com/example/repo/pull/123",
+		TaskId:      taskID,
 		CreatedAt:   resp.Event.CreatedAt,
 	}
 	assert.DeepEqual(t, resp.Event, expected, protocmp.Transform())
+}
+
+func TestCreateEvent_TaskNotFound(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := orgWithWorkspace(t, srv)
+	ctx := createCtx(t, org)
+
+	// Act - reference a task that does not exist
+	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+		Description: "Orphan event",
+		Data:        `{}`,
+		TaskId:      999999,
+	})
+
+	// Assert
+	assert.ErrorContains(t, err, "not found")
 }
 
 func TestGetEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
+	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
 	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Issue updated",
 		Data:        `{"status": "closed"}`,
 		Url:         "https://github.com/example/repo/issues/42",
+		TaskId:      taskID,
 	})
 	assert.NilError(t, err)
 
@@ -61,6 +106,7 @@ func TestGetEvent(t *testing.T) {
 		Description: "Issue updated",
 		Data:        `{"status": "closed"}`,
 		Url:         "https://github.com/example/repo/issues/42",
+		TaskId:      taskID,
 		CreatedAt:   getResp.Event.CreatedAt,
 	}
 	assert.DeepEqual(t, getResp.Event, expected, protocmp.Transform())
@@ -70,13 +116,15 @@ func TestGetEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, nil)
+	orgA := orgWithWorkspace(t, srv)
 	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, nil)
+	orgB := orgWithWorkspace(t, srv)
 	ctxB := createCtx(t, orgB)
+	taskA := createTestTask(t, srv, ctxA)
 	createResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
+		TaskId:      taskA,
 	})
 	assert.NilError(t, err)
 
@@ -93,16 +141,19 @@ func TestListEvents(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
+	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
 	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event 1",
 		Data:        `{"test": "data1"}`,
+		TaskId:      taskID,
 	})
 	assert.NilError(t, err)
 	_, err = srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event 2",
 		Data:        `{"test": "data2"}`,
+		TaskId:      taskID,
 	})
 	assert.NilError(t, err)
 
@@ -121,14 +172,16 @@ func TestListEventsWithLimit(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
+	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
 
 	// Create 5 events
 	for i := range 5 {
 		_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 			Description: fmt.Sprintf("Event %d", i+1),
 			Data:        `{}`,
+			TaskId:      taskID,
 		})
 		assert.NilError(t, err)
 	}
@@ -150,23 +203,28 @@ func TestListEvents_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, nil)
+	orgA := orgWithWorkspace(t, srv)
 	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, nil)
+	orgB := orgWithWorkspace(t, srv)
 	ctxB := createCtx(t, orgB)
+	taskA := createTestTask(t, srv, ctxA)
+	taskB := createTestTask(t, srv, ctxB)
 	_, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event 1",
 		Data:        `{}`,
+		TaskId:      taskA,
 	})
 	assert.NilError(t, err)
 	_, err = srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event 2",
 		Data:        `{}`,
+		TaskId:      taskA,
 	})
 	assert.NilError(t, err)
 	_, err = srv.CreateEvent(ctxB, &xagentv1.CreateEventRequest{
 		Description: "User B's Event",
 		Data:        `{}`,
+		TaskId:      taskB,
 	})
 	assert.NilError(t, err)
 
@@ -185,11 +243,13 @@ func TestDeleteEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
+	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
 	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event to Delete",
 		Data:        `{}`,
+		TaskId:      taskID,
 	})
 	assert.NilError(t, err)
 
@@ -208,13 +268,15 @@ func TestDeleteEvent_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, nil)
+	orgA := orgWithWorkspace(t, srv)
 	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, nil)
+	orgB := orgWithWorkspace(t, srv)
 	ctxB := createCtx(t, orgB)
+	taskA := createTestTask(t, srv, ctxA)
 	createResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
+		TaskId:      taskA,
 	})
 	assert.NilError(t, err)
 
@@ -230,368 +292,31 @@ func TestDeleteEvent_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-func TestAddEventTask(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctx := createCtx(t, org)
-
-	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Test Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Test Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-
-	// Verify the association
-	listResp, err := srv.ListEventTasks(ctx, &xagentv1.ListEventTasksRequest{
-		EventId: eventResp.Event.Id,
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, len(listResp.TaskIds), 1)
-	assert.Equal(t, listResp.TaskIds[0], taskResp.Task.Id)
-}
-
-func TestAddEventTask_Permissions_Task(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB := createCtx(t, orgB)
-
-	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctxB, &xagentv1.CreateEventRequest{
-		Description: "User B's Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, err = srv.AddEventTask(ctxB, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-
-	// Assert
-	assert.ErrorContains(t, err, "not found")
-}
-
-func TestAddEventTask_Permissions_Event(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB := createCtx(t, orgB)
-
-	taskResp, err := srv.CreateTask(ctxB, &xagentv1.CreateTaskRequest{
-		Name:      "User B's Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, err = srv.AddEventTask(ctxB, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-
-	// Assert
-	assert.ErrorContains(t, err, "not found")
-}
-
-func TestRemoveEventTask(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctx := createCtx(t, org)
-
-	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Test Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Test Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, err = srv.RemoveEventTask(ctx, &xagentv1.RemoveEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-
-	// Verify the association is removed
-	listResp, err := srv.ListEventTasks(ctx, &xagentv1.ListEventTasksRequest{
-		EventId: eventResp.Event.Id,
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, len(listResp.TaskIds), 0)
-}
-
-func TestRemoveEventTask_Permissions_Task(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB := createCtx(t, orgB)
-
-	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, err = srv.RemoveEventTask(ctxB, &xagentv1.RemoveEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-
-	// Assert
-	assert.ErrorContains(t, err, "not found")
-}
-
-func TestRemoveEventTask_Permissions_Event(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB := createCtx(t, orgB)
-
-	taskResp, err := srv.CreateTask(ctxB, &xagentv1.CreateTaskRequest{
-		Name:      "User B's Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	// User A links event to user B's task (user A owns event, user B owns task - neither can do this alone now)
-	// Instead: both users create their own, then user B tries to remove user A's event from their task
-	eventRespB, err := srv.CreateEvent(ctxB, &xagentv1.CreateEventRequest{
-		Description: "User B's Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctxB, &xagentv1.AddEventTaskRequest{
-		EventId: eventRespB.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	// Act - User B tries to remove User A's event (which isn't linked, but tests ownership check)
-	_, err = srv.RemoveEventTask(ctxB, &xagentv1.RemoveEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-
-	// Assert
-	assert.ErrorContains(t, err, "not found")
-}
-
-func TestListEventTasks(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctx := createCtx(t, org)
-
-	task1, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Task 1",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	task2, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Task 2",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Test Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  task1.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  task2.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	resp, err := srv.ListEventTasks(ctx, &xagentv1.ListEventTasksRequest{
-		EventId: eventResp.Event.Id,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, len(resp.TaskIds), 2)
-}
-
-func TestListEventTasks_Permissions(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB := createCtx(t, orgB)
-
-	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event",
-		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	respA, err := srv.ListEventTasks(ctxA, &xagentv1.ListEventTasksRequest{
-		EventId: eventResp.Event.Id,
-	})
-	assert.NilError(t, err)
-	respB, err := srv.ListEventTasks(ctxB, &xagentv1.ListEventTasksRequest{
-		EventId: eventResp.Event.Id,
-	})
-	assert.NilError(t, err)
-
-	// Assert
-	assert.Equal(t, len(respA.TaskIds), 1)
-	assert.Equal(t, len(respB.TaskIds), 0)
-}
-
 func TestListEventsByTask(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
 
-	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Test Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	event1, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event 1",
 		Data:        `{}`,
+		TaskId:      taskID,
 	})
 	assert.NilError(t, err)
 
-	event2, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+	_, err = srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "Event 2",
 		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-		EventId: event1.Event.Id,
-		TaskId:  taskResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-		EventId: event2.Event.Id,
-		TaskId:  taskResp.Task.Id,
+		TaskId:      taskID,
 	})
 	assert.NilError(t, err)
 
 	// Act
 	resp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
-		TaskId: taskResp.Task.Id,
+		TaskId: taskID,
 	})
 
 	// Assert
@@ -606,37 +331,25 @@ func TestListEventsByTask_Permissions(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	orgA := orgWithWorkspace(t, srv)
 	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	orgB := orgWithWorkspace(t, srv)
 	ctxB := createCtx(t, orgB)
-
-	taskResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	eventResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
+	taskA := createTestTask(t, srv, ctxA)
+	_, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
 		Description: "User A's Event",
 		Data:        `{}`,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
+		TaskId:      taskA,
 	})
 	assert.NilError(t, err)
 
 	// Act
 	respA, err := srv.ListEventsByTask(ctxA, &xagentv1.ListEventsByTaskRequest{
-		TaskId: taskResp.Task.Id,
+		TaskId: taskA,
 	})
 	assert.NilError(t, err)
 	respB, err := srv.ListEventsByTask(ctxB, &xagentv1.ListEventsByTaskRequest{
-		TaskId: taskResp.Task.Id,
+		TaskId: taskA,
 	})
 	assert.NilError(t, err)
 

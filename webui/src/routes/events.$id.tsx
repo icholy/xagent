@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@connectrpc/connect-query'
-import { getEvent, listEventTasks } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { getEvent } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { RelativeTime } from '@/components/relative-time'
 import { useOrgId } from '@/hooks/use-org-id'
@@ -20,12 +20,6 @@ function EventDetail() {
     isLoading: eventLoading,
     error: eventError,
   } = useQuery(getEvent, { id: eventId }, { refetchInterval: 60000 })
-
-  const { data: tasksData, isLoading: tasksLoading } = useQuery(
-    listEventTasks,
-    { eventId },
-    { refetchInterval: 60000 },
-  )
 
   if (eventLoading) {
     return (
@@ -52,8 +46,6 @@ function EventDetail() {
       </div>
     )
   }
-
-  const taskIds = tasksData?.taskIds ?? []
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -102,26 +94,18 @@ function EventDetail() {
         </div>
 
         <div className="rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Associated Tasks</h2>
-          {tasksLoading ? (
-            <p className="text-muted-foreground">Loading tasks...</p>
-          ) : taskIds.length === 0 ? (
-            <p className="text-muted-foreground">No associated tasks</p>
+          <h2 className="text-lg font-semibold mb-4">Task</h2>
+          {event.taskId ? (
+            <Link
+              to="/tasks/$id"
+              search={{ org: orgId }}
+              params={{ id: String(event.taskId) }}
+              className="text-primary hover:underline"
+            >
+              Task {String(event.taskId)}
+            </Link>
           ) : (
-            <ul className="space-y-2">
-              {taskIds.map((taskId) => (
-                <li key={String(taskId)}>
-                  <Link
-                    to="/tasks/$id"
-                    search={{ org: orgId }}
-                    params={{ id: String(taskId) }}
-                    className="text-primary hover:underline"
-                  >
-                    Task {String(taskId)}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <p className="text-muted-foreground">No associated task</p>
           )}
         </div>
       </div>

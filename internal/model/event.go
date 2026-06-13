@@ -14,6 +14,7 @@ type Event struct {
 	Data        string    `json:"data"`
 	URL         string    `json:"url,omitempty"`
 	OrgID       int64     `json:"org_id"`
+	TaskID      int64     `json:"task_id"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -24,6 +25,7 @@ func (e *Event) Proto() *xagentv1.Event {
 		Description: e.Description,
 		Data:        e.Data,
 		Url:         e.URL,
+		TaskId:      e.TaskID,
 		CreatedAt:   timestamppb.New(e.CreatedAt),
 	}
 }
@@ -39,6 +41,7 @@ func EventFromProto(pb *xagentv1.Event) *Event {
 		Description: pb.Description,
 		Data:        pb.Data,
 		URL:         pb.Url,
+		TaskID:      pb.TaskId,
 		CreatedAt:   createdAt,
 	}
 }

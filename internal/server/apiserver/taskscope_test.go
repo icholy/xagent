@@ -270,27 +270,26 @@ func TestTaskScope_WrongInstanceDenied(t *testing.T) {
 	}
 }
 
-// AddEventTask / RemoveEventTask are dual-gated (event.write + task.write). A
-// caller holding event.write but a task scope for A only must still be denied on
-// task B's task half.
-func TestTaskScope_EventTask_WrongInstanceDenied(t *testing.T) {
+// CreateEvent is dual-gated (event.create + task.write) because events are
+// task-scoped. A caller holding event.create but a task scope for A only must
+// still be denied when creating an event for task B.
+func TestTaskScope_CreateEvent_WrongInstanceDenied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	adminCtx, org, taskA, taskB := newOrgWithTasks(t, srv)
-	ev, err := srv.CreateEvent(adminCtx, &xagentv1.CreateEventRequest{Description: "e", Url: "https://example.com/e"})
-	assert.NilError(t, err)
+	_, org, taskA, taskB := newOrgWithTasks(t, srv)
 
-	// event.write (coarse) plus a task scope bound to A only.
+	// event.create (coarse) plus a task scope bound to A only.
 	scopes := authscope.Scopes{
-		authscope.New(authscope.OpEventWrite),
+		authscope.New(authscope.OpEventCreate),
 		authscope.New(authscope.OpTaskWrite, authscope.WithTaskID(taskA.Id)),
 	}
 	ctxA := scopedCtx(t, org, scopes)
 
-	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{EventId: ev.Event.Id, TaskId: taskB.Id})
-	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-
-	_, err = srv.RemoveEventTask(ctxA, &xagentv1.RemoveEventTaskRequest{EventId: ev.Event.Id, TaskId: taskB.Id})
+	_, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
+		Description: "e",
+		Url:         "https://example.com/e",
+		TaskId:      taskB.Id,
+	})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 

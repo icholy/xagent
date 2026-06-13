@@ -174,51 +174,6 @@ func (q *Queries) ListTasks(ctx context.Context, orgID int64) ([]Task, error) {
 	return items, nil
 }
 
-const listTasksByEvent = `-- name: ListTasksByEvent :many
-SELECT t.id, t.name, t.runner, t.workspace, t.instructions, t.status, t.command, t.version, t.org_id, t.archived, t.created_at, t.updated_at, t.auto_archive
-FROM tasks t
-JOIN event_tasks et ON t.id = et.task_id
-WHERE et.event_id = $1
-ORDER BY t.created_at DESC
-`
-
-func (q *Queries) ListTasksByEvent(ctx context.Context, eventID int64) ([]Task, error) {
-	rows, err := q.db.QueryContext(ctx, listTasksByEvent, eventID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Task{}
-	for rows.Next() {
-		var i Task
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Runner,
-			&i.Workspace,
-			&i.Instructions,
-			&i.Status,
-			&i.Command,
-			&i.Version,
-			&i.OrgID,
-			&i.Archived,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.AutoArchive,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTasksDueForArchive = `-- name: ListTasksDueForArchive :many
 SELECT id, version, org_id
 FROM tasks
