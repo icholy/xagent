@@ -163,6 +163,12 @@ rules, plus `Start`/`Restart`/`Cancel`) carries over unchanged — it is the fol
 function. `command`/`version` remain the runner-coordination channel and are
 *not* stream events (they are control state, not history).
 
+This proposal keeps the existing shape: the status mutation and the `lifecycle`
+event append sit side by side. Consolidating them into a single
+`applyLifecycleEvent(task, ev)` fold — so the projection can never drift from
+the stream — is a worthwhile but larger `internal/model/task.go` refactor,
+deferred as out of scope to #952 (revisit once the stream is in place).
+
 ### Links: event is truth, `task_links` is the index
 
 `link` events are the source of truth for the timeline. But the subscription
@@ -202,16 +208,17 @@ the stream:
 
 | Tool                     | Today                                   | Under the stream                                          |
 | ------------------------ | --------------------------------------- | --------------------------------------------------------- |
-| `get_my_task`            | `GetTaskDetails` (4 joins)              | read this task's to-agent events (brief)                  |
-| `report`                 | `UploadLogs` type=`llm`                 | append a `report` event                                   |
-| `create_link`            | `CreateLink`                            | append a `link` event (projection upsert follows)         |
-| `create_child_task`      | `CreateTask`                            | unchanged; child gets its own stream                      |
-| `update_child_task`      | `UpdateTask(start=true)`                | append an `instruction` event to the **child's** stream   |
-| `list_child_task_logs`   | `ListLogs`                              | read the child's stream                                   |
+| `get_my_task`            | `GetTaskDetails` (4 joins)              | `ListEvents` (this task, brief)                           |
+| `report`                 | `UploadLogs` type=`llm`                 | `AppendEvent` (`report`)                                  |
+| `create_link`            | `CreateLink`                            | `AppendEvent` (`link`) — handler upserts `task_links`     |
+| `create_child_task`      | `CreateTask`                            | `CreateTask` seeding the child's stream with `instruction`|
+| `update_child_task`      | `UpdateTask(start=true)`                | `AppendEvent` (`instruction`, `wake`) on the child        |
+| `list_child_task_logs`   | `ListLogs`                              | `ListEvents` (child)                                      |
 
-"Child interaction" is "append to / read the child's stream," with the same
-token-scoped authorization that exists today (the task token's `task.write`
-scope, plus own-or-child matching via `Task.ScopeAttr`).
+"Child interaction" is "create / append to / read the child's stream," with the
+same task-token scopes as today (`task.write`, own-or-child via
+`Task.ScopeAttr`) — now applied per event `type` in the `AppendEvent` handler
+rather than per RPC (see Open Questions).
 
 ### Raw output vs. semantic events
 
@@ -241,12 +248,13 @@ discussed under Trade-offs.
 
 ### API / proto changes
 
-`proto/xagent/v1/xagent.proto` redefines `Event` as the stream row and adds
-stream-shaped RPCs. The old org-level event RPCs and the per-channel log/fan-out
-RPCs collapse into them: `ListEvents` is re-pointed at the stream (it can scope
-by `org_id` for the feed or `task_id` for a timeline), and `GetEvent`,
-`CreateEvent`, `UploadLogs`, `ListLogs`, `ListEventsByTask`,
-`AddEventTask`/`RemoveEventTask` go away.
+`proto/xagent/v1/xagent.proto` redefines `Event` as the stream row and reduces
+the agent surface to three event-shaped RPCs: `CreateTask` (create the task +
+seed its stream), `AppendEvent` (append to an existing stream), and `ListEvents`
+(read, scoped by `task_id` or `org_id`). The old per-channel and org-event RPCs
+— `GetEvent`, `CreateEvent`, `ListEventsByTask`, `AddEventTask`/`RemoveEventTask`,
+`UploadLogs`, `ListLogs`, `CreateLink`, and the add-instruction-and-restart path
+of `UpdateTask` — fold into these or go away.
 
 ```proto
 message Event {
@@ -258,21 +266,34 @@ message Event {
   google.protobuf.Timestamp created_at = 6;
 }
 
-// Append one event. report = AppendEvent(type=report);
-// adding an instruction to a child = AppendEvent(type=instruction) on the child.
+// Create a task and seed its stream. The task entity (workspace, runner,
+// parent, …) can't be an append — a stream needs a task to belong to — but the
+// seed is a list of events, typically one `instruction`, so creation is
+// event-shaped too. The seed list goes through the same type-keyed authz as
+// AppendEvent.
+rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);  // task fields + repeated Event events
+
+// Append one event to an existing stream. report = AppendEvent(type=report);
+// add an instruction to a child = AppendEvent(type=instruction, wake) on the child.
 rpc AppendEvent(AppendEventRequest) returns (AppendEventResponse);
 
-// Read the stream. Scoped by task_id (a task's timeline / the brief, the latter
+// Read a stream. Scoped by task_id (a task's timeline / the brief, the latter
 // filtered to type in instruction, external) or by org_id (the org event feed,
 // filtered to type=external). Optional type filter.
 rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
 ```
 
-`SubmitRunnerEvents` is unchanged on the wire (the runner still submits
-`started`/`stopped`/`failed`); the handler additionally appends a `lifecycle`
-event. `CreateLink` and `CreateTask` keep their RPCs (ergonomic, validated
-entry points) but their handlers now append events and maintain the
-projections.
+`CreateTask` stays a distinct RPC because a stream needs a task to belong to —
+but instead of a magic "first instruction" field it takes a list of initial
+events to seed the stream (typically one `instruction`). Every other write is
+`AppendEvent`: `create_link` is `AppendEvent(link)` (the handler upserts the
+`task_links` projection), and "add instruction + restart" is
+`AppendEvent(instruction, wake)` (the handler sets `command=start`). `lifecycle`
+and `external` are never accepted from the public verbs — `SubmitRunnerEvents`
+(unchanged on the wire) and `eventrouter` append them internally. Both
+`CreateTask`'s seed list and `AppendEvent` apply the type-keyed authz from Open
+Questions: `report`/`link`/`instruction` per the caller's scope and target task,
+`lifecycle`/`external` rejected.
 
 ### Rollout
 
@@ -293,7 +314,10 @@ together rather than as separate additive steps.
    sibling proposal is the natural constructor for `lifecycle` rows), and point
    the brief, `get_my_task`, the org event feed (`ListEvents`, now org-scoped
    over the stream), and the #918 timeline at `ListEvents`. The initial
-   instruction becomes the first `instruction` event appended by `CreateTask`.
+   instruction becomes the first `instruction` event appended by `CreateTask`;
+   there is no denormalized `tasks.instructions` replacement — reads that want a
+   task's instructions filter the stream by `type='instruction'` (indexed on
+   `task_id`).
 
 ## Trade-offs
 
@@ -329,33 +353,38 @@ together rather than as separate additive steps.
   as events would conflate "what the runner should do next" with "what
   happened." Left as columns.
 
+- **Per-task `external` rows vs. a shared `events` row + join.** Fan-out now
+  writes one `external` row per subscribed task instead of one org-level
+  `events` row joined to N tasks. In the common case an external event maps to a
+  single task (1:1), so the fan-out is one row; the multiplied write only
+  appears for mass-subscribed resources, which are rare. In return the join and
+  the separate org-level table disappear, and the org feed becomes a plain
+  `org_id`-scoped scan over `idx_events_org_id`. The same occurrence then shows
+  once per subscribed task in the feed — accepted duplication. Accepted.
+
 ## Open Questions
 
-- **Does `instruction` keep a denormalized column?** Dropping
-  `tasks.instructions` entirely means the initial prompt is reconstructed from
-  the stream. The brief (to-agent events) covers the running
-  agent, but anything that wants "the task's instructions" outside a run (e.g.
-  list views, search) would scan the stream. A denormalized
-  `tasks.first_instruction` or a kept column as a projection is cheap insurance
-  — decide when writing the cutover migration.
-
-- **Status fold ownership.** Should `Task.ApplyRunnerEvent` (and `Start` /
-  `Restart` / `Cancel`) keep mutating `status` directly with the event appended
-  beside it, or should there be a single `applyLifecycleEvent(task, ev)` fold
-  that both appends and projects, so the projection can never drift from the
-  stream? The latter is cleaner but a larger refactor of `internal/model/task.go`.
-
-- **External-event fan-out volume.** One org-level webhook matching N subscribed
-  tasks now appends N `external` events (one per task's stream) instead of one
-  org-level `events` row + N `event_tasks` join rows. That drops the join and
-  the separate org-level table; the org event feed instead reads `events WHERE
-  org_id = ? AND type = 'external'` over the `idx_events_org_id` index. The same
-  occurrence therefore appears once per subscribed task in the feed — accepted
-  duplication (see Design). Worth confirming the fan-out volume (mass-subscribed
-  repos) stays bounded.
-
-- **Relationship to #945 (C2-hosted agent MCP).** With the agent contract
-  reduced to append/read-stream over the task token, the C2-hosted MCP server
-  (#945) and a bring-your-own-agent both implement the same two verbs. Should
-  `AppendEvent`/`ListEvents` be the *public* agent contract, with the
-  MCP tools as one client of it? Likely yes, but that is #945's call.
+- **Authz when the surface collapses to two verbs.** Two generic verbs are the
+  contract (the side-effecting RPCs fold in: the `AppendEvent` handler does the
+  `task_links` upsert for `link` and the `command=start` wake for `wake`, keyed
+  off the event). The open part is authorization. Today it is *structural* — an
+  agent can't forge a `lifecycle` or `external` event because no RPC lets it;
+  the RPC surface is the boundary, and a task token carries only `task.read` /
+  `task.write` on its own id, plus parent-scoped read/write with the
+  `child_tasks` capability (`agentauth/scope.go`). A single `AppendEvent` gated
+  only on `task.write` + own-or-child `ScopeAttr` matching (`apiserver/link.go`)
+  would let an agent append *any* type to a task it can write — including fake
+  status transitions and fake webhooks. So authz must move from "which RPC
+  exists" to a per-event policy keyed off `type` (and `wake`) against the target
+  task:
+    - `report`, `link` → `task.write` on own task (agent-allowed).
+    - `instruction` → `task.write` on the target; for a task token that is
+      children only (the `child_tasks` capability's parent-scoped write), with
+      `wake` riding the same grant.
+    - `lifecycle`, `external` → server/runner/router only, appended internally
+      by `SubmitRunnerEvents` / `eventrouter`; never through the public verb.
+  The verb stays generic; the public `AppendEvent` handler whitelists types by
+  caller — the same place it applies the type-keyed side-effects. The trade:
+  the old RPC surface gave per-op authz for free, whereas one handler branching
+  on `type` is a single spot to get a privilege check wrong. Nail down the exact
+  `type`→op mapping before implementing.
