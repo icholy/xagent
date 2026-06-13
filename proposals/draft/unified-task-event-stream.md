@@ -55,9 +55,9 @@ CREATE TABLE public.events (
     id         bigint  NOT NULL,                       -- BIGSERIAL; stream order
     task_id    bigint  NOT NULL,
     org_id     bigint  NOT NULL,
-    type       text    NOT NULL,                       -- instruction|report|external|lifecycle|link
+    type       text    NOT NULL,                       -- materialized from the Event.payload oneof arm; for filtering
     wake       boolean NOT NULL DEFAULT false,         -- does appending this wake an idle task?
-    payload    jsonb   NOT NULL,                        -- type-specific (see below)
+    payload    jsonb   NOT NULL,                        -- protojson of the set oneof arm (see Payloads)
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX idx_events_task_id_id ON public.events (task_id, id);
@@ -105,7 +105,9 @@ exactly as `Task.Start()` does today (`internal/model/task.go:416`).
 
 #### Payloads
 
-`payload jsonb` carries the type-specific fields. Shapes:
+Each type has a typed payload message — the arms of the `Event.payload` oneof
+(see API / proto changes) — stored as their protojson encoding in the `payload
+jsonb` column. The shapes:
 
 ```jsonc
 // instruction  — was model.Instruction + actor
@@ -117,8 +119,8 @@ exactly as `Task.Start()` does today (`internal/model/task.go:416`).
 // report       — the agent's report tool (was logs type='llm')
 { "content": "Opened PR #952 with the migration." }
 
-// lifecycle    — the model.TaskChange fact (see below)
-{ "kind": "container_exited", "actor": {"kind":"runner"}, "from_status": "RUNNING", "to_status": "COMPLETED", "runner_event": "stopped" }
+// lifecycle    — the model.TaskChange fact (see below); kind is the LifecycleKind enum
+{ "kind": "LIFECYCLE_KIND_CONTAINER_EXITED", "actor": {"kind":"runner"}, "from_status": "RUNNING", "to_status": "COMPLETED", "runner_event": "stopped" }
 
 // link         — was task_links row
 { "link_id": 1027, "relevance": "trigger", "url": "https://github.com/.../issues/947", "title": "icholy commented…", "subscribe": true }
@@ -129,9 +131,9 @@ exactly as `Task.Start()` does today (`internal/model/task.go:416`).
 `proposals/draft/task-change-unifying-logs-and-notifications.md` already
 designed the closed set of "things that happened to a task": `Created`,
 `Updated`, `Cancelled`, `Restarted`, `Archived`, `Unarchived`, `AutoArchived`,
-`Woken`, `ContainerStarted`, `ContainerExited`, `ContainerFailed`. Those are
-exactly the `lifecycle` event `payload.kind` values here. The two proposals
-converge:
+`Woken`, `ContainerStarted`, `ContainerExited`, `ContainerFailed`. Minus
+`Woken` (below), those are the `LifecycleKind` enum — the `lifecycle` event's
+`payload.kind`. The two proposals converge:
 
 - `TaskChange`'s "single structured fact" *is* a `lifecycle` event.
 - Its `Log()` projection becomes the timeline rendering of the event (no more
@@ -276,8 +278,9 @@ pre-build for output that isn't captured today.
 
 ### API / proto changes
 
-`proto/xagent/v1/xagent.proto` redefines `Event` as the stream row and reduces
-the **general** read/write surface to three event-shaped RPCs: `CreateTask`
+`proto/xagent/v1/xagent.proto` redefines `Event` as the stream row — its payload
+is a typed `oneof` over the five event shapes, not an opaque `Struct` — and
+reduces the **general** read/write surface to three event-shaped RPCs: `CreateTask`
 (create the task + seed its stream), `AppendEvent` (append to an existing
 stream), and `ListEvents` (read, scoped by `task_id` or `org_id`). The old
 per-channel and org-event RPCs — `GetEvent`, `CreateEvent`, `ListEventsByTask`,
@@ -290,24 +293,55 @@ The *agent* does not call these directly; it uses the identity-scoped
 message Event {
   int64 id = 1;
   int64 task_id = 2;
-  string type = 3;       // instruction|report|external|lifecycle|link
-  bool wake = 4;
-  google.protobuf.Struct payload = 5;
-  google.protobuf.Timestamp created_at = 6;
+  bool wake = 3;
+  google.protobuf.Timestamp created_at = 4;
+  // The set arm IS the event type — a typed union, not an opaque Struct. There
+  // is no separate `type` field on the wire; the db `type` column is
+  // materialized from the arm for indexed filtering (like `direction`).
+  oneof payload {
+    InstructionPayload instruction = 5;
+    ExternalPayload    external    = 6;
+    ReportPayload      report      = 7;
+    LifecyclePayload   lifecycle   = 8;
+    LinkPayload        link        = 9;
+  }
+}
+
+message InstructionPayload { string text = 1; string url = 2; Actor actor = 3; }
+message ExternalPayload    { string description = 1; string url = 2; string data = 3; }
+message ReportPayload      { string content = 1; }
+message LifecyclePayload   { LifecycleKind kind = 1; Actor actor = 2; string from_status = 3; string to_status = 4; string runner_event = 5; }
+message LinkPayload        { int64 link_id = 1; string relevance = 2; string url = 3; string title = 4; bool subscribe = 5; }
+message Actor              { string kind = 1; string name = 2; }  // kind: user|runner|router|agent
+
+// The closed set of lifecycle transitions (the TaskChange set, minus Woken —
+// which splits into an external event plus the transition the wake caused).
+enum LifecycleKind {
+  LIFECYCLE_KIND_UNSPECIFIED       = 0;
+  LIFECYCLE_KIND_CREATED           = 1;
+  LIFECYCLE_KIND_UPDATED           = 2;
+  LIFECYCLE_KIND_CANCELLED         = 3;
+  LIFECYCLE_KIND_RESTARTED         = 4;
+  LIFECYCLE_KIND_ARCHIVED          = 5;
+  LIFECYCLE_KIND_UNARCHIVED        = 6;
+  LIFECYCLE_KIND_AUTO_ARCHIVED     = 7;
+  LIFECYCLE_KIND_CONTAINER_STARTED = 8;
+  LIFECYCLE_KIND_CONTAINER_EXITED  = 9;
+  LIFECYCLE_KIND_CONTAINER_FAILED  = 10;
 }
 
 // Create a task and seed its stream. The task entity (workspace, runner, …)
 // can't be an append — a stream needs a task to belong to — but the seed is a
-// list of events, typically one `instruction`, so creation is event-shaped too.
+// list of events, typically one InstructionPayload, so creation is event-shaped.
 rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);  // task fields + repeated Event events
 
-// Append one event to an existing stream. report = AppendEvent(type=report);
-// a user adding an instruction = AppendEvent(type=instruction, wake).
+// Append one event to an existing stream. report = AppendEvent{report:{…}};
+// a user adding an instruction = AppendEvent{instruction:{…}, wake:true}.
 rpc AppendEvent(AppendEventRequest) returns (AppendEventResponse);
 
 // Read a stream. Scoped by task_id (a task's timeline / the brief, the latter
-// filtered to type in instruction, external) or by org_id (the org event feed,
-// filtered to type=external). Optional type filter.
+// filtered to the instruction/external arms) or by org_id (the org event feed,
+// external arm only). Filters run on the materialized `type` column.
 rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
 ```
 
