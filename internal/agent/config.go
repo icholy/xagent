@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 )
 
 var ConfigDir = "/tmp/xagent"
@@ -59,10 +58,6 @@ func (m *McpServer) Validate() error {
 		return fmt.Errorf("unknown type: %s", m.Type)
 	}
 	return nil
-}
-
-func (c *Config) hasCapability(capability string) bool {
-	return slices.Contains(c.Capabilities, capability)
 }
 
 func ConfigPath(taskID int64) string {

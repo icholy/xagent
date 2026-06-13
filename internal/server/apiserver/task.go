@@ -54,71 +54,19 @@ func (s *Server) ListRunnerTasks(ctx context.Context, req *xagentv1.ListRunnerTa
 	return resp, nil
 }
 
-func (s *Server) ListChildTasks(ctx context.Context, req *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.AllowOp(authscope.OpTaskRead) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list tasks"))
-	}
-	// A blanket task.read (admin/coarse) is authorized without inspecting the row,
-	// and the list query is already org-scoped. A predicated caller (a task token)
-	// loads the parent row so the archived gate keys off the parent's real state:
-	// authorize on the requested parent id plus the parent's archived flag, NOT the
-	// parent's full ScopeAttr(). Keying on task.parent keeps this own-children-only
-	// (task.read:{task.parent:self}); keying on the parent's id would also let an
-	// agent list a direct child's children. The archived flag denies an agent whose
-	// own task has been archived.
-	if !caller.Scopes.Allow(authscope.OpTaskRead) {
-		parent, err := s.store.GetTask(ctx, nil, req.ParentId, caller.OrgID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.ParentId))
-			}
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		if !caller.Scopes.Allow(authscope.OpTaskRead,
-			authscope.WithTaskParent(req.ParentId),
-			authscope.WithTaskArchived(parent.Archived),
-		) {
-			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list tasks"))
-		}
-	}
-	tasks, err := s.store.ListTaskChildren(ctx, nil, req.ParentId, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	resp := &xagentv1.ListChildTasksResponse{
-		Tasks: make([]*xagentv1.Task, len(tasks)),
-	}
-	for i, t := range tasks {
-		resp.Tasks[i] = t.Proto(s.baseURL)
-	}
-	return resp, nil
-}
-
 func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	// No row exists yet, so authorize directly on the request attributes — the
-	// narrow create scope (parent/workspace/runner) a task token holds. The
+	// narrow create scope (workspace/runner) a privileged caller holds. The
 	// literal task.archived:"false" satisfies the minted scope's archived
 	// predicate: a freshly created task is never archived. There is no row read to
 	// fail fast before, so no AllowOp pre-gate is needed.
 	if !caller.Scopes.Allow(authscope.OpTaskCreate,
-		authscope.WithTaskParent(req.Parent),
 		authscope.WithTaskWorkspace(req.Workspace),
 		authscope.WithTaskRunner(req.Runner),
 		authscope.WithTaskArchived(false),
 	) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create task"))
-	}
-	// Verify parent task ownership if specified
-	if req.Parent != 0 {
-		ok, err := s.store.HasTask(ctx, nil, req.Parent, caller.OrgID)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		if !ok {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("parent task %d not found", req.Parent))
-		}
 	}
 	// Verify runner and workspace exist
 	ok, err := s.store.HasWorkspace(ctx, nil, req.Runner, req.Workspace, caller.OrgID)
@@ -134,7 +82,6 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	}
 	task := &model.Task{
 		Name:         req.Name,
-		Parent:       req.Parent,
 		Runner:       req.Runner,
 		Workspace:    req.Workspace,
 		Instructions: instructions,
@@ -220,17 +167,12 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 	if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
-	children, _ := s.store.ListTaskChildren(ctx, nil, req.Id, caller.OrgID)
 	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, caller.OrgID)
 	links, _ := s.store.ListLinksByTask(ctx, nil, req.Id, caller.OrgID)
 	resp := &xagentv1.GetTaskDetailsResponse{
-		Task:     task.Proto(s.baseURL),
-		Children: make([]*xagentv1.Task, len(children)),
-		Events:   model.ProtoMap(events),
-		Links:    model.ProtoMap(links),
-	}
-	for i, c := range children {
-		resp.Children[i] = c.Proto(s.baseURL)
+		Task:   task.Proto(s.baseURL),
+		Events: model.ProtoMap(events),
+		Links:  model.ProtoMap(links),
 	}
 	return resp, nil
 }

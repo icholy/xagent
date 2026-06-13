@@ -11,7 +11,7 @@ import {
   cancelTask,
   restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { Task, TaskLink, Event, LogEntry } from '@/gen/xagent/v1/xagent_pb'
+import type { TaskLink, Event, LogEntry } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
 import {
@@ -53,7 +53,6 @@ const logTypeStyles: Record<string, string> = {
 }
 
 function TaskDetail() {
-  const orgId = useOrgId()
   const { id } = Route.useParams()
   const taskId = BigInt(id)
   const [instruction, setInstruction] = useState('')
@@ -121,7 +120,6 @@ function TaskDetail() {
   }
 
   const task = data?.task
-  const children = data?.children ?? []
   const events = data?.events ?? []
   const links = data?.links ?? []
   const logs = logsData?.entries ?? []
@@ -185,19 +183,6 @@ function TaskDetail() {
             <span className="text-muted-foreground">Workspace:</span>
             <span>{task.workspace}</span>
           </div>
-          {task.parent !== 0n && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Parent:</span>
-              <Link
-                to="/tasks/$id"
-                search={{ org: orgId }}
-                params={{ id: String(task.parent) }}
-                className="text-primary hover:underline"
-              >
-                Task {String(task.parent)}
-              </Link>
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Status:</span>
             <StatusBadge task={task} />
@@ -262,14 +247,6 @@ function TaskDetail() {
           </form>
         )}
       </div>
-
-      {/* Child Tasks */}
-      {children.length > 0 && (
-        <div className="rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Child Tasks</h2>
-          <ChildTasksTable tasks={children} onUpdate={refetch} />
-        </div>
-      )}
 
       {/* Events */}
       {events.length > 0 && (
@@ -341,72 +318,6 @@ function LinksSection({ links }: { links: TaskLink[] }) {
         </li>
       ))}
     </ul>
-  )
-}
-
-function ChildTasksTable({ tasks, onUpdate }: { tasks: Task[]; onUpdate: () => void }) {
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Runner</TableHead>
-          <TableHead>Workspace</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Created</TableHead>
-          <TableHead></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {tasks.map((task) => (
-          <ChildTaskRow key={String(task.id)} task={task} onUpdate={onUpdate} />
-        ))}
-      </TableBody>
-    </Table>
-  )
-}
-
-function ChildTaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
-  const orgId = useOrgId()
-  const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
-
-  const handleArchive = async () => {
-    await archiveMutation.mutateAsync({ id: task.id })
-  }
-
-  return (
-    <TableRow>
-      <TableCell>
-        <Link
-          to="/tasks/$id"
-          search={{ org: orgId }}
-          params={{ id: String(task.id) }}
-          className="text-primary hover:underline"
-        >
-          {task.name || `Unnamed - ${task.id}`}
-        </Link>
-      </TableCell>
-      <TableCell>{task.runner}</TableCell>
-      <TableCell>{task.workspace}</TableCell>
-      <TableCell>
-        <span className="flex items-center gap-2">
-          <StatusBadge task={task} />
-          <CommandBadge task={task} />
-        </span>
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
-      </TableCell>
-      <TableCell>
-        {canArchiveTask(task) && (
-          <ArchiveButton
-            task={task}
-            onArchive={handleArchive}
-            pending={archiveMutation.isPending}
-          />
-        )}
-      </TableCell>
-    </TableRow>
   )
 }
 

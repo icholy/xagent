@@ -75,7 +75,6 @@ type SchemaMigration struct {
 type Task struct {
 	ID           int64     `json:"id"`
 	Name         string    `json:"name"`
-	Parent       int64     `json:"parent"`
 	Runner       string    `json:"runner"`
 	Workspace    string    `json:"workspace"`
 	Instructions string    `json:"instructions"`

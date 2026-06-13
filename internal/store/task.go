@@ -18,7 +18,6 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 	now := time.Now().UTC()
 	id, err := s.q(tx).CreateTask(ctx, sqlc.CreateTaskParams{
 		Name:         task.Name,
-		Parent:       task.Parent,
 		Runner:       task.Runner,
 		Workspace:    task.Workspace,
 		Instructions: string(instructions),
@@ -62,26 +61,8 @@ func (s *Store) GetTaskForUpdate(ctx context.Context, tx *sql.Tx, id int64, orgI
 	return toModelTask(row)
 }
 
-func (s *Store) HasTask(ctx context.Context, tx *sql.Tx, id int64, orgID int64) (bool, error) {
-	return s.q(tx).HasTask(ctx, sqlc.HasTaskParams{
-		ID:    id,
-		OrgID: orgID,
-	})
-}
-
 func (s *Store) ListTasks(ctx context.Context, tx *sql.Tx, orgID int64) ([]*model.Task, error) {
 	rows, err := s.q(tx).ListTasks(ctx, orgID)
-	if err != nil {
-		return nil, err
-	}
-	return toModelTasks(rows)
-}
-
-func (s *Store) ListTaskChildren(ctx context.Context, tx *sql.Tx, parentID int64, orgID int64) ([]*model.Task, error) {
-	rows, err := s.q(tx).ListTaskChildren(ctx, sqlc.ListTaskChildrenParams{
-		Parent: parentID,
-		OrgID:  orgID,
-	})
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +96,6 @@ func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 	task.UpdatedAt = time.Now().UTC()
 	return s.q(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
 		Name:         task.Name,
-		Parent:       task.Parent,
 		Runner:       task.Runner,
 		Workspace:    task.Workspace,
 		Instructions: string(instructions),
@@ -167,7 +147,6 @@ func toModelTask(row sqlc.Task) (*model.Task, error) {
 	return &model.Task{
 		ID:           row.ID,
 		Name:         row.Name,
-		Parent:       row.Parent,
 		Runner:       row.Runner,
 		Workspace:    row.Workspace,
 		Instructions: instructions,

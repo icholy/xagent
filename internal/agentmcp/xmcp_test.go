@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -82,42 +81,9 @@ func TestGetMyTask(t *testing.T) {
 		"instructions": []any{
 			map[string]any{"text": "do something", "url": "https://example.com"},
 		},
-		"links":    []any{},
-		"events":   []any{},
-		"children": []any{},
+		"links":  []any{},
+		"events": []any{},
 	})
-}
-
-func TestUpdateChildTask_ArchivedTask(t *testing.T) {
-	parentTaskID := int64(123)
-	childTaskID := int64(456)
-
-	// The C2 now enforces task-scoped access (archived tasks are denied); the MCP
-	// server forwards the call and surfaces whatever error the C2 returns.
-	client := &xagentclient.ClientMock{
-		UpdateTaskFunc: func(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
-			assert.Equal(t, req.Id, childTaskID)
-			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot update archived task"))
-		},
-	}
-
-	task := &model.Task{ID: parentTaskID, Runner: "test-runner", Workspace: "test-workspace"}
-	srv := NewServer(client, task, []string{agentauth.CapabilityChildTasks})
-	session := setupTestSession(t, srv)
-
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "update_child_task",
-		Arguments: map[string]any{
-			"task_id":     float64(childTaskID),
-			"instruction": "do something",
-		},
-	})
-	assert.NilError(t, err)
-	assert.Assert(t, result.IsError, "expected error result")
-
-	text, ok := result.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok, "expected TextContent")
-	assert.Assert(t, strings.Contains(text.Text, "cannot update archived task"), "expected archived error message, got: %s", text.Text)
 }
 
 func TestGetGitHubToken(t *testing.T) {
@@ -168,26 +134,6 @@ func TestGetGitHubToken_Error(t *testing.T) {
 	text, ok := result.Content[0].(*mcp.TextContent)
 	assert.Assert(t, ok, "expected TextContent")
 	assert.Assert(t, strings.Contains(text.Text, "no installation linked"), "expected error message, got: %s", text.Text)
-}
-
-func TestChildTaskTools_NotRegisteredWithoutCapability(t *testing.T) {
-	client := &xagentclient.ClientMock{}
-
-	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, nil)
-	session := setupTestSession(t, srv)
-
-	tools, err := session.ListTools(t.Context(), nil)
-	assert.NilError(t, err)
-
-	gated := map[string]bool{
-		"create_child_task":    true,
-		"list_child_tasks":     true,
-		"update_child_task":    true,
-		"list_child_task_logs": true,
-	}
-	for _, tool := range tools.Tools {
-		assert.Assert(t, !gated[tool.Name], "%s should not be registered without the child-tasks capability", tool.Name)
-	}
 }
 
 func TestGetGitHubToken_NotRegisteredWithoutCapability(t *testing.T) {

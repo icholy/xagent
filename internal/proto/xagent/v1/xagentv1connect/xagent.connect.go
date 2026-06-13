@@ -43,9 +43,6 @@ const (
 	// XAgentServiceListRunnerTasksProcedure is the fully-qualified name of the XAgentService's
 	// ListRunnerTasks RPC.
 	XAgentServiceListRunnerTasksProcedure = "/xagent.v1.XAgentService/ListRunnerTasks"
-	// XAgentServiceListChildTasksProcedure is the fully-qualified name of the XAgentService's
-	// ListChildTasks RPC.
-	XAgentServiceListChildTasksProcedure = "/xagent.v1.XAgentService/ListChildTasks"
 	// XAgentServiceCreateTaskProcedure is the fully-qualified name of the XAgentService's CreateTask
 	// RPC.
 	XAgentServiceCreateTaskProcedure = "/xagent.v1.XAgentService/CreateTask"
@@ -170,7 +167,6 @@ type XAgentServiceClient interface {
 	GetProfile(context.Context, *v1.GetProfileRequest) (*v1.GetProfileResponse, error)
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
 	ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error)
-	ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error)
 	CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error)
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
 	GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error)
@@ -248,12 +244,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceListRunnerTasksProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("ListRunnerTasks")),
-			connect.WithClientOptions(opts...),
-		),
-		listChildTasks: connect.NewClient[v1.ListChildTasksRequest, v1.ListChildTasksResponse](
-			httpClient,
-			baseURL+XAgentServiceListChildTasksProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("ListChildTasks")),
 			connect.WithClientOptions(opts...),
 		),
 		createTask: connect.NewClient[v1.CreateTaskRequest, v1.CreateTaskResponse](
@@ -517,7 +507,6 @@ type xAgentServiceClient struct {
 	getProfile                     *connect.Client[v1.GetProfileRequest, v1.GetProfileResponse]
 	listTasks                      *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
 	listRunnerTasks                *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
-	listChildTasks                 *connect.Client[v1.ListChildTasksRequest, v1.ListChildTasksResponse]
 	createTask                     *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
 	getTask                        *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
 	getTaskDetails                 *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
@@ -592,15 +581,6 @@ func (c *xAgentServiceClient) ListTasks(ctx context.Context, req *v1.ListTasksRe
 // ListRunnerTasks calls xagent.v1.XAgentService.ListRunnerTasks.
 func (c *xAgentServiceClient) ListRunnerTasks(ctx context.Context, req *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error) {
 	response, err := c.listRunnerTasks.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// ListChildTasks calls xagent.v1.XAgentService.ListChildTasks.
-func (c *xAgentServiceClient) ListChildTasks(ctx context.Context, req *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error) {
-	response, err := c.listChildTasks.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -991,7 +971,6 @@ type XAgentServiceHandler interface {
 	GetProfile(context.Context, *v1.GetProfileRequest) (*v1.GetProfileResponse, error)
 	ListTasks(context.Context, *v1.ListTasksRequest) (*v1.ListTasksResponse, error)
 	ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error)
-	ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error)
 	CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error)
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
 	GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error)
@@ -1065,12 +1044,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceListRunnerTasksProcedure,
 		svc.ListRunnerTasks,
 		connect.WithSchema(xAgentServiceMethods.ByName("ListRunnerTasks")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceListChildTasksHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceListChildTasksProcedure,
-		svc.ListChildTasks,
-		connect.WithSchema(xAgentServiceMethods.ByName("ListChildTasks")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceCreateTaskHandler := connect.NewUnaryHandlerSimple(
@@ -1335,8 +1308,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceListRunnerTasksProcedure:
 			xAgentServiceListRunnerTasksHandler.ServeHTTP(w, r)
-		case XAgentServiceListChildTasksProcedure:
-			xAgentServiceListChildTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateTaskProcedure:
 			xAgentServiceCreateTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceGetTaskProcedure:
@@ -1444,10 +1415,6 @@ func (UnimplementedXAgentServiceHandler) ListTasks(context.Context, *v1.ListTask
 
 func (UnimplementedXAgentServiceHandler) ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListRunnerTasks is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) ListChildTasks(context.Context, *v1.ListChildTasksRequest) (*v1.ListChildTasksResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListChildTasks is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error) {

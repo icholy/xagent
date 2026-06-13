@@ -51,18 +51,15 @@ var (
 // the coarse API-caller op checks ignore them (proposal §7).
 const (
 	AttrTaskID        = "task.id"
-	AttrTaskParent    = "task.parent"
 	AttrTaskWorkspace = "task.workspace"
 	AttrTaskRunner    = "task.runner"
 	AttrTaskArchived  = "task.archived"
 )
 
-// WithTaskID, WithTaskParent, WithTaskWorkspace, and WithTaskRunner build the
-// attributes for a task-resource request, pairing each namespaced key with its
-// value. Call sites pass them straight to Scopes.Allow.
+// WithTaskID, WithTaskWorkspace, and WithTaskRunner build the attributes for a
+// task-resource request, pairing each namespaced key with its value. Call sites
+// pass them straight to Scopes.Allow.
 func WithTaskID(id int64) Attr { return Int64Attr(AttrTaskID, id) }
-
-func WithTaskParent(parent int64) Attr { return Int64Attr(AttrTaskParent, parent) }
 
 func WithTaskWorkspace(workspace string) Attr { return StringAttr(AttrTaskWorkspace, workspace) }
 

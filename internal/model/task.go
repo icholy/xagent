@@ -62,7 +62,6 @@ func InstructionFromProto(pb *xagentv1.Instruction) Instruction {
 type Task struct {
 	ID           int64         `json:"id"`
 	Name         string        `json:"name"`
-	Parent       int64         `json:"parent"`
 	Runner       string        `json:"runner"`
 	Workspace    string        `json:"workspace"`
 	Instructions []Instruction `json:"instructions"`
@@ -80,13 +79,12 @@ type Task struct {
 
 // ScopeAttr returns the authscope attributes describing this task, for the
 // post-load Allow check in the apiserver task handlers. Centralizing the set
-// here keeps a handler from forgetting one (especially task.archived): own-or-
-// child matching rides on task.id/task.parent and archive-based revocation on
-// task.archived. See proposals/implemented/eliminate-runner-socket-proxy.md §5.
+// here keeps a handler from forgetting one (especially task.archived): own-task
+// matching rides on task.id and archive-based revocation on task.archived. See
+// proposals/implemented/eliminate-runner-socket-proxy.md §5.
 func (t *Task) ScopeAttr() []authscope.Attr {
 	return []authscope.Attr{
 		authscope.WithTaskID(t.ID),
-		authscope.WithTaskParent(t.Parent),
 		authscope.WithTaskArchived(t.Archived),
 	}
 }
@@ -100,7 +98,6 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 	return &xagentv1.Task{
 		Id:           t.ID,
 		Name:         t.Name,
-		Parent:       t.Parent,
 		Runner:       t.Runner,
 		Workspace:    t.Workspace,
 		Instructions: instructions,
@@ -138,7 +135,6 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 	return &Task{
 		ID:           pb.Id,
 		Name:         pb.Name,
-		Parent:       pb.Parent,
 		Runner:       pb.Runner,
 		Workspace:    pb.Workspace,
 		Instructions: instructions,

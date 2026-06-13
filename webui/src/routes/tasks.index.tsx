@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
-import { useLocalStorage } from 'usehooks-ts'
 import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
-import { canArchiveTask, isChildTask } from '@/lib/task'
+import { canArchiveTask } from '@/lib/task'
 import {
   Table,
   TableBody,
@@ -17,12 +16,9 @@ import {
 import { StatusBadge } from '@/components/status-badge'
 import { ArchiveButton } from '@/components/archive-button'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
-import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
 import { Plus, Search, X } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
@@ -32,7 +28,6 @@ export const Route = createFileRoute('/tasks/')({
 
 function TasksPage() {
   const orgId = useOrgId()
-  const [showChildTasks, setShowChildTasks] = useLocalStorage('showChildTasks', false)
   const [searchQuery, setSearchQuery] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery(
@@ -62,34 +57,17 @@ function TasksPage() {
   const allTasks = data?.tasks ?? []
   const search = searchQuery.trim().toLowerCase()
   const tasks = allTasks.filter((task) => {
-    if (!showChildTasks && isChildTask(task)) {
-      return false
-    }
     if (search && !(task.name || `Unnamed - ${task.id}`).toLowerCase().includes(search)) {
       return false
     }
     return true
   })
-  const hiddenCount = allTasks.filter(isChildTask).length
 
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Label
-              htmlFor="show-child-tasks"
-              className="text-sm text-muted-foreground cursor-pointer"
-            >
-              Show child tasks{hiddenCount > 0 && !showChildTasks && ` (${hiddenCount} hidden)`}
-            </Label>
-            <Switch
-              id="show-child-tasks"
-              checked={showChildTasks}
-              onCheckedChange={setShowChildTasks}
-            />
-          </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -151,7 +129,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   }
 
   return (
-    <TableRow className={cn(isChildTask(task) && 'bg-muted/30')}>
+    <TableRow>
       <TableCell>
         <Link
           to="/tasks/$id"

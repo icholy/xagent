@@ -220,7 +220,6 @@ ALTER SEQUENCE public.task_links_id_seq OWNED BY public.task_links.id;
 CREATE TABLE public.tasks (
     id bigint NOT NULL,
     name text DEFAULT ''::text NOT NULL,
-    parent bigint DEFAULT 0 NOT NULL,
     runner text NOT NULL,
     workspace text NOT NULL,
     instructions text NOT NULL,
@@ -535,13 +534,6 @@ CREATE INDEX idx_tasks_org_id ON public.tasks USING btree (org_id);
 
 
 --
--- Name: idx_tasks_parent; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_tasks_parent ON public.tasks USING btree (parent);
-
-
---
 -- Name: idx_tasks_runner_status; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -704,4 +696,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260523000001'),
     ('20260601000001'),
     ('20260607000001'),
-    ('20260607000002');
+    ('20260607000002'),
+    ('20260613000001');

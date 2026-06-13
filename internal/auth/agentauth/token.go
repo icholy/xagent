@@ -6,15 +6,12 @@ const (
 	// CapabilityGitHubToken allows issuing GitHub App installation tokens via
 	// the CreateGitHubToken RPC.
 	CapabilityGitHubToken = "github_token"
-	// CapabilityChildTasks allows creating, listing, updating, and reading logs
-	// of child tasks.
-	CapabilityChildTasks = "child_tasks"
 )
 
 // ValidCapability reports whether capability is a recognized capability flag.
 func ValidCapability(capability string) bool {
 	switch capability {
-	case CapabilityGitHubToken, CapabilityChildTasks:
+	case CapabilityGitHubToken:
 		return true
 	default:
 		return false

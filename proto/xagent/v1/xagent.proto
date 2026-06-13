@@ -12,7 +12,6 @@ service XAgentService {
   rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc ListRunnerTasks(ListRunnerTasksRequest) returns (ListRunnerTasksResponse);
-  rpc ListChildTasks(ListChildTasksRequest) returns (ListChildTasksResponse);
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
   rpc GetTaskDetails(GetTaskDetailsRequest) returns (GetTaskDetailsResponse);
@@ -97,7 +96,7 @@ enum TaskCommand {
 message Task {
   int64 id = 1;
   string name = 2;
-  int64 parent = 3;
+  reserved 3;  // Previously: parent (child tasks removed)
   string workspace = 4;
   string runner = 5;  // Runner ID that handles this task
   repeated Instruction instructions = 6;
@@ -154,17 +153,9 @@ message ListRunnerTasksResponse {
   repeated Task tasks = 1;
 }
 
-message ListChildTasksRequest {
-  int64 parent_id = 1;
-}
-
-message ListChildTasksResponse {
-  repeated Task tasks = 1;
-}
-
 message CreateTaskRequest {
   string name = 1;
-  int64 parent = 2;
+  reserved 2;  // Previously: parent (child tasks removed)
   string workspace = 3;
   repeated Instruction instructions = 4;
   string runner = 5;  // Runner ID that should handle this task
@@ -189,7 +180,7 @@ message GetTaskDetailsRequest {
 
 message GetTaskDetailsResponse {
   Task task = 1;
-  repeated Task children = 2;
+  reserved 2;  // Previously: children (child tasks removed)
   repeated Event events = 3;
   repeated TaskLink links = 4;
 }
@@ -371,7 +362,7 @@ message SubmitRunnerEventsResponse {}
 message CreateTaskTokenRequest {
   int64 task_id = 1;
   // Workspace capability flags the runner enabled for this task
-  // (agentauth.CapabilityChildTasks, agentauth.CapabilityGitHubToken).
+  // (agentauth.CapabilityGitHubToken).
   repeated string capabilities = 2;
 }
 

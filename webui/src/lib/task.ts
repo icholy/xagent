@@ -3,12 +3,7 @@ import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { durationToMillis } from '@/lib/duration'
 
 type TaskLike = Pick<Task, 'status' | 'actions' | 'archived'>
-type TaskWithParent = Pick<Task, 'parent'>
 type AutoArchiveTask = TaskLike & Pick<Task, 'autoArchive' | 'updatedAt'>
-
-export function isChildTask(task: TaskWithParent): boolean {
-  return task.parent !== 0n
-}
 
 export function canArchiveTask(task: TaskLike): boolean {
   return task.actions?.archive ?? false

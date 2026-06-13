@@ -45,7 +45,6 @@ func TestGetTask(t *testing.T) {
 	expected := &xagentv1.Task{
 		Id:        createResp.Task.Id,
 		Name:      "Test Task",
-		Parent:    0,
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 		Instructions: []*xagentv1.Instruction{
@@ -143,7 +142,6 @@ func TestCreateTask(t *testing.T) {
 	expected := &xagentv1.Task{
 		Id:        resp.Task.Id,
 		Name:      "New Task",
-		Parent:    0,
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 		Instructions: []*xagentv1.Instruction{
@@ -161,33 +159,6 @@ func TestCreateTask(t *testing.T) {
 		AutoArchive: durationpb.New(0),
 	}
 	assert.DeepEqual(t, resp.Task, expected, protocmp.Transform())
-}
-
-func TestCreateTask_Permissions(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB := createCtx(t, orgB)
-	parentResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Parent Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, err = srv.CreateTask(ctxB, &xagentv1.CreateTaskRequest{
-		Name:      "User B's Child Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-		Parent:    parentResp.Task.Id,
-	})
-
-	// Assert
-	assert.ErrorContains(t, err, "not found")
 }
 
 func TestListTasks(t *testing.T) {
@@ -253,43 +224,6 @@ func TestListTasks_Permissions(t *testing.T) {
 	// Assert
 	assert.Equal(t, len(respA.Tasks), 2)
 	assert.Equal(t, len(respB.Tasks), 1)
-}
-
-func TestListChildTasks_Permissions(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB := createCtx(t, orgB)
-	parentResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Parent Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-	_, err = srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Child Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-		Parent:    parentResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	// Act
-	respA, err := srv.ListChildTasks(ctxA, &xagentv1.ListChildTasksRequest{
-		ParentId: parentResp.Task.Id,
-	})
-	assert.NilError(t, err)
-	respB, err := srv.ListChildTasks(ctxB, &xagentv1.ListChildTasksRequest{
-		ParentId: parentResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	// Assert
-	assert.Equal(t, len(respA.Tasks), 1)
-	assert.Equal(t, len(respB.Tasks), 0)
 }
 
 func TestCreateTask_BadRunner(t *testing.T) {

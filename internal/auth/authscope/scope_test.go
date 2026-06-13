@@ -137,23 +137,20 @@ func TestAllow(t *testing.T) {
 	}
 }
 
-// TestAllow_OwnTask reproduces the §6b own-task / child-via-parent scenario:
-// a caller holding both own-task and child scopes can read its own task and any
-// direct child, but not an unrelated task.
+// TestAllow_OwnTask reproduces the §6b own-task scenario: a caller holding an
+// own-task scope can read its own task, but not an unrelated task.
 func TestAllow_OwnTask(t *testing.T) {
 	t.Parallel()
 	set := Scopes{
 		mustParse(t, `task.read:{"task.id":"42"}`),
-		mustParse(t, `task.read:{"task.parent":"42"}`),
 	}
 	tests := []struct {
 		name  string
 		attrs []Attr
 		want  bool
 	}{
-		{"own task", []Attr{WithTaskID(42), WithTaskParent(7)}, true},
-		{"direct child", []Attr{WithTaskID(99), WithTaskParent(42)}, true},
-		{"unrelated task", []Attr{WithTaskID(5), WithTaskParent(7)}, false},
+		{"own task", []Attr{WithTaskID(42), WithTaskArchived(false)}, true},
+		{"unrelated task", []Attr{WithTaskID(5), WithTaskArchived(false)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -165,16 +162,16 @@ func TestAllow_OwnTask(t *testing.T) {
 }
 
 // TestAllow_CreateConjunction reproduces the §6a create scenario: a single
-// fully-constrained scope ANDs all three attributes.
+// fully-constrained scope ANDs all its attributes.
 func TestAllow_CreateConjunction(t *testing.T) {
 	t.Parallel()
-	set := Scopes{mustParse(t, `task.create:{"task.parent":"42","task.workspace":"ws","task.runner":"rn"}`)}
+	set := Scopes{mustParse(t, `task.create:{"task.workspace":"ws","task.runner":"rn"}`)}
 
-	ok := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("ws"), WithTaskRunner("rn"))
+	ok := set.Allow(OpTaskCreate, WithTaskWorkspace("ws"), WithTaskRunner("rn"))
 	assert.Equal(t, ok, true)
 
-	// Wrong workspace is denied even though parent and runner match.
-	denied := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("evil"), WithTaskRunner("rn"))
+	// Wrong workspace is denied even though runner matches.
+	denied := set.Allow(OpTaskCreate, WithTaskWorkspace("evil"), WithTaskRunner("rn"))
 	assert.Equal(t, denied, false)
 }
 
@@ -185,11 +182,11 @@ func TestAllow_CreateConjunction(t *testing.T) {
 func TestAllow_SplitConjunctionIsHole(t *testing.T) {
 	t.Parallel()
 	set := Scopes{
-		mustParse(t, `task.create:{"task.parent":"42"}`),
+		mustParse(t, `task.create:{"task.runner":"rn"}`),
 		mustParse(t, `task.create:{"task.workspace":"ws"}`),
 	}
-	// parent matches the first scope, which leaves workspace/runner unconstrained.
-	escalated := set.Allow(OpTaskCreate, WithTaskParent(42), WithTaskWorkspace("evil"), WithTaskRunner("evil"))
+	// runner matches the first scope, which leaves workspace unconstrained.
+	escalated := set.Allow(OpTaskCreate, WithTaskRunner("rn"), WithTaskWorkspace("evil"))
 	assert.Equal(t, escalated, true)
 }
 
@@ -197,9 +194,9 @@ func TestAllow_SplitConjunctionIsHole(t *testing.T) {
 func TestAllow_WildcardAdmin(t *testing.T) {
 	t.Parallel()
 
-	// task.* covers any action on a task instance, including a child.
+	// task.* covers any action on a task instance.
 	taskAdmin := Scopes{mustParse(t, `task.*`)}
-	assert.Equal(t, taskAdmin.Allow(OpTaskWrite, WithTaskID(99), WithTaskParent(42)), true)
+	assert.Equal(t, taskAdmin.Allow(OpTaskWrite, WithTaskID(99), WithTaskArchived(false)), true)
 	// ...but not a different resource.
 	assert.Equal(t, taskAdmin.Allow(OpGitHubTokenCreate), false)
 
