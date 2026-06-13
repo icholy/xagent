@@ -15,9 +15,11 @@ together:
 - **Logs** are their own table (`logs`: `id, task_id, type, content,
   created_at`) written through `UploadLogs` / `store.CreateLog`. The `type`
   column already overloads five distinct meanings: `llm` (the agent's `report`
-  tool, `agentmcp/xmcp.go:133`), `mcp` (per-tool-call logs,
-  `agentmcp/xmcp.go:43`), `audit` (task mutations, `apiserver/task.go`), `info`
-  (container lifecycle, `apiserver/runner.go:105`), and `error`.
+  tool, `agentmcp/xmcp.go:133`), `mcp` (short breadcrumbs the `xagent` MCP tools
+  write — "created link: …", "updated child task: …" — `agentmcp/xmcp.go:43`),
+  `audit` (task mutations, `apiserver/task.go`), `info` (container lifecycle,
+  `apiserver/runner.go:105`), and `error`. All of it is low-volume; the agent's
+  tool calls and message transcript are not uploaded anywhere today.
 - **External events** are an org-scoped `events` table fanned out to tasks via
   the `event_tasks` join, routed by `eventrouter.Route` matching an event's
   `model.RoutingKey(url)` against subscribed `task_links`.
@@ -247,31 +249,30 @@ own-or-child matching anywhere. The agent only ever touches its own task, and
 its entire write surface is `report` and `link` — it never appends
 `instruction`, `wake`, `lifecycle`, or `external`.
 
-### Raw output vs. semantic events
+### No separate verbose channel
 
-The issue flags the volume problem: `report`s are semantic and low-volume;
-per-tool-call `mcp` logs and any future raw stdout/transcript streaming are
-orders of magnitude higher. Putting megabytes of transcript chunks into
-`events` would bloat the stream that the brief renderer and timeline scan.
+The issue raises a volume worry — high-volume raw output swamping the stream. In
+practice there is no such channel today: the `logs` table, despite its name,
+holds only low-volume *semantic* rows, and the agent's tool calls and message
+transcript are **not** uploaded anywhere. Everything `logs` actually holds has
+an event-type home:
 
-**Recommendation: keep a separate verbose channel.** `events` holds the
-five semantic types. The existing `logs` table is retained but narrowed to the
-**verbose channel** — `mcp` tool-call logs (the subject of
-`proposals/draft/richer-tool-call-logs.md`) and any future raw transcript. The
-semantic log types migrate out:
+- `llm`   → `report` event (the `report` tool's messages)
+- `audit` → `lifecycle` event (task mutations)
+- `info`  → `lifecycle` event (container lifecycle)
+- `error` → `lifecycle` payload field (container failures)
+- `mcp`   → *nothing new* — these were short breadcrumbs the `xagent` MCP tools
+  wrote ("created link: …", "updated child task: …"), echoes of actions the
+  stream now records as first-class `link` / `instruction` events (and the
+  child-task ones retire with #940).
 
-- `llm`  → `report` events
-- `audit`→ `lifecycle` events
-- `info` → `lifecycle` events
-- `mcp`  → stays in `logs` (verbose channel)
-- `error`→ stays in `logs`, or rides as a `lifecycle` payload field for
-  container failures
-
-The brief renderer never touches `logs`. The #918 timeline does a cheap
-ordered union of `events` (always shown) and `logs` (collapsible /
-filterable "noise" tier), which is exactly the density/filtering control that
-issue asks for. The alternative — one table with a `volume` discriminator — is
-discussed under Trade-offs.
+So the `logs` table is **dropped outright** — no separate channel, no `volume`
+discriminator, no partial indexes, no two-table union for the #918 timeline
+(which now reads the one stream). If raw tool-call or transcript streaming is
+added later (the domain of `proposals/draft/richer-tool-call-logs.md`) and is
+genuinely high-volume, that is future work: it gets its own event type (or a
+dedicated store) and its own indexing decision then. This proposal does not
+pre-build for output that isn't captured today.
 
 ### API / proto changes
 
@@ -334,8 +335,9 @@ together rather than as separate additive steps.
 1. **Schema.** One migration (next sequence after
    `20260607000002_task_auto_archive.sql`) drops the old org-level `events`,
    `event_tasks`, and `tasks.instructions`; creates the new `events` stream
-   table under the reused name; and narrows `logs` to the verbose channel. Keep
-   `task_links` (the subscription index). Regenerate `sqlc`.
+   table under the reused name; and drops the `logs` table (every log row has an
+   event-type home — see No separate verbose channel). Keep `task_links` (the
+   subscription index). Regenerate `sqlc`.
 2. **Cutover.** In the same deploy, re-point every mutation site that today
    writes instructions/logs/events/links/status to append the corresponding
    `events` row in the same transaction (the `TaskChange` value type from the
@@ -348,17 +350,6 @@ together rather than as separate additive steps.
    `task_id`).
 
 ## Trade-offs
-
-- **One verbose channel vs. one unified table with a `volume` tag.** Keeping
-  `logs` separate is less migration churn, keeps the brief/timeline-critical
-  queries off the high-volume rows, and leaves
-  `proposals/draft/richer-tool-call-logs.md` to evolve the verbose channel
-  independently. A single table with `volume ∈ {semantic, verbose}` is
-  conceptually tidier and gives the timeline a single source, but every brief
-  and subscription query would then have to filter past transcript chunks, and
-  a runaway transcript would bloat the index the brief and timeline scans rely on.
-  Recommend the separate channel; the type system still makes the distinction
-  explicit (which table you're in).
 
 - **Global `BIGSERIAL` id vs. per-task sequence.** A global id keeps the schema
   trivial and ordering total; filtering by `task_id` preserves order, so the id
