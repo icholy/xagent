@@ -52,7 +52,6 @@ CREATE TABLE public.task_events (
     task_id    bigint  NOT NULL,
     org_id     bigint  NOT NULL,
     type       text    NOT NULL,                       -- instruction|report|external|lifecycle|link
-    direction  text    NOT NULL,                       -- to_agent|from_agent|about_task
     wake       boolean NOT NULL DEFAULT false,         -- does appending this wake an idle task?
     payload    jsonb   NOT NULL,                        -- type-specific (see below)
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
@@ -72,23 +71,27 @@ Clients fetch the whole stream each time, exactly as they fetch all
 instructions, logs, and events today. Incremental delivery — reading only
 what's new since a cursor — is a separate concern (#946) and out of scope here.
 
-#### Event types and the three axes
+#### Event types, `wake`, and the derived direction
 
-The issue's two classifying axes — **direction** and **wake** — plus the
-**type** become explicit columns rather than implied by which table a row lives
-in.
+The issue's classifying axes — **type** and **wake** — become explicit columns
+rather than implied by which table a row lives in. **Direction** (`to_agent` /
+`from_agent` / `about_task`) is a convenient way to talk about the types, but it
+is strictly a function of `type` (the mapping below), so it is *derived*, not
+stored.
 
-| `type`        | `direction`  | `wake` (default) | Replaces today                                         |
-| ------------- | ------------ | ---------------- | ------------------------------------------------------ |
-| `instruction` | `to_agent`   | `true`           | `tasks.instructions` JSON + `command=start`            |
-| `external`    | `to_agent`   | per routing rule | `events` + `event_tasks` fan-out                       |
-| `report`      | `from_agent` | `false`          | `logs` rows with `type='llm'` (the `report` tool)      |
-| `lifecycle`   | `about_task` | `false`          | `RunnerEvent` fold + `audit`/`info` log rows           |
-| `link`        | `about_task` | `false`          | `task_links` row creation                              |
+| `type`        | direction *(derived)* | `wake` (default) | Replaces today                                    |
+| ------------- | --------------------- | ---------------- | ------------------------------------------------- |
+| `instruction` | `to_agent`            | `true`           | `tasks.instructions` JSON + `command=start`       |
+| `external`    | `to_agent`            | per routing rule | `events` + `event_tasks` fan-out                  |
+| `report`      | `from_agent`          | `false`          | `logs` rows with `type='llm'` (the `report` tool) |
+| `lifecycle`   | `about_task`          | `false`          | `RunnerEvent` fold + `audit`/`info` log rows      |
+| `link`        | `about_task`          | `false`          | `task_links` row creation                         |
 
-`direction` is a function of `type` and is materialized only to make the brief
-query (`to_agent` events) and the UI timeline filters cheap.
-`wake` is *not* purely a function of type: instructions always wake, reports
+Because direction is a pure function of `type`, it is not a column — storing it
+would only invite drift for no gain. Queries that want a direction filter spell
+out the types instead: the brief is `type IN ('instruction','external')`, and
+the UI timeline groups by the same mapping.
+`wake`, by contrast, is *not* purely a function of type: instructions always wake, reports
 never do, but an `external` event wakes only when its routing rule has
 `wakeup = true` (`eventrouter.attach`, today's `rule.Wakeup`). So `wake` is set
 per-event at append time. This is the unification the issue asks for: **"add
@@ -171,16 +174,16 @@ links from the projection (cheap); the timeline reads them from the stream.
 
 ### The agent's brief
 
-The agent's brief — what a run is handed — is just the task's `to_agent`
-events:
+The agent's brief — what a run is handed — is just the task's to-agent events,
+the `instruction` and `external` types:
 
 ```sql
 SELECT * FROM task_events
-WHERE task_id = $1 AND direction = 'to_agent'
+WHERE task_id = $1 AND type IN ('instruction', 'external')
 ORDER BY id;
 ```
 
-`report`, `lifecycle`, and `link` events are not `to_agent`, so they never
+`report`, `lifecycle`, and `link` events are not to-agent, so they never
 enter the brief — they are the task's own output and history, surfaced in the
 UI timeline (#918) but not pushed back at the agent.
 
@@ -197,7 +200,7 @@ the stream:
 
 | Tool                     | Today                                   | Under the stream                                          |
 | ------------------------ | --------------------------------------- | --------------------------------------------------------- |
-| `get_my_task`            | `GetTaskDetails` (4 joins)              | read this task's `to_agent` events (brief)                |
+| `get_my_task`            | `GetTaskDetails` (4 joins)              | read this task's to-agent events (brief)                  |
 | `report`                 | `UploadLogs` type=`llm`                 | append a `report` event                                   |
 | `create_link`            | `CreateLink`                            | append a `link` event (projection upsert follows)         |
 | `create_child_task`      | `CreateTask`                            | unchanged; child gets its own stream                      |
@@ -245,18 +248,17 @@ message TaskEvent {
   int64 id = 1;
   int64 task_id = 2;
   string type = 3;       // instruction|report|external|lifecycle|link
-  string direction = 4;  // to_agent|from_agent|about_task
-  bool wake = 5;
-  google.protobuf.Struct payload = 6;
-  google.protobuf.Timestamp created_at = 7;
+  bool wake = 4;
+  google.protobuf.Struct payload = 5;
+  google.protobuf.Timestamp created_at = 6;
 }
 
 // Append one from-agent/to-agent event. report = AppendTaskEvent(type=report);
 // adding an instruction to a child = AppendTaskEvent(type=instruction) on the child.
 rpc AppendTaskEvent(AppendTaskEventRequest) returns (AppendTaskEventResponse);
 
-// Read a task's stream. Powers get_my_task, the brief (direction=to_agent),
-// and the #918 timeline. Optional direction/type filters.
+// Read a task's stream. Powers get_my_task, the brief (type in instruction,
+// external), and the #918 timeline. Optional type filter.
 rpc ListTaskEvents(ListTaskEventsRequest) returns (ListTaskEventsResponse);
 ```
 
