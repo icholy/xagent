@@ -69,11 +69,6 @@ var TaskListCommand = &cli.Command{
 				events[i], _ = marshalOpts.Marshal(event)
 			}
 
-			children := make([]json.RawMessage, len(details.GetChildren()))
-			for i, child := range details.GetChildren() {
-				children[i], _ = marshalOpts.Marshal(child)
-			}
-
 			// Create flattened structure
 			result = append(result, map[string]any{
 				"id":           details.Task.Id,
@@ -82,7 +77,6 @@ var TaskListCommand = &cli.Command{
 				"instructions": instructions,
 				"links":        links,
 				"events":       events,
-				"children":     children,
 			})
 		}
 

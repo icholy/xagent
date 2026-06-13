@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/icholy/xagent/internal/auth/agentauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"gotest.tools/v3/assert"
@@ -164,21 +163,11 @@ func TestDriverRun_FailedSubmitError(t *testing.T) {
 	assert.ErrorContains(t, err, "failed to submit failed event")
 }
 
-func TestConfigPrompt_WithoutChildTasksCapability(t *testing.T) {
+func TestConfigPrompt(t *testing.T) {
 	cfg := &Config{}
 	got, err := cfg.prompt()
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(got, "xagent:get_my_task"))
-	assert.Assert(t, !strings.Contains(got, "update_child_task"), "child task tools should not be mentioned without the child-tasks capability")
-	assert.Assert(t, !strings.Contains(got, "create_child_task"), "child task tools should not be mentioned without the child-tasks capability")
-}
-
-func TestConfigPrompt_WithChildTasksCapability(t *testing.T) {
-	cfg := &Config{Capabilities: []string{agentauth.CapabilityChildTasks}}
-	got, err := cfg.prompt()
-	assert.NilError(t, err)
-	assert.Assert(t, strings.Contains(got, "Use xagent:update_child_task to delegate work to child tasks."))
-	assert.Assert(t, strings.Contains(got, "Only use xagent:create_child_task when explicitly instructed to create a new task."))
 }
 
 func TestConfigPrompt_Started(t *testing.T) {

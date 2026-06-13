@@ -25,11 +25,6 @@ export const listTasks = XAgentService.method.listTasks;
 export const listRunnerTasks = XAgentService.method.listRunnerTasks;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.ListChildTasks
- */
-export const listChildTasks = XAgentService.method.listChildTasks;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.CreateTask
  */
 export const createTask = XAgentService.method.createTask;

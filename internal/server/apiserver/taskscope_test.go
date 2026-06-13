@@ -14,16 +14,15 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// This file migrates the behavioral spec that lived in
-// internal/agentmcp/filter_test.go (own task / direct children / archived
-// gating) onto the apiserver handlers, which now enforce per-task scopes
-// directly (proposals/implemented/eliminate-runner-socket-proxy.md §3/§5, with the
-// two-tier AllowOp+Allow override). It also adds, for every converted handler, a
-// wrong-instance test: a caller scoped to task A must be denied on task B. That
-// is the safety net for the pre-gate design — the empty-scopes completeness test
-// (scope_test.go) can't catch a forgotten post-load Allow because the pre-gate
-// already denies empty scopes, but a wrong-instance caller passes the pre-gate
-// and must be stopped by the post-load Allow.
+// This file exercises the per-task scope enforcement on the apiserver handlers
+// (proposals/implemented/eliminate-runner-socket-proxy.md §3/§5, with the
+// two-tier AllowOp+Allow override): a task token scoped to its own task may act
+// on that task but not on any other task in the org. For every converted handler
+// there is a wrong-instance test: a caller scoped to task A must be denied on
+// task B. That is the safety net for the pre-gate design — the empty-scopes
+// completeness test (scope_test.go) can't catch a forgotten post-load Allow
+// because the pre-gate already denies empty scopes, but a wrong-instance caller
+// passes the pre-gate and must be stopped by the post-load Allow.
 
 // scopedCtx returns a context carrying a caller in org with exactly the given
 // scopes — the narrow-token analogue of createCtx (which grants admin).
@@ -41,8 +40,6 @@ func scopedCtx(t *testing.T, org *teststore.Org, scopes authscope.Scopes) contex
 func taskScopes(taskID int64, caps ...string) authscope.Scopes {
 	return agentauth.Scopes(agentauth.ScopeOptions{
 		TaskID:       taskID,
-		Workspace:    "test-workspace",
-		Runner:       "test-runner",
 		Capabilities: caps,
 	})
 }
@@ -61,159 +58,98 @@ func makeArchived(t *testing.T, srv *Server, adminCtx context.Context, org *test
 }
 
 // newOrgWithTasks builds an org with the standard workspace and returns the
-// admin context plus a parent task and a direct child of it.
+// admin context plus two unrelated tasks in that org.
 func newOrgWithTasks(t *testing.T, srv *Server) (context.Context, *teststore.Org, *xagentv1.Task, *xagentv1.Task) {
 	t.Helper()
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{
 		Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}},
 	})
 	adminCtx := createCtx(t, org)
-	parent, err := srv.CreateTask(adminCtx, &xagentv1.CreateTaskRequest{
-		Name: "Parent", Runner: "test-runner", Workspace: "test-workspace",
+	taskA, err := srv.CreateTask(adminCtx, &xagentv1.CreateTaskRequest{
+		Name: "A", Runner: "test-runner", Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	child, err := srv.CreateTask(adminCtx, &xagentv1.CreateTaskRequest{
-		Name: "Child", Runner: "test-runner", Workspace: "test-workspace", Parent: parent.Task.Id,
+	taskB, err := srv.CreateTask(adminCtx, &xagentv1.CreateTaskRequest{
+		Name: "B", Runner: "test-runner", Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	return adminCtx, org, parent.Task, child.Task
+	return adminCtx, org, taskA.Task, taskB.Task
 }
 
-// --- Behavioral spec: own task allowed, child gated on the capability ---
+// --- Behavioral spec: own task allowed, any other task denied ---
 
-func TestTaskScope_GetTask_OwnAllowed_ChildGated(t *testing.T) {
+func TestTaskScope_GetTask_OwnAllowed_OtherDenied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	_, org, parent, child := newOrgWithTasks(t, srv)
+	_, org, taskA, taskB := newOrgWithTasks(t, srv)
 
-	own := scopedCtx(t, org, taskScopes(parent.Id))
-	withChild := scopedCtx(t, org, taskScopes(parent.Id, agentauth.CapabilityChildTasks))
+	own := scopedCtx(t, org, taskScopes(taskA.Id))
 
 	// Own task is always readable.
-	_, err := srv.GetTask(own, &xagentv1.GetTaskRequest{Id: parent.Id})
+	_, err := srv.GetTask(own, &xagentv1.GetTaskRequest{Id: taskA.Id})
 	assert.NilError(t, err)
 
-	// A direct child is denied without the child-tasks capability...
-	_, err = srv.GetTask(own, &xagentv1.GetTaskRequest{Id: child.Id})
+	// Any other task is denied.
+	_, err = srv.GetTask(own, &xagentv1.GetTaskRequest{Id: taskB.Id})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-
-	// ...and allowed with it.
-	_, err = srv.GetTask(withChild, &xagentv1.GetTaskRequest{Id: child.Id})
-	assert.NilError(t, err)
 }
 
-func TestTaskScope_GetTaskDetails_OwnAllowed_ChildGated(t *testing.T) {
+func TestTaskScope_GetTaskDetails_OwnAllowed_OtherDenied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	_, org, parent, child := newOrgWithTasks(t, srv)
+	_, org, taskA, taskB := newOrgWithTasks(t, srv)
 
-	own := scopedCtx(t, org, taskScopes(parent.Id))
-	withChild := scopedCtx(t, org, taskScopes(parent.Id, agentauth.CapabilityChildTasks))
+	own := scopedCtx(t, org, taskScopes(taskA.Id))
 
-	_, err := srv.GetTaskDetails(own, &xagentv1.GetTaskDetailsRequest{Id: parent.Id})
+	_, err := srv.GetTaskDetails(own, &xagentv1.GetTaskDetailsRequest{Id: taskA.Id})
 	assert.NilError(t, err)
-	_, err = srv.GetTaskDetails(own, &xagentv1.GetTaskDetailsRequest{Id: child.Id})
+	_, err = srv.GetTaskDetails(own, &xagentv1.GetTaskDetailsRequest{Id: taskB.Id})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-	_, err = srv.GetTaskDetails(withChild, &xagentv1.GetTaskDetailsRequest{Id: child.Id})
-	assert.NilError(t, err)
 }
 
-func TestTaskScope_UpdateTask_OwnAllowed_ChildGated(t *testing.T) {
+func TestTaskScope_UpdateTask_OwnAllowed_OtherDenied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	_, org, parent, child := newOrgWithTasks(t, srv)
+	_, org, taskA, taskB := newOrgWithTasks(t, srv)
 
-	own := scopedCtx(t, org, taskScopes(parent.Id))
-	withChild := scopedCtx(t, org, taskScopes(parent.Id, agentauth.CapabilityChildTasks))
+	own := scopedCtx(t, org, taskScopes(taskA.Id))
 
-	_, err := srv.UpdateTask(own, &xagentv1.UpdateTaskRequest{Id: parent.Id, Name: "renamed"})
+	_, err := srv.UpdateTask(own, &xagentv1.UpdateTaskRequest{Id: taskA.Id, Name: "renamed"})
 	assert.NilError(t, err)
-	_, err = srv.UpdateTask(own, &xagentv1.UpdateTaskRequest{Id: child.Id, Name: "hijack"})
+	_, err = srv.UpdateTask(own, &xagentv1.UpdateTaskRequest{Id: taskB.Id, Name: "hijack"})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-	_, err = srv.UpdateTask(withChild, &xagentv1.UpdateTaskRequest{Id: child.Id, Name: "ok"})
-	assert.NilError(t, err)
 }
 
-func TestTaskScope_ListLogs_OwnAllowed_ChildGated(t *testing.T) {
+func TestTaskScope_ListLogs_OwnAllowed_OtherDenied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	_, org, parent, child := newOrgWithTasks(t, srv)
+	_, org, taskA, taskB := newOrgWithTasks(t, srv)
 
-	own := scopedCtx(t, org, taskScopes(parent.Id))
-	withChild := scopedCtx(t, org, taskScopes(parent.Id, agentauth.CapabilityChildTasks))
+	own := scopedCtx(t, org, taskScopes(taskA.Id))
 
-	_, err := srv.ListLogs(own, &xagentv1.ListLogsRequest{TaskId: parent.Id})
+	_, err := srv.ListLogs(own, &xagentv1.ListLogsRequest{TaskId: taskA.Id})
 	assert.NilError(t, err)
-	_, err = srv.ListLogs(own, &xagentv1.ListLogsRequest{TaskId: child.Id})
+	_, err = srv.ListLogs(own, &xagentv1.ListLogsRequest{TaskId: taskB.Id})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-	_, err = srv.ListLogs(withChild, &xagentv1.ListLogsRequest{TaskId: child.Id})
-	assert.NilError(t, err)
 }
 
-func TestTaskScope_CreateTask_ChildGated(t *testing.T) {
+// A task token holds no create scope at all, so an agent cannot create tasks.
+func TestTaskScope_CreateTask_Denied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	_, org, parent, _ := newOrgWithTasks(t, srv)
+	_, org, taskA, _ := newOrgWithTasks(t, srv)
 
-	own := scopedCtx(t, org, taskScopes(parent.Id))
-	withChild := scopedCtx(t, org, taskScopes(parent.Id, agentauth.CapabilityChildTasks))
-
-	// Without the child-tasks capability there is no create scope at all.
+	own := scopedCtx(t, org, taskScopes(taskA.Id))
 	_, err := srv.CreateTask(own, &xagentv1.CreateTaskRequest{
-		Parent: parent.Id, Runner: "test-runner", Workspace: "test-workspace",
+		Runner: "test-runner", Workspace: "test-workspace",
 	})
-	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-
-	// With it, a child of the own task in the same workspace/runner is allowed.
-	_, err = srv.CreateTask(withChild, &xagentv1.CreateTaskRequest{
-		Parent: parent.Id, Runner: "test-runner", Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-}
-
-func TestTaskScope_ListChildTasks_ChildGated(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	_, org, parent, _ := newOrgWithTasks(t, srv)
-
-	own := scopedCtx(t, org, taskScopes(parent.Id))
-	withChild := scopedCtx(t, org, taskScopes(parent.Id, agentauth.CapabilityChildTasks))
-
-	// Listing children needs the child read scope (task.read:{task.parent:self}).
-	_, err := srv.ListChildTasks(own, &xagentv1.ListChildTasksRequest{ParentId: parent.Id})
-	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-
-	resp, err := srv.ListChildTasks(withChild, &xagentv1.ListChildTasksRequest{ParentId: parent.Id})
-	assert.NilError(t, err)
-	assert.Equal(t, len(resp.Tasks), 1)
-}
-
-// ListChildTasks keys the archived gate off the parent's real state: a token
-// scoped to task N may list N's children while N is active, but is denied once N
-// is archived (the minted child-read scope constrains task.archived:"false").
-func TestTaskScope_ListChildTasks_ArchivedParentDenied(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	adminCtx, org, parent, _ := newOrgWithTasks(t, srv)
-
-	withChild := scopedCtx(t, org, taskScopes(parent.Id, agentauth.CapabilityChildTasks))
-
-	// Active parent: the token can list its children.
-	resp, err := srv.ListChildTasks(withChild, &xagentv1.ListChildTasksRequest{ParentId: parent.Id})
-	assert.NilError(t, err)
-	assert.Equal(t, len(resp.Tasks), 1)
-
-	// Archived parent: the same token is denied.
-	makeArchived(t, srv, adminCtx, org, parent.Id)
-	_, err = srv.ListChildTasks(withChild, &xagentv1.ListChildTasksRequest{ParentId: parent.Id})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
 // --- Behavioral spec: archived gating ---
 //
-// In this slice the minter does not yet emit task.archived:"false" (that is
-// Phase 2). These tests build the archived-constrained scope directly to prove
-// the handlers pass the task's real archived state and the predicate denies an
+// These tests build the archived-constrained scope directly to prove the
+// handlers pass the task's real archived state and the predicate denies an
 // archived task uniformly for reads and writes.
 
 func TestTaskScope_ArchivedGating(t *testing.T) {
@@ -320,54 +256,18 @@ func taskInstanceHandlers() []struct {
 func TestTaskScope_WrongInstanceDenied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	_, org, taskA, _ := newOrgWithTasks(t, srv)
-	// taskB is an unrelated task in the same org.
-	taskB, err := srv.CreateTask(createCtx(t, org), &xagentv1.CreateTaskRequest{
-		Name: "B", Runner: "test-runner", Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
+	_, org, taskA, taskB := newOrgWithTasks(t, srv)
 
-	// Scoped to taskA only (read+write on its id), no child capability.
+	// Scoped to taskA only (read+write on its id).
 	ctxA := scopedCtx(t, org, taskScopes(taskA.Id))
 
 	for _, h := range taskInstanceHandlers() {
 		t.Run(h.name, func(t *testing.T) {
-			err := h.call(ctxA, srv, taskB.Task.Id)
+			err := h.call(ctxA, srv, taskB.Id)
 			assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied,
 				"%s scoped to task A must deny task B", h.name)
 		})
 	}
-}
-
-func TestTaskScope_CreateTask_WrongParentDenied(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	_, org, taskA, _ := newOrgWithTasks(t, srv)
-	taskB, err := srv.CreateTask(createCtx(t, org), &xagentv1.CreateTaskRequest{
-		Name: "B", Runner: "test-runner", Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Child-tasks capability scoped to taskA: may create children of A, not of B.
-	ctxA := scopedCtx(t, org, taskScopes(taskA.Id, agentauth.CapabilityChildTasks))
-	_, err = srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Parent: taskB.Task.Id, Runner: "test-runner", Workspace: "test-workspace",
-	})
-	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-}
-
-func TestTaskScope_ListChildTasks_WrongParentDenied(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	_, org, taskA, _ := newOrgWithTasks(t, srv)
-	taskB, err := srv.CreateTask(createCtx(t, org), &xagentv1.CreateTaskRequest{
-		Name: "B", Runner: "test-runner", Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	ctxA := scopedCtx(t, org, taskScopes(taskA.Id, agentauth.CapabilityChildTasks))
-	_, err = srv.ListChildTasks(ctxA, &xagentv1.ListChildTasksRequest{ParentId: taskB.Task.Id})
-	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
 // AddEventTask / RemoveEventTask are dual-gated (event.write + task.write). A
@@ -376,11 +276,7 @@ func TestTaskScope_ListChildTasks_WrongParentDenied(t *testing.T) {
 func TestTaskScope_EventTask_WrongInstanceDenied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	adminCtx, org, taskA, _ := newOrgWithTasks(t, srv)
-	taskB, err := srv.CreateTask(adminCtx, &xagentv1.CreateTaskRequest{
-		Name: "B", Runner: "test-runner", Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
+	adminCtx, org, taskA, taskB := newOrgWithTasks(t, srv)
 	ev, err := srv.CreateEvent(adminCtx, &xagentv1.CreateEventRequest{Description: "e", Url: "https://example.com/e"})
 	assert.NilError(t, err)
 
@@ -391,10 +287,10 @@ func TestTaskScope_EventTask_WrongInstanceDenied(t *testing.T) {
 	}
 	ctxA := scopedCtx(t, org, scopes)
 
-	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{EventId: ev.Event.Id, TaskId: taskB.Task.Id})
+	_, err = srv.AddEventTask(ctxA, &xagentv1.AddEventTaskRequest{EventId: ev.Event.Id, TaskId: taskB.Id})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 
-	_, err = srv.RemoveEventTask(ctxA, &xagentv1.RemoveEventTaskRequest{EventId: ev.Event.Id, TaskId: taskB.Task.Id})
+	_, err = srv.RemoveEventTask(ctxA, &xagentv1.RemoveEventTaskRequest{EventId: ev.Event.Id, TaskId: taskB.Id})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
@@ -403,17 +299,13 @@ func TestTaskScope_EventTask_WrongInstanceDenied(t *testing.T) {
 func TestTaskScope_SubmitRunnerEvents_PartialBatch(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	adminCtx, org, taskA, _ := newOrgWithTasks(t, srv)
-	taskB, err := srv.CreateTask(adminCtx, &xagentv1.CreateTaskRequest{
-		Name: "B", Runner: "test-runner", Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
+	adminCtx, org, taskA, taskB := newOrgWithTasks(t, srv)
 
 	ctxA := scopedCtx(t, org, taskScopes(taskA.Id))
-	_, err = srv.SubmitRunnerEvents(ctxA, &xagentv1.SubmitRunnerEventsRequest{
+	_, err := srv.SubmitRunnerEvents(ctxA, &xagentv1.SubmitRunnerEventsRequest{
 		Events: []*xagentv1.RunnerEvent{
 			{TaskId: taskA.Id, Event: "started", Version: 1},
-			{TaskId: taskB.Task.Id, Event: "started", Version: 1},
+			{TaskId: taskB.Id, Event: "started", Version: 1},
 		},
 	})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)

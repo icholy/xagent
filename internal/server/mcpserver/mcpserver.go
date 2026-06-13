@@ -74,7 +74,7 @@ func AddTools(server *mcp.Server, service xagentv1connect.XAgentServiceHandler, 
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_task",
-		Description: "Get full details of a task including instructions, logs, links, and children",
+		Description: "Get full details of a task including instructions, logs, and links",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint: true,
 		},
@@ -203,16 +203,9 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 		Title     string `json:"title,omitempty"`
 		Subscribe bool   `json:"subscribe"`
 	}
-	type childTask struct {
-		ID        int64  `json:"id"`
-		Name      string `json:"name"`
-		Workspace string `json:"workspace"`
-		Status    string `json:"status"`
-	}
 	type taskDetails struct {
 		ID           int64         `json:"id"`
 		Name         string        `json:"name"`
-		Parent       int64         `json:"parent,omitempty"`
 		Workspace    string        `json:"workspace"`
 		Runner       string        `json:"runner,omitempty"`
 		Status       string        `json:"status"`
@@ -220,13 +213,11 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 		Instructions []instruction `json:"instructions"`
 		Logs         []logEntry    `json:"logs"`
 		Links        []link        `json:"links"`
-		Children     []childTask   `json:"children"`
 	}
 	task := resp.Task
 	result := taskDetails{
 		ID:        task.Id,
 		Name:      task.Name,
-		Parent:    task.Parent,
 		Workspace: task.Workspace,
 		Runner:    task.Runner,
 		Status:    task.Status.String(),
@@ -256,14 +247,6 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 			URL:       l.Url,
 			Title:     l.Title,
 			Subscribe: l.Subscribe,
-		})
-	}
-	for _, c := range resp.Children {
-		result.Children = append(result.Children, childTask{
-			ID:        c.Id,
-			Name:      c.Name,
-			Workspace: c.Workspace,
-			Status:    c.Status.String(),
 		})
 	}
 	return jsonResult(result), nil, nil

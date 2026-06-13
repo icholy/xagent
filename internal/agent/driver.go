@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"text/template"
 
-	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -181,13 +180,11 @@ var promptTemplate = template.Must(template.New("prompt").Parse(promptText))
 func (c *Config) prompt() (string, error) {
 	var b strings.Builder
 	err := promptTemplate.Execute(&b, struct {
-		Started                 bool
-		HasChildTasksCapability bool
-		Prompt                  string
+		Started bool
+		Prompt  string
 	}{
-		Started:                 c.Started,
-		HasChildTasksCapability: c.hasCapability(agentauth.CapabilityChildTasks),
-		Prompt:                  c.Prompt,
+		Started: c.Started,
+		Prompt:  c.Prompt,
 	})
 	if err != nil {
 		return "", err

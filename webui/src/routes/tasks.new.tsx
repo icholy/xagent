@@ -67,7 +67,6 @@ function NewTaskPage() {
       name: name.trim(),
       runner: runner.trim(),
       workspace: workspace.trim(),
-      parent: 0n,
       instructions: [{ text: instruction.trim(), url: '' }],
       autoArchive: durationFromHours(autoArchive),
     })

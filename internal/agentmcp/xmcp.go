@@ -61,35 +61,13 @@ func (s *Server) AddTools(server *mcp.Server) {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_my_task",
-		Description: "Get the current task instructions, links, events, and children",
+		Description: "Get the current task instructions, links, and events",
 	}, s.getMyTask)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_my_task",
 		Description: "Update the current task's name",
 	}, s.updateMyTask)
-
-	if s.hasCapability(agentauth.CapabilityChildTasks) {
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        "create_child_task",
-			Description: "Create a child task of the current task",
-		}, s.createChildTask)
-
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        "list_child_tasks",
-			Description: "Get details of child tasks spawned by the current task",
-		}, s.listChildTasks)
-
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        "update_child_task",
-			Description: "Update a child task by adding an instruction, then start it",
-		}, s.updateChildTask)
-
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        "list_child_task_logs",
-			Description: "List logs for a child task",
-		}, s.listChildTaskLogs)
-	}
 
 	if s.hasCapability(agentauth.CapabilityGitHubToken) {
 		mcp.AddTool(server, &mcp.Tool{
@@ -149,32 +127,6 @@ func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input 
 	return jsonResult(taskDetailsToMap(resp)), nil, nil
 }
 
-type createChildTaskInput struct {
-	Name        string `json:"name" jsonschema:"A short name for the task"`
-	Instruction string `json:"instruction" jsonschema:"The instruction text for the task"`
-	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction (e.g. GitHub issue Jira ticket)"`
-	AutoArchive int64  `json:"auto_archive_seconds,omitempty" jsonschema:"Auto-archive the task this many seconds after it reaches a terminal status. 0 (default) = never; negative = archive immediately; positive = delay."`
-}
-
-func (s *Server) createChildTask(ctx context.Context, _ *mcp.CallToolRequest, input createChildTaskInput) (*mcp.CallToolResult, any, error) {
-	resp, err := s.client.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:        input.Name,
-		Parent:      s.task.ID,
-		Runner:      s.task.Runner,
-		Workspace:   s.task.Workspace,
-		AutoArchive: durationpb.New(time.Duration(input.AutoArchive) * time.Second),
-		Instructions: []*xagentv1.Instruction{
-			{Text: input.Instruction, Url: input.URL},
-		},
-	})
-	if err != nil {
-		return errorResult("failed to create task: %v", err), nil, nil
-	}
-
-	s.log(ctx, "created child task: %d (%s)", resp.Task.Id, input.Name)
-	return textResult("Task created: %d", resp.Task.Id), nil, nil
-}
-
 type updateMyTaskInput struct {
 	Name        string `json:"name,omitempty" jsonschema:"The new name for the task"`
 	AutoArchive *int64 `json:"auto_archive_seconds,omitempty" jsonschema:"Set the auto-archive timeout in seconds. Omit to leave the existing value untouched. 0 = never; negative = archive immediately; positive = delay."`
@@ -194,63 +146,6 @@ func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input
 	}
 
 	return textResult("Task updated"), nil, nil
-}
-
-func (s *Server) listChildTasks(ctx context.Context, req *mcp.CallToolRequest, input any) (*mcp.CallToolResult, any, error) {
-	resp, err := s.client.ListChildTasks(ctx, &xagentv1.ListChildTasksRequest{
-		ParentId: s.task.ID,
-	})
-	if err != nil {
-		return errorResult("failed to list children: %v", err), nil, nil
-	}
-
-	children := make([]map[string]any, 0, len(resp.Tasks))
-	for _, task := range resp.Tasks {
-		details, err := s.client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: task.Id})
-		if err != nil {
-			return errorResult("failed to get child task %d: %v", task.Id, err), nil, nil
-		}
-		children = append(children, taskDetailsToMap(details))
-	}
-
-	return jsonResult(children), nil, nil
-}
-
-type updateChildTaskInput struct {
-	TaskID      int64  `json:"task_id" jsonschema:"The child task ID"`
-	Instruction string `json:"instruction" jsonschema:"Instruction text to add"`
-	URL         string `json:"url,omitempty" jsonschema:"Optional URL associated with the instruction"`
-}
-
-func (s *Server) updateChildTask(ctx context.Context, req *mcp.CallToolRequest, input updateChildTaskInput) (*mcp.CallToolResult, any, error) {
-	// Proxy validates it's a child and not archived
-	_, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:    input.TaskID,
-		Start: true,
-		AddInstructions: []*xagentv1.Instruction{
-			{Text: input.Instruction, Url: input.URL},
-		},
-	})
-	if err != nil {
-		return errorResult("failed to update task: %v", err), nil, nil
-	}
-
-	s.log(ctx, "updated child task: %d", input.TaskID)
-	return textResult("Task %d updated and started", input.TaskID), nil, nil
-}
-
-type listChildTaskLogsInput struct {
-	TaskID int64 `json:"task_id" jsonschema:"The child task ID"`
-}
-
-func (s *Server) listChildTaskLogs(ctx context.Context, req *mcp.CallToolRequest, input listChildTaskLogsInput) (*mcp.CallToolResult, any, error) {
-	// Proxy validates it's a child task
-	logsResp, err := s.client.ListLogs(ctx, &xagentv1.ListLogsRequest{TaskId: input.TaskID})
-	if err != nil {
-		return errorResult("failed to list logs: %v", err), nil, nil
-	}
-
-	return protojsonResult(logsResp), nil, nil
 }
 
 type getGitHubTokenInput struct{}
@@ -324,11 +219,6 @@ func taskDetailsToMap(resp *xagentv1.GetTaskDetailsResponse) map[string]any {
 		events[i], _ = marshalOpts.Marshal(event)
 	}
 
-	children := make([]json.RawMessage, len(resp.GetChildren()))
-	for i, child := range resp.GetChildren() {
-		children[i], _ = marshalOpts.Marshal(child)
-	}
-
 	return map[string]any{
 		"id":           resp.Task.Id,
 		"name":         resp.Task.Name,
@@ -338,6 +228,5 @@ func taskDetailsToMap(resp *xagentv1.GetTaskDetailsResponse) map[string]any {
 		"instructions": instructions,
 		"links":        links,
 		"events":       events,
-		"children":     children,
 	}
 }

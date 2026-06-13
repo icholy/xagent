@@ -27,7 +27,7 @@ func TestCreateTaskToken(t *testing.T) {
 
 	resp, err := srv.CreateTaskToken(ctx, &xagentv1.CreateTaskTokenRequest{
 		TaskId:       task.ID,
-		Capabilities: []string{agentauth.CapabilityChildTasks},
+		Capabilities: []string{agentauth.CapabilityGitHubToken},
 	})
 	assert.NilError(t, err)
 	assert.Assert(t, resp.Token != "")
@@ -40,9 +40,7 @@ func TestCreateTaskToken(t *testing.T) {
 	assert.Equal(t, claims.OrgID, org.OrgID)
 	want := agentauth.Scopes(agentauth.ScopeOptions{
 		TaskID:       task.ID,
-		Workspace:    "test-workspace",
-		Runner:       "test-runner",
-		Capabilities: []string{agentauth.CapabilityChildTasks},
+		Capabilities: []string{agentauth.CapabilityGitHubToken},
 	})
 	assert.DeepEqual(t, claims.Scopes, want)
 }

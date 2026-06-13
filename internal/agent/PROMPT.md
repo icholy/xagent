@@ -12,11 +12,6 @@ The task may have linked events. Events provide additional context such as GitHu
 Events are routed to tasks that have a link with subscribe=true matching the event URL.
 When creating links with xagent:create_link, ALWAYS set subscribe=true for resources you create (PRs, issues, comments), even if the task is complete. Others may respond and you'll need to handle those responses. Only use subscribe=false for reference links to external resources you didn't create.
 
-{{- if .HasChildTasksCapability}}
-Use xagent:update_child_task to delegate work to child tasks.
-Only use xagent:create_child_task when explicitly instructed to create a new task.
-{{- end}}
-
 When done, use xagent:create_link for any URLs you created (PRs, issues, etc).
 Always use web URLs that users can visit, not API URLs.
 Use xagent:report to log important observations.

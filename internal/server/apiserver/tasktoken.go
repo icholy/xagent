@@ -42,12 +42,10 @@ func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTo
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	// The runner cannot widen the sandbox: workspace and runner come from the row,
+	// The runner cannot widen the sandbox: the task identity comes from the row,
 	// only the capability flags come from the request.
 	scopes := agentauth.Scopes(agentauth.ScopeOptions{
 		TaskID:       task.ID,
-		Workspace:    task.Workspace,
-		Runner:       task.Runner,
 		Capabilities: req.Capabilities,
 	})
 	token, err := apiauth.SignAppToken(s.appKey, apiauth.NewTaskTokenClaims(task.OrgID, scopes))

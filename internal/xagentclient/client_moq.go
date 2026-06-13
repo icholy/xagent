@@ -88,9 +88,6 @@ var _ Client = &ClientMock{}
 //			LinkGitHubInstallationFunc: func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
 //				panic("mock out the LinkGitHubInstallation method")
 //			},
-//			ListChildTasksFunc: func(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
-//				panic("mock out the ListChildTasks method")
-//			},
 //			ListEventTasksFunc: func(contextMoqParam context.Context, listEventTasksRequest *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
 //				panic("mock out the ListEventTasks method")
 //			},
@@ -235,9 +232,6 @@ type ClientMock struct {
 
 	// LinkGitHubInstallationFunc mocks the LinkGitHubInstallation method.
 	LinkGitHubInstallationFunc func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error)
-
-	// ListChildTasksFunc mocks the ListChildTasks method.
-	ListChildTasksFunc func(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error)
 
 	// ListEventTasksFunc mocks the ListEventTasks method.
 	ListEventTasksFunc func(contextMoqParam context.Context, listEventTasksRequest *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error)
@@ -471,13 +465,6 @@ type ClientMock struct {
 			// LinkGitHubInstallationRequest is the linkGitHubInstallationRequest argument value.
 			LinkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest
 		}
-		// ListChildTasks holds details about calls to the ListChildTasks method.
-		ListChildTasks []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// ListChildTasksRequest is the listChildTasksRequest argument value.
-			ListChildTasksRequest *xagentv1.ListChildTasksRequest
-		}
 		// ListEventTasks holds details about calls to the ListEventTasks method.
 		ListEventTasks []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -663,7 +650,6 @@ type ClientMock struct {
 	lockGetTask                        sync.RWMutex
 	lockGetTaskDetails                 sync.RWMutex
 	lockLinkGitHubInstallation         sync.RWMutex
-	lockListChildTasks                 sync.RWMutex
 	lockListEventTasks                 sync.RWMutex
 	lockListEvents                     sync.RWMutex
 	lockListEventsByTask               sync.RWMutex
@@ -1514,42 +1500,6 @@ func (mock *ClientMock) LinkGitHubInstallationCalls() []struct {
 	mock.lockLinkGitHubInstallation.RLock()
 	calls = mock.calls.LinkGitHubInstallation
 	mock.lockLinkGitHubInstallation.RUnlock()
-	return calls
-}
-
-// ListChildTasks calls ListChildTasksFunc.
-func (mock *ClientMock) ListChildTasks(contextMoqParam context.Context, listChildTasksRequest *xagentv1.ListChildTasksRequest) (*xagentv1.ListChildTasksResponse, error) {
-	if mock.ListChildTasksFunc == nil {
-		panic("ClientMock.ListChildTasksFunc: method is nil but Client.ListChildTasks was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam       context.Context
-		ListChildTasksRequest *xagentv1.ListChildTasksRequest
-	}{
-		ContextMoqParam:       contextMoqParam,
-		ListChildTasksRequest: listChildTasksRequest,
-	}
-	mock.lockListChildTasks.Lock()
-	mock.calls.ListChildTasks = append(mock.calls.ListChildTasks, callInfo)
-	mock.lockListChildTasks.Unlock()
-	return mock.ListChildTasksFunc(contextMoqParam, listChildTasksRequest)
-}
-
-// ListChildTasksCalls gets all the calls that were made to ListChildTasks.
-// Check the length with:
-//
-//	len(mockedClient.ListChildTasksCalls())
-func (mock *ClientMock) ListChildTasksCalls() []struct {
-	ContextMoqParam       context.Context
-	ListChildTasksRequest *xagentv1.ListChildTasksRequest
-} {
-	var calls []struct {
-		ContextMoqParam       context.Context
-		ListChildTasksRequest *xagentv1.ListChildTasksRequest
-	}
-	mock.lockListChildTasks.RLock()
-	calls = mock.calls.ListChildTasks
-	mock.lockListChildTasks.RUnlock()
 	return calls
 }
 

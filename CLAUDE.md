@@ -45,24 +45,10 @@ XAGENT is an async agent orchestrator using a botnet-style C2 (command & control
 
 The runner injects an `xagent` MCP server into each agent, providing these tools:
 
-- `get_my_task` - Get current task instructions, links, events, and children
+- `get_my_task` - Get current task instructions, links, and events
 - `update_my_task` - Update the current task's name
 - `create_link` - Associate external resources (PRs, Jira tickets) with the task
 - `report` - Log messages visible in the Web UI
-- `create_child_task` - Spawn a child task in the same workspace
-- `list_child_tasks` - List child tasks spawned by this task
-- `update_child_task` - Add instruction to a child task and restart it
-- `list_child_task_logs` - View logs from a child task
-
-### Parent/Child Tasks
-
-Tasks can spawn child tasks to delegate work. The parent task can monitor and interact with its children:
-
-- Child tasks inherit the parent's workspace
-- Parent can add instructions to children (triggers restart)
-- Parent can read child logs and links
-- Tasks track their parent via `parent` field in the database
-- Web UI shows child tasks under their parent
 
 ### Event System
 
