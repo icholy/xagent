@@ -105,21 +105,6 @@ export const getEvent = XAgentService.method.getEvent;
 export const deleteEvent = XAgentService.method.deleteEvent;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.AddEventTask
- */
-export const addEventTask = XAgentService.method.addEventTask;
-
-/**
- * @generated from rpc xagent.v1.XAgentService.RemoveEventTask
- */
-export const removeEventTask = XAgentService.method.removeEventTask;
-
-/**
- * @generated from rpc xagent.v1.XAgentService.ListEventTasks
- */
-export const listEventTasks = XAgentService.method.listEventTasks;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.ListEventsByTask
  */
 export const listEventsByTask = XAgentService.method.listEventsByTask;

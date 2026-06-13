@@ -87,15 +87,6 @@ const (
 	// XAgentServiceDeleteEventProcedure is the fully-qualified name of the XAgentService's DeleteEvent
 	// RPC.
 	XAgentServiceDeleteEventProcedure = "/xagent.v1.XAgentService/DeleteEvent"
-	// XAgentServiceAddEventTaskProcedure is the fully-qualified name of the XAgentService's
-	// AddEventTask RPC.
-	XAgentServiceAddEventTaskProcedure = "/xagent.v1.XAgentService/AddEventTask"
-	// XAgentServiceRemoveEventTaskProcedure is the fully-qualified name of the XAgentService's
-	// RemoveEventTask RPC.
-	XAgentServiceRemoveEventTaskProcedure = "/xagent.v1.XAgentService/RemoveEventTask"
-	// XAgentServiceListEventTasksProcedure is the fully-qualified name of the XAgentService's
-	// ListEventTasks RPC.
-	XAgentServiceListEventTasksProcedure = "/xagent.v1.XAgentService/ListEventTasks"
 	// XAgentServiceListEventsByTaskProcedure is the fully-qualified name of the XAgentService's
 	// ListEventsByTask RPC.
 	XAgentServiceListEventsByTaskProcedure = "/xagent.v1.XAgentService/ListEventsByTask"
@@ -183,9 +174,6 @@ type XAgentServiceClient interface {
 	CreateEvent(context.Context, *v1.CreateEventRequest) (*v1.CreateEventResponse, error)
 	GetEvent(context.Context, *v1.GetEventRequest) (*v1.GetEventResponse, error)
 	DeleteEvent(context.Context, *v1.DeleteEventRequest) (*v1.DeleteEventResponse, error)
-	AddEventTask(context.Context, *v1.AddEventTaskRequest) (*v1.AddEventTaskResponse, error)
-	RemoveEventTask(context.Context, *v1.RemoveEventTaskRequest) (*v1.RemoveEventTaskResponse, error)
-	ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
 	CreateTaskToken(context.Context, *v1.CreateTaskTokenRequest) (*v1.CreateTaskTokenResponse, error)
@@ -340,24 +328,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceDeleteEventProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("DeleteEvent")),
-			connect.WithClientOptions(opts...),
-		),
-		addEventTask: connect.NewClient[v1.AddEventTaskRequest, v1.AddEventTaskResponse](
-			httpClient,
-			baseURL+XAgentServiceAddEventTaskProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("AddEventTask")),
-			connect.WithClientOptions(opts...),
-		),
-		removeEventTask: connect.NewClient[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse](
-			httpClient,
-			baseURL+XAgentServiceRemoveEventTaskProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("RemoveEventTask")),
-			connect.WithClientOptions(opts...),
-		),
-		listEventTasks: connect.NewClient[v1.ListEventTasksRequest, v1.ListEventTasksResponse](
-			httpClient,
-			baseURL+XAgentServiceListEventTasksProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("ListEventTasks")),
 			connect.WithClientOptions(opts...),
 		),
 		listEventsByTask: connect.NewClient[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse](
@@ -523,9 +493,6 @@ type xAgentServiceClient struct {
 	createEvent                    *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
 	getEvent                       *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
 	deleteEvent                    *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
-	addEventTask                   *connect.Client[v1.AddEventTaskRequest, v1.AddEventTaskResponse]
-	removeEventTask                *connect.Client[v1.RemoveEventTaskRequest, v1.RemoveEventTaskResponse]
-	listEventTasks                 *connect.Client[v1.ListEventTasksRequest, v1.ListEventTasksResponse]
 	listEventsByTask               *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
 	submitRunnerEvents             *connect.Client[v1.SubmitRunnerEventsRequest, v1.SubmitRunnerEventsResponse]
 	createTaskToken                *connect.Client[v1.CreateTaskTokenRequest, v1.CreateTaskTokenResponse]
@@ -725,33 +692,6 @@ func (c *xAgentServiceClient) GetEvent(ctx context.Context, req *v1.GetEventRequ
 // DeleteEvent calls xagent.v1.XAgentService.DeleteEvent.
 func (c *xAgentServiceClient) DeleteEvent(ctx context.Context, req *v1.DeleteEventRequest) (*v1.DeleteEventResponse, error) {
 	response, err := c.deleteEvent.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// AddEventTask calls xagent.v1.XAgentService.AddEventTask.
-func (c *xAgentServiceClient) AddEventTask(ctx context.Context, req *v1.AddEventTaskRequest) (*v1.AddEventTaskResponse, error) {
-	response, err := c.addEventTask.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// RemoveEventTask calls xagent.v1.XAgentService.RemoveEventTask.
-func (c *xAgentServiceClient) RemoveEventTask(ctx context.Context, req *v1.RemoveEventTaskRequest) (*v1.RemoveEventTaskResponse, error) {
-	response, err := c.removeEventTask.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// ListEventTasks calls xagent.v1.XAgentService.ListEventTasks.
-func (c *xAgentServiceClient) ListEventTasks(ctx context.Context, req *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error) {
-	response, err := c.listEventTasks.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -987,9 +927,6 @@ type XAgentServiceHandler interface {
 	CreateEvent(context.Context, *v1.CreateEventRequest) (*v1.CreateEventResponse, error)
 	GetEvent(context.Context, *v1.GetEventRequest) (*v1.GetEventResponse, error)
 	DeleteEvent(context.Context, *v1.DeleteEventRequest) (*v1.DeleteEventResponse, error)
-	AddEventTask(context.Context, *v1.AddEventTaskRequest) (*v1.AddEventTaskResponse, error)
-	RemoveEventTask(context.Context, *v1.RemoveEventTaskRequest) (*v1.RemoveEventTaskResponse, error)
-	ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
 	SubmitRunnerEvents(context.Context, *v1.SubmitRunnerEventsRequest) (*v1.SubmitRunnerEventsResponse, error)
 	CreateTaskToken(context.Context, *v1.CreateTaskTokenRequest) (*v1.CreateTaskTokenResponse, error)
@@ -1140,24 +1077,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceDeleteEventProcedure,
 		svc.DeleteEvent,
 		connect.WithSchema(xAgentServiceMethods.ByName("DeleteEvent")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceAddEventTaskHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceAddEventTaskProcedure,
-		svc.AddEventTask,
-		connect.WithSchema(xAgentServiceMethods.ByName("AddEventTask")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceRemoveEventTaskHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceRemoveEventTaskProcedure,
-		svc.RemoveEventTask,
-		connect.WithSchema(xAgentServiceMethods.ByName("RemoveEventTask")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceListEventTasksHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceListEventTasksProcedure,
-		svc.ListEventTasks,
-		connect.WithSchema(xAgentServiceMethods.ByName("ListEventTasks")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceListEventsByTaskHandler := connect.NewUnaryHandlerSimple(
@@ -1340,12 +1259,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceGetEventHandler.ServeHTTP(w, r)
 		case XAgentServiceDeleteEventProcedure:
 			xAgentServiceDeleteEventHandler.ServeHTTP(w, r)
-		case XAgentServiceAddEventTaskProcedure:
-			xAgentServiceAddEventTaskHandler.ServeHTTP(w, r)
-		case XAgentServiceRemoveEventTaskProcedure:
-			xAgentServiceRemoveEventTaskHandler.ServeHTTP(w, r)
-		case XAgentServiceListEventTasksProcedure:
-			xAgentServiceListEventTasksHandler.ServeHTTP(w, r)
 		case XAgentServiceListEventsByTaskProcedure:
 			xAgentServiceListEventsByTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceSubmitRunnerEventsProcedure:
@@ -1479,18 +1392,6 @@ func (UnimplementedXAgentServiceHandler) GetEvent(context.Context, *v1.GetEventR
 
 func (UnimplementedXAgentServiceHandler) DeleteEvent(context.Context, *v1.DeleteEventRequest) (*v1.DeleteEventResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteEvent is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) AddEventTask(context.Context, *v1.AddEventTaskRequest) (*v1.AddEventTaskResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.AddEventTask is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) RemoveEventTask(context.Context, *v1.RemoveEventTaskRequest) (*v1.RemoveEventTaskResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.RemoveEventTask is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) ListEventTasks(context.Context, *v1.ListEventTasksRequest) (*v1.ListEventTasksResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListEventTasks is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error) {

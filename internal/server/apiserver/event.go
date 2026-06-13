@@ -36,26 +36,47 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 
 func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
 	caller := apiauth.MustCaller(ctx)
+	// Events are task-scoped: creating one writes the target task too, so both
+	// halves must pass — create the event (coarse) and write the task it belongs
+	// to (per-instance).
 	if !caller.Scopes.Allow(authscope.OpEventCreate) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create event"))
+	}
+	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
+	}
+	// Verify task ownership and the per-instance task scope.
+	task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
 	event := &model.Event{
 		Description: req.Description,
 		Data:        req.Data,
 		URL:         req.Url,
 		OrgID:       caller.OrgID,
+		TaskID:      task.ID,
 	}
 	if err := s.store.CreateEvent(ctx, nil, event); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("event created", "id", event.ID, "description", event.Description)
+	s.log.Info("event created", "id", event.ID, "task_id", event.TaskID, "description", event.Description)
 	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "created", Type: "event", ID: event.ID}},
-		OrgID:     caller.OrgID,
-		UserID:    caller.ID,
-		ClientID:  caller.ClientID,
-		Time:      time.Now(),
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "created", Type: "event", ID: event.ID},
+			{Action: "updated", Type: "task", ID: event.TaskID},
+		},
+		OrgID:    caller.OrgID,
+		UserID:   caller.ID,
+		ClientID: caller.ClientID,
+		Time:     time.Now(),
 	})
 	return &xagentv1.CreateEventResponse{
 		Event: event.Proto(),
@@ -97,112 +118,6 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 		Time:      time.Now(),
 	})
 	return &xagentv1.DeleteEventResponse{}, nil
-}
-
-func (s *Server) AddEventTask(ctx context.Context, req *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	// Both halves must pass: write the event (coarse) and write the task it is
-	// being attached to (proposal §7).
-	if !caller.Scopes.Allow(authscope.OpEventWrite) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event"))
-	}
-	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
-	}
-	// Verify task ownership and the per-instance task scope.
-	task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
-	}
-	// Verify event ownership
-	ok, err := s.store.HasEvent(ctx, nil, req.EventId, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.EventId))
-	}
-	if err := s.store.AddEventTask(ctx, nil, req.EventId, req.TaskId); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	s.log.Info("event task added", "event_id", req.EventId, "task_id", req.TaskId)
-	s.publish(model.Notification{
-		Type: "change",
-		Resources: []model.NotificationResource{
-			{Action: "updated", Type: "task", ID: req.TaskId},
-			{Action: "updated", Type: "event", ID: req.EventId},
-		},
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
-	})
-	return &xagentv1.AddEventTaskResponse{}, nil
-}
-
-func (s *Server) RemoveEventTask(ctx context.Context, req *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	// Both halves must pass: write the event (coarse) and write the task it is
-	// being detached from (proposal §7).
-	if !caller.Scopes.Allow(authscope.OpEventWrite) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write event"))
-	}
-	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
-	}
-	// Verify task ownership and the per-instance task scope.
-	task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
-	}
-	// Verify event ownership
-	ok, err := s.store.HasEvent(ctx, nil, req.EventId, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("event %d not found", req.EventId))
-	}
-	if err := s.store.RemoveEventTask(ctx, nil, req.EventId, req.TaskId); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	s.log.Info("event task removed", "event_id", req.EventId, "task_id", req.TaskId)
-	s.publish(model.Notification{
-		Type: "change",
-		Resources: []model.NotificationResource{
-			{Action: "updated", Type: "task", ID: req.TaskId},
-			{Action: "updated", Type: "event", ID: req.EventId},
-		},
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
-	})
-	return &xagentv1.RemoveEventTaskResponse{}, nil
-}
-
-func (s *Server) ListEventTasks(ctx context.Context, req *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpEventRead) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read event"))
-	}
-	taskIDs, err := s.store.ListEventTasks(ctx, nil, req.EventId, caller.OrgID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return &xagentv1.ListEventTasksResponse{TaskIds: taskIDs}, nil
 }
 
 func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {

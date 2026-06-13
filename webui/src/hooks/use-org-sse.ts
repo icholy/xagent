@@ -7,7 +7,6 @@ import {
   listLogs,
   listEvents,
   getEvent,
-  listEventTasks,
   listWorkspaces,
   listOrgMembers,
   listKeys,
@@ -56,13 +55,6 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
         queryKey: createConnectQueryKey({
           schema: getEvent,
           input: { id: BigInt(r.id) },
-          cardinality: 'finite',
-        }),
-      })
-      qc.invalidateQueries({
-        queryKey: createConnectQueryKey({
-          schema: listEventTasks,
-          input: { eventId: BigInt(r.id) },
           cardinality: 'finite',
         }),
       })

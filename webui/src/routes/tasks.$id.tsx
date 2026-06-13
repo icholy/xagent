@@ -5,7 +5,7 @@ import {
   getTaskDetails,
   listLogs,
   updateTask,
-  removeEventTask,
+  deleteEvent,
   archiveTask,
   unarchiveTask,
   cancelTask,
@@ -66,7 +66,7 @@ function TaskDetail() {
   const { data: logsData } = useQuery(listLogs, { taskId }, { refetchInterval: 60000 })
 
   const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
-  const removeEventMutation = useMutation(removeEventTask, { onSuccess: () => refetch() })
+  const deleteEventMutation = useMutation(deleteEvent, { onSuccess: () => refetch() })
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => refetch() })
   const unarchiveMutation = useMutation(unarchiveTask, { onSuccess: () => refetch() })
   const cancelMutation = useMutation(cancelTask, { onSuccess: () => refetch() })
@@ -99,8 +99,8 @@ function TaskDetail() {
     setInstruction('')
   }
 
-  const handleUnlinkEvent = async (eventId: bigint) => {
-    await removeEventMutation.mutateAsync({ eventId, taskId })
+  const handleDeleteEvent = async (eventId: bigint) => {
+    await deleteEventMutation.mutateAsync({ id: eventId })
   }
 
   if (isLoading) {
@@ -254,8 +254,8 @@ function TaskDetail() {
           <h2 className="text-lg font-semibold mb-4">Events</h2>
           <EventsTable
             events={events}
-            onUnlink={handleUnlinkEvent}
-            isUnlinking={removeEventMutation.isPending}
+            onDelete={handleDeleteEvent}
+            isDeleting={deleteEventMutation.isPending}
           />
         </div>
       )}
@@ -323,12 +323,12 @@ function LinksSection({ links }: { links: TaskLink[] }) {
 
 function EventsTable({
   events,
-  onUnlink,
-  isUnlinking,
+  onDelete,
+  isDeleting,
 }: {
   events: Event[]
-  onUnlink: (eventId: bigint) => void
-  isUnlinking: boolean
+  onDelete: (eventId: bigint) => void
+  isDeleting: boolean
 }) {
   const orgId = useOrgId()
 
@@ -383,10 +383,10 @@ function EventsTable({
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => onUnlink(event.id)}
-                  disabled={isUnlinking}
+                  onClick={() => onDelete(event.id)}
+                  disabled={isDeleting}
                 >
-                  Remove
+                  Delete
                 </Button>
               </TableCell>
             </TableRow>
