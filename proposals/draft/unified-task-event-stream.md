@@ -44,12 +44,11 @@ stream, and folds the `TaskChange` work in as the `lifecycle` event type.
 ### The stream: `task_events`
 
 A single append-only table is the source of truth for everything that happens
-to a task. Order is the stream; the `id` (a `BIGSERIAL`) is both the ordering
-key and the cursor space.
+to a task. Order is the stream; the `id` (a `BIGSERIAL`) is the ordering key.
 
 ```sql
 CREATE TABLE public.task_events (
-    id         bigint  NOT NULL,                       -- BIGSERIAL; stream order + cursor
+    id         bigint  NOT NULL,                       -- BIGSERIAL; stream order
     task_id    bigint  NOT NULL,
     org_id     bigint  NOT NULL,
     type       text    NOT NULL,                       -- instruction|report|external|lifecycle|link
@@ -66,12 +65,12 @@ The whole model reduces to two verbs:
 
 - **append** an event (instruction added, report written, external event
   arrived, lifecycle transition, link created),
-- **read** events since a cursor.
+- **read** a task's events in order.
 
-Reading a task's stream is one query — `WHERE task_id = $1 AND id > $cursor
-ORDER BY id` — and because filtering a monotonic sequence preserves order, the
-global `id` is also monotonic *within* a task, so a single `bigint` cursor is
-sufficient. No per-task sequence is needed.
+Reading a task's stream is one query — `WHERE task_id = $1 ORDER BY id`.
+Clients fetch the whole stream each time, exactly as they fetch all
+instructions, logs, and events today. Incremental delivery — reading only
+what's new since a cursor — is a separate concern (#946) and out of scope here.
 
 #### Event types and the three axes
 
@@ -88,7 +87,7 @@ in.
 | `link`        | `about_task` | `false`          | `task_links` row creation                              |
 
 `direction` is a function of `type` and is materialized only to make the brief
-query (`to_agent` events since cursor) and the UI timeline filters cheap.
+query (`to_agent` events) and the UI timeline filters cheap.
 `wake` is *not* purely a function of type: instructions always wake, reports
 never do, but an `external` event wakes only when its routing rule has
 `wakeup = true` (`eventrouter.attach`, today's `rule.Wakeup`). So `wake` is set
@@ -170,44 +169,35 @@ row into `task_links` (`task_id, routing_key, subscribe`), keeping the existing
 `FindSubscribedLinksForOrgs` against that projection unchanged. The UI reads
 links from the projection (cheap); the timeline reads them from the stream.
 
-### Delivery cursor (#946)
+### The agent's brief
 
-This proposal supplies the substrate `proposals/draft/...` #946 needs. Add one
-column:
-
-```sql
-ALTER TABLE public.tasks ADD COLUMN delivery_cursor bigint NOT NULL DEFAULT 0;
-```
-
-`delivery_cursor` is the highest `task_events.id` already handed to the agent
-(rendered into a dispatch brief, or returned by a `get_my_task` refresh). The
-**task brief** becomes one query, rendered:
+The agent's brief — what a run is handed — is just the task's `to_agent`
+events:
 
 ```sql
 SELECT * FROM task_events
-WHERE task_id = $1 AND direction = 'to_agent' AND id > $delivery_cursor
+WHERE task_id = $1 AND direction = 'to_agent'
 ORDER BY id;
 ```
-
-When the brief is built, the cursor advances to the max `id` included, so the
-next wakeup does not replay already-delivered instructions and events. This
-turns "new since last run" into a system property instead of relying on the
-model to diff a re-delivered full history — exactly #946's goal, now applied
-uniformly to *all* to-agent events rather than only external ones.
 
 `report`, `lifecycle`, and `link` events are not `to_agent`, so they never
 enter the brief — they are the task's own output and history, surfaced in the
 UI timeline (#918) but not pushed back at the agent.
 
+Clients fetch the brief in full on each run, exactly as they fetch all
+instructions and events today. Incremental delivery — handing the agent only
+the events new since its last run, so it doesn't re-process the whole stream —
+is a separate concern (#946) and out of scope here.
+
 ### The agent contract
 
-The contract reduces to "consume events since your cursor, append events as you
-work," and the MCP tools (`internal/agentmcp/xmcp.go`) become thin verbs over
+The contract reduces to "consume your events, append events as you work," and
+the MCP tools (`internal/agentmcp/xmcp.go`) become thin verbs over
 the stream:
 
 | Tool                     | Today                                   | Under the stream                                          |
 | ------------------------ | --------------------------------------- | --------------------------------------------------------- |
-| `get_my_task`            | `GetTaskDetails` (4 joins)              | read this task's stream since cursor (brief), advance it  |
+| `get_my_task`            | `GetTaskDetails` (4 joins)              | read this task's `to_agent` events (brief)                |
 | `report`                 | `UploadLogs` type=`llm`                 | append a `report` event                                   |
 | `create_link`            | `CreateLink`                            | append a `link` event (projection upsert follows)         |
 | `create_child_task`      | `CreateTask`                            | unchanged; child gets its own stream                      |
@@ -265,12 +255,9 @@ message TaskEvent {
 // adding an instruction to a child = AppendTaskEvent(type=instruction) on the child.
 rpc AppendTaskEvent(AppendTaskEventRequest) returns (AppendTaskEventResponse);
 
-// Read a task's stream since a cursor. Powers get_my_task, the brief, and
-// the #918 timeline. Optional direction/type filters.
+// Read a task's stream. Powers get_my_task, the brief (direction=to_agent),
+// and the #918 timeline. Optional direction/type filters.
 rpc ListTaskEvents(ListTaskEventsRequest) returns (ListTaskEventsResponse);
-
-// Server-rendered brief: to_agent events since delivery_cursor, advancing it.
-rpc GetTaskBrief(GetTaskBriefRequest) returns (GetTaskBriefResponse);
 ```
 
 `SubmitRunnerEvents` is unchanged on the wire (the runner still submits
@@ -283,7 +270,7 @@ projections.
 
 Phased, dual-write first so nothing breaks at once:
 
-1. **Schema.** Add `task_events` and `tasks.delivery_cursor` migrations
+1. **Schema.** Add the `task_events` migration
    (next sequence after `20260607000002_task_auto_archive.sql`). Regenerate
    `sqlc`. No reads change yet.
 2. **Dual-write.** At every mutation site that today writes
@@ -291,7 +278,7 @@ Phased, dual-write first so nothing breaks at once:
    `task_events` row in the same transaction. The `TaskChange` value type from
    the sibling proposal is the natural constructor for `lifecycle` rows.
 3. **Migrate reads.** Point the brief, `get_my_task`, and the #918 timeline at
-   `ListTaskEvents`/`GetTaskBrief`. Add the delivery-cursor advance.
+   `ListTaskEvents`.
 4. **Backfill + retire.** Backfill `task_events` from existing
    `instructions`/`events`/`event_tasks`/`task_links`/semantic `logs`. Drop
    `tasks.instructions` (instructions are now stream events; the initial
@@ -309,18 +296,16 @@ Phased, dual-write first so nothing breaks at once:
   independently. A single table with `volume ∈ {semantic, verbose}` is
   conceptually tidier and gives the timeline a single source, but every brief
   and subscription query would then have to filter past transcript chunks, and
-  a runaway transcript would bloat the index that the cursor walk depends on.
+  a runaway transcript would bloat the index the brief and timeline scans rely on.
   Recommend the separate channel; the type system still makes the distinction
   explicit (which table you're in).
 
-- **Global `BIGSERIAL` cursor vs. per-task sequence.** A global id keeps the
-  schema trivial and ordering total. The known wrinkle: under concurrent
-  inserts a sequence can make a higher id visible before a lower one commits,
-  so a reader advancing the cursor to `max(id)` could skip a not-yet-committed
-  lower id. Per-task write concurrency is effectively serialized (handlers
-  mutate one task under `GetTaskForUpdate`), so this is a corner case; if it
-  bites, the cursor advance can read `... ORDER BY id` and stop at the first
-  gap, or switch to a per-task sequence. Flagged, not blocking.
+- **Global `BIGSERIAL` id vs. per-task sequence.** A global id keeps the schema
+  trivial and ordering total; filtering by `task_id` preserves order, so the id
+  is also monotonic within a task and no per-task sequence is needed. The
+  concurrent-insert visibility wrinkle (a higher id committing visible before a
+  lower one) only matters for incremental cursor reads, which this proposal
+  doesn't do — clients fetch the whole stream each time. Deferred to #946.
 
 - **Materialized projections (`status`, `task_links`) vs. pure replay.**
   Pure event-sourcing would derive status and subscriptions by folding the
@@ -340,7 +325,7 @@ Phased, dual-write first so nothing breaks at once:
 
 - **Does `instruction` keep a denormalized column?** Dropping
   `tasks.instructions` entirely means the initial prompt is reconstructed from
-  the stream. The brief (to-agent events since cursor) covers the running
+  the stream. The brief (to-agent events) covers the running
   agent, but anything that wants "the task's instructions" outside a run (e.g.
   list views, search) would scan the stream. A denormalized
   `tasks.first_instruction` or a kept column as a projection is cheap insurance
@@ -355,8 +340,9 @@ Phased, dual-write first so nothing breaks at once:
 - **External-event fan-out storage.** One org-level webhook that matches N
   subscribed tasks currently inserts N `event_tasks` rows. Under the stream it
   appends N `external` events (one per task's stream). That is more rows but
-  removes the join and makes per-task delivery cursors trivial. Acceptable, but
-  worth confirming the fan-out volume (mass-subscribed repos) is bounded.
+  removes the join and gives each task its own self-contained stream.
+  Acceptable, but worth confirming the fan-out volume (mass-subscribed repos)
+  is bounded.
 
 - **Relationship to #945 (C2-hosted agent MCP).** With the agent contract
   reduced to append/read-stream over the task token, the C2-hosted MCP server
