@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -16,6 +17,7 @@ const (
 	EventTypeInstruction = "instruction"
 	EventTypeExternal    = "external"
 	EventTypeReport      = "report"
+	EventTypeLifecycle   = "lifecycle"
 	EventTypeLink        = "link"
 )
 
@@ -111,6 +113,162 @@ func (p *LinkPayload) SetPayloadProto(pb *xagentv1.Event) {
 	}}
 }
 
+// Actor identifies who caused a lifecycle event. Kind is one of the ActorKind*
+// constants; Name is the human-readable name for user actors and empty for the
+// server-internal runner/router actors.
+type Actor struct {
+	Kind string `json:"kind"`
+	Name string `json:"name,omitempty"`
+}
+
+// Actor kinds. user actions carry a Name; the server-internal runner/router
+// actors do not.
+const (
+	ActorKindUser   = "user"
+	ActorKindRunner = "runner"
+	ActorKindRouter = "router"
+)
+
+// UserActor returns a user Actor with the given display name.
+func UserActor(name string) Actor { return Actor{Kind: ActorKindUser, Name: name} }
+
+// RunnerActor and RouterActor are the server-internal actors for container
+// lifecycle transitions and routing-rule-created tasks respectively.
+var (
+	RunnerActor = Actor{Kind: ActorKindRunner}
+	RouterActor = Actor{Kind: ActorKindRouter}
+)
+
+// Proto converts an Actor to its protobuf representation.
+func (a Actor) Proto() *xagentv1.Actor {
+	return &xagentv1.Actor{Kind: a.Kind, Name: a.Name}
+}
+
+func actorFromProto(pb *xagentv1.Actor) Actor {
+	if pb == nil {
+		return Actor{}
+	}
+	return Actor{Kind: pb.Kind, Name: pb.Name}
+}
+
+// LifecycleKind is the closed set of lifecycle transitions, mapped 1:1 onto the
+// xagentv1.LifecycleKind enum (the TaskChange set, minus Woken).
+type LifecycleKind int32
+
+const (
+	LifecycleKindUnspecified    = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_UNSPECIFIED)
+	LifecycleKindCreated        = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_CREATED)
+	LifecycleKindUpdated        = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_UPDATED)
+	LifecycleKindCancelled      = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_CANCELLED)
+	LifecycleKindRestarted      = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_RESTARTED)
+	LifecycleKindArchived       = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_ARCHIVED)
+	LifecycleKindUnarchived     = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_UNARCHIVED)
+	LifecycleKindAutoArchived   = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_AUTO_ARCHIVED)
+	LifecycleKindSandboxStarted = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_STARTED)
+	LifecycleKindSandboxExited  = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_EXITED)
+	LifecycleKindSandboxFailed  = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_FAILED)
+)
+
+// LifecyclePayload is the body of a lifecycle event — an about-task record of a
+// transition (created, cancelled, sandbox exited, …). It is the stream
+// replacement for the old logs rows with type='audit'/'info' and the
+// type='error' container-failure rows. Lifecycle events sit beside the existing
+// status mutation in the same transaction; status stays a materialized
+// projection. Message carries the failure detail for SANDBOX_FAILED and is
+// empty for kinds that don't need it.
+type LifecyclePayload struct {
+	Kind       LifecycleKind `json:"kind"`
+	Actor      Actor         `json:"actor"`
+	FromStatus string        `json:"from_status,omitempty"`
+	ToStatus   string        `json:"to_status,omitempty"`
+	Message    string        `json:"message,omitempty"`
+}
+
+func (*LifecyclePayload) Type() string    { return EventTypeLifecycle }
+func (*LifecyclePayload) isEventPayload() {}
+
+func (p *LifecyclePayload) SetPayloadProto(pb *xagentv1.Event) {
+	pb.Payload = &xagentv1.Event_Lifecycle{Lifecycle: &xagentv1.LifecyclePayload{
+		Kind:       xagentv1.LifecycleKind(p.Kind),
+		Actor:      p.Actor.Proto(),
+		FromStatus: p.FromStatus,
+		ToStatus:   p.ToStatus,
+		Message:    p.Message,
+	}}
+}
+
+// NewLifecycleEvent builds an about-task lifecycle event for a task transition.
+// from is the task's status before the mutation; the task carries the
+// post-mutation status. message carries the failure detail for SANDBOX_FAILED
+// and is empty otherwise. The returned event is appended beside the status
+// mutation in the same transaction — status remains a materialized projection,
+// not derived from the stream (the #952 fold consolidation is deferred).
+func NewLifecycleEvent(task *Task, kind LifecycleKind, actor Actor, from TaskStatus, message string) *Event {
+	return &Event{
+		TaskID: task.ID,
+		OrgID:  task.OrgID,
+		Payload: &LifecyclePayload{
+			Kind:       kind,
+			Actor:      actor,
+			FromStatus: statusLabel(from),
+			ToStatus:   statusLabel(task.Status),
+			Message:    message,
+		},
+	}
+}
+
+// Summary renders a lifecycle event as a human-readable timeline line — e.g.
+// "Created by icholy", "Cancelled", "Sandbox exited (Running -> Completed)",
+// "Sandbox failed: <message>". It is the Go-side renderer (used by the local MCP
+// get_my_task tool); the web UI timeline has a parallel renderer in TypeScript.
+func (p *LifecyclePayload) Summary() string {
+	var s string
+	switch p.Kind {
+	case LifecycleKindCreated:
+		s = "Created"
+	case LifecycleKindUpdated:
+		s = "Updated"
+	case LifecycleKindCancelled:
+		s = "Cancelled"
+	case LifecycleKindRestarted:
+		s = "Restarted"
+	case LifecycleKindArchived:
+		s = "Archived"
+	case LifecycleKindUnarchived:
+		s = "Unarchived"
+	case LifecycleKindAutoArchived:
+		s = "Auto-archived"
+	case LifecycleKindSandboxStarted:
+		s = "Sandbox started"
+	case LifecycleKindSandboxExited:
+		s = "Sandbox exited"
+		if p.FromStatus != "" && p.ToStatus != "" {
+			s += fmt.Sprintf(" (%s -> %s)", p.FromStatus, p.ToStatus)
+		}
+	case LifecycleKindSandboxFailed:
+		s = "Sandbox failed"
+		if p.Message != "" {
+			s += ": " + p.Message
+		}
+	default:
+		s = "Lifecycle event"
+	}
+	if p.Actor.Kind == ActorKindUser && p.Actor.Name != "" {
+		s += " by " + p.Actor.Name
+	}
+	return s
+}
+
+// statusLabel renders a TaskStatus for a lifecycle payload, mapping the zero
+// (unspecified) status to the empty string — e.g. a freshly created task has no
+// prior status.
+func statusLabel(s TaskStatus) string {
+	if s == TaskStatusUnspecified {
+		return ""
+	}
+	return s.String()
+}
+
 // Event is one row of a task's event stream. Its body is a typed, sealed
 // payload; the events.type column is materialized from Payload.Type() purely as
 // a storage discriminator and is not carried on the value.
@@ -169,6 +327,14 @@ func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 	case *xagentv1.Event_Report:
 		return &ReportPayload{
 			Content: arm.Report.Content,
+		}
+	case *xagentv1.Event_Lifecycle:
+		return &LifecyclePayload{
+			Kind:       LifecycleKind(arm.Lifecycle.Kind),
+			Actor:      actorFromProto(arm.Lifecycle.Actor),
+			FromStatus: arm.Lifecycle.FromStatus,
+			ToStatus:   arm.Lifecycle.ToStatus,
+			Message:    arm.Lifecycle.Message,
 		}
 	case *xagentv1.Event_Link:
 		return &LinkPayload{

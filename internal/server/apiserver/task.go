@@ -109,11 +109,13 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 				return err
 			}
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  task.ID,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s created task", caller.AuditName()),
-		}); err != nil {
+		// Record the creation as a lifecycle event beside the new row (status is
+		// the materialized projection). A freshly created task has no prior status,
+		// so from is unspecified.
+		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+			task, model.LifecycleKindCreated, model.UserActor(caller.AuditName()),
+			model.TaskStatusUnspecified, "",
+		)); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -215,6 +217,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
+		from := task.Status
 		var changed []string
 		if req.Name != "" {
 			task.Name = req.Name
@@ -248,11 +251,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s updated task: %s", caller.AuditName(), strings.Join(changed, ", ")),
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+			task, model.LifecycleKindUpdated, model.UserActor(caller.AuditName()), from, "",
+		)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -304,17 +305,16 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
+		from := task.Status
 		if !task.Archive() {
 			return fmt.Errorf("cannot archive task with status %s", task.Status)
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s archived task", caller.AuditName()),
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+			task, model.LifecycleKindArchived, model.UserActor(caller.AuditName()), from, "",
+		)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -364,17 +364,16 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
+		from := task.Status
 		if !task.Unarchive() {
 			return fmt.Errorf("cannot unarchive task: not archived")
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s unarchived task", caller.AuditName()),
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+			task, model.LifecycleKindUnarchived, model.UserActor(caller.AuditName()), from, "",
+		)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -423,17 +422,16 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
+		from := task.Status
 		if !task.Cancel() {
 			return fmt.Errorf("cannot cancel task with status %s", task.Status)
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s cancelled task", caller.AuditName()),
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+			task, model.LifecycleKindCancelled, model.UserActor(caller.AuditName()), from, "",
+		)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -488,17 +486,16 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
+		from := task.Status
 		if !task.Restart() {
 			return fmt.Errorf("cannot restart task with status %s", task.Status)
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  req.Id,
-			Type:    "audit",
-			Content: fmt.Sprintf("%s restarted task", caller.AuditName()),
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+			task, model.LifecycleKindRestarted, model.UserActor(caller.AuditName()), from, "",
+		)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()

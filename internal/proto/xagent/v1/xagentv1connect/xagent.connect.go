@@ -69,8 +69,6 @@ const (
 	// XAgentServiceUploadLogsProcedure is the fully-qualified name of the XAgentService's UploadLogs
 	// RPC.
 	XAgentServiceUploadLogsProcedure = "/xagent.v1.XAgentService/UploadLogs"
-	// XAgentServiceListLogsProcedure is the fully-qualified name of the XAgentService's ListLogs RPC.
-	XAgentServiceListLogsProcedure = "/xagent.v1.XAgentService/ListLogs"
 	// XAgentServiceCreateLinkProcedure is the fully-qualified name of the XAgentService's CreateLink
 	// RPC.
 	XAgentServiceCreateLinkProcedure = "/xagent.v1.XAgentService/CreateLink"
@@ -167,7 +165,6 @@ type XAgentServiceClient interface {
 	CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error)
 	RestartTask(context.Context, *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error)
 	UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error)
-	ListLogs(context.Context, *v1.ListLogsRequest) (*v1.ListLogsResponse, error)
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
 	ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error)
 	ListEvents(context.Context, *v1.ListEventsRequest) (*v1.ListEventsResponse, error)
@@ -286,12 +283,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceUploadLogsProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("UploadLogs")),
-			connect.WithClientOptions(opts...),
-		),
-		listLogs: connect.NewClient[v1.ListLogsRequest, v1.ListLogsResponse](
-			httpClient,
-			baseURL+XAgentServiceListLogsProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("ListLogs")),
 			connect.WithClientOptions(opts...),
 		),
 		createLink: connect.NewClient[v1.CreateLinkRequest, v1.CreateLinkResponse](
@@ -486,7 +477,6 @@ type xAgentServiceClient struct {
 	cancelTask                     *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
 	restartTask                    *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
 	uploadLogs                     *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
-	listLogs                       *connect.Client[v1.ListLogsRequest, v1.ListLogsResponse]
 	createLink                     *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
 	listLinks                      *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
 	listEvents                     *connect.Client[v1.ListEventsRequest, v1.ListEventsResponse]
@@ -629,15 +619,6 @@ func (c *xAgentServiceClient) RestartTask(ctx context.Context, req *v1.RestartTa
 // UploadLogs calls xagent.v1.XAgentService.UploadLogs.
 func (c *xAgentServiceClient) UploadLogs(ctx context.Context, req *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error) {
 	response, err := c.uploadLogs.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// ListLogs calls xagent.v1.XAgentService.ListLogs.
-func (c *xAgentServiceClient) ListLogs(ctx context.Context, req *v1.ListLogsRequest) (*v1.ListLogsResponse, error) {
-	response, err := c.listLogs.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -920,7 +901,6 @@ type XAgentServiceHandler interface {
 	CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error)
 	RestartTask(context.Context, *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error)
 	UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error)
-	ListLogs(context.Context, *v1.ListLogsRequest) (*v1.ListLogsResponse, error)
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
 	ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error)
 	ListEvents(context.Context, *v1.ListEventsRequest) (*v1.ListEventsResponse, error)
@@ -1035,12 +1015,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceUploadLogsProcedure,
 		svc.UploadLogs,
 		connect.WithSchema(xAgentServiceMethods.ByName("UploadLogs")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceListLogsHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceListLogsProcedure,
-		svc.ListLogs,
-		connect.WithSchema(xAgentServiceMethods.ByName("ListLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceCreateLinkHandler := connect.NewUnaryHandlerSimple(
@@ -1245,8 +1219,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceRestartTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceUploadLogsProcedure:
 			xAgentServiceUploadLogsHandler.ServeHTTP(w, r)
-		case XAgentServiceListLogsProcedure:
-			xAgentServiceListLogsHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateLinkProcedure:
 			xAgentServiceCreateLinkHandler.ServeHTTP(w, r)
 		case XAgentServiceListLinksProcedure:
@@ -1364,10 +1336,6 @@ func (UnimplementedXAgentServiceHandler) RestartTask(context.Context, *v1.Restar
 
 func (UnimplementedXAgentServiceHandler) UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UploadLogs is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) ListLogs(context.Context, *v1.ListLogsRequest) (*v1.ListLogsResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListLogs is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error) {

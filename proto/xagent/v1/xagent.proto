@@ -21,7 +21,6 @@ service XAgentService {
   rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
   rpc RestartTask(RestartTaskRequest) returns (RestartTaskResponse);
   rpc UploadLogs(UploadLogsRequest) returns (UploadLogsResponse);
-  rpc ListLogs(ListLogsRequest) returns (ListLogsResponse);
   rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
   rpc ListLinks(ListLinksRequest) returns (ListLinksResponse);
   rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
@@ -232,14 +231,6 @@ message UploadLogsRequest {
 
 message UploadLogsResponse {}
 
-message ListLogsRequest {
-  int64 task_id = 1;
-}
-
-message ListLogsResponse {
-  repeated LogEntry entries = 1;
-}
-
 message TaskLink {
   int64 id = 1;
   int64 task_id = 2;
@@ -280,14 +271,13 @@ message Event {
   google.protobuf.Timestamp created_at = 4;
   // The set arm IS the event type — a typed union, not an opaque Struct. There
   // is no separate `type` field on the wire; the db `type` column is
-  // materialized from the arm for indexed filtering (like `direction`). The
-  // instruction, external, report, and link arms are wired today; field number 8
-  // is left unassigned for the lifecycle arm the proposal adds in a later
-  // increment (see proposals/draft/unified-task-event-stream.md).
+  // materialized from the arm for indexed filtering (like `direction`). All five
+  // arms are wired (see proposals/draft/unified-task-event-stream.md).
   oneof payload {
     InstructionPayload instruction = 5;
     ExternalPayload external = 6;
     ReportPayload report = 7;
+    LifecyclePayload lifecycle = 8;
     LinkPayload link = 9;
   }
 }
@@ -323,6 +313,47 @@ message LinkPayload {
   string url = 3;
   string title = 4;
   bool subscribe = 5;
+}
+
+// LifecyclePayload is the body of a lifecycle event — an about-task record of a
+// transition that happened to the task (created, cancelled, sandbox exited, …).
+// It is the stream replacement for the old logs rows with type='audit'/'info'
+// and the type='error' container-failure rows. Lifecycle events sit beside the
+// existing status mutation in the same transaction; status stays a materialized
+// projection (see proposals/draft/unified-task-event-stream.md "Status stays a
+// projection"). `message` carries the failure detail for SANDBOX_FAILED and is
+// empty for kinds that don't need it.
+message LifecyclePayload {
+  LifecycleKind kind = 1;
+  Actor actor = 2;
+  string from_status = 3;
+  string to_status = 4;
+  string message = 5;
+}
+
+// Actor identifies who caused a lifecycle event. kind is one of user, runner,
+// or router; name is the human-readable name for user actors (empty for the
+// server-internal runner/router actors).
+message Actor {
+  string kind = 1;
+  string name = 2;
+}
+
+// LifecycleKind is the closed set of lifecycle transitions (the TaskChange set,
+// minus Woken — which splits into an external event plus the transition the
+// wake caused).
+enum LifecycleKind {
+  LIFECYCLE_KIND_UNSPECIFIED = 0;
+  LIFECYCLE_KIND_CREATED = 1;
+  LIFECYCLE_KIND_UPDATED = 2;
+  LIFECYCLE_KIND_CANCELLED = 3;
+  LIFECYCLE_KIND_RESTARTED = 4;
+  LIFECYCLE_KIND_ARCHIVED = 5;
+  LIFECYCLE_KIND_UNARCHIVED = 6;
+  LIFECYCLE_KIND_AUTO_ARCHIVED = 7;
+  LIFECYCLE_KIND_SANDBOX_STARTED = 8;
+  LIFECYCLE_KIND_SANDBOX_EXITED = 9;
+  LIFECYCLE_KIND_SANDBOX_FAILED = 10;
 }
 
 message ListEventsRequest {

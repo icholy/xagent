@@ -44,6 +44,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 				return connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 			}
+			from := task.Status
 			applied := task.ApplyRunnerEvent(&event)
 			s.log.Info("runner event recieved",
 				"task_id", event.TaskID,
@@ -59,8 +60,11 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 				return err
 			}
-			if log, ok := s.toRunnerEventLog(event); ok {
-				if err := s.store.CreateLog(ctx, tx, &log); err != nil {
+			// Append the sandbox lifecycle event beside the status fold (status is
+			// the materialized projection; the fold logic is unchanged). from is the
+			// status before ApplyRunnerEvent; the task carries the post-fold status.
+			if ev, ok := runnerLifecycleEvent(task, event, from); ok {
+				if err := s.store.CreateEvent(ctx, tx, ev); err != nil {
 					return err
 				}
 			}
@@ -97,27 +101,20 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 	return &xagentv1.SubmitRunnerEventsResponse{}, nil
 }
 
-func (s *Server) toRunnerEventLog(e model.RunnerEvent) (model.Log, bool) {
+// runnerLifecycleEvent maps a runner event to its sandbox lifecycle event. task
+// carries the post-fold status and from is the status before the fold, so the
+// payload records the transition (e.g. RUNNING -> COMPLETED). The container
+// failure detail rides in the SANDBOX_FAILED message field (the old `error` log
+// content). Returns false for runner events with no lifecycle home.
+func runnerLifecycleEvent(task *model.Task, e model.RunnerEvent, from model.TaskStatus) (*model.Event, bool) {
 	switch e.Event {
 	case model.RunnerEventStarted:
-		return model.Log{
-			TaskID:  e.TaskID,
-			Type:    "info",
-			Content: "container started",
-		}, true
+		return model.NewLifecycleEvent(task, model.LifecycleKindSandboxStarted, model.RunnerActor, from, ""), true
 	case model.RunnerEventStopped:
-		return model.Log{
-			TaskID:  e.TaskID,
-			Type:    "info",
-			Content: "container exited successfully",
-		}, true
+		return model.NewLifecycleEvent(task, model.LifecycleKindSandboxExited, model.RunnerActor, from, ""), true
 	case model.RunnerEventFailed:
-		return model.Log{
-			TaskID:  e.TaskID,
-			Type:    "error",
-			Content: "container failed",
-		}, true
+		return model.NewLifecycleEvent(task, model.LifecycleKindSandboxFailed, model.RunnerActor, from, "container failed"), true
 	default:
-		return model.Log{}, false
+		return nil, false
 	}
 }

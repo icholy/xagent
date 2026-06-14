@@ -66,16 +66,23 @@ func TestCreateLink_AppendsLinkEvent(t *testing.T) {
 		TaskId: taskResp.Task.Id,
 	})
 	assert.NilError(t, err)
-	assert.Equal(t, len(eventsResp.Events), 1)
-	link := eventsResp.Events[0].GetLink()
-	assert.Assert(t, link != nil)
+	// The stream also carries the lifecycle CREATED event from task creation, so
+	// pick out the link event rather than asserting it is the only one.
+	var linkEvent *xagentv1.Event
+	for _, e := range eventsResp.Events {
+		if e.GetLink() != nil {
+			linkEvent = e
+		}
+	}
+	assert.Assert(t, linkEvent != nil)
+	link := linkEvent.GetLink()
 	assert.Equal(t, link.LinkId, linkResp.Link.Id)
 	assert.Equal(t, link.Relevance, "Related PR")
 	assert.Equal(t, link.Url, "https://github.com/example/repo/pull/123")
 	assert.Equal(t, link.Title, "Fix bug")
 	assert.Equal(t, link.Subscribe, true)
 	// The link event is about-task, not to-agent, so it does not wake the task.
-	assert.Equal(t, eventsResp.Events[0].Wake, false)
+	assert.Equal(t, linkEvent.Wake, false)
 }
 
 func TestCreateLink_DerivesRoutingKey(t *testing.T) {

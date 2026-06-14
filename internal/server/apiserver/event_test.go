@@ -359,12 +359,18 @@ func TestListEventsByTask(t *testing.T) {
 		TaskId: taskID,
 	})
 
-	// Assert
+	// Assert - the stream also carries the lifecycle CREATED event from task
+	// creation, so filter to the external events. They are newest-first.
 	assert.NilError(t, err)
-	assert.Equal(t, len(resp.Events), 2)
-	// Events are ordered by created_at DESC (newest first)
-	assert.Equal(t, resp.Events[0].GetExternal().Description, "Event 2")
-	assert.Equal(t, resp.Events[1].GetExternal().Description, "Event 1")
+	var external []*xagentv1.ExternalPayload
+	for _, e := range resp.Events {
+		if x := e.GetExternal(); x != nil {
+			external = append(external, x)
+		}
+	}
+	assert.Equal(t, len(external), 2)
+	assert.Equal(t, external[0].Description, "Event 2")
+	assert.Equal(t, external[1].Description, "Event 1")
 }
 
 func TestListEventsByTask_Permissions(t *testing.T) {
@@ -393,8 +399,15 @@ func TestListEventsByTask_Permissions(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Assert - org A sees its event; org B gets an empty list (blanket read skips
-	// the row load; the list query is org-scoped).
-	assert.Equal(t, len(respA.Events), 1)
+	// Assert - org A sees its external event (alongside the lifecycle CREATED
+	// event from task creation); org B gets an empty list (blanket read skips the
+	// row load; the list query is org-scoped).
+	var externalA int
+	for _, e := range respA.Events {
+		if e.GetExternal() != nil {
+			externalA++
+		}
+	}
+	assert.Equal(t, externalA, 1)
 	assert.Equal(t, len(respB.Events), 0)
 }

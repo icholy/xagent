@@ -70,11 +70,6 @@ export const restartTask = XAgentService.method.restartTask;
 export const uploadLogs = XAgentService.method.uploadLogs;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.ListLogs
- */
-export const listLogs = XAgentService.method.listLogs;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.CreateLink
  */
 export const createLink = XAgentService.method.createLink;

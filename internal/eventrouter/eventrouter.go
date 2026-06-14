@@ -216,17 +216,24 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 		if err != nil {
 			return err
 		}
+		from := task.Status
 		wasDone := task.IsDone()
 		task.Start()
 		if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := r.Store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  taskID,
-			Type:    "audit",
-			Content: "webhook started task",
-		}); err != nil {
-			return err
+		// The external event above records the trigger. The proposal's "Woken
+		// splits into the external event plus the transition the wake caused" has a
+		// second half: when the wake restarts a *done* task (done -> pending),
+		// that transition is a RESTARTED lifecycle event, mirroring a user restart
+		// (actor is the router since the external event drove it). A wake of an
+		// already-running task causes no status transition, so no lifecycle event.
+		if wasDone {
+			if err := r.Store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+				task, model.LifecycleKindRestarted, model.RouterActor, from, "",
+			)); err != nil {
+				return err
+			}
 		}
 		notification.Resources = []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: task.ID},
@@ -309,11 +316,12 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		}); err != nil {
 			return err
 		}
-		if err := r.Store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  task.ID,
-			Type:    "audit",
-			Content: "webhook created task",
-		}); err != nil {
+		// Record the creation as a lifecycle event. The router (not a user) created
+		// the task, so the actor is the routing-rule actor; a freshly created task
+		// has no prior status.
+		if err := r.Store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+			task, model.LifecycleKindCreated, model.RouterActor, model.TaskStatusUnspecified, "",
+		)); err != nil {
 			return err
 		}
 		notification = model.Notification{

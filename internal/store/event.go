@@ -129,6 +129,12 @@ func toEventPayload(typ string, data []byte) (model.EventPayload, error) {
 			return nil, fmt.Errorf("unmarshal report payload: %w", err)
 		}
 		return &p, nil
+	case model.EventTypeLifecycle:
+		var p model.LifecyclePayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("unmarshal lifecycle payload: %w", err)
+		}
+		return &p, nil
 	case model.EventTypeLink:
 		var p model.LinkPayload
 		if err := json.Unmarshal(data, &p); err != nil {

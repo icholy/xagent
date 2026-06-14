@@ -30,14 +30,6 @@ type Key struct {
 	Scopes    []string     `json:"scopes"`
 }
 
-type Log struct {
-	ID        int64     `json:"id"`
-	TaskID    int64     `json:"task_id"`
-	Type      string    `json:"type"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 type Org struct {
 	ID                     int64           `json:"id"`
 	Name                   string          `json:"name"`

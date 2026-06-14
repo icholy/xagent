@@ -120,19 +120,6 @@ func TestTaskScope_UpdateTask_OwnAllowed_OtherDenied(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
-func TestTaskScope_ListLogs_OwnAllowed_OtherDenied(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	_, org, taskA, taskB := newOrgWithTasks(t, srv)
-
-	own := scopedCtx(t, org, taskScopes(taskA.Id))
-
-	_, err := srv.ListLogs(own, &xagentv1.ListLogsRequest{TaskId: taskA.Id})
-	assert.NilError(t, err)
-	_, err = srv.ListLogs(own, &xagentv1.ListLogsRequest{TaskId: taskB.Id})
-	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-}
-
 // A task token holds no create scope at all, so an agent cannot create tasks.
 func TestTaskScope_CreateTask_Denied(t *testing.T) {
 	t.Parallel()
@@ -232,12 +219,8 @@ func taskInstanceHandlers() []struct {
 		}},
 		{"UploadLogs", func(ctx context.Context, srv *Server, id int64) error {
 			_, err := srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
-				TaskId: id, Entries: []*xagentv1.LogEntry{{Type: "info", Content: "x"}},
+				TaskId: id, Entries: []*xagentv1.LogEntry{{Type: "llm", Content: "x"}},
 			})
-			return err
-		}},
-		{"ListLogs", func(ctx context.Context, srv *Server, id int64) error {
-			_, err := srv.ListLogs(ctx, &xagentv1.ListLogsRequest{TaskId: id})
 			return err
 		}},
 		{"ListEventsByTask", func(ctx context.Context, srv *Server, id int64) error {

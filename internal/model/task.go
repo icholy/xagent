@@ -15,13 +15,14 @@ import (
 type TaskStatus int32
 
 const (
-	TaskStatusPending    TaskStatus = TaskStatus(xagentv1.TaskStatus_PENDING)
-	TaskStatusRunning    TaskStatus = TaskStatus(xagentv1.TaskStatus_RUNNING)
-	TaskStatusRestarting TaskStatus = TaskStatus(xagentv1.TaskStatus_RESTARTING)
-	TaskStatusCancelling TaskStatus = TaskStatus(xagentv1.TaskStatus_CANCELLING)
-	TaskStatusCompleted  TaskStatus = TaskStatus(xagentv1.TaskStatus_COMPLETED)
-	TaskStatusFailed     TaskStatus = TaskStatus(xagentv1.TaskStatus_FAILED)
-	TaskStatusCancelled  TaskStatus = TaskStatus(xagentv1.TaskStatus_CANCELLED)
+	TaskStatusUnspecified TaskStatus = TaskStatus(xagentv1.TaskStatus_UNSPECIFIED)
+	TaskStatusPending     TaskStatus = TaskStatus(xagentv1.TaskStatus_PENDING)
+	TaskStatusRunning     TaskStatus = TaskStatus(xagentv1.TaskStatus_RUNNING)
+	TaskStatusRestarting  TaskStatus = TaskStatus(xagentv1.TaskStatus_RESTARTING)
+	TaskStatusCancelling  TaskStatus = TaskStatus(xagentv1.TaskStatus_CANCELLING)
+	TaskStatusCompleted   TaskStatus = TaskStatus(xagentv1.TaskStatus_COMPLETED)
+	TaskStatusFailed      TaskStatus = TaskStatus(xagentv1.TaskStatus_FAILED)
+	TaskStatusCancelled   TaskStatus = TaskStatus(xagentv1.TaskStatus_CANCELLED)
 )
 
 //go:generate stringer -type=TaskCommand -trimprefix=TaskCommand

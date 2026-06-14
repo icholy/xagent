@@ -117,17 +117,18 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		if t.Archived || t.Version != due.Version {
 			return errSkip
 		}
+		from := t.Status
 		if !t.Archive() {
 			return errSkip
 		}
 		if err := a.store.UpdateTask(ctx, tx, t); err != nil {
 			return err
 		}
-		if err := a.store.CreateLog(ctx, tx, &model.Log{
-			TaskID:  due.ID,
-			Type:    "audit",
-			Content: "auto-archived: auto_archive deadline reached",
-		}); err != nil {
+		// The auto-archive is a runner-side (server worker) action, not a user
+		// one, so the lifecycle event's actor is the runner.
+		if err := a.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+			t, model.LifecycleKindAutoArchived, model.RunnerActor, from, "",
+		)); err != nil {
 			return err
 		}
 		return tx.Commit()

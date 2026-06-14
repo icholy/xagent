@@ -10,10 +10,11 @@ import { toJson, type DescMessage, type MessageShape } from '@bufbuild/protobuf'
 import {
 	XAgentService,
 	GetTaskDetailsResponseSchema,
-	ListLogsResponseSchema,
 	CancelTaskResponseSchema,
 	ArchiveTaskResponseSchema,
+	LifecycleKind,
 	TaskStatus,
+	type LifecyclePayload,
 } from '../../gen/xagent/v1/xagent_pb';
 
 export interface XAgentApiCredentials {
@@ -38,6 +39,50 @@ const TERMINAL_STATUSES: TaskStatus[] = [
 	TaskStatus.FAILED,
 	TaskStatus.CANCELLED,
 ];
+
+// renderLifecycle turns a lifecycle event into a readable activity line,
+// mirroring the Go-side LifecyclePayload.Summary and the web UI renderer.
+function renderLifecycle(p: LifecyclePayload): string {
+	let s: string;
+	switch (p.kind) {
+		case LifecycleKind.CREATED:
+			s = 'Created';
+			break;
+		case LifecycleKind.UPDATED:
+			s = 'Updated';
+			break;
+		case LifecycleKind.CANCELLED:
+			s = 'Cancelled';
+			break;
+		case LifecycleKind.RESTARTED:
+			s = 'Restarted';
+			break;
+		case LifecycleKind.ARCHIVED:
+			s = 'Archived';
+			break;
+		case LifecycleKind.UNARCHIVED:
+			s = 'Unarchived';
+			break;
+		case LifecycleKind.AUTO_ARCHIVED:
+			s = 'Auto-archived';
+			break;
+		case LifecycleKind.SANDBOX_STARTED:
+			s = 'Sandbox started';
+			break;
+		case LifecycleKind.SANDBOX_EXITED:
+			s = 'Sandbox exited';
+			if (p.fromStatus && p.toStatus) s += ` (${p.fromStatus} -> ${p.toStatus})`;
+			break;
+		case LifecycleKind.SANDBOX_FAILED:
+			s = 'Sandbox failed';
+			if (p.message) s += `: ${p.message}`;
+			break;
+		default:
+			s = 'Lifecycle event';
+	}
+	if (p.actor?.kind === 'user' && p.actor.name) s += ` by ${p.actor.name}`;
+	return s;
+}
 
 export class XAgentExecutor {
 	private ctx: IExecuteFunctions;
@@ -150,6 +195,22 @@ export class XAgentExecutor {
 		return toJson(schema, msg) as IDataObject;
 	}
 
+	// activityLogs projects the report and lifecycle arms of a task's event
+	// stream into flat {type, content} rows (the logs table is gone). The stream
+	// is returned newest-first, so reverse it to render chronologically.
+	private async activityLogs(taskId: bigint): Promise<IDataObject[]> {
+		const resp = await this.client.listEventsByTask({ taskId });
+		const rows: IDataObject[] = [];
+		for (const e of [...resp.events].reverse()) {
+			if (e.payload.case === 'report') {
+				rows.push({ type: 'report', content: e.payload.value.content });
+			} else if (e.payload.case === 'lifecycle') {
+				rows.push({ type: 'lifecycle', content: renderLifecycle(e.payload.value) });
+			}
+		}
+		return rows;
+	}
+
 	private async create(i: number): Promise<INodeExecutionData> {
 		const resp = await this.client.createTask({
 			runner: this.getStringParameter('runner', i),
@@ -165,11 +226,11 @@ export class XAgentExecutor {
 		await this.wait(taskId, i);
 
 		const details = await this.client.getTaskDetails({ id: taskId });
-		const logs = await this.client.listLogs({ taskId });
+		const logs = await this.activityLogs(taskId);
 		return {
 			json: {
 				...this.toJson(GetTaskDetailsResponseSchema, details),
-				logs: this.toJson(ListLogsResponseSchema, logs).entries ?? [],
+				logs,
 			},
 			pairedItem: { item: i },
 		};
@@ -211,11 +272,11 @@ export class XAgentExecutor {
 	private async getDetails(i: number): Promise<INodeExecutionData> {
 		const taskId = this.getBigIntParameter('taskId', i);
 		const details = await this.client.getTaskDetails({ id: taskId });
-		const logs = await this.client.listLogs({ taskId });
+		const logs = await this.activityLogs(taskId);
 		return {
 			json: {
 				...this.toJson(GetTaskDetailsResponseSchema, details),
-				logs: this.toJson(ListLogsResponseSchema, logs).entries ?? [],
+				logs,
 			},
 			pairedItem: { item: i },
 		};
@@ -233,11 +294,11 @@ export class XAgentExecutor {
 		await this.wait(taskId, i);
 
 		const details = await this.client.getTaskDetails({ id: taskId });
-		const logs = await this.client.listLogs({ taskId });
+		const logs = await this.activityLogs(taskId);
 		return {
 			json: {
 				...this.toJson(GetTaskDetailsResponseSchema, details),
-				logs: this.toJson(ListLogsResponseSchema, logs).entries ?? [],
+				logs,
 			},
 			pairedItem: { item: i },
 		};
