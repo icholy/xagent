@@ -83,6 +83,21 @@ func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *mode
 		if err := s.CreateLink(t.Context(), nil, link); err != nil {
 			t.Fatal(err)
 		}
+		// Mirror the real link-creation paths: the link event is the timeline
+		// source of truth, task_links the projection. Append it alongside the row.
+		if err := s.CreateEvent(t.Context(), nil, &model.Event{
+			TaskID: task.ID,
+			OrgID:  org.OrgID,
+			Payload: &model.LinkPayload{
+				LinkID:    link.ID,
+				Relevance: link.Relevance,
+				URL:       link.URL,
+				Title:     link.Title,
+				Subscribe: link.Subscribe,
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return task
 }
