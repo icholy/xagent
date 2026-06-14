@@ -50,8 +50,15 @@ func TestGetMyTask(t *testing.T) {
 				Task: &xagentv1.Task{
 					Id:   123,
 					Name: "test task",
-					Instructions: []*xagentv1.Instruction{
-						{Text: "do something", Url: "https://example.com"},
+				},
+				Events: []*xagentv1.Event{
+					{
+						Payload: &xagentv1.Event_Instruction{
+							Instruction: &xagentv1.InstructionPayload{
+								Text: "do something",
+								Url:  "https://example.com",
+							},
+						},
 					},
 				},
 			}, nil
@@ -81,8 +88,12 @@ func TestGetMyTask(t *testing.T) {
 		"instructions": []any{
 			map[string]any{"text": "do something", "url": "https://example.com"},
 		},
-		"links":  []any{},
-		"events": []any{},
+		"links": []any{},
+		"events": []any{
+			map[string]any{
+				"instruction": map[string]any{"text": "do something", "url": "https://example.com"},
+			},
+		},
 	})
 }
 

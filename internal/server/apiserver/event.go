@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"connectrpc.com/connect"
@@ -143,10 +144,14 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 		}
 	}
-	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID)
+	// nil types → all event types. The store now returns ascending stream order;
+	// this RPC's contract is newest-first, so reverse to keep that order rather
+	// than flipping it on the query (which also serves the chronological brief).
+	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID, nil)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	slices.Reverse(events)
 	return &xagentv1.ListEventsByTaskResponse{
 		Events: model.ProtoMap(events),
 	}, nil

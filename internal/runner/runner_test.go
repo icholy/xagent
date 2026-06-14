@@ -33,12 +33,9 @@ func TestRunnerStart(t *testing.T) {
 		Name:      "test-task",
 		Runner:    "test-runner",
 		Workspace: "test",
-		Instructions: []model.Instruction{
-			{Text: "Hello from test"},
-		},
-		Status:  model.TaskStatusPending,
-		Command: model.TaskCommandStart,
-		Version: 1,
+		Status:    model.TaskStatusPending,
+		Command:   model.TaskCommandStart,
+		Version:   1,
 	}
 
 	// Create mock client. The driver and the injected MCP server now connect to

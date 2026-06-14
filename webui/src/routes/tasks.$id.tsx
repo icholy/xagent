@@ -124,6 +124,11 @@ function TaskDetail() {
   const links = data?.links ?? []
   const logs = logsData?.entries ?? []
 
+  // Instructions are no longer a task field — they are instruction events in the
+  // brief. External events keep their own section below.
+  const instructionEvents = events.filter((e) => e.payload.case === 'instruction')
+  const externalEvents = events.filter((e) => e.payload.case === 'external')
+
   if (!task) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -217,13 +222,20 @@ function TaskDetail() {
       {/* Instructions */}
       <div className="rounded-lg border p-6">
         <h2 className="text-lg font-semibold mb-4">Instructions</h2>
-        {task.instructions.length === 0 ? (
+        {instructionEvents.length === 0 ? (
           <p className="text-muted-foreground">No instructions</p>
         ) : (
           <div className="space-y-3">
-            {task.instructions.map((inst, index) => (
-              <InstructionCard key={index} text={inst.text} url={inst.url} />
-            ))}
+            {instructionEvents.map((event) => {
+              const inst = event.payload.case === 'instruction' ? event.payload.value : undefined
+              return (
+                <InstructionCard
+                  key={String(event.id)}
+                  text={inst?.text ?? ''}
+                  url={inst?.url ?? ''}
+                />
+              )
+            })}
           </div>
         )}
         {!isArchivedTask(task) && (
@@ -249,11 +261,11 @@ function TaskDetail() {
       </div>
 
       {/* Events */}
-      {events.length > 0 && (
+      {externalEvents.length > 0 && (
         <div className="rounded-lg border p-6">
           <h2 className="text-lg font-semibold mb-4">Events</h2>
           <EventsTable
-            events={events}
+            events={externalEvents}
             onDelete={handleDeleteEvent}
             isDeleting={deleteEventMutation.isPending}
           />

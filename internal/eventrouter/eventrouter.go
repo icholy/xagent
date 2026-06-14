@@ -264,11 +264,8 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			prompt = fmt.Sprintf("You were created by a routing rule in response to a %s %s event.", input.Source, input.Type)
 		}
 		task := &model.Task{
-			Runner:    rule.Create.Runner,
-			Workspace: rule.Create.Workspace,
-			Instructions: []model.Instruction{{
-				Text: prompt,
-			}},
+			Runner:      rule.Create.Runner,
+			Workspace:   rule.Create.Workspace,
 			Status:      model.TaskStatusPending,
 			Command:     model.TaskCommandStart,
 			Version:     1,
@@ -279,6 +276,17 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			return err
 		}
 		taskID = task.ID
+		// Seed the stream with the rule's prompt as the initial instruction event
+		// (replacing the old tasks.instructions column). The task already starts
+		// via Command=Start; instruction events always wake.
+		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+			TaskID:  task.ID,
+			OrgID:   orgID,
+			Wake:    true,
+			Payload: &model.InstructionPayload{Text: prompt},
+		}); err != nil {
+			return err
+		}
 		if err := r.Store.CreateLink(ctx, tx, &model.Link{
 			TaskID:     task.ID,
 			URL:        input.URL,

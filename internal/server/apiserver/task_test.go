@@ -41,22 +41,13 @@ func TestGetTask(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Verify the task matches what we created
+	// Verify the task matches what we created. Instructions are no longer a task
+	// field — they are instruction events in the stream, asserted below.
 	expected := &xagentv1.Task{
-		Id:        createResp.Task.Id,
-		Name:      "Test Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-		Instructions: []*xagentv1.Instruction{
-			{
-				Text: "Do something important",
-				Url:  "https://example.com/issue/1",
-			},
-			{
-				Text: "Do something else",
-				Url:  "https://example.com/issue/2",
-			},
-		},
+		Id:          createResp.Task.Id,
+		Name:        "Test Task",
+		Runner:      "test-runner",
+		Workspace:   "test-workspace",
 		Status:      xagentv1.TaskStatus_PENDING,
 		Command:     xagentv1.TaskCommand_START,
 		Actions:     &xagentv1.TaskActions{Cancel: true},
@@ -67,6 +58,26 @@ func TestGetTask(t *testing.T) {
 	}
 
 	assert.DeepEqual(t, getResp.Task, expected, protocmp.Transform())
+
+	// The initial instructions are seeded into the stream as instruction events.
+	detailsResp, err := srv.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
+	assert.DeepEqual(t, instructionPayloads(detailsResp.Events), []*xagentv1.InstructionPayload{
+		{Text: "Do something important", Url: "https://example.com/issue/1"},
+		{Text: "Do something else", Url: "https://example.com/issue/2"},
+	}, protocmp.Transform())
+}
+
+// instructionPayloads extracts the instruction-arm payloads from a stream, in
+// order — the brief's instruction projection.
+func instructionPayloads(events []*xagentv1.Event) []*xagentv1.InstructionPayload {
+	var out []*xagentv1.InstructionPayload
+	for _, e := range events {
+		if inst := e.GetInstruction(); inst != nil {
+			out = append(out, inst)
+		}
+	}
+	return out
 }
 
 func TestGetTask_Permissions(t *testing.T) {
@@ -140,16 +151,10 @@ func TestCreateTask(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	expected := &xagentv1.Task{
-		Id:        resp.Task.Id,
-		Name:      "New Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-		Instructions: []*xagentv1.Instruction{
-			{
-				Text: "Do something",
-				Url:  "https://example.com/issue/1",
-			},
-		},
+		Id:          resp.Task.Id,
+		Name:        "New Task",
+		Runner:      "test-runner",
+		Workspace:   "test-workspace",
 		Status:      xagentv1.TaskStatus_PENDING,
 		Command:     xagentv1.TaskCommand_START,
 		Actions:     &xagentv1.TaskActions{Cancel: true},
@@ -159,6 +164,13 @@ func TestCreateTask(t *testing.T) {
 		AutoArchive: durationpb.New(0),
 	}
 	assert.DeepEqual(t, resp.Task, expected, protocmp.Transform())
+
+	// The initial instruction is seeded into the stream as an instruction event.
+	detailsResp, err := srv.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: resp.Task.Id})
+	assert.NilError(t, err)
+	assert.DeepEqual(t, instructionPayloads(detailsResp.Events), []*xagentv1.InstructionPayload{
+		{Text: "Do something", Url: "https://example.com/issue/1"},
+	}, protocmp.Transform())
 }
 
 func TestListTasks(t *testing.T) {

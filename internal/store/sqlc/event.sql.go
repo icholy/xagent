@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const createEvent = `-- name: CreateEvent :one
@@ -128,16 +130,23 @@ const listEventsByTask = `-- name: ListEventsByTask :many
 SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
 WHERE task_id = $1 AND org_id = $2
-ORDER BY id DESC
+  AND (cardinality($3::text[]) = 0 OR type = ANY($3::text[]))
+ORDER BY id
 `
 
 type ListEventsByTaskParams struct {
-	TaskID int64 `json:"task_id"`
-	OrgID  int64 `json:"org_id"`
+	TaskID int64    `json:"task_id"`
+	OrgID  int64    `json:"org_id"`
+	Types  []string `json:"types"`
 }
 
+// A task's events in chronological stream order (ORDER BY id). The optional
+// types filter ($3) narrows to specific arms — an empty/nil array matches all
+// types — so the same query serves both the full timeline and the agent's brief
+// (instruction + external; see proposals/draft/unified-task-event-stream.md
+// "The agent's brief").
 func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskParams) ([]Event, error) {
-	rows, err := q.db.QueryContext(ctx, listEventsByTask, arg.TaskID, arg.OrgID)
+	rows, err := q.db.QueryContext(ctx, listEventsByTask, arg.TaskID, arg.OrgID, pq.Array(arg.Types))
 	if err != nil {
 		return nil, err
 	}
