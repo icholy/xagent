@@ -4,6 +4,7 @@ import (
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -19,12 +20,20 @@ const (
 )
 
 // EventPayload is the sealed set of event bodies — one per arm of the
-// xagentv1.Event.payload oneof. Each arm reports its discriminator via Type().
-// The set is closed: implementations must live in this package because the
-// interface is sealed with the unexported isEventPayload marker.
+// xagentv1.Event.payload oneof. Each arm reports its discriminator via Type()
+// and maps itself onto the wire via Proto()/SetPayload, keeping the arm switch
+// off Event.Proto(). The set is closed: implementations must live in this
+// package because the interface is sealed with the unexported isEventPayload
+// marker.
 type EventPayload interface {
 	// Type returns the discriminator stored in the events.type column.
 	Type() string
+	// Proto returns the inner oneof arm message (e.g. *xagentv1.ExternalPayload).
+	Proto() proto.Message
+	// SetPayload assigns this arm onto pb.Payload. It does the assignment rather
+	// than returning the arm because protoc-gen-go's oneof wrapper type is
+	// unexported and unnameable from this package.
+	SetPayload(pb *xagentv1.Event)
 	isEventPayload()
 }
 
@@ -39,6 +48,18 @@ type ExternalPayload struct {
 func (*ExternalPayload) Type() string    { return EventTypeExternal }
 func (*ExternalPayload) isEventPayload() {}
 
+func (p *ExternalPayload) Proto() proto.Message {
+	return &xagentv1.ExternalPayload{Description: p.Description, Url: p.URL, Data: p.Data}
+}
+
+func (p *ExternalPayload) SetPayload(pb *xagentv1.Event) {
+	pb.Payload = &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+		Description: p.Description,
+		Url:         p.URL,
+		Data:        p.Data,
+	}}
+}
+
 // Event is one row of a task's event stream. Its body is a typed, sealed
 // payload; the events.type column is materialized from Payload.Type() purely as
 // a storage discriminator and is not carried on the value.
@@ -51,8 +72,8 @@ type Event struct {
 	CreatedAt time.Time    `json:"created_at"`
 }
 
-// Proto converts an Event to its protobuf representation, mapping the typed
-// payload to the matching oneof arm.
+// Proto converts an Event to its protobuf representation, delegating the arm
+// mapping to the payload.
 func (e *Event) Proto() *xagentv1.Event {
 	pb := &xagentv1.Event{
 		Id:        e.ID,
@@ -60,35 +81,36 @@ func (e *Event) Proto() *xagentv1.Event {
 		Wake:      e.Wake,
 		CreatedAt: timestamppb.New(e.CreatedAt),
 	}
-	switch p := e.Payload.(type) {
-	case *ExternalPayload:
-		pb.Payload = &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
-			Description: p.Description,
-			Url:         p.URL,
-			Data:        p.Data,
-		}}
-	}
+	e.Payload.SetPayload(pb)
 	return pb
 }
 
-// EventFromProto converts a protobuf Event to a model Event, mapping the set
-// oneof arm to its typed payload.
+// EventFromProto converts a protobuf Event to a model Event, delegating the arm
+// mapping to EventPayloadFromProto.
 func EventFromProto(pb *xagentv1.Event) *Event {
 	e := &Event{
-		ID:     pb.Id,
-		TaskID: pb.TaskId,
-		Wake:   pb.Wake,
+		ID:      pb.Id,
+		TaskID:  pb.TaskId,
+		Wake:    pb.Wake,
+		Payload: EventPayloadFromProto(pb),
 	}
 	if pb.CreatedAt != nil {
 		e.CreatedAt = pb.CreatedAt.AsTime()
 	}
+	return e
+}
+
+// EventPayloadFromProto maps the set oneof arm of pb to its typed payload. It
+// is the only proto→model arm switch; it returns nil when no arm is set.
+func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 	switch arm := pb.Payload.(type) {
 	case *xagentv1.Event_External:
-		e.Payload = &ExternalPayload{
+		return &ExternalPayload{
 			Description: arm.External.Description,
 			URL:         arm.External.Url,
 			Data:        arm.External.Data,
 		}
+	default:
+		return nil
 	}
-	return e
 }
