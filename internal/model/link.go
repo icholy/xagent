@@ -33,6 +33,20 @@ func (l *Link) Proto() *xagentv1.TaskLink {
 	}
 }
 
+// EventPayload builds the link event body that mirrors this task_links row.
+// The link event is the timeline source of truth; task_links is the projection.
+// LinkID points back at this row, so the link must already be persisted (ID set)
+// when this is called.
+func (l *Link) EventPayload() *LinkPayload {
+	return &LinkPayload{
+		LinkID:    l.ID,
+		Relevance: l.Relevance,
+		URL:       l.URL,
+		Title:     l.Title,
+		Subscribe: l.Subscribe,
+	}
+}
+
 // LinkFromProto converts a protobuf TaskLink to a model Link.
 func LinkFromProto(pb *xagentv1.TaskLink) *Link {
 	var createdAt time.Time

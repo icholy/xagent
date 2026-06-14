@@ -303,15 +303,9 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			return err
 		}
 		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  orgID,
-			Payload: &model.LinkPayload{
-				LinkID:    link.ID,
-				Relevance: link.Relevance,
-				URL:       link.URL,
-				Title:     link.Title,
-				Subscribe: link.Subscribe,
-			},
+			TaskID:  task.ID,
+			OrgID:   orgID,
+			Payload: link.EventPayload(),
 		}); err != nil {
 			return err
 		}

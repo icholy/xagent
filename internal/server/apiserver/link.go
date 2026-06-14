@@ -50,15 +50,9 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 			return err
 		}
 		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LinkPayload{
-				LinkID:    link.ID,
-				Relevance: link.Relevance,
-				URL:       link.URL,
-				Title:     link.Title,
-				Subscribe: link.Subscribe,
-			},
+			TaskID:  task.ID,
+			OrgID:   task.OrgID,
+			Payload: link.EventPayload(),
 		}); err != nil {
 			return err
 		}
