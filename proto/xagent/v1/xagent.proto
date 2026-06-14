@@ -280,69 +280,19 @@ message Event {
   google.protobuf.Timestamp created_at = 4;
   // The set arm IS the event type — a typed union, not an opaque Struct. There
   // is no separate `type` field on the wire; the db `type` column is
-  // materialized from the arm for indexed filtering (like `direction`).
+  // materialized from the arm for indexed filtering (like `direction`). Only the
+  // external arm is wired today; field numbers 5/7/8/9 are left unassigned for
+  // the instruction/report/lifecycle/link arms the proposal adds in later
+  // increments (see proposals/draft/unified-task-event-stream.md).
   oneof payload {
-    InstructionPayload instruction = 5;
     ExternalPayload external = 6;
-    ReportPayload report = 7;
-    LifecyclePayload lifecycle = 8;
-    LinkPayload link = 9;
   }
-}
-
-message InstructionPayload {
-  string text = 1;
-  string url = 2;
-  Actor actor = 3;
 }
 
 message ExternalPayload {
   string description = 1;
   string url = 2;
   string data = 3;
-}
-
-message ReportPayload {
-  string content = 1;
-}
-
-message LifecyclePayload {
-  LifecycleKind kind = 1;
-  Actor actor = 2;
-  string from_status = 3;
-  string to_status = 4;
-  string runner_event = 5;
-}
-
-message LinkPayload {
-  int64 link_id = 1;
-  string relevance = 2;
-  string url = 3;
-  string title = 4;
-  bool subscribe = 5;
-}
-
-// Actor identifies who caused an event. kind is one of: user|runner|router|agent.
-message Actor {
-  string kind = 1;
-  string name = 2;
-}
-
-// LifecycleKind is the closed set of lifecycle transitions (the TaskChange set,
-// minus Woken — which splits into an external event plus the transition the
-// wake caused).
-enum LifecycleKind {
-  LIFECYCLE_KIND_UNSPECIFIED = 0;
-  LIFECYCLE_KIND_CREATED = 1;
-  LIFECYCLE_KIND_UPDATED = 2;
-  LIFECYCLE_KIND_CANCELLED = 3;
-  LIFECYCLE_KIND_RESTARTED = 4;
-  LIFECYCLE_KIND_ARCHIVED = 5;
-  LIFECYCLE_KIND_UNARCHIVED = 6;
-  LIFECYCLE_KIND_AUTO_ARCHIVED = 7;
-  LIFECYCLE_KIND_SANDBOX_STARTED = 8;
-  LIFECYCLE_KIND_SANDBOX_EXITED = 9;
-  LIFECYCLE_KIND_SANDBOX_FAILED = 10;
 }
 
 message ListEventsRequest {

@@ -9,13 +9,10 @@ import (
 
 // Event type discriminators. These are the values of the events.type column —
 // a storage detail used to pick the concrete payload on read. They are not a
-// field on the Event value; the type is Payload.Type().
+// field on the Event value; the type is Payload.Type(). Only external is wired
+// today; later increments add their own discriminator with each arm.
 const (
-	EventTypeInstruction = "instruction"
-	EventTypeExternal    = "external"
-	EventTypeReport      = "report"
-	EventTypeLifecycle   = "lifecycle"
-	EventTypeLink        = "link"
+	EventTypeExternal = "external"
 )
 
 // EventPayload is the sealed set of event bodies — one per arm of the
