@@ -279,9 +279,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		return tx.Commit()
 	})
 	if err != nil {
-		// The in-tx instance check returns PermissionDenied; surface it as-is
-		// rather than re-wrapping it as Internal.
-		if connect.CodeOf(err) == connect.CodePermissionDenied {
+		// The in-tx checks return typed connect errors; surface any of them
+		// as-is rather than re-wrapping them as Internal.
+		if connect.CodeOf(err) != connect.CodeUnknown {
 			return nil, err
 		}
 		if errors.Is(err, sql.ErrNoRows) {
@@ -345,9 +345,9 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		return tx.Commit()
 	})
 	if err != nil {
-		// The in-tx instance check returns PermissionDenied; surface it as-is
-		// rather than re-wrapping it as Internal.
-		if connect.CodeOf(err) == connect.CodePermissionDenied {
+		// The in-tx checks return typed connect errors; surface any of them
+		// as-is rather than re-wrapping them as Internal.
+		if connect.CodeOf(err) != connect.CodeUnknown {
 			return nil, err
 		}
 		if errors.Is(err, sql.ErrNoRows) {
@@ -410,9 +410,9 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		return tx.Commit()
 	})
 	if err != nil {
-		// The in-tx instance check returns PermissionDenied; surface it as-is
-		// rather than re-wrapping it as Internal.
-		if connect.CodeOf(err) == connect.CodePermissionDenied {
+		// The in-tx checks return typed connect errors; surface any of them
+		// as-is rather than re-wrapping them as Internal.
+		if connect.CodeOf(err) != connect.CodeUnknown {
 			return nil, err
 		}
 		if errors.Is(err, sql.ErrNoRows) {
@@ -481,9 +481,9 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		return tx.Commit()
 	})
 	if err != nil {
-		// The in-tx instance check returns PermissionDenied; surface it as-is
-		// rather than re-wrapping it as Internal.
-		if connect.CodeOf(err) == connect.CodePermissionDenied {
+		// The in-tx checks return typed connect errors; surface any of them
+		// as-is rather than re-wrapping them as Internal.
+		if connect.CodeOf(err) != connect.CodeUnknown {
 			return nil, err
 		}
 		if errors.Is(err, sql.ErrNoRows) {
@@ -547,9 +547,9 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		return tx.Commit()
 	})
 	if err != nil {
-		// The in-tx instance check returns PermissionDenied; surface it as-is
-		// rather than re-wrapping it as Internal.
-		if connect.CodeOf(err) == connect.CodePermissionDenied {
+		// The in-tx checks return typed connect errors; surface any of them
+		// as-is rather than re-wrapping them as Internal.
+		if connect.CodeOf(err) != connect.CodeUnknown {
 			return nil, err
 		}
 		if errors.Is(err, sql.ErrNoRows) {
