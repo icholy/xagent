@@ -216,14 +216,25 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 		if err != nil {
 			return err
 		}
+		from := task.Status
 		wasDone := task.IsDone()
 		task.Start()
 		if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		// The wake itself is not a lifecycle event: the external event appended
-		// above is the record of the trigger (per the proposal's "Woken splits
-		// into the external event plus the transition the wake caused").
+		// The external event above records the trigger. The proposal's "Woken
+		// splits into the external event plus the transition the wake caused" has a
+		// second half: when the wake restarts a *done* task (done -> pending),
+		// that transition is a RESTARTED lifecycle event, mirroring a user restart
+		// (actor is the router since the external event drove it). A wake of an
+		// already-running task causes no status transition, so no lifecycle event.
+		if wasDone {
+			if err := r.Store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
+				task, model.LifecycleKindRestarted, model.RouterActor, from, "",
+			)); err != nil {
+				return err
+			}
+		}
 		notification.Resources = []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: task.ID},
 			{Action: "updated", Type: "event", ID: event.ID},

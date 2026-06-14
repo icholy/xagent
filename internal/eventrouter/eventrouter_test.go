@@ -416,6 +416,28 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, updated.Status, model.TaskStatusPending)
+
+	// Waking a done task records both the external trigger and the RESTARTED
+	// lifecycle transition (done -> pending) in the same stream, so the
+	// materialized status doesn't flip without a source-of-truth event behind it.
+	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
+	assert.NilError(t, err)
+	var external, restarted int
+	for _, e := range events {
+		switch p := e.Payload.(type) {
+		case *model.ExternalPayload:
+			external++
+		case *model.LifecyclePayload:
+			if p.Kind == model.LifecycleKindRestarted {
+				assert.Equal(t, p.Actor, model.RouterActor)
+				assert.Equal(t, p.FromStatus, "Completed")
+				assert.Equal(t, p.ToStatus, "Pending")
+				restarted++
+			}
+		}
+	}
+	assert.Equal(t, external, 1)
+	assert.Equal(t, restarted, 1)
 }
 
 func TestRouteCreateRuleSpawnsTask(t *testing.T) {
