@@ -19,7 +19,7 @@ import (
 // brief replacement for the old tasks.instructions column.
 func taskInstructions(t *testing.T, s *store.Store, taskID, orgID int64) []*model.InstructionPayload {
 	t.Helper()
-	events, err := s.ListTaskBrief(t.Context(), nil, taskID, orgID)
+	events, err := s.ListEventsByTask(t.Context(), nil, taskID, orgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
 	var out []*model.InstructionPayload
 	for _, e := range events {
@@ -368,7 +368,7 @@ func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
 	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
 
 	// The event was still attached to the task.
-	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID)
+	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
 	assert.NilError(t, err)
 	assert.Equal(t, len(events), 1)
 

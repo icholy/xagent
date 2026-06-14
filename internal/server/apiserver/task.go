@@ -181,7 +181,8 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 	}
 	// The brief: the task's to-agent events (instruction + external) in stream
 	// order. Instructions are read from the stream, not a denormalized column.
-	events, _ := s.store.ListTaskBrief(ctx, nil, req.Id, caller.OrgID)
+	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, caller.OrgID,
+		[]string{model.EventTypeInstruction, model.EventTypeExternal})
 	links, _ := s.store.ListLinksByTask(ctx, nil, req.Id, caller.OrgID)
 	resp := &xagentv1.GetTaskDetailsResponse{
 		Task:   task.Proto(s.baseURL),
