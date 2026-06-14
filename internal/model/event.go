@@ -9,12 +9,13 @@ import (
 
 // Event type discriminators. These are the values of the events.type column —
 // a storage detail used to pick the concrete payload on read. They are not a
-// field on the Event value; the type is Payload.Type(). The instruction and
-// external arms are wired today; later increments add their own discriminator
-// with each arm.
+// field on the Event value; the type is Payload.Type(). The instruction,
+// external, report, and link arms are wired today; later increments add their
+// own discriminator with each arm.
 const (
 	EventTypeInstruction = "instruction"
 	EventTypeExternal    = "external"
+	EventTypeReport      = "report"
 	EventTypeLink        = "link"
 )
 
@@ -67,6 +68,22 @@ func (p *ExternalPayload) SetPayloadProto(pb *xagentv1.Event) {
 		Description: p.Description,
 		Url:         p.URL,
 		Data:        p.Data,
+	}}
+}
+
+// ReportPayload is the body of a report event — a from-agent message written by
+// the agent's report tool. It is the stream replacement for the old logs rows
+// with type='llm'. Reports are not to-agent, so they never enter the brief.
+type ReportPayload struct {
+	Content string `json:"content"`
+}
+
+func (*ReportPayload) Type() string    { return EventTypeReport }
+func (*ReportPayload) isEventPayload() {}
+
+func (p *ReportPayload) SetPayloadProto(pb *xagentv1.Event) {
+	pb.Payload = &xagentv1.Event_Report{Report: &xagentv1.ReportPayload{
+		Content: p.Content,
 	}}
 }
 
@@ -148,6 +165,10 @@ func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 			Description: arm.External.Description,
 			URL:         arm.External.Url,
 			Data:        arm.External.Data,
+		}
+	case *xagentv1.Event_Report:
+		return &ReportPayload{
+			Content: arm.Report.Content,
 		}
 	case *xagentv1.Event_Link:
 		return &LinkPayload{

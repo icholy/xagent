@@ -281,12 +281,13 @@ message Event {
   // The set arm IS the event type — a typed union, not an opaque Struct. There
   // is no separate `type` field on the wire; the db `type` column is
   // materialized from the arm for indexed filtering (like `direction`). The
-  // instruction, external, and link arms are wired today; field numbers 7/8 are
-  // left unassigned for the report/lifecycle arms the proposal adds in later
-  // increments (see proposals/draft/unified-task-event-stream.md).
+  // instruction, external, report, and link arms are wired today; field number 8
+  // is left unassigned for the lifecycle arm the proposal adds in a later
+  // increment (see proposals/draft/unified-task-event-stream.md).
   oneof payload {
     InstructionPayload instruction = 5;
     ExternalPayload external = 6;
+    ReportPayload report = 7;
     LinkPayload link = 9;
   }
 }
@@ -303,6 +304,13 @@ message ExternalPayload {
   string description = 1;
   string url = 2;
   string data = 3;
+}
+
+// ReportPayload is the body of a report event — a from-agent message written by
+// the agent's `report` tool. It is the stream replacement for the old logs rows
+// with type='llm'. Reports are not to-agent, so they never enter the brief.
+message ReportPayload {
+  string content = 1;
 }
 
 // LinkPayload is the body of a link event — an about-task record of a link the

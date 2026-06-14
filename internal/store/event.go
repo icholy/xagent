@@ -123,6 +123,12 @@ func toEventPayload(typ string, data []byte) (model.EventPayload, error) {
 			return nil, fmt.Errorf("unmarshal external payload: %w", err)
 		}
 		return &p, nil
+	case model.EventTypeReport:
+		var p model.ReportPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("unmarshal report payload: %w", err)
+		}
+		return &p, nil
 	case model.EventTypeLink:
 		var p model.LinkPayload
 		if err := json.Unmarshal(data, &p); err != nil {
