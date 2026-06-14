@@ -3,9 +3,9 @@
 -- Give events a typed payload (the first data-model increment of the
 -- unified-task-event-stream proposal). The flat description/data/url columns are
 -- replaced by a materialized `type` column (the set Event.payload oneof arm), a
--- per-event `wake` flag, and a `payload` jsonb holding the arm's protojson. As
--- with the prior task-scoping migration there is no backfill, so clear the table
--- before reshaping it.
+-- per-event `wake` flag, and a `payload` jsonb holding the encoding/json of the
+-- model payload struct. As with the prior task-scoping migration there is no
+-- backfill, so clear the table before reshaping it.
 DELETE FROM events;
 
 DROP INDEX IF EXISTS idx_events_url;

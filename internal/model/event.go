@@ -17,10 +17,9 @@ const (
 
 // EventPayload is the sealed set of event bodies — one per arm of the
 // xagentv1.Event.payload oneof. Each arm reports its discriminator via Type()
-// and maps itself onto the wire via Proto()/SetPayload, keeping the arm switch
-// off Event.Proto(). The set is closed: implementations must live in this
-// package because the interface is sealed with the unexported isEventPayload
-// marker.
+// and maps itself onto the wire via SetPayloadProto, keeping the arm switch off
+// Event.Proto(). The set is closed: implementations must live in this package
+// because the interface is sealed with the unexported isEventPayload marker.
 type EventPayload interface {
 	// Type returns the discriminator stored in the events.type column.
 	Type() string
