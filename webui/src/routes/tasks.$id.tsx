@@ -1,19 +1,16 @@
-import Markdown from 'react-markdown'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
   listEventsByTask,
   updateTask,
-  deleteEvent,
   archiveTask,
   unarchiveTask,
   cancelTask,
   restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { LifecycleKind } from '@/gen/xagent/v1/xagent_pb'
-import type { TaskLink, Event, LifecyclePayload } from '@/gen/xagent/v1/xagent_pb'
-import { timestampDate, type Timestamp } from '@bufbuild/protobuf/wkt'
+import type { TaskLink } from '@/gen/xagent/v1/xagent_pb'
+import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
 import {
   canArchiveTask,
@@ -22,83 +19,22 @@ import {
   canRestartTask,
   isArchivedTask,
 } from '@/lib/task'
+import { eventsToTimeline } from '@/lib/timeline'
 import { ArchivedBadge } from '@/components/archived-badge'
 import { ArchiveButton } from '@/components/archive-button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
+import { TaskTimeline } from '@/components/task-timeline'
 import { Plus, Loader2 } from 'lucide-react'
-import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
   component: TaskDetail,
 })
-
-const logTypeStyles: Record<string, string> = {
-  report: 'bg-purple-100 text-purple-800 border-purple-200',
-  lifecycle: 'bg-blue-100 text-blue-800 border-blue-200',
-}
-
-// A row in the Activity table — a report or lifecycle event from the task's
-// stream projected into a flat shape (the logs table is gone).
-type ActivityRow = { type: string; content: string; createdAt?: Timestamp }
-
-// renderLifecycle turns a lifecycle event into a readable activity line, e.g.
-// "Created by icholy", "Cancelled", "Sandbox exited (Running -> Completed)",
-// "Sandbox failed: <message>". It mirrors the Go-side LifecyclePayload.Summary.
-function renderLifecycle(p: LifecyclePayload): string {
-  let s: string
-  switch (p.kind) {
-    case LifecycleKind.CREATED:
-      s = 'Created'
-      break
-    case LifecycleKind.UPDATED:
-      s = 'Updated'
-      break
-    case LifecycleKind.CANCELLED:
-      s = 'Cancelled'
-      break
-    case LifecycleKind.RESTARTED:
-      s = 'Restarted'
-      break
-    case LifecycleKind.ARCHIVED:
-      s = 'Archived'
-      break
-    case LifecycleKind.UNARCHIVED:
-      s = 'Unarchived'
-      break
-    case LifecycleKind.AUTO_ARCHIVED:
-      s = 'Auto-archived'
-      break
-    case LifecycleKind.SANDBOX_STARTED:
-      s = 'Sandbox started'
-      break
-    case LifecycleKind.SANDBOX_EXITED:
-      s = 'Sandbox exited'
-      if (p.fromStatus && p.toStatus) s += ` (${p.fromStatus} -> ${p.toStatus})`
-      break
-    case LifecycleKind.SANDBOX_FAILED:
-      s = 'Sandbox failed'
-      if (p.message) s += `: ${p.message}`
-      break
-    default:
-      s = 'Lifecycle event'
-  }
-  if (p.actor?.kind === 'user' && p.actor.name) s += ` by ${p.actor.name}`
-  return s
-}
 
 function TaskDetail() {
   const { id } = Route.useParams()
@@ -111,16 +47,24 @@ function TaskDetail() {
     { refetchInterval: 60000 },
   )
 
-  // The logs table is gone: the activity view reads report (from-agent) and
-  // lifecycle (about-task) events straight from the task's stream.
-  const { data: eventsData } = useQuery(listEventsByTask, { taskId }, { refetchInterval: 60000 })
+  // The single activity view is the timeline: every instruction, external
+  // event, report, lifecycle transition, and link the task produced, in order.
+  const { data: eventsData, refetch: refetchEvents } = useQuery(
+    listEventsByTask,
+    { taskId },
+    { refetchInterval: 60000 },
+  )
 
-  const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
-  const deleteEventMutation = useMutation(deleteEvent, { onSuccess: () => refetch() })
-  const archiveMutation = useMutation(archiveTask, { onSuccess: () => refetch() })
-  const unarchiveMutation = useMutation(unarchiveTask, { onSuccess: () => refetch() })
-  const cancelMutation = useMutation(cancelTask, { onSuccess: () => refetch() })
-  const restartMutation = useMutation(restartTask, { onSuccess: () => refetch() })
+  const refetchAll = () => {
+    refetch()
+    refetchEvents()
+  }
+
+  const updateMutation = useMutation(updateTask, { onSuccess: refetchAll })
+  const archiveMutation = useMutation(archiveTask, { onSuccess: refetchAll })
+  const unarchiveMutation = useMutation(unarchiveTask, { onSuccess: refetchAll })
+  const cancelMutation = useMutation(cancelTask, { onSuccess: refetchAll })
+  const restartMutation = useMutation(restartTask, { onSuccess: refetchAll })
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: taskId })
@@ -149,10 +93,6 @@ function TaskDetail() {
     setInstruction('')
   }
 
-  const handleDeleteEvent = async (eventId: bigint) => {
-    await deleteEventMutation.mutateAsync({ id: eventId })
-  }
-
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -170,34 +110,8 @@ function TaskDetail() {
   }
 
   const task = data?.task
-  const events = data?.events ?? []
   const links = data?.links ?? []
-
-  // Project the report and lifecycle arms of the stream into flat activity rows.
-  // listEventsByTask returns newest-first, so sort ascending to render them
-  // chronologically.
-  const activity: ActivityRow[] = (eventsData?.events ?? [])
-    .flatMap((e) => {
-      if (e.payload.case === 'report') {
-        return [{ type: 'report', content: e.payload.value.content, createdAt: e.createdAt }]
-      }
-      if (e.payload.case === 'lifecycle') {
-        return [
-          { type: 'lifecycle', content: renderLifecycle(e.payload.value), createdAt: e.createdAt },
-        ]
-      }
-      return []
-    })
-    .sort((a, b) => {
-      const at = a.createdAt ? Number(a.createdAt.seconds) : 0
-      const bt = b.createdAt ? Number(b.createdAt.seconds) : 0
-      return at - bt
-    })
-
-  // Instructions are no longer a task field — they are instruction events in the
-  // brief. External events keep their own section below.
-  const instructionEvents = events.filter((e) => e.payload.case === 'instruction')
-  const externalEvents = events.filter((e) => e.payload.case === 'external')
+  const timeline = eventsToTimeline(eventsData?.events ?? [])
 
   if (!task) {
     return (
@@ -289,27 +203,16 @@ function TaskDetail() {
         </div>
       )}
 
-      {/* Instructions */}
+      {/* Activity timeline */}
       <div className="rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-4">Instructions</h2>
-        {instructionEvents.length === 0 ? (
-          <p className="text-muted-foreground">No instructions</p>
-        ) : (
-          <div className="space-y-3">
-            {instructionEvents.map((event) => {
-              const inst = event.payload.case === 'instruction' ? event.payload.value : undefined
-              return (
-                <InstructionCard
-                  key={String(event.id)}
-                  text={inst?.text ?? ''}
-                  url={inst?.url ?? ''}
-                />
-              )
-            })}
-          </div>
-        )}
-        {!isArchivedTask(task) && (
-          <form onSubmit={handleAddInstruction} className="space-y-4 pt-4 mt-4 border-t">
+        <h2 className="text-lg font-semibold mb-4">Activity</h2>
+        <TaskTimeline items={timeline} />
+      </div>
+
+      {/* Add instruction */}
+      {!isArchivedTask(task) && (
+        <div className="rounded-lg border p-6">
+          <form onSubmit={handleAddInstruction} className="space-y-4">
             <Textarea
               placeholder="Enter a new instruction..."
               value={instruction}
@@ -327,45 +230,7 @@ function TaskDetail() {
               </Button>
             </div>
           </form>
-        )}
-      </div>
-
-      {/* Events */}
-      {externalEvents.length > 0 && (
-        <div className="rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Events</h2>
-          <EventsTable
-            events={externalEvents}
-            onDelete={handleDeleteEvent}
-            isDeleting={deleteEventMutation.isPending}
-          />
         </div>
-      )}
-
-      {/* Activity */}
-      <div className="rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-4">Activity</h2>
-        <ActivityTable rows={activity} />
-      </div>
-    </div>
-  )
-}
-
-function InstructionCard({ text, url }: { text: string; url: string }) {
-  return (
-    <div className="bg-muted/50 border rounded-lg p-4">
-      <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
-        <Markdown>{text}</Markdown>
-      </div>
-      {url && (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm text-muted-foreground hover:text-primary mt-2 inline-block break-all"
-        >
-          {url}
-        </a>
       )}
     </div>
   )
@@ -400,119 +265,5 @@ function LinksSection({ links }: { links: TaskLink[] }) {
         </li>
       ))}
     </ul>
-  )
-}
-
-function EventsTable({
-  events,
-  onDelete,
-  isDeleting,
-}: {
-  events: Event[]
-  onDelete: (eventId: bigint) => void
-  isDeleting: boolean
-}) {
-  const orgId = useOrgId()
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>ID</TableHead>
-          <TableHead>Description</TableHead>
-          <TableHead>Data</TableHead>
-          <TableHead>Created</TableHead>
-          <TableHead></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {events.map((event) => {
-          // Only external events carry description/url/data; other arms render as '-'.
-          const external = event.payload.case === 'external' ? event.payload.value : undefined
-          const dataContent = external?.data || '-'
-          const truncatedData =
-            dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
-
-          return (
-            <TableRow key={String(event.id)}>
-              <TableCell>{String(event.id)}</TableCell>
-              <TableCell>
-                <Link
-                  to="/events/$id"
-                  search={{ org: orgId }}
-                  params={{ id: String(event.id) }}
-                  className="text-primary hover:underline"
-                >
-                  {external?.description || '-'}
-                </Link>
-              </TableCell>
-              <TableCell className="max-w-xs truncate">
-                {external?.url ? (
-                  <a
-                    href={external.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    {truncatedData}
-                  </a>
-                ) : (
-                  truncatedData
-                )}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {event.createdAt ? <RelativeTime date={timestampDate(event.createdAt)} /> : '-'}
-              </TableCell>
-              <TableCell>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => onDelete(event.id)}
-                  disabled={isDeleting}
-                >
-                  Delete
-                </Button>
-              </TableCell>
-            </TableRow>
-          )
-        })}
-      </TableBody>
-    </Table>
-  )
-}
-
-function ActivityTable({ rows }: { rows: ActivityRow[] }) {
-  if (rows.length === 0) {
-    return <div className="text-muted-foreground">No activity yet.</div>
-  }
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Type</TableHead>
-          <TableHead>Content</TableHead>
-          <TableHead>Created</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row, index) => (
-          <TableRow key={index}>
-            <TableCell>
-              <Badge
-                variant="outline"
-                className={logTypeStyles[row.type] ?? 'bg-gray-100 text-gray-600'}
-              >
-                {row.type}
-              </Badge>
-            </TableCell>
-            <TableCell className="whitespace-pre-wrap break-words">{row.content}</TableCell>
-            <TableCell className="text-muted-foreground">
-              {row.createdAt ? <RelativeTime date={timestampDate(row.createdAt)} /> : '-'}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
   )
 }
