@@ -259,6 +259,37 @@ func (t *Task) applyRunnerEventFailed() bool {
 	}
 }
 
+// LifecycleEvent maps the runner event to its sandbox lifecycle event. task
+// carries the post-fold status and from is the status before the fold, so the
+// payload records the transition (e.g. RUNNING -> COMPLETED). The container
+// failure detail rides in the SANDBOX_FAILED message field (the old `error` log
+// content). Returns false for runner events with no lifecycle home.
+func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) {
+	lifecycle := func(kind LifecycleKind, message string) *Event {
+		return &Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &LifecyclePayload{
+				Kind:       kind,
+				Actor:      RunnerActor,
+				FromStatus: from.Label(),
+				ToStatus:   task.Status.Label(),
+				Message:    message,
+			},
+		}
+	}
+	switch e.Event {
+	case RunnerEventStarted:
+		return lifecycle(LifecycleKindSandboxStarted, ""), true
+	case RunnerEventStopped:
+		return lifecycle(LifecycleKindSandboxExited, ""), true
+	case RunnerEventFailed:
+		return lifecycle(LifecycleKindSandboxFailed, "container failed"), true
+	default:
+		return nil, false
+	}
+}
+
 // IsDone reports whether the task has finished its run: completed, failed,
 // or cancelled. A done task can still be restarted via Start/Restart, so
 // this isn't an absorbing state — just a snapshot that the current run
