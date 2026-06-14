@@ -275,11 +275,24 @@ message ListLinksResponse {
 
 message Event {
   int64 id = 1;
-  string description = 2;
+  int64 task_id = 2;
+  bool wake = 3;
+  google.protobuf.Timestamp created_at = 4;
+  // The set arm IS the event type — a typed union, not an opaque Struct. There
+  // is no separate `type` field on the wire; the db `type` column is
+  // materialized from the arm for indexed filtering (like `direction`). Only the
+  // external arm is wired today; field numbers 5/7/8/9 are left unassigned for
+  // the instruction/report/lifecycle/link arms the proposal adds in later
+  // increments (see proposals/draft/unified-task-event-stream.md).
+  oneof payload {
+    ExternalPayload external = 6;
+  }
+}
+
+message ExternalPayload {
+  string description = 1;
+  string url = 2;
   string data = 3;
-  string url = 4;
-  google.protobuf.Timestamp created_at = 5;
-  int64 task_id = 6;
 }
 
 message ListEventsRequest {

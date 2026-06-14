@@ -47,6 +47,9 @@ function EventDetail() {
     )
   }
 
+  // Only external events carry description/url/data; other arms render as '-'.
+  const external = event.payload.case === 'external' ? event.payload.value : undefined
+
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold mb-6">Event {String(event.id)}</h1>
@@ -55,20 +58,20 @@ function EventDetail() {
         <div className="rounded-lg border p-6 space-y-4">
           <div>
             <h2 className="text-sm font-medium text-muted-foreground">Description</h2>
-            <p className="mt-1">{event.description || '-'}</p>
+            <p className="mt-1">{external?.description || '-'}</p>
           </div>
 
           <div>
             <h2 className="text-sm font-medium text-muted-foreground">URL</h2>
             <p className="mt-1">
-              {event.url ? (
+              {external?.url ? (
                 <a
-                  href={event.url}
+                  href={external.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline break-all"
                 >
-                  {event.url}
+                  {external.url}
                 </a>
               ) : (
                 '-'
@@ -83,11 +86,11 @@ function EventDetail() {
             </p>
           </div>
 
-          {event.data && (
+          {external?.data && (
             <div>
               <h2 className="text-sm font-medium text-muted-foreground">Data</h2>
               <pre className="mt-1 p-4 bg-muted rounded-md overflow-x-auto text-sm">
-                {formatJson(event.data)}
+                {formatJson(external.data)}
               </pre>
             </div>
           )}

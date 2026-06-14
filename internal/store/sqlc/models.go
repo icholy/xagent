@@ -11,13 +11,13 @@ import (
 )
 
 type Event struct {
-	ID          int64     `json:"id"`
-	Description string    `json:"description"`
-	Data        string    `json:"data"`
-	Url         string    `json:"url"`
-	OrgID       int64     `json:"org_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	TaskID      int64     `json:"task_id"`
+	ID        int64           `json:"id"`
+	OrgID     int64           `json:"org_id"`
+	CreatedAt time.Time       `json:"created_at"`
+	TaskID    int64           `json:"task_id"`
+	Type      string          `json:"type"`
+	Wake      bool            `json:"wake"`
+	Payload   json.RawMessage `json:"payload"`
 }
 
 type Key struct {

@@ -124,7 +124,9 @@ function RecentEventsCard() {
 
 function EventRow({ event }: { event: Event }) {
   const orgId = useOrgId()
-  const dataContent = event.data || '-'
+  // Only external events carry description/url/data; other arms render as '-'.
+  const external = event.payload.case === 'external' ? event.payload.value : undefined
+  const dataContent = external?.data || '-'
   const truncatedData = dataContent.length > 100 ? dataContent.slice(0, 100) + '...' : dataContent
 
   return (
@@ -137,13 +139,13 @@ function EventRow({ event }: { event: Event }) {
           params={{ id: String(event.id) }}
           className="text-primary hover:underline"
         >
-          {event.description || '-'}
+          {external?.description || '-'}
         </Link>
       </TableCell>
       <TableCell className="max-w-xs truncate">
-        {event.url ? (
+        {external?.url ? (
           <a
-            href={event.url}
+            href={external.url}
             target="_blank"
             rel="noopener noreferrer"
             className="text-primary hover:underline"
