@@ -7,32 +7,33 @@ package sqlc
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
 const createEvent = `-- name: CreateEvent :one
-INSERT INTO events (description, data, url, created_at, org_id, task_id)
+INSERT INTO events (task_id, org_id, type, wake, payload, created_at)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id
 `
 
 type CreateEventParams struct {
-	Description string    `json:"description"`
-	Data        string    `json:"data"`
-	Url         string    `json:"url"`
-	CreatedAt   time.Time `json:"created_at"`
-	OrgID       int64     `json:"org_id"`
-	TaskID      int64     `json:"task_id"`
+	TaskID    int64           `json:"task_id"`
+	OrgID     int64           `json:"org_id"`
+	Type      string          `json:"type"`
+	Wake      bool            `json:"wake"`
+	Payload   json.RawMessage `json:"payload"`
+	CreatedAt time.Time       `json:"created_at"`
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, createEvent,
-		arg.Description,
-		arg.Data,
-		arg.Url,
-		arg.CreatedAt,
-		arg.OrgID,
 		arg.TaskID,
+		arg.OrgID,
+		arg.Type,
+		arg.Wake,
+		arg.Payload,
+		arg.CreatedAt,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -54,7 +55,7 @@ func (q *Queries) DeleteEvent(ctx context.Context, arg DeleteEventParams) error 
 }
 
 const getEvent = `-- name: GetEvent :one
-SELECT id, description, data, url, org_id, created_at, task_id
+SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
 WHERE id = $1 AND org_id = $2
 `
@@ -69,21 +70,21 @@ func (q *Queries) GetEvent(ctx context.Context, arg GetEventParams) (Event, erro
 	var i Event
 	err := row.Scan(
 		&i.ID,
-		&i.Description,
-		&i.Data,
-		&i.Url,
 		&i.OrgID,
 		&i.CreatedAt,
 		&i.TaskID,
+		&i.Type,
+		&i.Wake,
+		&i.Payload,
 	)
 	return i, err
 }
 
 const listEvents = `-- name: ListEvents :many
-SELECT id, description, data, url, org_id, created_at, task_id
+SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
 WHERE org_id = $1
-ORDER BY created_at DESC
+ORDER BY id DESC
 LIMIT $2
 `
 
@@ -103,12 +104,12 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 		var i Event
 		if err := rows.Scan(
 			&i.ID,
-			&i.Description,
-			&i.Data,
-			&i.Url,
 			&i.OrgID,
 			&i.CreatedAt,
 			&i.TaskID,
+			&i.Type,
+			&i.Wake,
+			&i.Payload,
 		); err != nil {
 			return nil, err
 		}
@@ -124,10 +125,10 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event
 }
 
 const listEventsByTask = `-- name: ListEventsByTask :many
-SELECT id, description, data, url, org_id, created_at, task_id
+SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
 WHERE task_id = $1 AND org_id = $2
-ORDER BY created_at DESC
+ORDER BY id DESC
 `
 
 type ListEventsByTaskParams struct {
@@ -146,12 +147,12 @@ func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskPara
 		var i Event
 		if err := rows.Scan(
 			&i.ID,
-			&i.Description,
-			&i.Data,
-			&i.Url,
 			&i.OrgID,
 			&i.CreatedAt,
 			&i.TaskID,
+			&i.Type,
+			&i.Wake,
+			&i.Payload,
 		); err != nil {
 			return nil, err
 		}

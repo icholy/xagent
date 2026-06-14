@@ -51,12 +51,14 @@ func TestCreateEvent(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	expected := &xagentv1.Event{
-		Id:          resp.Event.Id,
-		Description: "PR comment added",
-		Data:        `{"comment": "LGTM"}`,
-		Url:         "https://github.com/example/repo/pull/123",
-		TaskId:      taskID,
-		CreatedAt:   resp.Event.CreatedAt,
+		Id:     resp.Event.Id,
+		TaskId: taskID,
+		Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+			Description: "PR comment added",
+			Url:         "https://github.com/example/repo/pull/123",
+			Data:        `{"comment": "LGTM"}`,
+		}},
+		CreatedAt: resp.Event.CreatedAt,
 	}
 	assert.DeepEqual(t, resp.Event, expected, protocmp.Transform())
 }
@@ -102,12 +104,14 @@ func TestGetEvent(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	expected := &xagentv1.Event{
-		Id:          createResp.Event.Id,
-		Description: "Issue updated",
-		Data:        `{"status": "closed"}`,
-		Url:         "https://github.com/example/repo/issues/42",
-		TaskId:      taskID,
-		CreatedAt:   getResp.Event.CreatedAt,
+		Id:     createResp.Event.Id,
+		TaskId: taskID,
+		Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+			Description: "Issue updated",
+			Url:         "https://github.com/example/repo/issues/42",
+			Data:        `{"status": "closed"}`,
+		}},
+		CreatedAt: getResp.Event.CreatedAt,
 	}
 	assert.DeepEqual(t, getResp.Event, expected, protocmp.Transform())
 }
@@ -164,8 +168,8 @@ func TestListEvents(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(resp.Events), 2)
 	// Events are ordered by created_at DESC (newest first)
-	assert.Equal(t, resp.Events[0].Description, "Event 2")
-	assert.Equal(t, resp.Events[1].Description, "Event 1")
+	assert.Equal(t, resp.Events[0].GetExternal().Description, "Event 2")
+	assert.Equal(t, resp.Events[1].GetExternal().Description, "Event 1")
 }
 
 func TestListEventsWithLimit(t *testing.T) {
@@ -195,8 +199,8 @@ func TestListEventsWithLimit(t *testing.T) {
 	// Assert
 	assert.Equal(t, len(resp.Events), 2)
 	// Events are ordered by created_at DESC (newest first)
-	assert.Equal(t, resp.Events[0].Description, "Event 5")
-	assert.Equal(t, resp.Events[1].Description, "Event 4")
+	assert.Equal(t, resp.Events[0].GetExternal().Description, "Event 5")
+	assert.Equal(t, resp.Events[1].GetExternal().Description, "Event 4")
 }
 
 func TestListEvents_Permissions(t *testing.T) {
@@ -323,8 +327,8 @@ func TestListEventsByTask(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(resp.Events), 2)
 	// Events are ordered by created_at DESC (newest first)
-	assert.Equal(t, resp.Events[0].Description, "Event 2")
-	assert.Equal(t, resp.Events[1].Description, "Event 1")
+	assert.Equal(t, resp.Events[0].GetExternal().Description, "Event 2")
+	assert.Equal(t, resp.Events[1].GetExternal().Description, "Event 1")
 }
 
 func TestListEventsByTask_Permissions(t *testing.T) {

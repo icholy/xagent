@@ -11,12 +11,12 @@ import (
 
 func (s *Store) CreateEvent(ctx context.Context, tx *sql.Tx, event *model.Event) error {
 	id, err := s.q(tx).CreateEvent(ctx, sqlc.CreateEventParams{
-		Description: event.Description,
-		Data:        event.Data,
-		Url:         event.URL,
-		OrgID:       event.OrgID,
-		TaskID:      event.TaskID,
-		CreatedAt:   time.Now().UTC(),
+		TaskID:    event.TaskID,
+		OrgID:     event.OrgID,
+		Type:      event.Type,
+		Wake:      event.Wake,
+		Payload:   event.Payload,
+		CreatedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		return err
@@ -64,13 +64,13 @@ func (s *Store) ListEventsByTask(ctx context.Context, tx *sql.Tx, taskID int64, 
 
 func toModelEvent(row sqlc.Event) *model.Event {
 	return &model.Event{
-		ID:          row.ID,
-		Description: row.Description,
-		Data:        row.Data,
-		URL:         row.Url,
-		OrgID:       row.OrgID,
-		TaskID:      row.TaskID,
-		CreatedAt:   row.CreatedAt,
+		ID:        row.ID,
+		TaskID:    row.TaskID,
+		OrgID:     row.OrgID,
+		Type:      row.Type,
+		Wake:      row.Wake,
+		Payload:   row.Payload,
+		CreatedAt: row.CreatedAt,
 	}
 }
 

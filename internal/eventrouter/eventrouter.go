@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store"
 )
@@ -182,19 +183,20 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 // — no task.Start(), no audit log — but still emits a channel notification
 // unconditionally so the event isn't silently swallowed.
 func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, orgID int64, wake bool) error {
-	event := &model.Event{
+	event, err := model.NewExternalEvent(taskID, orgID, wake, &xagentv1.ExternalPayload{
 		Description: input.Description,
+		Url:         input.URL,
 		Data:        input.Data,
-		URL:         input.URL,
-		OrgID:       orgID,
-		TaskID:      taskID,
+	})
+	if err != nil {
+		return err
 	}
 	notification := model.Notification{
 		Type:  "change",
 		OrgID: orgID,
 		Time:  time.Now(),
 	}
-	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+	err = r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := r.Store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
@@ -206,7 +208,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 				{Action: "updated", Type: "task", ID: taskID},
 				{Action: "updated", Type: "event", ID: event.ID},
 			}
-			notification.ChannelMessage = fmt.Sprintf("Task %d: %s (%s)", taskID, event.Description, event.URL)
+			notification.ChannelMessage = fmt.Sprintf("Task %d: %s (%s)", taskID, input.Description, input.URL)
 			return tx.Commit()
 		}
 		task, err := r.Store.GetTaskForUpdate(ctx, tx, taskID, event.OrgID)
@@ -232,7 +234,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 		}
 		notification.Runner = task.PendingRunner()
 		if wasDone {
-			notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s (%s)", task.ID, event.ID, event.Description, event.URL)
+			notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s (%s)", task.ID, event.ID, input.Description, input.URL)
 		}
 		return tx.Commit()
 	})

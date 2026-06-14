@@ -25,12 +25,12 @@ SET default_table_access_method = heap;
 
 CREATE TABLE public.events (
     id bigint NOT NULL,
-    description text NOT NULL,
-    data text NOT NULL,
-    url text DEFAULT ''::text NOT NULL,
     org_id bigint NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    task_id bigint NOT NULL
+    task_id bigint NOT NULL,
+    type text NOT NULL,
+    wake boolean DEFAULT false NOT NULL,
+    payload jsonb NOT NULL
 );
 
 
@@ -433,10 +433,10 @@ CREATE INDEX idx_events_org_id ON public.events USING btree (org_id);
 
 
 --
--- Name: idx_events_task_id; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_events_task_id_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_events_task_id ON public.events USING btree (task_id);
+CREATE INDEX idx_events_task_id_id ON public.events USING btree (task_id, id);
 
 
 --
@@ -673,4 +673,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260607000001'),
     ('20260607000002'),
     ('20260613000001'),
-    ('20260613120000');
+    ('20260613120000'),
+    ('20260614000001');

@@ -56,17 +56,19 @@ func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventReque
 	if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 	}
-	event := &model.Event{
+	// A user-created event maps to the external arm; it does not wake the task.
+	event, err := model.NewExternalEvent(task.ID, caller.OrgID, false, &xagentv1.ExternalPayload{
 		Description: req.Description,
+		Url:         req.Url,
 		Data:        req.Data,
-		URL:         req.Url,
-		OrgID:       caller.OrgID,
-		TaskID:      task.ID,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if err := s.store.CreateEvent(ctx, nil, event); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("event created", "id", event.ID, "task_id", event.TaskID, "description", event.Description)
+	s.log.Info("event created", "id", event.ID, "task_id", event.TaskID, "type", event.Type)
 	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
