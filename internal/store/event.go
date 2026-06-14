@@ -69,7 +69,7 @@ func (s *Store) ListEventsByTask(ctx context.Context, tx *sql.Tx, taskID int64, 
 }
 
 func toModelEvent(row sqlc.Event) (*model.Event, error) {
-	payload, err := decodeEventPayload(row.Type, row.Payload)
+	payload, err := toEventPayload(row.Type, row.Payload)
 	if err != nil {
 		return nil, err
 	}
@@ -95,11 +95,11 @@ func toModelEvents(rows []sqlc.Event) ([]*model.Event, error) {
 	return events, nil
 }
 
-// decodeEventPayload picks the concrete model.EventPayload for a stored row by
+// toEventPayload picks the concrete model.EventPayload for a stored row by
 // switching on its type discriminator, then decodes the jsonb body into it.
 // This is the only place the events.type column is consumed — it is a storage
 // detail, not a field on the Event value.
-func decodeEventPayload(typ string, data []byte) (model.EventPayload, error) {
+func toEventPayload(typ string, data []byte) (model.EventPayload, error) {
 	switch typ {
 	case model.EventTypeExternal:
 		var p model.ExternalPayload
