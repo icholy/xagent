@@ -85,11 +85,11 @@ var _ Client = &ClientMock{}
 //			LinkGitHubInstallationFunc: func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
 //				panic("mock out the LinkGitHubInstallation method")
 //			},
-//			ListEventsFunc: func(contextMoqParam context.Context, listEventsRequest *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
-//				panic("mock out the ListEvents method")
-//			},
 //			ListEventsByTaskFunc: func(contextMoqParam context.Context, listEventsByTaskRequest *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 //				panic("mock out the ListEventsByTask method")
+//			},
+//			ListExternalEventsFunc: func(contextMoqParam context.Context, listExternalEventsRequest *xagentv1.ListExternalEventsRequest) (*xagentv1.ListExternalEventsResponse, error) {
+//				panic("mock out the ListExternalEvents method")
 //			},
 //			ListKeysFunc: func(contextMoqParam context.Context, listKeysRequest *xagentv1.ListKeysRequest) (*xagentv1.ListKeysResponse, error) {
 //				panic("mock out the ListKeys method")
@@ -218,11 +218,11 @@ type ClientMock struct {
 	// LinkGitHubInstallationFunc mocks the LinkGitHubInstallation method.
 	LinkGitHubInstallationFunc func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error)
 
-	// ListEventsFunc mocks the ListEvents method.
-	ListEventsFunc func(contextMoqParam context.Context, listEventsRequest *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error)
-
 	// ListEventsByTaskFunc mocks the ListEventsByTask method.
 	ListEventsByTaskFunc func(contextMoqParam context.Context, listEventsByTaskRequest *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error)
+
+	// ListExternalEventsFunc mocks the ListExternalEvents method.
+	ListExternalEventsFunc func(contextMoqParam context.Context, listExternalEventsRequest *xagentv1.ListExternalEventsRequest) (*xagentv1.ListExternalEventsResponse, error)
 
 	// ListKeysFunc mocks the ListKeys method.
 	ListKeysFunc func(contextMoqParam context.Context, listKeysRequest *xagentv1.ListKeysRequest) (*xagentv1.ListKeysResponse, error)
@@ -434,19 +434,19 @@ type ClientMock struct {
 			// LinkGitHubInstallationRequest is the linkGitHubInstallationRequest argument value.
 			LinkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest
 		}
-		// ListEvents holds details about calls to the ListEvents method.
-		ListEvents []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// ListEventsRequest is the listEventsRequest argument value.
-			ListEventsRequest *xagentv1.ListEventsRequest
-		}
 		// ListEventsByTask holds details about calls to the ListEventsByTask method.
 		ListEventsByTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
 			ContextMoqParam context.Context
 			// ListEventsByTaskRequest is the listEventsByTaskRequest argument value.
 			ListEventsByTaskRequest *xagentv1.ListEventsByTaskRequest
+		}
+		// ListExternalEvents holds details about calls to the ListExternalEvents method.
+		ListExternalEvents []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// ListExternalEventsRequest is the listExternalEventsRequest argument value.
+			ListExternalEventsRequest *xagentv1.ListExternalEventsRequest
 		}
 		// ListKeys holds details about calls to the ListKeys method.
 		ListKeys []struct {
@@ -597,8 +597,8 @@ type ClientMock struct {
 	lockGetTask                        sync.RWMutex
 	lockGetTaskDetails                 sync.RWMutex
 	lockLinkGitHubInstallation         sync.RWMutex
-	lockListEvents                     sync.RWMutex
 	lockListEventsByTask               sync.RWMutex
+	lockListExternalEvents             sync.RWMutex
 	lockListKeys                       sync.RWMutex
 	lockListLinks                      sync.RWMutex
 	lockListOrgMembers                 sync.RWMutex
@@ -1411,42 +1411,6 @@ func (mock *ClientMock) LinkGitHubInstallationCalls() []struct {
 	return calls
 }
 
-// ListEvents calls ListEventsFunc.
-func (mock *ClientMock) ListEvents(contextMoqParam context.Context, listEventsRequest *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
-	if mock.ListEventsFunc == nil {
-		panic("ClientMock.ListEventsFunc: method is nil but Client.ListEvents was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam   context.Context
-		ListEventsRequest *xagentv1.ListEventsRequest
-	}{
-		ContextMoqParam:   contextMoqParam,
-		ListEventsRequest: listEventsRequest,
-	}
-	mock.lockListEvents.Lock()
-	mock.calls.ListEvents = append(mock.calls.ListEvents, callInfo)
-	mock.lockListEvents.Unlock()
-	return mock.ListEventsFunc(contextMoqParam, listEventsRequest)
-}
-
-// ListEventsCalls gets all the calls that were made to ListEvents.
-// Check the length with:
-//
-//	len(mockedClient.ListEventsCalls())
-func (mock *ClientMock) ListEventsCalls() []struct {
-	ContextMoqParam   context.Context
-	ListEventsRequest *xagentv1.ListEventsRequest
-} {
-	var calls []struct {
-		ContextMoqParam   context.Context
-		ListEventsRequest *xagentv1.ListEventsRequest
-	}
-	mock.lockListEvents.RLock()
-	calls = mock.calls.ListEvents
-	mock.lockListEvents.RUnlock()
-	return calls
-}
-
 // ListEventsByTask calls ListEventsByTaskFunc.
 func (mock *ClientMock) ListEventsByTask(contextMoqParam context.Context, listEventsByTaskRequest *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 	if mock.ListEventsByTaskFunc == nil {
@@ -1480,6 +1444,42 @@ func (mock *ClientMock) ListEventsByTaskCalls() []struct {
 	mock.lockListEventsByTask.RLock()
 	calls = mock.calls.ListEventsByTask
 	mock.lockListEventsByTask.RUnlock()
+	return calls
+}
+
+// ListExternalEvents calls ListExternalEventsFunc.
+func (mock *ClientMock) ListExternalEvents(contextMoqParam context.Context, listExternalEventsRequest *xagentv1.ListExternalEventsRequest) (*xagentv1.ListExternalEventsResponse, error) {
+	if mock.ListExternalEventsFunc == nil {
+		panic("ClientMock.ListExternalEventsFunc: method is nil but Client.ListExternalEvents was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam           context.Context
+		ListExternalEventsRequest *xagentv1.ListExternalEventsRequest
+	}{
+		ContextMoqParam:           contextMoqParam,
+		ListExternalEventsRequest: listExternalEventsRequest,
+	}
+	mock.lockListExternalEvents.Lock()
+	mock.calls.ListExternalEvents = append(mock.calls.ListExternalEvents, callInfo)
+	mock.lockListExternalEvents.Unlock()
+	return mock.ListExternalEventsFunc(contextMoqParam, listExternalEventsRequest)
+}
+
+// ListExternalEventsCalls gets all the calls that were made to ListExternalEvents.
+// Check the length with:
+//
+//	len(mockedClient.ListExternalEventsCalls())
+func (mock *ClientMock) ListExternalEventsCalls() []struct {
+	ContextMoqParam           context.Context
+	ListExternalEventsRequest *xagentv1.ListExternalEventsRequest
+} {
+	var calls []struct {
+		ContextMoqParam           context.Context
+		ListExternalEventsRequest *xagentv1.ListExternalEventsRequest
+	}
+	mock.lockListExternalEvents.RLock()
+	calls = mock.calls.ListExternalEvents
+	mock.lockListExternalEvents.RUnlock()
 	return calls
 }
 

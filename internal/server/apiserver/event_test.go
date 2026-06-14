@@ -162,7 +162,7 @@ func TestListEvents(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act - uses default limit (100)
-	resp, err := srv.ListEvents(ctx, &xagentv1.ListEventsRequest{})
+	resp, err := srv.ListExternalEvents(ctx, &xagentv1.ListExternalEventsRequest{})
 
 	// Assert
 	assert.NilError(t, err)
@@ -199,7 +199,7 @@ func TestListEvents_ExternalOnly(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	resp, err := srv.ListEvents(ctx, &xagentv1.ListEventsRequest{})
+	resp, err := srv.ListExternalEvents(ctx, &xagentv1.ListExternalEventsRequest{})
 
 	// Assert - the org feed returns only the external event; instruction and link
 	// events do not leak into it.
@@ -227,7 +227,7 @@ func TestListEventsWithLimit(t *testing.T) {
 	}
 
 	// Act - Get only 2 most recent events
-	resp, err := srv.ListEvents(ctx, &xagentv1.ListEventsRequest{
+	resp, err := srv.ListExternalEvents(ctx, &xagentv1.ListExternalEventsRequest{
 		Limit: 2,
 	})
 	assert.NilError(t, err)
@@ -269,9 +269,9 @@ func TestListEvents_Permissions(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Act
-	respA, err := srv.ListEvents(ctxA, &xagentv1.ListEventsRequest{})
+	respA, err := srv.ListExternalEvents(ctxA, &xagentv1.ListExternalEventsRequest{})
 	assert.NilError(t, err)
-	respB, err := srv.ListEvents(ctxB, &xagentv1.ListEventsRequest{})
+	respB, err := srv.ListExternalEvents(ctxB, &xagentv1.ListExternalEventsRequest{})
 	assert.NilError(t, err)
 
 	// Assert

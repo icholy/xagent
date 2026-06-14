@@ -23,7 +23,7 @@ service XAgentService {
   rpc UploadLogs(UploadLogsRequest) returns (UploadLogsResponse);
   rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
   rpc ListLinks(ListLinksRequest) returns (ListLinksResponse);
-  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+  rpc ListExternalEvents(ListExternalEventsRequest) returns (ListExternalEventsResponse);
   rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
   rpc GetEvent(GetEventRequest) returns (GetEventResponse);
   rpc DeleteEvent(DeleteEventRequest) returns (DeleteEventResponse);
@@ -356,11 +356,11 @@ enum LifecycleKind {
   LIFECYCLE_KIND_SANDBOX_FAILED = 10;
 }
 
-message ListEventsRequest {
+message ListExternalEventsRequest {
   int32 limit = 1;  // Max events to return (default: 100, max: 100)
 }
 
-message ListEventsResponse {
+message ListExternalEventsResponse {
   repeated Event events = 1;
 }
 

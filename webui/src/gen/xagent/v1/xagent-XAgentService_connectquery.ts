@@ -80,9 +80,9 @@ export const createLink = XAgentService.method.createLink;
 export const listLinks = XAgentService.method.listLinks;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.ListEvents
+ * @generated from rpc xagent.v1.XAgentService.ListExternalEvents
  */
-export const listEvents = XAgentService.method.listEvents;
+export const listExternalEvents = XAgentService.method.listExternalEvents;
 
 /**
  * @generated from rpc xagent.v1.XAgentService.CreateEvent
