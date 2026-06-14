@@ -126,9 +126,16 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		}
 		// The auto-archive is a runner-side (server worker) action, not a user
 		// one, so the lifecycle event's actor is the runner.
-		if err := a.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-			t, model.LifecycleKindAutoArchived, model.RunnerActor, from, "",
-		)); err != nil {
+		if err := a.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: t.ID,
+			OrgID:  t.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:       model.LifecycleKindAutoArchived,
+				Actor:      model.RunnerActor,
+				FromStatus: from.Label(),
+				ToStatus:   t.Status.Label(),
+			},
+		}); err != nil {
 			return err
 		}
 		return tx.Commit()

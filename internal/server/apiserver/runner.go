@@ -107,13 +107,26 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 // failure detail rides in the SANDBOX_FAILED message field (the old `error` log
 // content). Returns false for runner events with no lifecycle home.
 func runnerLifecycleEvent(task *model.Task, e model.RunnerEvent, from model.TaskStatus) (*model.Event, bool) {
+	lifecycle := func(kind model.LifecycleKind, message string) *model.Event {
+		return &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:       kind,
+				Actor:      model.RunnerActor,
+				FromStatus: from.Label(),
+				ToStatus:   task.Status.Label(),
+				Message:    message,
+			},
+		}
+	}
 	switch e.Event {
 	case model.RunnerEventStarted:
-		return model.NewLifecycleEvent(task, model.LifecycleKindSandboxStarted, model.RunnerActor, from, ""), true
+		return lifecycle(model.LifecycleKindSandboxStarted, ""), true
 	case model.RunnerEventStopped:
-		return model.NewLifecycleEvent(task, model.LifecycleKindSandboxExited, model.RunnerActor, from, ""), true
+		return lifecycle(model.LifecycleKindSandboxExited, ""), true
 	case model.RunnerEventFailed:
-		return model.NewLifecycleEvent(task, model.LifecycleKindSandboxFailed, model.RunnerActor, from, "container failed"), true
+		return lifecycle(model.LifecycleKindSandboxFailed, "container failed"), true
 	default:
 		return nil, false
 	}

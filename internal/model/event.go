@@ -197,26 +197,6 @@ func (p *LifecyclePayload) SetPayloadProto(pb *xagentv1.Event) {
 	}}
 }
 
-// NewLifecycleEvent builds an about-task lifecycle event for a task transition.
-// from is the task's status before the mutation; the task carries the
-// post-mutation status. message carries the failure detail for SANDBOX_FAILED
-// and is empty otherwise. The returned event is appended beside the status
-// mutation in the same transaction — status remains a materialized projection,
-// not derived from the stream (the #952 fold consolidation is deferred).
-func NewLifecycleEvent(task *Task, kind LifecycleKind, actor Actor, from TaskStatus, message string) *Event {
-	return &Event{
-		TaskID: task.ID,
-		OrgID:  task.OrgID,
-		Payload: &LifecyclePayload{
-			Kind:       kind,
-			Actor:      actor,
-			FromStatus: statusLabel(from),
-			ToStatus:   statusLabel(task.Status),
-			Message:    message,
-		},
-	}
-}
-
 // Summary renders a lifecycle event as a human-readable timeline line — e.g.
 // "Created by icholy", "Cancelled", "Sandbox exited (Running -> Completed)",
 // "Sandbox failed: <message>". It is the Go-side renderer (used by the local MCP
@@ -257,16 +237,6 @@ func (p *LifecyclePayload) Summary() string {
 		s += " by " + p.Actor.Name
 	}
 	return s
-}
-
-// statusLabel renders a TaskStatus for a lifecycle payload, mapping the zero
-// (unspecified) status to the empty string — e.g. a freshly created task has no
-// prior status.
-func statusLabel(s TaskStatus) string {
-	if s == TaskStatusUnspecified {
-		return ""
-	}
-	return s.String()
 }
 
 // Event is one row of a task's event stream. Its body is a typed, sealed

@@ -6,6 +6,15 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+func TestTaskStatus_Label(t *testing.T) {
+	t.Parallel()
+	// The unspecified (zero) status renders empty — e.g. a freshly created task
+	// has no prior status.
+	assert.Equal(t, TaskStatusUnspecified.Label(), "")
+	assert.Equal(t, TaskStatusPending.Label(), "Pending")
+	assert.Equal(t, TaskStatusCancelled.Label(), "Cancelled")
+}
+
 func TestTask_ApplyRunnerEvent(t *testing.T) {
 	tests := []struct {
 		name    string

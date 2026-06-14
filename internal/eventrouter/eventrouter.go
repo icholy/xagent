@@ -229,9 +229,16 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 		// (actor is the router since the external event drove it). A wake of an
 		// already-running task causes no status transition, so no lifecycle event.
 		if wasDone {
-			if err := r.Store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-				task, model.LifecycleKindRestarted, model.RouterActor, from, "",
-			)); err != nil {
+			if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+				TaskID: task.ID,
+				OrgID:  task.OrgID,
+				Payload: &model.LifecyclePayload{
+					Kind:       model.LifecycleKindRestarted,
+					Actor:      model.RouterActor,
+					FromStatus: from.Label(),
+					ToStatus:   task.Status.Label(),
+				},
+			}); err != nil {
 				return err
 			}
 		}
@@ -319,9 +326,15 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		// Record the creation as a lifecycle event. The router (not a user) created
 		// the task, so the actor is the routing-rule actor; a freshly created task
 		// has no prior status.
-		if err := r.Store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-			task, model.LifecycleKindCreated, model.RouterActor, model.TaskStatusUnspecified, "",
-		)); err != nil {
+		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:     model.LifecycleKindCreated,
+				Actor:    model.RouterActor,
+				ToStatus: task.Status.Label(),
+			},
+		}); err != nil {
 			return err
 		}
 		notification = model.Notification{
