@@ -58,7 +58,11 @@ function EventsPage() {
 function RecentEventsCard() {
   const orgId = useOrgId()
   const [limit, setLimit] = useState(25)
-  const { data, isLoading, error } = useQuery(listExternalEvents, { limit }, { refetchInterval: 60000 })
+  const { data, isLoading, error } = useQuery(
+    listExternalEvents,
+    { limit },
+    { refetchInterval: 60000 },
+  )
 
   const events = data?.events ?? []
 
