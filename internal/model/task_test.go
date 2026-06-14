@@ -385,6 +385,156 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 	}
 }
 
+func TestTask_ApplyLifecycleEvent(t *testing.T) {
+	actor := UserActor("tester")
+	tests := []struct {
+		name    string
+		before  Task
+		kind    LifecycleKind
+		message string
+		after   Task              // expected task state (only checked when it applies)
+		want    *LifecyclePayload // nil means the guard rejected the transition
+	}{
+		{
+			name:   "created records landing status with no prior status",
+			before: Task{Status: TaskStatusPending},
+			kind:   LifecycleKindCreated,
+			after:  Task{Status: TaskStatusPending},
+			want:   &LifecyclePayload{Kind: LifecycleKindCreated, Actor: actor, FromStatus: "", ToStatus: "Pending"},
+		},
+		{
+			name:   "updated is not a status transition (from == to)",
+			before: Task{Status: TaskStatusRunning},
+			kind:   LifecycleKindUpdated,
+			after:  Task{Status: TaskStatusRunning},
+			want:   &LifecyclePayload{Kind: LifecycleKindUpdated, Actor: actor, FromStatus: "Running", ToStatus: "Running"},
+		},
+		{
+			name:   "cancelled from running",
+			before: Task{Status: TaskStatusRunning},
+			kind:   LifecycleKindCancelled,
+			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 1},
+			want:   &LifecyclePayload{Kind: LifecycleKindCancelled, Actor: actor, FromStatus: "Running", ToStatus: "Cancelling"},
+		},
+		{
+			name:   "cancelled rejected from completed",
+			before: Task{Status: TaskStatusCompleted},
+			kind:   LifecycleKindCancelled,
+			want:   nil,
+		},
+		{
+			name:   "restarted reuses Start: completed -> pending",
+			before: Task{Status: TaskStatusCompleted},
+			kind:   LifecycleKindRestarted,
+			after:  Task{Status: TaskStatusPending, Command: TaskCommandStart, Version: 1},
+			want:   &LifecyclePayload{Kind: LifecycleKindRestarted, Actor: actor, FromStatus: "Completed", ToStatus: "Pending"},
+		},
+		{
+			name:   "restarted reuses Start: running keeps status, sets start command",
+			before: Task{Status: TaskStatusRunning},
+			kind:   LifecycleKindRestarted,
+			after:  Task{Status: TaskStatusRunning, Command: TaskCommandStart, Version: 1},
+			want:   &LifecyclePayload{Kind: LifecycleKindRestarted, Actor: actor, FromStatus: "Running", ToStatus: "Running"},
+		},
+		{
+			name:   "restarted rejected from pending",
+			before: Task{Status: TaskStatusPending},
+			kind:   LifecycleKindRestarted,
+			want:   nil,
+		},
+		{
+			name:   "archived from completed",
+			before: Task{Status: TaskStatusCompleted},
+			kind:   LifecycleKindArchived,
+			after:  Task{Status: TaskStatusCompleted, Archived: true},
+			want:   &LifecyclePayload{Kind: LifecycleKindArchived, Actor: actor, FromStatus: "Completed", ToStatus: "Completed"},
+		},
+		{
+			name:   "archived rejected from running",
+			before: Task{Status: TaskStatusRunning},
+			kind:   LifecycleKindArchived,
+			want:   nil,
+		},
+		{
+			name:   "auto-archived from cancelled",
+			before: Task{Status: TaskStatusCancelled},
+			kind:   LifecycleKindAutoArchived,
+			after:  Task{Status: TaskStatusCancelled, Archived: true},
+			want:   &LifecyclePayload{Kind: LifecycleKindAutoArchived, Actor: actor, FromStatus: "Cancelled", ToStatus: "Cancelled"},
+		},
+		{
+			name:   "auto-archived rejected from pending",
+			before: Task{Status: TaskStatusPending},
+			kind:   LifecycleKindAutoArchived,
+			want:   nil,
+		},
+		{
+			name:   "unarchived clears archived flag",
+			before: Task{Status: TaskStatusCompleted, Archived: true},
+			kind:   LifecycleKindUnarchived,
+			after:  Task{Status: TaskStatusCompleted, Archived: false},
+			want:   &LifecyclePayload{Kind: LifecycleKindUnarchived, Actor: actor, FromStatus: "Completed", ToStatus: "Completed"},
+		},
+		{
+			name:   "unarchived rejected when not archived",
+			before: Task{Status: TaskStatusCompleted},
+			kind:   LifecycleKindUnarchived,
+			want:   nil,
+		},
+		{
+			name:   "sandbox started: pending with restart -> running",
+			before: Task{Status: TaskStatusPending, Command: TaskCommandRestart},
+			kind:   LifecycleKindSandboxStarted,
+			after:  Task{Status: TaskStatusRunning},
+			want:   &LifecyclePayload{Kind: LifecycleKindSandboxStarted, Actor: actor, FromStatus: "Pending", ToStatus: "Running"},
+		},
+		{
+			name:   "sandbox started rejected from completed",
+			before: Task{Status: TaskStatusCompleted},
+			kind:   LifecycleKindSandboxStarted,
+			want:   nil,
+		},
+		{
+			name:   "sandbox exited: running -> completed",
+			before: Task{Status: TaskStatusRunning},
+			kind:   LifecycleKindSandboxExited,
+			after:  Task{Status: TaskStatusCompleted},
+			want:   &LifecyclePayload{Kind: LifecycleKindSandboxExited, Actor: actor, FromStatus: "Running", ToStatus: "Completed"},
+		},
+		{
+			name:    "sandbox failed: running -> failed carries message",
+			before:  Task{Status: TaskStatusRunning},
+			kind:    LifecycleKindSandboxFailed,
+			message: "container failed",
+			after:   Task{Status: TaskStatusFailed},
+			want:    &LifecyclePayload{Kind: LifecycleKindSandboxFailed, Actor: actor, FromStatus: "Running", ToStatus: "Failed", Message: "container failed"},
+		},
+		{
+			name:   "unspecified kind is rejected",
+			before: Task{Status: TaskStatusRunning},
+			kind:   LifecycleKindUnspecified,
+			want:   nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := tt.before
+			got, ok := task.ApplyLifecycleEvent(tt.kind, actor, tt.message)
+			if tt.want == nil {
+				// A rejected guard leaves the task untouched and returns no payload.
+				assert.Assert(t, !ok)
+				assert.Assert(t, got == nil)
+				assert.DeepEqual(t, task, tt.before)
+				return
+			}
+			assert.Assert(t, ok)
+			assert.DeepEqual(t, got, tt.want)
+			assert.DeepEqual(t, task, tt.after)
+		})
+	}
+}
+
 func TestTask_IsDone(t *testing.T) {
 	tests := []struct {
 		status TaskStatus

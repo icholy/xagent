@@ -44,8 +44,11 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 				return connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 			}
-			from := task.Status
-			applied := task.ApplyRunnerEvent(&event)
+			// Route the runner event through the ApplyLifecycleEvent fold: it
+			// applies the SANDBOX_* transition to the materialized status and
+			// returns the lifecycle event to append beside it, so the two can't
+			// drift.
+			ev, applied := task.ApplyRunnerEventLifecycle(&event)
 			s.log.Info("runner event recieved",
 				"task_id", event.TaskID,
 				"event", event.Event,
@@ -60,13 +63,8 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 				return err
 			}
-			// Append the sandbox lifecycle event beside the status fold (status is
-			// the materialized projection; the fold logic is unchanged). from is the
-			// status before ApplyRunnerEvent; the task carries the post-fold status.
-			if ev, ok := event.LifecycleEvent(task, from); ok {
-				if err := s.store.CreateEvent(ctx, tx, ev); err != nil {
-					return err
-				}
+			if err := s.store.CreateEvent(ctx, tx, eventFromLifecycle(task, ev)); err != nil {
+				return err
 			}
 			notification.Runner = task.PendingRunner()
 			// Only terminal statuses produce a channel message. Completed,

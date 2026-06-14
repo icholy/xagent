@@ -166,27 +166,50 @@ func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 
 // ApplyRunnerEvent applies a runner event to the task, updating its status
 // and command fields according to the state machine rules defined in RFC #149.
-// Returns true if the task was updated, false otherwise.
+// Returns true if the task was updated, false otherwise. It is a thin wrapper
+// over ApplyRunnerEventLifecycle, which routes the transition through the
+// ApplyLifecycleEvent fold.
 func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
+	_, ok := t.ApplyRunnerEventLifecycle(e)
+	return ok
+}
+
+// ApplyRunnerEventLifecycle is the runner-event adapter over ApplyLifecycleEvent.
+// It enforces the reconcile/version guard, maps the runner event to its matching
+// SANDBOX_* lifecycle kind, then delegates the transition to the fold. It returns
+// the constructed lifecycle payload (for the event the caller appends beside the
+// updated row) and whether the transition applied.
+func (t *Task) ApplyRunnerEventLifecycle(e *RunnerEvent) (*LifecyclePayload, bool) {
 	// TODO: Reconciliation events require special handling
 	if e.Reconcile {
-		return false
+		return nil, false
 	}
-
 	// Check version match (version 0 bypasses check for spontaneous failures)
 	if e.Version != 0 && e.Version != t.Version {
-		return false
+		return nil, false
 	}
+	kind, message, ok := e.Event.lifecycleKind()
+	if !ok {
+		return nil, false
+	}
+	return t.ApplyLifecycleEvent(kind, RunnerActor, message)
+}
 
-	switch e.Event {
+// lifecycleKind maps a runner event type to its sandbox lifecycle kind and the
+// message that rides on the resulting event. Returns false for event types with
+// no lifecycle home.
+func (e RunnerEventType) lifecycleKind() (LifecycleKind, string, bool) {
+	switch e {
 	case RunnerEventStarted:
-		return t.applyRunnerEventStarted()
+		return LifecycleKindSandboxStarted, "", true
 	case RunnerEventStopped:
-		return t.applyRunnerEventStopped()
+		return LifecycleKindSandboxExited, "", true
 	case RunnerEventFailed:
-		return t.applyRunnerEventFailed()
+		// The container failure detail rides in the SANDBOX_FAILED message field
+		// (the old `error` log content).
+		return LifecycleKindSandboxFailed, "container failed", true
 	default:
-		return false
+		return LifecycleKindUnspecified, "", false
 	}
 }
 
@@ -259,35 +282,57 @@ func (t *Task) applyRunnerEventFailed() bool {
 	}
 }
 
-// LifecycleEvent maps the runner event to its sandbox lifecycle event. task
-// carries the post-fold status and from is the status before the fold, so the
-// payload records the transition (e.g. RUNNING -> COMPLETED). The container
-// failure detail rides in the SANDBOX_FAILED message field (the old `error` log
-// content). Returns false for runner events with no lifecycle home.
-func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) {
-	lifecycle := func(kind LifecycleKind, message string) *Event {
-		return &Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &LifecyclePayload{
-				Kind:       kind,
-				Actor:      RunnerActor,
-				FromStatus: from.Label(),
-				ToStatus:   task.Status.Label(),
-				Message:    message,
-			},
-		}
-	}
-	switch e.Event {
-	case RunnerEventStarted:
-		return lifecycle(LifecycleKindSandboxStarted, ""), true
-	case RunnerEventStopped:
-		return lifecycle(LifecycleKindSandboxExited, ""), true
-	case RunnerEventFailed:
-		return lifecycle(LifecycleKindSandboxFailed, "container failed"), true
+// ApplyLifecycleEvent is the single place that applies a lifecycle kind's full
+// effect to the task's materialized state — status, archived, command, and
+// version — enforcing the same guards the per-mutation methods (Cancel, Start,
+// Archive, …) do. It returns the lifecycle payload describing the transition
+// (from/to taken before/after the change) and whether the effect applied; when a
+// guard rejects the transition the task is left untouched and (nil, false) is
+// returned.
+//
+// Routing every transition through this fold keeps the materialized status from
+// drifting from the lifecycle event appended beside it: the event and the
+// projection come from one call (#952). Callers persist the task and append
+// eventFromLifecycle(task, payload) in the same transaction.
+func (t *Task) ApplyLifecycleEvent(kind LifecycleKind, actor Actor, message string) (*LifecyclePayload, bool) {
+	from := t.Status
+	var ok bool
+	switch kind {
+	case LifecycleKindCreated:
+		// A freshly created task already carries its initial status; CREATED
+		// records where it landed with no prior status (from stays unspecified).
+		from = TaskStatusUnspecified
+		ok = true
+	case LifecycleKindUpdated:
+		// A rename / metadata update is not a status transition (from == to).
+		ok = true
+	case LifecycleKindCancelled:
+		ok = t.Cancel()
+	case LifecycleKindRestarted:
+		ok = t.Start()
+	case LifecycleKindArchived, LifecycleKindAutoArchived:
+		ok = t.Archive()
+	case LifecycleKindUnarchived:
+		ok = t.Unarchive()
+	case LifecycleKindSandboxStarted:
+		ok = t.applyRunnerEventStarted()
+	case LifecycleKindSandboxExited:
+		ok = t.applyRunnerEventStopped()
+	case LifecycleKindSandboxFailed:
+		ok = t.applyRunnerEventFailed()
 	default:
 		return nil, false
 	}
+	if !ok {
+		return nil, false
+	}
+	return &LifecyclePayload{
+		Kind:       kind,
+		Actor:      actor,
+		FromStatus: from.Label(),
+		ToStatus:   t.Status.Label(),
+		Message:    message,
+	}, true
 }
 
 // IsDone reports whether the task has finished its run: completed, failed,

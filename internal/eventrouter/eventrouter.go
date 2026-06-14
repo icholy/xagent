@@ -216,29 +216,28 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 		if err != nil {
 			return err
 		}
-		from := task.Status
+		// The external event above records the trigger. The proposal's "Woken
+		// splits into the external event plus the transition the wake caused" has a
+		// second half: when the wake restarts a *done* task (done -> pending), that
+		// transition is a RESTARTED lifecycle event, mirroring a user restart (actor
+		// is the router since the external event drove it). Route that through the
+		// fold so the projection and the event come from one call. A wake of an
+		// already-running task is a bare start command nudge with no status
+		// transition, so it gets no lifecycle event.
 		wasDone := task.IsDone()
-		task.Start()
+		var lifecycleEvent *model.Event
+		if wasDone {
+			if ev, ok := task.ApplyLifecycleEvent(model.LifecycleKindRestarted, model.RouterActor, ""); ok {
+				lifecycleEvent = &model.Event{TaskID: task.ID, OrgID: task.OrgID, Payload: ev}
+			}
+		} else {
+			task.Start()
+		}
 		if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		// The external event above records the trigger. The proposal's "Woken
-		// splits into the external event plus the transition the wake caused" has a
-		// second half: when the wake restarts a *done* task (done -> pending),
-		// that transition is a RESTARTED lifecycle event, mirroring a user restart
-		// (actor is the router since the external event drove it). A wake of an
-		// already-running task causes no status transition, so no lifecycle event.
-		if wasDone {
-			if err := r.Store.CreateEvent(ctx, tx, &model.Event{
-				TaskID: task.ID,
-				OrgID:  task.OrgID,
-				Payload: &model.LifecyclePayload{
-					Kind:       model.LifecycleKindRestarted,
-					Actor:      model.RouterActor,
-					FromStatus: from.Label(),
-					ToStatus:   task.Status.Label(),
-				},
-			}); err != nil {
+		if lifecycleEvent != nil {
+			if err := r.Store.CreateEvent(ctx, tx, lifecycleEvent); err != nil {
 				return err
 			}
 		}
@@ -324,16 +323,13 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			return err
 		}
 		// Record the creation as a lifecycle event. The router (not a user) created
-		// the task, so the actor is the routing-rule actor; a freshly created task
-		// has no prior status.
+		// the task, so the actor is the routing-rule actor; the CREATED fold applies
+		// no transition and a freshly created task has no prior status.
+		ev, _ := task.ApplyLifecycleEvent(model.LifecycleKindCreated, model.RouterActor, "")
 		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:     model.LifecycleKindCreated,
-				Actor:    model.RouterActor,
-				ToStatus: task.Status.Label(),
-			},
+			TaskID:  task.ID,
+			OrgID:   task.OrgID,
+			Payload: ev,
 		}); err != nil {
 			return err
 		}

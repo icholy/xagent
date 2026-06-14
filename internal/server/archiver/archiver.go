@@ -117,24 +117,20 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 		if t.Archived || t.Version != due.Version {
 			return errSkip
 		}
-		from := t.Status
-		if !t.Archive() {
+		// The auto-archive is a runner-side (server worker) action, not a user
+		// one, so the lifecycle event's actor is the runner. The AUTO_ARCHIVED
+		// fold flips archived through the same guard as a manual archive.
+		ev, ok := t.ApplyLifecycleEvent(model.LifecycleKindAutoArchived, model.RunnerActor, "")
+		if !ok {
 			return errSkip
 		}
 		if err := a.store.UpdateTask(ctx, tx, t); err != nil {
 			return err
 		}
-		// The auto-archive is a runner-side (server worker) action, not a user
-		// one, so the lifecycle event's actor is the runner.
 		if err := a.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: t.ID,
-			OrgID:  t.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:       model.LifecycleKindAutoArchived,
-				Actor:      model.RunnerActor,
-				FromStatus: from.Label(),
-				ToStatus:   t.Status.Label(),
-			},
+			TaskID:  t.ID,
+			OrgID:   t.OrgID,
+			Payload: ev,
 		}); err != nil {
 			return err
 		}
