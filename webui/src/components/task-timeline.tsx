@@ -13,8 +13,6 @@ import {
   Info,
   Archive,
   Bell,
-  ChevronRight,
-  ChevronDown,
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -50,40 +48,12 @@ function filterOf(item: TimelineItem): FilterKey {
   }
 }
 
-// ----- row grouping ----------------------------------------------------------
-
-// Consecutive `report` entries collapse into a single expandable group so the
-// agent's output doesn't drown out the rest of the story.
-type Row =
-  | { type: 'item'; item: TimelineItem }
-  | { type: 'reports'; items: Extract<TimelineItem, { kind: 'report' }>[] }
-
-function buildRows(items: TimelineItem[]): Row[] {
-  const rows: Row[] = []
-  for (const item of items) {
-    if (item.kind === 'report') {
-      const last = rows[rows.length - 1]
-      if (last && last.type === 'reports') {
-        last.items.push(item)
-      } else {
-        rows.push({ type: 'reports', items: [item] })
-      }
-    } else {
-      rows.push({ type: 'item', item })
-    }
-  }
-  return rows
-}
-
 // ----- top-level component ---------------------------------------------------
 
 export function TaskTimeline({ items }: { items: TimelineItem[] }) {
   const [hidden, setHidden] = useState<Set<FilterKey>>(new Set())
 
-  const rows = useMemo(() => {
-    const visible = items.filter((i) => !hidden.has(filterOf(i)))
-    return buildRows(visible)
-  }, [items, hidden])
+  const visible = useMemo(() => items.filter((i) => !hidden.has(filterOf(i))), [items, hidden])
 
   const toggle = (key: FilterKey) =>
     setHidden((prev) => {
@@ -124,13 +94,9 @@ export function TaskTimeline({ items }: { items: TimelineItem[] }) {
       <ol className="relative space-y-3">
         {/* the rail */}
         <div className="absolute left-[17px] top-2 bottom-2 w-px bg-border" aria-hidden />
-        {rows.map((row, i) =>
-          row.type === 'reports' ? (
-            <ReportGroup key={`r-${i}`} items={row.items} />
-          ) : (
-            <TimelineRow key={row.item.id} item={row.item} />
-          ),
-        )}
+        {visible.map((item) => (
+          <TimelineRow key={item.id} item={item} />
+        ))}
       </ol>
     </div>
   )
@@ -171,8 +137,7 @@ function TimelineRow({ item }: { item: TimelineItem }) {
     case 'link':
       return <LinkRow item={item} />
     case 'report':
-      // reports are normally grouped; render standalone as a fallback.
-      return <ReportGroup items={[item]} />
+      return <ReportRow item={item} />
   }
 }
 
@@ -325,14 +290,11 @@ function LinkRow({ item }: { item: Extract<TimelineItem, { kind: 'link' }> }) {
   )
 }
 
-// ----- report group (collapsible) --------------------------------------------
+// ----- report row ------------------------------------------------------------
 
-// Reports ARE the agent's output (written via the `report` tool). Consecutive
-// reports collapse into a single expandable group; a lone report starts open.
-function ReportGroup({ items }: { items: Extract<TimelineItem, { kind: 'report' }>[] }) {
-  const [open, setOpen] = useState(items.length === 1)
-  const last = items[items.length - 1]
-
+// Reports ARE the agent's output (written via the `report` tool). Each report
+// renders as its own entry.
+function ReportRow({ item }: { item: Extract<TimelineItem, { kind: 'report' }> }) {
   return (
     <Row
       marker={
@@ -342,35 +304,15 @@ function ReportGroup({ items }: { items: Extract<TimelineItem, { kind: 'report' 
       }
     >
       <div className="rounded-lg border bg-card shadow-sm">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground"
-        >
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" />
-          )}
-          <span className="font-medium text-foreground">
-            {items.length === 1 ? 'Agent output' : `${items.length} agent outputs`}
+        <div className="flex items-center gap-2 px-3 py-2 text-xs">
+          <span className="font-medium text-foreground">Agent output</span>
+          <span className="ml-auto text-muted-foreground">
+            <RelativeTime date={item.at} />
           </span>
-          {!open && (
-            <span className="truncate text-[11px] text-muted-foreground/80">
-              {last.content.split('\n')[0]}
-            </span>
-          )}
-          <span className="ml-auto shrink-0">
-            <RelativeTime date={last.at} />
-          </span>
-        </button>
-        {open && (
-          <div className="space-y-3 border-t px-4 py-3">
-            {items.map((r) => (
-              <CollapsibleProse key={r.id} text={r.content} />
-            ))}
-          </div>
-        )}
+        </div>
+        <div className="border-t px-4 py-3">
+          <CollapsibleProse text={item.content} />
+        </div>
       </div>
     </Row>
   )
