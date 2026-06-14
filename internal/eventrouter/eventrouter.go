@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
-	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store"
 )
@@ -183,20 +182,22 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 // — no task.Start(), no audit log — but still emits a channel notification
 // unconditionally so the event isn't silently swallowed.
 func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, orgID int64, wake bool) error {
-	event, err := model.NewExternalEvent(taskID, orgID, wake, &xagentv1.ExternalPayload{
-		Description: input.Description,
-		Url:         input.URL,
-		Data:        input.Data,
-	})
-	if err != nil {
-		return err
+	event := &model.Event{
+		TaskID: taskID,
+		OrgID:  orgID,
+		Wake:   wake,
+		Payload: &model.ExternalPayload{
+			Description: input.Description,
+			URL:         input.URL,
+			Data:        input.Data,
+		},
 	}
 	notification := model.Notification{
 		Type:  "change",
 		OrgID: orgID,
 		Time:  time.Now(),
 	}
-	err = r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := r.Store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
