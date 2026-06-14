@@ -9,10 +9,10 @@ Builds on:
 
 ## Problem
 
-`eliminate-runner-socket-proxy` deleted the runner's out-of-process `AgentFilter` and moved per-task authorization **into the general apiserver handlers**: the in-container agent now holds a narrow, server-minted app JWT and calls the same `XAgentService` RPCs (`GetTaskDetails`, `UpdateTask`, `CreateLink`, `UploadLogs`, `CreateTask`, `ListChildTasks`, `ListLogs`, `SubmitRunnerEvents`) that admins and API keys call. To make those shared methods simultaneously correct for a `*.*` admin and a narrow task token, every task handler grew per-instance auth machinery that serves no human caller:
+`eliminate-runner-socket-proxy` deleted the runner's out-of-process `AgentFilter` and moved per-task authorization **into the general apiserver handlers**: the in-container agent now holds a narrow, server-minted app JWT and calls the same `XAgentService` RPCs (`GetTaskDetails`, `UpdateTask`, `CreateLink`, `UploadLogs`, `CreateGitHubToken`, `SubmitRunnerEvents`) that admins and API keys call. To make those shared methods simultaneously correct for a `*.*` admin and a narrow task token, every task handler grew per-instance auth machinery that serves no human caller:
 
-- **Two-tier gating in every task handler.** `GetTask`/`UpdateTask`/`ArchiveTask`/… do a fail-fast `AllowOp(op)`, then a post-load `Allow(op, task.ScopeAttr()...)`. `ListChildTasks`/`ListLinks`/`ListLogs` add an `if !Allow(op) { load row; deeper check }` fast-path so admins skip the read. Three auth checks and a branch where there used to be one (`internal/server/apiserver/task.go`, `link.go`, `log.go`).
-- **Request-only handlers need fudges.** `CreateTask` passes a literal `authscope.WithTaskArchived(false)` (no row to supply it). `ListChildTasks` loads the parent purely to feed the archived predicate while staying own-children-only.
+- **Two-tier gating in every task handler.** `GetTask`/`UpdateTask`/`ArchiveTask`/… do a fail-fast `AllowOp(op)`, then a post-load `Allow(op, task.ScopeAttr()...)`. `ListLinks`/`ListLogs` add an `if !Allow(op) { load row; deeper check }` fast-path so admins skip the read. Three auth checks and a branch where there used to be one (`internal/server/apiserver/task.go`, `link.go`, `log.go`).
+- **Request-only handlers need fudges.** `CreateTask` passes a literal `authscope.WithTaskArchived(false)` (no row to supply it).
 - **`SubmitRunnerEvents`** is a batch, dual-caller RPC (runner *and* driver) that doesn't fit the one-task-per-handler model; it authorizes per-event against each loaded row, an accepted "no all-or-nothing" wart (`internal/server/apiserver/runner.go`).
 - **Behavior drift.** Cross-org `ListLinks`/`ListLogs`/`ListEventsByTask` changed from empty-list to `NotFound` as a side effect of adding the org-scoped row load for auth.
 - **Forget-proofing tax.** `model.Task.ScopeAttr()`, the `task.archived:"false"` predicate stamped on every minted scope (`internal/auth/agentauth/scope.go`), and the `Allow`-vs-`AllowOp` correctness subtleties (`eliminate-runner-socket-proxy` §5) all exist *only* because the narrow token rides the general handlers.
@@ -45,13 +45,6 @@ service AgentService {
   // Driver-owned lifecycle event (replaces the driver's SubmitRunnerEvents call).
   rpc ReportMyTaskEvent(ReportMyTaskEventRequest) returns (ReportMyTaskEventResponse);
 
-  // Child tasks — gated by the child_tasks capability. The child id is a
-  // parameter, but every handler re-checks parent == my-task server-side.
-  rpc CreateChildTask(CreateChildTaskRequest) returns (CreateChildTaskResponse);
-  rpc ListChildTasks(ListMyChildTasksRequest) returns (ListMyChildTasksResponse);
-  rpc UpdateChildTask(UpdateChildTaskRequest) returns (UpdateChildTaskResponse);
-  rpc ListChildTaskLogs(ListChildTaskLogsRequest) returns (ListChildTaskLogsResponse);
-
   // GitHub token — gated by the github_token capability.
   rpc GetMyGitHubToken(GetMyGitHubTokenRequest) returns (GetMyGitHubTokenResponse);
 }
@@ -72,30 +65,15 @@ func (s *Server) GetMyTask(ctx context.Context, req *xagentv1.GetMyTaskRequest) 
         // check in one place — no archived *predicate* on any scope.
         return nil, connect.NewError(connect.CodePermissionDenied, errors.New("task is archived"))
     }
-    // ... assemble children/events/links exactly as GetTaskDetails does today ...
+    // ... assemble events/links exactly as GetTaskDetails does today ...
 }
 ```
 
-`UpdateMyTask`, `Report` (a log upload of type `llm`/`mcp`), and `CreateMyLink` follow the same shape: resolve `agent.TaskID`, load the row org-scoped, reject if archived, act. There is **no scope predicate** in this surface — the token *is* the authority to act on exactly one task, and "archived ⇒ revoked" is a plain field check at the single choke point.
+`UpdateMyTask`, `Report` (a log upload of type `llm`/`mcp`), and `CreateMyLink` follow the same shape: resolve `agent.TaskID`, load the row org-scoped, reject if archived, act. There is **no scope predicate** in this surface — the token *is* the authority to act on exactly one task, and "archived ⇒ revoked" is a plain field check at the single choke point. Because every method names "my task," **no request id is ever re-validated against the token** — there is no second task an agent token can address.
 
-#### Child-task methods
+#### Capability gating
 
-`CreateChildTask` takes no parent field — it always creates a child of `agent.TaskID`, deriving `runner`/`workspace` from the parent row (exactly as `agentmcp.createChildTask` does today). `ListChildTasks` lists children of `agent.TaskID`. `UpdateChildTask` and `ListChildTaskLogs` take a `child_task_id` parameter, but the handler loads it and verifies `child.Parent == agent.TaskID` before acting:
-
-```go
-func (s *Server) ListChildTaskLogs(ctx context.Context, req *xagentv1.ListChildTaskLogsRequest) (*xagentv1.ListChildTaskLogsResponse, error) {
-    agent := apiauth.MustAgentCaller(ctx)
-    requireCapability(agent, agentauth.CapabilityChildTasks)
-    child, err := s.store.GetTask(ctx, nil, req.ChildTaskId, agent.OrgID)
-    if err != nil { return nil, ... }
-    if child.Parent != agent.TaskID {
-        return nil, connect.NewError(connect.CodePermissionDenied, errors.New("not a child of your task"))
-    }
-    // ... list logs ...
-}
-```
-
-This is the *one* place a request id is re-validated, and it's a direct ownership comparison (`child.Parent == agent.TaskID`), not a scope-predicate match against a minted `task.parent` constraint. The `child_tasks` / `github_token` capabilities gate which methods are callable (`requireCapability`); without the capability the method returns `PermissionDenied` (and the MCP layer simply doesn't register the tool, as it does today via `hasCapability`).
+The agent surface has exactly one capability-gated method left: `GetMyGitHubToken`, behind the `github_token` capability (the `child_tasks` capability was removed with child tasks in #954). The handler calls `requireCapability(agent, agentauth.CapabilityGitHubToken)`; without the capability it returns `PermissionDenied`, and the MCP layer simply doesn't register the `get_github_token` tool, as it does today via `hasCapability`.
 
 #### `ReportMyTaskEvent` — the driver-owned-events cleanup
 
@@ -156,8 +134,7 @@ Once the agent is off the general surface (migration below), every wart the issu
 | Handler | Before (#911) | After |
 |---|---|---|
 | `GetTask`, `GetTaskDetails`, `UpdateTask`, `Archive/Unarchive/Cancel/RestartTask` | `AllowOp(op)` pre-gate + post-load `Allow(op, task.ScopeAttr()...)` | single `Allow(op)` op-level check |
-| `CreateTask` | `Allow(OpTaskCreate, WithTaskParent/Workspace/Runner/Archived(false))` | `Allow(OpTaskCreate)` |
-| `ListChildTasks` | `AllowOp` + conditional parent-load for the archived predicate | `Allow(OpTaskRead)` + org-scoped list |
+| `CreateTask` | `Allow(OpTaskCreate, WithTaskWorkspace/Runner/Archived(false))` | `Allow(OpTaskCreate)` |
 | `CreateLink`, `UploadLogs` | `AllowOp` + row-load + `Allow(op, task.ScopeAttr()...)` | `Allow(op)` |
 | `ListLinks`, `ListLogs`, `ListEventsByTask` | `AllowOp` + conditional row-load for predicate | `Allow(op)` (restores empty-list, not `NotFound`, cross-org) |
 | `SubmitRunnerEvents` (runner-only now) | per-event post-load `Allow(..., task.ScopeAttr()...)` | single `Allow(OpTaskWrite)` op-level check |
@@ -176,10 +153,6 @@ The behavior drift the issue notes (cross-org `ListLinks`/`ListLogs`/`ListEvents
 | `update_my_task` | `UpdateTask{Id: task.ID, ...}` | `UpdateMyTask{...}` |
 | `report` | `UploadLogs{TaskId: task.ID, ...}` | `Report{...}` |
 | `create_link` | `CreateLink{TaskId: task.ID, ...}` | `CreateMyLink{...}` |
-| `create_child_task` | `CreateTask{Parent: task.ID, ...}` | `CreateChildTask{...}` |
-| `list_child_tasks` | `ListChildTasks{ParentId: task.ID}` + N×`GetTaskDetails` | `ListChildTasks{}` |
-| `update_child_task` | `UpdateTask{Id: childId, Start, ...}` | `UpdateChildTask{ChildTaskId, ...}` |
-| `list_child_task_logs` | `ListLogs{TaskId: childId}` | `ListChildTaskLogs{ChildTaskId}` |
 | `get_github_token` | `CreateGitHubToken{}` | `GetMyGitHubToken{}` |
 
 The driver (`internal/agent/driver.go`) swaps its `SubmitRunnerEvents` call for `ReportMyTaskEvent`. The injected `XAGENT_TOKEN` is unchanged in transport — still a Bearer app JWT — only its claim contents differ.
@@ -196,7 +169,7 @@ Rollback before Phase 2 is a runner-config flip back to minting scope tokens; th
 
 ## Trade-offs
 
-- **A second RPC surface to maintain.** `CreateMyLink` / `CreateChildTask` duplicate logic that also exists generically (`CreateLink` / `CreateTask`). This is the deliberate cost: the duplication buys handlers with no per-instance auth, and the shared *store* methods (`store.CreateLink`, `store.CreateTask`, `store.GetTask`) are still reused — only the thin RPC handler is duplicated. The general handlers get simpler in exchange.
+- **A second RPC surface to maintain.** `CreateMyLink` duplicates logic that also exists generically (`CreateLink`). This is the deliberate cost: the duplication buys handlers with no per-instance auth, and the shared *store* methods (`store.CreateLink`, `store.GetTask`) are still reused — only the thin RPC handler is duplicated. The general handlers get simpler in exchange.
 - **Reintroducing a `TaskID` claim** that #907 removed. It returns for a different reason: the agent now has its *own* surface that wants identity, not a shared one that needed predicates. It rides the existing `AppClaims` / `appKey` / verification path, so it's a field, not a new credential type.
 - **Capabilities leave the scope engine.** `github_token.create` becomes a token capability flag rather than a scope. Acceptable — it was always a workspace-capability concept (`agentauth.CapabilityGitHubToken`), and the agent surface is the only consumer.
 - **The scope engine still earns its keep** on the user-facing surface, so this is not an argument to remove `authscope` — only to stop forcing the *agent* through per-instance task scopes.
