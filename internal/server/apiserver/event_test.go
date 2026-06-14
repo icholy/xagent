@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -32,55 +33,6 @@ func createTestTask(t *testing.T, srv *Server, ctx context.Context) int64 {
 	return resp.Task.Id
 }
 
-func TestCreateEvent(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	org := orgWithWorkspace(t, srv)
-	ctx := createCtx(t, org)
-	taskID := createTestTask(t, srv, ctx)
-
-	// Act
-	resp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "PR comment added",
-		Data:        `{"comment": "LGTM"}`,
-		Url:         "https://github.com/example/repo/pull/123",
-		TaskId:      taskID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	expected := &xagentv1.Event{
-		Id:     resp.Event.Id,
-		TaskId: taskID,
-		Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
-			Description: "PR comment added",
-			Url:         "https://github.com/example/repo/pull/123",
-			Data:        `{"comment": "LGTM"}`,
-		}},
-		CreatedAt: resp.Event.CreatedAt,
-	}
-	assert.DeepEqual(t, resp.Event, expected, protocmp.Transform())
-}
-
-func TestCreateEvent_TaskNotFound(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	org := orgWithWorkspace(t, srv)
-	ctx := createCtx(t, org)
-
-	// Act - reference a task that does not exist
-	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Orphan event",
-		Data:        `{}`,
-		TaskId:      999999,
-	})
-
-	// Assert
-	assert.ErrorContains(t, err, "not found")
-}
-
 func TestGetEvent(t *testing.T) {
 	t.Parallel()
 	// Arrange
@@ -88,23 +40,27 @@ func TestGetEvent(t *testing.T) {
 	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
 	taskID := createTestTask(t, srv, ctx)
-	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Issue updated",
-		Data:        `{"status": "closed"}`,
-		Url:         "https://github.com/example/repo/issues/42",
-		TaskId:      taskID,
-	})
-	assert.NilError(t, err)
+	// The CreateEvent RPC is gone, so seed the fixture via the store's append.
+	event := &model.Event{
+		TaskID: taskID,
+		OrgID:  org.OrgID,
+		Payload: &model.ExternalPayload{
+			Description: "Issue updated",
+			URL:         "https://github.com/example/repo/issues/42",
+			Data:        `{"status": "closed"}`,
+		},
+	}
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, event))
 
 	// Act
 	getResp, err := srv.GetEvent(ctx, &xagentv1.GetEventRequest{
-		Id: createResp.Event.Id,
+		Id: event.ID,
 	})
 
 	// Assert
 	assert.NilError(t, err)
 	expected := &xagentv1.Event{
-		Id:     createResp.Event.Id,
+		Id:     event.ID,
 		TaskId: taskID,
 		Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
 			Description: "Issue updated",
@@ -125,16 +81,16 @@ func TestGetEvent_Permissions(t *testing.T) {
 	orgB := orgWithWorkspace(t, srv)
 	ctxB := createCtx(t, orgB)
 	taskA := createTestTask(t, srv, ctxA)
-	createResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event",
-		Data:        `{}`,
-		TaskId:      taskA,
-	})
-	assert.NilError(t, err)
+	event := &model.Event{
+		TaskID:  taskA,
+		OrgID:   orgA.OrgID,
+		Payload: &model.ExternalPayload{Description: "User A's Event"},
+	}
+	assert.NilError(t, srv.store.CreateEvent(ctxA, nil, event))
 
 	// Act
-	_, err = srv.GetEvent(ctxB, &xagentv1.GetEventRequest{
-		Id: createResp.Event.Id,
+	_, err := srv.GetEvent(ctxB, &xagentv1.GetEventRequest{
+		Id: event.ID,
 	})
 
 	// Assert
@@ -148,18 +104,16 @@ func TestListEvents(t *testing.T) {
 	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
 	taskID := createTestTask(t, srv, ctx)
-	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Event 1",
-		Data:        `{"test": "data1"}`,
-		TaskId:      taskID,
-	})
-	assert.NilError(t, err)
-	_, err = srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Event 2",
-		Data:        `{"test": "data2"}`,
-		TaskId:      taskID,
-	})
-	assert.NilError(t, err)
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "Event 1", Data: `{"test": "data1"}`},
+	}))
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "Event 2", Data: `{"test": "data2"}`},
+	}))
 
 	// Act - uses default limit (100)
 	resp, err := srv.ListExternalEvents(ctx, &xagentv1.ListExternalEventsRequest{})
@@ -191,12 +145,11 @@ func TestListEvents_ExternalOnly(t *testing.T) {
 		Url:    "https://github.com/example/repo/pull/1",
 	})
 	assert.NilError(t, err)
-	_, err = srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "PR comment",
-		Data:        `{}`,
-		TaskId:      taskResp.Task.Id,
-	})
-	assert.NilError(t, err)
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskResp.Task.Id,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "PR comment"},
+	}))
 
 	// Act
 	resp, err := srv.ListExternalEvents(ctx, &xagentv1.ListExternalEventsRequest{})
@@ -218,12 +171,11 @@ func TestListEventsWithLimit(t *testing.T) {
 
 	// Create 5 events
 	for i := range 5 {
-		_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-			Description: fmt.Sprintf("Event %d", i+1),
-			Data:        `{}`,
-			TaskId:      taskID,
-		})
-		assert.NilError(t, err)
+		assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+			TaskID:  taskID,
+			OrgID:   org.OrgID,
+			Payload: &model.ExternalPayload{Description: fmt.Sprintf("Event %d", i+1)},
+		}))
 	}
 
 	// Act - Get only 2 most recent events
@@ -249,24 +201,21 @@ func TestListEvents_Permissions(t *testing.T) {
 	ctxB := createCtx(t, orgB)
 	taskA := createTestTask(t, srv, ctxA)
 	taskB := createTestTask(t, srv, ctxB)
-	_, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event 1",
-		Data:        `{}`,
-		TaskId:      taskA,
-	})
-	assert.NilError(t, err)
-	_, err = srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event 2",
-		Data:        `{}`,
-		TaskId:      taskA,
-	})
-	assert.NilError(t, err)
-	_, err = srv.CreateEvent(ctxB, &xagentv1.CreateEventRequest{
-		Description: "User B's Event",
-		Data:        `{}`,
-		TaskId:      taskB,
-	})
-	assert.NilError(t, err)
+	assert.NilError(t, srv.store.CreateEvent(ctxA, nil, &model.Event{
+		TaskID:  taskA,
+		OrgID:   orgA.OrgID,
+		Payload: &model.ExternalPayload{Description: "User A's Event 1"},
+	}))
+	assert.NilError(t, srv.store.CreateEvent(ctxA, nil, &model.Event{
+		TaskID:  taskA,
+		OrgID:   orgA.OrgID,
+		Payload: &model.ExternalPayload{Description: "User A's Event 2"},
+	}))
+	assert.NilError(t, srv.store.CreateEvent(ctxB, nil, &model.Event{
+		TaskID:  taskB,
+		OrgID:   orgB.OrgID,
+		Payload: &model.ExternalPayload{Description: "User B's Event"},
+	}))
 
 	// Act
 	respA, err := srv.ListExternalEvents(ctxA, &xagentv1.ListExternalEventsRequest{})
@@ -286,21 +235,21 @@ func TestDeleteEvent(t *testing.T) {
 	org := orgWithWorkspace(t, srv)
 	ctx := createCtx(t, org)
 	taskID := createTestTask(t, srv, ctx)
-	createResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Event to Delete",
-		Data:        `{}`,
-		TaskId:      taskID,
-	})
-	assert.NilError(t, err)
+	event := &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "Event to Delete"},
+	}
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, event))
 
 	// Act
-	_, err = srv.DeleteEvent(ctx, &xagentv1.DeleteEventRequest{
-		Id: createResp.Event.Id,
+	_, err := srv.DeleteEvent(ctx, &xagentv1.DeleteEventRequest{
+		Id: event.ID,
 	})
 
 	// Assert
 	assert.NilError(t, err)
-	_, getErr := srv.GetEvent(ctx, &xagentv1.GetEventRequest{Id: createResp.Event.Id})
+	_, getErr := srv.GetEvent(ctx, &xagentv1.GetEventRequest{Id: event.ID})
 	assert.ErrorContains(t, getErr, "")
 }
 
@@ -313,22 +262,22 @@ func TestDeleteEvent_Permissions(t *testing.T) {
 	orgB := orgWithWorkspace(t, srv)
 	ctxB := createCtx(t, orgB)
 	taskA := createTestTask(t, srv, ctxA)
-	createResp, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event",
-		Data:        `{}`,
-		TaskId:      taskA,
-	})
-	assert.NilError(t, err)
+	event := &model.Event{
+		TaskID:  taskA,
+		OrgID:   orgA.OrgID,
+		Payload: &model.ExternalPayload{Description: "User A's Event"},
+	}
+	assert.NilError(t, srv.store.CreateEvent(ctxA, nil, event))
 
 	// Act
-	_, err = srv.DeleteEvent(ctxB, &xagentv1.DeleteEventRequest{
-		Id: createResp.Event.Id,
+	_, err := srv.DeleteEvent(ctxB, &xagentv1.DeleteEventRequest{
+		Id: event.ID,
 	})
 
 	// Assert - delete should silently fail (no error, but event still exists)
 	assert.NilError(t, err)
 	// Verify event still exists for user A
-	_, err = srv.GetEvent(ctxA, &xagentv1.GetEventRequest{Id: createResp.Event.Id})
+	_, err = srv.GetEvent(ctxA, &xagentv1.GetEventRequest{Id: event.ID})
 	assert.NilError(t, err)
 }
 
@@ -340,19 +289,16 @@ func TestListEventsByTask(t *testing.T) {
 	ctx := createCtx(t, org)
 	taskID := createTestTask(t, srv, ctx)
 
-	_, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Event 1",
-		Data:        `{}`,
-		TaskId:      taskID,
-	})
-	assert.NilError(t, err)
-
-	_, err = srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "Event 2",
-		Data:        `{}`,
-		TaskId:      taskID,
-	})
-	assert.NilError(t, err)
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "Event 1"},
+	}))
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "Event 2"},
+	}))
 
 	// Act
 	resp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
@@ -382,12 +328,11 @@ func TestListEventsByTask_Permissions(t *testing.T) {
 	orgB := orgWithWorkspace(t, srv)
 	ctxB := createCtx(t, orgB)
 	taskA := createTestTask(t, srv, ctxA)
-	_, err := srv.CreateEvent(ctxA, &xagentv1.CreateEventRequest{
-		Description: "User A's Event",
-		Data:        `{}`,
-		TaskId:      taskA,
-	})
-	assert.NilError(t, err)
+	assert.NilError(t, srv.store.CreateEvent(ctxA, nil, &model.Event{
+		TaskID:  taskA,
+		OrgID:   orgA.OrgID,
+		Payload: &model.ExternalPayload{Description: "User A's Event"},
+	}))
 
 	// Act
 	respA, err := srv.ListEventsByTask(ctxA, &xagentv1.ListEventsByTaskRequest{
