@@ -6,6 +6,7 @@ import {
   listTasks,
   listLogs,
   listEvents,
+  listEventsByTask,
   getEvent,
   listWorkspaces,
   listOrgMembers,
@@ -33,6 +34,15 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
           schema: listLogs,
+          input: { taskId: BigInt(r.id) },
+          cardinality: 'finite',
+        }),
+      })
+      // Reports now live on the event stream but are still published as a
+      // task_logs change, so refresh the task's events too.
+      qc.invalidateQueries({
+        queryKey: createConnectQueryKey({
+          schema: listEventsByTask,
           input: { taskId: BigInt(r.id) },
           cardinality: 'finite',
         }),

@@ -105,6 +105,9 @@ type reportInput struct {
 }
 
 func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input reportInput) (*mcp.CallToolResult, any, error) {
+	// The wire is unchanged (UploadLogs) until the agent surface lands, but the
+	// server now re-points the `llm` channel onto the event stream: this upload
+	// appends a from-agent `report` event rather than a logs row.
 	_, err := s.client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 		TaskId: s.task.ID,
 		Entries: []*xagentv1.LogEntry{

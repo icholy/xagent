@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
   listLogs,
+  listEventsByTask,
   updateTask,
   deleteEvent,
   archiveTask,
@@ -11,8 +12,8 @@ import {
   cancelTask,
   restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { TaskLink, Event, LogEntry } from '@/gen/xagent/v1/xagent_pb'
-import { timestampDate } from '@bufbuild/protobuf/wkt'
+import type { TaskLink, Event } from '@/gen/xagent/v1/xagent_pb'
+import { timestampDate, type Timestamp } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
 import {
   canArchiveTask,
@@ -46,11 +47,16 @@ export const Route = createFileRoute('/tasks/$id')({
 })
 
 const logTypeStyles: Record<string, string> = {
+  report: 'bg-purple-100 text-purple-800 border-purple-200',
   llm: 'bg-purple-100 text-purple-800 border-purple-200',
   info: 'bg-blue-100 text-blue-800 border-blue-200',
   error: 'bg-red-100 text-red-800 border-red-200',
   audit: 'bg-yellow-100 text-yellow-800 border-yellow-200',
 }
+
+// A row in the Logs table — either a remaining logs-table entry or a report
+// event projected into the same shape so reports stay visible alongside logs.
+type LogRow = { type: string; content: string; createdAt?: Timestamp }
 
 function TaskDetail() {
   const { id } = Route.useParams()
@@ -64,6 +70,11 @@ function TaskDetail() {
   )
 
   const { data: logsData } = useQuery(listLogs, { taskId }, { refetchInterval: 60000 })
+
+  // Reports moved off the logs table onto the event stream (type='report'). Read
+  // them from the task's events and filter to the report arm client-side; the
+  // remaining log types still come from listLogs until the drop-logs increment.
+  const { data: eventsData } = useQuery(listEventsByTask, { taskId }, { refetchInterval: 60000 })
 
   const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
   const deleteEventMutation = useMutation(deleteEvent, { onSuccess: () => refetch() })
@@ -122,7 +133,23 @@ function TaskDetail() {
   const task = data?.task
   const events = data?.events ?? []
   const links = data?.links ?? []
-  const logs = logsData?.entries ?? []
+
+  // Reports (now report events) render in the Logs table alongside the remaining
+  // log types. Project each report event into a log-shaped row and merge the two
+  // sources in chronological order so the view matches what reports looked like
+  // when they were `llm` log rows.
+  const reportRows: LogRow[] = (eventsData?.events ?? [])
+    .filter((e) => e.payload.case === 'report')
+    .map((e) => ({
+      type: 'report',
+      content: e.payload.case === 'report' ? e.payload.value.content : '',
+      createdAt: e.createdAt,
+    }))
+  const logs: LogRow[] = [...(logsData?.entries ?? []), ...reportRows].sort((a, b) => {
+    const at = a.createdAt ? Number(a.createdAt.seconds) : 0
+    const bt = b.createdAt ? Number(b.createdAt.seconds) : 0
+    return at - bt
+  })
 
   // Instructions are no longer a task field — they are instruction events in the
   // brief. External events keep their own section below.
@@ -411,7 +438,7 @@ function EventsTable({
   )
 }
 
-function LogsTable({ logs }: { logs: LogEntry[] }) {
+function LogsTable({ logs }: { logs: LogRow[] }) {
   if (logs.length === 0) {
     return <div className="text-muted-foreground">No logs yet.</div>
   }
