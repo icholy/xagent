@@ -287,7 +287,10 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		}); err != nil {
 			return err
 		}
-		if err := r.Store.CreateLink(ctx, tx, &model.Link{
+		// task_links is the subscription/list projection; the link event is the
+		// timeline source of truth. Upsert the projection and append the event in
+		// the same tx so they can't drift (mirrors the apiserver CreateLink path).
+		link := &model.Link{
 			TaskID:     task.ID,
 			URL:        input.URL,
 			RoutingKey: model.RoutingKey(input.URL),
@@ -295,6 +298,14 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			Relevance:  "trigger",
 			Subscribe:  true,
 			CreatedAt:  time.Now().UTC(),
+		}
+		if err := r.Store.CreateLink(ctx, tx, link); err != nil {
+			return err
+		}
+		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+			TaskID:  task.ID,
+			OrgID:   orgID,
+			Payload: link.EventPayload(),
 		}); err != nil {
 			return err
 		}

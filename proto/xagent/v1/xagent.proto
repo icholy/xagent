@@ -281,12 +281,13 @@ message Event {
   // The set arm IS the event type — a typed union, not an opaque Struct. There
   // is no separate `type` field on the wire; the db `type` column is
   // materialized from the arm for indexed filtering (like `direction`). The
-  // instruction and external arms are wired today; field numbers 7/8/9 are left
-  // unassigned for the report/lifecycle/link arms the proposal adds in later
+  // instruction, external, and link arms are wired today; field numbers 7/8 are
+  // left unassigned for the report/lifecycle arms the proposal adds in later
   // increments (see proposals/draft/unified-task-event-stream.md).
   oneof payload {
     InstructionPayload instruction = 5;
     ExternalPayload external = 6;
+    LinkPayload link = 9;
   }
 }
 
@@ -302,6 +303,18 @@ message ExternalPayload {
   string description = 1;
   string url = 2;
   string data = 3;
+}
+
+// LinkPayload is the body of a link event — an about-task record of a link the
+// task created (a PR, issue, etc.). The link event is the timeline source of
+// truth; the task_links row it mirrors is the subscription/list projection.
+// link_id is the task_links row id.
+message LinkPayload {
+  int64 link_id = 1;
+  string relevance = 2;
+  string url = 3;
+  string title = 4;
+  bool subscribe = 5;
 }
 
 message ListEventsRequest {

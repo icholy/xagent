@@ -368,7 +368,7 @@ func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
 	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
 
 	// The event was still attached to the task.
-	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
+	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeExternal})
 	assert.NilError(t, err)
 	assert.Equal(t, len(events), 1)
 
@@ -472,6 +472,21 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, links[0].URL, url)
 	assert.Equal(t, links[0].Subscribe, true)
 	assert.Equal(t, links[0].Title, "alice commented on issue #1")
+
+	// The create path appends a link event mirroring the task_links row (the
+	// timeline source of truth; task_links is the projection), alongside the
+	// instruction event it already seeds.
+	linkEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeLink})
+	assert.NilError(t, err)
+	assert.Equal(t, len(linkEvents), 1)
+	linkPayload, ok := linkEvents[0].Payload.(*model.LinkPayload)
+	assert.Assert(t, ok)
+	assert.Equal(t, linkPayload.LinkID, links[0].ID)
+	assert.Equal(t, linkPayload.URL, url)
+	assert.Equal(t, linkPayload.Relevance, "trigger")
+	assert.Equal(t, linkPayload.Title, "alice commented on issue #1")
+	assert.Equal(t, linkPayload.Subscribe, true)
+	assert.Equal(t, linkEvents[0].Wake, false)
 }
 
 func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {

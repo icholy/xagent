@@ -85,7 +85,7 @@ func (q *Queries) GetEvent(ctx context.Context, arg GetEventParams) (Event, erro
 const listEvents = `-- name: ListEvents :many
 SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
-WHERE org_id = $1
+WHERE org_id = $1 AND type = 'external'
 ORDER BY id DESC
 LIMIT $2
 `
@@ -95,6 +95,9 @@ type ListEventsParams struct {
 	Limit int32 `json:"limit"`
 }
 
+// The org event feed: external events only. Per the proposal the org feed is
+// external-only, so the materialized type column filters out non-external arms
+// (instruction/link/...) that also carry an org_id but are not org-feed rows.
 func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event, error) {
 	rows, err := q.db.QueryContext(ctx, listEvents, arg.OrgID, arg.Limit)
 	if err != nil {

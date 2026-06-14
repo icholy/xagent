@@ -9,9 +9,12 @@ FROM events
 WHERE id = $1 AND org_id = $2;
 
 -- name: ListEvents :many
+-- The org event feed: external events only. Per the proposal the org feed is
+-- external-only, so the materialized type column filters out non-external arms
+-- (instruction/link/...) that also carry an org_id but are not org-feed rows.
 SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
-WHERE org_id = $1
+WHERE org_id = $1 AND type = 'external'
 ORDER BY id DESC
 LIMIT $2;
 
