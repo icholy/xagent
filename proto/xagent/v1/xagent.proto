@@ -28,9 +28,6 @@ service XAgentService {
   rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
   rpc GetEvent(GetEventRequest) returns (GetEventResponse);
   rpc DeleteEvent(DeleteEventRequest) returns (DeleteEventResponse);
-  rpc AddEventTask(AddEventTaskRequest) returns (AddEventTaskResponse);
-  rpc RemoveEventTask(RemoveEventTaskRequest) returns (RemoveEventTaskResponse);
-  rpc ListEventTasks(ListEventTasksRequest) returns (ListEventTasksResponse);
   rpc ListEventsByTask(ListEventsByTaskRequest) returns (ListEventsByTaskResponse);
   rpc SubmitRunnerEvents(SubmitRunnerEventsRequest) returns (SubmitRunnerEventsResponse);
   rpc CreateTaskToken(CreateTaskTokenRequest) returns (CreateTaskTokenResponse);
@@ -282,6 +279,7 @@ message Event {
   string data = 3;
   string url = 4;
   google.protobuf.Timestamp created_at = 5;
+  int64 task_id = 6;
 }
 
 message ListEventsRequest {
@@ -296,6 +294,7 @@ message CreateEventRequest {
   string description = 1;
   string data = 2;
   string url = 3;
+  int64 task_id = 4;
 }
 
 message CreateEventResponse {
@@ -315,28 +314,6 @@ message DeleteEventRequest {
 }
 
 message DeleteEventResponse {}
-
-message AddEventTaskRequest {
-  int64 event_id = 1;
-  int64 task_id = 2;
-}
-
-message AddEventTaskResponse {}
-
-message RemoveEventTaskRequest {
-  int64 event_id = 1;
-  int64 task_id = 2;
-}
-
-message RemoveEventTaskResponse {}
-
-message ListEventTasksRequest {
-  int64 event_id = 1;
-}
-
-message ListEventTasksResponse {
-  repeated int64 task_ids = 1;
-}
 
 message ListEventsByTaskRequest {
   int64 task_id = 1;

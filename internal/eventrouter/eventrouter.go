@@ -121,24 +121,16 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		outcome := RouteOutcome{Input: input, OrgID: orgID, Rule: rule}
 
 		if links := linksByOrg[orgID]; len(links) > 0 {
-			event := &model.Event{
-				Description: input.Description,
-				Data:        input.Data,
-				URL:         input.URL,
-				OrgID:       orgID,
-			}
-			if err := r.Store.CreateEvent(ctx, nil, event); err != nil {
-				r.Log.Error("failed to create event", "org_id", orgID, "error", err)
-				continue
-			}
+			// Events are task-scoped: fan the external event out as one event row
+			// per subscribed task instead of a shared row plus junction rows.
 			seen := map[int64]bool{}
 			for _, link := range links {
 				if seen[link.TaskID] {
 					continue
 				}
 				seen[link.TaskID] = true
-				if err := r.attach(ctx, link.TaskID, event, rule.Wakeup); err != nil {
-					r.Log.Error("failed to attach event to task", "event_id", event.ID, "task_id", link.TaskID, "error", err)
+				if err := r.attach(ctx, link.TaskID, input, orgID, rule.Wakeup); err != nil {
+					r.Log.Error("failed to attach event to task", "task_id", link.TaskID, "error", err)
 					continue
 				}
 				outcome.TaskIDs = append(outcome.TaskIDs, link.TaskID)
@@ -176,9 +168,9 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 	}
 }
 
-// attach associates an event with a task and publishes a change notification.
-// Both wake modes share the event-attach + publish; they differ only on
-// whether the task is restarted.
+// attach creates a task-scoped event for a task and publishes a change
+// notification. Both wake modes share the event-create + publish; they differ
+// only on whether the task is restarted.
 //
 // When wake is true (the default behavior), it starts the task, logs the
 // action, and sets the wake ChannelMessage only when the attach restarts a
@@ -189,14 +181,21 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 // When wake is false (a rule with Wakeup: false), it leaves the task untouched
 // — no task.Start(), no audit log — but still emits a channel notification
 // unconditionally so the event isn't silently swallowed.
-func (r *Router) attach(ctx context.Context, taskID int64, event *model.Event, wake bool) error {
+func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, orgID int64, wake bool) error {
+	event := &model.Event{
+		Description: input.Description,
+		Data:        input.Data,
+		URL:         input.URL,
+		OrgID:       orgID,
+		TaskID:      taskID,
+	}
 	notification := model.Notification{
 		Type:  "change",
-		OrgID: event.OrgID,
+		OrgID: orgID,
 		Time:  time.Now(),
 	}
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		if err := r.Store.AddEventTask(ctx, tx, event.ID, taskID); err != nil {
+		if err := r.Store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
 		if !wake {

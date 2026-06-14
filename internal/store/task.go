@@ -80,14 +80,6 @@ func (s *Store) ListTasksForRunner(ctx context.Context, tx *sql.Tx, runner strin
 	return toModelTasks(rows)
 }
 
-func (s *Store) ListTasksByEvent(ctx context.Context, tx *sql.Tx, eventID int64) ([]*model.Task, error) {
-	rows, err := s.q(tx).ListTasksByEvent(ctx, eventID)
-	if err != nil {
-		return nil, err
-	}
-	return toModelTasks(rows)
-}
-
 func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	instructions, err := json.Marshal(task.Instructions)
 	if err != nil {

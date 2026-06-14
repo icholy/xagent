@@ -19,9 +19,6 @@ var _ Client = &ClientMock{}
 //
 //		// make and configure a mocked Client
 //		mockedClient := &ClientMock{
-//			AddEventTaskFunc: func(contextMoqParam context.Context, addEventTaskRequest *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error) {
-//				panic("mock out the AddEventTask method")
-//			},
 //			AddOrgMemberFunc: func(contextMoqParam context.Context, addOrgMemberRequest *xagentv1.AddOrgMemberRequest) (*xagentv1.AddOrgMemberResponse, error) {
 //				panic("mock out the AddOrgMember method")
 //			},
@@ -88,9 +85,6 @@ var _ Client = &ClientMock{}
 //			LinkGitHubInstallationFunc: func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
 //				panic("mock out the LinkGitHubInstallation method")
 //			},
-//			ListEventTasksFunc: func(contextMoqParam context.Context, listEventTasksRequest *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
-//				panic("mock out the ListEventTasks method")
-//			},
 //			ListEventsFunc: func(contextMoqParam context.Context, listEventsRequest *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
 //				panic("mock out the ListEvents method")
 //			},
@@ -127,9 +121,6 @@ var _ Client = &ClientMock{}
 //			RegisterWorkspacesFunc: func(contextMoqParam context.Context, registerWorkspacesRequest *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error) {
 //				panic("mock out the RegisterWorkspaces method")
 //			},
-//			RemoveEventTaskFunc: func(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
-//				panic("mock out the RemoveEventTask method")
-//			},
 //			RemoveOrgMemberFunc: func(contextMoqParam context.Context, removeOrgMemberRequest *xagentv1.RemoveOrgMemberRequest) (*xagentv1.RemoveOrgMemberResponse, error) {
 //				panic("mock out the RemoveOrgMember method")
 //			},
@@ -164,9 +155,6 @@ var _ Client = &ClientMock{}
 //
 //	}
 type ClientMock struct {
-	// AddEventTaskFunc mocks the AddEventTask method.
-	AddEventTaskFunc func(contextMoqParam context.Context, addEventTaskRequest *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error)
-
 	// AddOrgMemberFunc mocks the AddOrgMember method.
 	AddOrgMemberFunc func(contextMoqParam context.Context, addOrgMemberRequest *xagentv1.AddOrgMemberRequest) (*xagentv1.AddOrgMemberResponse, error)
 
@@ -233,9 +221,6 @@ type ClientMock struct {
 	// LinkGitHubInstallationFunc mocks the LinkGitHubInstallation method.
 	LinkGitHubInstallationFunc func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error)
 
-	// ListEventTasksFunc mocks the ListEventTasks method.
-	ListEventTasksFunc func(contextMoqParam context.Context, listEventTasksRequest *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error)
-
 	// ListEventsFunc mocks the ListEvents method.
 	ListEventsFunc func(contextMoqParam context.Context, listEventsRequest *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error)
 
@@ -272,9 +257,6 @@ type ClientMock struct {
 	// RegisterWorkspacesFunc mocks the RegisterWorkspaces method.
 	RegisterWorkspacesFunc func(contextMoqParam context.Context, registerWorkspacesRequest *xagentv1.RegisterWorkspacesRequest) (*xagentv1.RegisterWorkspacesResponse, error)
 
-	// RemoveEventTaskFunc mocks the RemoveEventTask method.
-	RemoveEventTaskFunc func(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error)
-
 	// RemoveOrgMemberFunc mocks the RemoveOrgMember method.
 	RemoveOrgMemberFunc func(contextMoqParam context.Context, removeOrgMemberRequest *xagentv1.RemoveOrgMemberRequest) (*xagentv1.RemoveOrgMemberResponse, error)
 
@@ -304,13 +286,6 @@ type ClientMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// AddEventTask holds details about calls to the AddEventTask method.
-		AddEventTask []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// AddEventTaskRequest is the addEventTaskRequest argument value.
-			AddEventTaskRequest *xagentv1.AddEventTaskRequest
-		}
 		// AddOrgMember holds details about calls to the AddOrgMember method.
 		AddOrgMember []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -465,13 +440,6 @@ type ClientMock struct {
 			// LinkGitHubInstallationRequest is the linkGitHubInstallationRequest argument value.
 			LinkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest
 		}
-		// ListEventTasks holds details about calls to the ListEventTasks method.
-		ListEventTasks []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// ListEventTasksRequest is the listEventTasksRequest argument value.
-			ListEventTasksRequest *xagentv1.ListEventTasksRequest
-		}
 		// ListEvents holds details about calls to the ListEvents method.
 		ListEvents []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -556,13 +524,6 @@ type ClientMock struct {
 			// RegisterWorkspacesRequest is the registerWorkspacesRequest argument value.
 			RegisterWorkspacesRequest *xagentv1.RegisterWorkspacesRequest
 		}
-		// RemoveEventTask holds details about calls to the RemoveEventTask method.
-		RemoveEventTask []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// RemoveEventTaskRequest is the removeEventTaskRequest argument value.
-			RemoveEventTaskRequest *xagentv1.RemoveEventTaskRequest
-		}
 		// RemoveOrgMember holds details about calls to the RemoveOrgMember method.
 		RemoveOrgMember []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -627,7 +588,6 @@ type ClientMock struct {
 			UploadLogsRequest *xagentv1.UploadLogsRequest
 		}
 	}
-	lockAddEventTask                   sync.RWMutex
 	lockAddOrgMember                   sync.RWMutex
 	lockArchiveTask                    sync.RWMutex
 	lockCancelTask                     sync.RWMutex
@@ -650,7 +610,6 @@ type ClientMock struct {
 	lockGetTask                        sync.RWMutex
 	lockGetTaskDetails                 sync.RWMutex
 	lockLinkGitHubInstallation         sync.RWMutex
-	lockListEventTasks                 sync.RWMutex
 	lockListEvents                     sync.RWMutex
 	lockListEventsByTask               sync.RWMutex
 	lockListKeys                       sync.RWMutex
@@ -663,7 +622,6 @@ type ClientMock struct {
 	lockListWorkspaces                 sync.RWMutex
 	lockPing                           sync.RWMutex
 	lockRegisterWorkspaces             sync.RWMutex
-	lockRemoveEventTask                sync.RWMutex
 	lockRemoveOrgMember                sync.RWMutex
 	lockRestartTask                    sync.RWMutex
 	lockSetRoutingRules                sync.RWMutex
@@ -673,42 +631,6 @@ type ClientMock struct {
 	lockUnlinkGitHubAccount            sync.RWMutex
 	lockUpdateTask                     sync.RWMutex
 	lockUploadLogs                     sync.RWMutex
-}
-
-// AddEventTask calls AddEventTaskFunc.
-func (mock *ClientMock) AddEventTask(contextMoqParam context.Context, addEventTaskRequest *xagentv1.AddEventTaskRequest) (*xagentv1.AddEventTaskResponse, error) {
-	if mock.AddEventTaskFunc == nil {
-		panic("ClientMock.AddEventTaskFunc: method is nil but Client.AddEventTask was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam     context.Context
-		AddEventTaskRequest *xagentv1.AddEventTaskRequest
-	}{
-		ContextMoqParam:     contextMoqParam,
-		AddEventTaskRequest: addEventTaskRequest,
-	}
-	mock.lockAddEventTask.Lock()
-	mock.calls.AddEventTask = append(mock.calls.AddEventTask, callInfo)
-	mock.lockAddEventTask.Unlock()
-	return mock.AddEventTaskFunc(contextMoqParam, addEventTaskRequest)
-}
-
-// AddEventTaskCalls gets all the calls that were made to AddEventTask.
-// Check the length with:
-//
-//	len(mockedClient.AddEventTaskCalls())
-func (mock *ClientMock) AddEventTaskCalls() []struct {
-	ContextMoqParam     context.Context
-	AddEventTaskRequest *xagentv1.AddEventTaskRequest
-} {
-	var calls []struct {
-		ContextMoqParam     context.Context
-		AddEventTaskRequest *xagentv1.AddEventTaskRequest
-	}
-	mock.lockAddEventTask.RLock()
-	calls = mock.calls.AddEventTask
-	mock.lockAddEventTask.RUnlock()
-	return calls
 }
 
 // AddOrgMember calls AddOrgMemberFunc.
@@ -1503,42 +1425,6 @@ func (mock *ClientMock) LinkGitHubInstallationCalls() []struct {
 	return calls
 }
 
-// ListEventTasks calls ListEventTasksFunc.
-func (mock *ClientMock) ListEventTasks(contextMoqParam context.Context, listEventTasksRequest *xagentv1.ListEventTasksRequest) (*xagentv1.ListEventTasksResponse, error) {
-	if mock.ListEventTasksFunc == nil {
-		panic("ClientMock.ListEventTasksFunc: method is nil but Client.ListEventTasks was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam       context.Context
-		ListEventTasksRequest *xagentv1.ListEventTasksRequest
-	}{
-		ContextMoqParam:       contextMoqParam,
-		ListEventTasksRequest: listEventTasksRequest,
-	}
-	mock.lockListEventTasks.Lock()
-	mock.calls.ListEventTasks = append(mock.calls.ListEventTasks, callInfo)
-	mock.lockListEventTasks.Unlock()
-	return mock.ListEventTasksFunc(contextMoqParam, listEventTasksRequest)
-}
-
-// ListEventTasksCalls gets all the calls that were made to ListEventTasks.
-// Check the length with:
-//
-//	len(mockedClient.ListEventTasksCalls())
-func (mock *ClientMock) ListEventTasksCalls() []struct {
-	ContextMoqParam       context.Context
-	ListEventTasksRequest *xagentv1.ListEventTasksRequest
-} {
-	var calls []struct {
-		ContextMoqParam       context.Context
-		ListEventTasksRequest *xagentv1.ListEventTasksRequest
-	}
-	mock.lockListEventTasks.RLock()
-	calls = mock.calls.ListEventTasks
-	mock.lockListEventTasks.RUnlock()
-	return calls
-}
-
 // ListEvents calls ListEventsFunc.
 func (mock *ClientMock) ListEvents(contextMoqParam context.Context, listEventsRequest *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
 	if mock.ListEventsFunc == nil {
@@ -1968,42 +1854,6 @@ func (mock *ClientMock) RegisterWorkspacesCalls() []struct {
 	mock.lockRegisterWorkspaces.RLock()
 	calls = mock.calls.RegisterWorkspaces
 	mock.lockRegisterWorkspaces.RUnlock()
-	return calls
-}
-
-// RemoveEventTask calls RemoveEventTaskFunc.
-func (mock *ClientMock) RemoveEventTask(contextMoqParam context.Context, removeEventTaskRequest *xagentv1.RemoveEventTaskRequest) (*xagentv1.RemoveEventTaskResponse, error) {
-	if mock.RemoveEventTaskFunc == nil {
-		panic("ClientMock.RemoveEventTaskFunc: method is nil but Client.RemoveEventTask was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam        context.Context
-		RemoveEventTaskRequest *xagentv1.RemoveEventTaskRequest
-	}{
-		ContextMoqParam:        contextMoqParam,
-		RemoveEventTaskRequest: removeEventTaskRequest,
-	}
-	mock.lockRemoveEventTask.Lock()
-	mock.calls.RemoveEventTask = append(mock.calls.RemoveEventTask, callInfo)
-	mock.lockRemoveEventTask.Unlock()
-	return mock.RemoveEventTaskFunc(contextMoqParam, removeEventTaskRequest)
-}
-
-// RemoveEventTaskCalls gets all the calls that were made to RemoveEventTask.
-// Check the length with:
-//
-//	len(mockedClient.RemoveEventTaskCalls())
-func (mock *ClientMock) RemoveEventTaskCalls() []struct {
-	ContextMoqParam        context.Context
-	RemoveEventTaskRequest *xagentv1.RemoveEventTaskRequest
-} {
-	var calls []struct {
-		ContextMoqParam        context.Context
-		RemoveEventTaskRequest *xagentv1.RemoveEventTaskRequest
-	}
-	mock.lockRemoveEventTask.RLock()
-	calls = mock.calls.RemoveEventTask
-	mock.lockRemoveEventTask.RUnlock()
 	return calls
 }
 

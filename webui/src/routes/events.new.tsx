@@ -16,6 +16,7 @@ export const Route = createFileRoute('/events/new')({
 function CreateEventPage() {
   const navigate = useNavigate()
   const orgId = useOrgId()
+  const [taskId, setTaskId] = useState('')
   const [description, setDescription] = useState('')
   const [url, setUrl] = useState('')
   const [data, setData] = useState('')
@@ -29,6 +30,7 @@ function CreateEventPage() {
 
     try {
       const response = await mutation.mutateAsync({
+        taskId: BigInt(taskId),
         description,
         url,
         data,
@@ -52,6 +54,18 @@ function CreateEventPage() {
       <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="taskId">Task ID</Label>
+              <Input
+                id="taskId"
+                type="number"
+                placeholder="Task ID"
+                value={taskId}
+                onChange={(e) => setTaskId(e.target.value)}
+                required
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Input

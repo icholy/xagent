@@ -26,13 +26,6 @@ FROM tasks
 WHERE runner = $1 AND org_id = $2 AND command != 0 AND archived = FALSE
 ORDER BY created_at DESC;
 
--- name: ListTasksByEvent :many
-SELECT t.id, t.name, t.runner, t.workspace, t.instructions, t.status, t.command, t.version, t.org_id, t.archived, t.created_at, t.updated_at, t.auto_archive
-FROM tasks t
-JOIN event_tasks et ON t.id = et.task_id
-WHERE et.event_id = $1
-ORDER BY t.created_at DESC;
-
 -- name: UpdateTask :exec
 UPDATE tasks
 SET name = $1, runner = $2, workspace = $3, instructions = $4, status = $5, command = $6, version = $7, updated_at = $8, archived = $9, auto_archive = $10

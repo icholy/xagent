@@ -225,7 +225,7 @@ func TestCreateLink_Publishes(t *testing.T) {
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
-func TestAddEventTask_Publishes(t *testing.T) {
+func TestCreateEvent_Publishes(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
@@ -240,16 +240,12 @@ func TestAddEventTask_Publishes(t *testing.T) {
 		Name: "test", Runner: "r", Workspace: "w",
 	})
 	assert.NilError(t, err)
+	pub.ResetCalls()
+
 	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
 		Description: "test event",
 		Url:         "https://example.com",
-	})
-	assert.NilError(t, err)
-	pub.ResetCalls()
-
-	_, err = srv.AddEventTask(ctx, &xagentv1.AddEventTaskRequest{
-		EventId: eventResp.Event.Id,
-		TaskId:  taskResp.Task.Id,
+		TaskId:      taskResp.Task.Id,
 	})
 	assert.NilError(t, err)
 
@@ -258,8 +254,8 @@ func TestAddEventTask_Publishes(t *testing.T) {
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
+			{Action: "created", Type: "event", ID: eventResp.Event.Id},
 			{Action: "updated", Type: "task", ID: taskResp.Task.Id},
-			{Action: "updated", Type: "event", ID: eventResp.Event.Id},
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
