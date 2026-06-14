@@ -145,17 +145,17 @@ func (TaskCommand) EnumDescriptor() ([]byte, []int) {
 type LifecycleKind int32
 
 const (
-	LifecycleKind_LIFECYCLE_KIND_UNSPECIFIED       LifecycleKind = 0
-	LifecycleKind_LIFECYCLE_KIND_CREATED           LifecycleKind = 1
-	LifecycleKind_LIFECYCLE_KIND_UPDATED           LifecycleKind = 2
-	LifecycleKind_LIFECYCLE_KIND_CANCELLED         LifecycleKind = 3
-	LifecycleKind_LIFECYCLE_KIND_RESTARTED         LifecycleKind = 4
-	LifecycleKind_LIFECYCLE_KIND_ARCHIVED          LifecycleKind = 5
-	LifecycleKind_LIFECYCLE_KIND_UNARCHIVED        LifecycleKind = 6
-	LifecycleKind_LIFECYCLE_KIND_AUTO_ARCHIVED     LifecycleKind = 7
-	LifecycleKind_LIFECYCLE_KIND_CONTAINER_STARTED LifecycleKind = 8
-	LifecycleKind_LIFECYCLE_KIND_CONTAINER_EXITED  LifecycleKind = 9
-	LifecycleKind_LIFECYCLE_KIND_CONTAINER_FAILED  LifecycleKind = 10
+	LifecycleKind_LIFECYCLE_KIND_UNSPECIFIED     LifecycleKind = 0
+	LifecycleKind_LIFECYCLE_KIND_CREATED         LifecycleKind = 1
+	LifecycleKind_LIFECYCLE_KIND_UPDATED         LifecycleKind = 2
+	LifecycleKind_LIFECYCLE_KIND_CANCELLED       LifecycleKind = 3
+	LifecycleKind_LIFECYCLE_KIND_RESTARTED       LifecycleKind = 4
+	LifecycleKind_LIFECYCLE_KIND_ARCHIVED        LifecycleKind = 5
+	LifecycleKind_LIFECYCLE_KIND_UNARCHIVED      LifecycleKind = 6
+	LifecycleKind_LIFECYCLE_KIND_AUTO_ARCHIVED   LifecycleKind = 7
+	LifecycleKind_LIFECYCLE_KIND_SANDBOX_STARTED LifecycleKind = 8
+	LifecycleKind_LIFECYCLE_KIND_SANDBOX_EXITED  LifecycleKind = 9
+	LifecycleKind_LIFECYCLE_KIND_SANDBOX_FAILED  LifecycleKind = 10
 )
 
 // Enum value maps for LifecycleKind.
@@ -169,22 +169,22 @@ var (
 		5:  "LIFECYCLE_KIND_ARCHIVED",
 		6:  "LIFECYCLE_KIND_UNARCHIVED",
 		7:  "LIFECYCLE_KIND_AUTO_ARCHIVED",
-		8:  "LIFECYCLE_KIND_CONTAINER_STARTED",
-		9:  "LIFECYCLE_KIND_CONTAINER_EXITED",
-		10: "LIFECYCLE_KIND_CONTAINER_FAILED",
+		8:  "LIFECYCLE_KIND_SANDBOX_STARTED",
+		9:  "LIFECYCLE_KIND_SANDBOX_EXITED",
+		10: "LIFECYCLE_KIND_SANDBOX_FAILED",
 	}
 	LifecycleKind_value = map[string]int32{
-		"LIFECYCLE_KIND_UNSPECIFIED":       0,
-		"LIFECYCLE_KIND_CREATED":           1,
-		"LIFECYCLE_KIND_UPDATED":           2,
-		"LIFECYCLE_KIND_CANCELLED":         3,
-		"LIFECYCLE_KIND_RESTARTED":         4,
-		"LIFECYCLE_KIND_ARCHIVED":          5,
-		"LIFECYCLE_KIND_UNARCHIVED":        6,
-		"LIFECYCLE_KIND_AUTO_ARCHIVED":     7,
-		"LIFECYCLE_KIND_CONTAINER_STARTED": 8,
-		"LIFECYCLE_KIND_CONTAINER_EXITED":  9,
-		"LIFECYCLE_KIND_CONTAINER_FAILED":  10,
+		"LIFECYCLE_KIND_UNSPECIFIED":     0,
+		"LIFECYCLE_KIND_CREATED":         1,
+		"LIFECYCLE_KIND_UPDATED":         2,
+		"LIFECYCLE_KIND_CANCELLED":       3,
+		"LIFECYCLE_KIND_RESTARTED":       4,
+		"LIFECYCLE_KIND_ARCHIVED":        5,
+		"LIFECYCLE_KIND_UNARCHIVED":      6,
+		"LIFECYCLE_KIND_AUTO_ARCHIVED":   7,
+		"LIFECYCLE_KIND_SANDBOX_STARTED": 8,
+		"LIFECYCLE_KIND_SANDBOX_EXITED":  9,
+		"LIFECYCLE_KIND_SANDBOX_FAILED":  10,
 	}
 )
 
@@ -6168,7 +6168,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04NONE\x10\x00\x12\v\n" +
 	"\aRESTART\x10\x01\x12\b\n" +
 	"\x04STOP\x10\x02\x12\t\n" +
-	"\x05START\x10\x03*\xf1\x02\n" +
+	"\x05START\x10\x03*\xeb\x02\n" +
 	"\rLifecycleKind\x12\x1e\n" +
 	"\x1aLIFECYCLE_KIND_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16LIFECYCLE_KIND_CREATED\x10\x01\x12\x1a\n" +
@@ -6177,10 +6177,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x18LIFECYCLE_KIND_RESTARTED\x10\x04\x12\x1b\n" +
 	"\x17LIFECYCLE_KIND_ARCHIVED\x10\x05\x12\x1d\n" +
 	"\x19LIFECYCLE_KIND_UNARCHIVED\x10\x06\x12 \n" +
-	"\x1cLIFECYCLE_KIND_AUTO_ARCHIVED\x10\a\x12$\n" +
-	" LIFECYCLE_KIND_CONTAINER_STARTED\x10\b\x12#\n" +
-	"\x1fLIFECYCLE_KIND_CONTAINER_EXITED\x10\t\x12#\n" +
-	"\x1fLIFECYCLE_KIND_CONTAINER_FAILED\x10\n" +
+	"\x1cLIFECYCLE_KIND_AUTO_ARCHIVED\x10\a\x12\"\n" +
+	"\x1eLIFECYCLE_KIND_SANDBOX_STARTED\x10\b\x12!\n" +
+	"\x1dLIFECYCLE_KIND_SANDBOX_EXITED\x10\t\x12!\n" +
+	"\x1dLIFECYCLE_KIND_SANDBOX_FAILED\x10\n" +
 	"2\xff\x1b\n" +
 	"\rXAgentService\x127\n" +
 	"\x04Ping\x12\x16.xagent.v1.PingRequest\x1a\x17.xagent.v1.PingResponse\x12I\n" +

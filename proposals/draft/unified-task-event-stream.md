@@ -120,7 +120,7 @@ jsonb` column. The shapes:
 { "content": "Opened PR #952 with the migration." }
 
 // lifecycle    — the model.TaskChange fact (see below); kind is the LifecycleKind enum
-{ "kind": "LIFECYCLE_KIND_CONTAINER_EXITED", "actor": {"kind":"runner"}, "from_status": "RUNNING", "to_status": "COMPLETED", "runner_event": "stopped" }
+{ "kind": "LIFECYCLE_KIND_SANDBOX_EXITED", "actor": {"kind":"runner"}, "from_status": "RUNNING", "to_status": "COMPLETED", "runner_event": "stopped" }
 
 // link         — was task_links row
 { "link_id": 1027, "relevance": "trigger", "url": "https://github.com/.../issues/947", "title": "icholy commented…", "subscribe": true }
@@ -131,7 +131,7 @@ jsonb` column. The shapes:
 `proposals/draft/task-change-unifying-logs-and-notifications.md` already
 designed the closed set of "things that happened to a task": `Created`,
 `Updated`, `Cancelled`, `Restarted`, `Archived`, `Unarchived`, `AutoArchived`,
-`Woken`, `ContainerStarted`, `ContainerExited`, `ContainerFailed`. Minus
+`Woken`, `SandboxStarted`, `SandboxExited`, `SandboxFailed`. Minus
 `Woken` (below), those are the `LifecycleKind` enum — the `lifecycle` event's
 `payload.kind`. The two proposals converge:
 
@@ -325,9 +325,9 @@ enum LifecycleKind {
   LIFECYCLE_KIND_ARCHIVED          = 5;
   LIFECYCLE_KIND_UNARCHIVED        = 6;
   LIFECYCLE_KIND_AUTO_ARCHIVED     = 7;
-  LIFECYCLE_KIND_CONTAINER_STARTED = 8;
-  LIFECYCLE_KIND_CONTAINER_EXITED  = 9;
-  LIFECYCLE_KIND_CONTAINER_FAILED  = 10;
+  LIFECYCLE_KIND_SANDBOX_STARTED   = 8;
+  LIFECYCLE_KIND_SANDBOX_EXITED    = 9;
+  LIFECYCLE_KIND_SANDBOX_FAILED    = 10;
 }
 
 // Create a task and seed its stream. The task entity (workspace, runner, …)
