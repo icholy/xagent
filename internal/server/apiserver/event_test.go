@@ -306,7 +306,8 @@ func TestListEventsByTask(t *testing.T) {
 	})
 
 	// Assert - the stream also carries the lifecycle CREATED event from task
-	// creation, so filter to the external events. They are newest-first.
+	// creation, so filter to the external events. They are in chronological
+	// (oldest-first) stream order.
 	assert.NilError(t, err)
 	var external []*xagentv1.ExternalPayload
 	for _, e := range resp.Events {
@@ -315,8 +316,8 @@ func TestListEventsByTask(t *testing.T) {
 		}
 	}
 	assert.Equal(t, len(external), 2)
-	assert.Equal(t, external[0].Description, "Event 2")
-	assert.Equal(t, external[1].Description, "Event 1")
+	assert.Equal(t, external[0].Description, "Event 1")
+	assert.Equal(t, external[1].Description, "Event 2")
 }
 
 func TestListEventsByTask_Permissions(t *testing.T) {

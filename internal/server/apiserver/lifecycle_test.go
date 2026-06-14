@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -9,8 +10,9 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// lifecycleEvents returns the task's lifecycle events. ListEventsByTask returns
-// newest-first, so the most recent lifecycle event is at index 0.
+// lifecycleEvents returns the task's lifecycle events most-recent-first.
+// ListEventsByTask returns chronological (oldest-first) order, so the collected
+// events are reversed to put the most recent lifecycle event at index 0.
 func lifecycleEvents(t *testing.T, srv *Server, ctx context.Context, taskID int64) []*xagentv1.LifecyclePayload {
 	t.Helper()
 	resp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{TaskId: taskID})
@@ -21,6 +23,7 @@ func lifecycleEvents(t *testing.T, srv *Server, ctx context.Context, taskID int6
 			out = append(out, l)
 		}
 	}
+	slices.Reverse(out)
 	return out
 }
 
