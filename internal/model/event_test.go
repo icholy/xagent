@@ -25,30 +25,6 @@ func TestLifecyclePayload_ProtoRoundTrip(t *testing.T) {
 	assert.Equal(t, payload.Type(), EventTypeLifecycle)
 }
 
-func TestNewLifecycleEvent(t *testing.T) {
-	t.Parallel()
-	task := &Task{ID: 1, OrgID: 2, Status: TaskStatusCancelled}
-	ev := NewLifecycleEvent(task, LifecycleKindCancelled, UserActor("icholy"), TaskStatusPending, "")
-
-	assert.Equal(t, ev.TaskID, int64(1))
-	assert.Equal(t, ev.OrgID, int64(2))
-	payload := ev.Payload.(*LifecyclePayload)
-	assert.Equal(t, payload.Kind, LifecycleKindCancelled)
-	assert.Equal(t, payload.Actor, Actor{Kind: ActorKindUser, Name: "icholy"})
-	assert.Equal(t, payload.FromStatus, "Pending")
-	assert.Equal(t, payload.ToStatus, "Cancelled")
-}
-
-func TestNewLifecycleEvent_UnspecifiedFromStatus(t *testing.T) {
-	t.Parallel()
-	// A freshly created task has no prior status, so from renders empty.
-	task := &Task{ID: 1, OrgID: 2, Status: TaskStatusPending}
-	ev := NewLifecycleEvent(task, LifecycleKindCreated, RouterActor, TaskStatusUnspecified, "")
-	payload := ev.Payload.(*LifecyclePayload)
-	assert.Equal(t, payload.FromStatus, "")
-	assert.Equal(t, payload.ToStatus, "Pending")
-}
-
 func TestLifecyclePayload_Summary(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

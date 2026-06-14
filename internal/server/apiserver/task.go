@@ -112,10 +112,15 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		// Record the creation as a lifecycle event beside the new row (status is
 		// the materialized projection). A freshly created task has no prior status,
 		// so from is unspecified.
-		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-			task, model.LifecycleKindCreated, model.UserActor(caller.AuditName()),
-			model.TaskStatusUnspecified, "",
-		)); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:     model.LifecycleKindCreated,
+				Actor:    model.UserActor(caller.AuditName()),
+				ToStatus: task.Status.Label(),
+			},
+		}); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -251,9 +256,16 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-			task, model.LifecycleKindUpdated, model.UserActor(caller.AuditName()), from, "",
-		)); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:       model.LifecycleKindUpdated,
+				Actor:      model.UserActor(caller.AuditName()),
+				FromStatus: from.Label(),
+				ToStatus:   task.Status.Label(),
+			},
+		}); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -312,9 +324,16 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-			task, model.LifecycleKindArchived, model.UserActor(caller.AuditName()), from, "",
-		)); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:       model.LifecycleKindArchived,
+				Actor:      model.UserActor(caller.AuditName()),
+				FromStatus: from.Label(),
+				ToStatus:   task.Status.Label(),
+			},
+		}); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -371,9 +390,16 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-			task, model.LifecycleKindUnarchived, model.UserActor(caller.AuditName()), from, "",
-		)); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:       model.LifecycleKindUnarchived,
+				Actor:      model.UserActor(caller.AuditName()),
+				FromStatus: from.Label(),
+				ToStatus:   task.Status.Label(),
+			},
+		}); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -429,9 +455,16 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-			task, model.LifecycleKindCancelled, model.UserActor(caller.AuditName()), from, "",
-		)); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:       model.LifecycleKindCancelled,
+				Actor:      model.UserActor(caller.AuditName()),
+				FromStatus: from.Label(),
+				ToStatus:   task.Status.Label(),
+			},
+		}); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -493,9 +526,16 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, model.NewLifecycleEvent(
-			task, model.LifecycleKindRestarted, model.UserActor(caller.AuditName()), from, "",
-		)); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:       model.LifecycleKindRestarted,
+				Actor:      model.UserActor(caller.AuditName()),
+				FromStatus: from.Label(),
+				ToStatus:   task.Status.Label(),
+			},
+		}); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()

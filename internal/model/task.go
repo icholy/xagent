@@ -25,6 +25,16 @@ const (
 	TaskStatusCancelled   TaskStatus = TaskStatus(xagentv1.TaskStatus_CANCELLED)
 )
 
+// Label renders a TaskStatus for a lifecycle payload, mapping the zero
+// (unspecified) status to the empty string — e.g. a freshly created task has no
+// prior status.
+func (s TaskStatus) Label() string {
+	if s == TaskStatusUnspecified {
+		return ""
+	}
+	return s.String()
+}
+
 //go:generate stringer -type=TaskCommand -trimprefix=TaskCommand
 
 // TaskCommand represents a command to be executed by the runner.
