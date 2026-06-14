@@ -4,7 +4,6 @@ import (
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -28,12 +27,10 @@ const (
 type EventPayload interface {
 	// Type returns the discriminator stored in the events.type column.
 	Type() string
-	// Proto returns the inner oneof arm message (e.g. *xagentv1.ExternalPayload).
-	Proto() proto.Message
-	// SetPayload assigns this arm onto pb.Payload. It does the assignment rather
-	// than returning the arm because protoc-gen-go's oneof wrapper type is
-	// unexported and unnameable from this package.
-	SetPayload(pb *xagentv1.Event)
+	// SetPayloadProto assigns this arm onto pb.Payload. It does the assignment
+	// rather than returning the arm because protoc-gen-go's oneof wrapper type
+	// is unexported and unnameable from this package.
+	SetPayloadProto(pb *xagentv1.Event)
 	isEventPayload()
 }
 
@@ -48,11 +45,7 @@ type ExternalPayload struct {
 func (*ExternalPayload) Type() string    { return EventTypeExternal }
 func (*ExternalPayload) isEventPayload() {}
 
-func (p *ExternalPayload) Proto() proto.Message {
-	return &xagentv1.ExternalPayload{Description: p.Description, Url: p.URL, Data: p.Data}
-}
-
-func (p *ExternalPayload) SetPayload(pb *xagentv1.Event) {
+func (p *ExternalPayload) SetPayloadProto(pb *xagentv1.Event) {
 	pb.Payload = &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
 		Description: p.Description,
 		Url:         p.URL,
@@ -81,7 +74,7 @@ func (e *Event) Proto() *xagentv1.Event {
 		Wake:      e.Wake,
 		CreatedAt: timestamppb.New(e.CreatedAt),
 	}
-	e.Payload.SetPayload(pb)
+	e.Payload.SetPayloadProto(pb)
 	return pb
 }
 
