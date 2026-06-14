@@ -23,7 +23,6 @@ import { Route as RoutingIndexRouteImport } from './routes/routing.$index'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as KeysNewRouteImport } from './routes/keys.new'
 import { Route as GithubSetupRouteImport } from './routes/github.setup'
-import { Route as EventsNewRouteImport } from './routes/events.new'
 import { Route as EventsIdRouteImport } from './routes/events.$id'
 
 const SettingsRoute = SettingsRouteImport.update({
@@ -96,11 +95,6 @@ const GithubSetupRoute = GithubSetupRouteImport.update({
   path: '/github/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EventsNewRoute = EventsNewRouteImport.update({
-  id: '/events/new',
-  path: '/events/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const EventsIdRoute = EventsIdRouteImport.update({
   id: '/events/$id',
   path: '/events/$id',
@@ -111,7 +105,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/events/$id': typeof EventsIdRoute
-  '/events/new': typeof EventsNewRoute
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -129,7 +122,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/events/$id': typeof EventsIdRoute
-  '/events/new': typeof EventsNewRoute
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -148,7 +140,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/events/$id': typeof EventsIdRoute
-  '/events/new': typeof EventsNewRoute
   '/github/setup': typeof GithubSetupRoute
   '/keys/new': typeof KeysNewRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -168,7 +159,6 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/events/$id'
-    | '/events/new'
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
@@ -186,7 +176,6 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/events/$id'
-    | '/events/new'
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
@@ -204,7 +193,6 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/events/$id'
-    | '/events/new'
     | '/github/setup'
     | '/keys/new'
     | '/oauth/authorize'
@@ -223,7 +211,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingsRoute: typeof SettingsRoute
   EventsIdRoute: typeof EventsIdRoute
-  EventsNewRoute: typeof EventsNewRoute
   GithubSetupRoute: typeof GithubSetupRoute
   KeysNewRoute: typeof KeysNewRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
@@ -338,13 +325,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GithubSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/events/new': {
-      id: '/events/new'
-      path: '/events/new'
-      fullPath: '/events/new'
-      preLoaderRoute: typeof EventsNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/events/$id': {
       id: '/events/$id'
       path: '/events/$id'
@@ -359,7 +339,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
   EventsIdRoute: EventsIdRoute,
-  EventsNewRoute: EventsNewRoute,
   GithubSetupRoute: GithubSetupRoute,
   KeysNewRoute: KeysNewRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,

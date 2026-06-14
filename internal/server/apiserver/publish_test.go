@@ -225,43 +225,6 @@ func TestCreateLink_Publishes(t *testing.T) {
 	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
-func TestCreateEvent_Publishes(t *testing.T) {
-	t.Parallel()
-
-	pub := &pubsub.PublisherMock{
-		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
-	}
-	st := teststore.New(t)
-	srv := New(Options{Store: st, Publisher: pub})
-	org := teststore.CreateOrg(t, st, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "r", Name: "w"}}})
-	ctx := createCtx(t, org)
-
-	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name: "test", Runner: "r", Workspace: "w",
-	})
-	assert.NilError(t, err)
-	pub.ResetCalls()
-
-	eventResp, err := srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
-		Description: "test event",
-		Url:         "https://example.com",
-		TaskId:      taskResp.Task.Id,
-	})
-	assert.NilError(t, err)
-
-	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
-	assert.DeepEqual(t, calls[0].N, model.Notification{
-		Type: "change",
-		Resources: []model.NotificationResource{
-			{Action: "created", Type: "event", ID: eventResp.Event.Id},
-			{Action: "updated", Type: "task", ID: taskResp.Task.Id},
-		},
-		OrgID:  org.OrgID,
-		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
-}
-
 func TestUpdateTask_ChannelMessage_QueuedOnStart(t *testing.T) {
 	t.Parallel()
 

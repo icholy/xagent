@@ -77,9 +77,6 @@ const (
 	// XAgentServiceListExternalEventsProcedure is the fully-qualified name of the XAgentService's
 	// ListExternalEvents RPC.
 	XAgentServiceListExternalEventsProcedure = "/xagent.v1.XAgentService/ListExternalEvents"
-	// XAgentServiceCreateEventProcedure is the fully-qualified name of the XAgentService's CreateEvent
-	// RPC.
-	XAgentServiceCreateEventProcedure = "/xagent.v1.XAgentService/CreateEvent"
 	// XAgentServiceGetEventProcedure is the fully-qualified name of the XAgentService's GetEvent RPC.
 	XAgentServiceGetEventProcedure = "/xagent.v1.XAgentService/GetEvent"
 	// XAgentServiceDeleteEventProcedure is the fully-qualified name of the XAgentService's DeleteEvent
@@ -168,7 +165,6 @@ type XAgentServiceClient interface {
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
 	ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error)
 	ListExternalEvents(context.Context, *v1.ListExternalEventsRequest) (*v1.ListExternalEventsResponse, error)
-	CreateEvent(context.Context, *v1.CreateEventRequest) (*v1.CreateEventResponse, error)
 	GetEvent(context.Context, *v1.GetEventRequest) (*v1.GetEventResponse, error)
 	DeleteEvent(context.Context, *v1.DeleteEventRequest) (*v1.DeleteEventResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
@@ -301,12 +297,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceListExternalEventsProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("ListExternalEvents")),
-			connect.WithClientOptions(opts...),
-		),
-		createEvent: connect.NewClient[v1.CreateEventRequest, v1.CreateEventResponse](
-			httpClient,
-			baseURL+XAgentServiceCreateEventProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("CreateEvent")),
 			connect.WithClientOptions(opts...),
 		),
 		getEvent: connect.NewClient[v1.GetEventRequest, v1.GetEventResponse](
@@ -480,7 +470,6 @@ type xAgentServiceClient struct {
 	createLink                     *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
 	listLinks                      *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
 	listExternalEvents             *connect.Client[v1.ListExternalEventsRequest, v1.ListExternalEventsResponse]
-	createEvent                    *connect.Client[v1.CreateEventRequest, v1.CreateEventResponse]
 	getEvent                       *connect.Client[v1.GetEventRequest, v1.GetEventResponse]
 	deleteEvent                    *connect.Client[v1.DeleteEventRequest, v1.DeleteEventResponse]
 	listEventsByTask               *connect.Client[v1.ListEventsByTaskRequest, v1.ListEventsByTaskResponse]
@@ -646,15 +635,6 @@ func (c *xAgentServiceClient) ListLinks(ctx context.Context, req *v1.ListLinksRe
 // ListExternalEvents calls xagent.v1.XAgentService.ListExternalEvents.
 func (c *xAgentServiceClient) ListExternalEvents(ctx context.Context, req *v1.ListExternalEventsRequest) (*v1.ListExternalEventsResponse, error) {
 	response, err := c.listExternalEvents.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// CreateEvent calls xagent.v1.XAgentService.CreateEvent.
-func (c *xAgentServiceClient) CreateEvent(ctx context.Context, req *v1.CreateEventRequest) (*v1.CreateEventResponse, error) {
-	response, err := c.createEvent.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -904,7 +884,6 @@ type XAgentServiceHandler interface {
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
 	ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error)
 	ListExternalEvents(context.Context, *v1.ListExternalEventsRequest) (*v1.ListExternalEventsResponse, error)
-	CreateEvent(context.Context, *v1.CreateEventRequest) (*v1.CreateEventResponse, error)
 	GetEvent(context.Context, *v1.GetEventRequest) (*v1.GetEventResponse, error)
 	DeleteEvent(context.Context, *v1.DeleteEventRequest) (*v1.DeleteEventResponse, error)
 	ListEventsByTask(context.Context, *v1.ListEventsByTaskRequest) (*v1.ListEventsByTaskResponse, error)
@@ -1033,12 +1012,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceListExternalEventsProcedure,
 		svc.ListExternalEvents,
 		connect.WithSchema(xAgentServiceMethods.ByName("ListExternalEvents")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceCreateEventHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceCreateEventProcedure,
-		svc.CreateEvent,
-		connect.WithSchema(xAgentServiceMethods.ByName("CreateEvent")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceGetEventHandler := connect.NewUnaryHandlerSimple(
@@ -1225,8 +1198,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceListLinksHandler.ServeHTTP(w, r)
 		case XAgentServiceListExternalEventsProcedure:
 			xAgentServiceListExternalEventsHandler.ServeHTTP(w, r)
-		case XAgentServiceCreateEventProcedure:
-			xAgentServiceCreateEventHandler.ServeHTTP(w, r)
 		case XAgentServiceGetEventProcedure:
 			xAgentServiceGetEventHandler.ServeHTTP(w, r)
 		case XAgentServiceDeleteEventProcedure:
@@ -1348,10 +1319,6 @@ func (UnimplementedXAgentServiceHandler) ListLinks(context.Context, *v1.ListLink
 
 func (UnimplementedXAgentServiceHandler) ListExternalEvents(context.Context, *v1.ListExternalEventsRequest) (*v1.ListExternalEventsResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListExternalEvents is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) CreateEvent(context.Context, *v1.CreateEventRequest) (*v1.CreateEventResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateEvent is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) GetEvent(context.Context, *v1.GetEventRequest) (*v1.GetEventResponse, error) {

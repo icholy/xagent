@@ -24,7 +24,6 @@ service XAgentService {
   rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
   rpc ListLinks(ListLinksRequest) returns (ListLinksResponse);
   rpc ListExternalEvents(ListExternalEventsRequest) returns (ListExternalEventsResponse);
-  rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
   rpc GetEvent(GetEventRequest) returns (GetEventResponse);
   rpc DeleteEvent(DeleteEventRequest) returns (DeleteEventResponse);
   rpc ListEventsByTask(ListEventsByTaskRequest) returns (ListEventsByTaskResponse);
@@ -362,17 +361,6 @@ message ListExternalEventsRequest {
 
 message ListExternalEventsResponse {
   repeated Event events = 1;
-}
-
-message CreateEventRequest {
-  string description = 1;
-  string data = 2;
-  string url = 3;
-  int64 task_id = 4;
-}
-
-message CreateEventResponse {
-  Event event = 1;
 }
 
 message GetEventRequest {

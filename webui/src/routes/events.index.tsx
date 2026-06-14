@@ -56,7 +56,6 @@ function EventsPage() {
 }
 
 function RecentEventsCard() {
-  const orgId = useOrgId()
   const [limit, setLimit] = useState(25)
   const { data, isLoading, error } = useQuery(
     listExternalEvents,
@@ -88,12 +87,6 @@ function RecentEventsCard() {
                 </SelectContent>
               </Select>
             </div>
-            <Link to="/events/new" search={{ org: orgId }}>
-              <Button>
-                <Plus className="h-4 w-4" />
-                Event
-              </Button>
-            </Link>
           </div>
         </div>
       </CardHeader>

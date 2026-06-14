@@ -37,58 +37,6 @@ func (s *Server) ListExternalEvents(ctx context.Context, req *xagentv1.ListExter
 	}, nil
 }
 
-func (s *Server) CreateEvent(ctx context.Context, req *xagentv1.CreateEventRequest) (*xagentv1.CreateEventResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	// Events are task-scoped: creating one writes the target task too, so both
-	// halves must pass — create the event (coarse) and write the task it belongs
-	// to (per-instance).
-	if !caller.Scopes.Allow(authscope.OpEventCreate) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot create event"))
-	}
-	if !caller.Scopes.AllowOp(authscope.OpTaskWrite) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
-	}
-	// Verify task ownership and the per-instance task scope.
-	task, err := s.store.GetTask(ctx, nil, req.TaskId, caller.OrgID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.TaskId))
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
-	}
-	// A user-created event maps to the external arm; it does not wake the task.
-	event := &model.Event{
-		TaskID: task.ID,
-		OrgID:  caller.OrgID,
-		Payload: &model.ExternalPayload{
-			Description: req.Description,
-			URL:         req.Url,
-			Data:        req.Data,
-		},
-	}
-	if err := s.store.CreateEvent(ctx, nil, event); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	s.log.Info("event created", "id", event.ID, "task_id", event.TaskID, "type", event.Payload.Type())
-	s.publish(model.Notification{
-		Type: "change",
-		Resources: []model.NotificationResource{
-			{Action: "created", Type: "event", ID: event.ID},
-			{Action: "updated", Type: "task", ID: event.TaskID},
-		},
-		OrgID:    caller.OrgID,
-		UserID:   caller.ID,
-		ClientID: caller.ClientID,
-		Time:     time.Now(),
-	})
-	return &xagentv1.CreateEventResponse{
-		Event: event.Proto(),
-	}, nil
-}
-
 func (s *Server) GetEvent(ctx context.Context, req *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpEventRead) {
