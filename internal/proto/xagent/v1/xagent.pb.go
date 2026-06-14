@@ -2728,27 +2728,27 @@ func (x *Actor) GetName() string {
 	return ""
 }
 
-type ListEventsRequest struct {
+type ListExternalEventsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"` // Max events to return (default: 100, max: 100)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListEventsRequest) Reset() {
-	*x = ListEventsRequest{}
+func (x *ListExternalEventsRequest) Reset() {
+	*x = ListExternalEventsRequest{}
 	mi := &file_xagent_v1_xagent_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListEventsRequest) String() string {
+func (x *ListExternalEventsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListEventsRequest) ProtoMessage() {}
+func (*ListExternalEventsRequest) ProtoMessage() {}
 
-func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
+func (x *ListExternalEventsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_xagent_v1_xagent_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2760,39 +2760,39 @@ func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListEventsRequest.ProtoReflect.Descriptor instead.
-func (*ListEventsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListExternalEventsRequest.ProtoReflect.Descriptor instead.
+func (*ListExternalEventsRequest) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{44}
 }
 
-func (x *ListEventsRequest) GetLimit() int32 {
+func (x *ListExternalEventsRequest) GetLimit() int32 {
 	if x != nil {
 		return x.Limit
 	}
 	return 0
 }
 
-type ListEventsResponse struct {
+type ListExternalEventsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Events        []*Event               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListEventsResponse) Reset() {
-	*x = ListEventsResponse{}
+func (x *ListExternalEventsResponse) Reset() {
+	*x = ListExternalEventsResponse{}
 	mi := &file_xagent_v1_xagent_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListEventsResponse) String() string {
+func (x *ListExternalEventsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListEventsResponse) ProtoMessage() {}
+func (*ListExternalEventsResponse) ProtoMessage() {}
 
-func (x *ListEventsResponse) ProtoReflect() protoreflect.Message {
+func (x *ListExternalEventsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_xagent_v1_xagent_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2804,12 +2804,12 @@ func (x *ListEventsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListEventsResponse.ProtoReflect.Descriptor instead.
-func (*ListEventsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListExternalEventsResponse.ProtoReflect.Descriptor instead.
+func (*ListExternalEventsResponse) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{45}
 }
 
-func (x *ListEventsResponse) GetEvents() []*Event {
+func (x *ListExternalEventsResponse) GetEvents() []*Event {
 	if x != nil {
 		return x.Events
 	}
@@ -5892,10 +5892,10 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\amessage\x18\x05 \x01(\tR\amessage\"/\n" +
 	"\x05Actor\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\")\n" +
-	"\x11ListEventsRequest\x12\x14\n" +
-	"\x05limit\x18\x01 \x01(\x05R\x05limit\">\n" +
-	"\x12ListEventsResponse\x12(\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"1\n" +
+	"\x19ListExternalEventsRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\"F\n" +
+	"\x1aListExternalEventsResponse\x12(\n" +
 	"\x06events\x18\x01 \x03(\v2\x10.xagent.v1.EventR\x06events\"u\n" +
 	"\x12CreateEventRequest\x12 \n" +
 	"\vdescription\x18\x01 \x01(\tR\vdescription\x12\x12\n" +
@@ -6092,7 +6092,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x1eLIFECYCLE_KIND_SANDBOX_STARTED\x10\b\x12!\n" +
 	"\x1dLIFECYCLE_KIND_SANDBOX_EXITED\x10\t\x12!\n" +
 	"\x1dLIFECYCLE_KIND_SANDBOX_FAILED\x10\n" +
-	"2\xba\x1b\n" +
+	"2\xd2\x1b\n" +
 	"\rXAgentService\x127\n" +
 	"\x04Ping\x12\x16.xagent.v1.PingRequest\x1a\x17.xagent.v1.PingResponse\x12I\n" +
 	"\n" +
@@ -6114,9 +6114,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"UploadLogs\x12\x1c.xagent.v1.UploadLogsRequest\x1a\x1d.xagent.v1.UploadLogsResponse\x12I\n" +
 	"\n" +
 	"CreateLink\x12\x1c.xagent.v1.CreateLinkRequest\x1a\x1d.xagent.v1.CreateLinkResponse\x12F\n" +
-	"\tListLinks\x12\x1b.xagent.v1.ListLinksRequest\x1a\x1c.xagent.v1.ListLinksResponse\x12I\n" +
-	"\n" +
-	"ListEvents\x12\x1c.xagent.v1.ListEventsRequest\x1a\x1d.xagent.v1.ListEventsResponse\x12L\n" +
+	"\tListLinks\x12\x1b.xagent.v1.ListLinksRequest\x1a\x1c.xagent.v1.ListLinksResponse\x12a\n" +
+	"\x12ListExternalEvents\x12$.xagent.v1.ListExternalEventsRequest\x1a%.xagent.v1.ListExternalEventsResponse\x12L\n" +
 	"\vCreateEvent\x12\x1d.xagent.v1.CreateEventRequest\x1a\x1e.xagent.v1.CreateEventResponse\x12C\n" +
 	"\bGetEvent\x12\x1a.xagent.v1.GetEventRequest\x1a\x1b.xagent.v1.GetEventResponse\x12L\n" +
 	"\vDeleteEvent\x12\x1d.xagent.v1.DeleteEventRequest\x1a\x1e.xagent.v1.DeleteEventResponse\x12[\n" +
@@ -6206,8 +6205,8 @@ var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*LinkPayload)(nil),                            // 44: xagent.v1.LinkPayload
 	(*LifecyclePayload)(nil),                       // 45: xagent.v1.LifecyclePayload
 	(*Actor)(nil),                                  // 46: xagent.v1.Actor
-	(*ListEventsRequest)(nil),                      // 47: xagent.v1.ListEventsRequest
-	(*ListEventsResponse)(nil),                     // 48: xagent.v1.ListEventsResponse
+	(*ListExternalEventsRequest)(nil),              // 47: xagent.v1.ListExternalEventsRequest
+	(*ListExternalEventsResponse)(nil),             // 48: xagent.v1.ListExternalEventsResponse
 	(*CreateEventRequest)(nil),                     // 49: xagent.v1.CreateEventRequest
 	(*CreateEventResponse)(nil),                    // 50: xagent.v1.CreateEventResponse
 	(*GetEventRequest)(nil),                        // 51: xagent.v1.GetEventRequest
@@ -6309,7 +6308,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	44,  // 32: xagent.v1.Event.link:type_name -> xagent.v1.LinkPayload
 	2,   // 33: xagent.v1.LifecyclePayload.kind:type_name -> xagent.v1.LifecycleKind
 	46,  // 34: xagent.v1.LifecyclePayload.actor:type_name -> xagent.v1.Actor
-	40,  // 35: xagent.v1.ListEventsResponse.events:type_name -> xagent.v1.Event
+	40,  // 35: xagent.v1.ListExternalEventsResponse.events:type_name -> xagent.v1.Event
 	40,  // 36: xagent.v1.CreateEventResponse.event:type_name -> xagent.v1.Event
 	40,  // 37: xagent.v1.GetEventResponse.event:type_name -> xagent.v1.Event
 	40,  // 38: xagent.v1.ListEventsByTaskResponse.events:type_name -> xagent.v1.Event
@@ -6352,7 +6351,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	33,  // 75: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
 	36,  // 76: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
 	38,  // 77: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
-	47,  // 78: xagent.v1.XAgentService.ListEvents:input_type -> xagent.v1.ListEventsRequest
+	47,  // 78: xagent.v1.XAgentService.ListExternalEvents:input_type -> xagent.v1.ListExternalEventsRequest
 	49,  // 79: xagent.v1.XAgentService.CreateEvent:input_type -> xagent.v1.CreateEventRequest
 	51,  // 80: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
 	53,  // 81: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
@@ -6394,7 +6393,7 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	34,  // 117: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
 	37,  // 118: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
 	39,  // 119: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
-	48,  // 120: xagent.v1.XAgentService.ListEvents:output_type -> xagent.v1.ListEventsResponse
+	48,  // 120: xagent.v1.XAgentService.ListExternalEvents:output_type -> xagent.v1.ListExternalEventsResponse
 	50,  // 121: xagent.v1.XAgentService.CreateEvent:output_type -> xagent.v1.CreateEventResponse
 	52,  // 122: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
 	54,  // 123: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse

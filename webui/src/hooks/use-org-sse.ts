@@ -4,7 +4,7 @@ import { createConnectQueryKey } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
   listTasks,
-  listEvents,
+  listExternalEvents,
   listEventsByTask,
   getEvent,
   listWorkspaces,
@@ -52,7 +52,7 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
       break
     case 'event':
       qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listEvents, cardinality: 'finite' }),
+        queryKey: createConnectQueryKey({ schema: listExternalEvents, cardinality: 'finite' }),
       })
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({

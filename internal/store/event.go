@@ -42,10 +42,20 @@ func (s *Store) GetEvent(ctx context.Context, tx *sql.Tx, id int64, orgID int64)
 	return toModelEvent(row)
 }
 
-func (s *Store) ListEvents(ctx context.Context, tx *sql.Tx, limit int, orgID int64) ([]*model.Event, error) {
+// ListEvents returns the org event feed newest-first. A nil or empty types
+// filter returns all event types; a non-empty filter narrows to those types —
+// e.g. the org external feed passes ['external'].
+func (s *Store) ListEvents(ctx context.Context, tx *sql.Tx, limit int, orgID int64, types []string) ([]*model.Event, error) {
+	// A nil slice encodes as SQL NULL (cardinality(NULL) is NULL, not 0), which
+	// would filter everything out; coerce to an empty array so the "all types"
+	// case matches the query's cardinality(...) = 0 guard.
+	if types == nil {
+		types = []string{}
+	}
 	rows, err := s.q(tx).ListEvents(ctx, sqlc.ListEventsParams{
 		OrgID: orgID,
 		Limit: int32(limit),
+		Types: types,
 	})
 	if err != nil {
 		return nil, err

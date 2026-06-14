@@ -3,7 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   getRoutingRules,
-  listEvents,
+  listExternalEvents,
   setRoutingRules,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Event, RoutingRule } from '@/gen/xagent/v1/xagent_pb'
@@ -58,7 +58,7 @@ function EventsPage() {
 function RecentEventsCard() {
   const orgId = useOrgId()
   const [limit, setLimit] = useState(25)
-  const { data, isLoading, error } = useQuery(listEvents, { limit }, { refetchInterval: 60000 })
+  const { data, isLoading, error } = useQuery(listExternalEvents, { limit }, { refetchInterval: 60000 })
 
   const events = data?.events ?? []
 

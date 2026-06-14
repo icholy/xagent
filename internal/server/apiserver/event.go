@@ -16,7 +16,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
 
-func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest) (*xagentv1.ListEventsResponse, error) {
+func (s *Server) ListExternalEvents(ctx context.Context, req *xagentv1.ListExternalEventsRequest) (*xagentv1.ListExternalEventsResponse, error) {
 	const maxLimit = 100
 	limit := cmp.Or(int(req.Limit), maxLimit)
 	if limit < 0 || limit > maxLimit {
@@ -26,11 +26,13 @@ func (s *Server) ListEvents(ctx context.Context, req *xagentv1.ListEventsRequest
 	if !caller.Scopes.Allow(authscope.OpEventRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list events"))
 	}
-	events, err := s.store.ListEvents(ctx, nil, limit, caller.OrgID)
+	// The org feed is external-only; narrow the parameterized store query to the
+	// external arm.
+	events, err := s.store.ListEvents(ctx, nil, limit, caller.OrgID, []string{model.EventTypeExternal})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return &xagentv1.ListEventsResponse{
+	return &xagentv1.ListExternalEventsResponse{
 		Events: model.ProtoMap(events),
 	}, nil
 }

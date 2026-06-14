@@ -1139,9 +1139,9 @@ export const ActorSchema: GenMessage<Actor> = /*@__PURE__*/
   messageDesc(file_xagent_v1_xagent, 43);
 
 /**
- * @generated from message xagent.v1.ListEventsRequest
+ * @generated from message xagent.v1.ListExternalEventsRequest
  */
-export type ListEventsRequest = Message<"xagent.v1.ListEventsRequest"> & {
+export type ListExternalEventsRequest = Message<"xagent.v1.ListExternalEventsRequest"> & {
   /**
    * Max events to return (default: 100, max: 100)
    *
@@ -1151,16 +1151,16 @@ export type ListEventsRequest = Message<"xagent.v1.ListEventsRequest"> & {
 };
 
 /**
- * Describes the message xagent.v1.ListEventsRequest.
- * Use `create(ListEventsRequestSchema)` to create a new message.
+ * Describes the message xagent.v1.ListExternalEventsRequest.
+ * Use `create(ListExternalEventsRequestSchema)` to create a new message.
  */
-export const ListEventsRequestSchema: GenMessage<ListEventsRequest> = /*@__PURE__*/
+export const ListExternalEventsRequestSchema: GenMessage<ListExternalEventsRequest> = /*@__PURE__*/
   messageDesc(file_xagent_v1_xagent, 44);
 
 /**
- * @generated from message xagent.v1.ListEventsResponse
+ * @generated from message xagent.v1.ListExternalEventsResponse
  */
-export type ListEventsResponse = Message<"xagent.v1.ListEventsResponse"> & {
+export type ListExternalEventsResponse = Message<"xagent.v1.ListExternalEventsResponse"> & {
   /**
    * @generated from field: repeated xagent.v1.Event events = 1;
    */
@@ -1168,10 +1168,10 @@ export type ListEventsResponse = Message<"xagent.v1.ListEventsResponse"> & {
 };
 
 /**
- * Describes the message xagent.v1.ListEventsResponse.
- * Use `create(ListEventsResponseSchema)` to create a new message.
+ * Describes the message xagent.v1.ListExternalEventsResponse.
+ * Use `create(ListExternalEventsResponseSchema)` to create a new message.
  */
-export const ListEventsResponseSchema: GenMessage<ListEventsResponse> = /*@__PURE__*/
+export const ListExternalEventsResponseSchema: GenMessage<ListExternalEventsResponse> = /*@__PURE__*/
   messageDesc(file_xagent_v1_xagent, 45);
 
 /**
@@ -2666,12 +2666,12 @@ export const XAgentService: GenService<{
     output: typeof ListLinksResponseSchema;
   },
   /**
-   * @generated from rpc xagent.v1.XAgentService.ListEvents
+   * @generated from rpc xagent.v1.XAgentService.ListExternalEvents
    */
-  listEvents: {
+  listExternalEvents: {
     methodKind: "unary";
-    input: typeof ListEventsRequestSchema;
-    output: typeof ListEventsResponseSchema;
+    input: typeof ListExternalEventsRequestSchema;
+    output: typeof ListExternalEventsResponseSchema;
   },
   /**
    * @generated from rpc xagent.v1.XAgentService.CreateEvent
