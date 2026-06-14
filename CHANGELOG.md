@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.0.0](https://github.com/icholy/xagent/compare/v1.4.0...v2.0.0) (2026-06-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove orphaned CreateEvent RPC and its UI ([#974](https://github.com/icholy/xagent/issues/974))
+* parameterize ListEvents store filter, rename RPC to ListExternalEvents ([#972](https://github.com/icholy/xagent/issues/972))
+* lifecycle events replace audit/info/error logs, drop logs table ([#966](https://github.com/icholy/xagent/issues/966))
+* instruction events replace tasks.instructions ([#959](https://github.com/icholy/xagent/issues/959))
+* the Event proto message and the events table are incompatible with the prior flat shape; existing events are not migrated.
+* removes the AddEventTask, RemoveEventTask, and ListEventTasks RPCs and the event_tasks table.
+* removes the ListChildTasks RPC, the child_tasks token capability, and the Task.parent / GetTaskDetailsResponse.children fields.
+
+### Features
+
+* **webui:** make the task timeline the single activity view ([#975](https://github.com/icholy/xagent/issues/975)) ([633e29b](https://github.com/icholy/xagent/commit/633e29b55b34bfbe0996ce6b819759a2d5b6c998))
+
+
+### Bug Fixes
+
+* passthrough any connect error code in task/runner handlers ([#970](https://github.com/icholy/xagent/issues/970)) ([4fa2e47](https://github.com/icholy/xagent/commit/4fa2e4709ffb74d50976acb50bdc8c7b87f0e46c))
+* render activity timeline oldest-first ([#976](https://github.com/icholy/xagent/issues/976)) ([4e27370](https://github.com/icholy/xagent/commit/4e27370941a858484d7010ca8cf4e7870479613a))
+* **webui:** render each report as its own timeline entry ([#977](https://github.com/icholy/xagent/issues/977)) ([d716bb5](https://github.com/icholy/xagent/commit/d716bb5b8f854ea7bfddd70d637412ebb8248bbc))
+
+
+### Miscellaneous
+
+* inline NewLifecycleEvent, add TaskStatus.Label ([#967](https://github.com/icholy/xagent/issues/967)) ([92269d2](https://github.com/icholy/xagent/commit/92269d26396195602975234929a0bbb86cfb2961))
+* instruction events replace tasks.instructions ([#959](https://github.com/icholy/xagent/issues/959)) ([c1672bf](https://github.com/icholy/xagent/commit/c1672bf233aacef2150d5aaa4da569707de0e0f1))
+* lifecycle events replace audit/info/error logs, drop logs table ([#966](https://github.com/icholy/xagent/issues/966)) ([65ff0b6](https://github.com/icholy/xagent/commit/65ff0b67faf2639cd54eec64a5a54c189c2176b1))
+* link events as timeline source of truth, task_links the projection ([#961](https://github.com/icholy/xagent/issues/961)) ([819dcc5](https://github.com/icholy/xagent/commit/819dcc5b8ca0132c6af188760f4b7a8af19e0410))
+* make events task-scoped ([#956](https://github.com/icholy/xagent/issues/956)) ([52a49b5](https://github.com/icholy/xagent/commit/52a49b530616a55d5764d2e61ffb5049a63e8071))
+* make runnerLifecycleEvent a RunnerEvent method ([#969](https://github.com/icholy/xagent/issues/969)) ([d7b01d3](https://github.com/icholy/xagent/commit/d7b01d37b79a786536066b6b13335ad991a652d6))
+* parameterize ListEvents store filter, rename RPC to ListExternalEvents ([#972](https://github.com/icholy/xagent/issues/972)) ([fedccce](https://github.com/icholy/xagent/commit/fedccce1a1325af819a0f75abfc9d59f232a0cdc))
+* remove child tasks ([#954](https://github.com/icholy/xagent/issues/954)) ([6602667](https://github.com/icholy/xagent/commit/6602667804b22404561f07ba448ba586345d155a))
+* remove orphaned CreateEvent RPC and its UI ([#974](https://github.com/icholy/xagent/issues/974)) ([03c913f](https://github.com/icholy/xagent/commit/03c913f47d10bece0d7b339ba1888fa6c0c2e5f1))
+* report tool writes a report event ([#964](https://github.com/icholy/xagent/issues/964)) ([c601e89](https://github.com/icholy/xagent/commit/c601e895141480308edab3809583f24247fee6e7))
+* type the Event payload as a oneof ([#957](https://github.com/icholy/xagent/issues/957)) ([8f1acb9](https://github.com/icholy/xagent/commit/8f1acb99c39b69dc33bbcb1cb76160efbf6ff657))
+
 ## [1.4.0](https://github.com/icholy/xagent/compare/v1.3.0...v1.4.0) (2026-06-10)
 
 
