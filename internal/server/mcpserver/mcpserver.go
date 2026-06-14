@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -234,15 +235,20 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 			URL:  inst.Url,
 		})
 	}
-	logsResp, err := h.service.ListLogs(ctx, &xagentv1.ListLogsRequest{
+	// Logs moved onto the event stream: reports (from-agent) and lifecycle
+	// transitions (about-task) replace the old report/audit/info/error log rows.
+	// Read the full stream and project those two arms into the activity list.
+	eventsResp, err := h.service.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
 		TaskId: input.ID,
 	})
 	if err == nil {
-		for _, l := range logsResp.Entries {
-			result.Logs = append(result.Logs, logEntry{
-				Type:    l.Type,
-				Content: l.Content,
-			})
+		for _, event := range eventsResp.Events {
+			switch payload := model.EventFromProto(event).Payload.(type) {
+			case *model.ReportPayload:
+				result.Logs = append(result.Logs, logEntry{Type: "report", Content: payload.Content})
+			case *model.LifecyclePayload:
+				result.Logs = append(result.Logs, logEntry{Type: "lifecycle", Content: payload.Summary()})
+			}
 		}
 	}
 	for _, l := range resp.Links {

@@ -97,9 +97,6 @@ var _ Client = &ClientMock{}
 //			ListLinksFunc: func(contextMoqParam context.Context, listLinksRequest *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
 //				panic("mock out the ListLinks method")
 //			},
-//			ListLogsFunc: func(contextMoqParam context.Context, listLogsRequest *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
-//				panic("mock out the ListLogs method")
-//			},
 //			ListOrgMembersFunc: func(contextMoqParam context.Context, listOrgMembersRequest *xagentv1.ListOrgMembersRequest) (*xagentv1.ListOrgMembersResponse, error) {
 //				panic("mock out the ListOrgMembers method")
 //			},
@@ -232,9 +229,6 @@ type ClientMock struct {
 
 	// ListLinksFunc mocks the ListLinks method.
 	ListLinksFunc func(contextMoqParam context.Context, listLinksRequest *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error)
-
-	// ListLogsFunc mocks the ListLogs method.
-	ListLogsFunc func(contextMoqParam context.Context, listLogsRequest *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error)
 
 	// ListOrgMembersFunc mocks the ListOrgMembers method.
 	ListOrgMembersFunc func(contextMoqParam context.Context, listOrgMembersRequest *xagentv1.ListOrgMembersRequest) (*xagentv1.ListOrgMembersResponse, error)
@@ -468,13 +462,6 @@ type ClientMock struct {
 			// ListLinksRequest is the listLinksRequest argument value.
 			ListLinksRequest *xagentv1.ListLinksRequest
 		}
-		// ListLogs holds details about calls to the ListLogs method.
-		ListLogs []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// ListLogsRequest is the listLogsRequest argument value.
-			ListLogsRequest *xagentv1.ListLogsRequest
-		}
 		// ListOrgMembers holds details about calls to the ListOrgMembers method.
 		ListOrgMembers []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -614,7 +601,6 @@ type ClientMock struct {
 	lockListEventsByTask               sync.RWMutex
 	lockListKeys                       sync.RWMutex
 	lockListLinks                      sync.RWMutex
-	lockListLogs                       sync.RWMutex
 	lockListOrgMembers                 sync.RWMutex
 	lockListOrgs                       sync.RWMutex
 	lockListRunnerTasks                sync.RWMutex
@@ -1566,42 +1552,6 @@ func (mock *ClientMock) ListLinksCalls() []struct {
 	mock.lockListLinks.RLock()
 	calls = mock.calls.ListLinks
 	mock.lockListLinks.RUnlock()
-	return calls
-}
-
-// ListLogs calls ListLogsFunc.
-func (mock *ClientMock) ListLogs(contextMoqParam context.Context, listLogsRequest *xagentv1.ListLogsRequest) (*xagentv1.ListLogsResponse, error) {
-	if mock.ListLogsFunc == nil {
-		panic("ClientMock.ListLogsFunc: method is nil but Client.ListLogs was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam context.Context
-		ListLogsRequest *xagentv1.ListLogsRequest
-	}{
-		ContextMoqParam: contextMoqParam,
-		ListLogsRequest: listLogsRequest,
-	}
-	mock.lockListLogs.Lock()
-	mock.calls.ListLogs = append(mock.calls.ListLogs, callInfo)
-	mock.lockListLogs.Unlock()
-	return mock.ListLogsFunc(contextMoqParam, listLogsRequest)
-}
-
-// ListLogsCalls gets all the calls that were made to ListLogs.
-// Check the length with:
-//
-//	len(mockedClient.ListLogsCalls())
-func (mock *ClientMock) ListLogsCalls() []struct {
-	ContextMoqParam context.Context
-	ListLogsRequest *xagentv1.ListLogsRequest
-} {
-	var calls []struct {
-		ContextMoqParam context.Context
-		ListLogsRequest *xagentv1.ListLogsRequest
-	}
-	mock.lockListLogs.RLock()
-	calls = mock.calls.ListLogs
-	mock.lockListLogs.RUnlock()
 	return calls
 }
 

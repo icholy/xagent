@@ -69,38 +69,6 @@ CREATE TABLE public.keys (
 
 
 --
--- Name: logs; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.logs (
-    id bigint NOT NULL,
-    task_id bigint NOT NULL,
-    type text NOT NULL,
-    content text NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-
---
--- Name: logs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.logs_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.logs_id_seq OWNED BY public.logs.id;
-
-
---
 -- Name: org_members; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -302,13 +270,6 @@ ALTER TABLE ONLY public.events ALTER COLUMN id SET DEFAULT nextval('public.event
 
 
 --
--- Name: logs id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.logs ALTER COLUMN id SET DEFAULT nextval('public.logs_id_seq'::regclass);
-
-
---
 -- Name: orgs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -350,14 +311,6 @@ ALTER TABLE ONLY public.events
 
 ALTER TABLE ONLY public.keys
     ADD CONSTRAINT keys_pkey PRIMARY KEY (id);
-
-
---
--- Name: logs logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.logs
-    ADD CONSTRAINT logs_pkey PRIMARY KEY (id);
 
 
 --
@@ -450,13 +403,6 @@ CREATE INDEX idx_keys_org_id ON public.keys USING btree (org_id);
 --
 
 CREATE UNIQUE INDEX idx_keys_token_hash ON public.keys USING btree (token_hash);
-
-
---
--- Name: idx_logs_task_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_logs_task_id ON public.logs USING btree (task_id);
 
 
 --
@@ -621,14 +567,6 @@ ALTER TABLE ONLY public.workspaces
 
 
 --
--- Name: logs logs_task_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.logs
-    ADD CONSTRAINT logs_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id) ON DELETE CASCADE;
-
-
---
 -- Name: org_members org_members_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -674,4 +612,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260613000001'),
     ('20260613120000'),
     ('20260614000001'),
-    ('20260614000002');
+    ('20260614000002'),
+    ('20260614000003');

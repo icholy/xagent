@@ -4,7 +4,6 @@ import { createConnectQueryKey } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
   listTasks,
-  listLogs,
   listEvents,
   listEventsByTask,
   getEvent,
@@ -31,15 +30,9 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
       })
       break
     case 'task_logs':
-      qc.invalidateQueries({
-        queryKey: createConnectQueryKey({
-          schema: listLogs,
-          input: { taskId: BigInt(r.id) },
-          cardinality: 'finite',
-        }),
-      })
-      // Reports now live on the event stream but are still published as a
-      // task_logs change, so refresh the task's events too.
+      // The logs table is gone; reports and lifecycle transitions are events on
+      // the task's stream. A task_logs change means the stream grew, so refresh
+      // the task's events.
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
           schema: listEventsByTask,

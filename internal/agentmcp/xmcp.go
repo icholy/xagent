@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"slices"
 	"time"
 
@@ -34,18 +33,6 @@ func NewServer(client xagentclient.Client, task *model.Task, capabilities []stri
 
 func (s *Server) hasCapability(capability string) bool {
 	return slices.Contains(s.capabilities, capability)
-}
-
-func (s *Server) log(ctx context.Context, format string, args ...any) {
-	_, err := s.client.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
-		TaskId: s.task.ID,
-		Entries: []*xagentv1.LogEntry{
-			{Type: "mcp", Content: fmt.Sprintf(format, args...)},
-		},
-	})
-	if err != nil {
-		slog.Warn("failed to upload log", "error", err)
-	}
 }
 
 func (s *Server) AddTools(server *mcp.Server) {
@@ -96,7 +83,6 @@ func (s *Server) createLink(ctx context.Context, req *mcp.CallToolRequest, input
 		return errorResult("failed to create link: %v", err), nil, nil
 	}
 
-	s.log(ctx, "created link: %s", input.URL)
 	return textResult("Link created: %s", input.URL), nil, nil
 }
 

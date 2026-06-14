@@ -173,7 +173,7 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	_, err = srv.UploadLogs(ctx, &xagentv1.UploadLogsRequest{
 		TaskId: resp.Task.Id,
 		Entries: []*xagentv1.LogEntry{
-			{Type: "info", Content: "hello"},
+			{Type: "llm", Content: "hello"},
 		},
 	})
 	assert.NilError(t, err)

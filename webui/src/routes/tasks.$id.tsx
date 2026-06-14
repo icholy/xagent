@@ -3,7 +3,6 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
-  listLogs,
   listEventsByTask,
   updateTask,
   deleteEvent,
@@ -12,7 +11,8 @@ import {
   cancelTask,
   restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { TaskLink, Event } from '@/gen/xagent/v1/xagent_pb'
+import { LifecycleKind } from '@/gen/xagent/v1/xagent_pb'
+import type { TaskLink, Event, LifecyclePayload } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate, type Timestamp } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
 import {
@@ -48,15 +48,57 @@ export const Route = createFileRoute('/tasks/$id')({
 
 const logTypeStyles: Record<string, string> = {
   report: 'bg-purple-100 text-purple-800 border-purple-200',
-  llm: 'bg-purple-100 text-purple-800 border-purple-200',
-  info: 'bg-blue-100 text-blue-800 border-blue-200',
-  error: 'bg-red-100 text-red-800 border-red-200',
-  audit: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  lifecycle: 'bg-blue-100 text-blue-800 border-blue-200',
 }
 
-// A row in the Logs table — either a remaining logs-table entry or a report
-// event projected into the same shape so reports stay visible alongside logs.
-type LogRow = { type: string; content: string; createdAt?: Timestamp }
+// A row in the Activity table — a report or lifecycle event from the task's
+// stream projected into a flat shape (the logs table is gone).
+type ActivityRow = { type: string; content: string; createdAt?: Timestamp }
+
+// renderLifecycle turns a lifecycle event into a readable activity line, e.g.
+// "Created by icholy", "Cancelled", "Sandbox exited (Running -> Completed)",
+// "Sandbox failed: <message>". It mirrors the Go-side LifecyclePayload.Summary.
+function renderLifecycle(p: LifecyclePayload): string {
+  let s: string
+  switch (p.kind) {
+    case LifecycleKind.CREATED:
+      s = 'Created'
+      break
+    case LifecycleKind.UPDATED:
+      s = 'Updated'
+      break
+    case LifecycleKind.CANCELLED:
+      s = 'Cancelled'
+      break
+    case LifecycleKind.RESTARTED:
+      s = 'Restarted'
+      break
+    case LifecycleKind.ARCHIVED:
+      s = 'Archived'
+      break
+    case LifecycleKind.UNARCHIVED:
+      s = 'Unarchived'
+      break
+    case LifecycleKind.AUTO_ARCHIVED:
+      s = 'Auto-archived'
+      break
+    case LifecycleKind.SANDBOX_STARTED:
+      s = 'Sandbox started'
+      break
+    case LifecycleKind.SANDBOX_EXITED:
+      s = 'Sandbox exited'
+      if (p.fromStatus && p.toStatus) s += ` (${p.fromStatus} -> ${p.toStatus})`
+      break
+    case LifecycleKind.SANDBOX_FAILED:
+      s = 'Sandbox failed'
+      if (p.message) s += `: ${p.message}`
+      break
+    default:
+      s = 'Lifecycle event'
+  }
+  if (p.actor?.kind === 'user' && p.actor.name) s += ` by ${p.actor.name}`
+  return s
+}
 
 function TaskDetail() {
   const { id } = Route.useParams()
@@ -69,11 +111,8 @@ function TaskDetail() {
     { refetchInterval: 60000 },
   )
 
-  const { data: logsData } = useQuery(listLogs, { taskId }, { refetchInterval: 60000 })
-
-  // Reports moved off the logs table onto the event stream (type='report'). Read
-  // them from the task's events and filter to the report arm client-side; the
-  // remaining log types still come from listLogs until the drop-logs increment.
+  // The logs table is gone: the activity view reads report (from-agent) and
+  // lifecycle (about-task) events straight from the task's stream.
   const { data: eventsData } = useQuery(listEventsByTask, { taskId }, { refetchInterval: 60000 })
 
   const updateMutation = useMutation(updateTask, { onSuccess: () => refetch() })
@@ -134,22 +173,26 @@ function TaskDetail() {
   const events = data?.events ?? []
   const links = data?.links ?? []
 
-  // Reports (now report events) render in the Logs table alongside the remaining
-  // log types. Project each report event into a log-shaped row and merge the two
-  // sources in chronological order so the view matches what reports looked like
-  // when they were `llm` log rows.
-  const reportRows: LogRow[] = (eventsData?.events ?? [])
-    .filter((e) => e.payload.case === 'report')
-    .map((e) => ({
-      type: 'report',
-      content: e.payload.case === 'report' ? e.payload.value.content : '',
-      createdAt: e.createdAt,
-    }))
-  const logs: LogRow[] = [...(logsData?.entries ?? []), ...reportRows].sort((a, b) => {
-    const at = a.createdAt ? Number(a.createdAt.seconds) : 0
-    const bt = b.createdAt ? Number(b.createdAt.seconds) : 0
-    return at - bt
-  })
+  // Project the report and lifecycle arms of the stream into flat activity rows.
+  // listEventsByTask returns newest-first, so sort ascending to render them
+  // chronologically.
+  const activity: ActivityRow[] = (eventsData?.events ?? [])
+    .flatMap((e) => {
+      if (e.payload.case === 'report') {
+        return [{ type: 'report', content: e.payload.value.content, createdAt: e.createdAt }]
+      }
+      if (e.payload.case === 'lifecycle') {
+        return [
+          { type: 'lifecycle', content: renderLifecycle(e.payload.value), createdAt: e.createdAt },
+        ]
+      }
+      return []
+    })
+    .sort((a, b) => {
+      const at = a.createdAt ? Number(a.createdAt.seconds) : 0
+      const bt = b.createdAt ? Number(b.createdAt.seconds) : 0
+      return at - bt
+    })
 
   // Instructions are no longer a task field — they are instruction events in the
   // brief. External events keep their own section below.
@@ -299,10 +342,10 @@ function TaskDetail() {
         </div>
       )}
 
-      {/* Logs */}
+      {/* Activity */}
       <div className="rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-4">Logs</h2>
-        <LogsTable logs={logs} />
+        <h2 className="text-lg font-semibold mb-4">Activity</h2>
+        <ActivityTable rows={activity} />
       </div>
     </div>
   )
@@ -438,9 +481,9 @@ function EventsTable({
   )
 }
 
-function LogsTable({ logs }: { logs: LogRow[] }) {
-  if (logs.length === 0) {
-    return <div className="text-muted-foreground">No logs yet.</div>
+function ActivityTable({ rows }: { rows: ActivityRow[] }) {
+  if (rows.length === 0) {
+    return <div className="text-muted-foreground">No activity yet.</div>
   }
 
   return (
@@ -453,19 +496,19 @@ function LogsTable({ logs }: { logs: LogRow[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {logs.map((log, index) => (
+        {rows.map((row, index) => (
           <TableRow key={index}>
             <TableCell>
               <Badge
                 variant="outline"
-                className={logTypeStyles[log.type] ?? 'bg-gray-100 text-gray-600'}
+                className={logTypeStyles[row.type] ?? 'bg-gray-100 text-gray-600'}
               >
-                {log.type}
+                {row.type}
               </Badge>
             </TableCell>
-            <TableCell className="whitespace-pre-wrap break-words">{log.content}</TableCell>
+            <TableCell className="whitespace-pre-wrap break-words">{row.content}</TableCell>
             <TableCell className="text-muted-foreground">
-              {log.createdAt ? <RelativeTime date={timestampDate(log.createdAt)} /> : '-'}
+              {row.createdAt ? <RelativeTime date={timestampDate(row.createdAt)} /> : '-'}
             </TableCell>
           </TableRow>
         ))}
