@@ -15,6 +15,7 @@ import (
 const (
 	EventTypeInstruction = "instruction"
 	EventTypeExternal    = "external"
+	EventTypeLink        = "link"
 )
 
 // EventPayload is the sealed set of event bodies — one per arm of the
@@ -66,6 +67,30 @@ func (p *ExternalPayload) SetPayloadProto(pb *xagentv1.Event) {
 		Description: p.Description,
 		Url:         p.URL,
 		Data:        p.Data,
+	}}
+}
+
+// LinkPayload is the body of a link event — an about-task record of a link the
+// task created. It is the timeline source of truth; the task_links row it
+// mirrors is the subscription/list projection. LinkID is the task_links row id.
+type LinkPayload struct {
+	LinkID    int64  `json:"link_id"`
+	Relevance string `json:"relevance"`
+	URL       string `json:"url"`
+	Title     string `json:"title,omitempty"`
+	Subscribe bool   `json:"subscribe"`
+}
+
+func (*LinkPayload) Type() string    { return EventTypeLink }
+func (*LinkPayload) isEventPayload() {}
+
+func (p *LinkPayload) SetPayloadProto(pb *xagentv1.Event) {
+	pb.Payload = &xagentv1.Event_Link{Link: &xagentv1.LinkPayload{
+		LinkId:    p.LinkID,
+		Relevance: p.Relevance,
+		Url:       p.URL,
+		Title:     p.Title,
+		Subscribe: p.Subscribe,
 	}}
 }
 
@@ -123,6 +148,14 @@ func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 			Description: arm.External.Description,
 			URL:         arm.External.Url,
 			Data:        arm.External.Data,
+		}
+	case *xagentv1.Event_Link:
+		return &LinkPayload{
+			LinkID:    arm.Link.LinkId,
+			Relevance: arm.Link.Relevance,
+			URL:       arm.Link.Url,
+			Title:     arm.Link.Title,
+			Subscribe: arm.Link.Subscribe,
 		}
 	default:
 		return nil

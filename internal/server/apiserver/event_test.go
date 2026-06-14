@@ -172,6 +172,42 @@ func TestListEvents(t *testing.T) {
 	assert.Equal(t, resp.Events[1].GetExternal().Description, "Event 1")
 }
 
+func TestListEvents_ExternalOnly(t *testing.T) {
+	t.Parallel()
+	// Arrange - a task seeded with an instruction event, plus a link event from
+	// CreateLink; both carry an org_id but are not org-feed rows.
+	srv := New(Options{Store: teststore.New(t)})
+	org := orgWithWorkspace(t, srv)
+	ctx := createCtx(t, org)
+	taskResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:         "Test Task",
+		Runner:       "test-runner",
+		Workspace:    "test-workspace",
+		Instructions: []*xagentv1.Instruction{{Text: "do the thing"}},
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateLink(ctx, &xagentv1.CreateLinkRequest{
+		TaskId: taskResp.Task.Id,
+		Url:    "https://github.com/example/repo/pull/1",
+	})
+	assert.NilError(t, err)
+	_, err = srv.CreateEvent(ctx, &xagentv1.CreateEventRequest{
+		Description: "PR comment",
+		Data:        `{}`,
+		TaskId:      taskResp.Task.Id,
+	})
+	assert.NilError(t, err)
+
+	// Act
+	resp, err := srv.ListEvents(ctx, &xagentv1.ListEventsRequest{})
+
+	// Assert - the org feed returns only the external event; instruction and link
+	// events do not leak into it.
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Events), 1)
+	assert.Equal(t, resp.Events[0].GetExternal().Description, "PR comment")
+}
+
 func TestListEventsWithLimit(t *testing.T) {
 	t.Parallel()
 	// Arrange

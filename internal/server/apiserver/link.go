@@ -42,7 +42,29 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 		Subscribe:  req.Subscribe,
 		CreatedAt:  time.Now(),
 	}
-	if err := s.store.CreateLink(ctx, nil, link); err != nil {
+	// task_links is the subscription/list projection; the link event is the
+	// timeline source of truth. Upsert the projection and append the event in one
+	// transaction so they can't drift. link_id points back at the task_links row.
+	err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := s.store.CreateLink(ctx, tx, link); err != nil {
+			return err
+		}
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LinkPayload{
+				LinkID:    link.ID,
+				Relevance: link.Relevance,
+				URL:       link.URL,
+				Title:     link.Title,
+				Subscribe: link.Subscribe,
+			},
+		}); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
