@@ -86,9 +86,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			return tx.Commit()
 		})
 		if err != nil {
-			// The in-tx instance check returns PermissionDenied; surface it as-is
-			// rather than re-wrapping it as Internal.
-			if connect.CodeOf(err) == connect.CodePermissionDenied {
+			// The in-tx checks return typed connect errors; surface any of them
+			// as-is rather than re-wrapping them as Internal.
+			if connect.CodeOf(err) != connect.CodeUnknown {
 				return nil, err
 			}
 			if errors.Is(err, sql.ErrNoRows) {
