@@ -9,10 +9,26 @@ import (
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
+	"github.com/icholy/xagent/internal/store"
 
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
+
+// taskInstructions reads a task's instruction events from the stream — the
+// brief replacement for the old tasks.instructions column.
+func taskInstructions(t *testing.T, s *store.Store, taskID, orgID int64) []*model.InstructionPayload {
+	t.Helper()
+	events, err := s.ListTaskBrief(t.Context(), nil, taskID, orgID)
+	assert.NilError(t, err)
+	var out []*model.InstructionPayload
+	for _, e := range events {
+		if inst, ok := e.Payload.(*model.InstructionPayload); ok {
+			out = append(out, inst)
+		}
+	}
+	return out
+}
 
 func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 	t.Parallel()
@@ -445,9 +461,10 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, task.Command, model.TaskCommandStart)
 	// A custom prompt replaces the default preamble entirely — the task gets
 	// exactly the configured prompt and nothing else.
-	assert.Equal(t, len(task.Instructions), 1)
-	assert.Equal(t, task.Instructions[0].Text, "Triage this issue.")
-	assert.Equal(t, task.Instructions[0].URL, "")
+	insts := taskInstructions(t, s, task.ID, org.OrgID)
+	assert.Equal(t, len(insts), 1)
+	assert.Equal(t, insts[0].Text, "Triage this issue.")
+	assert.Equal(t, insts[0].URL, "")
 
 	links, err := s.ListLinksByTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
@@ -489,10 +506,11 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(tasks), 1)
 	task := tasks[0]
-	assert.Equal(t, len(task.Instructions), 1)
-	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "routing rule"))
-	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "github"))
-	assert.Assert(t, strings.Contains(task.Instructions[0].Text, "issue_comment"))
+	insts := taskInstructions(t, s, task.ID, org.OrgID)
+	assert.Equal(t, len(insts), 1)
+	assert.Assert(t, strings.Contains(insts[0].Text, "routing rule"))
+	assert.Assert(t, strings.Contains(insts[0].Text, "github"))
+	assert.Assert(t, strings.Contains(insts[0].Text, "issue_comment"))
 }
 
 func TestRouteCreateRuleAppliesAutoArchive(t *testing.T) {
@@ -593,7 +611,7 @@ func TestRouteCreateRuleOmittedPromptUsesPreambleOnly(t *testing.T) {
 	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, len(tasks), 1)
-	assert.Equal(t, len(tasks[0].Instructions), 1)
+	assert.Equal(t, len(taskInstructions(t, s, tasks[0].ID, org.OrgID)), 1)
 }
 
 func TestRouteSecondEventWakesCreatedTask(t *testing.T) {

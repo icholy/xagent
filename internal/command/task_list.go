@@ -53,10 +53,15 @@ var TaskListCommand = &cli.Command{
 				return fmt.Errorf("failed to get details for task %d: %w", task.Id, err)
 			}
 
-			// Marshal nested arrays using protojson
-			instructions := make([]json.RawMessage, len(details.Task.Instructions))
-			for i, inst := range details.Task.Instructions {
-				instructions[i], _ = marshalOpts.Marshal(inst)
+			// Instructions are instruction events in the brief, not a task field.
+			var instructions []json.RawMessage
+			for _, event := range details.GetEvents() {
+				inst := event.GetInstruction()
+				if inst == nil {
+					continue
+				}
+				data, _ := marshalOpts.Marshal(inst)
+				instructions = append(instructions, data)
 			}
 
 			links := make([]json.RawMessage, len(details.GetLinks()))

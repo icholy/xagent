@@ -223,7 +223,12 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 		Status:    task.Status.String(),
 		URL:       task.Url,
 	}
-	for _, inst := range task.Instructions {
+	// Instructions are instruction events in the brief, not a task field.
+	for _, event := range resp.Events {
+		inst := event.GetInstruction()
+		if inst == nil {
+			continue
+		}
 		result.Instructions = append(result.Instructions, instruction{
 			Text: inst.Text,
 			URL:  inst.Url,

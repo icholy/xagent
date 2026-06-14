@@ -9,10 +9,12 @@ import (
 
 // Event type discriminators. These are the values of the events.type column —
 // a storage detail used to pick the concrete payload on read. They are not a
-// field on the Event value; the type is Payload.Type(). Only external is wired
-// today; later increments add their own discriminator with each arm.
+// field on the Event value; the type is Payload.Type(). The instruction and
+// external arms are wired today; later increments add their own discriminator
+// with each arm.
 const (
-	EventTypeExternal = "external"
+	EventTypeInstruction = "instruction"
+	EventTypeExternal    = "external"
 )
 
 // EventPayload is the sealed set of event bodies — one per arm of the
@@ -30,8 +32,26 @@ type EventPayload interface {
 	isEventPayload()
 }
 
+// InstructionPayload is the body of an instruction event — a to-agent
+// instruction. It is the stream replacement for the old tasks.instructions JSON
+// column and carries the same text/url parity (no actor, per #957's trimming).
+type InstructionPayload struct {
+	Text string `json:"text"`
+	URL  string `json:"url,omitempty"`
+}
+
+func (*InstructionPayload) Type() string    { return EventTypeInstruction }
+func (*InstructionPayload) isEventPayload() {}
+
+func (p *InstructionPayload) SetPayloadProto(pb *xagentv1.Event) {
+	pb.Payload = &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{
+		Text: p.Text,
+		Url:  p.URL,
+	}}
+}
+
 // ExternalPayload is the body of an external event — a self-contained webhook
-// trigger. It is the only arm wired end to end in this increment.
+// trigger.
 type ExternalPayload struct {
 	Description string `json:"description"`
 	URL         string `json:"url"`
@@ -93,6 +113,11 @@ func EventFromProto(pb *xagentv1.Event) *Event {
 // is the only proto→model arm switch; it returns nil when no arm is set.
 func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 	switch arm := pb.Payload.(type) {
+	case *xagentv1.Event_Instruction:
+		return &InstructionPayload{
+			Text: arm.Instruction.Text,
+			URL:  arm.Instruction.Url,
+		}
 	case *xagentv1.Event_External:
 		return &ExternalPayload{
 			Description: arm.External.Description,

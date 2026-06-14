@@ -76,19 +76,14 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("workspace %q not found on runner %q", req.Workspace, req.Runner))
 	}
-	instructions := make([]model.Instruction, len(req.Instructions))
-	for i, inst := range req.Instructions {
-		instructions[i] = model.InstructionFromProto(inst)
-	}
 	task := &model.Task{
-		Name:         req.Name,
-		Runner:       req.Runner,
-		Workspace:    req.Workspace,
-		Instructions: instructions,
-		Status:       model.TaskStatusPending,
-		Command:      model.TaskCommandStart,
-		Version:      1,
-		OrgID:        caller.OrgID,
+		Name:      req.Name,
+		Runner:    req.Runner,
+		Workspace: req.Workspace,
+		Status:    model.TaskStatusPending,
+		Command:   model.TaskCommandStart,
+		Version:   1,
+		OrgID:     caller.OrgID,
 	}
 	if req.AutoArchive != nil {
 		task.AutoArchive = req.AutoArchive.AsDuration()
@@ -96,6 +91,23 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := s.store.CreateTask(ctx, tx, task); err != nil {
 			return err
+		}
+		// Seed the stream with the initial instructions as instruction events
+		// instead of a tasks.instructions column. The task already starts via
+		// Command=Start above; instruction events always wake (per the proposal's
+		// type semantics).
+		for _, inst := range req.Instructions {
+			if err := s.store.CreateEvent(ctx, tx, &model.Event{
+				TaskID: task.ID,
+				OrgID:  task.OrgID,
+				Wake:   true,
+				Payload: &model.InstructionPayload{
+					Text: inst.Text,
+					URL:  inst.Url,
+				},
+			}); err != nil {
+				return err
+			}
 		}
 		if err := s.store.CreateLog(ctx, tx, &model.Log{
 			TaskID:  task.ID,
@@ -167,7 +179,9 @@ func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetail
 	if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 	}
-	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, caller.OrgID)
+	// The brief: the task's to-agent events (instruction + external) in stream
+	// order. Instructions are read from the stream, not a denormalized column.
+	events, _ := s.store.ListTaskBrief(ctx, nil, req.Id, caller.OrgID)
 	links, _ := s.store.ListLinksByTask(ctx, nil, req.Id, caller.OrgID)
 	resp := &xagentv1.GetTaskDetailsResponse{
 		Task:   task.Proto(s.baseURL),
@@ -206,7 +220,20 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			changed = append(changed, "name")
 		}
 		for _, inst := range req.AddInstructions {
-			task.Instructions = append(task.Instructions, model.InstructionFromProto(inst))
+			// Adding an instruction appends an instruction event (wake=true) to the
+			// stream instead of mutating a tasks.instructions column. The actual
+			// restart is driven by req.Start below via Task.Start(), exactly as before.
+			if err := s.store.CreateEvent(ctx, tx, &model.Event{
+				TaskID: task.ID,
+				OrgID:  task.OrgID,
+				Wake:   true,
+				Payload: &model.InstructionPayload{
+					Text: inst.Text,
+					URL:  inst.Url,
+				},
+			}); err != nil {
+				return err
+			}
 			changed = append(changed, "instructions")
 		}
 		if req.Start {

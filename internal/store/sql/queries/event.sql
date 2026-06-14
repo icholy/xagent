@@ -23,3 +23,12 @@ SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
 WHERE task_id = $1 AND org_id = $2
 ORDER BY id DESC;
+
+-- name: ListTaskBrief :many
+-- The agent's brief: a task's to-agent events (instruction + external) in stream
+-- order. Instructions are read from the stream here rather than a denormalized
+-- column (see proposals/draft/unified-task-event-stream.md "The agent's brief").
+SELECT id, org_id, created_at, task_id, type, wake, payload
+FROM events
+WHERE task_id = $1 AND org_id = $2 AND type IN ('instruction', 'external')
+ORDER BY id;

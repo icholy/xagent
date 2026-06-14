@@ -213,7 +213,6 @@ CREATE TABLE public.tasks (
     name text DEFAULT ''::text NOT NULL,
     runner text NOT NULL,
     workspace text NOT NULL,
-    instructions text NOT NULL,
     status integer NOT NULL,
     command integer DEFAULT 0 NOT NULL,
     version bigint DEFAULT 0 NOT NULL,
@@ -674,4 +673,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260607000002'),
     ('20260613000001'),
     ('20260613120000'),
-    ('20260614000001');
+    ('20260614000001'),
+    ('20260614000002');

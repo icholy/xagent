@@ -166,3 +166,49 @@ func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskPara
 	}
 	return items, nil
 }
+
+const listTaskBrief = `-- name: ListTaskBrief :many
+SELECT id, org_id, created_at, task_id, type, wake, payload
+FROM events
+WHERE task_id = $1 AND org_id = $2 AND type IN ('instruction', 'external')
+ORDER BY id
+`
+
+type ListTaskBriefParams struct {
+	TaskID int64 `json:"task_id"`
+	OrgID  int64 `json:"org_id"`
+}
+
+// The agent's brief: a task's to-agent events (instruction + external) in stream
+// order. Instructions are read from the stream here rather than a denormalized
+// column (see proposals/draft/unified-task-event-stream.md "The agent's brief").
+func (q *Queries) ListTaskBrief(ctx context.Context, arg ListTaskBriefParams) ([]Event, error) {
+	rows, err := q.db.QueryContext(ctx, listTaskBrief, arg.TaskID, arg.OrgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Event{}
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.CreatedAt,
+			&i.TaskID,
+			&i.Type,
+			&i.Wake,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

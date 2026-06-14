@@ -96,7 +96,7 @@ message Task {
   reserved 3;  // Previously: parent (child tasks removed)
   string workspace = 4;
   string runner = 5;  // Runner ID that handles this task
-  repeated Instruction instructions = 6;
+  reserved 6;  // Previously: instructions (now instruction events in the stream)
   TaskStatus status = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
@@ -280,13 +280,22 @@ message Event {
   google.protobuf.Timestamp created_at = 4;
   // The set arm IS the event type — a typed union, not an opaque Struct. There
   // is no separate `type` field on the wire; the db `type` column is
-  // materialized from the arm for indexed filtering (like `direction`). Only the
-  // external arm is wired today; field numbers 5/7/8/9 are left unassigned for
-  // the instruction/report/lifecycle/link arms the proposal adds in later
+  // materialized from the arm for indexed filtering (like `direction`). The
+  // instruction and external arms are wired today; field numbers 7/8/9 are left
+  // unassigned for the report/lifecycle/link arms the proposal adds in later
   // increments (see proposals/draft/unified-task-event-stream.md).
   oneof payload {
+    InstructionPayload instruction = 5;
     ExternalPayload external = 6;
   }
+}
+
+// InstructionPayload is a to-agent instruction — the stream replacement for the
+// old tasks.instructions JSON column. Kept minimal (parity with the stored
+// instruction); no actor, consistent with the external-only trimming in #957.
+message InstructionPayload {
+  string text = 1;
+  string url = 2;
 }
 
 message ExternalPayload {

@@ -68,6 +68,20 @@ func (s *Store) ListEventsByTask(ctx context.Context, tx *sql.Tx, taskID int64, 
 	return toModelEvents(rows)
 }
 
+// ListTaskBrief returns a task's to-agent events (instruction + external) in
+// stream order — the agent's brief. Instructions are read from the stream here
+// rather than a denormalized column.
+func (s *Store) ListTaskBrief(ctx context.Context, tx *sql.Tx, taskID int64, orgID int64) ([]*model.Event, error) {
+	rows, err := s.q(tx).ListTaskBrief(ctx, sqlc.ListTaskBriefParams{
+		TaskID: taskID,
+		OrgID:  orgID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return toModelEvents(rows)
+}
+
 func toModelEvent(row sqlc.Event) (*model.Event, error) {
 	payload, err := toEventPayload(row.Type, row.Payload)
 	if err != nil {
@@ -101,6 +115,12 @@ func toModelEvents(rows []sqlc.Event) ([]*model.Event, error) {
 // detail, not a field on the Event value.
 func toEventPayload(typ string, data []byte) (model.EventPayload, error) {
 	switch typ {
+	case model.EventTypeInstruction:
+		var p model.InstructionPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("unmarshal instruction payload: %w", err)
+		}
+		return &p, nil
 	case model.EventTypeExternal:
 		var p model.ExternalPayload
 		if err := json.Unmarshal(data, &p); err != nil {

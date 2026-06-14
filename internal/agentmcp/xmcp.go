@@ -201,12 +201,19 @@ func jsonResult(v any) *mcp.CallToolResult {
 }
 
 // taskDetailsToMap converts a GetTaskDetailsResponse to a map for JSON output.
+// Instructions are no longer a task field — they are instruction events in the
+// brief, so they are projected out of the event stream here.
 func taskDetailsToMap(resp *xagentv1.GetTaskDetailsResponse) map[string]any {
 	marshalOpts := protojson.MarshalOptions{Indent: "  "}
 
-	instructions := make([]json.RawMessage, len(resp.Task.Instructions))
-	for i, inst := range resp.Task.Instructions {
-		instructions[i], _ = marshalOpts.Marshal(inst)
+	var instructions []json.RawMessage
+	for _, event := range resp.GetEvents() {
+		inst := event.GetInstruction()
+		if inst == nil {
+			continue
+		}
+		data, _ := marshalOpts.Marshal(inst)
+		instructions = append(instructions, data)
 	}
 
 	links := make([]json.RawMessage, len(resp.GetLinks()))

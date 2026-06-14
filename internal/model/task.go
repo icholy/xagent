@@ -36,42 +36,20 @@ const (
 	TaskCommandStart   TaskCommand = TaskCommand(xagentv1.TaskCommand_START)
 )
 
-// Instruction represents a task instruction with text and optional source URL.
-type Instruction struct {
-	Text string `json:"text"`
-	URL  string `json:"url,omitempty"`
-}
-
-// Proto converts an Instruction to its protobuf representation.
-func (i *Instruction) Proto() *xagentv1.Instruction {
-	return &xagentv1.Instruction{
-		Text: i.Text,
-		Url:  i.URL,
-	}
-}
-
-// InstructionFromProto converts a protobuf Instruction to a model Instruction.
-func InstructionFromProto(pb *xagentv1.Instruction) Instruction {
-	return Instruction{
-		Text: pb.Text,
-		URL:  pb.Url,
-	}
-}
-
-// Task represents a task in the system.
+// Task represents a task in the system. Instructions are no longer a Task field —
+// they are instruction events in the task's stream (see InstructionPayload).
 type Task struct {
-	ID           int64         `json:"id"`
-	Name         string        `json:"name"`
-	Runner       string        `json:"runner"`
-	Workspace    string        `json:"workspace"`
-	Instructions []Instruction `json:"instructions"`
-	Status       TaskStatus    `json:"status"`
-	Command      TaskCommand   `json:"command"`
-	Version      int64         `json:"version"`
-	OrgID        int64         `json:"org_id"`
-	Archived     bool          `json:"archived"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
+	ID        int64       `json:"id"`
+	Name      string      `json:"name"`
+	Runner    string      `json:"runner"`
+	Workspace string      `json:"workspace"`
+	Status    TaskStatus  `json:"status"`
+	Command   TaskCommand `json:"command"`
+	Version   int64       `json:"version"`
+	OrgID     int64       `json:"org_id"`
+	Archived  bool        `json:"archived"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
 	// AutoArchive controls auto-archive after the task reaches a terminal
 	// status. 0 = never (default); <0 = archive immediately; >0 = delay.
 	AutoArchive time.Duration `json:"auto_archive,omitempty"`
@@ -91,24 +69,19 @@ func (t *Task) ScopeAttr() []authscope.Attr {
 
 // Proto converts a Task to its protobuf representation.
 func (t *Task) Proto(baseURL string) *xagentv1.Task {
-	instructions := make([]*xagentv1.Instruction, len(t.Instructions))
-	for i, inst := range t.Instructions {
-		instructions[i] = inst.Proto()
-	}
 	return &xagentv1.Task{
-		Id:           t.ID,
-		Name:         t.Name,
-		Runner:       t.Runner,
-		Workspace:    t.Workspace,
-		Instructions: instructions,
-		Status:       xagentv1.TaskStatus(t.Status),
-		Command:      xagentv1.TaskCommand(t.Command),
-		Version:      t.Version,
-		Archived:     t.Archived,
-		Url:          TaskURL(baseURL, t.ID, t.OrgID),
-		CreatedAt:    timestamppb.New(t.CreatedAt),
-		UpdatedAt:    timestamppb.New(t.UpdatedAt),
-		AutoArchive:  durationpb.New(t.AutoArchive),
+		Id:          t.ID,
+		Name:        t.Name,
+		Runner:      t.Runner,
+		Workspace:   t.Workspace,
+		Status:      xagentv1.TaskStatus(t.Status),
+		Command:     xagentv1.TaskCommand(t.Command),
+		Version:     t.Version,
+		Archived:    t.Archived,
+		Url:         TaskURL(baseURL, t.ID, t.OrgID),
+		CreatedAt:   timestamppb.New(t.CreatedAt),
+		UpdatedAt:   timestamppb.New(t.UpdatedAt),
+		AutoArchive: durationpb.New(t.AutoArchive),
 		Actions: &xagentv1.TaskActions{
 			Archive:   t.CanArchive(),
 			Unarchive: t.CanUnarchive(),
@@ -121,10 +94,6 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 
 // TaskFromProto converts a protobuf Task to a model Task.
 func TaskFromProto(pb *xagentv1.Task) *Task {
-	instructions := make([]Instruction, len(pb.Instructions))
-	for i, inst := range pb.Instructions {
-		instructions[i] = InstructionFromProto(inst)
-	}
 	var createdAt, updatedAt time.Time
 	if pb.CreatedAt != nil {
 		createdAt = pb.CreatedAt.AsTime()
@@ -133,18 +102,17 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		updatedAt = pb.UpdatedAt.AsTime()
 	}
 	return &Task{
-		ID:           pb.Id,
-		Name:         pb.Name,
-		Runner:       pb.Runner,
-		Workspace:    pb.Workspace,
-		Instructions: instructions,
-		Status:       TaskStatus(pb.Status),
-		Command:      TaskCommand(pb.Command),
-		Version:      pb.Version,
-		Archived:     pb.Archived,
-		CreatedAt:    createdAt,
-		UpdatedAt:    updatedAt,
-		AutoArchive:  pb.AutoArchive.AsDuration(),
+		ID:          pb.Id,
+		Name:        pb.Name,
+		Runner:      pb.Runner,
+		Workspace:   pb.Workspace,
+		Status:      TaskStatus(pb.Status),
+		Command:     TaskCommand(pb.Command),
+		Version:     pb.Version,
+		Archived:    pb.Archived,
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
+		AutoArchive: pb.AutoArchive.AsDuration(),
 	}
 }
 
