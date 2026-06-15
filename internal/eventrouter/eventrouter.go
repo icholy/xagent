@@ -326,11 +326,17 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		// the same tx so they can't drift (mirrors the apiserver CreateLink path).
 		// Emit the link (the trigger) before the instruction so the timeline
 		// (ordered by event id) shows what triggered the task before its prompt.
+		//
+		// Point the link at the canonical resource (the issue/PR), not the
+		// triggering comment, and leave the title empty so it surfaces the
+		// resource itself. The triggering event's description now lives on the
+		// external event above, so the link no longer has to double as the
+		// trigger's label.
+		key := model.RoutingKey(input.URL)
 		link := &model.Link{
 			TaskID:     task.ID,
-			URL:        input.URL,
-			RoutingKey: model.RoutingKey(input.URL),
-			Title:      input.Description,
+			URL:        key,
+			RoutingKey: key,
 			Relevance:  "trigger",
 			Subscribe:  true,
 			CreatedAt:  time.Now().UTC(),
