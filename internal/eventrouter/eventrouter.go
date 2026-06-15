@@ -290,6 +290,21 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			return err
 		}
 		taskID = task.ID
+		// Record the creation as a lifecycle event. The router (not a user) created
+		// the task, so the actor is the routing-rule actor; a freshly created task
+		// has no prior status. Emit it before the instruction and link events so the
+		// timeline (ordered by event id) shows "Created" first.
+		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:     model.LifecycleKindCreated,
+				Actor:    model.RouterActor,
+				ToStatus: task.Status.Label(),
+			},
+		}); err != nil {
+			return err
+		}
 		// Seed the stream with the rule's prompt as the initial instruction event
 		// (replacing the old tasks.instructions column). The task already starts
 		// via Command=Start; instruction events always wake.
@@ -320,20 +335,6 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			TaskID:  task.ID,
 			OrgID:   orgID,
 			Payload: link.EventPayload(),
-		}); err != nil {
-			return err
-		}
-		// Record the creation as a lifecycle event. The router (not a user) created
-		// the task, so the actor is the routing-rule actor; a freshly created task
-		// has no prior status.
-		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:     model.LifecycleKindCreated,
-				Actor:    model.RouterActor,
-				ToStatus: task.Status.Label(),
-			},
 		}); err != nil {
 			return err
 		}
