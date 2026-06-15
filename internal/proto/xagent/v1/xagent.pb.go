@@ -2596,7 +2596,9 @@ func (x *LinkPayload) GetSubscribe() bool {
 // existing status mutation in the same transaction; status stays a materialized
 // projection (see proposals/draft/unified-task-event-stream.md "Status stays a
 // projection"). `message` carries the failure detail for SANDBOX_FAILED and is
-// empty for kinds that don't need it.
+// empty for kinds that don't need it. `fields` lists the task fields that
+// changed for LIFECYCLE_KIND_UPDATED (e.g. "name", "status") and is empty for
+// other kinds.
 type LifecyclePayload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Kind          LifecycleKind          `protobuf:"varint,1,opt,name=kind,proto3,enum=xagent.v1.LifecycleKind" json:"kind,omitempty"`
@@ -2604,6 +2606,7 @@ type LifecyclePayload struct {
 	FromStatus    string                 `protobuf:"bytes,3,opt,name=from_status,json=fromStatus,proto3" json:"from_status,omitempty"`
 	ToStatus      string                 `protobuf:"bytes,4,opt,name=to_status,json=toStatus,proto3" json:"to_status,omitempty"`
 	Message       string                 `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
+	Fields        []string               `protobuf:"bytes,6,rep,name=fields,proto3" json:"fields,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2671,6 +2674,13 @@ func (x *LifecyclePayload) GetMessage() string {
 		return x.Message
 	}
 	return ""
+}
+
+func (x *LifecyclePayload) GetFields() []string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
 }
 
 // Actor identifies who caused a lifecycle event. kind is one of user, runner,
@@ -5770,14 +5780,15 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\trelevance\x18\x02 \x01(\tR\trelevance\x12\x10\n" +
 	"\x03url\x18\x03 \x01(\tR\x03url\x12\x14\n" +
 	"\x05title\x18\x04 \x01(\tR\x05title\x12\x1c\n" +
-	"\tsubscribe\x18\x05 \x01(\bR\tsubscribe\"\xc0\x01\n" +
+	"\tsubscribe\x18\x05 \x01(\bR\tsubscribe\"\xd8\x01\n" +
 	"\x10LifecyclePayload\x12,\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x18.xagent.v1.LifecycleKindR\x04kind\x12&\n" +
 	"\x05actor\x18\x02 \x01(\v2\x10.xagent.v1.ActorR\x05actor\x12\x1f\n" +
 	"\vfrom_status\x18\x03 \x01(\tR\n" +
 	"fromStatus\x12\x1b\n" +
 	"\tto_status\x18\x04 \x01(\tR\btoStatus\x12\x18\n" +
-	"\amessage\x18\x05 \x01(\tR\amessage\"/\n" +
+	"\amessage\x18\x05 \x01(\tR\amessage\x12\x16\n" +
+	"\x06fields\x18\x06 \x03(\tR\x06fields\"/\n" +
 	"\x05Actor\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"1\n" +

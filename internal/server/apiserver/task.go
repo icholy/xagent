@@ -264,6 +264,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 				Actor:      model.UserActor(caller.AuditName()),
 				FromStatus: from.Label(),
 				ToStatus:   task.Status.Label(),
+				Fields:     changed,
 			},
 		}); err != nil {
 			return err

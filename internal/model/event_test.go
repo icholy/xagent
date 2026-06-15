@@ -52,6 +52,16 @@ func TestLifecyclePayload_Summary(t *testing.T) {
 			payload: LifecyclePayload{Kind: LifecycleKindSandboxFailed, Actor: RunnerActor, Message: "boom"},
 			want:    "Sandbox failed: boom",
 		},
+		{
+			name:    "updated with fields by user",
+			payload: LifecyclePayload{Kind: LifecycleKindUpdated, Actor: UserActor("icholy"), Fields: []string{"name", "status"}},
+			want:    "Updated name, status by icholy",
+		},
+		{
+			name:    "updated without fields",
+			payload: LifecyclePayload{Kind: LifecycleKindUpdated, Actor: RunnerActor},
+			want:    "Updated",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

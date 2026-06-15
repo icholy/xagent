@@ -94,6 +94,7 @@ export function lifecycleSummary(p: LifecyclePayload): string {
       break
     case LifecycleKind.UPDATED:
       s = 'Updated'
+      if (p.fields.length > 0) s += ` ${p.fields.join(', ')}`
       break
     case LifecycleKind.CANCELLED:
       s = 'Cancelled'

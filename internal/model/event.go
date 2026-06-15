@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -182,6 +183,9 @@ type LifecyclePayload struct {
 	FromStatus string        `json:"from_status,omitempty"`
 	ToStatus   string        `json:"to_status,omitempty"`
 	Message    string        `json:"message,omitempty"`
+	// Fields lists the task fields that changed for LifecycleKindUpdated (e.g.
+	// "name", "status") and is empty for other kinds.
+	Fields []string `json:"fields,omitempty"`
 }
 
 func (*LifecyclePayload) Type() string    { return EventTypeLifecycle }
@@ -194,6 +198,7 @@ func (p *LifecyclePayload) SetPayloadProto(pb *xagentv1.Event) {
 		FromStatus: p.FromStatus,
 		ToStatus:   p.ToStatus,
 		Message:    p.Message,
+		Fields:     p.Fields,
 	}}
 }
 
@@ -208,6 +213,9 @@ func (p *LifecyclePayload) Summary() string {
 		s = "Created"
 	case LifecycleKindUpdated:
 		s = "Updated"
+		if len(p.Fields) > 0 {
+			s += " " + strings.Join(p.Fields, ", ")
+		}
 	case LifecycleKindCancelled:
 		s = "Cancelled"
 	case LifecycleKindRestarted:
@@ -305,6 +313,7 @@ func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 			FromStatus: arm.Lifecycle.FromStatus,
 			ToStatus:   arm.Lifecycle.ToStatus,
 			Message:    arm.Lifecycle.Message,
+			Fields:     arm.Lifecycle.Fields,
 		}
 	case *xagentv1.Event_Link:
 		return &LinkPayload{
