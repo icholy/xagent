@@ -203,9 +203,10 @@ func (p *LifecyclePayload) SetPayloadProto(pb *xagentv1.Event) {
 }
 
 // Summary renders a lifecycle event as a human-readable timeline line — e.g.
-// "Created by icholy", "Cancelled", "Sandbox exited (Running -> Completed)",
-// "Sandbox failed: <message>". It is the Go-side renderer (used by the local MCP
-// get_my_task tool); the web UI timeline has a parallel renderer in TypeScript.
+// "Created by icholy", "Created by routing rule", "Cancelled", "Sandbox exited
+// (Running -> Completed)", "Sandbox failed: <message>". It is the Go-side
+// renderer (used by the local MCP get_my_task tool); the web UI timeline has a
+// parallel renderer in TypeScript.
 func (p *LifecyclePayload) Summary() string {
 	var s string
 	switch p.Kind {
@@ -241,8 +242,11 @@ func (p *LifecyclePayload) Summary() string {
 	default:
 		s = "Lifecycle event"
 	}
-	if p.Actor.Kind == ActorKindUser && p.Actor.Name != "" {
+	switch {
+	case p.Actor.Kind == ActorKindUser && p.Actor.Name != "":
 		s += " by " + p.Actor.Name
+	case p.Actor.Kind == ActorKindRouter:
+		s += " by routing rule"
 	}
 	return s
 }
