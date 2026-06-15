@@ -5,14 +5,13 @@ tasks: {
   id: BIGSERIAL {constraint: primary_key}
   org_id: BIGINT {constraint: foreign_key}
   name: TEXT
-  parent: BIGINT
   runner: TEXT
   workspace: TEXT
-  instructions: TEXT
   status: INTEGER
   command: INTEGER
   version: BIGINT
   archived: BOOLEAN
+  auto_archive: BIGINT
   created_at: TIMESTAMP
   updated_at: TIMESTAMP
 }
@@ -25,6 +24,7 @@ task_links: {
   url: TEXT
   title: TEXT
   subscribe: BOOLEAN
+  routing_key: TEXT
   created_at: TIMESTAMP
 }
 
@@ -33,9 +33,9 @@ events: {
   id: BIGSERIAL {constraint: primary_key}
   org_id: BIGINT {constraint: foreign_key}
   task_id: BIGINT {constraint: foreign_key}
-  description: TEXT
-  data: TEXT
-  url: TEXT
+  type: TEXT
+  wake: BOOLEAN
+  payload: JSONB
   created_at: TIMESTAMP
 }
 
@@ -55,6 +55,7 @@ keys: {
   org_id: BIGINT {constraint: foreign_key}
   name: TEXT
   token_hash: TEXT {constraint: unique}
+  scopes: "TEXT[]"
   expires_at: TIMESTAMP
   created_at: TIMESTAMP
 }
@@ -80,6 +81,7 @@ orgs: {
   owner: TEXT
   atlassian_webhook_secret: TEXT
   routing_rules: JSONB
+  github_installation_id: BIGINT
   created_at: TIMESTAMP
   updated_at: TIMESTAMP
   archived: BOOLEAN
@@ -93,10 +95,17 @@ org_members: {
   created_at: TIMESTAMP
 }
 
+pending_integrations: {
+  shape: sql_table
+  type: TEXT {constraint: primary_key}
+  external_id: TEXT {constraint: primary_key}
+  options: JSONB
+  created_at: TIMESTAMP
+}
+
 # Relationships
 org_members.org_id -> orgs.id
 task_links.task_id -> tasks.id
-tasks.parent -> tasks.id: parent
 tasks.org_id -> orgs.id
 events.org_id -> orgs.id
 events.task_id -> tasks.id
@@ -105,4 +114,3 @@ keys.org_id -> orgs.id
 org_members.user_id -> users.id
 orgs.owner -> users.id
 users.default_org_id -> orgs.id
-
