@@ -321,13 +321,16 @@ message LinkPayload {
 // existing status mutation in the same transaction; status stays a materialized
 // projection (see proposals/draft/unified-task-event-stream.md "Status stays a
 // projection"). `message` carries the failure detail for SANDBOX_FAILED and is
-// empty for kinds that don't need it.
+// empty for kinds that don't need it. `fields` lists the task fields that
+// changed for LIFECYCLE_KIND_UPDATED (e.g. "name", "status") and is empty for
+// other kinds.
 message LifecyclePayload {
   LifecycleKind kind = 1;
   Actor actor = 2;
   string from_status = 3;
   string to_status = 4;
   string message = 5;
+  repeated string fields = 6;
 }
 
 // Actor identifies who caused a lifecycle event. kind is one of user, runner,
