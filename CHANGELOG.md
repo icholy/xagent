@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.0.1](https://github.com/icholy/xagent/compare/v2.0.0...v2.0.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* emit Created lifecycle event before instruction events ([#988](https://github.com/icholy/xagent/issues/988)) ([fd89605](https://github.com/icholy/xagent/commit/fd8960538afe698760b42090d961eff0bb319d37))
+* include changed fields in updated lifecycle event ([#989](https://github.com/icholy/xagent/issues/989)) ([fde159a](https://github.com/icholy/xagent/commit/fde159a972c4455128a901df6cc1c1d856ca63a1))
+* remove separate links section from task UI ([#987](https://github.com/icholy/xagent/issues/987)) ([c469b36](https://github.com/icholy/xagent/commit/c469b36dbb834d9ebceef984fed2538055af63ff))
+
+
+### Miscellaneous
+
+* **deps:** update dependency flyctl to v0.4.58 ([#982](https://github.com/icholy/xagent/issues/982)) ([c35d099](https://github.com/icholy/xagent/commit/c35d099978a2b917890b1a67a326e0952f8fc448))
+* **deps:** update tanstack-router monorepo ([#979](https://github.com/icholy/xagent/issues/979)) ([abc7c45](https://github.com/icholy/xagent/commit/abc7c45b5eb8bb78c55ea8b7cd61d10535b26f1a))
+* **deps:** update typescript native preview to v7.0.0-dev.20260607.1 ([#980](https://github.com/icholy/xagent/issues/980)) ([fa790d6](https://github.com/icholy/xagent/commit/fa790d6d0e89c78bd5861a2c373d859e7cc02951))
+* remove logs table from schema diagram ([#985](https://github.com/icholy/xagent/issues/985)) ([4f7aaf2](https://github.com/icholy/xagent/commit/4f7aaf2f56b57419abc2700d9795c1789f69e026))
+
 ## [2.0.0](https://github.com/icholy/xagent/compare/v1.4.0...v2.0.0) (2026-06-14)
 
 
