@@ -92,6 +92,21 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		if err := s.store.CreateTask(ctx, tx, task); err != nil {
 			return err
 		}
+		// Record the creation as a lifecycle event beside the new row (status is
+		// the materialized projection). A freshly created task has no prior status,
+		// so from is unspecified. Emit it before the instruction events so the
+		// timeline (ordered by event id) shows "Created" first.
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  task.OrgID,
+			Payload: &model.LifecyclePayload{
+				Kind:     model.LifecycleKindCreated,
+				Actor:    model.UserActor(caller.AuditName()),
+				ToStatus: task.Status.Label(),
+			},
+		}); err != nil {
+			return err
+		}
 		// Seed the stream with the initial instructions as instruction events
 		// instead of a tasks.instructions column. The task already starts via
 		// Command=Start above; instruction events always wake (per the proposal's
@@ -108,20 +123,6 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 			}); err != nil {
 				return err
 			}
-		}
-		// Record the creation as a lifecycle event beside the new row (status is
-		// the materialized projection). A freshly created task has no prior status,
-		// so from is unspecified.
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:     model.LifecycleKindCreated,
-				Actor:    model.UserActor(caller.AuditName()),
-				ToStatus: task.Status.Label(),
-			},
-		}); err != nil {
-			return err
 		}
 		return tx.Commit()
 	})
