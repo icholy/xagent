@@ -15,6 +15,17 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
 
+// eventFromLifecycle wraps a lifecycle payload produced by
+// Task.ApplyLifecycleEvent into a task-scoped event row, ready to append in the
+// same transaction as the projected status mutation.
+func eventFromLifecycle(task *model.Task, p *model.LifecyclePayload) *model.Event {
+	return &model.Event{
+		TaskID:  task.ID,
+		OrgID:   task.OrgID,
+		Payload: p,
+	}
+}
+
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpTaskRead) {
@@ -110,17 +121,11 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 			}
 		}
 		// Record the creation as a lifecycle event beside the new row (status is
-		// the materialized projection). A freshly created task has no prior status,
-		// so from is unspecified.
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:     model.LifecycleKindCreated,
-				Actor:    model.UserActor(caller.AuditName()),
-				ToStatus: task.Status.Label(),
-			},
-		}); err != nil {
+		// the materialized projection). The CREATED fold applies no transition —
+		// the task already carries its initial status — and a freshly created task
+		// has no prior status, so from is unspecified.
+		ev, _ := task.ApplyLifecycleEvent(model.LifecycleKindCreated, model.UserActor(caller.AuditName()), "")
+		if err := s.store.CreateEvent(ctx, tx, eventFromLifecycle(task, ev)); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -222,7 +227,6 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
-		from := task.Status
 		var changed []string
 		if req.Name != "" {
 			task.Name = req.Name
@@ -246,6 +250,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			changed = append(changed, "instructions")
 		}
 		if req.Start {
+			// Start is a command nudge (re-queue / keep-running), not a lifecycle
+			// restart, so it stays a direct mutation here; the update records a
+			// single UPDATED event (no status transition of its own) via the fold.
 			task.Start()
 			changed = append(changed, "status")
 		}
@@ -256,16 +263,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:       model.LifecycleKindUpdated,
-				Actor:      model.UserActor(caller.AuditName()),
-				FromStatus: from.Label(),
-				ToStatus:   task.Status.Label(),
-			},
-		}); err != nil {
+		ev, _ := task.ApplyLifecycleEvent(model.LifecycleKindUpdated, model.UserActor(caller.AuditName()), "")
+		if err := s.store.CreateEvent(ctx, tx, eventFromLifecycle(task, ev)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -317,23 +316,14 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
-		from := task.Status
-		if !task.Archive() {
+		ev, ok := task.ApplyLifecycleEvent(model.LifecycleKindArchived, model.UserActor(caller.AuditName()), "")
+		if !ok {
 			return fmt.Errorf("cannot archive task with status %s", task.Status)
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:       model.LifecycleKindArchived,
-				Actor:      model.UserActor(caller.AuditName()),
-				FromStatus: from.Label(),
-				ToStatus:   task.Status.Label(),
-			},
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, eventFromLifecycle(task, ev)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -383,23 +373,14 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
-		from := task.Status
-		if !task.Unarchive() {
+		ev, ok := task.ApplyLifecycleEvent(model.LifecycleKindUnarchived, model.UserActor(caller.AuditName()), "")
+		if !ok {
 			return fmt.Errorf("cannot unarchive task: not archived")
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:       model.LifecycleKindUnarchived,
-				Actor:      model.UserActor(caller.AuditName()),
-				FromStatus: from.Label(),
-				ToStatus:   task.Status.Label(),
-			},
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, eventFromLifecycle(task, ev)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -448,23 +429,14 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
-		from := task.Status
-		if !task.Cancel() {
+		ev, ok := task.ApplyLifecycleEvent(model.LifecycleKindCancelled, model.UserActor(caller.AuditName()), "")
+		if !ok {
 			return fmt.Errorf("cannot cancel task with status %s", task.Status)
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:       model.LifecycleKindCancelled,
-				Actor:      model.UserActor(caller.AuditName()),
-				FromStatus: from.Label(),
-				ToStatus:   task.Status.Label(),
-			},
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, eventFromLifecycle(task, ev)); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -519,6 +491,13 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
+		// RestartTask keeps Task.Restart() rather than the RESTARTED fold: the fold
+		// reuses Task.Start() (a graceful re-queue that lets a running container
+		// finish), whereas the Restart button's contract is the distinct
+		// kill-and-restart command (TaskCommandRestart) the runner acts on
+		// immediately. Folding it here would silently change that behavior and
+		// orphan the restart command path, so the transition stays direct while the
+		// lifecycle event is still constructed from the same before/after status.
 		from := task.Status
 		if !task.Restart() {
 			return fmt.Errorf("cannot restart task with status %s", task.Status)
@@ -526,16 +505,12 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:       model.LifecycleKindRestarted,
-				Actor:      model.UserActor(caller.AuditName()),
-				FromStatus: from.Label(),
-				ToStatus:   task.Status.Label(),
-			},
-		}); err != nil {
+		if err := s.store.CreateEvent(ctx, tx, eventFromLifecycle(task, &model.LifecyclePayload{
+			Kind:       model.LifecycleKindRestarted,
+			Actor:      model.UserActor(caller.AuditName()),
+			FromStatus: from.Label(),
+			ToStatus:   task.Status.Label(),
+		})); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()

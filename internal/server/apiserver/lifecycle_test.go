@@ -129,6 +129,42 @@ func TestLifecycle_TaskMutationsAppendEvents(t *testing.T) {
 	assert.Assert(t, kinds[xagentv1.LifecycleKind_LIFECYCLE_KIND_UNARCHIVED])
 }
 
+func TestLifecycle_RestartKeepsKillAndRestartCommand(t *testing.T) {
+	t.Parallel()
+	srv, ctx := lifecycleTestServer(t)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	taskID := resp.Task.Id
+
+	// Drive the task to running so the restart exercises the kill-and-restart path.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "started", Version: 1}},
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.RestartTask(ctx, &xagentv1.RestartTaskRequest{Id: taskID})
+	assert.NilError(t, err)
+
+	// RestartTask keeps Task.Restart(): a running task lands in RESTARTING with the
+	// distinct RESTART command (not the graceful START the RESTARTED fold reuses).
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.Status, xagentv1.TaskStatus_RESTARTING)
+	assert.Equal(t, getResp.Task.Command, xagentv1.TaskCommand_RESTART)
+
+	// ...and the RESTARTED lifecycle event records the Running -> Restarting move.
+	events := lifecycleEvents(t, srv, ctx, taskID)
+	assert.Equal(t, events[0].Kind, xagentv1.LifecycleKind_LIFECYCLE_KIND_RESTARTED)
+	assert.Equal(t, events[0].Actor.Kind, "user")
+	assert.Equal(t, events[0].FromStatus, "Running")
+	assert.Equal(t, events[0].ToStatus, "Restarting")
+}
+
 func TestLifecycle_RunnerEventsAppendSandboxEvents(t *testing.T) {
 	t.Parallel()
 	srv, ctx := lifecycleTestServer(t)
