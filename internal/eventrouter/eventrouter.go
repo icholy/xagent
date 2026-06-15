@@ -305,20 +305,11 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		}); err != nil {
 			return err
 		}
-		// Seed the stream with the rule's prompt as the initial instruction event
-		// (replacing the old tasks.instructions column). The task already starts
-		// via Command=Start; instruction events always wake.
-		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
-			TaskID:  task.ID,
-			OrgID:   orgID,
-			Wake:    true,
-			Payload: &model.InstructionPayload{Text: prompt},
-		}); err != nil {
-			return err
-		}
 		// task_links is the subscription/list projection; the link event is the
 		// timeline source of truth. Upsert the projection and append the event in
 		// the same tx so they can't drift (mirrors the apiserver CreateLink path).
+		// Emit the link (the trigger) before the instruction so the timeline
+		// (ordered by event id) shows what triggered the task before its prompt.
 		link := &model.Link{
 			TaskID:     task.ID,
 			URL:        input.URL,
@@ -335,6 +326,17 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			TaskID:  task.ID,
 			OrgID:   orgID,
 			Payload: link.EventPayload(),
+		}); err != nil {
+			return err
+		}
+		// Seed the stream with the rule's prompt as the initial instruction event
+		// (replacing the old tasks.instructions column). The task already starts
+		// via Command=Start; instruction events always wake.
+		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+			TaskID:  task.ID,
+			OrgID:   orgID,
+			Wake:    true,
+			Payload: &model.InstructionPayload{Text: prompt},
 		}); err != nil {
 			return err
 		}
