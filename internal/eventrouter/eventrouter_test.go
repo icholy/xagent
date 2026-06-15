@@ -488,14 +488,13 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, insts[0].Text, "Triage this issue.")
 	assert.Equal(t, insts[0].URL, "")
 
-	// The subscription link points at the canonical resource (the issue/PR),
-	// not the triggering comment, and carries no title — the trigger's
-	// description lives on the external event instead, so the link no longer
-	// double-duties as the trigger label.
+	// The subscription link keeps the trigger URL but carries no title — the
+	// trigger's description lives on the external event instead, so the link no
+	// longer double-duties as the trigger label.
 	links, err := s.ListLinksByTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, len(links), 1)
-	assert.Equal(t, links[0].URL, model.RoutingKey(url))
+	assert.Equal(t, links[0].URL, url)
 	assert.Equal(t, links[0].Subscribe, true)
 	assert.Equal(t, links[0].Title, "")
 
@@ -508,7 +507,7 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	linkPayload, ok := linkEvents[0].Payload.(*model.LinkPayload)
 	assert.Assert(t, ok)
 	assert.Equal(t, linkPayload.LinkID, links[0].ID)
-	assert.Equal(t, linkPayload.URL, model.RoutingKey(url))
+	assert.Equal(t, linkPayload.URL, url)
 	assert.Equal(t, linkPayload.Relevance, "trigger")
 	assert.Equal(t, linkPayload.Title, "")
 	assert.Equal(t, linkPayload.Subscribe, true)
