@@ -488,12 +488,15 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, insts[0].Text, "Triage this issue.")
 	assert.Equal(t, insts[0].URL, "")
 
+	// The subscription link keeps the trigger URL but carries no title — the
+	// trigger's description lives on the external event instead, so the link no
+	// longer double-duties as the trigger label.
 	links, err := s.ListLinksByTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, len(links), 1)
 	assert.Equal(t, links[0].URL, url)
 	assert.Equal(t, links[0].Subscribe, true)
-	assert.Equal(t, links[0].Title, "alice commented on issue #1")
+	assert.Equal(t, links[0].Title, "")
 
 	// The create path appends a link event mirroring the task_links row (the
 	// timeline source of truth; task_links is the projection), alongside the
@@ -506,12 +509,14 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, linkPayload.LinkID, links[0].ID)
 	assert.Equal(t, linkPayload.URL, url)
 	assert.Equal(t, linkPayload.Relevance, "trigger")
-	assert.Equal(t, linkPayload.Title, "alice commented on issue #1")
+	assert.Equal(t, linkPayload.Title, "")
 	assert.Equal(t, linkPayload.Subscribe, true)
 	assert.Equal(t, linkEvents[0].Wake, false)
 
-	// The timeline (ordered by event id) must read Created -> Link -> Instruction:
-	// the lifecycle event first, then the link that triggered the task, then the
+	// The timeline (ordered by event id) must read
+	// External -> Created -> Link -> Instruction: the trigger event that caused
+	// the task to exist first (the same way a woken task surfaces its trigger),
+	// then the lifecycle event, the link that triggered the task, and finally the
 	// prompt the agent acts on.
 	allEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
 	assert.NilError(t, err)
@@ -520,10 +525,22 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 		types = append(types, e.Payload.Type())
 	}
 	assert.DeepEqual(t, types, []string{
+		model.EventTypeExternal,
 		model.EventTypeLifecycle,
 		model.EventTypeLink,
 		model.EventTypeInstruction,
 	})
+
+	// The trigger surfaces as an external event carrying the webhook payload,
+	// mirroring the wake path (attach).
+	externalEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeExternal})
+	assert.NilError(t, err)
+	assert.Equal(t, len(externalEvents), 1)
+	externalPayload, ok := externalEvents[0].Payload.(*model.ExternalPayload)
+	assert.Assert(t, ok)
+	assert.Equal(t, externalPayload.Description, "alice commented on issue #1")
+	assert.Equal(t, externalPayload.URL, url)
+	assert.Equal(t, externalPayload.Data, "@icholy-bot please look at this")
 }
 
 func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
