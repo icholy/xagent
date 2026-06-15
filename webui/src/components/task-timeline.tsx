@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Bot,
   MessageSquarePlus,
@@ -287,7 +288,7 @@ function SourceLink({ url }: { url: string }) {
 function Prose({ text }: { text: string }) {
   return (
     <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
-      <Markdown>{text}</Markdown>
+      <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
     </div>
   )
 }
