@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.2](https://github.com/icholy/xagent/compare/v2.0.1...v2.0.2) (2026-06-15)
+
+
+### Bug Fixes
+
+* emit link event before instruction in eventrouter created tasks ([#992](https://github.com/icholy/xagent/issues/992)) ([b47cd4d](https://github.com/icholy/xagent/commit/b47cd4d5202de7037243725bec4d80a4b3356b9d))
+* show routing rule as actor on router-created lifecycle events ([#996](https://github.com/icholy/xagent/issues/996)) ([aeca52d](https://github.com/icholy/xagent/commit/aeca52d9a812ac3eaa5440081c1bd868b8573dc5))
+
 ## [2.0.1](https://github.com/icholy/xagent/compare/v2.0.0...v2.0.1) (2026-06-15)
 
 
