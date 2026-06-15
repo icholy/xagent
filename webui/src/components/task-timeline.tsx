@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import Markdown from 'react-markdown'
 import {
   Bot,
   MessageSquarePlus,
@@ -17,8 +16,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { RelativeTime } from '@/components/relative-time'
+import { Markdown, CollapsibleMarkdown } from '@/components/markdown'
 import { GithubIcon } from '@/components/github-icon'
 import { AtlassianIcon } from '@/components/atlassian-icon'
 import type { TimelineItem, LifecycleCategory, ExternalSource } from '@/lib/timeline'
@@ -161,7 +160,7 @@ function InstructionRow({ item }: { item: Extract<TimelineItem, { kind: 'instruc
           </span>
         </div>
         <div className="border-t border-primary/20 px-4 py-3">
-          <Prose text={item.text} />
+          <Markdown text={item.text} />
           {item.url && <SourceLink url={item.url} />}
         </div>
       </div>
@@ -205,9 +204,7 @@ function ExternalRow({ item }: { item: Extract<TimelineItem, { kind: 'external' 
         </div>
         <div className="border-t border-amber-300/40 px-4 py-3">
           <p className="text-sm font-medium text-foreground">{item.description}</p>
-          {item.data && (
-            <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">{item.data}</p>
-          )}
+          {item.data && <Markdown text={item.data} className="mt-1 text-muted-foreground" />}
           {item.url && <SourceLink url={item.url} />}
         </div>
       </div>
@@ -311,7 +308,7 @@ function ReportRow({ item }: { item: Extract<TimelineItem, { kind: 'report' }> }
           </span>
         </div>
         <div className="border-t px-4 py-3">
-          <CollapsibleProse text={item.content} />
+          <CollapsibleMarkdown text={item.content} />
         </div>
       </div>
     </Row>
@@ -342,38 +339,5 @@ function SourceLink({ url }: { url: string }) {
     >
       {url}
     </a>
-  )
-}
-
-function Prose({ text }: { text: string }) {
-  return (
-    <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
-      <Markdown>{text}</Markdown>
-    </div>
-  )
-}
-
-// Agent output can be verbose — collapse anything tall behind a "Show more".
-function CollapsibleProse({ text }: { text: string }) {
-  const long = text.length > 320 || text.split('\n').length > 4
-  const [open, setOpen] = useState(false)
-  if (!long) return <Prose text={text} />
-  return (
-    <div>
-      <div className={cn(!open && 'relative max-h-24 overflow-hidden')}>
-        <Prose text={text} />
-        {!open && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card to-transparent" />
-        )}
-      </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="mt-1 h-6 px-2 text-xs text-muted-foreground"
-        onClick={() => setOpen((o) => !o)}
-      >
-        {open ? 'Show less' : 'Show more'}
-      </Button>
-    </div>
   )
 }
