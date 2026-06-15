@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/icholy/xagent/compare/v2.2.0...v2.2.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* surface routing-rule trigger as leading external event ([#1008](https://github.com/icholy/xagent/issues/1008)) ([d464413](https://github.com/icholy/xagent/commit/d464413d8d0c5bb6421e982373329ee6b82868ca))
+
 ## [2.2.0](https://github.com/icholy/xagent/compare/v2.1.0...v2.2.0) (2026-06-15)
 
 
