@@ -9,7 +9,6 @@ import {
   cancelTask,
   restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import type { TaskLink } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState } from 'react'
 import {
@@ -22,7 +21,6 @@ import {
 import { eventsToTimeline } from '@/lib/timeline'
 import { ArchivedBadge } from '@/components/archived-badge'
 import { ArchiveButton } from '@/components/archive-button'
-import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -110,7 +108,6 @@ function TaskDetail() {
   }
 
   const task = data?.task
-  const links = data?.links ?? []
   const timeline = eventsToTimeline(eventsData?.events ?? [])
 
   if (!task) {
@@ -195,14 +192,6 @@ function TaskDetail() {
         </div>
       </div>
 
-      {/* Links */}
-      {links.length > 0 && (
-        <div className="rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Links</h2>
-          <LinksSection links={links} />
-        </div>
-      )}
-
       {/* Activity timeline */}
       <div className="rounded-lg border p-6">
         <h2 className="text-lg font-semibold mb-4">Activity</h2>
@@ -233,37 +222,5 @@ function TaskDetail() {
         </div>
       )}
     </div>
-  )
-}
-
-function LinksSection({ links }: { links: TaskLink[] }) {
-  return (
-    <ul className="space-y-2">
-      {links.map((link) => (
-        <li key={String(link.id)} className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <a
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              {link.title || link.url}
-            </a>
-            {link.subscribe && (
-              <Badge
-                variant="outline"
-                className="bg-blue-100 text-blue-800 border-blue-200 text-xs"
-              >
-                subscribed
-              </Badge>
-            )}
-          </div>
-          {link.relevance && (
-            <span className="text-sm text-muted-foreground">{link.relevance}</span>
-          )}
-        </li>
-      ))}
-    </ul>
   )
 }
