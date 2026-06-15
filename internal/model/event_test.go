@@ -38,6 +38,11 @@ func TestLifecyclePayload_Summary(t *testing.T) {
 			want:    "Created by icholy",
 		},
 		{
+			name:    "created by routing rule",
+			payload: LifecyclePayload{Kind: LifecycleKindCreated, Actor: RouterActor},
+			want:    "Created by routing rule",
+		},
+		{
 			name:    "cancelled no actor name",
 			payload: LifecyclePayload{Kind: LifecycleKindCancelled, Actor: RunnerActor},
 			want:    "Cancelled",
