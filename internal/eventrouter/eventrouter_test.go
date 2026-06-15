@@ -509,6 +509,21 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, linkPayload.Title, "alice commented on issue #1")
 	assert.Equal(t, linkPayload.Subscribe, true)
 	assert.Equal(t, linkEvents[0].Wake, false)
+
+	// The timeline (ordered by event id) must read Created -> Link -> Instruction:
+	// the lifecycle event first, then the link that triggered the task, then the
+	// prompt the agent acts on.
+	allEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
+	assert.NilError(t, err)
+	var types []string
+	for _, e := range allEvents {
+		types = append(types, e.Payload.Type())
+	}
+	assert.DeepEqual(t, types, []string{
+		model.EventTypeLifecycle,
+		model.EventTypeLink,
+		model.EventTypeInstruction,
+	})
 }
 
 func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
