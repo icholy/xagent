@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/icholy/xagent/compare/v2.0.2...v2.1.0) (2026-06-15)
+
+
+### Features
+
+* **webui:** streamline task page layout and composer ([5d6f3f7](https://github.com/icholy/xagent/commit/5d6f3f77d8537da1f253e488506439bbe711f87d))
+
 ## [2.0.2](https://github.com/icholy/xagent/compare/v2.0.1...v2.0.2) (2026-06-15)
 
 
