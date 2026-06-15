@@ -17,15 +17,6 @@ tasks: {
   updated_at: TIMESTAMP
 }
 
-logs: {
-  shape: sql_table
-  id: BIGSERIAL {constraint: primary_key}
-  task_id: BIGINT {constraint: foreign_key}
-  type: TEXT
-  content: TEXT
-  created_at: TIMESTAMP
-}
-
 task_links: {
   shape: sql_table
   id: BIGSERIAL {constraint: primary_key}
@@ -104,7 +95,6 @@ org_members: {
 
 # Relationships
 org_members.org_id -> orgs.id
-logs.task_id -> tasks.id
 task_links.task_id -> tasks.id
 tasks.parent -> tasks.id: parent
 tasks.org_id -> orgs.id
