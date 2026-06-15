@@ -290,10 +290,26 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			return err
 		}
 		taskID = task.ID
+		// Emit the external (trigger) event first so it leads the timeline (ordered
+		// by event id), the same way it appears when an event wakes an existing task
+		// (see attach). The event that caused the task to exist should precede the
+		// "Created" lifecycle event it triggered.
+		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+			TaskID: task.ID,
+			OrgID:  orgID,
+			Payload: &model.ExternalPayload{
+				Description: input.Description,
+				URL:         input.URL,
+				Data:        input.Data,
+			},
+		}); err != nil {
+			return err
+		}
 		// Record the creation as a lifecycle event. The router (not a user) created
 		// the task, so the actor is the routing-rule actor; a freshly created task
-		// has no prior status. Emit it before the instruction and link events so the
-		// timeline (ordered by event id) shows "Created" first.
+		// has no prior status. Emit it after the external trigger but before the
+		// link and instruction events so the timeline reads
+		// External -> Created -> Link -> Instruction.
 		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
 			TaskID: task.ID,
 			OrgID:  task.OrgID,
