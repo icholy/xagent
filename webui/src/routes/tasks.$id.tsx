@@ -10,7 +10,7 @@ import {
   restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import {
   canArchiveTask,
   canUnarchiveTask,
@@ -27,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { TaskTimeline } from '@/components/task-timeline'
-import { Plus, Loader2 } from 'lucide-react'
+import { Send, Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -38,6 +38,18 @@ function TaskDetail() {
   const { id } = Route.useParams()
   const taskId = BigInt(id)
   const [instruction, setInstruction] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-grow the composer to fit its content. Done in JS rather than relying on
+  // CSS field-sizing, which isn't supported across all browsers (e.g. Firefox).
+  // The min/max heights are enforced by the textarea's CSS classes.
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const borderY = el.offsetHeight - el.clientHeight
+    el.style.height = `${el.scrollHeight + borderY}px`
+  }, [instruction])
 
   const { data, isLoading, error, refetch } = useQuery(
     getTaskDetails,
@@ -80,15 +92,27 @@ function TaskDetail() {
     await restartMutation.mutateAsync({ id: taskId })
   }
 
-  const handleAddInstruction = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!instruction.trim()) return
+  const submitInstruction = async () => {
+    if (!instruction.trim() || updateMutation.isPending) return
     await updateMutation.mutateAsync({
       id: taskId,
       start: true,
       addInstructions: [{ text: instruction, url: '' }],
     })
     setInstruction('')
+  }
+
+  const handleAddInstruction = (e: React.FormEvent) => {
+    e.preventDefault()
+    submitInstruction()
+  }
+
+  // Enter sends, Shift+Enter inserts a newline (chat-style).
+  const handleInstructionKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      submitInstruction()
+    }
   }
 
   if (isLoading) {
@@ -158,9 +182,16 @@ function TaskDetail() {
         </div>
       </div>
 
-      {/* Task Details */}
-      <div className="rounded-lg border p-4">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+      {/* Details + activity in a single card: metadata header strip above the
+          activity timeline. */}
+      <div className="rounded-lg border">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b p-4 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Status:</span>
+            <StatusBadge task={task} />
+            <CommandBadge task={task} />
+            <ArchivedBadge task={task} />
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Runner:</span>
             <span>{task.runner}</span>
@@ -168,12 +199,6 @@ function TaskDetail() {
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Workspace:</span>
             <span>{task.workspace}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Status:</span>
-            <StatusBadge task={task} />
-            <CommandBadge task={task} />
-            <ArchivedBadge task={task} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Created:</span>
@@ -190,37 +215,41 @@ function TaskDetail() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Activity timeline */}
-      <div className="rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-4">Activity</h2>
-        <TaskTimeline items={timeline} />
-      </div>
+        <div className="p-6">
+          <TaskTimeline items={timeline} />
+        </div>
 
-      {/* Add instruction */}
-      {!isArchivedTask(task) && (
-        <div className="rounded-lg border p-6">
-          <form onSubmit={handleAddInstruction} className="space-y-4">
-            <Textarea
-              placeholder="Enter a new instruction..."
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              required
-            />
-            <div className="flex justify-start">
-              <Button type="submit" disabled={updateMutation.isPending}>
+        {/* Add instruction */}
+        {!isArchivedTask(task) && (
+          <div className="border-t p-4">
+            <form onSubmit={handleAddInstruction} className="flex items-end gap-2">
+              <Textarea
+                ref={textareaRef}
+                placeholder="Send an instruction…  (Enter to send, Shift+Enter for newline)"
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                onKeyDown={handleInstructionKeyDown}
+                rows={1}
+                className="max-h-60 min-h-[40px] flex-1 resize-none overflow-y-auto"
+                required
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={updateMutation.isPending}
+                title="Send instruction"
+              >
                 {updateMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Plus className="h-4 w-4" />
+                  <Send className="h-4 w-4" />
                 )}
-                Instruction
               </Button>
-            </div>
-          </form>
-        </div>
-      )}
+            </form>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

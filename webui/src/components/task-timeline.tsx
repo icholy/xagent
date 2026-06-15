@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import Markdown from 'react-markdown'
 import {
   Bot,
@@ -23,82 +23,21 @@ import { GithubIcon } from '@/components/github-icon'
 import { AtlassianIcon } from '@/components/atlassian-icon'
 import type { TimelineItem, LifecycleCategory, ExternalSource } from '@/lib/timeline'
 
-// ----- filtering -------------------------------------------------------------
-
-type FilterKey = 'instruction' | 'agent' | 'external' | 'system'
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'agent', label: 'Agent output' },
-  { key: 'instruction', label: 'Instructions' },
-  { key: 'external', label: 'Events' },
-  { key: 'system', label: 'System' },
-]
-
-// `system` collapses the lower-signal about-task entries (lifecycle + link).
-function filterOf(item: TimelineItem): FilterKey {
-  switch (item.kind) {
-    case 'instruction':
-      return 'instruction'
-    case 'report':
-      return 'agent'
-    case 'external':
-      return 'external'
-    default:
-      return 'system'
-  }
-}
-
 // ----- top-level component ---------------------------------------------------
 
 export function TaskTimeline({ items }: { items: TimelineItem[] }) {
-  const [hidden, setHidden] = useState<Set<FilterKey>>(new Set())
-
-  const visible = useMemo(() => items.filter((i) => !hidden.has(filterOf(i))), [items, hidden])
-
-  const toggle = (key: FilterKey) =>
-    setHidden((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-
   if (items.length === 0) {
     return <div className="text-muted-foreground">No activity yet.</div>
   }
 
   return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted-foreground mr-1">Show</span>
-        {FILTERS.map((f) => {
-          const active = !hidden.has(f.key)
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => toggle(f.key)}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs transition-colors',
-                active
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-transparent text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {f.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <ol className="relative space-y-3">
-        {/* the rail */}
-        <div className="absolute left-[17px] top-2 bottom-2 w-px bg-border" aria-hidden />
-        {visible.map((item) => (
-          <TimelineRow key={item.id} item={item} />
-        ))}
-      </ol>
-    </div>
+    <ol className="relative space-y-3">
+      {/* the rail */}
+      <div className="absolute left-[17px] top-2 bottom-2 w-px bg-border" aria-hidden />
+      {items.map((item) => (
+        <TimelineRow key={item.id} item={item} />
+      ))}
+    </ol>
   )
 }
 
