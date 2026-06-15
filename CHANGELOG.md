@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.0](https://github.com/icholy/xagent/compare/v2.1.0...v2.2.0) (2026-06-15)
+
+
+### Features
+
+* **webui:** support GitHub Flavored Markdown in rendered prose ([#1001](https://github.com/icholy/xagent/issues/1001)) ([c4e8c75](https://github.com/icholy/xagent/commit/c4e8c75a22f7bd5348b1ad6e9bc8bcdf651bb4ec))
+
+
+### Miscellaneous
+
+* update schema diagram in README ([#1004](https://github.com/icholy/xagent/issues/1004)) ([d86ac1d](https://github.com/icholy/xagent/commit/d86ac1da9483c444c8c2bd34e9b6751f3585c011))
+
 ## [2.1.0](https://github.com/icholy/xagent/compare/v2.0.2...v2.1.0) (2026-06-15)
 
 
