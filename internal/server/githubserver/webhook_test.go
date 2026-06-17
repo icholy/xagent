@@ -495,7 +495,7 @@ func TestToGithubInputEvent(t *testing.T) {
 		{
 			name: "PullRequestEvent_WrongAction",
 			event: &github.PullRequestEvent{
-				Action: github.Ptr("opened"),
+				Action: github.Ptr("synchronize"),
 				PullRequest: &github.PullRequest{
 					Number:  github.Ptr(12),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
@@ -683,6 +683,47 @@ func TestToGithubInputEvent(t *testing.T) {
 					Number:  github.Ptr(12),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
 					Merged:  github.Ptr(true),
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "PullRequestEvent_Opened",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("opened"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					NodeID:  github.Ptr("PR_node12"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
+				},
+				Sender: &github.User{
+					ID:    github.Ptr[int64](42),
+					Login: github.Ptr("alice"),
+				},
+				Repo: &github.Repository{
+					Name:  github.Ptr("repo"),
+					Owner: &github.User{Login: github.Ptr("owner")},
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_opened",
+				Description: "alice opened PR #12",
+				URL:         "https://github.com/owner/repo/pull/12",
+				Meta: GitHubMeta{
+					AuthorID:    42,
+					AuthorLogin: "alice",
+					NodeID:      "PR_node12",
+				},
+			},
+		},
+		{
+			name: "PullRequestEvent_Opened_NoSender",
+			event: &github.PullRequestEvent{
+				Action: github.Ptr("opened"),
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(12),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
 				},
 			},
 			expected: nil,

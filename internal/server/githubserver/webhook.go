@@ -155,6 +155,7 @@ const (
 	EventTypePullRequestReview        = "pull_request_review"
 	EventTypeIssueAssigned            = "issue_assigned"
 	EventTypePullRequestAssigned      = "pull_request_assigned"
+	EventTypePullRequestOpened        = "pull_request_opened"
 	EventTypePullRequestClosed        = "pull_request_closed"
 	EventTypeLabelAdded               = "label_added"
 )
@@ -295,6 +296,26 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 
 	case *github.PullRequestEvent:
 		switch event.GetAction() {
+		case "opened":
+			if event.PullRequest == nil || event.PullRequest.HTMLURL == nil ||
+				event.Sender == nil || event.Sender.ID == nil {
+				return nil
+			}
+			senderLogin := event.Sender.GetLogin()
+			number := event.PullRequest.GetNumber()
+			return &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        EventTypePullRequestOpened,
+				Description: fmt.Sprintf("%s opened PR #%d", senderLogin, number),
+				// model.RoutingKey reduces this PR URL to the canonical /pull/N,
+				// matching the link the agent created when it opened the PR.
+				URL: *event.PullRequest.HTMLURL,
+				Meta: GitHubMeta{
+					AuthorID:    *event.Sender.ID,
+					AuthorLogin: senderLogin,
+					NodeID:      event.GetPullRequest().GetNodeID(),
+				},
+			}
 		case "assigned":
 			if event.PullRequest == nil || event.PullRequest.HTMLURL == nil ||
 				event.Assignee == nil || event.Assignee.Login == nil ||
