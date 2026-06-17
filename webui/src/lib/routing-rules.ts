@@ -44,6 +44,12 @@ export const EVENT_TYPES: EventTypeOption[] = [
     type: 'pull_request_assigned',
   },
   {
+    id: 'github:pull_request_opened',
+    label: 'GitHub: PR Created',
+    source: 'github',
+    type: 'pull_request_opened',
+  },
+  {
     id: 'github:pull_request_closed',
     label: 'GitHub: PR Closed',
     source: 'github',
