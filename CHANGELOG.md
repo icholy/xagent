@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.3.0](https://github.com/icholy/xagent/compare/v2.2.1...v2.3.0) (2026-06-17)
+
+
+### Features
+
+* **github:** add routing rule trigger for PR created ([#1021](https://github.com/icholy/xagent/issues/1021)) ([3379d24](https://github.com/icholy/xagent/commit/3379d24ca584082d21635d0da9a6a0a368f67c17))
+
+
+### Miscellaneous
+
+* **deps:** update dependency @tailwindcss/typography to v0.5.20 ([#1016](https://github.com/icholy/xagent/issues/1016)) ([94adef9](https://github.com/icholy/xagent/commit/94adef9f526209b69b2070f7761530882f74ffde))
+* **deps:** update dependency flyctl to v0.4.59 ([#1015](https://github.com/icholy/xagent/issues/1015)) ([b18b84c](https://github.com/icholy/xagent/commit/b18b84c50c90472c72990b5ab731c54b5c04ab4b))
+* **deps:** update dependency go to v1.26.4 ([#1017](https://github.com/icholy/xagent/issues/1017)) ([bcc342b](https://github.com/icholy/xagent/commit/bcc342b72b0f4a50310a87f83fa5903a5cfd9418))
+* **deps:** update dependency vite to v8.0.16 [security] ([#1013](https://github.com/icholy/xagent/issues/1013)) ([237ed72](https://github.com/icholy/xagent/commit/237ed72a8ca69396d0ff9d338298729dd67c1792))
+* **deps:** update typescript-eslint monorepo to v8.61.0 ([#1010](https://github.com/icholy/xagent/issues/1010)) ([ad52f62](https://github.com/icholy/xagent/commit/ad52f625e9fb3997e55f1852fe3c7a90b1b2b295))
+
 ## [2.2.1](https://github.com/icholy/xagent/compare/v2.2.0...v2.2.1) (2026-06-15)
 
 
