@@ -12,12 +12,12 @@ import (
 )
 
 // NotifyCommand runs a long-lived daemon that subscribes to the server's
-// notification stream and emits a system notification for each change that
-// carries a human-readable message.
+// notification stream and emits a system notification when a task reaches a
+// terminal state (completed, failed, or cancelled).
 //
 // It reuses the same per-org SSE stream as the runner and the mcp channel
-// bridge. Notifications are gated on the ChannelMessage field: an empty
-// message is silent, mirroring the channel forwarder in the mcp command.
+// bridge. Notifications are gated on the terminal TaskStatus so the daemon
+// only surfaces outcomes that need attention, rather than every change.
 var NotifyCommand = &cli.Command{
 	Name:  "notify",
 	Usage: "Subscribe to server notifications and emit system notifications",
@@ -46,10 +46,10 @@ var NotifyCommand = &cli.Command{
 			BaseURL: cmd.String("server"),
 			Token:   cmd.String("token"),
 			Handler: func(n model.Notification) {
-				// ChannelMessage holds the human-readable line; empty
-				// means the change is silent (e.g. the "ready" event or
-				// internal-only changes), so there's nothing to show.
-				if n.ChannelMessage == "" {
+				// Only surface terminal task transitions (completed,
+				// failed, cancelled) — these are the outcomes that need
+				// attention. Every other change is left silent.
+				if !n.TaskStatus.IsTerminal() {
 					return
 				}
 				if err := notify.Send(title, n.ChannelMessage); err != nil {
