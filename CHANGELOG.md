@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.1](https://github.com/icholy/xagent/compare/v2.3.0...v2.3.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **eventrouter:** drop redundant RESTARTED lifecycle event on event wake ([#1024](https://github.com/icholy/xagent/issues/1024)) ([4b1da8a](https://github.com/icholy/xagent/commit/4b1da8a1e9af9907e122cbcf2d522d568ba454a7))
+
+
+### Miscellaneous
+
+* **deps:** update dependency npm:pnpm to v11.5.3 ([#1018](https://github.com/icholy/xagent/issues/1018)) ([1ab8514](https://github.com/icholy/xagent/commit/1ab8514abfb01baaceae303f8949b00e63c933da))
+
 ## [2.3.0](https://github.com/icholy/xagent/compare/v2.2.1...v2.3.0) (2026-06-17)
 
 
