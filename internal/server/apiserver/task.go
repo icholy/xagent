@@ -224,10 +224,16 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot write task"))
 		}
 		from := task.Status
-		var changed []string
+		// changed drives the queued channel message; lifecycleFields drives the
+		// Updated lifecycle event. They diverge on instructions: added instructions
+		// already appear in the timeline as their own instruction events, so listing
+		// them on a lifecycle event (or emitting a bare "Updated" when instructions
+		// are the only change) would just duplicate them — see issue #1030.
+		var changed, lifecycleFields []string
 		if req.Name != "" {
 			task.Name = req.Name
 			changed = append(changed, "name")
+			lifecycleFields = append(lifecycleFields, "name")
 		}
 		for _, inst := range req.AddInstructions {
 			// Adding an instruction appends an instruction event (wake=true) to the
@@ -244,31 +250,40 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			}); err != nil {
 				return err
 			}
+		}
+		if len(req.AddInstructions) > 0 {
 			changed = append(changed, "instructions")
 		}
 		if req.Start {
 			task.Start()
 			changed = append(changed, "status")
+			lifecycleFields = append(lifecycleFields, "status")
 		}
 		if req.AutoArchive != nil {
 			task.AutoArchive = req.AutoArchive.AsDuration()
 			changed = append(changed, "auto_archive")
+			lifecycleFields = append(lifecycleFields, "auto_archive")
 		}
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:       model.LifecycleKindUpdated,
-				Actor:      model.UserActor(caller.AuditName()),
-				FromStatus: from.Label(),
-				ToStatus:   task.Status.Label(),
-				Fields:     changed,
-			},
-		}); err != nil {
-			return err
+		// Only record an Updated lifecycle event when a non-instruction field
+		// changed; instruction-only updates are already represented by the
+		// instruction events appended above.
+		if len(lifecycleFields) > 0 {
+			if err := s.store.CreateEvent(ctx, tx, &model.Event{
+				TaskID: task.ID,
+				OrgID:  task.OrgID,
+				Payload: &model.LifecyclePayload{
+					Kind:       model.LifecycleKindUpdated,
+					Actor:      model.UserActor(caller.AuditName()),
+					FromStatus: from.Label(),
+					ToStatus:   task.Status.Label(),
+					Fields:     lifecycleFields,
+				},
+			}); err != nil {
+				return err
+			}
 		}
 		notification.Runner = task.PendingRunner()
 		notification.Resources = []model.NotificationResource{

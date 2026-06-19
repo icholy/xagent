@@ -129,6 +129,46 @@ func TestLifecycle_TaskMutationsAppendEvents(t *testing.T) {
 	assert.Assert(t, kinds[xagentv1.LifecycleKind_LIFECYCLE_KIND_UNARCHIVED])
 }
 
+func TestLifecycle_AddInstructionsSkipsRedundantUpdatedEvent(t *testing.T) {
+	t.Parallel()
+	srv, ctx := lifecycleTestServer(t)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	taskID := resp.Task.Id
+
+	// Adding an instruction appends an instruction event of its own, so it must
+	// not also emit a redundant Updated lifecycle event (issue #1030). Only the
+	// Created event from CreateTask should remain.
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:              taskID,
+		AddInstructions: []*xagentv1.Instruction{{Text: "do the thing"}},
+	})
+	assert.NilError(t, err)
+
+	events := lifecycleEvents(t, srv, ctx, taskID)
+	assert.Equal(t, len(events), 1)
+	assert.Equal(t, events[0].Kind, xagentv1.LifecycleKind_LIFECYCLE_KIND_CREATED)
+
+	// A non-instruction field change still records an Updated event, and the
+	// instructions added alongside it are not listed on it.
+	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
+		Id:              taskID,
+		Name:            "Renamed",
+		AddInstructions: []*xagentv1.Instruction{{Text: "and another"}},
+	})
+	assert.NilError(t, err)
+
+	events = lifecycleEvents(t, srv, ctx, taskID)
+	assert.Equal(t, len(events), 2)
+	assert.Equal(t, events[0].Kind, xagentv1.LifecycleKind_LIFECYCLE_KIND_UPDATED)
+	assert.DeepEqual(t, events[0].Fields, []string{"name"})
+}
+
 func TestLifecycle_RunnerEventsAppendSandboxEvents(t *testing.T) {
 	t.Parallel()
 	srv, ctx := lifecycleTestServer(t)
