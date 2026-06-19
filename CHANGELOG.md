@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.2](https://github.com/icholy/xagent/compare/v2.3.1...v2.3.2) (2026-06-19)
+
+
+### Bug Fixes
+
+* **webui:** expand agent output by default in timeline ([#1032](https://github.com/icholy/xagent/issues/1032)) ([c956bc3](https://github.com/icholy/xagent/commit/c956bc30df6deedf1d57241c0121857c790122ac))
+
 ## [2.3.1](https://github.com/icholy/xagent/compare/v2.3.0...v2.3.1) (2026-06-18)
 
 
