@@ -293,10 +293,10 @@ function Prose({ text }: { text: string }) {
   )
 }
 
-// Agent output can be verbose — collapse anything tall behind a "Show more".
+// Agent output is expanded by default; tall entries can be collapsed behind a "Show less".
 function CollapsibleProse({ text }: { text: string }) {
   const long = text.length > 320 || text.split('\n').length > 4
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   if (!long) return <Prose text={text} />
   return (
     <div>
