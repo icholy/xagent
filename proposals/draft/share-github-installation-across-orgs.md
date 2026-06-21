@@ -100,42 +100,47 @@ if err := s.github.VerifyInstallationAccess(ctx, req.InstallationId, user); err 
 if err := s.store.SetOrgGitHubInstallation(ctx, nil, caller.OrgID, req.InstallationId); err != nil {
     return err
 }
-// Best-effort: clear the pending row if the original installer is claiming it.
-// No longer the authorization mechanism, so a missing row is not an error.
-_ = s.store.DeletePendingIntegration(ctx, nil, model.PendingIntegrationTypeGitHub, externalID)
 ```
 
-The membership check is a network round-trip, so it moves **out** of the DB transaction. The transaction that previously guarded the pending-row read/write against a racing webhook (`github.go:30-32`) is no longer needed: the pending row is no longer the source of truth.
+The membership check is a network round-trip, so it moves **out** of the DB transaction. The transaction that previously guarded the pending-row read/write against a racing webhook (`github.go:30-32`) is no longer needed: the pending row is no longer the source of truth, and — per section 4 — is removed entirely.
 
-With this alone, the **existing redirect flow already works for the second coworker**: Settings → "Install GitHub App" → GitHub shows the app is already installed → "Configure" → save → redirect to `/github/setup?installation_id=…` (GitHub sends `setup_action=update`) → **Approve** → membership verified → linked. The `github.setup.tsx` page needs no change; it stops erroring with "no pending GitHub installation".
+The **existing redirect flow now works for the second coworker** with no UI changes: Settings → "Install GitHub App" → GitHub shows the app is already installed → "Configure" → save → redirect to `/github/setup?installation_id=…` (GitHub sends `setup_action=update`) → **Approve** → membership verified → linked. The `github.setup.tsx` page needs no change; it stops erroring with "no pending GitHub installation".
 
-### 4. Nicer UX: discover linkable installations (no GitHub bounce)
+### 4. Retire the now-unused pending-integration machinery
 
-Because the server can enumerate the App's installations (`GET /app/installations` via `s.app`) and check membership, the coworker doesn't need to round-trip through GitHub's "Configure" page at all. Add an RPC:
+The only reader of pending rows is the old claim check (`GetPendingIntegration` at `internal/server/apiserver/github.go:40`), which section 3 removes. Once it's gone, nothing reads `pending_integrations`, and `PendingIntegrationTypeGitHub` is its only type — the whole subsystem is dead.
 
-```proto
-// proto/xagent/v1/xagent.proto
-rpc ListLinkableGitHubInstallations(ListLinkableGitHubInstallationsRequest)
-    returns (ListLinkableGitHubInstallationsResponse);
+The webhook installation handler shrinks accordingly (`internal/server/githubserver/webhook.go:87-129`):
 
-message LinkableGitHubInstallation {
-  int64  installation_id = 1;
-  string account_login   = 2;  // e.g. "work-org"
-  string account_type    = 3;  // "Organization" | "User"
-  bool   linked_to_current_org = 4;
-}
-message ListLinkableGitHubInstallationsResponse {
-  repeated LinkableGitHubInstallation installations = 1;
+- **`created`** — currently writes a pending row recording `SenderGitHubUserID` / `AccountLogin` / `AccountType`. Nothing reads those anymore (the membership check fetches account info live via `GET /app/installations`). **Drop this branch.**
+- **`deleted`** — keep the `ClearGitHubInstallation` call (NULLs `github_installation_id` across every org sharing the installation when the App is uninstalled, so Settings stops showing "Installed" and reactions stop minting tokens against a dead installation). Drop the `DeletePendingIntegration` call.
+
+```go
+func (h *WebhookHandler) handleInstallationEvent(w http.ResponseWriter, r *http.Request, event *github.InstallationEvent) {
+    installationID := event.GetInstallation().GetID()
+    if event.GetAction() == "deleted" {
+        if err := h.Store.ClearGitHubInstallation(r.Context(), nil, installationID); err != nil { /* 500 */ }
+    }
+    // created / suspend / etc. need no bookkeeping: routing is author-keyed and
+    // linking is membership-verified on demand.
 }
 ```
 
-Implementation: list all App installations, run `VerifyInstallationAccess` against the caller for each, return the ones that pass (annotating those already linked to the current org via the org's `github_installation_id`). With one installation this is a single membership check.
+That leaves the `pending_integrations` table, `internal/model/pending_integration.go`, `internal/store/pending_integration.go` (+ its sqlc queries), and the `UpsertPendingIntegration`/`DeletePendingIntegration`/`GetPendingIntegration` methods (incl. the `githubserver.Store` interface entries at `store.go:17-18`) with no callers. Remove them, with a migration to drop the table:
 
-The Settings "GitHub App" card (`webui/src/routes/settings.tsx:193-230`) then renders, for an org not yet linked:
-
-> ✓ You're a member of **work-org**, which has the GitHub App installed. **[Link to this org]**
-
-The button calls `LinkGitHubInstallation` directly — one click, no bounce to GitHub, no pending row. The existing "Install GitHub App" link + `/github/setup` flow remains as the path for installing the App somewhere new (when the caller has no linkable installation yet).
+```sql
+-- internal/store/sql/migrations/<timestamp>_drop_pending_integrations.sql
+-- migrate:up
+DROP TABLE IF EXISTS pending_integrations;
+-- migrate:down
+CREATE TABLE pending_integrations (
+    type TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    options JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (type, external_id)
+);
+```
 
 ### Reactions are unchanged
 
@@ -147,11 +152,11 @@ The button calls `LinkGitHubInstallation` directly — one click, no bounce to G
 
 **Drop the unique index vs. a join table (issue's Approach C).** A junction table `org_github_installations(org_id, installation_id)` is the fully general model and also enables one-org-to-many-GitHub-orgs. It is also the largest change (schema, queries, settings RPC returning a list, UI). Dropping the unique index solves the reported direction (one installation, many orgs) with a one-line migration and no new queries. If one-org-many-installations becomes a real requirement, the join table is the right follow-up; this proposal does not foreclose it.
 
-**Replace the sender check entirely vs. keep it as a fast path.** Keeping the sender check as a fast path for the original installer adds a branch and two code paths for one behavior. The membership check is uniform and covers the original installer too (they are a member/owner), so the sender check is removed outright and the pending row demoted to best-effort cleanup.
+**Replace the sender check entirely vs. keep it as a fast path.** Keeping the sender check as a fast path for the original installer adds a branch and two code paths for one behavior. The membership check is uniform and covers the original installer too (they are a member/owner), so the sender check is removed outright and the pending row — which had no other reader — is retired entirely (section 4).
 
 ## Open Questions
 
 1. **Member vs. admin.** Should any *active* org member be allowed to link, or only **admins/owners**? `GetOrgMembership` returns the role, so requiring `role == "admin"` is a one-line change. Member-level is proposed (matches "coworkers share the integration"); admin-only is more conservative.
 2. **Username staleness.** The membership check uses `user.GitHubUsername`, which is refreshed on inbound webhooks (`webhook.go:68-71`) but could be stale at link time after a rename. GitHub's membership endpoint is keyed by username, not ID. Acceptable, or re-fetch the login by ID first?
-3. **Scope of this PR.** Is the discovery RPC + Settings affordance (section 4) in scope, or should the first PR be just sections 1-3 (drop index + membership-verified link via the existing `/github/setup` redirect), with the nicer UX as a follow-up?
+3. **Drop the table now vs. later.** Section 4 drops `pending_integrations` outright since it's GitHub-only and fully unused after this change. Alternatively, stop writing/reading the rows but leave the dormant table for a separate cleanup. Dropping now is proposed (no other consumers exist).
 4. **Reaction noise when a user is in multiple of their own orgs.** A single author's comment can route to several orgs that user belongs to, firing `react()` once per matched org. GitHub reactions are idempotent per app identity, so duplicates collapse to one 🚀/👀 — no change needed, noted for completeness.
