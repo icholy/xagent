@@ -49,7 +49,9 @@ Adding an org permission triggers a re-approval prompt to every existing install
 
 ### 3. Authorization: verify membership with the App token
 
-Replace the pending-row sender check in `LinkGitHubInstallation` with a membership check resolved entirely server-side. The caller's GitHub identity is already verified at login (`LinkGitHubAccount` stores a GitHub-confirmed `GitHubUserID`/`GitHubUsername`, `internal/server/githubserver/githubserver.go:148-157`), so there is no impersonation risk in checking "is this verified user a member of the installation's account?".
+Replace the pending-row sender check in `LinkGitHubInstallation` with a membership check resolved entirely server-side. The caller's GitHub identity is already verified at login (`LinkGitHubAccount` stores a GitHub-confirmed `GitHubUserID`, `internal/server/githubserver/githubserver.go:148-157`), so there is no impersonation risk in checking "is this verified user a member of the installation's account?". **Any active member** of the installation's GitHub org may link it (not just admins): linking only grants the org the installation token used for emoji reactions — routing is author-keyed and `CreateGitHubToken` is unimplemented server-side — and the reported scenario is a coworker who may be a regular member.
+
+The check keys off the **immutable GitHub user ID**, not the cached username: `user.GitHubUsername` is only refreshed via webhooks, and GitHub recycles usernames, so a stale handle could match a *different* person who later claimed it (or false-reject a renamed member). Resolve the current login from the ID first (`Users.GetByID`) and assert the membership's user ID matches.
 
 Add a method to `githubserver.Server`, which already holds the App JWT transport (`s.app`) and the installation-token cache (`s.tokens`):
 
@@ -57,9 +59,9 @@ Add a method to `githubserver.Server`, which already holds the App JWT transport
 // internal/server/githubserver/installations.go
 
 // VerifyInstallationAccess returns nil if the user is allowed to link the given
-// installation: a member of the installation's organization, or the owner of a
-// user-account installation. Returns a connect PermissionDenied / NotFound error
-// otherwise.
+// installation: an active member of the installation's organization, or the owner
+// of a user-account installation. Returns a connect PermissionDenied / NotFound
+// error otherwise.
 func (s *Server) VerifyInstallationAccess(ctx context.Context, installationID int64, user *model.User) error {
     // App JWT identifies the installation's account (login + type). Don't rely on
     // the pending row — it won't exist for a second org claiming an existing install.
@@ -69,10 +71,13 @@ func (s *Server) VerifyInstallationAccess(ctx context.Context, installationID in
 
     switch inst.GetAccount().GetType() {
     case "Organization":
-        // Installation token + Members:read. 404 => not a member.
-        instClient := github.NewClient(s.tokens.Client(installationID))
-        m, _, err := instClient.Organizations.GetOrgMembership(ctx, user.GitHubUsername, inst.GetAccount().GetLogin())
-        if isNotFound(err) || m.GetState() != "active" {
+        // Resolve the caller's CURRENT login from their immutable ID so a renamed
+        // or recycled username can't slip the check.
+        instClient := github.NewClient(s.tokens.Client(installationID)) // installation token + Members:read
+        ghUser, _, err := instClient.Users.GetByID(ctx, user.GitHubUserID)
+        if err != nil { /* Internal */ }
+        m, _, err := instClient.Organizations.GetOrgMembership(ctx, ghUser.GetLogin(), inst.GetAccount().GetLogin())
+        if isNotFound(err) || m.GetState() != "active" || m.GetUser().GetID() != user.GitHubUserID {
             return connect.NewError(connect.CodePermissionDenied, errors.New("you are not a member of this GitHub organization"))
         }
         return err // nil on success
@@ -146,6 +151,8 @@ CREATE TABLE pending_integrations (
 
 `react()` keeps reading `org.GitHubInstallationID` (`reactions.go:46-53`). Each org still has its own column pointing at the shared installation, so once both orgs are linked, both get reactions. No change to reaction logic is required; resolving the installation from the webhook payload instead (issue's Approach B) is an orthogonal simplification, not needed here.
 
+A single author's comment can route into several of that author's own orgs, firing `react()` once per matched org — but GitHub reactions are idempotent per app identity, so the duplicates collapse to one 🚀/👀. No handling needed.
+
 ## Trade-offs
 
 **App token vs. user token for the membership check.** The alternative is verifying with the linking user's own OAuth token via `GET /user/installations`. That answers the question directly and needs no new App permission, but the OAuth login flow currently requests only `read:user` and **discards the token** (`githubserver.go:130,142-157`). Using it would require either a re-consent at link time or persisting user GitHub tokens. The App-token path needs a one-time `Members:read` approval (trivial at one installation) but then verifies every future coworker with zero user-facing friction and no new secrets at rest. Given the single existing installation, the App-token path is strictly cheaper.
@@ -154,9 +161,9 @@ CREATE TABLE pending_integrations (
 
 **Replace the sender check entirely vs. keep it as a fast path.** Keeping the sender check as a fast path for the original installer adds a branch and two code paths for one behavior. The membership check is uniform and covers the original installer too (they are a member/owner), so the sender check is removed outright and the pending row — which had no other reader — is retired entirely (section 4).
 
-## Open Questions
+## Resolved Decisions
 
-1. **Member vs. admin.** Should any *active* org member be allowed to link, or only **admins/owners**? `GetOrgMembership` returns the role, so requiring `role == "admin"` is a one-line change. Member-level is proposed (matches "coworkers share the integration"); admin-only is more conservative.
-2. **Username staleness.** The membership check uses `user.GitHubUsername`, which is refreshed on inbound webhooks (`webhook.go:68-71`) but could be stale at link time after a rename. GitHub's membership endpoint is keyed by username, not ID. Acceptable, or re-fetch the login by ID first?
-3. **Drop the table now vs. later.** Section 4 drops `pending_integrations` outright since it's GitHub-only and fully unused after this change. Alternatively, stop writing/reading the rows but leave the dormant table for a separate cleanup. Dropping now is proposed (no other consumers exist).
-4. **Reaction noise when a user is in multiple of their own orgs.** A single author's comment can route to several orgs that user belongs to, firing `react()` once per matched org. GitHub reactions are idempotent per app identity, so duplicates collapse to one 🚀/👀 — no change needed, noted for completeness.
+- **Authorization is member-level, not admin-only.** Any active member of the installation's GitHub org may link it. Linking only grants the installation token used for reactions, and the reported case is a non-admin coworker; admin-only would re-block it. (§3)
+- **Identity is keyed on the immutable GitHub user ID, not the cached username.** Resolve the current login via `Users.GetByID` and assert the membership's user ID matches, to defeat username rename/recycling. (§3)
+- **`pending_integrations` is dropped in this change**, not left dormant — it's GitHub-only, holds only transient claim state, and has no readers after §3. (§4)
+- **Reaction de-duplication needs no handling** — GitHub reactions are idempotent per app identity. (§ Reactions are unchanged)
