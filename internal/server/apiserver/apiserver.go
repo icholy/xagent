@@ -18,10 +18,12 @@ import (
 	"github.com/icholy/xagent/internal/version"
 )
 
-// githubServer is the subset of *githubserver.Server the apiserver depends on.
-// It is an interface so LinkGitHubInstallation's membership check can be faked
+//go:generate go tool moq -out github_moq_test.go . GithubServer
+
+// GithubServer is the subset of *githubserver.Server the apiserver depends on.
+// It is an interface so LinkGitHubInstallation's membership check can be mocked
 // in tests without a real GitHub App.
-type githubServer interface {
+type GithubServer interface {
 	AppInstallURL() string
 	VerifyInstallationAccess(ctx context.Context, installationID int64, user *model.User) error
 }
@@ -33,7 +35,7 @@ type Server struct {
 	baseURL   string
 	publisher pubsub.Publisher
 	atlassian *atlassianserver.Server
-	github    githubServer
+	github    GithubServer
 	// appKey signs the app JWTs minted by CreateTaskToken; it is the same key the
 	// auth layer uses for every other app JWT, so the minted token verifies on the
 	// normal VerifyAppToken path.
