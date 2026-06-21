@@ -13,11 +13,6 @@
       ]
     },
     {
-      "groupName": "typescript native preview",
-      "matchPackageNames": ["@typescript/native-preview"],
-      "schedule": ["before 5am on monday"]
-    },
-    {
       "groupName": "docker",
       "matchPackageNames": ["github.com/docker/cli"],
       "schedule": ["before 5am on monday"]
