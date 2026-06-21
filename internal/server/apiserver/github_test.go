@@ -41,21 +41,14 @@ func newInstallationID() int64 {
 	return rand.Int64N(1_000_000_000) + 1
 }
 
-// setupGitHubLinkable creates an org whose owner has a linked GitHub account.
-func setupGitHubLinkable(t *testing.T, srv *Server) *teststore.Org {
-	t.Helper()
-	org := teststore.CreateOrg(t, srv.store, nil)
-	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
-	return org
-}
-
 func TestLinkGitHubInstallation(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
 	gh := &fakeGitHub{}
 	srv.github = gh
 	installationID := newInstallationID()
-	org := setupGitHubLinkable(t, srv)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
 	ctx := createCtx(t, org)
 
 	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
@@ -77,13 +70,15 @@ func TestLinkGitHubInstallation_Shared(t *testing.T) {
 	srv.github = &fakeGitHub{}
 	installationID := newInstallationID()
 
-	org1 := setupGitHubLinkable(t, srv)
+	org1 := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org1.UserID, newGitHubUserID(), "owner"))
 	_, err := srv.LinkGitHubInstallation(createCtx(t, org1), &xagentv1.LinkGitHubInstallationRequest{
 		InstallationId: installationID,
 	})
 	assert.NilError(t, err)
 
-	org2 := setupGitHubLinkable(t, srv)
+	org2 := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org2.UserID, newGitHubUserID(), "owner"))
 	_, err = srv.LinkGitHubInstallation(createCtx(t, org2), &xagentv1.LinkGitHubInstallationRequest{
 		InstallationId: installationID,
 	})
@@ -121,7 +116,8 @@ func TestLinkGitHubInstallation_Unauthenticated(t *testing.T) {
 func TestLinkGitHubInstallation_NotConfigured(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
-	org := setupGitHubLinkable(t, srv)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
 	ctx := createCtx(t, org)
 
 	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
@@ -150,7 +146,8 @@ func TestLinkGitHubInstallation_AccessDenied(t *testing.T) {
 	srv.github = &fakeGitHub{
 		verifyErr: connect.NewError(connect.CodePermissionDenied, errors.New("not a member")),
 	}
-	org := setupGitHubLinkable(t, srv)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
 	ctx := createCtx(t, org)
 
 	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
@@ -182,7 +179,8 @@ func TestStoreClearGitHubInstallation(t *testing.T) {
 	srv := New(Options{Store: teststore.New(t)})
 	srv.github = &fakeGitHub{}
 	installationID := newInstallationID()
-	org := setupGitHubLinkable(t, srv)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
 	ctx := createCtx(t, org)
 	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
 		InstallationId: installationID,
