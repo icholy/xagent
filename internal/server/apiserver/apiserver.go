@@ -18,6 +18,14 @@ import (
 	"github.com/icholy/xagent/internal/version"
 )
 
+// githubServer is the subset of *githubserver.Server the apiserver depends on.
+// It is an interface so LinkGitHubInstallation's membership check can be faked
+// in tests without a real GitHub App.
+type githubServer interface {
+	AppInstallURL() string
+	VerifyInstallationAccess(ctx context.Context, installationID int64, user *model.User) error
+}
+
 type Server struct {
 	xagentv1connect.UnimplementedXAgentServiceHandler
 	log       *slog.Logger
@@ -25,7 +33,7 @@ type Server struct {
 	baseURL   string
 	publisher pubsub.Publisher
 	atlassian *atlassianserver.Server
-	github    *githubserver.Server
+	github    githubServer
 	// appKey signs the app JWTs minted by CreateTaskToken; it is the same key the
 	// auth layer uses for every other app JWT, so the minted token verifies on the
 	// normal VerifyAppToken path.
@@ -47,15 +55,20 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{
+	srv := &Server{
 		log:       log,
 		store:     opts.Store,
 		baseURL:   opts.BaseURL,
 		publisher: opts.Publisher,
 		atlassian: opts.Atlassian,
-		github:    opts.GitHub,
 		appKey:    opts.AppKey,
 	}
+	// Avoid storing a typed-nil *githubserver.Server in the interface field: the
+	// org settings handler relies on s.github == nil meaning "not configured".
+	if opts.GitHub != nil {
+		srv.github = opts.GitHub
+	}
+	return srv
 }
 
 func (s *Server) publish(n model.Notification) {

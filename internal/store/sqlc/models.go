@@ -49,13 +49,6 @@ type OrgMember struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type PendingIntegration struct {
-	Type       string          `json:"type"`
-	ExternalID string          `json:"external_id"`
-	Options    json.RawMessage `json:"options"`
-	CreatedAt  time.Time       `json:"created_at"`
-}
-
 type SchemaMigration struct {
 	Version string `json:"version"`
 }
