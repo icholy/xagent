@@ -24,7 +24,7 @@ require (
 	github.com/shurcooL/githubv4 v0.0.0-20260209031235-2402fdf4a9ed
 	github.com/urfave/cli/v3 v3.9.0
 	github.com/zitadel/oidc/v3 v3.47.5
-	github.com/zitadel/zitadel-go/v3 v3.29.0
+	github.com/zitadel/zitadel-go/v3 v3.29.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0
