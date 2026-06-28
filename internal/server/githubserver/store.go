@@ -14,6 +14,4 @@ type Store interface {
 	GetUserByGitHubUserID(ctx context.Context, tx *sql.Tx, githubUserID int64) (*model.User, error)
 	UpdateGitHubUsername(ctx context.Context, tx *sql.Tx, githubUserID int64, username string) error
 	ClearGitHubInstallation(ctx context.Context, tx *sql.Tx, installationID int64) error
-	UpsertPendingIntegration(ctx context.Context, tx *sql.Tx, p *model.PendingIntegration) error
-	DeletePendingIntegration(ctx context.Context, tx *sql.Tx, typ model.PendingIntegrationType, externalID string) error
 }

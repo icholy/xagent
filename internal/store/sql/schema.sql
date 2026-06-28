@@ -117,18 +117,6 @@ ALTER SEQUENCE public.orgs_id_seq OWNED BY public.orgs.id;
 
 
 --
--- Name: pending_integrations; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.pending_integrations (
-    type text NOT NULL,
-    external_id text NOT NULL,
-    options jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-
---
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -330,14 +318,6 @@ ALTER TABLE ONLY public.orgs
 
 
 --
--- Name: pending_integrations pending_integrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.pending_integrations
-    ADD CONSTRAINT pending_integrations_pkey PRIMARY KEY (type, external_id);
-
-
---
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -416,7 +396,7 @@ CREATE INDEX idx_org_members_user_id ON public.org_members USING btree (user_id)
 -- Name: idx_orgs_github_installation_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_orgs_github_installation_id ON public.orgs USING btree (github_installation_id);
+CREATE INDEX idx_orgs_github_installation_id ON public.orgs USING btree (github_installation_id);
 
 
 --
@@ -613,4 +593,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260613120000'),
     ('20260614000001'),
     ('20260614000002'),
-    ('20260614000003');
+    ('20260614000003'),
+    ('20260621000001'),
+    ('20260621000002');

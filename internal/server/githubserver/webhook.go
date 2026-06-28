@@ -7,12 +7,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v88/github"
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/githubx"
 )
 
@@ -84,50 +82,28 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "processed")
 }
 
+// handleInstallationEvent reacts only to App uninstalls. Linking is now
+// verified on demand against live GitHub membership (see
+// Server.VerifyInstallationAccess), so the App no longer records a pending row
+// on "created"; routing is author-keyed and needs no installation bookkeeping
+// either. The only remaining bookkeeping is clearing the stored installation id
+// across every org sharing it when the App is uninstalled, so Settings stops
+// showing "Installed" and reactions stop minting tokens against a dead install.
 func (h *WebhookHandler) handleInstallationEvent(w http.ResponseWriter, r *http.Request, event *github.InstallationEvent) {
-	installation := event.GetInstallation()
-	installationID := installation.GetID()
+	installationID := event.GetInstallation().GetID()
 	action := event.GetAction()
-	switch action {
-	case "created":
-		pending := &model.PendingIntegration{
-			Type:       model.PendingIntegrationTypeGitHub,
-			ExternalID: strconv.FormatInt(installationID, 10),
-			Options: model.PendingIntegrationOptions{
-				GitHub: &model.GitHubPendingIntegration{
-					SenderGitHubUserID: event.GetSender().GetID(),
-					AccountLogin:       installation.GetAccount().GetLogin(),
-					AccountType:        installation.GetAccount().GetType(),
-				},
-			},
-		}
-		if err := h.Store.UpsertPendingIntegration(r.Context(), nil, pending); err != nil {
-			slog.Error("failed to upsert pending github installation", "error", err, "installation_id", installationID)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		slog.Info("github installation pending",
-			"installation_id", installationID,
-			"sender_id", event.GetSender().GetID(),
-			"account", installation.GetAccount().GetLogin())
-		fmt.Fprintf(w, "pending")
-	case "deleted":
-		if err := h.Store.DeletePendingIntegration(r.Context(), nil, model.PendingIntegrationTypeGitHub, strconv.FormatInt(installationID, 10)); err != nil {
-			slog.Error("failed to delete pending github installation", "error", err, "installation_id", installationID)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if err := h.Store.ClearGitHubInstallation(r.Context(), nil, installationID); err != nil {
-			slog.Error("failed to clear github installation", "error", err, "installation_id", installationID)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		slog.Info("github installation cleared", "installation_id", installationID)
-		fmt.Fprintf(w, "cleared")
-	default:
+	if action != "deleted" {
 		slog.Info("github installation event", "action", action, "installation_id", installationID)
 		fmt.Fprintf(w, "ignored")
+		return
 	}
+	if err := h.Store.ClearGitHubInstallation(r.Context(), nil, installationID); err != nil {
+		slog.Error("failed to clear github installation", "error", err, "installation_id", installationID)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	slog.Info("github installation cleared", "installation_id", installationID)
+	fmt.Fprintf(w, "cleared")
 }
 
 // GitHubMeta is attached to an eventrouter.InputEvent's Meta field, carrying

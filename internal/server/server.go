@@ -53,15 +53,21 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	api := apiserver.New(apiserver.Options{
+	apiOpts := apiserver.Options{
 		Log:       log,
 		Store:     opts.Store,
 		BaseURL:   opts.BaseURL,
 		Publisher: opts.Publisher,
 		Atlassian: opts.Atlassian,
-		GitHub:    opts.GitHub,
 		AppKey:    opts.AppKey,
-	})
+	}
+	// Only populate GitHub when configured: assigning a typed-nil
+	// *githubserver.Server into the interface field would make
+	// apiserver's s.github != nil ("configured") check spuriously true.
+	if opts.GitHub != nil {
+		apiOpts.GitHub = opts.GitHub
+	}
+	api := apiserver.New(apiOpts)
 	return &Server{
 		log:       log,
 		api:       api,

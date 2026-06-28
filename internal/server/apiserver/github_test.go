@@ -2,8 +2,8 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"math/rand/v2"
-	"strconv"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -20,63 +20,76 @@ func newGitHubUserID() int64 {
 	return rand.Int64N(1_000_000_000) + 1
 }
 
-// newInstallationID returns a positive random installation id. Used to avoid
-// (type, external_id) PK collisions in pending_integrations and the unique
-// index on orgs.github_installation_id across parallel and repeated runs.
+// newInstallationID returns a positive random installation id.
 func newInstallationID() int64 {
 	return rand.Int64N(1_000_000_000) + 1
 }
 
-// setupGitHubLinkable creates an org whose owner has a linked GitHub account
-// and seeds a matching pending_integration row. If senderGitHubUserID is 0 it
-// defaults to the owner's GitHub user id so the link call succeeds.
-func setupGitHubLinkable(t *testing.T, srv *Server, installationID, senderGitHubUserID int64) *teststore.Org {
-	t.Helper()
-	org := teststore.CreateOrg(t, srv.store, nil)
-	ownerGitHubID := newGitHubUserID()
-	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, ownerGitHubID, "owner"))
-	if senderGitHubUserID == 0 {
-		senderGitHubUserID = ownerGitHubID
-	}
-	pending := &model.PendingIntegration{
-		Type:       model.PendingIntegrationTypeGitHub,
-		ExternalID: strconv.FormatInt(installationID, 10),
-		Options: model.PendingIntegrationOptions{
-			GitHub: &model.GitHubPendingIntegration{
-				SenderGitHubUserID: senderGitHubUserID,
-				AccountLogin:       "acme",
-				AccountType:        "Organization",
-			},
-		},
-	}
-	assert.NilError(t, srv.store.UpsertPendingIntegration(t.Context(), nil, pending))
-	return org
-}
-
 func TestLinkGitHubInstallation(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
+	gh := &GithubServerMock{
+		VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+	}
+	srv := New(Options{Store: teststore.New(t), GitHub: gh})
 	installationID := newInstallationID()
-	org := setupGitHubLinkable(t, srv, installationID, 0)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
 	ctx := createCtx(t, org)
 
 	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
 		InstallationId: installationID,
 	})
 	assert.NilError(t, err)
+	calls := gh.VerifyInstallationAccessCalls()
+	assert.Equal(t, len(calls), 1)
+	assert.Equal(t, calls[0].InstallationID, installationID)
 
 	got, err := srv.store.GetOrg(ctx, nil, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, got.GitHubInstallationID, installationID)
+}
 
-	// Pending row should have been consumed.
-	_, err = srv.store.GetPendingIntegration(ctx, nil, model.PendingIntegrationTypeGitHub, strconv.FormatInt(installationID, 10))
-	assert.ErrorContains(t, err, "no rows")
+// A second org may link an installation already linked to another org: the
+// membership check, not a unique index, is what gates linking now.
+func TestLinkGitHubInstallation_Shared(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
+	installationID := newInstallationID()
+
+	org1 := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org1.UserID, newGitHubUserID(), "owner"))
+	_, err := srv.LinkGitHubInstallation(createCtx(t, org1), &xagentv1.LinkGitHubInstallationRequest{
+		InstallationId: installationID,
+	})
+	assert.NilError(t, err)
+
+	org2 := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org2.UserID, newGitHubUserID(), "owner"))
+	_, err = srv.LinkGitHubInstallation(createCtx(t, org2), &xagentv1.LinkGitHubInstallationRequest{
+		InstallationId: installationID,
+	})
+	assert.NilError(t, err)
+
+	for _, o := range []*teststore.Org{org1, org2} {
+		got, err := srv.store.GetOrg(t.Context(), nil, o.OrgID)
+		assert.NilError(t, err)
+		assert.Equal(t, got.GitHubInstallationID, installationID)
+	}
 }
 
 func TestLinkGitHubInstallation_MissingID(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
 	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)
 
@@ -86,7 +99,12 @@ func TestLinkGitHubInstallation_MissingID(t *testing.T) {
 
 func TestLinkGitHubInstallation_Unauthenticated(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
 
 	_, err := srv.LinkGitHubInstallation(context.Background(), &xagentv1.LinkGitHubInstallationRequest{
 		InstallationId: newInstallationID(),
@@ -94,19 +112,7 @@ func TestLinkGitHubInstallation_Unauthenticated(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodeUnauthenticated)
 }
 
-func TestLinkGitHubInstallation_NoLinkedGitHubAccount(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
-	ctx := createCtx(t, org)
-
-	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
-		InstallationId: newInstallationID(),
-	})
-	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
-}
-
-func TestLinkGitHubInstallation_NoPendingRow(t *testing.T) {
+func TestLinkGitHubInstallation_NotConfigured(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
 	org := teststore.CreateOrg(t, srv.store, nil)
@@ -116,22 +122,50 @@ func TestLinkGitHubInstallation_NoPendingRow(t *testing.T) {
 	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
 		InstallationId: newInstallationID(),
 	})
-	assert.Equal(t, connect.CodeOf(err), connect.CodeNotFound)
+	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
 }
 
-func TestLinkGitHubInstallation_SenderMismatch(t *testing.T) {
+func TestLinkGitHubInstallation_NoLinkedGitHubAccount(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	// Pending row was started by a different GitHub user than the caller.
-	otherSender := newGitHubUserID()
-	installationID := newInstallationID()
-	org := setupGitHubLinkable(t, srv, installationID, otherSender)
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
+	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)
 
 	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
-		InstallationId: installationID,
+		InstallationId: newInstallationID(),
+	})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
+}
+
+// A failed membership check propagates as-is (the mock returns PermissionDenied).
+func TestLinkGitHubInstallation_AccessDenied(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error {
+				return connect.NewError(connect.CodePermissionDenied, errors.New("not a member"))
+			},
+		},
+	})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
+	ctx := createCtx(t, org)
+
+	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
+		InstallationId: newInstallationID(),
 	})
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
+
+	// The installation must not be linked when the check fails.
+	got, err := srv.store.GetOrg(ctx, nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, got.GitHubInstallationID, int64(0))
 }
 
 // CreateGitHubToken no longer mints tokens on the server; it always reports
@@ -149,9 +183,15 @@ func TestCreateGitHubToken_Unimplemented(t *testing.T) {
 // Sanity check: the store's clear method removes a previously set installation.
 func TestStoreClearGitHubInstallation(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
 	installationID := newInstallationID()
-	org := setupGitHubLinkable(t, srv, installationID, 0)
+	org := teststore.CreateOrg(t, srv.store, nil)
+	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
 	ctx := createCtx(t, org)
 	_, err := srv.LinkGitHubInstallation(ctx, &xagentv1.LinkGitHubInstallationRequest{
 		InstallationId: installationID,
