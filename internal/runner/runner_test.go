@@ -17,11 +17,24 @@ import (
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/runner/backend"
 	dockerbackend "github.com/icholy/xagent/internal/runner/backend/docker"
+	"github.com/icholy/xagent/internal/runner/taskstate"
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"gotest.tools/v3/assert"
 )
+
+// testStore opens a fresh taskstate store in a temp dir, optionally seeded with
+// records.
+func testStore(t *testing.T, recs ...taskstate.Record) *taskstate.Store {
+	t.Helper()
+	s, err := taskstate.Open(t.TempDir())
+	assert.NilError(t, err)
+	for _, rec := range recs {
+		assert.NilError(t, s.Write(rec))
+	}
+	return s
+}
 
 func TestRunnerStart(t *testing.T) {
 	abs, err := filepath.Abs("../../prebuilt")
@@ -68,6 +81,7 @@ func TestRunnerStart(t *testing.T) {
 	r, err := New(Options{
 		Client:    client,
 		Backend:   be,
+		Store:     testStore(t),
 		ServerURL: ts.URL,
 		Queue:     NewEventQueue(EventQueueOptions{Client: client, Log: slog.Default()}),
 		Workspaces: &workspace.Config{
@@ -106,6 +120,13 @@ func TestRunnerStart(t *testing.T) {
 	err = r.Start(t.Context(), task)
 	assert.NilError(t, err)
 
+	// The runner records the launched handle in the store.
+	rec, ok, err := r.store.Read(task.ID)
+	assert.NilError(t, err)
+	assert.Equal(t, ok, true)
+	assert.Equal(t, rec.Backend, "docker")
+	assert.Assert(t, rec.ID != "")
+
 	// Wait for the container to exit
 	err = dockerx.ContainerWait(t.Context(), docker, "xagent-1", container.WaitConditionNotRunning)
 	assert.NilError(t, err)
@@ -139,9 +160,99 @@ func submitted(t *testing.T, mock *xagentclient.ClientMock, queue *EventQueue) [
 	return events
 }
 
+func TestRunnerStart_Idempotent(t *testing.T) {
+	t.Parallel()
+	// Arrange - a task with an already-running tracked sandbox.
+	task := &model.Task{ID: 5, Runner: "test-runner", Workspace: "test", Version: 1}
+	store := testStore(t, taskstate.Record{TaskID: 5, Backend: "docker", ID: "c5"})
+	be := &backend.BackendMock{
+		ProbeFunc: func(_ context.Context, h backend.Handle) (backend.State, error) {
+			assert.Equal(t, h.ID, "c5")
+			return backend.StateRunning, nil
+		},
+	}
+	mock := &xagentclient.ClientMock{}
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: NewEventQueue(EventQueueOptions{Client: mock})})
+	assert.NilError(t, err)
+
+	// Act
+	err = r.Start(t.Context(), task)
+
+	// Assert - the running sandbox is left alone: no Launch, no token minted.
+	assert.NilError(t, err)
+	assert.Equal(t, len(be.LaunchCalls()), 0)
+	assert.Equal(t, len(mock.CreateTaskTokenCalls()), 0)
+}
+
+func TestRunnerStart_AdoptReuse(t *testing.T) {
+	t.Parallel()
+	// Arrange - a task whose tracked sandbox has exited; Start must pass the
+	// prior handle to Launch as reuse and persist the returned handle.
+	task := &model.Task{ID: 6, Runner: "test-runner", Workspace: "test", Version: 1}
+	store := testStore(t, taskstate.Record{TaskID: 6, Backend: "docker", ID: "old-id"})
+	be := &backend.BackendMock{
+		ValidateWorkspaceFunc: func(_ *workspace.Workspace) error { return nil },
+		ProbeFunc: func(_ context.Context, h backend.Handle) (backend.State, error) {
+			return backend.StateExited, nil
+		},
+		LaunchFunc: func(_ context.Context, _ *backend.Spec, reuse *backend.Handle) (backend.Handle, error) {
+			assert.Assert(t, reuse != nil)
+			assert.Equal(t, reuse.ID, "old-id")
+			return backend.Handle{ID: "new-id"}, nil
+		},
+	}
+	mock := &xagentclient.ClientMock{
+		CreateTaskTokenFunc: func(_ context.Context, _ *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
+			return &xagentv1.CreateTaskTokenResponse{Token: "t"}, nil
+		},
+	}
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: NewEventQueue(EventQueueOptions{Client: mock}), Workspaces: testWorkspaces()})
+	assert.NilError(t, err)
+
+	// Act
+	err = r.Start(t.Context(), task)
+
+	// Assert - the new handle replaced the old record.
+	assert.NilError(t, err)
+	assert.Equal(t, len(be.LaunchCalls()), 1)
+	rec, ok, err := store.Read(6)
+	assert.NilError(t, err)
+	assert.Equal(t, ok, true)
+	assert.Equal(t, rec.ID, "new-id")
+}
+
+func TestRunnerList(t *testing.T) {
+	t.Parallel()
+	// Arrange - two tracked records; List maps each to a Sandbox via Probe.
+	store := testStore(t,
+		taskstate.Record{TaskID: 1, Backend: "docker", ID: "c1"},
+		taskstate.Record{TaskID: 2, Backend: "docker", ID: "c2"},
+	)
+	state := map[string]backend.State{"c1": backend.StateRunning, "c2": backend.StateExited}
+	be := &backend.BackendMock{
+		ProbeFunc: func(_ context.Context, h backend.Handle) (backend.State, error) {
+			return state[h.ID], nil
+		},
+	}
+	mock := &xagentclient.ClientMock{}
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: NewEventQueue(EventQueueOptions{Client: mock})})
+	assert.NilError(t, err)
+
+	// Act
+	sandboxes, err := r.List(t.Context())
+
+	// Assert
+	assert.NilError(t, err)
+	got := map[int64]backend.State{}
+	for _, sb := range sandboxes {
+		got[sb.TaskID] = sb.State
+	}
+	assert.DeepEqual(t, got, map[int64]backend.State{1: backend.StateRunning, 2: backend.StateExited})
+}
+
 func TestRunnerPoll_StopWithoutSandbox(t *testing.T) {
 	t.Parallel()
-	// Arrange
+	// Arrange - task being cancelled with no tracked sandbox.
 	task := &model.Task{
 		ID:        7,
 		Runner:    "test-runner",
@@ -159,20 +270,21 @@ func TestRunnerPoll_StopWithoutSandbox(t *testing.T) {
 		},
 	}
 	be := &backend.BackendMock{
-		StopFunc: func(_ context.Context, taskID int64) (bool, error) {
+		SignalFunc: func(_ context.Context, _ backend.Handle) (bool, error) {
 			return false, nil
 		},
 	}
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
-	r, err := New(Options{Client: mock, Backend: be, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
 	err = r.Poll(t.Context())
 	assert.NilError(t, err)
 
-	// Assert - no sandbox was signalled, so the runner emits "stopped" itself
-	assert.Equal(t, len(be.StopCalls()), 1)
+	// Assert - no record, so the backend is never signalled and the runner
+	// emits "stopped" itself.
+	assert.Equal(t, len(be.SignalCalls()), 0)
 	events := submitted(t, mock, queue)
 	assert.Equal(t, len(events), 1)
 	assert.Equal(t, events[0].Event, "stopped")
@@ -182,7 +294,7 @@ func TestRunnerPoll_StopWithoutSandbox(t *testing.T) {
 
 func TestRunnerPoll_StopSignalled(t *testing.T) {
 	t.Parallel()
-	// Arrange
+	// Arrange - task being cancelled with a tracked, running sandbox.
 	task := &model.Task{
 		ID:        7,
 		Runner:    "test-runner",
@@ -197,48 +309,57 @@ func TestRunnerPoll_StopSignalled(t *testing.T) {
 		},
 	}
 	be := &backend.BackendMock{
-		StopFunc: func(_ context.Context, taskID int64) (bool, error) {
+		SignalFunc: func(_ context.Context, h backend.Handle) (bool, error) {
+			assert.Equal(t, h.ID, "c7")
 			return true, nil
 		},
 	}
+	store := testStore(t, taskstate.Record{TaskID: 7, Backend: "docker", ID: "c7"})
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
-	r, err := New(Options{Client: mock, Backend: be, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
 	err = r.Poll(t.Context())
 	assert.NilError(t, err)
 
-	// Assert - the driver was signalled and owns the terminal report
-	assert.Equal(t, len(be.StopCalls()), 1)
+	// Assert - the driver was signalled and owns the terminal report.
+	assert.Equal(t, len(be.SignalCalls()), 1)
 	assert.Equal(t, queue.Len(), 0)
 }
 
 func TestRunnerMonitor(t *testing.T) {
 	t.Parallel()
-	// Arrange
+	// Arrange - two tracked sandboxes plus one untracked exit the runner must
+	// ignore.
 	mock := &xagentclient.ClientMock{
 		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
 	}
 	be := &backend.BackendMock{
-		WatchFunc: func(_ context.Context, handle func(backend.Exit)) error {
-			handle(backend.Exit{TaskID: 1, ExitCode: 0})
-			handle(backend.Exit{TaskID: 2, ExitCode: 137})
+		WatchFunc: func(_ context.Context, handle func(backend.HandleExit)) error {
+			handle(backend.HandleExit{ID: "c1", ExitCode: 0})
+			handle(backend.HandleExit{ID: "c2", ExitCode: 137})
+			handle(backend.HandleExit{ID: "unknown", ExitCode: 1})
 			return nil
 		},
 	}
+	store := testStore(t,
+		taskstate.Record{TaskID: 1, Backend: "docker", ID: "c1"},
+		taskstate.Record{TaskID: 2, Backend: "docker", ID: "c2"},
+	)
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
-	r, err := New(Options{Client: mock, Backend: be, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
 	err = r.Monitor(t.Context())
 	assert.NilError(t, err)
 
-	// Assert - exit 0 means the driver already reported; non-zero means the
-	// report was lost and the runner emits "failed" on its behalf
+	// Assert - c1 exit 0 means the driver already reported; c2 non-zero means
+	// the report was lost so the runner emits "failed"; the untracked id is
+	// ignored.
 	events := submitted(t, mock, queue)
 	assert.Equal(t, len(events), 1)
 	assert.Equal(t, events[0].Event, "failed")
@@ -261,17 +382,23 @@ func TestRunnerReconcile(t *testing.T) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
 	}
+	state := map[string]backend.State{
+		"c1": backend.StateRunning,
+		"c2": backend.StateExited,
+		"c3": backend.StateExited,
+	}
 	be := &backend.BackendMock{
-		ListFunc: func(_ context.Context) ([]backend.Sandbox, error) {
-			return []backend.Sandbox{
-				{TaskID: 1, State: backend.StateRunning},
-				{TaskID: 2, State: backend.StateExited},
-				{TaskID: 3, State: backend.StateExited},
-			}, nil
+		ProbeFunc: func(_ context.Context, h backend.Handle) (backend.State, error) {
+			return state[h.ID], nil
 		},
 	}
+	store := testStore(t,
+		taskstate.Record{TaskID: 1, Backend: "docker", ID: "c1"},
+		taskstate.Record{TaskID: 2, Backend: "docker", ID: "c2"},
+		taskstate.Record{TaskID: 3, Backend: "docker", ID: "c3"},
+	)
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
-	r, err := New(Options{Client: mock, Backend: be, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
@@ -279,7 +406,7 @@ func TestRunnerReconcile(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Assert - only the exited sandbox whose task is still running means the
-	// driver's report was lost
+	// driver's report was lost.
 	events := submitted(t, mock, queue)
 	assert.Equal(t, len(events), 1)
 	assert.Equal(t, events[0].Event, "failed")
@@ -298,31 +425,60 @@ func TestRunnerPrune(t *testing.T) {
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Archived: archived[req.Id]}}, nil
 		},
 	}
+	state := map[string]backend.State{
+		"c1": backend.StateExited,  // archived -> removed
+		"c2": backend.StateExited,  // not archived -> kept
+		"c3": backend.StateRunning, // running -> not considered
+		"c4": backend.StateExited,  // deleted -> removed
+	}
 	be := &backend.BackendMock{
-		ListFunc: func(_ context.Context) ([]backend.Sandbox, error) {
-			return []backend.Sandbox{
-				{TaskID: 1, State: backend.StateExited},  // archived -> removed
-				{TaskID: 2, State: backend.StateExited},  // not archived -> kept
-				{TaskID: 3, State: backend.StateRunning}, // running -> not considered
-				{TaskID: 4, State: backend.StateExited},  // deleted -> removed
-			}, nil
+		ProbeFunc: func(_ context.Context, h backend.Handle) (backend.State, error) {
+			return state[h.ID], nil
 		},
-		RemoveFunc: func(_ context.Context, taskID int64) error {
+		DestroyFunc: func(_ context.Context, _ backend.Handle) error {
 			return nil
 		},
 	}
+	store := testStore(t,
+		taskstate.Record{TaskID: 1, Backend: "docker", ID: "c1"},
+		taskstate.Record{TaskID: 2, Backend: "docker", ID: "c2"},
+		taskstate.Record{TaskID: 3, Backend: "docker", ID: "c3"},
+		taskstate.Record{TaskID: 4, Backend: "docker", ID: "c4"},
+	)
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
-	r, err := New(Options{Client: mock, Backend: be, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
 	err = r.Prune(t.Context())
 	assert.NilError(t, err)
 
-	// Assert
-	var removed []int64
-	for _, call := range be.RemoveCalls() {
-		removed = append(removed, call.TaskID)
+	// Assert - archived/deleted tasks' sandboxes are destroyed and their
+	// records removed.
+	var destroyed []string
+	for _, call := range be.DestroyCalls() {
+		destroyed = append(destroyed, call.H.ID)
 	}
-	assert.DeepEqual(t, removed, []int64{1, 4})
+	assert.DeepEqual(t, destroyed, []string{"c1", "c4"})
+	for _, id := range []int64{1, 4} {
+		_, ok, err := store.Read(id)
+		assert.NilError(t, err)
+		assert.Equal(t, ok, false)
+	}
+	// Kept records survive.
+	_, ok, err := store.Read(2)
+	assert.NilError(t, err)
+	assert.Equal(t, ok, true)
+}
+
+// testWorkspaces returns a minimal workspace config with a "test" workspace.
+func testWorkspaces() *workspace.Config {
+	return &workspace.Config{
+		Workspaces: map[string]workspace.Workspace{
+			"test": {
+				Container: workspace.Container{Image: "alpine:latest"},
+				Agent:     workspace.Agent{Type: "dummy", Dummy: &workspace.DummyConfig{}},
+			},
+		},
+	}
 }

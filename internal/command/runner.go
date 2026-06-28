@@ -13,6 +13,7 @@ import (
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/runner/backend"
 	dockerbackend "github.com/icholy/xagent/internal/runner/backend/docker"
+	"github.com/icholy/xagent/internal/runner/taskstate"
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -74,6 +75,12 @@ var RunnerCommand = &cli.Command{
 			Value:   "docker",
 			Sources: cli.EnvVars("XAGENT_BACKEND"),
 		},
+		&cli.StringFlag{
+			Name:    "state-dir",
+			Usage:   "Directory for the runner-local task→sandbox-handle store",
+			Value:   "/var/lib/xagent/tasks",
+			Sources: cli.EnvVars("XAGENT_STATE_DIR"),
+		},
 		&cli.BoolFlag{
 			Name:  "debug",
 			Usage: "Enable debug logging",
@@ -130,8 +137,9 @@ var RunnerCommand = &cli.Command{
 			RetryInterval: pollInterval,
 		})
 
+		backendName := cmd.String("backend")
 		var be backend.Backend
-		switch name := cmd.String("backend"); name {
+		switch backendName {
 		case "docker":
 			be, err = dockerbackend.New(dockerbackend.Options{
 				RunnerID: runnerID,
@@ -141,12 +149,21 @@ var RunnerCommand = &cli.Command{
 				return err
 			}
 		default:
-			return fmt.Errorf("unknown backend: %q", name)
+			return fmt.Errorf("unknown backend: %q", backendName)
+		}
+
+		// Open the runner-local task→sandbox-handle store, the single source of
+		// truth for which sandbox belongs to which task.
+		store, err := taskstate.Open(cmd.String("state-dir"))
+		if err != nil {
+			return fmt.Errorf("failed to open task store: %w", err)
 		}
 
 		r, err := runner.New(runner.Options{
 			Client:      client,
 			Backend:     be,
+			BackendName: backendName,
+			Store:       store,
 			ServerURL:   serverAddr,
 			Workspaces:  workspaces,
 			Concurrency: int(concurrency),
