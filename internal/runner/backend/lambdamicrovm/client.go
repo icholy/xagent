@@ -11,6 +11,7 @@ import (
 // backend's orchestration be unit-tested against a fake.
 type Cloud interface {
 	RunMicrovm(ctx context.Context, in *awsmicrovm.RunMicrovmInput) (*awsmicrovm.RunMicrovmOutput, error)
+	GetMicrovm(ctx context.Context, in *awsmicrovm.GetMicrovmInput) (*awsmicrovm.GetMicrovmOutput, error)
 	ListMicrovms(ctx context.Context, in *awsmicrovm.ListMicrovmsInput) (*awsmicrovm.ListMicrovmsOutput, error)
 	TerminateMicrovm(ctx context.Context, in *awsmicrovm.TerminateMicrovmInput) (*awsmicrovm.TerminateMicrovmOutput, error)
 }

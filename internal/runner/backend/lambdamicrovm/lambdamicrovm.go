@@ -309,26 +309,26 @@ func (b *Backend) Watch(ctx context.Context, handle func(backend.HandleExit)) er
 	}
 }
 
-// find looks up a MicroVM by id across all pages of ListMicrovms.
+// find looks up a single MicroVM by id with a point GetMicrovm call (not a
+// full-fleet scan). A 404 means the MicroVM is gone; both Get's terminal-state
+// result and not-found map to "exited" in Probe.
 func (b *Backend) find(ctx context.Context, microvmID string) (awsmicrovm.Microvm, bool, error) {
 	if microvmID == "" {
 		return awsmicrovm.Microvm{}, false, nil
 	}
-	mvms, err := b.listAll(ctx)
+	out, err := b.cloud.GetMicrovm(ctx, &awsmicrovm.GetMicrovmInput{MicrovmID: microvmID})
+	if awsmicrovm.IsNotFound(err) {
+		return awsmicrovm.Microvm{}, false, nil
+	}
 	if err != nil {
-		return awsmicrovm.Microvm{}, false, err
+		return awsmicrovm.Microvm{}, false, fmt.Errorf("get microvm: %w", err)
 	}
-	for _, m := range mvms {
-		if m.MicrovmID == microvmID {
-			return m, true, nil
-		}
-	}
-	return awsmicrovm.Microvm{}, false, nil
+	return out.Microvm, true, nil
 }
 
-// listAll pages through ListMicrovms until NextToken is empty, so callers see
+// listAll pages through ListMicrovms until NextToken is empty, so Watch sees
 // every MicroVM rather than just the first page. Truncating here would make
-// find/Probe miss live VMs on later pages and Watch drop their exits.
+// Watch drop the exits of VMs on later pages.
 func (b *Backend) listAll(ctx context.Context) ([]awsmicrovm.Microvm, error) {
 	var all []awsmicrovm.Microvm
 	in := &awsmicrovm.ListMicrovmsInput{}

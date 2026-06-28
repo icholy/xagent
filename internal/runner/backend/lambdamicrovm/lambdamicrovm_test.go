@@ -42,6 +42,16 @@ func (f *fakeCloud) RunMicrovm(_ context.Context, in *awsmicrovm.RunMicrovmInput
 	return &awsmicrovm.RunMicrovmOutput{MicrovmID: id, Endpoint: id + ".example.com"}, nil
 }
 
+func (f *fakeCloud) GetMicrovm(_ context.Context, in *awsmicrovm.GetMicrovmInput) (*awsmicrovm.GetMicrovmOutput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	vm, ok := f.vms[in.MicrovmID]
+	if !ok {
+		return nil, &awsmicrovm.APIError{Op: "GetMicrovm", StatusCode: 404}
+	}
+	return &awsmicrovm.GetMicrovmOutput{Microvm: *vm}, nil
+}
+
 func (f *fakeCloud) TerminateMicrovm(_ context.Context, in *awsmicrovm.TerminateMicrovmInput) (*awsmicrovm.TerminateMicrovmOutput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -356,15 +366,14 @@ func TestWatchReportsExitOnce(t *testing.T) {
 	}
 }
 
-func TestPaginationFindAndWatch(t *testing.T) {
+func TestWatchPagesThroughResults(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
 	cloud.pageSize = 1 // force ListMicrovms to paginate one VM per page
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	be.poll = time.Millisecond
 
-	_, err := be.Launch(ctx, testSpec(1), nil) // mvm-1, first page
-	if err != nil {
+	if _, err := be.Launch(ctx, testSpec(1), nil); err != nil { // mvm-1, first page
 		t.Fatalf("Launch 1: %v", err)
 	}
 	h2, err := be.Launch(ctx, testSpec(2), nil) // mvm-2, a later page
@@ -372,13 +381,8 @@ func TestPaginationFindAndWatch(t *testing.T) {
 		t.Fatalf("Launch 2: %v", err)
 	}
 
-	// find must page past the first result to resolve a VM on a later page —
-	// otherwise Probe would wrongly report it exited.
-	if state, err := be.Probe(ctx, h2); err != nil || state != backend.StateRunning {
-		t.Fatalf("Probe(h2) across pages = %v, %v; want running", state, err)
-	}
-
-	// Watch must page through too: a terminal VM on a later page still emits.
+	// Watch must page through the fleet: a terminal VM on a later page still
+	// emits its exit (a single first-page list would drop it).
 	exits := make(chan backend.HandleExit, 4)
 	go func() { _ = be.Watch(ctx, func(e backend.HandleExit) { exits <- e }) }()
 	cloud.setState(h2.ID, awsmicrovm.MicrovmStateTerminated)
@@ -389,6 +393,20 @@ func TestPaginationFindAndWatch(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Watch dropped the exit of a VM on a later page")
+	}
+}
+
+func TestSignalDestroyAbsentMicrovmNoOp(t *testing.T) {
+	be, _, _ := newTestBackend(t)
+	ctx := context.Background()
+	// A handle whose MicroVM doesn't exist (GetMicrovm 404 -> IsNotFound).
+	h := backend.Handle{Type: HandleType, ID: "mvm-gone"}
+
+	if signalled, err := be.Signal(ctx, h); err != nil || signalled {
+		t.Fatalf("Signal absent = %v, %v; want (false, nil)", signalled, err)
+	}
+	if err := be.Destroy(ctx, h); err != nil {
+		t.Fatalf("Destroy absent = %v; want nil", err)
 	}
 }
 
