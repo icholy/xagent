@@ -61,10 +61,10 @@ make it the **single source of truth** for the task→sandbox-handle mapping for
 lambda-microvm backend adopts it when #1054 lands; firecracker / agentcore use
 it from day one.
 
-The store records, per task, which backend owns the sandbox and an opaque
-per-backend **handle** (the container id for Docker; for a microVM it will be
-`{microvmId, imageARN, stageBucket, stageKey}`). Crucially, **the runner owns the
-store and every mutation of it.** Backends no longer persist, discover, or
+The store records, per task, which backend owns the sandbox and a backend-produced
+**handle** — an explicit `ID` (the container id for Docker; the microVM id for a
+microVM) plus opaque `Data` the store never decodes. Crucially, **the runner owns
+the store and every mutation of it.** Backends no longer persist, discover, or
 reconcile anything: the `Backend` interface is rewritten down to per-sandbox
 runtime ops — **launch / probe / signal / destroy** — that take and return
 handles, and the runner composes `List` / `Running` / `Remove` / reconcile over
@@ -105,42 +105,54 @@ Five decisions frame the design.
    inspectable and recoverable by hand, which matters for an
    operability-sensitive runner.
 
-4. **A generic, backend-agnostic record.** The store persists:
+4. **A handle with an explicit id; the store is a dependency-free leaf.** A
+   sandbox handle has two parts: a backend-produced **id** that is unique and
+   stable for the sandbox's lifetime, and opaque **data** the store never decodes.
+   The id is the legitimate index key; the data carries whatever the backend needs
+   for cleanup but not for identity. The `backend` package defines:
 
    ```go
-   // Record is the runner's authoritative task→sandbox mapping. The runner
-   // writes it; Handle is an opaque blob the owning backend produced and is the
-   // only code that interprets.
+   // Handle identifies a backend's sandbox. ID is the index key (a container id,
+   // an AWS microVM id, ...); Data is backend-defined and never decoded by the
+   // store or the runner.
+   type Handle struct {
+       ID   string          `json:"id"`
+       Data json.RawMessage `json:"data,omitempty"`
+   }
+   ```
+
+   - **Docker:** `ID` = container id, `Data` = nil (identity *is* the whole
+     handle).
+   - **microVM** (when #1054 adopts the store): `ID` = the AWS microVM id that
+     `ListMicrovms` returns, `Data` = `{image_arn, stage_bucket, stage_key}` — the
+     fields `Destroy` needs for staged-object cleanup, not for identity.
+
+   The store persists the **decomposed** form so it never has to import the
+   `backend` package or decode anything — it stays a dependency-free leaf with a
+   plain string-keyed reverse index:
+
+   ```go
+   // package taskstate
    type Record struct {
        TaskID  int64           `json:"task_id"`
-       Backend string          `json:"backend"` // "docker", "lambda-microvm", ...
-       Handle  json.RawMessage `json:"handle"`  // backend-defined shape
+       Backend string          `json:"backend"`        // "docker", "lambda-microvm", ...
+       ID      string          `json:"id"`             // == backend.Handle.ID; reverse-index key
+       Data    json.RawMessage `json:"data,omitempty"` // == backend.Handle.Data; opaque
    }
+   // ByID(id) (Record, bool) is backed by a map[string]int64 (id → task id).
    ```
 
-   Each backend defines its own handle type and (un)marshals it:
+   The runner translates between `backend.Handle{ID,Data}` and
+   `taskstate.Record`: on `Launch` it splits the returned handle into the record;
+   when calling `Probe`/`Signal`/`Destroy` it reassembles `Handle{rec.ID,
+   rec.Data}`. This is what makes the `Watch`→task resolution sound — see decision
+   5 — instead of byte-matching opaque JSON (which would be fragile to key
+   ordering/whitespace, and impossible for a poll-based `Watch` that only sees ids).
 
-   ```go
-   // docker (this change)
-   type handle struct {
-       ContainerID string `json:"container_id"`
-   }
-
-   // lambda-microvm (when #1054 adopts the store)
-   type handle struct {
-       MicrovmID   string `json:"microvm_id"`
-       ImageARN    string `json:"image_arn"`
-       StageBucket string `json:"stage_bucket"`
-       StageKey    string `json:"stage_key"`
-   }
-   ```
-
-   The store stays backend-agnostic: it persists, lists, and removes records
-   without ever decoding `Handle`. The `Backend` field is informational — it
-   records which backend produced the handle (a guard against decoding a record
-   with the wrong backend, and useful for tooling). It is **not** a namespacing
-   key: task ids are globally unique, so a flat `tasks/<id>.json` directory needs
-   no per-backend partitioning.
+   The `Backend` field stays informational — which backend produced the handle (a
+   decode guard / tooling aid). It is **not** a namespacing key: task ids are
+   globally unique, so a flat `tasks/<id>.json` directory needs no per-backend
+   partitioning.
 
 5. **The runner owns taskstate mutations; the `Backend` interface is rewritten.**
    The `Backend` interface today mixes runtime ops with discovery and persistence
@@ -149,19 +161,15 @@ Five decisions frame the design.
    store:
 
    ```go
-   // Handle is an opaque, backend-defined blob. The runner stores it verbatim
-   // in Record.Handle and hands it back; only the owning backend decodes it.
-   type Handle = json.RawMessage
-
    type Backend interface {
        ValidateWorkspace(ws *workspace.Workspace) error
 
        // Launch ensures a sandbox exists for the spec and starts it, returning
-       // the handle the RUNNER persists. If reuse is non-nil, the backend may
+       // the Handle the RUNNER persists. If reuse is non-nil, the backend may
        // adopt the sandbox it identifies (preserving its filesystem) instead of
        // creating fresh, or clean up its stale resources. The backend performs
        // no persistence of its own.
-       Launch(ctx context.Context, spec *Spec, reuse Handle) (Handle, error)
+       Launch(ctx context.Context, spec *Spec, reuse *Handle) (Handle, error)
 
        // Probe reports the liveness of a single handle.
        Probe(ctx context.Context, h Handle) (State, error)
@@ -174,16 +182,20 @@ Five decisions frame the design.
        // Destroy deletes the sandbox identified by h.
        Destroy(ctx context.Context, h Handle) error
 
-       // Watch streams sandbox exits keyed by handle until ctx is cancelled.
-       // The runner resolves handle→task and dedups; Watch performs no
-       // persistence. (Stays per-backend — see below.)
+       // Watch streams sandbox exits keyed by handle ID until ctx is cancelled.
+       // It emits only the id (not the full Handle) so a poll-based backend that
+       // sees only ids — e.g. ListMicrovms — can report without reconstructing
+       // Data. The runner resolves id→task via the store and dedups; Watch
+       // performs no persistence. (Stays per-backend — see below.)
        Watch(ctx context.Context, handle func(HandleExit)) error
 
        Close() error
    }
 
+   // HandleExit carries only the handle id — enough for the runner's id→task
+   // lookup, and all a poll-based Watch can produce.
    type HandleExit struct {
-       Handle   Handle
+       ID       string
        ExitCode int
    }
    ```
@@ -191,35 +203,43 @@ Five decisions frame the design.
    `Spec`, `State` (`StateRunning`/`StateExited`/`StateUnknown`), and the
    orchestrator's `Sandbox`/`Exit` task-keyed views are unchanged; what moves is
    *who* maps task↔handle. The runner (`runner.Runner`) gains a
-   `*taskstate.Store` and becomes the only writer:
+   `*taskstate.Store` and becomes the only writer, translating between
+   `backend.Handle` and `taskstate.Record` at the boundary:
 
    ```
    // runner-side, composed over the backend + store
+   handleOf(rec) = backend.Handle{ID: rec.ID, Data: rec.Data}
+
    Start(taskID, spec):
        rec, ok := store.Read(taskID)
-       var reuse Handle
+       var reuse *backend.Handle
        if ok {
-           if backend.Probe(rec.Handle) == StateRunning { return }   // idempotent
-           reuse = rec.Handle                                        // adopt / cleanup
+           h := handleOf(rec)
+           if backend.Probe(h) == StateRunning { return }           // idempotent
+           reuse = &h                                                // adopt / cleanup
        }
        h := backend.Launch(spec, reuse)
-       store.Write(Record{taskID, backendName, h})                  // ← runner owns the mutation
+       store.Write(Record{taskID, backendName, h.ID, h.Data})       // ← runner owns the mutation
 
    List():     for rec in store.List():
-                   emit Sandbox{rec.TaskID, backend.Probe(rec.Handle)}
-   Running(t): backend.Probe(store.Read(t).Handle) == StateRunning
-   Remove(t):  backend.Destroy(store.Read(t).Handle); store.Remove(t)
-   Kill(t):    backend.Signal(store.Read(t).Handle)
+                   emit Sandbox{rec.TaskID, backend.Probe(handleOf(rec))}
+   Running(t): backend.Probe(handleOf(store.Read(t))) == StateRunning
+   Remove(t):  backend.Destroy(handleOf(store.Read(t))); store.Remove(t)
+   Kill(t):    backend.Signal(handleOf(store.Read(t)))
+   Monitor:    backend.Watch(func(e HandleExit) {                   // see Watch section
+                   if rec, ok := store.ByID(e.ID); ok { enqueue(rec.TaskID, e.ExitCode) }
+               })
    ```
 
    So the orchestrator's `Reconcile`/`Prune`/`Monitor` no longer call a backend
    `List`/`Remove`/`Watch` that hides a store; they call these runner-owned
    wrappers, and the store mutation lives in exactly one place.
 
-   - **Docker's `Launch`** inspects `reuse` (a `{container_id}`): if the container
-     exists it reuses it (`RepairNetworks` + `ContainerStart`), else it creates
-     `xagent-{taskID}`; on a name conflict it adopts the existing container by
-     name and returns its id. **`Probe`** is `ContainerInspect(containerID)`
+   - **Docker's `Launch`** inspects `reuse` (whose `ID` is a container id): if the
+     container exists it reuses it (`RepairNetworks` + `ContainerStart`), else it
+     creates `xagent-{taskID}`; on a name conflict it adopts the existing
+     container by name and returns its id. **`Probe`** is
+     `ContainerInspect(handle.ID)`
      (`running`→`StateRunning`, `exited`/`dead`/not-found→`StateExited`),
      replacing the label-filtered `ContainerList` in `find` and the
      label-parsing loop in `List`. No Docker code parses `xagent.task` anymore.
@@ -244,29 +264,36 @@ two differ are intrinsic — Docker has a real event bus, Lambda does not — an
 forcing a common abstraction would either throw away Docker's push semantics or
 impose a poll on a backend that doesn't need one.
 
-What *does* change is that `Watch` now reports exits keyed by **handle**, not by a
-task id the backend parsed out of runtime metadata. The runner resolves
-handle→task via the store (a small reverse index) and applies the same
-dedup/enqueue logic `Monitor` has today. So Docker's `Watch` stops doing
-`strconv.ParseInt` on `xagent.task` event attributes, and a microVM `Watch` no
-longer needs to read the store itself — it just emits the handles it sees go
-terminal and the runner ignores any it doesn't track.
+What *does* change is that `Watch` now reports exits keyed by **handle id**, not
+by a task id the backend parsed out of runtime metadata. The runner resolves
+id→task via `store.ByID` (the `map[string]int64` reverse index) and applies the
+same dedup/enqueue logic `Monitor` has today. Emitting only the id is what keeps
+this sound for both styles of backend: Docker's `Watch` stops doing
+`strconv.ParseInt` on `xagent.task` event attributes and just reports the
+container id from the `die` event; a microVM `Watch` reports the microVM id its
+`ListMicrovms` poll already returns, with no need to reconstruct the opaque
+`Data`. The runner ignores any id it doesn't track. (This is why the handle has an
+explicit `ID` rather than being an opaque blob the runner would have to
+byte-match — see decision 4.)
 
 ### Package layout
 
 ```
 internal/runner/
-├── taskstate/                  new shared, atomic-write store (imported by runner.go, NOT by backends)
-│   └── taskstate.go            Record{TaskID, Backend, Handle}; Write/Read/Remove/List/ByHandle
-├── runner.go                   owns *taskstate.Store; composes List/Running/Remove/reconcile over the backend
+├── taskstate/                  new shared, atomic-write store (dependency-free leaf)
+│   └── taskstate.go            Record{TaskID, Backend, ID, Data}; Write/Read/Remove/List/ByID
+├── runner.go                   owns *taskstate.Store; translates backend.Handle↔Record; composes List/Running/Remove/reconcile
 └── backend/
-    ├── backend.go              rewritten Backend interface (Launch/Probe/Signal/Destroy/Watch)
-    └── docker/                 implements the four ops; handle = {container_id}
+    ├── backend.go              Handle{ID, Data}; rewritten Backend interface (Launch/Probe/Signal/Destroy/Watch)
+    └── docker/                 implements the four ops; Handle.ID = container id, Data = nil
 ```
 
-Backends no longer import `taskstate` at all — only `runner.go` does. When the
-lambda-microvm backend lands, it adds `backend/lambdamicrovm/` implementing the
-same four ops with a `{microvm_id, ...}` handle, and drops both the standalone
+Neither side imports the other: `taskstate` never imports `backend` (it stores
+the decomposed `{ID, Data}`, never `backend.Handle`), and backends never import
+`taskstate`. Only `runner.go` depends on both and translates at the boundary.
+When the lambda-microvm backend lands, it adds `backend/lambdamicrovm/`
+implementing the same four ops with `Handle.ID` = microVM id and `Data` =
+`{image_arn, stage_bucket, stage_key}`, and drops both the standalone
 `backend/lambdamicrovm/taskstate` package *and* its own List/Watch store-scanning
 its branch currently carries.
 
@@ -361,7 +388,7 @@ is not a directory key.
    Launch/Probe/Signal/Destroy/Watch quartet above (the former "keep the current
    interface" option is rejected per maintainer direction). What remains is the
    exact signatures:
-   - **`reuse Handle` on `Launch` vs. a separate `Adopt`.** Folding "create
+   - **`reuse *Handle` on `Launch` vs. a separate `Adopt`.** Folding "create
      fresh" and "reuse/cleanup the prior sandbox" into one `Launch(spec, reuse)`
      keeps the runner's `Start` to a single call, but overloads `Launch` with two
      intents. The alternative is an explicit `Adopt(handle) (State, error)` the
@@ -371,19 +398,22 @@ is not a directory key.
      the floor; add `ProbeAll([]Handle) ([]State, error)` if/when a list-based
      backend (microVM) makes N-probes-per-`List` a measurable cost. The runner's
      `List` can prefer `ProbeAll` when the backend implements it.
-   - **`Watch` keyed by `HandleExit` vs. the runner supplying the handle set.**
-     Proposed: the backend emits terminal handles it observes and the runner
-     resolves/filters via the store. Should the runner instead pass the tracked
-     handle set into `Watch` so a polling backend only lists what it must? Leaning
-     to the former (keeps the backend stateless) unless poll cost argues
-     otherwise.
+   - **Should the runner pass the tracked id-set into `Watch`?** The id-based
+     matching itself is **decided**: `Watch` emits `HandleExit{ID, ExitCode}` and
+     the runner resolves via `store.ByID` (decision 4). What's left is purely a
+     poll-efficiency question — should the runner hand a polling backend the set
+     of ids it currently tracks so it can narrow its `ListMicrovms` scope, or
+     should the backend keep emitting every terminal id it sees and let the runner
+     filter? Leaning to the latter (keeps the backend stateless) unless poll cost
+     argues otherwise.
 
 3. **Coordination with the in-flight microvm backend (#1054).** Since this lands
    first, #1054 will be updated to use `internal/runner/taskstate` with a
    `{microvm_id, ...}` handle and drop its standalone
    `backend/lambdamicrovm/taskstate` package. Its on-disk path
-   (`tasks/<id>.json`) is unchanged; only the record shape gains the
-   `backend`/`handle` envelope. Should that conversion happen *in* #1054 (rebased
+   (`tasks/<id>.json`) is unchanged; the record becomes
+   `{TaskID, Backend, ID: microvmID, Data: {image_arn, stage_bucket, stage_key}}`.
+   Should that conversion happen *in* #1054 (rebased
    on this), or as a follow-up immediately after both land? No production microvm
    store exists yet, so there is no data migration either way — purely a
    merge-ordering choice for the maintainer.
