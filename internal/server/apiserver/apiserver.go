@@ -13,7 +13,6 @@ import (
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server/atlassianserver"
-	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/version"
 )
@@ -48,7 +47,7 @@ type Options struct {
 	BaseURL   string
 	Publisher pubsub.Publisher
 	Atlassian *atlassianserver.Server
-	GitHub    *githubserver.Server
+	GitHub    GithubServer
 	AppKey    ed25519.PrivateKey
 }
 
@@ -57,20 +56,15 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	srv := &Server{
+	return &Server{
 		log:       log,
 		store:     opts.Store,
 		baseURL:   opts.BaseURL,
 		publisher: opts.Publisher,
 		atlassian: opts.Atlassian,
+		github:    opts.GitHub,
 		appKey:    opts.AppKey,
 	}
-	// Avoid storing a typed-nil *githubserver.Server in the interface field: the
-	// org settings handler relies on s.github == nil meaning "not configured".
-	if opts.GitHub != nil {
-		srv.github = opts.GitHub
-	}
-	return srv
 }
 
 func (s *Server) publish(n model.Notification) {
