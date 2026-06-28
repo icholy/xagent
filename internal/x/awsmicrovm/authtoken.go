@@ -3,71 +3,29 @@ package awsmicrovm
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 )
 
 // AllowedPort scopes which ports a CreateMicrovmAuthToken token may reach. The
-// wire shape is a union: an element is either {"allPorts": {}} (every port) or
-// a single port {"port": <n>}. Build elements with AllPorts or Port rather than
-// constructing the struct directly.
+// wire shape is a union: an element is either {"allPorts": {}} (every port,
+// when All is true) or a single port {"port": <n>}.
 //
 // PREVIEW: the single-port shape ({"port": <n>}) is modelled from the documented
 // all-ports example; only the all-ports element is shown in the public docs.
 type AllowedPort struct {
-	all  bool
-	port int
-}
-
-// AllPorts returns an AllowedPort that authorizes every port.
-func AllPorts() AllowedPort { return AllowedPort{all: true} }
-
-// Port returns an AllowedPort that authorizes a single port.
-func Port(n int) AllowedPort { return AllowedPort{port: n} }
-
-// IsAllPorts reports whether the element authorizes every port.
-func (p AllowedPort) IsAllPorts() bool { return p.all }
-
-// PortNumber returns the authorized port and true, or 0 and false for an
-// all-ports element.
-func (p AllowedPort) PortNumber() (int, bool) {
-	if p.all {
-		return 0, false
-	}
-	return p.port, true
+	All  bool
+	Port int
 }
 
 // MarshalJSON renders the union element: {"allPorts":{}} or {"port":<n>}.
 func (p AllowedPort) MarshalJSON() ([]byte, error) {
-	if p.all {
+	if p.All {
 		return []byte(`{"allPorts":{}}`), nil
 	}
 	return json.Marshal(struct {
 		Port int `json:"port"`
-	}{Port: p.port})
-}
-
-// UnmarshalJSON parses the union element back into an AllowedPort.
-func (p *AllowedPort) UnmarshalJSON(data []byte) error {
-	var w struct {
-		AllPorts *json.RawMessage `json:"allPorts"`
-		Port     *int             `json:"port"`
-	}
-	if err := json.Unmarshal(data, &w); err != nil {
-		return err
-	}
-	switch {
-	case w.AllPorts != nil:
-		p.all = true
-		p.port = 0
-	case w.Port != nil:
-		p.all = false
-		p.port = *w.Port
-	default:
-		return fmt.Errorf("awsmicrovm: unrecognized allowedPort element: %s", data)
-	}
-	return nil
+	}{Port: p.Port})
 }
 
 // CreateMicrovmAuthTokenInput is the input to CreateMicrovmAuthToken.

@@ -31,7 +31,7 @@ func TestCreateMicrovmAuthTokenSignsAndPosts(t *testing.T) {
 	out, err := newTestClient(srv).CreateMicrovmAuthToken(context.Background(), &CreateMicrovmAuthTokenInput{
 		MicrovmID:         "mvm-1",
 		ExpirationMinutes: 30,
-		AllowedPorts:      []AllowedPort{AllPorts()},
+		AllowedPorts:      []AllowedPort{{All: true}},
 	})
 	if err != nil {
 		t.Fatalf("CreateMicrovmAuthToken: %v", err)
@@ -76,35 +76,13 @@ func TestCreateMicrovmAuthTokenAPIError(t *testing.T) {
 	}
 }
 
-func TestAllowedPortRoundTrip(t *testing.T) {
-	in := []AllowedPort{AllPorts(), Port(8080)}
-	data, err := json.Marshal(in)
+func TestAllowedPortMarshal(t *testing.T) {
+	data, err := json.Marshal([]AllowedPort{{All: true}, {Port: 8080}})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 	if string(data) != `[{"allPorts":{}},{"port":8080}]` {
 		t.Fatalf("marshal = %s", data)
-	}
-
-	var out []AllowedPort
-	if err := json.Unmarshal(data, &out); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if len(out) != 2 || !out[0].IsAllPorts() {
-		t.Fatalf("out = %+v", out)
-	}
-	if n, ok := out[1].PortNumber(); !ok || n != 8080 {
-		t.Fatalf("port = %d ok=%v", n, ok)
-	}
-	if _, ok := out[0].PortNumber(); ok {
-		t.Fatal("all-ports element should report no port number")
-	}
-}
-
-func TestAllowedPortUnmarshalUnknown(t *testing.T) {
-	var p AllowedPort
-	if err := p.UnmarshalJSON([]byte(`{"somethingElse":{}}`)); err == nil {
-		t.Fatal("expected error for unrecognized element")
 	}
 }
 
