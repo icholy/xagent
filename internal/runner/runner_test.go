@@ -471,6 +471,66 @@ func TestRunnerPrune(t *testing.T) {
 	assert.Equal(t, ok, true)
 }
 
+func TestRunnerStart_ExitDuringLaunch(t *testing.T) {
+	t.Parallel()
+	// Arrange - a task whose container exits in the window between Launch
+	// returning and the runner writing its record. Monitor must still resolve
+	// the exit (not drop it) because both halves take launchMu.
+	task := &model.Task{ID: 8, Runner: "test-runner", Workspace: "test", Version: 1}
+	store := testStore(t)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	be := &backend.BackendMock{
+		ValidateWorkspaceFunc: func(_ *workspace.Workspace) error { return nil },
+		LaunchFunc: func(_ context.Context, _ *backend.Spec, _ *backend.Handle) (backend.Handle, error) {
+			// Park inside Launch (holding launchMu) until the test releases us.
+			close(entered)
+			<-release
+			return backend.Handle{ID: "c8"}, nil
+		},
+		WatchFunc: func(_ context.Context, fn func(backend.HandleExit)) error {
+			fn(backend.HandleExit{ID: "c8", ExitCode: 1})
+			return nil
+		},
+	}
+	mock := &xagentclient.ClientMock{
+		CreateTaskTokenFunc: func(_ context.Context, _ *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
+			return &xagentv1.CreateTaskTokenResponse{Token: "t"}, nil
+		},
+		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+			return &xagentv1.SubmitRunnerEventsResponse{}, nil
+		},
+	}
+	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue, Workspaces: testWorkspaces()})
+	assert.NilError(t, err)
+
+	// Act - Start parks inside Launch holding launchMu; the die event arrives
+	// while it is parked. Monitor's handler blocks on launchMu (or, if it runs
+	// after the unlock, finds the committed record), so ByID resolves either
+	// way and the exit is never dropped.
+	startErr := make(chan error, 1)
+	go func() { startErr <- r.Start(t.Context(), task) }()
+	<-entered
+
+	monErr := make(chan error, 1)
+	go func() { monErr <- r.Monitor(t.Context()) }()
+
+	close(release)
+	assert.NilError(t, <-startErr)
+	assert.NilError(t, <-monErr)
+
+	// Assert - the exit resolved to task 8 and produced a failed event.
+	rec, ok, err := store.Read(8)
+	assert.NilError(t, err)
+	assert.Equal(t, ok, true)
+	assert.Equal(t, rec.ID, "c8")
+	events := submitted(t, mock, queue)
+	assert.Equal(t, len(events), 1)
+	assert.Equal(t, events[0].Event, "failed")
+	assert.Equal(t, events[0].TaskId, int64(8))
+}
+
 // testWorkspaces returns a minimal workspace config with a "test" workspace.
 func testWorkspaces() *workspace.Config {
 	return &workspace.Config{

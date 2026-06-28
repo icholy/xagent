@@ -9,6 +9,7 @@ import (
 	"math"
 	"path"
 	"regexp"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/agent"
@@ -27,6 +28,16 @@ type Runner struct {
 	backend     backend.Backend
 	backendName string
 	store       *taskstate.Store
+	// launchMu serializes a Start's Launch+record-write against Monitor's
+	// id→task resolution. A container is created and started inside Launch but
+	// its record is written only after Launch returns; without this lock a
+	// sandbox that exits in that window delivers its die event to Monitor before
+	// the record exists, so store.ByID misses — dropping the terminal event and
+	// leaking the concurrency slot. Holding the same lock across Launch+Write
+	// and around the watch handler's ByID parks a mid-window exit until the
+	// record is committed. (A runner *crash* in that window is the orphan gap
+	// the Docker name-conflict adoption in ensure self-heals on the next Start.)
+	launchMu    sync.Mutex
 	client      xagentclient.Client
 	serverURL   string
 	workspaces  *workspace.Config
@@ -465,6 +476,12 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 		return err
 	}
 
+	// Launch and record the handle atomically with respect to Monitor: the
+	// container starts inside Launch, so its die event must not be able to reach
+	// Monitor's store.ByID before the record exists. See launchMu.
+	r.launchMu.Lock()
+	defer r.launchMu.Unlock()
+
 	h, err := r.backend.Launch(ctx, spec, reuse)
 	if err != nil {
 		return err
@@ -487,10 +504,14 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 // event is emitted.
 func (r *Runner) Monitor(ctx context.Context) error {
 	return r.backend.Watch(ctx, func(exit backend.HandleExit) {
-		// Resolve the handle id back to a task. Ids the store doesn't track
-		// aren't ours (or were already removed), so ignore them — no slot was
-		// held and no task event is owed.
+		// Resolve the handle id back to a task. Take launchMu so an exit that
+		// fires while a Start is mid-Launch parks here until that Start commits
+		// its record, closing the race where ByID would miss a just-started
+		// container. Ids the store doesn't track aren't ours (or were already
+		// removed), so ignore them — no slot was held and no task event is owed.
+		r.launchMu.Lock()
 		rec, ok, err := r.store.ByID(exit.ID)
+		r.launchMu.Unlock()
 		if err != nil {
 			r.log.Error("failed to resolve sandbox exit", "id", exit.ID, "error", err)
 			return
