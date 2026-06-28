@@ -162,7 +162,6 @@ var RunnerCommand = &cli.Command{
 		r, err := runner.New(runner.Options{
 			Client:      client,
 			Backend:     be,
-			BackendName: backendName,
 			Store:       store,
 			ServerURL:   serverAddr,
 			Workspaces:  workspaces,

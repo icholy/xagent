@@ -27,6 +27,10 @@ import (
 	"github.com/icholy/xagent/internal/x/dockerx"
 )
 
+// HandleType is the backend.Handle.Type the Docker backend stamps on the
+// handles it produces (informational metadata persisted in the task record).
+const HandleType = "docker"
+
 // Backend runs task sandboxes as containers on the local Docker daemon.
 type Backend struct {
 	docker   *client.Client
@@ -86,7 +90,7 @@ func (b *Backend) Launch(ctx context.Context, spec *backend.Spec, reuse *backend
 	if err := b.docker.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return backend.Handle{}, fmt.Errorf("failed to start container: %w", err)
 	}
-	return backend.Handle{ID: containerID}, nil
+	return backend.Handle{Type: HandleType, ID: containerID}, nil
 }
 
 // ensure resolves the container to start: the reuse handle's container if it

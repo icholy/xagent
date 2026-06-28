@@ -29,6 +29,9 @@ const BinaryPath = "/usr/local/bin/xagent"
 // backend-defined (whatever the backend needs for cleanup but not for
 // identity) and is never decoded by the store or the runner.
 type Handle struct {
+	// Type is the backend that produced this handle ("docker", ...).
+	// Informational only: persisted into the record, never read for logic.
+	Type string          `json:"type"`
 	ID   string          `json:"id"`
 	Data json.RawMessage `json:"data,omitempty"`
 }

@@ -124,7 +124,7 @@ func TestRunnerStart(t *testing.T) {
 	rec, ok, err := r.store.Read(task.ID)
 	assert.NilError(t, err)
 	assert.Equal(t, ok, true)
-	assert.Equal(t, rec.Backend, "docker")
+	assert.Equal(t, rec.Type, "docker")
 	assert.Assert(t, rec.ID != "")
 
 	// Wait for the container to exit
@@ -164,7 +164,7 @@ func TestRunnerStart_Idempotent(t *testing.T) {
 	t.Parallel()
 	// Arrange - a task with an already-running tracked sandbox.
 	task := &model.Task{ID: 5, Runner: "test-runner", Workspace: "test", Version: 1}
-	store := testStore(t, taskstate.Record{TaskID: 5, Backend: "docker", ID: "c5"})
+	store := testStore(t, taskstate.Record{TaskID: 5, Type: "docker", ID: "c5"})
 	be := &backend.BackendMock{
 		ProbeFunc: func(_ context.Context, h backend.Handle) (backend.State, error) {
 			assert.Equal(t, h.ID, "c5")
@@ -189,7 +189,7 @@ func TestRunnerStart_AdoptReuse(t *testing.T) {
 	// Arrange - a task whose tracked sandbox has exited; Start must pass the
 	// prior handle to Launch as reuse and persist the returned handle.
 	task := &model.Task{ID: 6, Runner: "test-runner", Workspace: "test", Version: 1}
-	store := testStore(t, taskstate.Record{TaskID: 6, Backend: "docker", ID: "old-id"})
+	store := testStore(t, taskstate.Record{TaskID: 6, Type: "docker", ID: "old-id"})
 	be := &backend.BackendMock{
 		ValidateWorkspaceFunc: func(_ *workspace.Workspace) error { return nil },
 		ProbeFunc: func(_ context.Context, h backend.Handle) (backend.State, error) {
@@ -225,8 +225,8 @@ func TestRunnerList(t *testing.T) {
 	t.Parallel()
 	// Arrange - two tracked records; List maps each to a Sandbox via Probe.
 	store := testStore(t,
-		taskstate.Record{TaskID: 1, Backend: "docker", ID: "c1"},
-		taskstate.Record{TaskID: 2, Backend: "docker", ID: "c2"},
+		taskstate.Record{TaskID: 1, Type: "docker", ID: "c1"},
+		taskstate.Record{TaskID: 2, Type: "docker", ID: "c2"},
 	)
 	state := map[string]backend.State{"c1": backend.StateRunning, "c2": backend.StateExited}
 	be := &backend.BackendMock{
@@ -314,7 +314,7 @@ func TestRunnerPoll_StopSignalled(t *testing.T) {
 			return true, nil
 		},
 	}
-	store := testStore(t, taskstate.Record{TaskID: 7, Backend: "docker", ID: "c7"})
+	store := testStore(t, taskstate.Record{TaskID: 7, Type: "docker", ID: "c7"})
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
@@ -346,8 +346,8 @@ func TestRunnerMonitor(t *testing.T) {
 		},
 	}
 	store := testStore(t,
-		taskstate.Record{TaskID: 1, Backend: "docker", ID: "c1"},
-		taskstate.Record{TaskID: 2, Backend: "docker", ID: "c2"},
+		taskstate.Record{TaskID: 1, Type: "docker", ID: "c1"},
+		taskstate.Record{TaskID: 2, Type: "docker", ID: "c2"},
 	)
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
@@ -393,9 +393,9 @@ func TestRunnerReconcile(t *testing.T) {
 		},
 	}
 	store := testStore(t,
-		taskstate.Record{TaskID: 1, Backend: "docker", ID: "c1"},
-		taskstate.Record{TaskID: 2, Backend: "docker", ID: "c2"},
-		taskstate.Record{TaskID: 3, Backend: "docker", ID: "c3"},
+		taskstate.Record{TaskID: 1, Type: "docker", ID: "c1"},
+		taskstate.Record{TaskID: 2, Type: "docker", ID: "c2"},
+		taskstate.Record{TaskID: 3, Type: "docker", ID: "c3"},
 	)
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
@@ -440,10 +440,10 @@ func TestRunnerPrune(t *testing.T) {
 		},
 	}
 	store := testStore(t,
-		taskstate.Record{TaskID: 1, Backend: "docker", ID: "c1"},
-		taskstate.Record{TaskID: 2, Backend: "docker", ID: "c2"},
-		taskstate.Record{TaskID: 3, Backend: "docker", ID: "c3"},
-		taskstate.Record{TaskID: 4, Backend: "docker", ID: "c4"},
+		taskstate.Record{TaskID: 1, Type: "docker", ID: "c1"},
+		taskstate.Record{TaskID: 2, Type: "docker", ID: "c2"},
+		taskstate.Record{TaskID: 3, Type: "docker", ID: "c3"},
+		taskstate.Record{TaskID: 4, Type: "docker", ID: "c4"},
 	)
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
 	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})

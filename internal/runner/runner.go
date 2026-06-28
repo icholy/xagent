@@ -25,9 +25,8 @@ import (
 )
 
 type Runner struct {
-	backend     backend.Backend
-	backendName string
-	store       *taskstate.Store
+	backend backend.Backend
+	store   *taskstate.Store
 	// launchMu serializes a Start's Launch+record-write against Monitor's
 	// id→task resolution. A container is created and started inside Launch but
 	// its record is written only after Launch returns; without this lock a
@@ -53,10 +52,6 @@ type Options struct {
 	Client xagentclient.Client
 	// Backend is the sandbox runtime that hosts task drivers.
 	Backend backend.Backend
-	// BackendName identifies the backend that produced a handle ("docker",
-	// "lambda-microvm", ...). It is persisted in each record as informational
-	// metadata; defaults to "docker".
-	BackendName string
 	// Store is the runner-local source of truth for the task→sandbox-handle
 	// mapping. The runner is the only writer; backends never touch it.
 	Store *taskstate.Store
@@ -103,7 +98,6 @@ func New(opts Options) (*Runner, error) {
 
 	return &Runner{
 		backend:     opts.Backend,
-		backendName: cmp.Or(opts.BackendName, "docker"),
 		store:       opts.Store,
 		client:      opts.Client,
 		serverURL:   opts.ServerURL,
@@ -311,7 +305,7 @@ func (r *Runner) handle(taskID int64) (backend.Handle, bool, error) {
 	if err != nil || !ok {
 		return backend.Handle{}, false, err
 	}
-	return backend.Handle{ID: rec.ID, Data: rec.Data}, true, nil
+	return backend.Handle{Type: rec.Type, ID: rec.ID, Data: rec.Data}, true, nil
 }
 
 // Running reports whether the task's sandbox is currently running, probing the
@@ -337,7 +331,7 @@ func (r *Runner) List(ctx context.Context) ([]backend.Sandbox, error) {
 	}
 	sandboxes := make([]backend.Sandbox, 0, len(records))
 	for _, rec := range records {
-		state, err := r.backend.Probe(ctx, backend.Handle{ID: rec.ID, Data: rec.Data})
+		state, err := r.backend.Probe(ctx, backend.Handle{Type: rec.Type, ID: rec.ID, Data: rec.Data})
 		if err != nil {
 			return nil, fmt.Errorf("failed to probe task %d: %w", rec.TaskID, err)
 		}
@@ -482,10 +476,10 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 		return err
 	}
 	if err := r.store.Write(taskstate.Record{
-		TaskID:  task.ID,
-		Backend: r.backendName,
-		ID:      h.ID,
-		Data:    h.Data,
+		TaskID: task.ID,
+		Type:   h.Type,
+		ID:     h.ID,
+		Data:   h.Data,
 	}); err != nil {
 		return fmt.Errorf("failed to record task handle: %w", err)
 	}
