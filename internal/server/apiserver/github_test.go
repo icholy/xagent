@@ -13,17 +13,6 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// githubMock returns a GithubServerMock whose VerifyInstallationAccess yields
-// verifyErr (nil to allow linking), standing in for *githubserver.Server so
-// LinkGitHubInstallation can be exercised without a real GitHub App.
-func githubMock(verifyErr error) *GithubServerMock {
-	return &GithubServerMock{
-		VerifyInstallationAccessFunc: func(ctx context.Context, installationID int64, user *model.User) error {
-			return verifyErr
-		},
-	}
-}
-
 // newGitHubUserID returns a positive random GitHub user id. Random rather
 // than monotonic so values don't collide with rows left over from previous
 // test runs (teststore.CreateOrg destroys the org but not its owner user).
@@ -38,9 +27,10 @@ func newInstallationID() int64 {
 
 func TestLinkGitHubInstallation(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	gh := githubMock(nil)
-	srv.github = gh
+	gh := &GithubServerMock{
+		VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+	}
+	srv := New(Options{Store: teststore.New(t), GitHub: gh})
 	installationID := newInstallationID()
 	org := teststore.CreateOrg(t, srv.store, nil)
 	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
@@ -63,8 +53,12 @@ func TestLinkGitHubInstallation(t *testing.T) {
 // membership check, not a unique index, is what gates linking now.
 func TestLinkGitHubInstallation_Shared(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	srv.github = githubMock(nil)
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
 	installationID := newInstallationID()
 
 	org1 := teststore.CreateOrg(t, srv.store, nil)
@@ -90,8 +84,12 @@ func TestLinkGitHubInstallation_Shared(t *testing.T) {
 
 func TestLinkGitHubInstallation_MissingID(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	srv.github = githubMock(nil)
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
 	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)
 
@@ -101,8 +99,12 @@ func TestLinkGitHubInstallation_MissingID(t *testing.T) {
 
 func TestLinkGitHubInstallation_Unauthenticated(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	srv.github = githubMock(nil)
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
 
 	_, err := srv.LinkGitHubInstallation(context.Background(), &xagentv1.LinkGitHubInstallationRequest{
 		InstallationId: newInstallationID(),
@@ -125,8 +127,12 @@ func TestLinkGitHubInstallation_NotConfigured(t *testing.T) {
 
 func TestLinkGitHubInstallation_NoLinkedGitHubAccount(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	srv.github = githubMock(nil)
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
 	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)
 
@@ -139,8 +145,14 @@ func TestLinkGitHubInstallation_NoLinkedGitHubAccount(t *testing.T) {
 // A failed membership check propagates as-is (the mock returns PermissionDenied).
 func TestLinkGitHubInstallation_AccessDenied(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	srv.github = githubMock(connect.NewError(connect.CodePermissionDenied, errors.New("not a member")))
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error {
+				return connect.NewError(connect.CodePermissionDenied, errors.New("not a member"))
+			},
+		},
+	})
 	org := teststore.CreateOrg(t, srv.store, nil)
 	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
 	ctx := createCtx(t, org)
@@ -171,8 +183,12 @@ func TestCreateGitHubToken_Unimplemented(t *testing.T) {
 // Sanity check: the store's clear method removes a previously set installation.
 func TestStoreClearGitHubInstallation(t *testing.T) {
 	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	srv.github = githubMock(nil)
+	srv := New(Options{
+		Store: teststore.New(t),
+		GitHub: &GithubServerMock{
+			VerifyInstallationAccessFunc: func(context.Context, int64, *model.User) error { return nil },
+		},
+	})
 	installationID := newInstallationID()
 	org := teststore.CreateOrg(t, srv.store, nil)
 	assert.NilError(t, srv.store.LinkGitHubAccount(t.Context(), nil, org.UserID, newGitHubUserID(), "owner"))
