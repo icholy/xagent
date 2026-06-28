@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/icholy/xagent/internal/microvmshim"
-	"github.com/icholy/xagent/internal/runner/backend/lambdamicrovm/awsmvm"
 	"github.com/icholy/xagent/internal/x/awsmicrovm"
 	"github.com/urfave/cli/v3"
 )
@@ -23,19 +23,15 @@ var MicrovmShimCommand = &cli.Command{
 			Usage: "Address to serve the lifecycle hooks on",
 			Value: fmt.Sprintf(":%d", awsmicrovm.DefaultPort),
 		},
-		&cli.StringFlag{
-			Name:    "region",
-			Usage:   "AWS region for self-termination (defaults to AWS_REGION)",
-			Sources: cli.EnvVars("AWS_REGION", "AWS_DEFAULT_REGION"),
-		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		srv := &microvmshim.Server{Log: slog.Default()}
 		// Self-termination on driver exit (and the /terminate fallback) needs the
-		// AWS client, which uses the MicroVM's execution-role credentials. If the
-		// AWS config can't be loaded the shim still serves hooks but cannot
-		// terminate the VM, leaving --maximum-duration-in-seconds as the backstop.
-		if cfg, err := awsmvm.LoadConfig(ctx, cmd.String("region")); err != nil {
+		// AWS client, which uses the MicroVM's execution-role credentials and
+		// region (AWS_REGION) from the standard SDK chain. If the config can't be
+		// loaded the shim still serves hooks but cannot terminate the VM, leaving
+		// --maximum-duration-in-seconds as the backstop.
+		if cfg, err := config.LoadDefaultConfig(ctx); err != nil {
 			slog.Warn("no AWS config; microvm cannot self-terminate", "error", err)
 		} else {
 			client := awsmicrovm.NewClient(cfg)

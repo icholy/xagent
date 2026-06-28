@@ -323,15 +323,15 @@ its own.
 ### CLI
 
 ```
-xagent runner --backend lambda-microvm \
-  [--lambda-microvm-region us-east-1] \
+AWS_REGION=us-east-1 xagent runner --backend lambda-microvm \
   [--lambda-microvm-poll 10s]
 ```
 
 The runner-local store directory is the shared `--state-dir` flag (default
-`/var/lib/xagent/tasks`); the backend has no state dir of its own. All
-lambda-microvm flags have `XAGENT_LAMBDA_MICROVM_*` env sources; AWS
-credentials/region also resolve through the standard SDK chain.
+`/var/lib/xagent/tasks`); the backend has no state dir of its own. AWS
+credentials and region resolve through the standard SDK chain
+(`config.LoadDefaultConfig` — env including `AWS_REGION`, shared config,
+instance/IRSA role), so there is no region flag.
 `internal/command/runner.go`'s backend switch gains a `lambda-microvm` case
 constructing `lambdamicrovm.New(...)` with `Cloud: awsmicrovm.NewClient(cfg)`
 and `Stager: awsmvm.NewS3Stager(cfg)`.
@@ -479,10 +479,10 @@ as backpressure rather than a hard `Start` failure.
    ids. Re-adoption after a restart uses the shared store's records (the
    `microvmId` is the `Handle.ID`), not a per-image scan. If `list-microvms` is
    expensive at scale, is a narrower server-side filter needed?
-5. **Region / multi-region.** One backend instance targets one region
-   (`--lambda-microvm-region`). Is single-region per runner acceptable, or should a
-   workspace pin its own region (the `region` field allows it, but the staging
-   bucket and quotas are then per-region too)?
+5. **Region / multi-region.** One backend instance targets one region (resolved
+   by the SDK from `AWS_REGION`/shared config). Is single-region per runner
+   acceptable, or should a workspace pin its own region (the `region` field
+   allows it, but the staging bucket and quotas are then per-region too)?
 6. **Cost and quotas.** Per-microVM compute + `run-microvm`/snapshot storage are
    billed and quota-limited per account/region. Should the backend surface
    `ServiceQuotaExceededException`/`ThrottlingException` as a distinct retryable

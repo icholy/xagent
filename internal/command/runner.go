@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/runner"
@@ -84,11 +85,6 @@ var RunnerCommand = &cli.Command{
 			Value:   "/var/lib/xagent/tasks",
 			Sources: cli.EnvVars("XAGENT_STATE_DIR"),
 		},
-		&cli.StringFlag{
-			Name:    "lambda-microvm-region",
-			Usage:   "AWS region for the lambda-microvm backend (defaults to AWS_REGION)",
-			Sources: cli.EnvVars("XAGENT_LAMBDA_MICROVM_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"),
-		},
 		&cli.DurationFlag{
 			Name:    "lambda-microvm-poll",
 			Usage:   "Interval at which the lambda-microvm backend polls for MicroVM exits",
@@ -163,7 +159,7 @@ var RunnerCommand = &cli.Command{
 				return err
 			}
 		case "lambda-microvm":
-			awsCfg, err := awsmvm.LoadConfig(ctx, cmd.String("lambda-microvm-region"))
+			awsCfg, err := config.LoadDefaultConfig(ctx)
 			if err != nil {
 				return fmt.Errorf("lambda-microvm backend: %w", err)
 			}

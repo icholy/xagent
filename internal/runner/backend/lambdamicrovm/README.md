@@ -5,11 +5,11 @@ container. See `proposals/implemented/lambda-microvm-backend.md` for the full
 design.
 
 ```
-xagent runner --backend lambda-microvm --lambda-microvm-region us-east-1
+AWS_REGION=us-east-1 xagent runner --backend lambda-microvm
 ```
 
-The runner resolves AWS credentials from the standard environment (an
-instance/IRSA role in production).
+The runner resolves AWS credentials and region from the standard SDK chain
+(`config.LoadDefaultConfig`: env, shared config, instance/IRSA role).
 
 ## How it fits together
 
