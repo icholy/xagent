@@ -113,16 +113,14 @@ func TestNewProxyRequestStreamsSSE(t *testing.T) {
 		if r.Header.Get(ProxyAuthHeader) != "tok-123" {
 			t.Errorf("missing proxy auth header: %q", r.Header.Get(ProxyAuthHeader))
 		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		fl, _ := w.(http.Flusher)
-		sw := sse.NewWriter(w)
+		sw, err := sse.NewServerWriter(w)
+		if err != nil {
+			t.Errorf("NewServerWriter: %v", err)
+			return
+		}
 		for _, data := range []string{"one", "two"} {
 			if err := sw.Write(sse.Event{Data: []byte(data)}); err != nil {
 				t.Errorf("write event: %v", err)
-			}
-			if fl != nil {
-				fl.Flush()
 			}
 		}
 	}))
