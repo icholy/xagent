@@ -10,6 +10,7 @@ import {
   deleteOrg,
   getOrgSettings,
   generateAtlassianWebhookSecret,
+  linkGitHubInstallation,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Org } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
@@ -25,6 +26,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { RelativeTime } from '@/components/relative-time'
 import { GithubIcon } from '@/components/github-icon'
 import { AtlassianIcon } from '@/components/atlassian-icon'
@@ -34,6 +43,7 @@ import {
   Copy,
   ExternalLink,
   KeyRound,
+  Link2,
   Loader2,
   Mail,
   Plus,
@@ -218,12 +228,7 @@ function OrgSettings() {
                 </a>
               </div>
             ) : (
-              <a href={data.githubAppUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline">
-                  <ExternalLink className="h-4 w-4" />
-                  Install GitHub App
-                </Button>
-              </a>
+              <GitHubAppNotInstalled appUrl={data.githubAppUrl} onLinked={refetch} />
             )}
           </CardContent>
         </Card>
@@ -308,6 +313,91 @@ function OrgSettings() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function GitHubAppNotInstalled({ appUrl, onLinked }: { appUrl: string; onLinked: () => void }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="flex items-center gap-2">
+      <a href={appUrl} target="_blank" rel="noopener noreferrer">
+        <Button variant="outline">
+          <ExternalLink className="h-4 w-4" />
+          Install GitHub App
+        </Button>
+      </a>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline">
+            <Link2 className="h-4 w-4" />
+            Link existing installation
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link existing installation</DialogTitle>
+            <DialogDescription>
+              Link a GitHub App installation that's already installed on your organisation.
+            </DialogDescription>
+          </DialogHeader>
+          <LinkInstallationForm
+            onLinked={() => {
+              setOpen(false)
+              onLinked()
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function LinkInstallationForm({ onLinked }: { onLinked: () => void }) {
+  const [value, setValue] = useState('')
+  const mutation = useMutation(linkGitHubInstallation, {
+    onSuccess: () => {
+      setValue('')
+      onLinked()
+    },
+  })
+
+  const valid = /^\d+$/.test(value.trim())
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!valid) return
+    await mutation.mutateAsync({ installationId: BigInt(value.trim()) })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <div className="flex gap-2">
+        <Input
+          type="text"
+          inputMode="numeric"
+          placeholder="Installation ID"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="max-w-xs"
+        />
+        <Button type="submit" disabled={mutation.isPending || !valid}>
+          {mutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Link2 className="h-4 w-4" />
+          )}
+          Link
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Find the ID in the URL of your installation settings on GitHub:{' '}
+        <code className="bg-muted px-1 py-0.5 rounded">
+          github.com/settings/installations/&lt;id&gt;
+        </code>
+      </p>
+      {mutation.error && <p className="text-destructive text-sm">{mutation.error.message}</p>}
+    </form>
   )
 }
 
