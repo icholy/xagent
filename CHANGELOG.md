@@ -1,5 +1,50 @@
 # Changelog
 
+## [2.4.0](https://github.com/icholy/xagent/compare/v2.3.2...v2.4.0) (2026-06-28)
+
+
+### Features
+
+* share a GitHub App installation across xagent orgs ([#1043](https://github.com/icholy/xagent/issues/1043)) ([304a2ee](https://github.com/icholy/xagent/commit/304a2ee5f7bb68581c9e3fe34ee7fc71f17ff12e))
+* **webui:** link existing GitHub installation by ID ([#1073](https://github.com/icholy/xagent/issues/1073)) ([3307010](https://github.com/icholy/xagent/commit/3307010d668d1287df1b5e6c0c6b5889a147eaf5))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/bradleyfalzon/ghinstallation/v2 to v2.19.0 ([#1069](https://github.com/icholy/xagent/issues/1069)) ([851e93b](https://github.com/icholy/xagent/commit/851e93b2a748b6b798aee10901d3a0b7bee02823))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.10.0 ([#1070](https://github.com/icholy/xagent/issues/1070)) ([3a28657](https://github.com/icholy/xagent/commit/3a28657f25d7dd7b1c7ab160bb9086f26cd0d137))
+* **deps:** update module github.com/urfave/cli/v3 to v3.10.0 ([#1071](https://github.com/icholy/xagent/issues/1071)) ([b33bcba](https://github.com/icholy/xagent/commit/b33bcbae833e05f6ec7052f35c7155a9cd728319))
+* **deps:** update module github.com/zitadel/zitadel-go/v3 to v3.29.1 ([#1061](https://github.com/icholy/xagent/issues/1061)) ([bd3b1f9](https://github.com/icholy/xagent/commit/bd3b1f9238443ee25c726873e2a745948aa036c2))
+
+
+### Miscellaneous
+
+* **deps:** update actions/checkout action to v7 ([#1072](https://github.com/icholy/xagent/issues/1072)) ([1c9211f](https://github.com/icholy/xagent/commit/1c9211fc5c7a6562f7093eb7f07614fd88f22a28))
+* **deps:** update alpine docker tag to v3.24 ([#1062](https://github.com/icholy/xagent/issues/1062)) ([4e8571c](https://github.com/icholy/xagent/commit/4e8571ce7637e9bbaeb2b55a3d5fa75bd636c120))
+* **deps:** update dependency @bufbuild/buf to v1.71.0 ([#1063](https://github.com/icholy/xagent/issues/1063)) ([2e12c5a](https://github.com/icholy/xagent/commit/2e12c5a2faddac7ffbc0df7104b7974d6213ef3c))
+* **deps:** update dependency @connectrpc/connect to v2.1.2 ([#1038](https://github.com/icholy/xagent/issues/1038)) ([52109e1](https://github.com/icholy/xagent/commit/52109e16a481d00a26203e46b690d22b858aa69e))
+* **deps:** update dependency @connectrpc/connect-web to v2.1.2 ([#1039](https://github.com/icholy/xagent/issues/1039)) ([e7ae8a4](https://github.com/icholy/xagent/commit/e7ae8a4b3157d2aba7d8b6d884929c1525b9bece))
+* **deps:** update dependency @types/node to v24.13.2 ([#1064](https://github.com/icholy/xagent/issues/1064)) ([de48071](https://github.com/icholy/xagent/commit/de4807193a680353c06f6d66778a6237b54b2b86))
+* **deps:** update dependency eslint to v10.5.0 ([#1065](https://github.com/icholy/xagent/issues/1065)) ([a4cd2c6](https://github.com/icholy/xagent/commit/a4cd2c6028631169b950c9caf2ff4c4f02e7167e))
+* **deps:** update dependency eslint-plugin-react-refresh to v0.5.3 ([#1041](https://github.com/icholy/xagent/issues/1041)) ([7911646](https://github.com/icholy/xagent/commit/791164626457c978bf78f708b13087d49c48bec6))
+* **deps:** update dependency lucide-react to v1.21.0 ([#1066](https://github.com/icholy/xagent/issues/1066)) ([91f3430](https://github.com/icholy/xagent/commit/91f3430e19f53da3a6c10ad3cbb9bbcd1c9b94dd))
+* **deps:** update dependency npm:pnpm to v11.6.0 ([#1035](https://github.com/icholy/xagent/issues/1035)) ([d9bc1e6](https://github.com/icholy/xagent/commit/d9bc1e699f44de74a9f766db88ff883271bd0789))
+* **deps:** update dependency npm:pnpm to v11.7.0 ([#1045](https://github.com/icholy/xagent/issues/1045)) ([c5465d1](https://github.com/icholy/xagent/commit/c5465d1fd8eea6cac2f641caeb3a800b73ace5a8))
+* **deps:** update dependency npm:pnpm to v11.8.0 ([#1058](https://github.com/icholy/xagent/issues/1058)) ([8d949c6](https://github.com/icholy/xagent/commit/8d949c6f3a3e5a16fc4469578c206e1dd03656af))
+* **deps:** update dependency prettier to v3.8.4 ([#1042](https://github.com/icholy/xagent/issues/1042)) ([ab28b1b](https://github.com/icholy/xagent/commit/ab28b1bc44f24c886451c647e6825f5db3d9791a))
+* **deps:** update dependency vitest to v4.1.9 ([#1059](https://github.com/icholy/xagent/issues/1059)) ([dae6e68](https://github.com/icholy/xagent/commit/dae6e68b961281aef13531c4b99580ef38fbf5d0))
+* **deps:** update happy-dom monorepo ([#1047](https://github.com/icholy/xagent/issues/1047)) ([1101749](https://github.com/icholy/xagent/commit/11017490d05cd723ba9f996b2046ae63b7b253b0))
+* **deps:** update happy-dom monorepo ([#1050](https://github.com/icholy/xagent/issues/1050)) ([89abd7f](https://github.com/icholy/xagent/commit/89abd7f8c0771aef6930217b53347745e32b19a4))
+* **deps:** update happy-dom monorepo ([#1055](https://github.com/icholy/xagent/issues/1055)) ([6160db1](https://github.com/icholy/xagent/commit/6160db1bdbe8b50cdc42cf72ad8461e4c96b875a))
+* **deps:** update happy-dom monorepo to v20.10.3 ([#1044](https://github.com/icholy/xagent/issues/1044)) ([8e4274d](https://github.com/icholy/xagent/commit/8e4274d0f12db42a32b04bc577f7456c252c2416))
+* **deps:** update module github.com/bufbuild/buf to v1.71.0 ([#1067](https://github.com/icholy/xagent/issues/1067)) ([c0b158b](https://github.com/icholy/xagent/commit/c0b158b8b246c8ea251ef4fb7a19a79822c4890d))
+* **deps:** update module golang.org/x/tools to v0.46.0 ([#1068](https://github.com/icholy/xagent/issues/1068)) ([88bdca4](https://github.com/icholy/xagent/commit/88bdca4f83c68e8901672f5045435822f80f4c6b))
+* **deps:** update radix-ui-primitives monorepo ([#1056](https://github.com/icholy/xagent/issues/1056)) ([645b474](https://github.com/icholy/xagent/commit/645b47498ab17cdc8b5cc4bd39718f42bedbf08e))
+* **deps:** update react monorepo ([#1057](https://github.com/icholy/xagent/issues/1057)) ([363a741](https://github.com/icholy/xagent/commit/363a741263c9247d3bd6c5bb475436d1708c8a8d))
+* **deps:** update tailwindcss monorepo to v4.3.1 ([#1060](https://github.com/icholy/xagent/issues/1060)) ([b26553c](https://github.com/icholy/xagent/commit/b26553ca9b9bf7dba26149f88b085ef6f401937a))
+* **deps:** update typescript-eslint monorepo ([#1046](https://github.com/icholy/xagent/issues/1046)) ([344539a](https://github.com/icholy/xagent/commit/344539a0b80eaa9a2449aef9b68bbaac8f249ccb))
+* **deps:** update webui to TypeScript 7.0 RC ([#1037](https://github.com/icholy/xagent/issues/1037)) ([b5e7606](https://github.com/icholy/xagent/commit/b5e7606f31e7e9a8bde38d912fd5f2bb4db6404d))
+
 ## [2.3.2](https://github.com/icholy/xagent/compare/v2.3.1...v2.3.2) (2026-06-19)
 
 
