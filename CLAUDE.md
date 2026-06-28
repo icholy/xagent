@@ -69,6 +69,7 @@ xagent server     # Start C2 server
 xagent runner     # Start container orchestrator
 xagent driver     # Run agent (inside container, started by runner)
 xagent mcp        # Local user-facing stdio MCP server that proxies to the C2
+xagent notify     # Subscribe to server notifications and emit system notifications
 xagent tool agent-mcp # In-container MCP server providing xagent tools to the agent
 xagent task       # Task CRUD (list, create, update, delete)
 xagent containers # List xagent containers

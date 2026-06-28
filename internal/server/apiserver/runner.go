@@ -74,13 +74,18 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			// non-terminal runner transitions (running, restarting, pending
 			// re-queue) don't carry enough context to say anything useful
 			// without re-deriving why, so we stay silent and let the
-			// eventual terminal event speak.
+			// eventual terminal event speak. The terminal status is also
+			// stamped on the notification so subscribers like `xagent notify`
+			// can filter to task outcomes that need attention.
 			switch task.Status {
 			case model.TaskStatusCompleted:
+				notification.TaskStatus = task.Status
 				notification.ChannelMessage = fmt.Sprintf("Task %d completed.", task.ID)
 			case model.TaskStatusFailed:
+				notification.TaskStatus = task.Status
 				notification.ChannelMessage = fmt.Sprintf("Task %d failed.", task.ID)
 			case model.TaskStatusCancelled:
+				notification.TaskStatus = task.Status
 				notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
 			}
 			return tx.Commit()

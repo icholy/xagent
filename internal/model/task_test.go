@@ -406,6 +406,27 @@ func TestTask_IsDone(t *testing.T) {
 	}
 }
 
+func TestTaskStatus_IsTerminal(t *testing.T) {
+	tests := []struct {
+		status TaskStatus
+		want   bool
+	}{
+		{TaskStatusUnspecified, false},
+		{TaskStatusPending, false},
+		{TaskStatusRunning, false},
+		{TaskStatusRestarting, false},
+		{TaskStatusCancelling, false},
+		{TaskStatusCompleted, true},
+		{TaskStatusFailed, true},
+		{TaskStatusCancelled, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.status.String(), func(t *testing.T) {
+			assert.Equal(t, tt.status.IsTerminal(), tt.want)
+		})
+	}
+}
+
 func TestTask_Archive(t *testing.T) {
 	tests := []struct {
 		name   string

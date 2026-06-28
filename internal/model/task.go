@@ -35,6 +35,14 @@ func (s TaskStatus) Label() string {
 	return s.String()
 }
 
+// IsTerminal reports whether the status is a finished run state:
+// completed, failed, or cancelled.
+func (s TaskStatus) IsTerminal() bool {
+	return s == TaskStatusCompleted ||
+		s == TaskStatusFailed ||
+		s == TaskStatusCancelled
+}
+
 //go:generate stringer -type=TaskCommand -trimprefix=TaskCommand
 
 // TaskCommand represents a command to be executed by the runner.
@@ -295,9 +303,7 @@ func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) 
 // this isn't an absorbing state — just a snapshot that the current run
 // reached an end.
 func (t *Task) IsDone() bool {
-	return t.Status == TaskStatusCompleted ||
-		t.Status == TaskStatusFailed ||
-		t.Status == TaskStatusCancelled
+	return t.Status.IsTerminal()
 }
 
 // CanArchive returns true if the task can be archived.
