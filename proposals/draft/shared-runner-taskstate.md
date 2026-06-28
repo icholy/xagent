@@ -136,9 +136,11 @@ Five decisions frame the design.
    ```
 
    The store stays backend-agnostic: it persists, lists, and removes records
-   without ever decoding `Handle`. The `Backend` field lets a single store
-   directory safely hold records from a runner that advertises more than one
-   backend, and lets `List` skip records that don't belong to the active backend.
+   without ever decoding `Handle`. The `Backend` field is informational — it
+   records which backend produced the handle (a guard against decoding a record
+   with the wrong backend, and useful for tooling). It is **not** a namespacing
+   key: task ids are globally unique, so a flat `tasks/<id>.json` directory needs
+   no per-backend partitioning.
 
 5. **The runner owns taskstate mutations; the `Backend` interface is rewritten.**
    The `Backend` interface today mixes runtime ops with discovery and persistence
@@ -203,7 +205,7 @@ Five decisions frame the design.
        h := backend.Launch(spec, reuse)
        store.Write(Record{taskID, backendName, h})                  // ← runner owns the mutation
 
-   List():     for rec in store.List(backendName):
+   List():     for rec in store.List():
                    emit Sandbox{rec.TaskID, backend.Probe(rec.Handle)}
    Running(t): backend.Probe(store.Read(t).Handle) == StateRunning
    Remove(t):  backend.Destroy(store.Read(t).Handle); store.Remove(t)
@@ -273,9 +275,11 @@ its branch currently carries.
 This is the only backend that changes on disk today, and the transition is
 deliberately conservative:
 
-- **New state dir.** The runner gains a per-runner state directory for the Docker
-  backend (e.g. `/var/lib/xagent/docker/<runner-id>/tasks/<id>.json`). On first
-  run after upgrade the store is empty.
+- **New state dir.** The runner gains a single flat state directory
+  (e.g. `<state-dir>/tasks/<id>.json`, default `/var/lib/xagent/tasks`). It is
+  **not** namespaced by backend — task ids are globally unique, so one `tasks/`
+  directory suffices regardless of which backend a runner runs. On first run after
+  upgrade the store is empty.
 - **The runner writes the record.** After `backend.Launch` returns a handle, the
   runner writes the `{container_id}` record; on `Remove` the runner calls
   `backend.Destroy` and deletes the record. The backend itself persists nothing.
@@ -332,12 +336,12 @@ comes from container *reuse*, not from label-based discovery, so it is orthogona
 and stays exactly as is. This change removes label *parsing*, not container
 reuse.
 
-**One shared store directory vs. per-backend dirs.** A runner that advertises
-multiple backends could collide task ids across backends in one `tasks/` dir. The
-`Record.Backend` field disambiguates and `List` filters to the active backend, so
-a single directory is safe and keeps the path scheme uniform. The alternative (a
-per-backend subdirectory) is also viable but buys little once records are
-self-describing.
+**A single flat state directory.** The store is one flat `tasks/<id>.json`
+directory, not partitioned by backend. Task ids are globally unique, so there is
+no id collision to disambiguate and no reason to namespace the path by backend
+(or to carry a `<backend>/` path segment). The `Record.Backend` field stays in
+the record as informational metadata — which backend produced the handle — but it
+is not a directory key.
 
 ## Open Questions
 
