@@ -1,15 +1,15 @@
 package awsmicrovm
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/icholy/xagent/internal/x/sse"
 )
 
 func TestCreateMicrovmAuthTokenSignsAndPosts(t *testing.T) {
@@ -116,8 +116,11 @@ func TestNewProxyRequestStreamsSSE(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		fl, _ := w.(http.Flusher)
-		for _, line := range []string{"data: one\n\n", "data: two\n\n"} {
-			_, _ = io.WriteString(w, line)
+		sw := sse.NewWriter(w)
+		for _, data := range []string{"one", "two"} {
+			if err := sw.Write(sse.Event{Data: []byte(data)}); err != nil {
+				t.Errorf("write event: %v", err)
+			}
 			if fl != nil {
 				fl.Flush()
 			}
@@ -131,8 +134,8 @@ func TestNewProxyRequestStreamsSSE(t *testing.T) {
 	}
 	req.Header.Set("Accept", "text/event-stream")
 
-	// The caller sends the request with its own client and reads the streamed
-	// body — the helper does not parse it.
+	// The caller sends the request with its own client and parses the streamed
+	// body itself (here with x/sse) — the helper does not parse it.
 	resp, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatalf("Do: %v", err)
@@ -143,14 +146,16 @@ func TestNewProxyRequestStreamsSSE(t *testing.T) {
 	}
 
 	var events []string
-	sc := bufio.NewScanner(resp.Body)
-	for sc.Scan() {
-		if line := sc.Text(); strings.HasPrefix(line, "data: ") {
-			events = append(events, strings.TrimPrefix(line, "data: "))
+	rd := sse.NewReader(resp.Body)
+	for {
+		ev, err := rd.Read()
+		if err != nil {
+			t.Fatalf("read event: %v", err)
 		}
-	}
-	if err := sc.Err(); err != nil {
-		t.Fatalf("scan: %v", err)
+		if len(ev.Data) == 0 {
+			break
+		}
+		events = append(events, string(ev.Data))
 	}
 	if len(events) != 2 || events[0] != "one" || events[1] != "two" {
 		t.Fatalf("events = %v", events)
