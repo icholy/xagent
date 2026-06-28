@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +22,9 @@ type fakeCloud struct {
 	vms     map[string]*awsmicrovm.Microvm
 	lastRun *awsmicrovm.RunMicrovmInput
 	runErr  error
+	// pageSize > 0 makes ListMicrovms paginate (NextToken is the start index),
+	// exercising the backend's listAll paginator.
+	pageSize int
 }
 
 func newFakeCloud() *fakeCloud { return &fakeCloud{vms: map[string]*awsmicrovm.Microvm{}} }
@@ -46,12 +51,34 @@ func (f *fakeCloud) TerminateMicrovm(_ context.Context, in *awsmicrovm.Terminate
 	return &awsmicrovm.TerminateMicrovmOutput{}, nil
 }
 
-func (f *fakeCloud) ListMicrovms(_ context.Context, _ *awsmicrovm.ListMicrovmsInput) (*awsmicrovm.ListMicrovmsOutput, error) {
+func (f *fakeCloud) ListMicrovms(_ context.Context, in *awsmicrovm.ListMicrovmsInput) (*awsmicrovm.ListMicrovmsOutput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Stable order so NextToken (a start index) paginates deterministically.
+	ids := make([]string, 0, len(f.vms))
+	for id := range f.vms {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	start := 0
+	if in != nil && in.NextToken != "" {
+		start, _ = strconv.Atoi(in.NextToken)
+	}
+	size := f.pageSize
+	if size <= 0 {
+		size = len(ids)
+	}
+	end := start + size
+	if end > len(ids) {
+		end = len(ids)
+	}
 	out := &awsmicrovm.ListMicrovmsOutput{}
-	for _, vm := range f.vms {
-		out.Microvms = append(out.Microvms, *vm)
+	for _, id := range ids[start:end] {
+		out.Microvms = append(out.Microvms, *f.vms[id])
+	}
+	if end < len(ids) {
+		out.NextToken = strconv.Itoa(end)
 	}
 	return out, nil
 }
@@ -326,6 +353,42 @@ func TestWatchReportsExitOnce(t *testing.T) {
 	case e := <-exits:
 		t.Fatalf("unexpected duplicate exit for %s", e.ID)
 	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestPaginationFindAndWatch(t *testing.T) {
+	be, cloud, _ := newTestBackend(t)
+	cloud.pageSize = 1 // force ListMicrovms to paginate one VM per page
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	be.poll = time.Millisecond
+
+	_, err := be.Launch(ctx, testSpec(1), nil) // mvm-1, first page
+	if err != nil {
+		t.Fatalf("Launch 1: %v", err)
+	}
+	h2, err := be.Launch(ctx, testSpec(2), nil) // mvm-2, a later page
+	if err != nil {
+		t.Fatalf("Launch 2: %v", err)
+	}
+
+	// find must page past the first result to resolve a VM on a later page —
+	// otherwise Probe would wrongly report it exited.
+	if state, err := be.Probe(ctx, h2); err != nil || state != backend.StateRunning {
+		t.Fatalf("Probe(h2) across pages = %v, %v; want running", state, err)
+	}
+
+	// Watch must page through too: a terminal VM on a later page still emits.
+	exits := make(chan backend.HandleExit, 4)
+	go func() { _ = be.Watch(ctx, func(e backend.HandleExit) { exits <- e }) }()
+	cloud.setState(h2.ID, awsmicrovm.MicrovmStateTerminated)
+	select {
+	case e := <-exits:
+		if e.ID != h2.ID || e.ExitCode != 0 {
+			t.Fatalf("paged exit = %+v; want %s code 0", e, h2.ID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Watch dropped the exit of a VM on a later page")
 	}
 }
 

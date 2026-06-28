@@ -258,12 +258,12 @@ func (b *Backend) Watch(ctx context.Context, handle func(backend.HandleExit)) er
 	ticker := time.NewTicker(b.poll)
 	defer ticker.Stop()
 	for {
-		out, err := b.cloud.ListMicrovms(ctx, &awsmicrovm.ListMicrovmsInput{})
+		mvms, err := b.listAll(ctx)
 		if err != nil {
 			b.log.Error("watch: list microvms", "error", err)
 		} else {
-			curr := make(map[string]awsmicrovm.Microvm, len(out.Microvms))
-			for _, m := range out.Microvms {
+			curr := make(map[string]awsmicrovm.Microvm, len(mvms))
+			for _, m := range mvms {
 				if m.Tags[tagRunner] != b.runnerID {
 					continue // another runner's MicroVM
 				}
@@ -309,21 +309,41 @@ func (b *Backend) Watch(ctx context.Context, handle func(backend.HandleExit)) er
 	}
 }
 
-// find looks up a MicroVM by id via a single ListMicrovms call.
+// find looks up a MicroVM by id across all pages of ListMicrovms.
 func (b *Backend) find(ctx context.Context, microvmID string) (awsmicrovm.Microvm, bool, error) {
 	if microvmID == "" {
 		return awsmicrovm.Microvm{}, false, nil
 	}
-	out, err := b.cloud.ListMicrovms(ctx, &awsmicrovm.ListMicrovmsInput{})
+	mvms, err := b.listAll(ctx)
 	if err != nil {
-		return awsmicrovm.Microvm{}, false, fmt.Errorf("list microvms: %w", err)
+		return awsmicrovm.Microvm{}, false, err
 	}
-	for _, m := range out.Microvms {
+	for _, m := range mvms {
 		if m.MicrovmID == microvmID {
 			return m, true, nil
 		}
 	}
 	return awsmicrovm.Microvm{}, false, nil
+}
+
+// listAll pages through ListMicrovms until NextToken is empty, so callers see
+// every MicroVM rather than just the first page. Truncating here would make
+// find/Probe miss live VMs on later pages and Watch drop their exits.
+func (b *Backend) listAll(ctx context.Context) ([]awsmicrovm.Microvm, error) {
+	var all []awsmicrovm.Microvm
+	in := &awsmicrovm.ListMicrovmsInput{}
+	for {
+		out, err := b.cloud.ListMicrovms(ctx, in)
+		if err != nil {
+			return nil, fmt.Errorf("list microvms: %w", err)
+		}
+		all = append(all, out.Microvms...)
+		if out.NextToken == "" {
+			break
+		}
+		in.NextToken = out.NextToken
+	}
+	return all, nil
 }
 
 func decodeData(raw []byte) (handleData, bool) {
