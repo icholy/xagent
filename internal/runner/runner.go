@@ -304,11 +304,6 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-// handleOf reconstructs the backend handle from a stored record.
-func handleOf(rec taskstate.Record) backend.Handle {
-	return backend.Handle{ID: rec.ID, Data: rec.Data}
-}
-
 // handle returns the tracked handle for a task. ok is false when no record
 // exists (the runner never started the task, or its sandbox was removed).
 func (r *Runner) handle(taskID int64) (backend.Handle, bool, error) {
@@ -316,7 +311,7 @@ func (r *Runner) handle(taskID int64) (backend.Handle, bool, error) {
 	if err != nil || !ok {
 		return backend.Handle{}, false, err
 	}
-	return handleOf(rec), true, nil
+	return backend.Handle{ID: rec.ID, Data: rec.Data}, true, nil
 }
 
 // Running reports whether the task's sandbox is currently running, probing the
@@ -342,7 +337,7 @@ func (r *Runner) List(ctx context.Context) ([]backend.Sandbox, error) {
 	}
 	sandboxes := make([]backend.Sandbox, 0, len(records))
 	for _, rec := range records {
-		state, err := r.backend.Probe(ctx, handleOf(rec))
+		state, err := r.backend.Probe(ctx, backend.Handle{ID: rec.ID, Data: rec.Data})
 		if err != nil {
 			return nil, fmt.Errorf("failed to probe task %d: %w", rec.TaskID, err)
 		}
