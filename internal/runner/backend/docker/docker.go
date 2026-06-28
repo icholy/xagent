@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
@@ -22,8 +23,13 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/runner/backend"
 	"github.com/icholy/xagent/internal/runner/prebuilt"
+	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/dockerx"
 )
+
+// HandleType is the backend.Handle.Type the Docker backend stamps on the
+// handles it produces (informational metadata persisted in the task record).
+const HandleType = "docker"
 
 // Backend runs task sandboxes as containers on the local Docker daemon.
 type Backend struct {
@@ -53,58 +59,83 @@ func (b *Backend) Close() error {
 	return b.docker.Close()
 }
 
-// find returns the container for the given task.
-// Returns (container, true, nil) if found, (empty, false, nil) if not found,
-// or (empty, false, error) on error.
-func (b *Backend) find(ctx context.Context, taskID int64) (container.Summary, bool, error) {
-	containers, err := b.docker.ContainerList(ctx, container.ListOptions{
-		All:     true,
-		Filters: filters.NewArgs(filters.Arg("label", fmt.Sprintf("xagent.task=%d", taskID))),
-	})
-	if err != nil {
-		return container.Summary{}, false, fmt.Errorf("failed to list containers: %w", err)
-	}
-	if len(containers) == 0 {
-		return container.Summary{}, false, nil
-	}
-	return containers[0], true, nil
+// ValidateWorkspace reports whether the workspace's container config is usable
+// by the Docker backend.
+func (b *Backend) ValidateWorkspace(ws *workspace.Workspace) error {
+	return ws.Container.Validate()
 }
 
-// Start finds or creates the task's container and starts it. A previous
-// container for the same task is reused, so its filesystem persists across
-// restarts.
-func (b *Backend) Start(ctx context.Context, spec *backend.Spec) error {
-	c, ok, err := b.find(ctx, spec.TaskID)
+// inspectID returns the container's id and whether it exists. A missing
+// container is ("", false, nil); any other failure is an error.
+func (b *Backend) inspectID(ctx context.Context, ref string) (string, bool, error) {
+	info, err := b.docker.ContainerInspect(ctx, ref)
+	if cerrdefs.IsNotFound(err) {
+		return "", false, nil
+	}
 	if err != nil {
-		return err
+		return "", false, fmt.Errorf("failed to inspect container: %w", err)
 	}
+	return info.ID, true, nil
+}
 
-	var containerID string
-	if ok {
-		b.log.Info("starting existing container", "task", spec.TaskID, "name", fmt.Sprintf("xagent-%d", spec.TaskID))
-		containerID = c.ID
-
-		// Refresh any network attachments whose endpoint ID has drifted
-		// from the live network — e.g. after `docker compose down && up`.
-		repaired, err := dockerx.RepairNetworks(ctx, b.docker, containerID, spec.Workspace.Container.Networks)
-		if err != nil {
-			return fmt.Errorf("failed to repair network attachment: %w", err)
-		}
-		if len(repaired) > 0 {
-			b.log.Warn("repaired stale network attachments",
-				"task", spec.TaskID, "container", containerID, "networks", repaired)
-		}
-	} else {
-		containerID, err = b.create(ctx, spec)
-		if err != nil {
-			return err
-		}
+// Launch ensures the task's container exists and starts it, returning the
+// handle the runner persists (the container id). A reuse handle or a
+// name-conflicting container is adopted in place so its filesystem persists
+// across restarts; otherwise a fresh xagent-{taskID} container is created.
+func (b *Backend) Launch(ctx context.Context, spec *backend.Spec, reuse *backend.Handle) (backend.Handle, error) {
+	containerID, err := b.ensure(ctx, spec, reuse)
+	if err != nil {
+		return backend.Handle{}, err
 	}
-
 	if err := b.docker.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("failed to start container: %w", err)
+		return backend.Handle{}, fmt.Errorf("failed to start container: %w", err)
 	}
-	return nil
+	return backend.Handle{Type: HandleType, ID: containerID}, nil
+}
+
+// ensure resolves the container to start: the reuse handle's container if it
+// still exists, an existing container with the deterministic name (the orphan
+// self-heal / name-conflict case), or a freshly created one.
+func (b *Backend) ensure(ctx context.Context, spec *backend.Spec, reuse *backend.Handle) (string, error) {
+	// Adopt the prior handle's container if it still exists.
+	if reuse != nil && reuse.ID != "" {
+		id, ok, err := b.inspectID(ctx, reuse.ID)
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			return b.adopt(ctx, spec, id)
+		}
+	}
+
+	// Adopt a container that already holds the deterministic name. This covers
+	// the create-then-record orphan gap: a lost store-write leaves the runner
+	// with no reuse handle, so the next Launch hits the existing name instead
+	// of spawning a duplicate.
+	name := fmt.Sprintf("xagent-%d", spec.TaskID)
+	if id, ok, err := b.inspectID(ctx, name); err != nil {
+		return "", err
+	} else if ok {
+		return b.adopt(ctx, spec, id)
+	}
+
+	return b.create(ctx, spec)
+}
+
+// adopt reuses an existing container, repairing any network attachments whose
+// endpoint ID has drifted from the live network — e.g. after
+// `docker compose down && up`.
+func (b *Backend) adopt(ctx context.Context, spec *backend.Spec, containerID string) (string, error) {
+	b.log.Info("adopting existing container", "task", spec.TaskID, "container", containerID)
+	repaired, err := dockerx.RepairNetworks(ctx, b.docker, containerID, spec.Workspace.Container.Networks)
+	if err != nil {
+		return "", fmt.Errorf("failed to repair network attachment: %w", err)
+	}
+	if len(repaired) > 0 {
+		b.log.Warn("repaired stale network attachments",
+			"task", spec.TaskID, "container", containerID, "networks", repaired)
+	}
+	return containerID, nil
 }
 
 func (b *Backend) create(ctx context.Context, spec *backend.Spec) (string, error) {
@@ -203,78 +234,17 @@ func (b *Backend) copyFiles(ctx context.Context, containerID string, files []bac
 	return b.docker.CopyToContainer(ctx, containerID, "/", &buf, container.CopyToContainerOptions{})
 }
 
-// Stop stops the task's container if it is running: SIGTERM first, then
-// SIGKILL after a 30s grace period. It reports whether a running container
-// was signalled — in that case the driver owns the terminal event report
-// (see the driver-owned-events proposal).
-func (b *Backend) Stop(ctx context.Context, taskID int64) (bool, error) {
-	c, ok, err := b.find(ctx, taskID)
+// Probe reports the liveness of a single handle by inspecting its container.
+// A missing container is treated as exited.
+func (b *Backend) Probe(ctx context.Context, h backend.Handle) (backend.State, error) {
+	info, err := b.docker.ContainerInspect(ctx, h.ID)
+	if cerrdefs.IsNotFound(err) {
+		return backend.StateExited, nil
+	}
 	if err != nil {
-		return false, err
+		return backend.StateUnknown, fmt.Errorf("failed to inspect container: %w", err)
 	}
-	if !ok || c.State != "running" {
-		return false, nil
-	}
-	b.log.Info("killing container", "task", taskID)
-
-	// Try SIGTERM first with a timeout
-	killCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	err = dockerx.ContainerKill(killCtx, b.docker, c.ID, "SIGTERM")
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, dockerx.ErrNotRunning) {
-		// The container exited between the running check and the kill, so
-		// nothing was signalled.
-		return false, nil
-	}
-
-	// If SIGTERM timed out, send SIGKILL
-	if errors.Is(err, context.DeadlineExceeded) {
-		b.log.Warn("SIGTERM timed out, sending SIGKILL", "task", taskID)
-		if err := dockerx.ContainerKill(ctx, b.docker, c.ID, "SIGKILL"); err != nil && !errors.Is(err, dockerx.ErrNotRunning) {
-			return true, err
-		}
-		return true, nil
-	}
-
-	return true, err
-}
-
-func (b *Backend) Running(ctx context.Context, taskID int64) (bool, error) {
-	c, ok, err := b.find(ctx, taskID)
-	if err != nil || !ok {
-		return false, err
-	}
-	return c.State == "running", nil
-}
-
-func (b *Backend) List(ctx context.Context) ([]backend.Sandbox, error) {
-	containers, err := b.docker.ContainerList(ctx, container.ListOptions{
-		All: true,
-		Filters: filters.NewArgs(
-			filters.Arg("label", "xagent=true"),
-			filters.Arg("label", "xagent.runner="+b.runnerID),
-		),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list containers: %w", err)
-	}
-	var sandboxes []backend.Sandbox
-	for _, c := range containers {
-		label := c.Labels["xagent.task"]
-		if label == "" {
-			continue
-		}
-		taskID, err := strconv.ParseInt(label, 10, 64)
-		if err != nil {
-			b.log.Error("invalid task ID in container label", "xagent.task", label, "error", err)
-			continue
-		}
-		sandboxes = append(sandboxes, backend.Sandbox{TaskID: taskID, State: sandboxState(c.State)})
-	}
-	return sandboxes, nil
+	return sandboxState(info.State.Status), nil
 }
 
 func sandboxState(state string) backend.State {
@@ -288,23 +258,55 @@ func sandboxState(state string) backend.State {
 	}
 }
 
-func (b *Backend) Remove(ctx context.Context, taskID int64) error {
-	c, ok, err := b.find(ctx, taskID)
-	if err != nil {
-		return err
+// Signal gracefully stops the handle's container if it is running: SIGTERM
+// first, then SIGKILL after a 30s grace period. It reports whether a running
+// container was signalled — in that case the driver owns the terminal event
+// report (see the driver-owned-events proposal).
+func (b *Backend) Signal(ctx context.Context, h backend.Handle) (bool, error) {
+	b.log.Info("killing container", "container", h.ID)
+
+	// Try SIGTERM first with a timeout
+	killCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err := dockerx.ContainerKill(killCtx, b.docker, h.ID, "SIGTERM")
+	if err == nil {
+		return true, nil
 	}
-	if !ok {
-		return nil
+	if errors.Is(err, dockerx.ErrNotRunning) || cerrdefs.IsNotFound(err) {
+		// The container exited (or was removed) before the kill, so nothing
+		// was signalled.
+		return false, nil
 	}
-	return b.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true})
+
+	// If SIGTERM timed out, send SIGKILL
+	if errors.Is(err, context.DeadlineExceeded) {
+		b.log.Warn("SIGTERM timed out, sending SIGKILL", "container", h.ID)
+		if err := dockerx.ContainerKill(ctx, b.docker, h.ID, "SIGKILL"); err != nil && !errors.Is(err, dockerx.ErrNotRunning) && !cerrdefs.IsNotFound(err) {
+			return true, err
+		}
+		return true, nil
+	}
+
+	return true, err
+}
+
+// Destroy removes the handle's container. A missing container is not an error.
+func (b *Backend) Destroy(ctx context.Context, h backend.Handle) error {
+	err := b.docker.ContainerRemove(ctx, h.ID, container.RemoveOptions{Force: true})
+	if err != nil && !cerrdefs.IsNotFound(err) {
+		return fmt.Errorf("failed to remove container: %w", err)
+	}
+	return nil
 }
 
 // Watch subscribes to docker die events for this runner's containers and
-// invokes handle once per exit. An unparseable exit code is reported as
-// non-zero: by the driver-owned-events invariant that means "report lost",
-// and the status guard rejects the resulting failed event if the driver
-// already reported.
-func (b *Backend) Watch(ctx context.Context, handle func(backend.Exit)) error {
+// invokes handle once per exit, keyed by container id. The runner resolves
+// id→task via the store; the labels only scope the event stream to this
+// runner's containers — no task id is parsed out of them. An unparseable exit
+// code is reported as non-zero: by the driver-owned-events invariant that means
+// "report lost", and the status guard rejects the resulting failed event if the
+// driver already reported.
+func (b *Backend) Watch(ctx context.Context, handle func(backend.HandleExit)) error {
 	eventCh, errCh := b.docker.Events(ctx, events.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("type", "container"),
@@ -317,18 +319,13 @@ func (b *Backend) Watch(ctx context.Context, handle func(backend.Exit)) error {
 	for {
 		select {
 		case event := <-eventCh:
-			taskIDStr := event.Actor.Attributes["xagent.task"]
-			taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-			if err != nil {
-				b.log.Error("invalid task ID in container event", "task", taskIDStr, "error", err)
-				continue
-			}
+			containerID := event.Actor.ID
 			exitCode, err := strconv.Atoi(event.Actor.Attributes["exitCode"])
 			if err != nil {
-				b.log.Error("invalid exit code in container event", "task", taskID, "exitCode", event.Actor.Attributes["exitCode"], "error", err)
+				b.log.Error("invalid exit code in container event", "container", containerID, "exitCode", event.Actor.Attributes["exitCode"], "error", err)
 				exitCode = -1
 			}
-			handle(backend.Exit{TaskID: taskID, ExitCode: exitCode})
+			handle(backend.HandleExit{ID: containerID, ExitCode: exitCode})
 
 		case err := <-errCh:
 			return fmt.Errorf("docker events error: %w", err)

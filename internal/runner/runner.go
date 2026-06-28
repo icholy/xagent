@@ -9,12 +9,14 @@ import (
 	"math"
 	"path"
 	"regexp"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/runner/backend"
+	"github.com/icholy/xagent/internal/runner/taskstate"
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/safesem"
 	"github.com/icholy/xagent/internal/x/wakeup"
@@ -23,7 +25,18 @@ import (
 )
 
 type Runner struct {
-	backend     backend.Backend
+	backend backend.Backend
+	store   *taskstate.Store
+	// launchMu serializes a Start's Launch+record-write against Monitor's
+	// id→task resolution. A container is created and started inside Launch but
+	// its record is written only after Launch returns; without this lock a
+	// sandbox that exits in that window delivers its die event to Monitor before
+	// the record exists, so store.ByID misses — dropping the terminal event and
+	// leaking the concurrency slot. Holding the same lock across Launch+Write
+	// and around the watch handler's ByID parks a mid-window exit until the
+	// record is committed. (A runner *crash* in that window is the orphan gap
+	// the Docker name-conflict adoption in ensure self-heals on the next Start.)
+	launchMu    sync.Mutex
 	client      xagentclient.Client
 	serverURL   string
 	workspaces  *workspace.Config
@@ -39,6 +52,9 @@ type Options struct {
 	Client xagentclient.Client
 	// Backend is the sandbox runtime that hosts task drivers.
 	Backend backend.Backend
+	// Store is the runner-local source of truth for the task→sandbox-handle
+	// mapping. The runner is the only writer; backends never touch it.
+	Store *taskstate.Store
 	// ServerURL is the C2 URL injected into sandboxes so the driver and the
 	// injected xagent MCP server connect directly to the C2. It is the runner's
 	// own configured --server value; the sandbox reaches the same C2 the runner
@@ -68,6 +84,9 @@ func New(opts Options) (*Runner, error) {
 	if opts.Backend == nil {
 		return nil, fmt.Errorf("backend is required")
 	}
+	if opts.Store == nil {
+		return nil, fmt.Errorf("store is required")
+	}
 
 	// Use math.MaxInt64 if no limit is set (concurrency <= 0)
 	concurrency := int64(opts.Concurrency)
@@ -79,6 +98,7 @@ func New(opts Options) (*Runner, error) {
 
 	return &Runner{
 		backend:     opts.Backend,
+		store:       opts.Store,
 		client:      opts.Client,
 		serverURL:   opts.ServerURL,
 		workspaces:  opts.Workspaces,
@@ -196,7 +216,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 					return nil
 				}
 				// Check if the sandbox is already running
-				running, err := r.backend.Running(ctx, task.ID)
+				running, err := r.Running(ctx, task.ID)
 				if err != nil {
 					r.log.Error("failed to check if task is running", "task", task.ID, "error", err)
 					return nil
@@ -233,7 +253,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 }
 
 func (r *Runner) Reconcile(ctx context.Context) error {
-	sandboxes, err := r.backend.List(ctx)
+	sandboxes, err := r.List(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list sandboxes: %w", err)
 	}
@@ -278,11 +298,74 @@ func (r *Runner) Reconcile(ctx context.Context) error {
 	return nil
 }
 
+// handle returns the tracked handle for a task. ok is false when no record
+// exists (the runner never started the task, or its sandbox was removed).
+func (r *Runner) handle(taskID int64) (backend.Handle, bool, error) {
+	rec, ok, err := r.store.Read(taskID)
+	if err != nil || !ok {
+		return backend.Handle{}, false, err
+	}
+	return backend.Handle{Type: rec.Type, ID: rec.ID, Data: rec.Data}, true, nil
+}
+
+// Running reports whether the task's sandbox is currently running, probing the
+// handle the store tracks for it.
+func (r *Runner) Running(ctx context.Context, taskID int64) (bool, error) {
+	h, ok, err := r.handle(taskID)
+	if err != nil || !ok {
+		return false, err
+	}
+	state, err := r.backend.Probe(ctx, h)
+	if err != nil {
+		return false, err
+	}
+	return state == backend.StateRunning, nil
+}
+
+// List composes the orchestrator's sandbox view from the store: one Sandbox
+// per tracked record, its state resolved by probing the backend handle.
+func (r *Runner) List(ctx context.Context) ([]backend.Sandbox, error) {
+	records, err := r.store.List()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list records: %w", err)
+	}
+	sandboxes := make([]backend.Sandbox, 0, len(records))
+	for _, rec := range records {
+		state, err := r.backend.Probe(ctx, backend.Handle{Type: rec.Type, ID: rec.ID, Data: rec.Data})
+		if err != nil {
+			return nil, fmt.Errorf("failed to probe task %d: %w", rec.TaskID, err)
+		}
+		sandboxes = append(sandboxes, backend.Sandbox{TaskID: rec.TaskID, State: state})
+	}
+	return sandboxes, nil
+}
+
+// Remove destroys the task's sandbox and deletes its record. The record is
+// removed only after the backend destroy succeeds, so a failed destroy leaves
+// the task tracked and the removal is retried.
+func (r *Runner) Remove(ctx context.Context, taskID int64) error {
+	h, ok, err := r.handle(taskID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	if err := r.backend.Destroy(ctx, h); err != nil {
+		return err
+	}
+	return r.store.Remove(taskID)
+}
+
 // Kill stops the task's sandbox if it is running. It reports whether a
 // running sandbox was signalled — in that case the driver owns the
 // terminal event report (see the driver-owned-events proposal).
 func (r *Runner) Kill(ctx context.Context, task *model.Task) (bool, error) {
-	return r.backend.Stop(ctx, task.ID)
+	h, ok, err := r.handle(task.ID)
+	if err != nil || !ok {
+		return false, err
+	}
+	return r.backend.Signal(ctx, h)
 }
 
 // spec assembles the sandbox spec for a task: the task token, the driver
@@ -291,6 +374,9 @@ func (r *Runner) spec(ctx context.Context, task *model.Task) (*backend.Spec, err
 	ws, err := r.workspaces.Get(task.Workspace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
+	}
+	if err := r.backend.ValidateWorkspace(ws); err != nil {
+		return nil, fmt.Errorf("invalid workspace %q: %w", task.Workspace, err)
 	}
 
 	// Mint the task token via the C2 rather than signing it locally: the runner
@@ -351,12 +437,53 @@ func (r *Runner) spec(ctx context.Context, task *model.Task) (*backend.Spec, err
 	}, nil
 }
 
+// Start ensures the task's sandbox is running and records its handle. It is
+// idempotent: if the tracked handle is already running it returns without
+// relaunching. Otherwise the prior handle (if any) is passed to Launch so the
+// backend can adopt or clean up the existing sandbox, and the returned handle
+// is persisted — the store write is the runner's job, not the backend's.
 func (r *Runner) Start(ctx context.Context, task *model.Task) error {
+	// Resolve the tracked handle first: a still-running sandbox makes Start a
+	// no-op, and we skip minting a token for it. An exited handle is passed to
+	// Launch so the backend can adopt or clean up the existing sandbox.
+	var reuse *backend.Handle
+	if h, ok, err := r.handle(task.ID); err != nil {
+		return err
+	} else if ok {
+		state, err := r.backend.Probe(ctx, h)
+		if err != nil {
+			return err
+		}
+		if state == backend.StateRunning {
+			return nil
+		}
+		reuse = &h
+	}
+
 	spec, err := r.spec(ctx, task)
 	if err != nil {
 		return err
 	}
-	return r.backend.Start(ctx, spec)
+
+	// Launch and record the handle atomically with respect to Monitor: the
+	// container starts inside Launch, so its die event must not be able to reach
+	// Monitor's store.ByID before the record exists. See launchMu.
+	r.launchMu.Lock()
+	defer r.launchMu.Unlock()
+
+	h, err := r.backend.Launch(ctx, spec, reuse)
+	if err != nil {
+		return err
+	}
+	if err := r.store.Write(taskstate.Record{
+		TaskID: task.ID,
+		Type:   h.Type,
+		ID:     h.ID,
+		Data:   h.Data,
+	}); err != nil {
+		return fmt.Errorf("failed to record task handle: %w", err)
+	}
+	return nil
 }
 
 // Monitor watches for sandbox exits and reports the ones the driver
@@ -365,17 +492,34 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 // driver already reported (see the driver-owned-events proposal), so no
 // event is emitted.
 func (r *Runner) Monitor(ctx context.Context) error {
-	return r.backend.Watch(ctx, func(exit backend.Exit) {
+	return r.backend.Watch(ctx, func(exit backend.HandleExit) {
+		// Resolve the handle id back to a task. Take launchMu so an exit that
+		// fires while a Start is mid-Launch parks here until that Start commits
+		// its record, closing the race where ByID would miss a just-started
+		// container. Ids the store doesn't track aren't ours (or were already
+		// removed), so ignore them — no slot was held and no task event is owed.
+		r.launchMu.Lock()
+		rec, ok, err := r.store.ByID(exit.ID)
+		r.launchMu.Unlock()
+		if err != nil {
+			r.log.Error("failed to resolve sandbox exit", "id", exit.ID, "error", err)
+			return
+		}
+		if !ok {
+			r.log.Debug("ignoring exit for untracked sandbox", "id", exit.ID)
+			return
+		}
+
 		r.sem.Release(1)
 		r.wake.Wake()
 		if exit.ExitCode == 0 {
-			r.log.Info("sandbox exited, driver already reported", "task", exit.TaskID)
+			r.log.Info("sandbox exited, driver already reported", "task", rec.TaskID)
 			return
 		}
-		r.log.Error("sandbox exited without reporting", "task", exit.TaskID, "exitCode", exit.ExitCode)
+		r.log.Error("sandbox exited without reporting", "task", rec.TaskID, "exitCode", exit.ExitCode)
 		// Use version 0 to bypass version check (spontaneous events)
 		r.queue.Enqueue(model.RunnerEvent{
-			TaskID: exit.TaskID,
+			TaskID: rec.TaskID,
 			Event:  model.RunnerEventFailed,
 		})
 	})
@@ -383,7 +527,7 @@ func (r *Runner) Monitor(ctx context.Context) error {
 
 // Prune removes sandboxes for archived tasks.
 func (r *Runner) Prune(ctx context.Context) error {
-	sandboxes, err := r.backend.List(ctx)
+	sandboxes, err := r.List(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list sandboxes: %w", err)
 	}
@@ -401,7 +545,7 @@ func (r *Runner) Prune(ctx context.Context) error {
 		}
 		// Remove sandbox if task is archived or deleted
 		if connect.CodeOf(err) == connect.CodeNotFound || resp.Task.Archived {
-			if err := r.backend.Remove(ctx, sb.TaskID); err != nil {
+			if err := r.Remove(ctx, sb.TaskID); err != nil {
 				r.log.Error("failed to remove sandbox", "task", sb.TaskID, "error", err)
 			} else {
 				r.log.Info("sandbox removed", "task", sb.TaskID)

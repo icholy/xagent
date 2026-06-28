@@ -5,6 +5,7 @@ package backend
 
 import (
 	"context"
+	"github.com/icholy/xagent/internal/runner/workspace"
 	"sync"
 )
 
@@ -21,22 +22,22 @@ var _ Backend = &BackendMock{}
 //			CloseFunc: func() error {
 //				panic("mock out the Close method")
 //			},
-//			ListFunc: func(ctx context.Context) ([]Sandbox, error) {
-//				panic("mock out the List method")
+//			DestroyFunc: func(ctx context.Context, h Handle) error {
+//				panic("mock out the Destroy method")
 //			},
-//			RemoveFunc: func(ctx context.Context, taskID int64) error {
-//				panic("mock out the Remove method")
+//			LaunchFunc: func(ctx context.Context, spec *Spec, reuse *Handle) (Handle, error) {
+//				panic("mock out the Launch method")
 //			},
-//			RunningFunc: func(ctx context.Context, taskID int64) (bool, error) {
-//				panic("mock out the Running method")
+//			ProbeFunc: func(ctx context.Context, h Handle) (State, error) {
+//				panic("mock out the Probe method")
 //			},
-//			StartFunc: func(ctx context.Context, spec *Spec) error {
-//				panic("mock out the Start method")
+//			SignalFunc: func(ctx context.Context, h Handle) (bool, error) {
+//				panic("mock out the Signal method")
 //			},
-//			StopFunc: func(ctx context.Context, taskID int64) (bool, error) {
-//				panic("mock out the Stop method")
+//			ValidateWorkspaceFunc: func(ws *workspace.Workspace) error {
+//				panic("mock out the ValidateWorkspace method")
 //			},
-//			WatchFunc: func(ctx context.Context, handle func(Exit)) error {
+//			WatchFunc: func(ctx context.Context, handle func(HandleExit)) error {
 //				panic("mock out the Watch method")
 //			},
 //		}
@@ -49,77 +50,79 @@ type BackendMock struct {
 	// CloseFunc mocks the Close method.
 	CloseFunc func() error
 
-	// ListFunc mocks the List method.
-	ListFunc func(ctx context.Context) ([]Sandbox, error)
+	// DestroyFunc mocks the Destroy method.
+	DestroyFunc func(ctx context.Context, h Handle) error
 
-	// RemoveFunc mocks the Remove method.
-	RemoveFunc func(ctx context.Context, taskID int64) error
+	// LaunchFunc mocks the Launch method.
+	LaunchFunc func(ctx context.Context, spec *Spec, reuse *Handle) (Handle, error)
 
-	// RunningFunc mocks the Running method.
-	RunningFunc func(ctx context.Context, taskID int64) (bool, error)
+	// ProbeFunc mocks the Probe method.
+	ProbeFunc func(ctx context.Context, h Handle) (State, error)
 
-	// StartFunc mocks the Start method.
-	StartFunc func(ctx context.Context, spec *Spec) error
+	// SignalFunc mocks the Signal method.
+	SignalFunc func(ctx context.Context, h Handle) (bool, error)
 
-	// StopFunc mocks the Stop method.
-	StopFunc func(ctx context.Context, taskID int64) (bool, error)
+	// ValidateWorkspaceFunc mocks the ValidateWorkspace method.
+	ValidateWorkspaceFunc func(ws *workspace.Workspace) error
 
 	// WatchFunc mocks the Watch method.
-	WatchFunc func(ctx context.Context, handle func(Exit)) error
+	WatchFunc func(ctx context.Context, handle func(HandleExit)) error
 
 	// calls tracks calls to the methods.
 	calls struct {
 		// Close holds details about calls to the Close method.
 		Close []struct {
 		}
-		// List holds details about calls to the List method.
-		List []struct {
+		// Destroy holds details about calls to the Destroy method.
+		Destroy []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+			// H is the h argument value.
+			H Handle
 		}
-		// Remove holds details about calls to the Remove method.
-		Remove []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// TaskID is the taskID argument value.
-			TaskID int64
-		}
-		// Running holds details about calls to the Running method.
-		Running []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// TaskID is the taskID argument value.
-			TaskID int64
-		}
-		// Start holds details about calls to the Start method.
-		Start []struct {
+		// Launch holds details about calls to the Launch method.
+		Launch []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Spec is the spec argument value.
 			Spec *Spec
+			// Reuse is the reuse argument value.
+			Reuse *Handle
 		}
-		// Stop holds details about calls to the Stop method.
-		Stop []struct {
+		// Probe holds details about calls to the Probe method.
+		Probe []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// TaskID is the taskID argument value.
-			TaskID int64
+			// H is the h argument value.
+			H Handle
+		}
+		// Signal holds details about calls to the Signal method.
+		Signal []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// H is the h argument value.
+			H Handle
+		}
+		// ValidateWorkspace holds details about calls to the ValidateWorkspace method.
+		ValidateWorkspace []struct {
+			// Ws is the ws argument value.
+			Ws *workspace.Workspace
 		}
 		// Watch holds details about calls to the Watch method.
 		Watch []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Handle is the handle argument value.
-			Handle func(Exit)
+			Handle func(HandleExit)
 		}
 	}
-	lockClose   sync.RWMutex
-	lockList    sync.RWMutex
-	lockRemove  sync.RWMutex
-	lockRunning sync.RWMutex
-	lockStart   sync.RWMutex
-	lockStop    sync.RWMutex
-	lockWatch   sync.RWMutex
+	lockClose             sync.RWMutex
+	lockDestroy           sync.RWMutex
+	lockLaunch            sync.RWMutex
+	lockProbe             sync.RWMutex
+	lockSignal            sync.RWMutex
+	lockValidateWorkspace sync.RWMutex
+	lockWatch             sync.RWMutex
 }
 
 // Close calls CloseFunc.
@@ -149,190 +152,194 @@ func (mock *BackendMock) CloseCalls() []struct {
 	return calls
 }
 
-// List calls ListFunc.
-func (mock *BackendMock) List(ctx context.Context) ([]Sandbox, error) {
-	if mock.ListFunc == nil {
-		panic("BackendMock.ListFunc: method is nil but Backend.List was just called")
+// Destroy calls DestroyFunc.
+func (mock *BackendMock) Destroy(ctx context.Context, h Handle) error {
+	if mock.DestroyFunc == nil {
+		panic("BackendMock.DestroyFunc: method is nil but Backend.Destroy was just called")
 	}
 	callInfo := struct {
 		Ctx context.Context
+		H   Handle
 	}{
 		Ctx: ctx,
+		H:   h,
 	}
-	mock.lockList.Lock()
-	mock.calls.List = append(mock.calls.List, callInfo)
-	mock.lockList.Unlock()
-	return mock.ListFunc(ctx)
+	mock.lockDestroy.Lock()
+	mock.calls.Destroy = append(mock.calls.Destroy, callInfo)
+	mock.lockDestroy.Unlock()
+	return mock.DestroyFunc(ctx, h)
 }
 
-// ListCalls gets all the calls that were made to List.
+// DestroyCalls gets all the calls that were made to Destroy.
 // Check the length with:
 //
-//	len(mockedBackend.ListCalls())
-func (mock *BackendMock) ListCalls() []struct {
+//	len(mockedBackend.DestroyCalls())
+func (mock *BackendMock) DestroyCalls() []struct {
 	Ctx context.Context
+	H   Handle
 } {
 	var calls []struct {
 		Ctx context.Context
+		H   Handle
 	}
-	mock.lockList.RLock()
-	calls = mock.calls.List
-	mock.lockList.RUnlock()
+	mock.lockDestroy.RLock()
+	calls = mock.calls.Destroy
+	mock.lockDestroy.RUnlock()
 	return calls
 }
 
-// Remove calls RemoveFunc.
-func (mock *BackendMock) Remove(ctx context.Context, taskID int64) error {
-	if mock.RemoveFunc == nil {
-		panic("BackendMock.RemoveFunc: method is nil but Backend.Remove was just called")
+// Launch calls LaunchFunc.
+func (mock *BackendMock) Launch(ctx context.Context, spec *Spec, reuse *Handle) (Handle, error) {
+	if mock.LaunchFunc == nil {
+		panic("BackendMock.LaunchFunc: method is nil but Backend.Launch was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		TaskID int64
+		Ctx   context.Context
+		Spec  *Spec
+		Reuse *Handle
 	}{
-		Ctx:    ctx,
-		TaskID: taskID,
+		Ctx:   ctx,
+		Spec:  spec,
+		Reuse: reuse,
 	}
-	mock.lockRemove.Lock()
-	mock.calls.Remove = append(mock.calls.Remove, callInfo)
-	mock.lockRemove.Unlock()
-	return mock.RemoveFunc(ctx, taskID)
+	mock.lockLaunch.Lock()
+	mock.calls.Launch = append(mock.calls.Launch, callInfo)
+	mock.lockLaunch.Unlock()
+	return mock.LaunchFunc(ctx, spec, reuse)
 }
 
-// RemoveCalls gets all the calls that were made to Remove.
+// LaunchCalls gets all the calls that were made to Launch.
 // Check the length with:
 //
-//	len(mockedBackend.RemoveCalls())
-func (mock *BackendMock) RemoveCalls() []struct {
-	Ctx    context.Context
-	TaskID int64
+//	len(mockedBackend.LaunchCalls())
+func (mock *BackendMock) LaunchCalls() []struct {
+	Ctx   context.Context
+	Spec  *Spec
+	Reuse *Handle
 } {
 	var calls []struct {
-		Ctx    context.Context
-		TaskID int64
+		Ctx   context.Context
+		Spec  *Spec
+		Reuse *Handle
 	}
-	mock.lockRemove.RLock()
-	calls = mock.calls.Remove
-	mock.lockRemove.RUnlock()
+	mock.lockLaunch.RLock()
+	calls = mock.calls.Launch
+	mock.lockLaunch.RUnlock()
 	return calls
 }
 
-// Running calls RunningFunc.
-func (mock *BackendMock) Running(ctx context.Context, taskID int64) (bool, error) {
-	if mock.RunningFunc == nil {
-		panic("BackendMock.RunningFunc: method is nil but Backend.Running was just called")
+// Probe calls ProbeFunc.
+func (mock *BackendMock) Probe(ctx context.Context, h Handle) (State, error) {
+	if mock.ProbeFunc == nil {
+		panic("BackendMock.ProbeFunc: method is nil but Backend.Probe was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		TaskID int64
+		Ctx context.Context
+		H   Handle
 	}{
-		Ctx:    ctx,
-		TaskID: taskID,
+		Ctx: ctx,
+		H:   h,
 	}
-	mock.lockRunning.Lock()
-	mock.calls.Running = append(mock.calls.Running, callInfo)
-	mock.lockRunning.Unlock()
-	return mock.RunningFunc(ctx, taskID)
+	mock.lockProbe.Lock()
+	mock.calls.Probe = append(mock.calls.Probe, callInfo)
+	mock.lockProbe.Unlock()
+	return mock.ProbeFunc(ctx, h)
 }
 
-// RunningCalls gets all the calls that were made to Running.
+// ProbeCalls gets all the calls that were made to Probe.
 // Check the length with:
 //
-//	len(mockedBackend.RunningCalls())
-func (mock *BackendMock) RunningCalls() []struct {
-	Ctx    context.Context
-	TaskID int64
+//	len(mockedBackend.ProbeCalls())
+func (mock *BackendMock) ProbeCalls() []struct {
+	Ctx context.Context
+	H   Handle
 } {
 	var calls []struct {
-		Ctx    context.Context
-		TaskID int64
+		Ctx context.Context
+		H   Handle
 	}
-	mock.lockRunning.RLock()
-	calls = mock.calls.Running
-	mock.lockRunning.RUnlock()
+	mock.lockProbe.RLock()
+	calls = mock.calls.Probe
+	mock.lockProbe.RUnlock()
 	return calls
 }
 
-// Start calls StartFunc.
-func (mock *BackendMock) Start(ctx context.Context, spec *Spec) error {
-	if mock.StartFunc == nil {
-		panic("BackendMock.StartFunc: method is nil but Backend.Start was just called")
+// Signal calls SignalFunc.
+func (mock *BackendMock) Signal(ctx context.Context, h Handle) (bool, error) {
+	if mock.SignalFunc == nil {
+		panic("BackendMock.SignalFunc: method is nil but Backend.Signal was just called")
 	}
 	callInfo := struct {
-		Ctx  context.Context
-		Spec *Spec
+		Ctx context.Context
+		H   Handle
 	}{
-		Ctx:  ctx,
-		Spec: spec,
+		Ctx: ctx,
+		H:   h,
 	}
-	mock.lockStart.Lock()
-	mock.calls.Start = append(mock.calls.Start, callInfo)
-	mock.lockStart.Unlock()
-	return mock.StartFunc(ctx, spec)
+	mock.lockSignal.Lock()
+	mock.calls.Signal = append(mock.calls.Signal, callInfo)
+	mock.lockSignal.Unlock()
+	return mock.SignalFunc(ctx, h)
 }
 
-// StartCalls gets all the calls that were made to Start.
+// SignalCalls gets all the calls that were made to Signal.
 // Check the length with:
 //
-//	len(mockedBackend.StartCalls())
-func (mock *BackendMock) StartCalls() []struct {
-	Ctx  context.Context
-	Spec *Spec
+//	len(mockedBackend.SignalCalls())
+func (mock *BackendMock) SignalCalls() []struct {
+	Ctx context.Context
+	H   Handle
 } {
 	var calls []struct {
-		Ctx  context.Context
-		Spec *Spec
+		Ctx context.Context
+		H   Handle
 	}
-	mock.lockStart.RLock()
-	calls = mock.calls.Start
-	mock.lockStart.RUnlock()
+	mock.lockSignal.RLock()
+	calls = mock.calls.Signal
+	mock.lockSignal.RUnlock()
 	return calls
 }
 
-// Stop calls StopFunc.
-func (mock *BackendMock) Stop(ctx context.Context, taskID int64) (bool, error) {
-	if mock.StopFunc == nil {
-		panic("BackendMock.StopFunc: method is nil but Backend.Stop was just called")
+// ValidateWorkspace calls ValidateWorkspaceFunc.
+func (mock *BackendMock) ValidateWorkspace(ws *workspace.Workspace) error {
+	if mock.ValidateWorkspaceFunc == nil {
+		panic("BackendMock.ValidateWorkspaceFunc: method is nil but Backend.ValidateWorkspace was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		TaskID int64
+		Ws *workspace.Workspace
 	}{
-		Ctx:    ctx,
-		TaskID: taskID,
+		Ws: ws,
 	}
-	mock.lockStop.Lock()
-	mock.calls.Stop = append(mock.calls.Stop, callInfo)
-	mock.lockStop.Unlock()
-	return mock.StopFunc(ctx, taskID)
+	mock.lockValidateWorkspace.Lock()
+	mock.calls.ValidateWorkspace = append(mock.calls.ValidateWorkspace, callInfo)
+	mock.lockValidateWorkspace.Unlock()
+	return mock.ValidateWorkspaceFunc(ws)
 }
 
-// StopCalls gets all the calls that were made to Stop.
+// ValidateWorkspaceCalls gets all the calls that were made to ValidateWorkspace.
 // Check the length with:
 //
-//	len(mockedBackend.StopCalls())
-func (mock *BackendMock) StopCalls() []struct {
-	Ctx    context.Context
-	TaskID int64
+//	len(mockedBackend.ValidateWorkspaceCalls())
+func (mock *BackendMock) ValidateWorkspaceCalls() []struct {
+	Ws *workspace.Workspace
 } {
 	var calls []struct {
-		Ctx    context.Context
-		TaskID int64
+		Ws *workspace.Workspace
 	}
-	mock.lockStop.RLock()
-	calls = mock.calls.Stop
-	mock.lockStop.RUnlock()
+	mock.lockValidateWorkspace.RLock()
+	calls = mock.calls.ValidateWorkspace
+	mock.lockValidateWorkspace.RUnlock()
 	return calls
 }
 
 // Watch calls WatchFunc.
-func (mock *BackendMock) Watch(ctx context.Context, handle func(Exit)) error {
+func (mock *BackendMock) Watch(ctx context.Context, handle func(HandleExit)) error {
 	if mock.WatchFunc == nil {
 		panic("BackendMock.WatchFunc: method is nil but Backend.Watch was just called")
 	}
 	callInfo := struct {
 		Ctx    context.Context
-		Handle func(Exit)
+		Handle func(HandleExit)
 	}{
 		Ctx:    ctx,
 		Handle: handle,
@@ -349,11 +356,11 @@ func (mock *BackendMock) Watch(ctx context.Context, handle func(Exit)) error {
 //	len(mockedBackend.WatchCalls())
 func (mock *BackendMock) WatchCalls() []struct {
 	Ctx    context.Context
-	Handle func(Exit)
+	Handle func(HandleExit)
 } {
 	var calls []struct {
 		Ctx    context.Context
-		Handle func(Exit)
+		Handle func(HandleExit)
 	}
 	mock.lockWatch.RLock()
 	calls = mock.calls.Watch

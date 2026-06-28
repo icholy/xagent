@@ -24,10 +24,10 @@ import (
 // Record is the persisted task→sandbox-handle mapping. Data is opaque,
 // backend-defined, and never decoded by the store.
 type Record struct {
-	TaskID  int64           `json:"task_id"`
-	Backend string          `json:"backend"`        // "docker", "lambda-microvm", ... (informational)
-	ID      string          `json:"id"`             // backend-produced handle id; the reverse-index key
-	Data    json.RawMessage `json:"data,omitempty"` // opaque, backend-defined; the store NEVER decodes it
+	TaskID int64           `json:"task_id"`
+	Type   string          `json:"type"`           // "docker", "lambda-microvm", ... (informational; never read for logic)
+	ID     string          `json:"id"`             // backend-produced handle id; the reverse-index key
+	Data   json.RawMessage `json:"data,omitempty"` // opaque, backend-defined; the store NEVER decodes it
 }
 
 // Store is a runner-local, concurrency-safe store of task records backed by
