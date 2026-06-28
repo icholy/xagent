@@ -7,6 +7,8 @@ require (
 	connectrpc.com/otelconnect v0.9.0
 	github.com/XSAM/otelsql v0.42.0
 	github.com/amacneil/dbmate/v2 v2.33.0
+	github.com/aws/aws-sdk-go-v2 v1.42.0
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.24
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/distribution/reference v0.6.0
@@ -57,6 +59,7 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
+	github.com/aws/smithy-go v1.27.1 // indirect
 	github.com/bufbuild/buf v1.71.0 // indirect
 	github.com/bufbuild/protocompile v0.14.2-0.20260605203730-cd7c3c124e10 // indirect
 	github.com/bufbuild/protoplugin v0.0.0-20260414125817-25d1d281b46b // indirect
