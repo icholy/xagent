@@ -13,8 +13,11 @@ import (
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/runner/backend"
 	dockerbackend "github.com/icholy/xagent/internal/runner/backend/docker"
+	"github.com/icholy/xagent/internal/runner/backend/lambdamicrovm"
+	"github.com/icholy/xagent/internal/runner/backend/lambdamicrovm/awsmvm"
 	"github.com/icholy/xagent/internal/runner/taskstate"
 	"github.com/icholy/xagent/internal/runner/workspace"
+	"github.com/icholy/xagent/internal/x/awsmicrovm"
 	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
@@ -71,7 +74,7 @@ var RunnerCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "backend",
-			Usage:   "Sandbox backend (docker)",
+			Usage:   "Sandbox backend (docker, lambda-microvm)",
 			Value:   "docker",
 			Sources: cli.EnvVars("XAGENT_BACKEND"),
 		},
@@ -80,6 +83,17 @@ var RunnerCommand = &cli.Command{
 			Usage:   "Directory for the runner-local task→sandbox-handle store",
 			Value:   "/var/lib/xagent/tasks",
 			Sources: cli.EnvVars("XAGENT_STATE_DIR"),
+		},
+		&cli.StringFlag{
+			Name:    "lambda-microvm-region",
+			Usage:   "AWS region for the lambda-microvm backend (defaults to AWS_REGION)",
+			Sources: cli.EnvVars("XAGENT_LAMBDA_MICROVM_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"),
+		},
+		&cli.DurationFlag{
+			Name:    "lambda-microvm-poll",
+			Usage:   "Interval at which the lambda-microvm backend polls for MicroVM exits",
+			Value:   10 * time.Second,
+			Sources: cli.EnvVars("XAGENT_LAMBDA_MICROVM_POLL"),
 		},
 		&cli.BoolFlag{
 			Name:  "debug",
@@ -144,6 +158,22 @@ var RunnerCommand = &cli.Command{
 			be, err = dockerbackend.New(dockerbackend.Options{
 				RunnerID: runnerID,
 				Log:      log,
+			})
+			if err != nil {
+				return err
+			}
+		case "lambda-microvm":
+			awsCfg, err := awsmvm.LoadConfig(ctx, cmd.String("lambda-microvm-region"))
+			if err != nil {
+				return fmt.Errorf("lambda-microvm backend: %w", err)
+			}
+			be, err = lambdamicrovm.New(lambdamicrovm.Options{
+				Cloud:        awsmicrovm.NewClient(awsCfg),
+				Stager:       awsmvm.NewS3Stager(awsCfg),
+				RunnerID:     runnerID,
+				Region:       awsCfg.Region,
+				PollInterval: cmd.Duration("lambda-microvm-poll"),
+				Log:          log,
 			})
 			if err != nil {
 				return err

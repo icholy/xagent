@@ -80,9 +80,12 @@ cannot.
 ### Overview
 
 A new package `internal/runner/backend/lambdamicrovm` implements
-`backend.Backend` against the AWS SDK for Go v2
-(`github.com/aws/aws-sdk-go-v2/service/lambdamicrovms` + `s3`). Selection follows
-the existing seam in `internal/command/runner.go`:
+`backend.Backend`. Credentials, region, and S3 use `aws-sdk-go-v2`
+(`config` + `service/s3`); the Lambda MicroVMs control plane has no Go SDK yet,
+so it is a thin JSON client signed with the SDK's `aws/signer/v4`, in a
+general-purpose `internal/x/awsmicrovm` package that models the service with no
+xagent knowledge (the backend consumes it through a `Cloud` interface).
+Selection follows the existing seam in `internal/command/runner.go`:
 
 ```
 xagent runner --backend lambda-microvm
@@ -100,8 +103,8 @@ Per task, the backend:
 3. Calls `run-microvm` with the image ARN, egress connector, `NO_INGRESS`, a
    disabled idle policy (see below), `--maximum-duration-in-seconds` from the
    workspace, and a `--run-hook-payload` carrying the presigned URL. The returned
-   `microvmId` is tagged `xagent.task=<id>` / `xagent.runner=<id>` and recorded
-   locally.
+   `microvmId` is tagged `xagent.task=<id>` / `xagent.runner=<id>` and returned to
+   the runner as the `Handle.ID`, which the runner records in the shared store.
 
 An in-image **shim** receives the `/run` hook, fetches the staged bundle,
 provisions the files, and execs the driver — which connects to the C2 with its
@@ -217,17 +220,9 @@ workspace may set `container:`, `firecracker:`, `agent_core:`, and
 `lambda_microvm:` together so one `workspaces.yaml` serves runners with different
 backends.
 
-This builds on the validation method the Firecracker proposal adds to `Backend`:
-
-```go
-type Backend interface {
-	// ValidateWorkspace checks the workspace's config section for this
-	// backend. The runner validates at startup and registers only the
-	// workspaces its backend accepts; Start re-validates.
-	ValidateWorkspace(ws *workspace.Workspace) error
-	// ... existing methods unchanged
-}
-```
+This uses the `ValidateWorkspace` method already on the `backend.Backend`
+interface (master): the runner validates at startup and registers only the
+workspaces its backend accepts; `Launch` re-validates.
 
 The backend's `ValidateWorkspace` requires `execution_role`, `staging_bucket`,
 `egress_connector`, and one of `image_identifier` / `image_source`, and bounds
@@ -237,50 +232,70 @@ workspace only from runners that can run it. The `container.image is required`
 check moves into the Docker backend, as the Firecracker proposal already
 establishes.
 
-### State directory
+### Task state: the shared runner store
 
-The backend keeps minimal local state under a per-runner directory (default
-`/var/lib/xagent/lambda-microvm/<runner-id>`), since AWS holds the heavy state:
+The backend persists **nothing**. The runner owns the single, runner-local
+`internal/runner/taskstate` store (`shared-runner-taskstate`) and is the only
+writer: after `Launch` returns, the runner writes a `taskstate.Record{TaskID,
+Type, ID, Data}` keyed by task id and reverse-indexed by handle id. The backend
+only produces and consumes `backend.Handle`s.
 
+A `lambda-microvm` handle is:
+
+```go
+const HandleType = "lambda-microvm"
+
+// Handle.ID   = the AWS microVM id (the reverse-index key)
+// Handle.Data = json of:
+type handleData struct {
+	ImageARN    string `json:"image_arn"`
+	StageBucket string `json:"stage_bucket"`
+	StageKey    string `json:"stage_key"`
+}
 ```
-<state-dir>/
-├── images/<image-digest>-<xagent-version>.json   # cached MicroVM image ARN per workspace image
-└── tasks/<task-id>.json                           # microvmId, image ARN, S3 staging key, started-at
-```
 
-`tasks/<task-id>` is the sandbox for the `Backend` contract: `List` scans it,
-`Remove` deletes it (and the staged S3 object), `Start` reuses it. This is the
-analog of the AgentCore `sessions/` and Firecracker `tasks/` directories, but it
-holds only handles — no rootfs, no networking, no local process. Because
-`microvmId` is persisted (and tagged on the VM), the runner re-adopts a task's
-microVM after a restart by reading this directory and reconciling against
-`list-microvms` — the survival property AgentCore lacks.
+The microVM id is the identity (`Handle.ID`); everything else needed only for
+cleanup lives in the opaque `Handle.Data`, which the store persists and never
+decodes. After a runner restart the runner re-reads its records and reconciles
+each handle against `list-microvms` via `Probe` — the survival property
+AgentCore lacks — with no backend-local state directory.
 
 ### Backend method mapping
 
+The backend implements the handle-oriented interface; the runner composes
+`List`/`Running`/`Remove`/`Kill`/`Start`/`Monitor` over `backend + store`.
+
 | Method | Implementation |
 |---|---|
-| `ValidateWorkspace` | Require `execution_role`, `staging_bucket`, `egress_connector`, and `image_identifier` or `image_source`; bound `max_duration_seconds`. |
-| `Start` | Ensure the MicroVM image ARN for the workspace (use `image_identifier`, else build from `image_source` via S3 zip + `create-microvm-image`, cached by digest+version). Build the bundle from `spec`, upload to `s3://<staging_bucket>/<runner>/<task>.json`, presign a GET URL. `run-microvm` with the image ARN, `NO_INGRESS`, the egress connector, idle policy disabled, `--maximum-duration-in-seconds`, and the presigned URL as `--run-hook-payload`. Tag the returned `microvmId` (`xagent.task`, `xagent.runner`); persist `tasks/<id>.json`. |
-| `Stop` | No record / not running → `(false, nil)`. Otherwise `terminate-microvm` (which fires the shim's `/terminate` hook → SIGTERM→SIGKILL the driver) and return `(true, nil)` — the driver owns the terminal report, same contract as Docker's SIGTERM. |
-| `Running` | Read `tasks/<id>.json`; confirm the `microvmId` is in a `RUNNING`/`SUSPENDED` state via `list-microvms`. Absent/terminated → false. |
-| `List` | Scan `tasks/`, reconcile each against `list-microvms` (filtered by image / tag). `RUNNING`/`SUSPENDED` → `StateRunning`; terminated/absent → `StateExited`. |
-| `Remove` | Best-effort `terminate-microvm` if still alive; delete the staged S3 object and `tasks/<id>.json`. AWS GCs the microVM, so this is mostly local + S3 cleanup. |
-| `Watch` | A poll loop (Lambda has no microVM event stream). Periodically `list-microvms`; when a tracked VM reaches a terminal state, `handle(Exit{TaskID, ExitCode})`. |
-| `Close` | Stop the poll loop; leave microVMs running — they outlive the runner, exactly as containers do today. |
+| `ValidateWorkspace` | Require `execution_role`, `staging_bucket`, `egress_connector`, and `image_identifier`; bound `max_duration_seconds`; reject a workspace `region` that differs from the runner's. |
+| `Launch(spec, reuse)` | Build the bundle from `spec`, upload to `s3://<staging_bucket>/<runner>/<task>.json`, presign a GET URL. `run-microvm` with the image ARN, `NO_INGRESS`, the egress connector, idle policy disabled, `--maximum-duration-in-seconds`, and the presigned URL as `--run-hook-payload`. If `reuse != nil`, first delete the prior run's stale staged object (decoded from `reuse.Data`) — microVMs are never adopted, only relaunched fresh. Return `Handle{Type:"lambda-microvm", ID:<microvmId>, Data:<{image_arn,stage_bucket,stage_key}>}`. |
+| `Probe(h)` | Resolve `h.ID` via a single `list-microvms` lookup. `RUNNING`/`SUSPENDED` → `StateRunning`; terminal or absent → `StateExited`. |
+| `Signal(h)` | Not alive → `(false, nil)`. Otherwise `terminate-microvm` (which fires the shim's `/terminate` hook → SIGTERM→SIGKILL the driver) and return `(true, nil)` — the driver owns the terminal report, same contract as Docker's SIGTERM. |
+| `Destroy(h)` | Best-effort `terminate-microvm` if still alive; delete the staged S3 object (from `h.Data`). Idempotent. AWS GCs the microVM; the runner deletes the store record. |
+| `Watch(fn)` | A poll loop (Lambda has no microVM event stream). Periodically `list-microvms` filtered to this runner's `xagent.runner` tag; emit `HandleExit{ID:<microvmId>, ExitCode}` once per exit (terminal state, or a VM seen alive then vanished). The runner resolves id→task via the store and ignores untracked ids. |
+| `Close` | No-op; leave microVMs running — they outlive the runner, exactly as containers do today. |
 
 Exit-code fidelity follows the interface contract. Lambda does **not** surface the
 driver's process exit code through the microVM lifecycle — only the VM's terminal
 *state*. So when the shim terminates the VM after a clean driver exit, the backend
-observes `TERMINATED` and reports `Exit{TaskID, 0}` ("driver reported its
+observes `TERMINATED` and emits `HandleExit{ID, 0}` ("driver reported its
 outcome", which it did, directly to the C2). A microVM that reaches a `FAILED`
 terminal state, or vanishes without the shim having driven a clean exit, is
-reported as `Exit{TaskID, -1}` — "report lost." By the driver-owned-events
-invariant, `-1` lets the state machine's status guard in `internal/model/task.go`
-reject a spurious `failed` if the driver *did* report, or record an honest
-`failed` if it didn't. Correctness comes from the state machine, not from backend
-fidelity — the same fallback AgentCore relies on, but exercised less often here
-because the autonomous-VM model makes clean termination the common path.
+emitted as `HandleExit{ID, -1}` — "report lost." The runner resolves the id to a
+task and, by the driver-owned-events invariant, `-1` lets the state machine's
+status guard in `internal/model/task.go` reject a spurious `failed` if the driver
+*did* report, or record an honest `failed` if it didn't. Correctness comes from
+the state machine, not from backend fidelity — the same fallback AgentCore relies
+on, but exercised less often here because the autonomous-VM model makes clean
+termination the common path.
+
+Because the microVM id is AWS-assigned and only known after `run-microvm`, the
+runner's record write necessarily lags `Launch`, and there is **no deterministic
+name to self-heal from** (unlike Docker's `xagent-{taskID}` container name). A
+runner crash in that window orphans a running, untracked VM; the accepted
+backstop is `max_duration_seconds` as the reaper (see `shared-runner-taskstate`).
+There is no discovery-from-tags and no periodic reconcile beyond the shared
+store's startup reconcile — a periodic reconcile is a possible follow-up.
 
 ### Idle policy and suspend/resume
 
@@ -309,15 +324,17 @@ its own.
 
 ```
 xagent runner --backend lambda-microvm \
-  [--lambda-microvm-state-dir /var/lib/xagent/lambda-microvm] \
   [--lambda-microvm-region us-east-1] \
   [--lambda-microvm-poll 10s]
 ```
 
-All flags have `XAGENT_LAMBDA_MICROVM_*` env sources; AWS credentials/region also
-resolve through the standard SDK chain. `internal/command/runner.go`'s backend
-switch gains a `lambda-microvm` case constructing
-`lambdamicrovm.New(lambdamicrovm.Options{RunnerID, Region, StateDir, PollInterval, Log})`.
+The runner-local store directory is the shared `--state-dir` flag (default
+`/var/lib/xagent/tasks`); the backend has no state dir of its own. All
+lambda-microvm flags have `XAGENT_LAMBDA_MICROVM_*` env sources; AWS
+credentials/region also resolve through the standard SDK chain.
+`internal/command/runner.go`'s backend switch gains a `lambda-microvm` case
+constructing `lambdamicrovm.New(...)` with `Cloud: awsmicrovm.NewClient(cfg)`
+and `Stager: awsmvm.NewS3Stager(cfg)`.
 
 `xagent download` is not extended — there is no host kernel or hypervisor binary
 to fetch; the AWS SDK is compiled in. Instead, `xagent` publishes the MicroVM base
@@ -327,16 +344,19 @@ image and `Dockerfile` fragment (see image contract above).
 
 ```
 internal/runner/
-├── runner.go                 unchanged orchestrator
+├── runner.go                 unchanged orchestrator (owns the shared taskstate store)
+├── taskstate/                shared runner-owned store (already on master)
 ├── backend/
-│   ├── backend.go            +ValidateWorkspace (from the firecracker proposal)
-│   ├── docker/               unchanged (gains ValidateWorkspace)
-│   ├── firecracker/          proposed separately
-│   ├── agentcore/            proposed separately
+│   ├── backend.go            handle-oriented interface (already on master)
+│   ├── docker/               unchanged
 │   └── lambdamicrovm/
-│       └── lambdamicrovm.go  Lambda MicroVMs implementation
-└── workspace/                +LambdaMicroVM config section
-internal/command/tool.go      +microvm-shim hidden subcommand
+│       ├── lambdamicrovm.go  Lambda MicroVMs implementation (handle-oriented)
+│       ├── client.go         Cloud / Stager interfaces
+│       └── awsmvm/           xagent AWS glue: config loader + S3 Stager
+internal/x/awsmicrovm/        general-purpose service client + lifecycle Handler (no xagent knowledge)
+├── workspace/                +LambdaMicroVM config section
+internal/microvmshim/         in-VM lifecycle-hook server
+internal/command/tool.go      +microvm-shim subcommand
 ```
 
 ### Testing
@@ -454,11 +474,11 @@ as backpressure rather than a hard `Start` failure.
    otherwise sufficient, or should the shim stash the driver's real exit code
    somewhere the backend can read post-termination (e.g. a tag or an S3 object
    written in `/terminate`) for richer diagnostics?
-4. **Tag-based discovery vs. local index.** `list-microvms` filters by image, not
-   by arbitrary tag (per current docs). Re-adoption after a runner restart relies
-   on `tasks/<id>.json` cross-checked against `list-microvms`. If tag-filtered
-   listing is unavailable, is the local index + per-image scan enough, or do we
-   need the C2 to persist `taskID ↔ microvmId`?
+4. **Watch scoping.** `Watch` filters `list-microvms` to this runner's
+   `xagent.runner` tag and emits every exit by id; the runner ignores untracked
+   ids. Re-adoption after a restart uses the shared store's records (the
+   `microvmId` is the `Handle.ID`), not a per-image scan. If `list-microvms` is
+   expensive at scale, is a narrower server-side filter needed?
 5. **Region / multi-region.** One backend instance targets one region
    (`--lambda-microvm-region`). Is single-region per runner acceptable, or should a
    workspace pin its own region (the `region` field allows it, but the staging
