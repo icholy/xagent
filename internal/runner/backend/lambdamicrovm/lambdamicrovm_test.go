@@ -3,6 +3,7 @@ package lambdamicrovm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -22,6 +23,7 @@ type fakeCloud struct {
 	vms     map[string]*awsmicrovm.Microvm
 	lastRun *awsmicrovm.RunMicrovmInput
 	runErr  error
+	listErr error // if set, ListMicrovms returns it
 	// pageSize > 0 makes ListMicrovms paginate (NextToken is the start index),
 	// exercising the backend's listAll paginator.
 	pageSize int
@@ -64,6 +66,9 @@ func (f *fakeCloud) TerminateMicrovm(_ context.Context, in *awsmicrovm.Terminate
 func (f *fakeCloud) ListMicrovms(_ context.Context, in *awsmicrovm.ListMicrovmsInput) (*awsmicrovm.ListMicrovmsOutput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	// Stable order so NextToken (a start index) paginates deterministically.
 	ids := make([]string, 0, len(f.vms))
 	for id := range f.vms {
@@ -393,6 +398,32 @@ func TestWatchPagesThroughResults(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Watch dropped the exit of a VM on a later page")
+	}
+}
+
+func TestListAllYieldsErrorAndStops(t *testing.T) {
+	be, cloud, _ := newTestBackend(t)
+	ctx := context.Background()
+	if _, err := be.Launch(ctx, testSpec(1), nil); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	cloud.listErr = errors.New("throttled")
+
+	var gotErr error
+	steps := 0
+	for m, err := range be.listAll(ctx) {
+		steps++
+		if err != nil {
+			gotErr = err
+			break
+		}
+		_ = m
+	}
+	if gotErr == nil {
+		t.Fatal("listAll should yield the ListMicrovms error")
+	}
+	if steps != 1 {
+		t.Fatalf("listAll should yield once (the error) then stop, got %d steps", steps)
 	}
 }
 

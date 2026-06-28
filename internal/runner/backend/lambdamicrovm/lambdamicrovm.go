@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"log/slog"
 	"strconv"
 	"time"
@@ -258,26 +259,31 @@ func (b *Backend) Watch(ctx context.Context, handle func(backend.HandleExit)) er
 	ticker := time.NewTicker(b.poll)
 	defer ticker.Stop()
 	for {
-		mvms, err := b.listAll(ctx)
-		if err != nil {
-			b.log.Error("watch: list microvms", "error", err)
-		} else {
-			curr := make(map[string]awsmicrovm.Microvm, len(mvms))
-			for _, m := range mvms {
-				if m.Tags[tagRunner] != b.runnerID {
-					continue // another runner's MicroVM
-				}
-				curr[m.MicrovmID] = m
-				if m.Alive() || reported[m.MicrovmID] {
-					continue
-				}
-				code := -1
-				if m.State == awsmicrovm.MicrovmStateTerminated {
-					code = 0
-				}
-				reported[m.MicrovmID] = true
-				handle(backend.HandleExit{ID: m.MicrovmID, ExitCode: code})
+		curr := make(map[string]awsmicrovm.Microvm)
+		listErr := false
+		for m, err := range b.listAll(ctx) {
+			if err != nil {
+				// A partial fleet view can't be diffed for vanished VMs, so log
+				// and skip the rest of this poll cycle; the next tick retries.
+				b.log.Error("watch: list microvms", "error", err)
+				listErr = true
+				break
 			}
+			if m.Tags[tagRunner] != b.runnerID {
+				continue // another runner's MicroVM
+			}
+			curr[m.MicrovmID] = m
+			if m.Alive() || reported[m.MicrovmID] {
+				continue
+			}
+			code := -1
+			if m.State == awsmicrovm.MicrovmStateTerminated {
+				code = 0
+			}
+			reported[m.MicrovmID] = true
+			handle(backend.HandleExit{ID: m.MicrovmID, ExitCode: code})
+		}
+		if !listErr {
 			// A MicroVM seen alive last poll but now absent vanished without an
 			// observed terminal state: report it lost.
 			for id := range prevAlive {
@@ -326,24 +332,30 @@ func (b *Backend) find(ctx context.Context, microvmID string) (awsmicrovm.Microv
 	return out.Microvm, true, nil
 }
 
-// listAll pages through ListMicrovms until NextToken is empty, so Watch sees
-// every MicroVM rather than just the first page. Truncating here would make
-// Watch drop the exits of VMs on later pages.
-func (b *Backend) listAll(ctx context.Context) ([]awsmicrovm.Microvm, error) {
-	var all []awsmicrovm.Microvm
-	in := &awsmicrovm.ListMicrovmsInput{}
-	for {
-		out, err := b.cloud.ListMicrovms(ctx, in)
-		if err != nil {
-			return nil, fmt.Errorf("list microvms: %w", err)
+// listAll yields every MicroVM across all pages of ListMicrovms, so Watch sees
+// the whole fleet rather than just the first page. Pagination is fallible, so
+// it is an iter.Seq2 carrying a per-step error: a non-nil error is yielded once
+// (with a zero Microvm) and iteration stops.
+func (b *Backend) listAll(ctx context.Context) iter.Seq2[awsmicrovm.Microvm, error] {
+	return func(yield func(awsmicrovm.Microvm, error) bool) {
+		in := &awsmicrovm.ListMicrovmsInput{}
+		for {
+			out, err := b.cloud.ListMicrovms(ctx, in)
+			if err != nil {
+				yield(awsmicrovm.Microvm{}, fmt.Errorf("list microvms: %w", err))
+				return
+			}
+			for _, m := range out.Microvms {
+				if !yield(m, nil) {
+					return
+				}
+			}
+			if out.NextToken == "" {
+				return
+			}
+			in.NextToken = out.NextToken
 		}
-		all = append(all, out.Microvms...)
-		if out.NextToken == "" {
-			break
-		}
-		in.NextToken = out.NextToken
 	}
-	return all, nil
 }
 
 func decodeData(raw []byte) (handleData, bool) {
