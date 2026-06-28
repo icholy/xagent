@@ -110,7 +110,7 @@ type RunMicrovmOutput struct {
 // until suspended or terminated.
 func (c *Client) RunMicrovm(ctx context.Context, in *RunMicrovmInput) (*RunMicrovmOutput, error) {
 	var out RunMicrovmOutput
-	if err := c.do(ctx, http.MethodPost, "/microvms", in, &out); err != nil {
+	if err := c.do(ctx, "RunMicrovm", http.MethodPost, "/microvms", in, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -128,7 +128,7 @@ type TerminateMicrovmOutput struct{}
 // before releasing resources.
 func (c *Client) TerminateMicrovm(ctx context.Context, in *TerminateMicrovmInput) (*TerminateMicrovmOutput, error) {
 	path := "/microvms/" + url.PathEscape(in.MicrovmID) + "/terminate"
-	if err := c.do(ctx, http.MethodPost, path, struct{}{}, nil); err != nil {
+	if err := c.do(ctx, "TerminateMicrovm", http.MethodPost, path, struct{}{}, nil); err != nil {
 		return nil, err
 	}
 	return &TerminateMicrovmOutput{}, nil
@@ -159,7 +159,7 @@ func (w wireMicrovm) toMicrovm() Microvm {
 // GetMicrovm returns a single MicroVM by id.
 func (c *Client) GetMicrovm(ctx context.Context, in *GetMicrovmInput) (*GetMicrovmOutput, error) {
 	var w wireMicrovm
-	if err := c.do(ctx, http.MethodGet, "/microvms/"+url.PathEscape(in.MicrovmID), nil, &w); err != nil {
+	if err := c.do(ctx, "GetMicrovm", http.MethodGet, "/microvms/"+url.PathEscape(in.MicrovmID), nil, &w); err != nil {
 		return nil, err
 	}
 	return &GetMicrovmOutput{Microvm: w.toMicrovm()}, nil
@@ -197,7 +197,7 @@ func (c *Client) ListMicrovms(ctx context.Context, in *ListMicrovmsInput) (*List
 		path += "?" + q.Encode()
 	}
 	var resp listMicrovmsResponse
-	if err := c.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
+	if err := c.do(ctx, "ListMicrovms", http.MethodGet, path, nil, &resp); err != nil {
 		return nil, err
 	}
 	out := &ListMicrovmsOutput{NextToken: resp.NextToken}
@@ -210,7 +210,7 @@ func (c *Client) ListMicrovms(ctx context.Context, in *ListMicrovmsInput) (*List
 // do signs and sends a JSON request to an operation path, decoding the response
 // into out (which may be nil). Requests are signed with the AWS SDK's SigV4
 // signer using credentials from the SDK credential chain.
-func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
+func (c *Client) do(ctx context.Context, op, method, path string, in, out any) error {
 	var body []byte
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -241,7 +241,7 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("lambda-microvms %s %s: status %d: %s", method, path, resp.StatusCode, data)
+		return newAPIError(op, resp.StatusCode, data)
 	}
 	if out != nil && len(data) > 0 {
 		if err := json.Unmarshal(data, out); err != nil {

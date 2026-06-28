@@ -3,6 +3,7 @@ package awsmicrovm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -101,6 +102,112 @@ func TestListAndTerminateAndGet(t *testing.T) {
 	}
 	if getPath != "/microvms/mvm-1" || !got.Microvm.State.Terminal() {
 		t.Fatalf("get path=%q state=%v", getPath, got.Microvm.State)
+	}
+}
+
+func TestAPIErrorNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"__type":"ResourceNotFoundException","message":"microvm mvm-x not found"}`))
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-x"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error is not *APIError: %v", err)
+	}
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d", apiErr.StatusCode)
+	}
+	if apiErr.Op != "GetMicrovm" {
+		t.Fatalf("op = %q", apiErr.Op)
+	}
+	if apiErr.Code != "ResourceNotFoundException" {
+		t.Fatalf("code = %q", apiErr.Code)
+	}
+	if apiErr.Message != "microvm mvm-x not found" {
+		t.Fatalf("message = %q", apiErr.Message)
+	}
+	if !IsNotFound(err) {
+		t.Fatal("IsNotFound should be true for a 404")
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	if IsNotFound(nil) {
+		t.Fatal("IsNotFound(nil) should be false")
+	}
+	if IsNotFound(errors.New("boom")) {
+		t.Fatal("IsNotFound(non-APIError) should be false")
+	}
+	if IsNotFound(&APIError{StatusCode: 500}) {
+		t.Fatal("IsNotFound(500) should be false")
+	}
+	if !IsNotFound(&APIError{StatusCode: 404}) {
+		t.Fatal("IsNotFound(404) should be true")
+	}
+
+	// A 500 from the server is an *APIError but not a not-found.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"code":"InternalFailure","message":"oops"}`))
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-x"})
+	if IsNotFound(err) {
+		t.Fatalf("IsNotFound should be false for a 500: %v", err)
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Code != "InternalFailure" || apiErr.Message != "oops" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAPIErrorUnparseableBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("<html>502 Bad Gateway</html>"))
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).RunMicrovm(context.Background(), &RunMicrovmInput{ImageIdentifier: "arn:image"})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error is not *APIError: %v", err)
+	}
+	if apiErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %d", apiErr.StatusCode)
+	}
+	if apiErr.Op != "RunMicrovm" {
+		t.Fatalf("op = %q", apiErr.Op)
+	}
+	if apiErr.Message != "<html>502 Bad Gateway</html>" {
+		t.Fatalf("message = %q", apiErr.Message)
+	}
+}
+
+func TestAPIErrorEmptyBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv).GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-x"})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error is not *APIError: %v", err)
+	}
+	if apiErr.StatusCode != http.StatusNotFound || apiErr.Message != "" {
+		t.Fatalf("status=%d message=%q", apiErr.StatusCode, apiErr.Message)
+	}
+	if !IsNotFound(err) {
+		t.Fatal("IsNotFound should be true even with empty body")
 	}
 }
 
