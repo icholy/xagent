@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/x/sse"
+	"gotest.tools/v3/assert"
 )
 
 func TestCreateMicrovmAuthTokenSignsAndPosts(t *testing.T) {
@@ -33,27 +34,14 @@ func TestCreateMicrovmAuthTokenSignsAndPosts(t *testing.T) {
 		ExpirationMinutes: 30,
 		AllowedPorts:      []AllowedPort{{All: true}},
 	})
-	if err != nil {
-		t.Fatalf("CreateMicrovmAuthToken: %v", err)
-	}
-	if out.Token != "tok-123" {
-		t.Fatalf("token = %q", out.Token)
-	}
-	if gotMethod != http.MethodPost {
-		t.Fatalf("method = %q", gotMethod)
-	}
-	if gotPath != "/microvms/mvm-1/auth-tokens" {
-		t.Fatalf("path = %q", gotPath)
-	}
-	if !strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=AKID/") {
-		t.Fatalf("missing/invalid SigV4 auth header: %q", gotAuth)
-	}
-	if gotBody.MicrovmID != "mvm-1" || gotBody.ExpirationMinutes != 30 {
-		t.Fatalf("body = %+v", gotBody)
-	}
-	if string(gotBody.AllowedPorts) != `[{"allPorts":{}}]` {
-		t.Fatalf("allowedPorts = %s", gotBody.AllowedPorts)
-	}
+	assert.NilError(t, err)
+	assert.Equal(t, out.Token, "tok-123")
+	assert.Equal(t, gotMethod, http.MethodPost)
+	assert.Equal(t, gotPath, "/microvms/mvm-1/auth-tokens")
+	assert.Assert(t, strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=AKID/"), "auth header = %q", gotAuth)
+	assert.Equal(t, gotBody.MicrovmID, "mvm-1")
+	assert.Equal(t, gotBody.ExpirationMinutes, 30)
+	assert.Equal(t, string(gotBody.AllowedPorts), `[{"allPorts":{}}]`)
 }
 
 func TestCreateMicrovmAuthTokenAPIError(t *testing.T) {
@@ -65,47 +53,28 @@ func TestCreateMicrovmAuthTokenAPIError(t *testing.T) {
 
 	_, err := newTestClient(srv).CreateMicrovmAuthToken(context.Background(), &CreateMicrovmAuthTokenInput{MicrovmID: "mvm-x"})
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("error is not *APIError: %v", err)
-	}
-	if apiErr.Op != "CreateMicrovmAuthToken" || apiErr.StatusCode != http.StatusNotFound {
-		t.Fatalf("op=%q status=%d", apiErr.Op, apiErr.StatusCode)
-	}
-	if !IsNotFound(err) {
-		t.Fatal("IsNotFound should be true for a 404")
-	}
+	assert.Assert(t, errors.As(err, &apiErr), "error is not *APIError: %v", err)
+	assert.Equal(t, apiErr.Op, "CreateMicrovmAuthToken")
+	assert.Equal(t, apiErr.StatusCode, http.StatusNotFound)
+	assert.Assert(t, IsNotFound(err))
 }
 
 func TestAllowedPortMarshal(t *testing.T) {
 	data, err := json.Marshal([]AllowedPort{{All: true}, {Port: 8080}})
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	if string(data) != `[{"allPorts":{}},{"port":8080}]` {
-		t.Fatalf("marshal = %s", data)
-	}
+	assert.NilError(t, err)
+	assert.Equal(t, string(data), `[{"allPorts":{}},{"port":8080}]`)
 }
 
 func TestNewProxyRequestSetsURLAndHeader(t *testing.T) {
 	req, err := NewProxyRequest(context.Background(), "mvm-1.example.com", "tok-123", http.MethodGet, "/health", nil)
-	if err != nil {
-		t.Fatalf("NewProxyRequest: %v", err)
-	}
-	if req.URL.String() != "https://mvm-1.example.com/health" {
-		t.Fatalf("url = %q", req.URL.String())
-	}
-	if req.Header.Get(ProxyAuthHeader) != "tok-123" {
-		t.Fatalf("header = %q", req.Header.Get(ProxyAuthHeader))
-	}
+	assert.NilError(t, err)
+	assert.Equal(t, req.URL.String(), "https://mvm-1.example.com/health")
+	assert.Equal(t, req.Header.Get(ProxyAuthHeader), "tok-123")
 
 	// An endpoint that already carries a scheme is used as-is.
 	req, err = NewProxyRequest(context.Background(), "https://mvm-1.example.com/", "tok", http.MethodPost, "/run", nil)
-	if err != nil {
-		t.Fatalf("NewProxyRequest: %v", err)
-	}
-	if req.URL.String() != "https://mvm-1.example.com/run" {
-		t.Fatalf("url = %q", req.URL.String())
-	}
+	assert.NilError(t, err)
+	assert.Equal(t, req.URL.String(), "https://mvm-1.example.com/run")
 }
 
 func TestNewProxyRequestStreamsSSE(t *testing.T) {
@@ -127,35 +96,25 @@ func TestNewProxyRequestStreamsSSE(t *testing.T) {
 	defer srv.Close()
 
 	req, err := NewProxyRequest(context.Background(), srv.URL, "tok-123", http.MethodGet, "/events", nil)
-	if err != nil {
-		t.Fatalf("NewProxyRequest: %v", err)
-	}
+	assert.NilError(t, err)
 	req.Header.Set("Accept", "text/event-stream")
 
 	// The caller sends the request with its own client and parses the streamed
 	// body itself (here with x/sse) — the helper does not parse it.
 	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatalf("Do: %v", err)
-	}
+	assert.NilError(t, err)
 	defer resp.Body.Close()
-	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
-		t.Fatalf("content-type = %q", ct)
-	}
+	assert.Equal(t, resp.Header.Get("Content-Type"), "text/event-stream")
 
 	var events []string
 	rd := sse.NewReader(resp.Body)
 	for {
 		ev, err := rd.Read()
-		if err != nil {
-			t.Fatalf("read event: %v", err)
-		}
+		assert.NilError(t, err)
 		if len(ev.Data) == 0 {
 			break
 		}
 		events = append(events, string(ev.Data))
 	}
-	if len(events) != 2 || events[0] != "one" || events[1] != "two" {
-		t.Fatalf("events = %v", events)
-	}
+	assert.DeepEqual(t, events, []string{"one", "two"})
 }
