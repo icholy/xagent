@@ -231,14 +231,14 @@ sequenceDiagram
     R->>S3: stage spec bundle, presign GET URL
     R->>CP: RunMicrovm(image, NO_INGRESS, idle off, payload=presigned URL)
     CP-->>R: {microvmId, endpoint}
-    Note over R: persist Handle (id=microvmId; data: endpoint, image, staging)
+    Note over R: persist Handle (id=microvmId, data=endpoint+image+staging)
     CP->>Shim: POST /run (microvmId, payload)
     Shim->>S3: GET bundle (presigned URL)
     Shim->>Drv: provision files (once), spawn driver, supervise proc.Wait()
     Shim-->>CP: 200 OK
     Drv->>C2: connect (task token), run task
 
-    R->>CP: CreateMicrovmAuthToken(microvmId, allowedPorts=[8080])
+    R->>CP: CreateMicrovmAuthToken(microvmId, allowedPorts=8080)
     CP-->>R: token
     R->>Shim: GET /xagent/lifecycle (X-aws-proxy-auth, via proxy)
     Note over R,Shim: SSE stream open
@@ -246,7 +246,7 @@ sequenceDiagram
     Drv->>C2: report terminal status (driver-owned events)
     Drv--)Shim: process exits (proc.Wait returns)
     Shim--)R: SSE driver-exited{code}
-    R->>CP: TerminateMicrovm(microvmId) [runner credentials]
+    R->>CP: TerminateMicrovm(microvmId) using runner credentials
     R->>S3: delete staged object
     Note over R: record Exit{taskID, code}
 ```
@@ -270,7 +270,7 @@ sequenceDiagram
         R->>Shim: reconnect SSE
     else TERMINATED / FAILED / not-found
         CP-->>R: terminal or gone
-        Note over R: emit Exit{last SSE code, else -1 "report lost"}
+        Note over R: emit Exit{last SSE code, else -1 report lost}
     end
     Note over R,CP: periodic ListMicrovms reconcile is the final backstop
 ```
@@ -295,7 +295,7 @@ sequenceDiagram
     Drv--)Shim: process exits
     Shim--)R: SSE driver-exited{code}
     Note over R: Destroy
-    R->>CP: TerminateMicrovm(microvmId) [idempotent]
+    R->>CP: TerminateMicrovm(microvmId), idempotent
     R->>S3: delete staged object
 ```
 
