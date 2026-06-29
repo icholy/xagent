@@ -8,13 +8,17 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/runner/backend"
 	dockerbackend "github.com/icholy/xagent/internal/runner/backend/docker"
+	"github.com/icholy/xagent/internal/runner/backend/lambdamicrovm"
+	"github.com/icholy/xagent/internal/runner/backend/lambdamicrovm/awsmvm"
 	"github.com/icholy/xagent/internal/runner/taskstate"
 	"github.com/icholy/xagent/internal/runner/workspace"
+	"github.com/icholy/xagent/internal/x/awsmicrovm"
 	"github.com/icholy/xagent/internal/x/common"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
@@ -71,7 +75,7 @@ var RunnerCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "backend",
-			Usage:   "Sandbox backend (docker)",
+			Usage:   "Sandbox backend (docker, lambda-microvm)",
 			Value:   "docker",
 			Sources: cli.EnvVars("XAGENT_BACKEND"),
 		},
@@ -80,6 +84,17 @@ var RunnerCommand = &cli.Command{
 			Usage:   "Directory for the runner-local task→sandbox-handle store",
 			Value:   "/var/lib/xagent/tasks",
 			Sources: cli.EnvVars("XAGENT_STATE_DIR"),
+		},
+		&cli.StringFlag{
+			Name:    "lambda-microvm-region",
+			Usage:   "AWS region for the lambda-microvm backend (defaults to the SDK-resolved region)",
+			Sources: cli.EnvVars("XAGENT_LAMBDA_MICROVM_REGION"),
+		},
+		&cli.DurationFlag{
+			Name:    "lambda-microvm-reconcile",
+			Usage:   "Interval of the lambda-microvm backend's ListMicrovms reconcile sweep",
+			Value:   30 * time.Second,
+			Sources: cli.EnvVars("XAGENT_LAMBDA_MICROVM_RECONCILE"),
 		},
 		&cli.BoolFlag{
 			Name:  "debug",
@@ -144,6 +159,26 @@ var RunnerCommand = &cli.Command{
 			be, err = dockerbackend.New(dockerbackend.Options{
 				RunnerID: runnerID,
 				Log:      log,
+			})
+			if err != nil {
+				return err
+			}
+		case "lambda-microvm":
+			loadOpts := []func(*config.LoadOptions) error{}
+			if region := cmd.String("lambda-microvm-region"); region != "" {
+				loadOpts = append(loadOpts, config.WithRegion(region))
+			}
+			awsCfg, err := config.LoadDefaultConfig(ctx, loadOpts...)
+			if err != nil {
+				return fmt.Errorf("lambda-microvm backend: %w", err)
+			}
+			be, err = lambdamicrovm.New(lambdamicrovm.Options{
+				Cloud:             awsmicrovm.NewClient(awsCfg),
+				Stager:            awsmvm.NewS3Stager(awsCfg),
+				RunnerID:          runnerID,
+				Region:            awsCfg.Region,
+				ReconcileInterval: cmd.Duration("lambda-microvm-reconcile"),
+				Log:               log,
 			})
 			if err != nil {
 				return err
