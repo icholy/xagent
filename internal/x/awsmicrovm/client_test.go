@@ -105,6 +105,71 @@ func TestListAndTerminateAndGet(t *testing.T) {
 	}
 }
 
+func TestSuspendAndResume(t *testing.T) {
+	var gotPath, gotMethod, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotMethod = r.Method
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+
+	if _, err := c.SuspendMicrovm(context.Background(), &SuspendMicrovmInput{MicrovmID: "mvm-1"}); err != nil {
+		t.Fatalf("SuspendMicrovm: %v", err)
+	}
+	if gotPath != "/microvms/mvm-1/suspend" {
+		t.Fatalf("suspend path = %q", gotPath)
+	}
+	if gotMethod != http.MethodPost {
+		t.Fatalf("suspend method = %q", gotMethod)
+	}
+	if !strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=AKID/") {
+		t.Fatalf("missing/invalid SigV4 auth header: %q", gotAuth)
+	}
+
+	if _, err := c.ResumeMicrovm(context.Background(), &ResumeMicrovmInput{MicrovmID: "mvm-1"}); err != nil {
+		t.Fatalf("ResumeMicrovm: %v", err)
+	}
+	if gotPath != "/microvms/mvm-1/resume" {
+		t.Fatalf("resume path = %q", gotPath)
+	}
+	if gotMethod != http.MethodPost {
+		t.Fatalf("resume method = %q", gotMethod)
+	}
+	if !strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=AKID/") {
+		t.Fatalf("missing/invalid SigV4 auth header: %q", gotAuth)
+	}
+}
+
+func TestSuspendAndResumeAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"__type":"ResourceNotFoundException","message":"microvm mvm-x not found"}`))
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+
+	_, suspendErr := c.SuspendMicrovm(context.Background(), &SuspendMicrovmInput{MicrovmID: "mvm-x"})
+	var suspendAPIErr *APIError
+	if !errors.As(suspendErr, &suspendAPIErr) {
+		t.Fatalf("SuspendMicrovm error is not *APIError: %v", suspendErr)
+	}
+	if suspendAPIErr.Op != "SuspendMicrovm" || !IsNotFound(suspendErr) {
+		t.Fatalf("suspend api error = %+v", suspendAPIErr)
+	}
+
+	_, resumeErr := c.ResumeMicrovm(context.Background(), &ResumeMicrovmInput{MicrovmID: "mvm-x"})
+	var resumeAPIErr *APIError
+	if !errors.As(resumeErr, &resumeAPIErr) {
+		t.Fatalf("ResumeMicrovm error is not *APIError: %v", resumeErr)
+	}
+	if resumeAPIErr.Op != "ResumeMicrovm" || !IsNotFound(resumeErr) {
+		t.Fatalf("resume api error = %+v", resumeAPIErr)
+	}
+}
+
 func TestAPIErrorNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
