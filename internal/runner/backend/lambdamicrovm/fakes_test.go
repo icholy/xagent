@@ -39,7 +39,9 @@ func (f *fakeCloud) RunMicrovm(_ context.Context, in *awsmicrovm.RunMicrovmInput
 	f.next++
 	id := fmt.Sprintf("mvm-%d", f.next)
 	endpoint := id + ".example.com"
-	f.vms[id] = &awsmicrovm.Microvm{MicrovmID: id, State: awsmicrovm.MicrovmStateRunning, Endpoint: endpoint, Tags: in.Tags}
+	// run-microvm does not tag the VM (the service has no tags input and a running
+	// MicroVM is not taggable); ownership for the Watch tests is set via add().
+	f.vms[id] = &awsmicrovm.Microvm{MicrovmID: id, State: awsmicrovm.MicrovmStateRunning, Endpoint: endpoint}
 	return &awsmicrovm.RunMicrovmOutput{MicrovmID: id, Endpoint: endpoint}, nil
 }
 

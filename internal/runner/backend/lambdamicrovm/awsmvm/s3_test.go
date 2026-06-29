@@ -1,12 +1,12 @@
 package awsmvm
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"gotest.tools/v3/assert"
 )
 
 type fakeS3 struct {
@@ -40,20 +40,10 @@ func TestS3StagerStageAndRemove(t *testing.T) {
 	ctx := context.Background()
 
 	url, err := st.Stage(ctx, "bucket", "runner-1/7.json", []byte("payload"), 3600)
-	if err != nil {
-		t.Fatalf("Stage: %v", err)
-	}
-	if got := s3c.puts["bucket/runner-1/7.json"]; !bytes.Equal(got, []byte("payload")) {
-		t.Fatalf("staged object = %q", got)
-	}
-	if url != "https://presigned/bucket/runner-1/7.json" {
-		t.Fatalf("presigned url = %q", url)
-	}
+	assert.NilError(t, err)
+	assert.Equal(t, string(s3c.puts["bucket/runner-1/7.json"]), "payload")
+	assert.Equal(t, url, "https://presigned/bucket/runner-1/7.json")
 
-	if err := st.Remove(ctx, "bucket", "runner-1/7.json"); err != nil {
-		t.Fatalf("Remove: %v", err)
-	}
-	if len(s3c.deletes) != 1 || s3c.deletes[0] != "bucket/runner-1/7.json" {
-		t.Fatalf("deletes = %v", s3c.deletes)
-	}
+	assert.NilError(t, st.Remove(ctx, "bucket", "runner-1/7.json"))
+	assert.DeepEqual(t, s3c.deletes, []string{"bucket/runner-1/7.json"})
 }

@@ -23,7 +23,6 @@ import (
 	"iter"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -37,12 +36,16 @@ import (
 // (informational metadata persisted in the task record).
 const HandleType = "lambda-microvm"
 
-// Resource tag keys mirrored from the Docker backend's container labels.
-const (
-	tagMarker = "xagent"
-	tagTask   = "xagent.task"
-	tagRunner = "xagent.runner"
-)
+// tagRunner is the tag key that would scope a MicroVM to its owning runner.
+//
+// NOTE: the real Lambda MicroVMs API does not let us tag a running MicroVM
+// instance (run-microvm takes no tags, and a MicroVM is not a taggable resource
+// for tag-resource), and get/list-microvms do not return tags. So Watch's
+// tag-based ownership filter below cannot work against the live service yet —
+// rediscovery of this runner's VMs needs a different mechanism (tracked
+// separately). The constant and filter are retained for the unit tests, which
+// drive ownership through the Cloud fake.
+const tagRunner = "xagent.runner"
 
 // shimPort is the port the in-VM shim's HTTP server (hooks + xagent control
 // surface) listens on; the proxy auth token is scoped to it.
@@ -224,14 +227,15 @@ func (b *Backend) tryResume(ctx context.Context, reuse *backend.Handle) (bool, b
 	}
 	mvm := out.Microvm
 	switch mvm.State {
-	case awsmicrovm.MicrovmStateRunning:
-		// Already running (e.g. a restart that beat the suspend): adopt it.
+	case awsmicrovm.MicrovmStateRunning, awsmicrovm.MicrovmStatePending:
+		// Already running or coming up (e.g. a restart that beat the suspend):
+		// adopt it.
 	case awsmicrovm.MicrovmStateSuspended:
 		b.log.Info("resuming microvm", "microvm", reuse.ID)
 		if _, err := b.cloud.ResumeMicrovm(ctx, &awsmicrovm.ResumeMicrovmInput{MicrovmID: reuse.ID}); err != nil {
 			return false, backend.Handle{}, fmt.Errorf("resume microvm: %w", err)
 		}
-	default: // TERMINATED / FAILED
+	default: // SUSPENDING / TERMINATING / TERMINATED
 		return false, backend.Handle{}, nil
 	}
 
@@ -275,16 +279,12 @@ func (b *Backend) launchFresh(ctx context.Context, spec *backend.Spec) (backend.
 		IngressNetworkConnectors: []string{fmt.Sprintf(noIngressConnector, b.region)},
 		MaximumDurationInSeconds: maxDuration,
 		RunHookPayload:           url,
-		// Endpoint-idle auto-suspend must be disabled: the runner drives suspend
-		// explicitly off the driver-exit signal, and auto-suspend would race that
-		// stream and wrongly suspend a CPU-busy agent receiving no traffic (per
-		// AWS's guidance for asynchronous applications).
-		IdlePolicy: &awsmicrovm.IdlePolicy{AutoResumeEnabled: false},
-		Tags: map[string]string{
-			tagMarker: "true",
-			tagTask:   strconv.FormatInt(spec.TaskID, 10),
-			tagRunner: b.runnerID,
-		},
+		// No idle policy: the runner drives suspend explicitly off the driver-exit
+		// signal. The service's idlePolicy cannot express "never auto-suspend"
+		// (maxIdleDurationSeconds has a 600s floor), so it is omitted rather than
+		// set to a partial/invalid value. run-microvm also does not accept tags
+		// (tagging is a separate op, and a running MicroVM is not a taggable
+		// resource), so the VM carries none — see Watch for the consequence.
 	})
 	if err != nil {
 		_ = b.stager.Remove(ctx, cfg.StagingBucket, stageKey)
@@ -316,10 +316,12 @@ func (b *Backend) Probe(ctx context.Context, h backend.Handle) (backend.State, e
 	if err != nil {
 		return backend.StateUnknown, fmt.Errorf("get microvm: %w", err)
 	}
-	if out.Microvm.State == awsmicrovm.MicrovmStateRunning {
-		return backend.StateRunning, nil
+	switch out.Microvm.State {
+	case awsmicrovm.MicrovmStateRunning, awsmicrovm.MicrovmStatePending:
+		return backend.StateRunning, nil // up, or coming up
+	default:
+		return backend.StateExited, nil // SUSPENDING / SUSPENDED / TERMINATING / TERMINATED
 	}
-	return backend.StateExited, nil // SUSPENDED / TERMINATED / FAILED
 }
 
 // Signal gracefully stops the driver: over the managed proxy it POSTs the shim's

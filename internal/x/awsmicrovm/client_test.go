@@ -12,6 +12,7 @@ import (
 
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"gotest.tools/v3/assert"
 )
 
 func newTestClient(server *httptest.Server) *Client {
@@ -24,6 +25,8 @@ func newTestClient(server *httptest.Server) *Client {
 		now:      func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) },
 	}
 }
+
+func sigV4(auth string) bool { return strings.HasPrefix(auth, "AWS4-HMAC-SHA256 Credential=AKID/") }
 
 func TestRunMicrovmSignsAndPosts(t *testing.T) {
 	var gotPath, gotAuth string
@@ -42,36 +45,25 @@ func TestRunMicrovmSignsAndPosts(t *testing.T) {
 		RunHookPayload:           "opaque-payload",
 		IdlePolicy:               &IdlePolicy{AutoResumeEnabled: false},
 		IngressNetworkConnectors: []string{"arn:no-ingress"},
-		Tags:                     map[string]string{"k": "v"},
 	})
-	if err != nil {
-		t.Fatalf("RunMicrovm: %v", err)
-	}
-	if out.MicrovmID != "mvm-1" {
-		t.Fatalf("microvm id = %q", out.MicrovmID)
-	}
-	if gotPath != "/microvms" {
-		t.Fatalf("path = %q", gotPath)
-	}
-	if !strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=AKID/") {
-		t.Fatalf("missing/invalid SigV4 auth header: %q", gotAuth)
-	}
-	// The payload and tags pass through verbatim.
-	if gotBody.RunHookPayload != "opaque-payload" || gotBody.Tags["k"] != "v" {
-		t.Fatalf("body = %+v", gotBody)
-	}
+	assert.NilError(t, err)
+	assert.Equal(t, out.MicrovmID, "mvm-1")
+	assert.Equal(t, gotPath, "/2025-09-09/microvms")
+	assert.Assert(t, sigV4(gotAuth), "missing/invalid SigV4 auth header: %q", gotAuth)
+	// The payload passes through verbatim.
+	assert.Equal(t, gotBody.RunHookPayload, "opaque-payload")
 }
 
 func TestListAndTerminateAndGet(t *testing.T) {
-	var terminatePath, getPath string
+	var terminateMethod, terminatePath, getPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/microvms":
-			_, _ = w.Write([]byte(`{"microvms":[{"microvmId":"mvm-1","state":"RUNNING","tags":{"k":"v"}}]}`))
-		case strings.HasSuffix(r.URL.Path, "/terminate"):
-			terminatePath = r.URL.Path
+		case r.Method == http.MethodGet && r.URL.Path == "/2025-09-09/microvms":
+			_, _ = w.Write([]byte(`{"items":[{"microvmId":"mvm-1","state":"RUNNING"}]}`))
+		case r.Method == http.MethodDelete:
+			terminateMethod, terminatePath = r.Method, r.URL.Path
 			w.WriteHeader(http.StatusOK)
-		case strings.HasPrefix(r.URL.Path, "/microvms/"):
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/2025-09-09/microvms/"):
 			getPath = r.URL.Path
 			_, _ = w.Write([]byte(`{"microvmId":"mvm-1","state":"TERMINATED"}`))
 		default:
@@ -82,27 +74,20 @@ func TestListAndTerminateAndGet(t *testing.T) {
 	c := newTestClient(srv)
 
 	list, err := c.ListMicrovms(context.Background(), &ListMicrovmsInput{})
-	if err != nil {
-		t.Fatalf("ListMicrovms: %v", err)
-	}
-	if len(list.Microvms) != 1 || list.Microvms[0].MicrovmID != "mvm-1" || !list.Microvms[0].Alive() {
-		t.Fatalf("microvms = %+v", list.Microvms)
-	}
+	assert.NilError(t, err)
+	assert.Equal(t, len(list.Microvms), 1)
+	assert.Equal(t, list.Microvms[0].MicrovmID, "mvm-1")
+	assert.Assert(t, list.Microvms[0].Alive())
 
-	if _, err := c.TerminateMicrovm(context.Background(), &TerminateMicrovmInput{MicrovmID: "mvm-1"}); err != nil {
-		t.Fatalf("TerminateMicrovm: %v", err)
-	}
-	if terminatePath != "/microvms/mvm-1/terminate" {
-		t.Fatalf("terminate path = %q", terminatePath)
-	}
+	_, err = c.TerminateMicrovm(context.Background(), &TerminateMicrovmInput{MicrovmID: "mvm-1"})
+	assert.NilError(t, err)
+	assert.Equal(t, terminateMethod, http.MethodDelete)
+	assert.Equal(t, terminatePath, "/2025-09-09/microvms/mvm-1")
 
 	got, err := c.GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-1"})
-	if err != nil {
-		t.Fatalf("GetMicrovm: %v", err)
-	}
-	if getPath != "/microvms/mvm-1" || !got.Microvm.State.Terminal() {
-		t.Fatalf("get path=%q state=%v", getPath, got.Microvm.State)
-	}
+	assert.NilError(t, err)
+	assert.Equal(t, getPath, "/2025-09-09/microvms/mvm-1")
+	assert.Assert(t, got.Microvm.State.Terminal())
 }
 
 func TestSuspendAndResume(t *testing.T) {
@@ -116,31 +101,17 @@ func TestSuspendAndResume(t *testing.T) {
 	defer srv.Close()
 	c := newTestClient(srv)
 
-	if _, err := c.SuspendMicrovm(context.Background(), &SuspendMicrovmInput{MicrovmID: "mvm-1"}); err != nil {
-		t.Fatalf("SuspendMicrovm: %v", err)
-	}
-	if gotPath != "/microvms/mvm-1/suspend" {
-		t.Fatalf("suspend path = %q", gotPath)
-	}
-	if gotMethod != http.MethodPost {
-		t.Fatalf("suspend method = %q", gotMethod)
-	}
-	if !strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=AKID/") {
-		t.Fatalf("missing/invalid SigV4 auth header: %q", gotAuth)
-	}
+	_, err := c.SuspendMicrovm(context.Background(), &SuspendMicrovmInput{MicrovmID: "mvm-1"})
+	assert.NilError(t, err)
+	assert.Equal(t, gotPath, "/2025-09-09/microvms/mvm-1/suspend")
+	assert.Equal(t, gotMethod, http.MethodPost)
+	assert.Assert(t, sigV4(gotAuth), "missing/invalid SigV4 auth header: %q", gotAuth)
 
-	if _, err := c.ResumeMicrovm(context.Background(), &ResumeMicrovmInput{MicrovmID: "mvm-1"}); err != nil {
-		t.Fatalf("ResumeMicrovm: %v", err)
-	}
-	if gotPath != "/microvms/mvm-1/resume" {
-		t.Fatalf("resume path = %q", gotPath)
-	}
-	if gotMethod != http.MethodPost {
-		t.Fatalf("resume method = %q", gotMethod)
-	}
-	if !strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=AKID/") {
-		t.Fatalf("missing/invalid SigV4 auth header: %q", gotAuth)
-	}
+	_, err = c.ResumeMicrovm(context.Background(), &ResumeMicrovmInput{MicrovmID: "mvm-1"})
+	assert.NilError(t, err)
+	assert.Equal(t, gotPath, "/2025-09-09/microvms/mvm-1/resume")
+	assert.Equal(t, gotMethod, http.MethodPost)
+	assert.Assert(t, sigV4(gotAuth), "missing/invalid SigV4 auth header: %q", gotAuth)
 }
 
 func TestSuspendAndResumeAPIError(t *testing.T) {
@@ -153,21 +124,15 @@ func TestSuspendAndResumeAPIError(t *testing.T) {
 
 	_, suspendErr := c.SuspendMicrovm(context.Background(), &SuspendMicrovmInput{MicrovmID: "mvm-x"})
 	var suspendAPIErr *APIError
-	if !errors.As(suspendErr, &suspendAPIErr) {
-		t.Fatalf("SuspendMicrovm error is not *APIError: %v", suspendErr)
-	}
-	if suspendAPIErr.Op != "SuspendMicrovm" || !IsNotFound(suspendErr) {
-		t.Fatalf("suspend api error = %+v", suspendAPIErr)
-	}
+	assert.Assert(t, errors.As(suspendErr, &suspendAPIErr), "SuspendMicrovm error is not *APIError: %v", suspendErr)
+	assert.Equal(t, suspendAPIErr.Op, "SuspendMicrovm")
+	assert.Assert(t, IsNotFound(suspendErr))
 
 	_, resumeErr := c.ResumeMicrovm(context.Background(), &ResumeMicrovmInput{MicrovmID: "mvm-x"})
 	var resumeAPIErr *APIError
-	if !errors.As(resumeErr, &resumeAPIErr) {
-		t.Fatalf("ResumeMicrovm error is not *APIError: %v", resumeErr)
-	}
-	if resumeAPIErr.Op != "ResumeMicrovm" || !IsNotFound(resumeErr) {
-		t.Fatalf("resume api error = %+v", resumeAPIErr)
-	}
+	assert.Assert(t, errors.As(resumeErr, &resumeAPIErr), "ResumeMicrovm error is not *APIError: %v", resumeErr)
+	assert.Equal(t, resumeAPIErr.Op, "ResumeMicrovm")
+	assert.Assert(t, IsNotFound(resumeErr))
 }
 
 func TestAPIErrorNotFound(t *testing.T) {
@@ -178,44 +143,20 @@ func TestAPIErrorNotFound(t *testing.T) {
 	defer srv.Close()
 
 	_, err := newTestClient(srv).GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-x"})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("error is not *APIError: %v", err)
-	}
-	if apiErr.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d", apiErr.StatusCode)
-	}
-	if apiErr.Op != "GetMicrovm" {
-		t.Fatalf("op = %q", apiErr.Op)
-	}
-	if apiErr.Code != "ResourceNotFoundException" {
-		t.Fatalf("code = %q", apiErr.Code)
-	}
-	if apiErr.Message != "microvm mvm-x not found" {
-		t.Fatalf("message = %q", apiErr.Message)
-	}
-	if !IsNotFound(err) {
-		t.Fatal("IsNotFound should be true for a 404")
-	}
+	assert.Assert(t, errors.As(err, &apiErr), "error is not *APIError: %v", err)
+	assert.Equal(t, apiErr.StatusCode, http.StatusNotFound)
+	assert.Equal(t, apiErr.Op, "GetMicrovm")
+	assert.Equal(t, apiErr.Code, "ResourceNotFoundException")
+	assert.Equal(t, apiErr.Message, "microvm mvm-x not found")
+	assert.Assert(t, IsNotFound(err))
 }
 
 func TestIsNotFound(t *testing.T) {
-	if IsNotFound(nil) {
-		t.Fatal("IsNotFound(nil) should be false")
-	}
-	if IsNotFound(errors.New("boom")) {
-		t.Fatal("IsNotFound(non-APIError) should be false")
-	}
-	if IsNotFound(&APIError{StatusCode: 500}) {
-		t.Fatal("IsNotFound(500) should be false")
-	}
-	if !IsNotFound(&APIError{StatusCode: 404}) {
-		t.Fatal("IsNotFound(404) should be true")
-	}
+	assert.Assert(t, !IsNotFound(nil))
+	assert.Assert(t, !IsNotFound(errors.New("boom")))
+	assert.Assert(t, !IsNotFound(&APIError{StatusCode: 500}))
+	assert.Assert(t, IsNotFound(&APIError{StatusCode: 404}))
 
 	// A 500 from the server is an *APIError but not a not-found.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -225,13 +166,11 @@ func TestIsNotFound(t *testing.T) {
 	defer srv.Close()
 
 	_, err := newTestClient(srv).GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-x"})
-	if IsNotFound(err) {
-		t.Fatalf("IsNotFound should be false for a 500: %v", err)
-	}
+	assert.Assert(t, !IsNotFound(err), "IsNotFound should be false for a 500: %v", err)
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) || apiErr.Code != "InternalFailure" || apiErr.Message != "oops" {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.Assert(t, errors.As(err, &apiErr))
+	assert.Equal(t, apiErr.Code, "InternalFailure")
+	assert.Equal(t, apiErr.Message, "oops")
 }
 
 func TestAPIErrorUnparseableBody(t *testing.T) {
@@ -243,18 +182,10 @@ func TestAPIErrorUnparseableBody(t *testing.T) {
 
 	_, err := newTestClient(srv).RunMicrovm(context.Background(), &RunMicrovmInput{ImageIdentifier: "arn:image"})
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("error is not *APIError: %v", err)
-	}
-	if apiErr.StatusCode != http.StatusBadGateway {
-		t.Fatalf("status = %d", apiErr.StatusCode)
-	}
-	if apiErr.Op != "RunMicrovm" {
-		t.Fatalf("op = %q", apiErr.Op)
-	}
-	if apiErr.Message != "<html>502 Bad Gateway</html>" {
-		t.Fatalf("message = %q", apiErr.Message)
-	}
+	assert.Assert(t, errors.As(err, &apiErr), "error is not *APIError: %v", err)
+	assert.Equal(t, apiErr.StatusCode, http.StatusBadGateway)
+	assert.Equal(t, apiErr.Op, "RunMicrovm")
+	assert.Equal(t, apiErr.Message, "<html>502 Bad Gateway</html>")
 }
 
 func TestAPIErrorEmptyBody(t *testing.T) {
@@ -265,25 +196,17 @@ func TestAPIErrorEmptyBody(t *testing.T) {
 
 	_, err := newTestClient(srv).GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-x"})
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("error is not *APIError: %v", err)
-	}
-	if apiErr.StatusCode != http.StatusNotFound || apiErr.Message != "" {
-		t.Fatalf("status=%d message=%q", apiErr.StatusCode, apiErr.Message)
-	}
-	if !IsNotFound(err) {
-		t.Fatal("IsNotFound should be true even with empty body")
-	}
+	assert.Assert(t, errors.As(err, &apiErr), "error is not *APIError: %v", err)
+	assert.Equal(t, apiErr.StatusCode, http.StatusNotFound)
+	assert.Equal(t, apiErr.Message, "")
+	assert.Assert(t, IsNotFound(err))
 }
 
 func TestStatePredicates(t *testing.T) {
-	if !MicrovmStateTerminated.Terminal() || !MicrovmStateFailed.Terminal() {
-		t.Fatal("terminated/failed should be terminal")
-	}
-	if MicrovmStateRunning.Terminal() || MicrovmStateSuspended.Terminal() {
-		t.Fatal("running/suspended should not be terminal")
-	}
-	if !(Microvm{State: MicrovmStateSuspended}).Alive() {
-		t.Fatal("suspended should be alive")
-	}
+	assert.Assert(t, MicrovmStateTerminated.Terminal())
+	assert.Assert(t, MicrovmStateTerminating.Terminal())
+	assert.Assert(t, !MicrovmStatePending.Terminal())
+	assert.Assert(t, !MicrovmStateRunning.Terminal())
+	assert.Assert(t, !MicrovmStateSuspended.Terminal())
+	assert.Assert(t, Microvm{State: MicrovmStateSuspended}.Alive())
 }

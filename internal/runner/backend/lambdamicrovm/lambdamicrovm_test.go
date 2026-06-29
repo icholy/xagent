@@ -96,17 +96,15 @@ func TestLaunchFresh(t *testing.T) {
 	assert.Equal(t, hd.StageBucket, "bucket")
 	assert.Equal(t, hd.StageKey, "runner-1/7.json")
 
-	// run-microvm assembly: connectors, idle off, payload pointer, tags.
+	// run-microvm assembly: connectors, idle omitted, payload pointer, no tags.
 	in := cloud.lastRun
 	assert.Equal(t, in.ImageIdentifier, "arn:aws:lambda:us-east-1:123:microvm-image/x")
 	assert.Equal(t, in.ExecutionRoleArn, "arn:aws:iam::123:role/x")
 	assert.DeepEqual(t, in.EgressNetworkConnectors, []string{"arn:aws:lambda:us-east-1:aws:network-connector:aws-network-connector:INTERNET_EGRESS"})
 	assert.Assert(t, len(in.IngressNetworkConnectors) == 1 && strings.Contains(in.IngressNetworkConnectors[0], "NO_INGRESS"))
 	assert.Equal(t, in.MaximumDurationInSeconds, defaultMaxDuration)
-	assert.Assert(t, in.IdlePolicy != nil && !in.IdlePolicy.AutoResumeEnabled)
+	assert.Assert(t, in.IdlePolicy == nil) // omitted: the service cannot express "never auto-suspend"
 	assert.Equal(t, in.RunHookPayload, "https://bucket.staging.example.com/runner-1/7.json")
-	assert.Equal(t, in.Tags[tagRunner], "runner-1")
-	assert.Equal(t, in.Tags[tagTask], "7")
 
 	// Bundle round-trips cmd/env/files (env = workspace env + spec env).
 	raw, ok := stager.get("runner-1/7.json")

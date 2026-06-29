@@ -16,7 +16,6 @@ import (
 func TestCreateMicrovmAuthTokenSignsAndPosts(t *testing.T) {
 	var gotPath, gotAuth, gotMethod string
 	var gotBody struct {
-		MicrovmID         string          `json:"microvmIdentifier"`
 		ExpirationMinutes int             `json:"expirationInMinutes"`
 		AllowedPorts      json.RawMessage `json:"allowedPorts"`
 	}
@@ -37,9 +36,8 @@ func TestCreateMicrovmAuthTokenSignsAndPosts(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, out.Token, "tok-123")
 	assert.Equal(t, gotMethod, http.MethodPost)
-	assert.Equal(t, gotPath, "/microvms/mvm-1/auth-tokens")
+	assert.Equal(t, gotPath, "/2025-09-09/microvms/mvm-1/auth-token")
 	assert.Assert(t, strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=AKID/"), "auth header = %q", gotAuth)
-	assert.Equal(t, gotBody.MicrovmID, "mvm-1")
 	assert.Equal(t, gotBody.ExpirationMinutes, 30)
 	assert.Equal(t, string(gotBody.AllowedPorts), `[{"allPorts":{}}]`)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/url"
 )
 
 // AllowedPort scopes which ports a CreateMicrovmAuthToken token may reach. The
@@ -42,14 +41,14 @@ type CreateMicrovmAuthTokenOutput struct {
 	Token string
 }
 
-// createMicrovmAuthTokenRequest is the modelled request body.
+// createMicrovmAuthTokenRequest is the request body. microvmIdentifier is bound
+// to the URI path, not the body.
 type createMicrovmAuthTokenRequest struct {
-	MicrovmID         string        `json:"microvmIdentifier"`
 	ExpirationMinutes int           `json:"expirationInMinutes,omitempty"`
 	AllowedPorts      []AllowedPort `json:"allowedPorts,omitempty"`
 }
 
-// createMicrovmAuthTokenResponse is the modelled response body. The token is a
+// createMicrovmAuthTokenResponse is the response body. authToken is a
 // header-name/value map; the proxy auth header key is ProxyAuthHeader.
 type createMicrovmAuthTokenResponse struct {
 	AuthToken map[string]string `json:"authToken"`
@@ -57,14 +56,9 @@ type createMicrovmAuthTokenResponse struct {
 
 // CreateMicrovmAuthToken mints a short-lived token for authenticated requests to
 // a MicroVM's endpoint through the AWS proxy. Pair it with NewProxyRequest.
-//
-// PREVIEW: the request path (POST /microvms/<id>/auth-tokens) and JSON field
-// names are modelled from the public documentation, like the rest of this
-// package.
 func (c *Client) CreateMicrovmAuthToken(ctx context.Context, in *CreateMicrovmAuthTokenInput) (*CreateMicrovmAuthTokenOutput, error) {
-	path := "/microvms/" + url.PathEscape(in.MicrovmID) + "/auth-tokens"
+	path := microvmPath(in.MicrovmID) + "/auth-token"
 	body := createMicrovmAuthTokenRequest{
-		MicrovmID:         in.MicrovmID,
 		ExpirationMinutes: in.ExpirationMinutes,
 		AllowedPorts:      in.AllowedPorts,
 	}

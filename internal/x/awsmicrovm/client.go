@@ -1,15 +1,18 @@
 // Package awsmicrovm is a general-purpose Go client and lifecycle-hook server
 // for the AWS Lambda MicroVMs service — what AWS would ship if they wrote a Go
 // package for MicroVMs. It models the service and nothing about how any
-// particular application uses it: no tasks, sandboxes, staging, or tag
-// semantics. Tags and the run-hook payload are passed through verbatim; their
-// meaning is the caller's business.
+// particular application uses it: no tasks, sandboxes, or staging semantics. The
+// run-hook payload is passed through verbatim; its meaning is the caller's
+// business.
 //
-// PREVIEW: AWS Lambda MicroVMs has no official Go SDK at the time of writing, so
-// the control-plane wire surface (endpoint host, request paths, JSON field
-// names) is modelled from the public documentation and verified only against an
-// httptest server. Credentials, region, and SigV4 signing use aws-sdk-go-v2;
-// adjust the wire surface here when an official SDK ships.
+// PREVIEW: AWS Lambda MicroVMs has no official Go SDK at the time of writing.
+// The control-plane wire surface here (Lambda endpoint host, the /2025-09-09
+// operation paths, HTTP methods, and JSON field names) is taken from the
+// service's own API model (the lambda-microvms botocore service-2.json shipped
+// with aws-cli) rather than guessed, but is verified in this package only
+// against an httptest server. Credentials, region, and SigV4 signing (as the
+// "lambda" service) use aws-sdk-go-v2; replace this with the official SDK when
+// one ships.
 package awsmicrovm
 
 import (
@@ -28,26 +31,38 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
-// signingService is the SigV4 service name for Lambda MicroVMs.
-const signingService = "lambda-microvms"
+// signingName is the SigV4 service name. Lambda MicroVMs is part of the Lambda
+// service: requests are signed as "lambda" and sent to the Lambda endpoint
+// (lambda.<region>.amazonaws.com), under the date-stamped API version below.
+const signingName = "lambda"
 
-// MicrovmState is the lifecycle state Lambda reports for a MicroVM.
+// apiVersion is the date-stamped path prefix for the MicroVMs operations, e.g.
+// POST /2025-09-09/microvms.
+const apiVersion = "2025-09-09"
+
+// MicrovmState is the lifecycle state Lambda reports for a MicroVM. The values
+// are the service's MicrovmState enum.
 type MicrovmState string
 
 const (
-	MicrovmStateRunning    MicrovmState = "RUNNING"
-	MicrovmStateSuspended  MicrovmState = "SUSPENDED"
-	MicrovmStateTerminated MicrovmState = "TERMINATED"
-	MicrovmStateFailed     MicrovmState = "FAILED"
+	MicrovmStatePending     MicrovmState = "PENDING"
+	MicrovmStateRunning     MicrovmState = "RUNNING"
+	MicrovmStateSuspending  MicrovmState = "SUSPENDING"
+	MicrovmStateSuspended   MicrovmState = "SUSPENDED"
+	MicrovmStateTerminating MicrovmState = "TERMINATING"
+	MicrovmStateTerminated  MicrovmState = "TERMINATED"
 )
 
-// Terminal reports whether the state is an end state (the MicroVM is gone or
-// failed and will not run again).
+// Terminal reports whether the state is an end state (the MicroVM is being
+// torn down or is gone, and will not run again).
 func (s MicrovmState) Terminal() bool {
-	return s == MicrovmStateTerminated || s == MicrovmStateFailed
+	return s == MicrovmStateTerminating || s == MicrovmStateTerminated
 }
 
-// Microvm is a point-in-time view of a MicroVM.
+// Microvm is a point-in-time view of a MicroVM. Tags is not populated by
+// GetMicrovm/ListMicrovms (the service does not return tags on those); it is
+// here for callers that resolve tags separately (ListTags) — note running
+// MicroVM instances are not a taggable resource on the service.
 type Microvm struct {
 	MicrovmID string
 	State     MicrovmState
@@ -55,7 +70,8 @@ type Microvm struct {
 	Tags      map[string]string
 }
 
-// Alive reports whether the MicroVM is running or suspended (not terminal).
+// Alive reports whether the MicroVM is not terminal (pending, running,
+// suspending, or suspended).
 func (m Microvm) Alive() bool { return !m.State.Terminal() }
 
 // IdlePolicy configures automatic suspend/resume on endpoint idleness.
@@ -76,13 +92,13 @@ type Client struct {
 }
 
 // NewClient builds a control-plane client from an AWS config. The endpoint
-// defaults to https://lambda-microvms.<region>.amazonaws.com.
+// defaults to https://lambda.<region>.amazonaws.com (the Lambda service host).
 func NewClient(cfg aws.Config) *Client {
 	return &Client{
 		region:   cfg.Region,
 		creds:    cfg.Credentials,
 		signer:   v4.NewSigner(),
-		endpoint: fmt.Sprintf("https://%s.%s.amazonaws.com", signingService, cfg.Region),
+		endpoint: fmt.Sprintf("https://lambda.%s.amazonaws.com", cfg.Region),
 		http:     http.DefaultClient,
 		now:      time.Now,
 	}
@@ -90,14 +106,13 @@ func NewClient(cfg aws.Config) *Client {
 
 // RunMicrovmInput is the input to RunMicrovm.
 type RunMicrovmInput struct {
-	ImageIdentifier          string            `json:"imageIdentifier"`
-	ExecutionRoleArn         string            `json:"executionRoleArn,omitempty"`
-	EgressNetworkConnectors  []string          `json:"egressNetworkConnectors,omitempty"`
-	IngressNetworkConnectors []string          `json:"ingressNetworkConnectors,omitempty"`
-	MaximumDurationInSeconds int64             `json:"maximumDurationInSeconds,omitempty"`
-	RunHookPayload           string            `json:"runHookPayload,omitempty"`
-	IdlePolicy               *IdlePolicy       `json:"idlePolicy,omitempty"`
-	Tags                     map[string]string `json:"tags,omitempty"`
+	ImageIdentifier          string      `json:"imageIdentifier"`
+	ExecutionRoleArn         string      `json:"executionRoleArn,omitempty"`
+	EgressNetworkConnectors  []string    `json:"egressNetworkConnectors,omitempty"`
+	IngressNetworkConnectors []string    `json:"ingressNetworkConnectors,omitempty"`
+	MaximumDurationInSeconds int64       `json:"maximumDurationInSeconds,omitempty"`
+	RunHookPayload           string      `json:"runHookPayload,omitempty"`
+	IdlePolicy               *IdlePolicy `json:"idlePolicy,omitempty"`
 }
 
 // RunMicrovmOutput is the result of RunMicrovm.
@@ -106,11 +121,15 @@ type RunMicrovmOutput struct {
 	Endpoint  string `json:"endpoint"`
 }
 
+// microvmsPath is the collection path; microvmPath is a single MicroVM's path.
+func microvmsPath() string         { return "/" + apiVersion + "/microvms" }
+func microvmPath(id string) string { return microvmsPath() + "/" + url.PathEscape(id) }
+
 // RunMicrovm launches a MicroVM from an image. The MicroVM runs autonomously
 // until suspended or terminated.
 func (c *Client) RunMicrovm(ctx context.Context, in *RunMicrovmInput) (*RunMicrovmOutput, error) {
 	var out RunMicrovmOutput
-	if err := c.do(ctx, "RunMicrovm", http.MethodPost, "/microvms", in, &out); err != nil {
+	if err := c.do(ctx, "RunMicrovm", http.MethodPost, microvmsPath(), in, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -127,8 +146,7 @@ type TerminateMicrovmOutput struct{}
 // TerminateMicrovm terminates a MicroVM, firing its /terminate lifecycle hook
 // before releasing resources.
 func (c *Client) TerminateMicrovm(ctx context.Context, in *TerminateMicrovmInput) (*TerminateMicrovmOutput, error) {
-	path := "/microvms/" + url.PathEscape(in.MicrovmID) + "/terminate"
-	if err := c.do(ctx, "TerminateMicrovm", http.MethodPost, path, struct{}{}, nil); err != nil {
+	if err := c.do(ctx, "TerminateMicrovm", http.MethodDelete, microvmPath(in.MicrovmID), nil, nil); err != nil {
 		return nil, err
 	}
 	return &TerminateMicrovmOutput{}, nil
@@ -144,12 +162,8 @@ type SuspendMicrovmOutput struct{}
 
 // SuspendMicrovm suspends a running MicroVM, pausing it while preserving its
 // state so it can later be resumed.
-//
-// The request path is modelled from the public documentation (boto3
-// suspend-microvm); see the package PREVIEW caveat.
 func (c *Client) SuspendMicrovm(ctx context.Context, in *SuspendMicrovmInput) (*SuspendMicrovmOutput, error) {
-	path := "/microvms/" + url.PathEscape(in.MicrovmID) + "/suspend"
-	if err := c.do(ctx, "SuspendMicrovm", http.MethodPost, path, struct{}{}, nil); err != nil {
+	if err := c.do(ctx, "SuspendMicrovm", http.MethodPost, microvmPath(in.MicrovmID)+"/suspend", nil, nil); err != nil {
 		return nil, err
 	}
 	return &SuspendMicrovmOutput{}, nil
@@ -165,12 +179,8 @@ type ResumeMicrovmOutput struct{}
 
 // ResumeMicrovm resumes a previously suspended MicroVM, returning it to the
 // running state.
-//
-// The request path is modelled from the public documentation (boto3
-// resume-microvm); see the package PREVIEW caveat.
 func (c *Client) ResumeMicrovm(ctx context.Context, in *ResumeMicrovmInput) (*ResumeMicrovmOutput, error) {
-	path := "/microvms/" + url.PathEscape(in.MicrovmID) + "/resume"
-	if err := c.do(ctx, "ResumeMicrovm", http.MethodPost, path, struct{}{}, nil); err != nil {
+	if err := c.do(ctx, "ResumeMicrovm", http.MethodPost, microvmPath(in.MicrovmID)+"/resume", nil, nil); err != nil {
 		return nil, err
 	}
 	return &ResumeMicrovmOutput{}, nil
@@ -186,22 +196,22 @@ type GetMicrovmOutput struct {
 	Microvm Microvm
 }
 
-// wireMicrovm is the JSON shape of a MicroVM in control-plane responses.
+// wireMicrovm is the JSON shape of a MicroVM in control-plane responses. The
+// service does not return tags here, so Microvm.Tags is left unset.
 type wireMicrovm struct {
-	MicrovmID string            `json:"microvmId"`
-	State     string            `json:"state"`
-	Endpoint  string            `json:"endpoint"`
-	Tags      map[string]string `json:"tags"`
+	MicrovmID string `json:"microvmId"`
+	State     string `json:"state"`
+	Endpoint  string `json:"endpoint"`
 }
 
 func (w wireMicrovm) toMicrovm() Microvm {
-	return Microvm{MicrovmID: w.MicrovmID, State: MicrovmState(w.State), Endpoint: w.Endpoint, Tags: w.Tags}
+	return Microvm{MicrovmID: w.MicrovmID, State: MicrovmState(w.State), Endpoint: w.Endpoint}
 }
 
 // GetMicrovm returns a single MicroVM by id.
 func (c *Client) GetMicrovm(ctx context.Context, in *GetMicrovmInput) (*GetMicrovmOutput, error) {
 	var w wireMicrovm
-	if err := c.do(ctx, "GetMicrovm", http.MethodGet, "/microvms/"+url.PathEscape(in.MicrovmID), nil, &w); err != nil {
+	if err := c.do(ctx, "GetMicrovm", http.MethodGet, microvmPath(in.MicrovmID), nil, &w); err != nil {
 		return nil, err
 	}
 	return &GetMicrovmOutput{Microvm: w.toMicrovm()}, nil
@@ -221,13 +231,15 @@ type ListMicrovmsOutput struct {
 }
 
 type listMicrovmsResponse struct {
-	Microvms  []wireMicrovm `json:"microvms"`
+	Microvms  []wireMicrovm `json:"items"`
 	NextToken string        `json:"nextToken"`
 }
 
-// ListMicrovms returns the MicroVMs visible to the caller.
+// ListMicrovms returns the MicroVMs visible to the caller. The listing carries
+// only id/state/image per item — not the endpoint or tags; fetch those with
+// GetMicrovm / ListTags.
 func (c *Client) ListMicrovms(ctx context.Context, in *ListMicrovmsInput) (*ListMicrovmsOutput, error) {
-	path := "/microvms"
+	path := microvmsPath()
 	q := url.Values{}
 	if in != nil && in.ImageIdentifier != "" {
 		q.Set("imageIdentifier", in.ImageIdentifier)
@@ -272,7 +284,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, in, out any) e
 		return fmt.Errorf("retrieve aws credentials: %w", err)
 	}
 	sum := sha256.Sum256(body)
-	if err := c.signer.SignHTTP(ctx, creds, req, hex.EncodeToString(sum[:]), signingService, c.region, c.now().UTC()); err != nil {
+	if err := c.signer.SignHTTP(ctx, creds, req, hex.EncodeToString(sum[:]), signingName, c.region, c.now().UTC()); err != nil {
 		return fmt.Errorf("sign request: %w", err)
 	}
 
