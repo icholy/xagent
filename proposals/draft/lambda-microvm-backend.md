@@ -15,6 +15,17 @@ Issue: https://github.com/icholy/xagent/issues/1048
 > over an **SSE stream through AWS's managed auth-token proxy**, with the control
 > plane as the liveness authority. Implementation follows in
 > [#1054](https://github.com/icholy/xagent/pull/1054).
+>
+> **Refinement.** Driver exit drives a **`suspend-microvm`**, not a
+> `terminate-microvm`. This makes the MicroVM lifecycle symmetric with Docker — an
+> exited driver suspends the VM (snapshot-storage only, no compute, full
+> memory + disk preserved), the next run **`resume-microvm`**s it, and
+> `terminate-microvm` happens **only** when the task is archived/deleted (or the
+> `max_duration` backstop fires). This folds the proposal's deferred
+> suspend/resume open question into the core lifecycle: an event-driven task
+> completes, suspends cheaply, and resumes with full state on the next routed
+> event — no re-clone, no re-setup. All three lifecycle verbs (suspend, resume,
+> terminate) are the runner's; the guest holds no AWS credentials.
 
 ## Problem
 
@@ -69,15 +80,16 @@ Several facts about Lambda MicroVMs drive the design.
    it does not stop the work, exactly as closing `docker logs` does not stop a
    container.)
 
-3. **A MicroVM keeps running — and billing — until explicitly terminated.**
-   Verified in #1081 against the AWS state table: `RUNNING → TERMINATING` happens
-   **only** on an explicit `terminate-microvm` call or when
-   `maximumDurationInSeconds` is exceeded. *Nothing* transitions a VM out of
-   `RUNNING` because its entrypoint/driver process exited. Running VMs incur
-   compute charges; terminated VMs incur none. So **explicit termination is
-   mandatory** — a "shim that just exits when the driver finishes" is off the
-   table: it would leak a billed `RUNNING` VM (with a dead application behind a
-   dead endpoint) until `max_duration`.
+3. **A MicroVM keeps running — and billing compute — until an explicit lifecycle
+   call moves it.** Verified in #1081 against the AWS state table: `RUNNING →`
+   anything happens **only** on an explicit `suspend-microvm` / `terminate-microvm`
+   call (or `maximumDurationInSeconds`). *Nothing* transitions a VM out of
+   `RUNNING` because its entrypoint/driver process exited. So an **explicit
+   lifecycle action is mandatory** when the driver finishes — a "shim that just
+   exits" is off the table: it would leak a billed `RUNNING` VM (with a dead
+   application behind a dead endpoint) until `max_duration`. This design's action
+   on driver exit is **suspend** (preserve, stop compute), not terminate (see the
+   lifecycle section).
 
 4. **Per-VM config is delivered via the run hook payload.** `run-microvm`
    `--run-hook-payload` accepts a **≤16 KB string** that Lambda delivers (with the
@@ -88,7 +100,13 @@ Several facts about Lambda MicroVMs drive the design.
    application exposes HTTP hooks Lambda calls at each transition. The
    `/terminate` hook runs *before* resources are released — our seam for a
    graceful SIGTERM. `--maximum-duration-in-seconds` (≤28,800 = 8 h) caps total
-   lifetime; `list-microvms` enumerates VMs (filterable by image).
+   lifetime; `list-microvms` enumerates VMs (filterable by image). On cost:
+   **running** VMs incur compute charges, **suspended** VMs incur only
+   snapshot-storage charges (no compute) while preserving full memory + disk, and
+   **terminated** VMs incur nothing. `resume-microvm` thaws a suspended VM back to
+   `RUNNING`. This is what lets a finished task suspend cheaply and resume later
+   with its filesystem and memory intact — the basis for the Docker-symmetric
+   lifecycle below.
 
 6. **A running VM is reachable over a managed proxy with no self-managed
    ingress.** Mint a short-lived token with
@@ -153,22 +171,33 @@ the driver already connects to the C2 by URL + token and neither knows nor cares
 what launched it. That was the point of the socket-proxy elimination and
 driver-owned-events prerequisites.
 
-### Lifecycle: runner-driven termination over the auth-token proxy + SSE
+### Lifecycle: runner-driven suspend on exit, terminate on archive
 
 The core of this revision. Because entrypoint exit does **not** stop a MicroVM
-(fact 3), *some* explicit `terminate-microvm` is mandatory — but it is the
-**runner's** job, not the guest's:
+(fact 3), the runner drives the lifecycle explicitly — and it does so to mirror
+Docker:
 
-- **No AWS credentials in the guest.** The shim never calls `terminate-microvm`
-  and the in-VM execution role does **not** grant
-  `lambda-microvms:TerminateMicrovm`. IAM cannot express "terminate the VM I am
-  running in": `TerminateMicrovm` takes a `microvmId`, there is no "self" concept,
-  and the VM's id is only assigned at `run-microvm` time. The tightest achievable
-  scope is a fleet tag-condition (e.g. `aws:ResourceTag/xagent: true`), which
-  still lets compromised agent code terminate **sibling tasks'** VMs — a
-  cross-task denial of service. Termination is a control-plane verb that belongs
-  with the trusted runner, not inside the untrusted sandbox, mirroring how the
-  Docker backend keeps the Docker socket and all teardown authority on the host.
+| | Docker | Lambda MicroVM |
+|---|---|---|
+| driver exits | container exits (costs nothing, state preserved) | **`suspend-microvm`** (snapshot-storage only, no compute, state preserved) |
+| next run / restart | reuse the exited container | **`resume-microvm`** the suspended VM (driver re-runs) |
+| task archived/deleted | remove the container | **`terminate-microvm`** |
+
+All three control-plane verbs (suspend, resume, terminate) are the **runner's**;
+the guest never holds AWS credentials. The payoff: an event-driven task
+(subscribed to a PR) completes, suspends cheaply, and on the next routed event
+resumes with full filesystem + memory state — no re-clone, no re-setup.
+
+- **No AWS credentials in the guest.** The shim makes **no** MicroVM control-plane
+  calls — not suspend, resume, or terminate — and the in-VM execution role grants
+  none of them. IAM cannot express "act on the VM I am running in":
+  `terminate-microvm` / `suspend-microvm` take a `microvmId`, there is no "self"
+  concept, and the VM's id is only assigned at `run-microvm` time. The tightest
+  achievable scope is a fleet tag-condition (e.g. `aws:ResourceTag/xagent: true`),
+  which still lets compromised agent code terminate or suspend **sibling tasks'**
+  VMs — a cross-task denial of service. Lifecycle control belongs with the trusted
+  runner, not inside the untrusted sandbox, mirroring how the Docker backend keeps
+  the Docker socket and all teardown authority on the host.
 
 - **The shim exposes an SSE lifecycle stream over the proxy.** The shim already
   supervises the driver (`proc.Wait()`), so it pushes lifecycle events the instant
@@ -177,17 +206,37 @@ The core of this revision. Because entrypoint exit does **not** stop a MicroVM
   alongside the Lambda hooks) at an xagent-owned path (e.g.
   `GET /xagent/lifecycle`, `Accept: text/event-stream`) and is reached by the
   runner over the managed proxy. Unknown event types are ignored by the runner;
-  only `driver-exited{code}` is load-bearing. (Periodic SSE comments keep the
-  connection alive.)
+  only `driver-exited{code}` is load-bearing. The last `driver-exited` is
+  **sticky**: a fresh connection replays it immediately, so an exit that happened
+  while the runner was briefly disconnected (the VM still up) is delivered on
+  reconnect rather than lost — otherwise the runner would never learn to suspend
+  and the VM would bill compute until `max_duration`. (Periodic SSE comments keep
+  the connection alive.)
 
-- **The runner consumes the stream.** It mints a token with
+- **The runner consumes the stream and suspends on exit.** It mints a token with
   `CreateMicrovmAuthToken(microvmId, …, allowedPorts=[8080])` and connects to the
   VM's `endpoint` with the `X-aws-proxy-auth` header. On `driver-exited{code}` it
-  records the **true exit code** and terminates the VM with the **runner's own**
-  credentials (`terminate-microvm`). This delivers real-time completion plus the
-  true exit code, resolving the old `TERMINATED → exit 0` ambiguity (a clean
-  completion and a `max_duration` reap both land in `TERMINATED`, so VM state
-  alone cannot tell them apart — see the old Open Question #3).
+  records the **true exit code** and **suspends** the VM with the **runner's own**
+  credentials (`suspend-microvm`) — preserving memory + disk and stopping compute
+  billing, exactly like a Docker container that exits but is kept for reuse. It
+  does **not** terminate. This delivers real-time completion plus the true exit
+  code, resolving the old `TERMINATED → exit 0` ambiguity (VM *state* alone cannot
+  distinguish a clean completion from a `max_duration` reap — the exit-code
+  fidelity gap the original design left as an open question).
+
+- **Resume on the next run.** When the task next needs to run (a routed event, a
+  restart), the runner `resume-microvm`s the suspended VM. Resume thaws memory
+  with the *old* driver already exited, so the shim's `/resume` hook **re-spawns
+  the driver** to process the new work. Files are not re-provisioned (they are
+  already on the preserved disk); only the driver process is restarted. This is
+  the MicroVM analog of reusing an exited Docker container — same filesystem, same
+  setup markers, no re-clone.
+
+- **`terminate-microvm` happens only on archive/delete.** The single terminate
+  path is `Destroy`, reached when the task is archived or deleted (the runner's
+  `Prune`). Terminate releases the VM and stops snapshot-storage billing, and the
+  backend then deletes the staged S3 object. A graceful stop (`Signal`) just
+  SIGTERMs the driver; the resulting driver-exit suspends like any other.
 
 - **A stream drop is NOT an exit.** A transient network glitch, the proxy's
   connection-age cap, or token expiry must never fail a healthy task — and a false
@@ -196,28 +245,29 @@ The core of this revision. Because entrypoint exit does **not** stop a MicroVM
   with backoff (re-minting the token if it expired) **and** consults the control
   plane via `GetMicrovm`. The disambiguation:
 
-  | `GetMicrovm` after a drop | Action |
+  | `GetMicrovm` after an unexpected drop | Action |
   |---|---|
-  | `RUNNING` / `SUSPENDED` | VM is alive — reconnect the SSE stream, **no exit emitted** |
-  | `TERMINATED` / `FAILED` / not-found | VM is gone — **emit an exit**, with the code from the last SSE event if one was seen, else `-1` ("report lost") |
+  | `RUNNING` | VM is alive — reconnect; the sticky `driver-exited` is replayed, so an exit during the gap still arrives. **No exit emitted by the drop itself** |
+  | `SUSPENDED` / `TERMINATED` / `FAILED` / not-found | the driver is no longer running — **emit an exit**, with the code from the last SSE event if one was seen, else `-1` ("report lost") |
 
   Only a **positive** signal emits an exit: (a) an SSE `driver-exited{code}` event,
-  or (b) the control plane reporting a terminal/absent VM. The **control plane is
-  the liveness authority**; SSE is the fast, exit-code-rich layer on top of it. A
+  or (b) the control plane reporting a non-`RUNNING` VM. The **control plane is the
+  liveness authority**; SSE is the fast, exit-code-rich layer on top of it. A
   periodic `ListMicrovms` reconcile (tag-filtered to this runner) is the final
   backstop, catching VMs that went terminal while the stream was down and the
   runner never reconnected.
 
 - **`max_duration_seconds` is a coarse backstop**, not the primary reaper. It
-  covers the case where the runner itself is down and never reconnects to
-  terminate a finished VM: the VM is reaped at `--maximum-duration-in-seconds`
-  rather than billing indefinitely. Normal completion is runner-driven and prompt.
+  covers the case where the runner itself is down and never reconnects to suspend a
+  finished VM (the VM keeps billing compute until reaped at
+  `--maximum-duration-in-seconds`) and caps total lifetime. Normal completion is
+  runner-driven suspend, and prompt.
 
 #### Lifecycle sequences
 
-**Launch through normal completion (the happy path).** The runner stages the
-spec, launches the VM, opens the SSE stream over the proxy, and reaps the VM
-itself when the driver exits:
+**Launch through completion (the happy path).** The runner stages the spec,
+launches the VM, opens the SSE stream over the proxy, and **suspends** the VM
+(preserving state) when the driver exits:
 
 ```mermaid
 sequenceDiagram
@@ -245,15 +295,35 @@ sequenceDiagram
 
     Drv->>C2: report terminal status (driver-owned events)
     Drv--)Shim: process exits (proc.Wait returns)
-    Shim--)R: SSE driver-exited{code}
-    R->>CP: TerminateMicrovm(microvmId) using runner credentials
-    R->>S3: delete staged object
-    Note over R: record Exit{taskID, code}
+    Shim--)R: SSE driver-exited{code} (sticky, replayed on reconnect)
+    R->>CP: SuspendMicrovm(microvmId) using runner credentials
+    Note over R: record Exit{taskID, code}. VM SUSPENDED: state preserved, compute billing stops
 ```
 
-**A stream drop is not an exit.** On a drop the runner consults the control
-plane (the liveness authority) before deciding anything; only a terminal/absent
-VM emits an exit:
+**Resume on the next run.** A routed event or restart reuses the suspended VM;
+`/resume` re-spawns the driver against the preserved filesystem — no re-clone, no
+re-provision:
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant CP as Control plane
+    participant Shim as Shim (in VM)
+    participant Drv as Driver
+    participant C2
+
+    Note over R: next run for the task — Launch(reuse=Handle)
+    R->>CP: ResumeMicrovm(microvmId)
+    CP->>Shim: POST /resume
+    Shim->>Drv: re-spawn driver (files already provisioned), supervise proc.Wait()
+    Drv->>C2: connect (task token), process new work
+    R->>Shim: reopen SSE /xagent/lifecycle (new token, via proxy)
+    Note over R,Shim: runs until the next driver exit, then suspend again
+```
+
+**A stream drop is not an exit.** On an unexpected drop the runner consults the
+control plane (the liveness authority) before deciding anything; only a
+non-`RUNNING` VM emits an exit:
 
 ```mermaid
 sequenceDiagram
@@ -264,20 +334,20 @@ sequenceDiagram
     R->>Shim: SSE /xagent/lifecycle (via proxy)
     Note over R,Shim: stream drops (network glitch / conn-age cap / token expiry)
     R->>CP: GetMicrovm(microvmId)
-    alt RUNNING or SUSPENDED
-        CP-->>R: alive
+    alt RUNNING
+        CP-->>R: running
         Note over R: NO exit — re-mint token if expired, reconnect with backoff
-        R->>Shim: reconnect SSE
-    else TERMINATED / FAILED / not-found
-        CP-->>R: terminal or gone
+        R->>Shim: reconnect SSE (sticky driver-exited replayed if it exited during the gap)
+    else SUSPENDED, TERMINATED, FAILED, or not-found
+        CP-->>R: not running
         Note over R: emit Exit{last SSE code, else -1 report lost}
     end
     Note over R,CP: periodic ListMicrovms reconcile is the final backstop
 ```
 
-**Graceful stop (`Signal` then `Destroy`).** The runner asks the shim to stop the
-driver over the proxy; the driver owns its terminal report, then the runner
-terminates the VM and cleans up:
+**Graceful stop, then archive.** `Signal` SIGTERMs the driver; the driver-exit
+suspends the VM like any other completion. `terminate-microvm` happens only later,
+when the task is archived/deleted (`Destroy`):
 
 ```mermaid
 sequenceDiagram
@@ -294,7 +364,10 @@ sequenceDiagram
     Drv->>C2: report terminal status
     Drv--)Shim: process exits
     Shim--)R: SSE driver-exited{code}
-    Note over R: Destroy
+    R->>CP: SuspendMicrovm(microvmId)
+    Note over R: VM SUSPENDED (state preserved), record Exit
+
+    Note over R: later — task archived/deleted, Destroy
     R->>CP: TerminateMicrovm(microvmId), idempotent
     R->>S3: delete staged object
 ```
@@ -316,6 +389,10 @@ Lambda's default port 8080) that serves both the Lambda lifecycle hooks under
 `/aws/lambda-microvms/runtime/v1/` (via `awsmicrovm.Handler`) and the xagent SSE
 lifecycle stream:
 
+The shim decouples two things the old design conflated: **provisioning files**
+(happens once, on the first run) and **spawning the driver** (happens on every
+run — the first `/run` and every `/resume`).
+
 - **`POST /run`** — decode the run-hook payload, fetch the staged bundle from its
   presigned S3 URL, provision `spec.Files` if the sandbox is fresh, then spawn the
   driver (`spec.Cmd` + `spec.Env`) **in the background** and return HTTP 200
@@ -329,14 +406,23 @@ lifecycle stream:
   below), so the driver gets to catch the signal and own its terminal report.
 - **`GET /xagent/lifecycle`** — the SSE stream described above. Emits
   `driver-exited{code}` when `proc.Wait()` returns, plus optional `started` /
-  keep-alive events. The runner is the only consumer, over the managed proxy.
-- **`POST /suspend` / `POST /resume`** — wired as near-no-ops. Idle-driven
-  suspend/resume is out of scope (see "Idle policy and suspend/resume"); the hooks
-  exist so the contract is satisfied.
+  keep-alive events. The last `driver-exited` is **sticky**: a fresh connection
+  receives it immediately, so a completion that happened while the runner was
+  disconnected (VM still up) is delivered on reconnect rather than lost. The runner
+  is the only consumer, over the managed proxy.
+- **`POST /resume`** — **load-bearing, not a no-op.** Resume thaws the VM with the
+  *previous* driver already exited (that exit is what suspended the VM), so
+  `/resume` **re-spawns the driver** to process the new work. Files are *not*
+  re-provisioned — they are already on the preserved disk. The shim resumes
+  supervision and the lifecycle stream for the new driver process.
+- **`POST /suspend`** — flush any in-flight state before the snapshot. Fired by
+  Lambda on the runner's `suspend-microvm`; by this point the driver has already
+  exited (its exit is what triggered the suspend), so this is mostly a flush seam.
 
-The shim holds **no AWS credentials** and makes **no** control-plane calls — it
-only supervises the driver and reports over the SSE stream. There is no
-`supervise() → TerminateMicrovm` path anymore.
+The shim holds **no AWS credentials** and makes **no** control-plane calls (not
+suspend, resume, or terminate) — it only supervises the driver, (re-)spawns it on
+`/run` and `/resume`, and reports over the SSE stream. Suspend/resume/terminate
+are the runner's, over the proxy and the control plane.
 
 The staged bundle is the shim's equivalent of the Firecracker boot manifest,
 carrying exactly what `backend.Spec` holds:
@@ -354,7 +440,10 @@ type bundle struct {
 Files are provisioned only on a fresh sandbox and skipped on a resumed VM (gated
 by a `/xagent/.provisioned` marker), reproducing the Docker backend's
 provision-at-create-only semantics so a resume never clobbers the driver's
-`SetupCommandsCompleted`/`Started` markers in `agent.ConfigPath(taskID)`.
+`SetupCommandsCompleted`/`Started` markers in `agent.ConfigPath(taskID)`. The
+driver, by contrast, is (re-)spawned on **every** run — `/run` for the first,
+`/resume` for each subsequent one — since a resumed VM thaws with the previous
+driver already exited.
 
 Because the application must be the shim and the binary must be pre-baked,
 **MicroVM images are purpose-built** (the same portability cost AgentCore
@@ -447,10 +536,11 @@ over opaque `backend.Handle`s. The backend persists, discovers, and reconciles
 
 The handle's index id (`Handle.ID`, the reverse-index key the runner resolves
 back to a task) is the **`microvmId`**. `Handle.Data` carries what the backend
-needs to reach and clean up the VM but not for identity — most importantly the VM
+needs to reach and manage the VM but not for identity — most importantly the VM
 **`endpoint`**, so the runner can reach the proxy (mint a token, open the SSE
-stream, POST `/terminate`) and **reconnect** after a stream drop without first
-re-listing:
+stream, POST `/terminate`), **reconnect** after a stream drop, and drive
+suspend/resume — without first re-listing. The same handle is what `Launch`
+receives as `reuse` to `resume-microvm` a suspended VM:
 
 ```go
 // stored opaque in Handle.Data (taskstate.Record.Data), never decoded by the store
@@ -478,54 +568,53 @@ the runner's.
 | Method | Implementation |
 |---|---|
 | `ValidateWorkspace` | Require `execution_role`, `staging_bucket`, `egress_connector`, and `image_identifier` or `image_source`; bound `max_duration_seconds`. |
-| `Launch` | Ensure the MicroVM image ARN for the workspace (use `image_identifier`, else build from `image_source` via S3 zip + `create-microvm-image`, cached by digest+version). Build the bundle from `spec`, upload to `s3://<staging_bucket>/<runner>/<task>.json`, presign a GET URL. `run-microvm` with the image ARN, `NO_INGRESS`, the egress connector, idle policy disabled, `--maximum-duration-in-seconds`, and the presigned URL as `--run-hook-payload`. Tag the returned VM (`xagent.task`, `xagent.runner`). Return the `Handle` (id = `microvmId`, `Data` = endpoint + image + staging) for the runner to persist. If `reuse` is non-nil, adopt the identified VM instead of launching fresh. |
-| `Probe` | `GetMicrovm` on the handle id. `RUNNING`/`SUSPENDED` → `StateRunning`; `TERMINATED`/`FAILED`/not-found → `StateExited`. The VM state is the authority. |
-| `Signal` | Graceful stop: over the managed proxy, POST the shim's `/terminate` hook (SIGTERM → grace → SIGKILL the driver). The driver catches SIGTERM and owns its terminal report to the C2; the shim emits `driver-exited` over SSE. Returns `signalled=true` if a running VM was reached. Does **not** itself `terminate-microvm` — that is `Destroy`'s job. |
-| `Destroy` | `terminate-microvm` on the handle id (idempotent; also fires `/terminate` as a final SIGTERM backstop if `Signal` wasn't called), then delete the staged S3 object. Destroying an absent/already-terminated VM is not an error. |
-| `Watch` | Maintain a per-VM SSE stream for each of this runner's tracked VMs (discovered via `ListMicrovms` tag-filtered to the runner, endpoints from the listing): mint a token, connect, and on `driver-exited{code}` call `handle(HandleExit{ID: microvmId, ExitCode: code})`. On a stream drop, arbitrate via `GetMicrovm` — reconnect if alive, emit an exit only if terminal/gone (last SSE code, else `-1`). A periodic `ListMicrovms` sweep is the reconcile backstop for VMs that went terminal while disconnected. Emits no exit on a bare drop. |
-| `Close` | Stop the SSE streams and the reconcile sweep; leave microVMs running — they outlive the runner, exactly as containers do today. |
+| `Launch` | **Fresh (`reuse` nil):** ensure the MicroVM image ARN for the workspace (use `image_identifier`, else build from `image_source` via S3 zip + `create-microvm-image`, cached by digest+version). Build the bundle from `spec`, upload to `s3://<staging_bucket>/<runner>/<task>.json`, presign a GET URL. `run-microvm` with the image ARN, `NO_INGRESS`, the egress connector, idle policy disabled, `--maximum-duration-in-seconds`, and the presigned URL as `--run-hook-payload`. Tag the returned VM (`xagent.task`, `xagent.runner`). Return the `Handle` (id = `microvmId`, `Data` = endpoint + image + staging). **Reuse (`reuse` non-nil):** `resume-microvm` the suspended VM identified by the handle, preserving memory + disk; the `/resume` hook re-spawns the driver. This is the resume path — the MicroVM analog of reusing an exited Docker container. |
+| `Probe` | `GetMicrovm` on the handle id. `RUNNING` → `StateRunning`; **`SUSPENDED`** / `TERMINATED` / `FAILED` / not-found → **`StateExited`**. A suspended-after-completion VM must look like an exited-but-preserved container so the existing restart/archive machinery works unchanged: `Start` → `Probe StateExited` → `Launch(reuse)` → resume, and `Prune`-on-archive → `Destroy` → terminate. |
+| `Signal` | Graceful stop: over the managed proxy, POST the shim's `/terminate` hook (SIGTERM → grace → SIGKILL the driver). The driver catches SIGTERM and owns its terminal report to the C2; the shim emits `driver-exited` over SSE, and `Watch` then suspends the VM like any other completion. Returns `signalled=true` if a running VM was reached. Does **not** `terminate-microvm` — that is `Destroy`'s job. |
+| `Destroy` | The **only** terminate path, reached via `Prune` on task archive/delete: `terminate-microvm` on the handle id (idempotent; also fires `/terminate` as a final SIGTERM backstop), then delete the staged S3 object. Destroying an absent/already-terminated VM is not an error. |
+| `Watch` | Maintain a per-VM SSE stream for each of this runner's tracked VMs (discovered via `ListMicrovms` tag-filtered to the runner, endpoints from the listing): mint a token, connect, and on `driver-exited{code}` **call `suspend-microvm` itself**, then `handle(HandleExit{ID: microvmId, ExitCode: code})`. Because the suspend is done in the backend, the orchestrator stays untouched — it sees a sandbox that "exited" (Docker-identically) and never knows the VM is merely suspended. On a stream drop, arbitrate via `GetMicrovm` — reconnect if `RUNNING` (the sticky `driver-exited` covers an exit during the gap), emit an exit only if non-`RUNNING` (last SSE code, else `-1`). A periodic `ListMicrovms` sweep is the reconcile backstop for VMs that went terminal while disconnected. Emits no exit on a bare drop. |
+| `Close` | Stop the SSE streams and the reconcile sweep; leave microVMs running/suspended — they outlive the runner, exactly as containers do today. |
 
 **Exit-code fidelity.** With the SSE `driver-exited{code}` event, the runner now
-observes the driver's **true** process exit code in real time, not just the VM's
-terminal state — closing the old ambiguity where a clean completion and a
-`max_duration` reap both presented as `TERMINATED`. The driver-owned-events
+observes the driver's **true** process exit code in real time, not the VM's state
+— which is the point, since after a clean completion the VM is `SUSPENDED`, not
+terminal, and VM state alone could never carry the code. The driver-owned-events
 invariant still governs correctness: the driver reports its terminal status
 directly to the C2, and the runner's `Reconcile` treats an exited sandbox whose
 task is still `RUNNING` as a lost report (`failed`), regardless of code. When no
-SSE event was seen and the control plane shows the VM terminal/gone, the runner
+SSE event was seen and the control plane shows the VM non-`RUNNING`, the runner
 reports `-1` ("report lost") and lets the state machine's status guard in
 `internal/model/task.go` reconcile — the same fallback AgentCore relies on, but
-exercised less often here because runner-driven termination after a `driver-exited`
-event makes the clean, code-bearing path the common one.
+exercised less often here because the `driver-exited` event makes the clean,
+code-bearing path the common one.
 
 ### Idle policy and suspend/resume
 
-Lambda MicroVMs can auto-suspend on **endpoint** idleness to cut cost while
-preserving memory + disk state. This backend launches with the idle policy
-**disabled**, for two reasons:
+Suspend/resume is **core** to this design, not deferred: the runner suspends on
+driver exit and resumes on the next run (the lifecycle section above). What stays
+**disabled** is Lambda's *automatic* idle-policy suspend — the platform feature
+that auto-suspends a VM on **endpoint** idleness. The distinction matters:
 
-- **The runner holds an always-on SSE stream to the VM**, which is live endpoint
-  traffic — so the VM is never "idle" by the traffic definition anyway, and
-  reaping is **runner-driven termination**, not idle-auto-suspend. The two
-  conflict: auto-suspend would race the very stream the runner uses to learn the
-  task finished. Reaping a completed VM is `terminate-microvm` by the runner, full
-  stop.
-- **"Idle" appears to be traffic-based**, which is the wrong signal for our
-  workload regardless: a CPU-busy agent that happens to receive no inbound
-  endpoint traffic for a stretch would be wrongly suspended mid-work. The AWS docs
-  themselves say to disable automatic suspension "for asynchronous applications
-  that do not actively send or receive traffic through the endpoint."
+- **Suspend is runner-driven and explicit**, triggered by the `driver-exited` SSE
+  event — a precise "the work for now is done" signal. Auto-suspend would instead
+  fire on its own schedule and **race** the very stream the runner uses to learn
+  the task finished, so the two conflict; the runner owns the timing.
+- **"Idle" (the auto-suspend trigger) appears to be traffic-based**, which is the
+  wrong signal for our workload: a CPU-busy agent that happens to receive no
+  inbound endpoint traffic for a stretch would be wrongly suspended mid-work. The
+  AWS docs themselves say to disable automatic suspension "for asynchronous
+  applications that do not actively send or receive traffic through the endpoint."
 
-Suspend/resume is therefore **wired but dormant**: the shim implements the
-`/suspend` and `/resume` hooks (as near-no-ops) so the contract is satisfied, but
-the backend never suspends on its own. Whether xagent's event-driven tasks (a
-task that subscribes to a PR and sits idle awaiting a review comment) should
-*explicitly* suspend the microVM between events — paying only snapshot-storage
-cost while idle, then `resume-microvm` on the next routed event — is a genuinely
-attractive capability unique to this backend, but it requires the orchestrator to
-model "idle awaiting event" as a backend-visible state, and a CPU-vs-traffic idle
-signal that does not misfire on a busy agent. That is out of scope here and called
-out as an open question.
+So the backend launches with the idle policy off and drives `suspend-microvm` /
+`resume-microvm` itself. The earlier framing — suspend/resume "wired but dormant",
+idle event-driven tasks an out-of-scope open question — is **superseded**: a task
+that subscribes to a PR now completes, suspends (paying only snapshot storage),
+and resumes with full filesystem + memory state when the next event is routed to
+it, riding the same `Start → Probe StateExited → Launch(reuse)` path the
+orchestrator already uses to reuse exited Docker containers. The remaining
+open question is narrower (see Open Questions): how the orchestrator decides
+*when* a suspended-but-subscribed task should resume, and the quota cost of
+keeping many tasks suspended.
 
 ### CLI
 
@@ -560,17 +649,18 @@ internal/runner/
 │   └── lambdamicrovm/
 │       └── lambdamicrovm.go  Lambda MicroVMs implementation
 └── workspace/                +LambdaMicroVM config section
-internal/microvmshim/         in-VM shim: hooks + driver supervision + SSE stream
-internal/x/awsmicrovm/        general-purpose client (+CreateMicrovmAuthToken, proxy helper) and Handler
+internal/microvmshim/         in-VM shim: hooks (+ /resume re-spawns driver) + supervision + SSE stream
+internal/x/awsmicrovm/        general-purpose client (+CreateMicrovmAuthToken, +Suspend/ResumeMicrovm, proxy helper) and Handler
 internal/command/             +microvm-shim hidden subcommand
 ```
 
 `internal/x/awsmicrovm` is the general-purpose service client and hook server
-(modelled from the public docs; no official Go SDK yet). The two pieces this
-design depends on — `CreateMicrovmAuthToken` and an authenticated proxy-request
-helper (sets `X-aws-proxy-auth`, supports streaming responses) — are being added
-there as available transport; the backend and the runner use them, and the shim
-uses `awsmicrovm.Handler` for the hook routing.
+(modelled from the public docs; no official Go SDK yet). The pieces this design
+depends on — `CreateMicrovmAuthToken`, an authenticated proxy-request helper
+(sets `X-aws-proxy-auth`, supports streaming responses), and
+`SuspendMicrovm`/`ResumeMicrovm` — are being added there as available transport;
+the backend and the runner use them, and the shim uses `awsmicrovm.Handler` for
+the hook routing (with a load-bearing `/resume` that re-spawns the driver).
 
 ### Testing
 
@@ -583,21 +673,24 @@ uses `awsmicrovm.Handler` for the hook routing.
   calls are mocked, matching the `dockerx` moq pattern.
 - The `microvm-shim` handlers are unit-tested in `internal/microvmshim` against a
   fake driver binary: `/run` payload decode + provision-once gating + background
-  spawn, `/terminate` SIGTERM→SIGKILL, and the `/xagent/lifecycle` SSE stream
-  emitting `driver-exited{code}` with the fake's real exit code. There is **no**
-  self-terminate path to test (and a test asserts the shim makes no control-plane
-  call).
+  spawn; **`/resume` re-spawns the driver without re-provisioning** (the
+  load-bearing resume path); `/terminate` SIGTERM→SIGKILL; and the
+  `/xagent/lifecycle` SSE stream emitting `driver-exited{code}` with the fake's
+  real exit code, including **sticky replay** to a connection that attaches after
+  the exit. A test asserts the shim makes **no** control-plane call (no creds).
 - `Watch` is tested against an httptest SSE server plus a fake control plane:
-  clean `driver-exited` → `HandleExit`; mid-stream drop with the VM still `RUNNING`
-  → reconnect, no exit; drop with the VM `TERMINATED` → one exit with the last
-  code; `max_duration` reap (VM `TERMINATED`, no SSE event) → `-1` via the
-  `ListMicrovms` reconcile sweep.
+  clean `driver-exited` → backend calls `suspend-microvm` then emits `HandleExit`;
+  mid-stream drop with the VM still `RUNNING` → reconnect, no exit (sticky
+  `driver-exited` replayed); drop with the VM `SUSPENDED`/`TERMINATED` → one exit
+  with the last code; a runner that never reconnects (VM reaped) → `-1` via the
+  `ListMicrovms` reconcile sweep. `Probe` maps `SUSPENDED` → `StateExited`.
 - Integration tests in `backend/lambdamicrovm`, skipped unless AWS credentials, a
   test execution role, and a staging bucket are present (an env guard, mirroring
   how the Docker e2e tests require a daemon, Firecracker requires `/dev/kvm`, and
   AgentCore requires AWS creds). They cover image build, run→`driver-exited`→
-  runner-terminate, provision-once-across-restart, graceful stop via `Signal`, and
-  re-adoption after a simulated runner restart.
+  runner-suspend, **resume-on-reuse re-running the driver against the preserved
+  disk**, provision-once-across-resume, graceful stop via `Signal`, terminate via
+  `Destroy` on archive, and re-adoption after a simulated runner restart.
 - The orchestrator needs no new tests: it already runs against `BackendMock`.
 
 ### What doesn't change
@@ -617,6 +710,8 @@ image.
 | Isolation | shared kernel | per-task KVM | AWS microVM | **AWS microVM (Firecracker)** |
 | Image | unmodified | unmodified | purpose-built | **purpose-built** |
 | Work survives runner restart | yes (container) | yes (VM) | **uncertain** (held request) | **yes (autonomous VM, re-adopted by id)** |
+| On driver exit | container exits (state preserved, no cost) | VM stays up | hard teardown | **`suspend-microvm` (state preserved, snapshot-storage only, no compute)** |
+| Reuse on next run | restart exited container | restart VM | re-invoke (fresh) | **`resume-microvm` (full memory + disk, driver re-spawned)** |
 | Graceful stop (SIGTERM) | yes | yes (MMDS poll) | **no** (hard teardown) | **yes (`/terminate` hook over the proxy)** |
 | Exit notification | docker `die` event | poll | held-request return | **SSE `driver-exited{code}` (true exit code) + control-plane backstop** |
 | Teardown authority | host (no socket in guest) | host | service | **runner only — no creds in guest** |
@@ -629,16 +724,29 @@ control-plane credential inside the sandbox.
 
 ## Trade-offs
 
-**Runner-driven termination vs. in-guest self-termination.** The earlier design
-had the shim terminate its own VM on driver exit, which needed
-`TerminateMicrovm` in the (untrusted) execution role. Per #1081 that grant cannot
-be scoped to "self" — only to xagent's fleet — so it hands compromised agent code
-a cross-task DoS, and it lets a buggy/compromised guest manufacture a "clean exit"
-at any moment. Moving termination to the trusted runner removes the credential
-from the guest entirely and tightens the clean-exit signal to a real
-`driver-exited` event. The cost is that the runner must learn *when* the driver
-finished — which Docker gets for free (the container self-exits) but Lambda does
-not — hence the SSE stream + control-plane arbitration below.
+**Runner-driven lifecycle vs. in-guest self-termination.** The earlier design had
+the shim terminate its own VM on driver exit, which needed `TerminateMicrovm` in
+the (untrusted) execution role. Per #1081 that grant cannot be scoped to "self" —
+only to xagent's fleet — so it hands compromised agent code a cross-task DoS, and
+it lets a buggy/compromised guest manufacture a "clean exit" at any moment. Moving
+all lifecycle control (suspend, resume, terminate) to the trusted runner removes
+the credential from the guest entirely and tightens the clean-exit signal to a
+real `driver-exited` event. The cost is that the runner must learn *when* the
+driver finished — which Docker gets for free (the container self-exits) but Lambda
+does not — hence the SSE stream + control-plane arbitration below.
+
+**Suspend on exit vs. terminate on exit.** Terminating a finished VM is the
+simplest reaper, but it throws away the snapshot — the next run must re-launch
+from the image, re-deliver the spec, and re-run setup. Suspending instead makes
+the lifecycle symmetric with Docker (driver exits → state preserved at near-zero
+cost → reuse on the next run) and unlocks the capability unique to this backend:
+an event-driven task resumes with full filesystem + memory state on the next
+routed event. The price is that a suspended VM, while it stops compute billing,
+still **counts against the account memory quota** (see the semaphore trade-off):
+"terminate only on archive" means the quota ceiling scales with every
+non-archived task, not just the running ones. We accept that for the resume
+capability and lean on the runner-side concurrency knob to stay under quota;
+`max_duration` and archive are the releases.
 
 **SSE notification + control-plane authority vs. poll-only.** Watching VM state
 alone (the old plan) can't see a driver exit (the VM stays `RUNNING`) and can't
@@ -665,14 +773,14 @@ backend self-contained (no new C2 RPC to fetch config). The cost is an S3
 dependency and a short-lived presigned URL per task — cheap and operationally
 familiar in an AWS deployment that is already running microVMs.
 
-**Persistent server is mandated by the hook contract, not by suspend/resume.** An
-earlier framing justified the long-lived shim server by suspend/resume; #1081
-corrected that. The server is required because `/run` is the **only** channel the
-per-task spec arrives on and `/terminate` is the graceful-stop seam — both demand
-a server that stays up for the driver's whole lifetime, independent of
-suspend/resume (which is dormant) and independent of termination (now the
-runner's). The server stays; only the in-guest `TerminateMicrovm` call was
-removed.
+**Persistent server is mandated by the hook contract.** An earlier framing
+justified the long-lived shim server by suspend/resume alone; #1081 corrected
+that. The server is required because `/run` is the **only** channel the per-task
+spec arrives on, `/terminate` is the graceful-stop seam, and `/resume` re-spawns
+the driver on the next run — all three demand a server that stays up for the
+sandbox's whole lifetime. (Suspend/resume now ride on it as core, not as the
+justification for it.) The server stays; what the revision removed is the in-guest
+control-plane credential, not the server.
 
 **Purpose-built images vs. a universal image.** Like AgentCore, requiring
 MicroVM-specific images is a real regression in `workspaces.yaml` portability
@@ -691,12 +799,16 @@ Firecracker base-rootfs and AgentCore runtime caches and keeps
 `create-microvm-image` off the hot path.
 
 **Keep the runner-side semaphore vs. defer to the platform.** Lambda enforces an
-account-level memory quota across running/suspended microVMs. Keeping the
-orchestrator's `safesem.Semaphore` (with `--concurrency 0` = unlimited as the
-opt-out) preserves a uniform client-side throttle and avoids special-casing the
-orchestrator, matching the interface proposal's lean — and gives the operator a
-knob to stay under the account quota and surface `ServiceQuotaExceededException`
-as backpressure rather than a hard `Launch` failure.
+account-level memory quota across running **and suspended** microVMs. Because this
+design suspends rather than terminates on exit, that quota is consumed by every
+non-archived task — idle-suspended ones included — not just the actively running
+ones, so the ceiling is the count of *live tasks*, not *running drivers*. Keeping
+the orchestrator's `safesem.Semaphore` (with `--concurrency 0` = unlimited as the
+opt-out) preserves a uniform client-side throttle, but for this backend the
+semaphore must count **suspended** VMs too, so the fleet stays under the memory
+quota; releases come from `Destroy` on archive and the `max_duration` backstop. It
+also gives the operator a knob to surface `ServiceQuotaExceededException` as
+backpressure rather than a hard `Launch` failure.
 
 ## Open Questions
 
@@ -706,15 +818,15 @@ as backpressure rather than a hard `Launch` failure.
    proposal assumes operator-built images (or `image_source` build-on-first-use) +
    a published base. The zip→S3→`create-microvm-image` build is slow, so on-demand
    build needs careful caching.
-2. **Explicit suspend/resume for idle event-driven tasks.** Should a task that is
-   idle awaiting a routed event (subscribed PR/issue) explicitly `suspend-microvm`
-   to pay only snapshot storage, then `resume-microvm` (or auto-resume) when the
-   event arrives? This is a capability unique to this backend but needs (a) the
-   orchestrator to model "idle awaiting event" as a backend-visible state, and
-   (b) an idle signal that tracks *work*, not *endpoint traffic* — the always-on
-   SSE stream makes the VM perpetually "non-idle" by traffic, and a CPU-busy agent
-   with no inbound traffic would be wrongly suspended. A cross-cutting change
-   beyond a single backend; worth a follow-up.
+2. **Resume timing for suspended event-driven tasks.** Suspend-on-exit /
+   resume-on-run is now core, and a routed event resumes a subscribed task via the
+   existing `Start → Probe StateExited → Launch(reuse)` path. The open part is the
+   *trigger*: today the orchestrator starts a task on a routed event; does that
+   path already fire for a completed-but-subscribed task whose driver has exited
+   and VM is suspended, or does event-driven resume need explicit wiring (and a
+   guard so a flood of events doesn't thrash resume/suspend)? This is the one
+   genuinely cross-cutting piece left; the per-VM suspend/resume mechanics are
+   settled.
 3. **Token lifetime and proxy connection caps.** `CreateMicrovmAuthToken`'s
    `expirationInMinutes` and the proxy's connection-age cap force periodic
    re-mint + reconnect on the SSE stream. What expiration balances re-mint churn
@@ -731,8 +843,14 @@ as backpressure rather than a hard `Launch` failure.
    (`--lambda-microvm-region`). Is single-region per runner acceptable, or should a
    workspace pin its own region (the `region` field allows it, but the staging
    bucket and quotas are then per-region too)?
-6. **Cost and quotas.** Per-microVM compute + `run-microvm`/snapshot storage are
-   billed and quota-limited per account/region. Should the backend surface
-   `ServiceQuotaExceededException`/`ThrottlingException` as a distinct retryable
-   backpressure condition to the orchestrator, or treat them as generic `Launch`
-   failures (with exponential backoff, as the AWS docs recommend)?
+6. **Cost, quotas, and the suspended-VM ceiling.** Per-microVM compute +
+   `run-microvm`/snapshot storage are billed and quota-limited per account/region,
+   and the **memory quota counts suspended VMs**. Because the design terminates
+   only on archive, the quota ceiling scales with every non-archived task — so a
+   large backlog of suspended-but-subscribed tasks can exhaust it even with no
+   compute running. Should there be a secondary reaper (e.g. AWS
+   `suspendedDurationSeconds` auto-terminate, or a runner policy terminating VMs
+   suspended longer than some bound, re-launching fresh if the task wakes), and
+   should the backend surface `ServiceQuotaExceededException`/`ThrottlingException`
+   as distinct retryable backpressure rather than a generic `Launch` failure (with
+   exponential backoff, as the AWS docs recommend)?
