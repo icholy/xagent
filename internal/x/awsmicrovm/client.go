@@ -134,6 +134,48 @@ func (c *Client) TerminateMicrovm(ctx context.Context, in *TerminateMicrovmInput
 	return &TerminateMicrovmOutput{}, nil
 }
 
+// SuspendMicrovmInput is the input to SuspendMicrovm.
+type SuspendMicrovmInput struct {
+	MicrovmID string `json:"-"`
+}
+
+// SuspendMicrovmOutput is the result of SuspendMicrovm.
+type SuspendMicrovmOutput struct{}
+
+// SuspendMicrovm suspends a running MicroVM, pausing it while preserving its
+// state so it can later be resumed.
+//
+// The request path is modelled from the public documentation (boto3
+// suspend-microvm); see the package PREVIEW caveat.
+func (c *Client) SuspendMicrovm(ctx context.Context, in *SuspendMicrovmInput) (*SuspendMicrovmOutput, error) {
+	path := "/microvms/" + url.PathEscape(in.MicrovmID) + "/suspend"
+	if err := c.do(ctx, "SuspendMicrovm", http.MethodPost, path, struct{}{}, nil); err != nil {
+		return nil, err
+	}
+	return &SuspendMicrovmOutput{}, nil
+}
+
+// ResumeMicrovmInput is the input to ResumeMicrovm.
+type ResumeMicrovmInput struct {
+	MicrovmID string `json:"-"`
+}
+
+// ResumeMicrovmOutput is the result of ResumeMicrovm.
+type ResumeMicrovmOutput struct{}
+
+// ResumeMicrovm resumes a previously suspended MicroVM, returning it to the
+// running state.
+//
+// The request path is modelled from the public documentation (boto3
+// resume-microvm); see the package PREVIEW caveat.
+func (c *Client) ResumeMicrovm(ctx context.Context, in *ResumeMicrovmInput) (*ResumeMicrovmOutput, error) {
+	path := "/microvms/" + url.PathEscape(in.MicrovmID) + "/resume"
+	if err := c.do(ctx, "ResumeMicrovm", http.MethodPost, path, struct{}{}, nil); err != nil {
+		return nil, err
+	}
+	return &ResumeMicrovmOutput{}, nil
+}
+
 // GetMicrovmInput is the input to GetMicrovm.
 type GetMicrovmInput struct {
 	MicrovmID string `json:"-"`
