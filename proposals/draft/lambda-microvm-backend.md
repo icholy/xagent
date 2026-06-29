@@ -213,6 +213,92 @@ The core of this revision. Because entrypoint exit does **not** stop a MicroVM
   terminate a finished VM: the VM is reaped at `--maximum-duration-in-seconds`
   rather than billing indefinitely. Normal completion is runner-driven and prompt.
 
+#### Lifecycle sequences
+
+**Launch through normal completion (the happy path).** The runner stages the
+spec, launches the VM, opens the SSE stream over the proxy, and reaps the VM
+itself when the driver exits:
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant S3
+    participant CP as Control plane
+    participant Shim as Shim (in VM)
+    participant Drv as Driver
+    participant C2
+
+    R->>S3: stage spec bundle, presign GET URL
+    R->>CP: RunMicrovm(image, NO_INGRESS, idle off, payload=presigned URL)
+    CP-->>R: {microvmId, endpoint}
+    Note over R: persist Handle (id=microvmId; data: endpoint, image, staging)
+    CP->>Shim: POST /run (microvmId, payload)
+    Shim->>S3: GET bundle (presigned URL)
+    Shim->>Drv: provision files (once), spawn driver, supervise proc.Wait()
+    Shim-->>CP: 200 OK
+    Drv->>C2: connect (task token), run task
+
+    R->>CP: CreateMicrovmAuthToken(microvmId, allowedPorts=[8080])
+    CP-->>R: token
+    R->>Shim: GET /xagent/lifecycle (X-aws-proxy-auth, via proxy)
+    Note over R,Shim: SSE stream open
+
+    Drv->>C2: report terminal status (driver-owned events)
+    Drv--)Shim: process exits (proc.Wait returns)
+    Shim--)R: SSE driver-exited{code}
+    R->>CP: TerminateMicrovm(microvmId) [runner credentials]
+    R->>S3: delete staged object
+    Note over R: record Exit{taskID, code}
+```
+
+**A stream drop is not an exit.** On a drop the runner consults the control
+plane (the liveness authority) before deciding anything; only a terminal/absent
+VM emits an exit:
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant CP as Control plane
+    participant Shim as Shim (in VM)
+
+    R->>Shim: SSE /xagent/lifecycle (via proxy)
+    Note over R,Shim: stream drops (network glitch / conn-age cap / token expiry)
+    R->>CP: GetMicrovm(microvmId)
+    alt RUNNING or SUSPENDED
+        CP-->>R: alive
+        Note over R: NO exit — re-mint token if expired, reconnect with backoff
+        R->>Shim: reconnect SSE
+    else TERMINATED / FAILED / not-found
+        CP-->>R: terminal or gone
+        Note over R: emit Exit{last SSE code, else -1 "report lost"}
+    end
+    Note over R,CP: periodic ListMicrovms reconcile is the final backstop
+```
+
+**Graceful stop (`Signal` then `Destroy`).** The runner asks the shim to stop the
+driver over the proxy; the driver owns its terminal report, then the runner
+terminates the VM and cleans up:
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant CP as Control plane
+    participant S3
+    participant Shim as Shim (in VM)
+    participant Drv as Driver
+    participant C2
+
+    Note over R: Signal (graceful stop)
+    R->>Shim: POST /terminate (via proxy)
+    Shim->>Drv: SIGTERM, grace period, then SIGKILL
+    Drv->>C2: report terminal status
+    Drv--)Shim: process exits
+    Shim--)R: SSE driver-exited{code}
+    Note over R: Destroy
+    R->>CP: TerminateMicrovm(microvmId) [idempotent]
+    R->>S3: delete staged object
+```
+
 ### The in-image shim and image contract
 
 Lambda MicroVMs require the application to be an HTTP server exposing the
