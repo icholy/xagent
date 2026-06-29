@@ -80,10 +80,15 @@ func (c *Config) Validate() error {
 }
 
 type Workspace struct {
-	Description string    `yaml:"description"`
-	Container   Container `yaml:"container"`
-	Agent       Agent     `yaml:"agent"`
-	Commands    []string  `yaml:"commands"`
+	Description string `yaml:"description"`
+	// Container holds the Docker backend's runtime config. LambdaMicroVM holds
+	// the Lambda MicroVMs backend's. A workspace may set both so one
+	// workspaces.yaml serves runners with different backends; each backend
+	// validates and consumes only its own section (see Backend.ValidateWorkspace).
+	Container     Container      `yaml:"container"`
+	LambdaMicroVM *LambdaMicroVM `yaml:"lambda_microvm,omitempty"`
+	Agent         Agent          `yaml:"agent"`
+	Commands      []string       `yaml:"commands"`
 	// Capabilities grant agents in this workspace additional capabilities, such
 	// as "github_token" to issue GitHub App installation tokens. None are
 	// granted unless explicitly listed.
@@ -144,9 +149,10 @@ type DummyConfig struct {
 }
 
 func (w *Workspace) Validate() error {
-	if err := w.Container.Validate(); err != nil {
-		return fmt.Errorf("container: %w", err)
-	}
+	// The runtime-specific section (container: / lambda_microvm:) is validated
+	// by the selected backend's ValidateWorkspace, not here, so a single
+	// workspaces.yaml can describe workspaces for backends this runner doesn't
+	// use. Only backend-agnostic config is checked at load time.
 	if err := w.Agent.Validate(); err != nil {
 		return fmt.Errorf("agent: %w", err)
 	}
@@ -168,13 +174,13 @@ func (a *Agent) Validate() error {
 }
 
 type Container struct {
-	Image       string            `yaml:"image"`
-	Runtime     string            `yaml:"runtime"`
-	Privileged  bool              `yaml:"privileged"`
-	WorkingDir  string            `yaml:"working_dir"`
-	User        string            `yaml:"user"`
-	Volumes     []string          `yaml:"volumes"`
-	Networks    []string          `yaml:"networks"`
+	Image      string   `yaml:"image"`
+	Runtime    string   `yaml:"runtime"`
+	Privileged bool     `yaml:"privileged"`
+	WorkingDir string   `yaml:"working_dir"`
+	User       string   `yaml:"user"`
+	Volumes    []string `yaml:"volumes"`
+	Networks   []string `yaml:"networks"`
 	// NetworkMode sets the container's Docker network mode (e.g. "host"). Empty
 	// uses the default bridge. Now that agents connect to the C2 directly over
 	// the network instead of a bind-mounted socket, a workspace can use this to
@@ -198,6 +204,43 @@ func (c *Container) Validate() error {
 		return fmt.Errorf("image is required")
 	}
 	return nil
+}
+
+// LambdaMicroVM holds the Lambda MicroVMs backend's runtime config for a
+// workspace. AWS credentials are not configured here; they resolve through the
+// standard AWS credential chain on the runner.
+type LambdaMicroVM struct {
+	// ImageIdentifier is a pre-built MicroVM image ARN to launch from. If empty,
+	// the backend builds one from ImageSource on first use.
+	ImageIdentifier string `yaml:"image_identifier"`
+	// ImageSource is the OCI image to build a MicroVM image from when
+	// ImageIdentifier is empty.
+	ImageSource string `yaml:"image_source"`
+	// Region is the AWS region. Empty defers to the runner's region.
+	Region string `yaml:"region"`
+	// ExecutionRole is the IAM role ARN the MicroVM assumes at runtime. It needs
+	// S3 read for the staged bundle and whatever the workload requires, but no
+	// MicroVM control-plane permissions: suspend/resume/terminate are the
+	// runner's, never the guest's.
+	ExecutionRole string `yaml:"execution_role"`
+	// EgressConnector is the network connector ARN granting outbound access so
+	// the driver can reach the C2 (INTERNET_EGRESS or a VPC connector).
+	EgressConnector string `yaml:"egress_connector"`
+	// StagingBucket is the S3 bucket the backend stages the spec bundle in.
+	StagingBucket string `yaml:"staging_bucket"`
+	// MaxDurationSeconds caps the MicroVM's lifetime (run-microvm
+	// --maximum-duration-in-seconds). 0 uses the backend default.
+	MaxDurationSeconds int64             `yaml:"max_duration_seconds"`
+	Environment        map[string]string `yaml:"environment"`
+}
+
+// Environ returns the environment variables as a slice of "key=value" strings.
+func (l *LambdaMicroVM) Environ() []string {
+	env := make([]string, 0, len(l.Environment))
+	for k, v := range l.Environment {
+		env = append(env, k+"="+v)
+	}
+	return env
 }
 
 // NetworkingConfig returns the Docker networking configuration for this container.
