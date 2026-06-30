@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
@@ -14,7 +13,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 type Server struct {
@@ -117,19 +115,16 @@ func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input 
 }
 
 type updateMyTaskInput struct {
-	Name        string `json:"name,omitempty" jsonschema:"The new name for the task"`
-	AutoArchive *int64 `json:"auto_archive_seconds,omitempty" jsonschema:"Set the auto-archive timeout in seconds. Omit to leave the existing value untouched. 0 = never; negative = archive immediately; positive = delay."`
+	Name string `json:"name,omitempty" jsonschema:"The new name for the task"`
 }
 
 func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input updateMyTaskInput) (*mcp.CallToolResult, any, error) {
-	var autoArchive *durationpb.Duration
-	if input.AutoArchive != nil {
-		autoArchive = durationpb.New(time.Duration(*input.AutoArchive) * time.Second)
-	}
+	// Note: a task is intentionally not allowed to change its own auto_archive.
+	// The value set by the routing rule (or a human) is authoritative for the
+	// task's lifetime — see icholy/xagent#1094.
 	if _, err := s.client.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:          s.task.ID,
-		Name:        input.Name,
-		AutoArchive: autoArchive,
+		Id:   s.task.ID,
+		Name: input.Name,
 	}); err != nil {
 		return errorResult("failed to update task: %v", err), nil, nil
 	}
