@@ -176,7 +176,12 @@ WHERE archived = FALSE
   AND auto_archive <> 0
   AND command = 0
   AND status IN (5, 6, 7)
-  AND updated_at + (INTERVAL '1 microsecond' * auto_archive) < NOW()
+  -- updated_at is a naive ` + "`" + `timestamp without time zone` + "`" + ` that stores UTC
+  -- wall-clock (Go writes time.Now().UTC()). Comparing it directly against the
+  -- timezone-aware NOW() casts it using the session TimeZone, which skews the
+  -- deadline by the session's UTC offset (premature archive east of UTC). Pin
+  -- the comparison to UTC so it is timezone-independent.
+  AND updated_at + (INTERVAL '1 microsecond' * auto_archive) < (NOW() AT TIME ZONE 'UTC')
 ORDER BY updated_at
 LIMIT $1
 `

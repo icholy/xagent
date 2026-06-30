@@ -1,10 +1,13 @@
 package archiver
 
 import (
+	"net/url"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
@@ -92,6 +95,46 @@ func TestArchiver_Tick_SkipsFutureDeadline(t *testing.T) {
 	got, err := st.GetTask(t.Context(), nil, task.ID, org.OrgID)
 	assert.NilError(t, err)
 	assert.Assert(t, !got.Archived, "task with future deadline must not be auto-archived yet")
+}
+
+// TestArchiver_Tick_SessionTimezoneDoesNotSkewDeadline is a regression test for
+// the premature auto-archive bug (issue #1092). The archiver query compares the
+// naive UTC `updated_at` column against the database clock; if that comparison
+// is resolved in a non-UTC session timezone, the deadline is skewed by the
+// session's UTC offset and a just-updated task is archived early. Drive a Tick
+// through a session pinned far east of UTC (Asia/Tokyo, +9h) against a task with
+// a one-hour window: the deadline is comfortably in the future, so it must not
+// archive regardless of the session timezone.
+func TestArchiver_Tick_SessionTimezoneDoesNotSkewDeadline(t *testing.T) {
+	t.Parallel()
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	// pgx treats unrecognized connection-string parameters as session runtime
+	// parameters, so `timezone` pins this pool's sessions to Asia/Tokyo.
+	u, err := url.Parse(dsn)
+	assert.NilError(t, err)
+	q := u.Query()
+	q.Set("timezone", "Asia/Tokyo")
+	u.RawQuery = q.Encode()
+
+	db, err := store.Open(u.String(), false)
+	assert.NilError(t, err)
+	t.Cleanup(func() { db.Close() })
+	st := store.New(db)
+
+	org := teststore.CreateOrg(t, st, nil)
+	task := teststore.CreateTask(t, st, org, &teststore.TaskOptions{Status: model.TaskStatusCompleted})
+	task.AutoArchive = time.Hour
+	assert.NilError(t, st.UpdateTask(t.Context(), nil, task))
+
+	a := New(Options{Store: st})
+	assert.NilError(t, a.Tick(t.Context()))
+
+	got, err := st.GetTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Assert(t, !got.Archived, "task with a future deadline must not be archived under a non-UTC session timezone")
 }
 
 func TestArchiver_Tick_BatchSizeBounded(t *testing.T) {
