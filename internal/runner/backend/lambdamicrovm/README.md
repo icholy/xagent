@@ -113,26 +113,34 @@ baked into the Dockerfile. See `microvm.Dockerfile` for the container layer.
 # 1. Build the linux/arm64 in-VM binary next to microvm.Dockerfile.
 GOOS=linux GOARCH=arm64 go build -o xagent ./cmd/xagent
 
-# 2. Zip the Dockerfile + app and upload to S3.
-zip app.zip microvm.Dockerfile xagent
+# 2. Zip the app + Dockerfile and upload to S3. The Dockerfile MUST be named
+#    `Dockerfile` in the archive — create-microvm-image fails with "No Dockerfile
+#    was found in the artifact archive" otherwise — so rename it as you package.
+cp microvm.Dockerfile Dockerfile
+zip app.zip Dockerfile xagent
 aws s3 cp app.zip s3://my-xagent-staging/images/app.zip
 
 # 3. Build the image. --hooks declares the hook port and the per-hook timeouts.
 #    Image hooks (ready/validate) allow ≤3600s; microvm hooks
 #    (run/resume/suspend/terminate) allow ≤60s. Per-hook timeouts are REQUIRED
 #    for every enabled hook.
-aws lambda create-microvm-image \
+aws lambda-microvms create-microvm-image \
+  --name xagent-shim \
   --code-artifact uri=s3://my-xagent-staging/images/app.zip \
   --base-image-arn arn:aws:lambda:us-east-1:aws:microvm-image:al2023-1 \
   --build-role-arn arn:aws:iam::123456789012:role/xagent-microvm-build-role \
   --hooks '{
     "port": 9000,
-    "ready":     {"timeoutSeconds": 300},
-    "validate":  {"timeoutSeconds": 60},
-    "run":       {"timeoutSeconds": 60},
-    "resume":    {"timeoutSeconds": 60},
-    "suspend":   {"timeoutSeconds": 60},
-    "terminate": {"timeoutSeconds": 60}
+    "microvmImageHooks": {
+      "ready":    "ENABLED", "readyTimeoutInSeconds":   300,
+      "validate": "ENABLED", "validateTimeoutInSeconds": 60
+    },
+    "microvmHooks": {
+      "run":       "ENABLED", "runTimeoutInSeconds":       60,
+      "resume":    "ENABLED", "resumeTimeoutInSeconds":    60,
+      "suspend":   "ENABLED", "suspendTimeoutInSeconds":   60,
+      "terminate": "ENABLED", "terminateTimeoutInSeconds": 60
+    }
   }'
 ```
 
