@@ -66,6 +66,8 @@ const (
 	// XAgentServiceRestartTaskProcedure is the fully-qualified name of the XAgentService's RestartTask
 	// RPC.
 	XAgentServiceRestartTaskProcedure = "/xagent.v1.XAgentService/RestartTask"
+	// XAgentServiceOpenShellProcedure is the fully-qualified name of the XAgentService's OpenShell RPC.
+	XAgentServiceOpenShellProcedure = "/xagent.v1.XAgentService/OpenShell"
 	// XAgentServiceUploadLogsProcedure is the fully-qualified name of the XAgentService's UploadLogs
 	// RPC.
 	XAgentServiceUploadLogsProcedure = "/xagent.v1.XAgentService/UploadLogs"
@@ -161,6 +163,7 @@ type XAgentServiceClient interface {
 	UnarchiveTask(context.Context, *v1.UnarchiveTaskRequest) (*v1.UnarchiveTaskResponse, error)
 	CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error)
 	RestartTask(context.Context, *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error)
+	OpenShell(context.Context, *v1.OpenShellRequest) (*v1.OpenShellResponse, error)
 	UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error)
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
 	ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error)
@@ -273,6 +276,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceRestartTaskProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("RestartTask")),
+			connect.WithClientOptions(opts...),
+		),
+		openShell: connect.NewClient[v1.OpenShellRequest, v1.OpenShellResponse](
+			httpClient,
+			baseURL+XAgentServiceOpenShellProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("OpenShell")),
 			connect.WithClientOptions(opts...),
 		),
 		uploadLogs: connect.NewClient[v1.UploadLogsRequest, v1.UploadLogsResponse](
@@ -466,6 +475,7 @@ type xAgentServiceClient struct {
 	unarchiveTask                  *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
 	cancelTask                     *connect.Client[v1.CancelTaskRequest, v1.CancelTaskResponse]
 	restartTask                    *connect.Client[v1.RestartTaskRequest, v1.RestartTaskResponse]
+	openShell                      *connect.Client[v1.OpenShellRequest, v1.OpenShellResponse]
 	uploadLogs                     *connect.Client[v1.UploadLogsRequest, v1.UploadLogsResponse]
 	createLink                     *connect.Client[v1.CreateLinkRequest, v1.CreateLinkResponse]
 	listLinks                      *connect.Client[v1.ListLinksRequest, v1.ListLinksResponse]
@@ -599,6 +609,15 @@ func (c *xAgentServiceClient) CancelTask(ctx context.Context, req *v1.CancelTask
 // RestartTask calls xagent.v1.XAgentService.RestartTask.
 func (c *xAgentServiceClient) RestartTask(ctx context.Context, req *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error) {
 	response, err := c.restartTask.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// OpenShell calls xagent.v1.XAgentService.OpenShell.
+func (c *xAgentServiceClient) OpenShell(ctx context.Context, req *v1.OpenShellRequest) (*v1.OpenShellResponse, error) {
+	response, err := c.openShell.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -880,6 +899,7 @@ type XAgentServiceHandler interface {
 	UnarchiveTask(context.Context, *v1.UnarchiveTaskRequest) (*v1.UnarchiveTaskResponse, error)
 	CancelTask(context.Context, *v1.CancelTaskRequest) (*v1.CancelTaskResponse, error)
 	RestartTask(context.Context, *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error)
+	OpenShell(context.Context, *v1.OpenShellRequest) (*v1.OpenShellResponse, error)
 	UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error)
 	CreateLink(context.Context, *v1.CreateLinkRequest) (*v1.CreateLinkResponse, error)
 	ListLinks(context.Context, *v1.ListLinksRequest) (*v1.ListLinksResponse, error)
@@ -988,6 +1008,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceRestartTaskProcedure,
 		svc.RestartTask,
 		connect.WithSchema(xAgentServiceMethods.ByName("RestartTask")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceOpenShellHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceOpenShellProcedure,
+		svc.OpenShell,
+		connect.WithSchema(xAgentServiceMethods.ByName("OpenShell")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceUploadLogsHandler := connect.NewUnaryHandlerSimple(
@@ -1190,6 +1216,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceCancelTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceRestartTaskProcedure:
 			xAgentServiceRestartTaskHandler.ServeHTTP(w, r)
+		case XAgentServiceOpenShellProcedure:
+			xAgentServiceOpenShellHandler.ServeHTTP(w, r)
 		case XAgentServiceUploadLogsProcedure:
 			xAgentServiceUploadLogsHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateLinkProcedure:
@@ -1303,6 +1331,10 @@ func (UnimplementedXAgentServiceHandler) CancelTask(context.Context, *v1.CancelT
 
 func (UnimplementedXAgentServiceHandler) RestartTask(context.Context, *v1.RestartTaskRequest) (*v1.RestartTaskResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.RestartTask is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) OpenShell(context.Context, *v1.OpenShellRequest) (*v1.OpenShellResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.OpenShell is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) UploadLogs(context.Context, *v1.UploadLogsRequest) (*v1.UploadLogsResponse, error) {

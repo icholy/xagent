@@ -55,6 +55,7 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
+	shell := shellrelay.NewRegistry(log, shellrelay.DefaultEstablishTimeout)
 	apiOpts := apiserver.Options{
 		Log:       log,
 		Store:     opts.Store,
@@ -62,6 +63,7 @@ func New(opts Options) *Server {
 		Publisher: opts.Publisher,
 		Atlassian: opts.Atlassian,
 		AppKey:    opts.AppKey,
+		Shells:    shell,
 	}
 	// Only populate GitHub when configured: assigning a typed-nil
 	// *githubserver.Server into the interface field would make
@@ -80,7 +82,7 @@ func New(opts Options) *Server {
 		oauth:     opts.OAuth,
 		cors:      opts.CORS,
 		notify:    opts.Notify,
-		shell:     shellrelay.NewRegistry(log, shellrelay.DefaultEstablishTimeout),
+		shell:     shell,
 	}
 }
 

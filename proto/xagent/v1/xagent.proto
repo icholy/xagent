@@ -20,6 +20,7 @@ service XAgentService {
   rpc UnarchiveTask(UnarchiveTaskRequest) returns (UnarchiveTaskResponse);
   rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
   rpc RestartTask(RestartTaskRequest) returns (RestartTaskResponse);
+  rpc OpenShell(OpenShellRequest) returns (OpenShellResponse);
   rpc UploadLogs(UploadLogsRequest) returns (UploadLogsResponse);
   rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
   rpc ListLinks(ListLinksRequest) returns (ListLinksResponse);
@@ -220,6 +221,17 @@ message RestartTaskRequest {
 }
 
 message RestartTaskResponse {}
+
+message OpenShellRequest {
+  int64 task_id = 1;
+}
+
+message OpenShellResponse {
+  // session_id is the rendezvous id the operator connects to via
+  // GET /shell/{session_id}/attach. It is also written to the task's
+  // shell_session field so the re-spawned driver serves this session.
+  string session_id = 1;
+}
 
 message LogEntry {
   string type = 1;
