@@ -16,6 +16,7 @@ import (
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
+	"github.com/icholy/xagent/internal/server/shellrelay"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/justinas/alice"
@@ -31,6 +32,7 @@ type Server struct {
 	oauth     *oauthflow.Auth
 	cors      bool
 	notify    *notifyserver.Server
+	shell     *shellrelay.Registry
 }
 
 type Options struct {
@@ -78,6 +80,7 @@ func New(opts Options) *Server {
 		oauth:     opts.OAuth,
 		cors:      opts.CORS,
 		notify:    opts.Notify,
+		shell:     shellrelay.NewRegistry(log, shellrelay.DefaultEstablishTimeout),
 	}
 }
 
@@ -124,6 +127,12 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/oauth/authorize", s.oauth.HandleAuthorize)
 		mux.HandleFunc("/oauth/token", s.oauth.HandleToken)
 	}
+	// Shell rendezvous relay (step 2 of the driver reverse shell, #1113).
+	// Both legs ride the same Bearer auth as the other authenticated endpoints:
+	// the driver leg with its task token, the operator (attach) leg with a Bearer
+	// token whose org claim must match the session's owning org.
+	mux.Handle("GET /shell/{session}/driver", alice.New(s.auth.RequireAuth()).Then(s.shell.DriverHandler()))
+	mux.Handle("GET /shell/{session}/attach", alice.New(s.auth.RequireAuth()).Then(s.shell.AttachHandler()))
 	// MCP endpoint (protected by auth middleware)
 	mux.Handle("/mcp", alice.New(s.auth.RequireAuth()).Then(mcpserver.Handler(s.api)))
 	// React UI (SPA with client-side routing, protected by cookie auth)
