@@ -79,7 +79,7 @@ xagent github     # GitHub integration
 
 ### Protobuf
 
-Service definitions in `proto/xagent/v1/xagent.proto`, generated code goes to `internal/proto/` (gitignored).
+Service definitions in `proto/xagent/v1/xagent.proto`; generated code is written to `internal/proto/` (checked in) by `mise run generate`.
 
 ## Conventional Commits & Releases
 
