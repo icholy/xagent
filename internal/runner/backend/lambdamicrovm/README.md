@@ -29,6 +29,21 @@ The guest holds **no** AWS credentials.
   the driver; on `/resume` it re-spawns the driver against the preserved disk
   (no re-provision). It supervises the driver and streams `driver-exited{code}`
   on `GET /xagent/lifecycle` (SSE, sticky-replayed) over AWS's managed proxy.
+
+### Two-port layout
+
+The shim serves its two surfaces on **two separate ports** — Lambda's hook
+caller cannot reach the AWS hooks on the ingress port:
+
+| Surface | Port (flag) | Reached by |
+|---|---|---|
+| AWS lifecycle hooks (`/aws/lambda-microvms/runtime/v1/*`: run/suspend/resume/terminate) | **9000** (`--hook-addr`, `awsmicrovm.HookPort`) | Lambda's control plane, control-plane-internal — **not** over the proxy |
+| xagent control surface (`GET /xagent/lifecycle` + `POST /xagent/stop`) | **8080** (`--addr`, `awsmicrovm.DefaultPort`) | the runner, over AWS's managed auth-token proxy |
+
+The hook port is control-plane-internal: it must **not** be reachable over the
+ingress proxy and must **not** be in the auth token's `AllowedPorts` (those are
+scoped to the 8080 control port). The hook port the shim listens on **must
+match** the port declared to `create-microvm-image` via `--hooks port=9000`.
 - The runner's per-handle `Wait` consumes that stream (over the proxy, with a
   short-lived `CreateMicrovmAuthToken` token) and, on `driver-exited`,
   **suspends** the VM itself and returns the true exit code. A stream drop is

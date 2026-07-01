@@ -1,8 +1,14 @@
 // Package microvmshim implements the in-MicroVM application that runs as the
 // Lambda MicroVMs image entrypoint (`xagent tool microvm-shim`). It exposes two
-// surfaces on one HTTP server (port 8080): the AWS lifecycle hooks under
-// /aws/lambda-microvms/runtime/v1/ (Lambda → shim) and the xagent control
-// surface under /xagent/ (runner → shim over the managed proxy).
+// surfaces on two separate HTTP servers/ports:
+//
+//   - The AWS lifecycle hooks under /aws/lambda-microvms/runtime/v1/ (Lambda →
+//     shim) on the dedicated hook port (awsmicrovm.HookPort, 9000). This is
+//     control-plane-internal: Lambda cannot reach the hooks on the ingress port,
+//     so they get their own port, which must match the create-microvm-image
+//     `--hooks port=...` declaration.
+//   - The xagent control surface under /xagent/ (runner → shim over the managed
+//     proxy) on the ingress port (awsmicrovm.DefaultPort, 8080).
 //
 // The shim decouples provisioning (the task's files, once) from spawning the
 // driver (every run — the first /run and every /resume). It supervises the
@@ -30,6 +36,7 @@ import (
 	"github.com/icholy/xagent/internal/runner/backend/lambdamicrovm"
 	"github.com/icholy/xagent/internal/x/awsmicrovm"
 	"github.com/icholy/xagent/internal/x/sse"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -85,17 +92,23 @@ type driverProc struct {
 
 func (s *Server) log() *slog.Logger { return cmp.Or(s.Log, slog.Default()) }
 
-// Handler returns the HTTP handler exposing both surfaces. The AWS hooks are
-// routed by awsmicrovm.Handler; the xagent control surface is served directly.
-func (s *Server) Handler() http.Handler {
-	hooks := &awsmicrovm.Handler{
+// HooksHandler returns the HTTP handler for the AWS lifecycle hooks, routed by
+// awsmicrovm.Handler. It is served on the dedicated hook port (Lambda → shim)
+// and must NOT be reachable over the ingress proxy.
+func (s *Server) HooksHandler() http.Handler {
+	return &awsmicrovm.Handler{
 		Run:       s.runHook,
 		Resume:    s.resumeHook,
 		Suspend:   s.suspendHook,
 		Terminate: s.terminateHook,
 	}
+}
+
+// ControlHandler returns the HTTP handler for the xagent control surface
+// (/xagent/lifecycle + /xagent/stop). It is served on the ingress port, reached
+// by the runner over the managed proxy.
+func (s *Server) ControlHandler() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(awsmicrovm.HookBase+"/", hooks)
 	mux.HandleFunc("GET "+lambdamicrovmLifecyclePath, s.lifecycleHandler)
 	mux.HandleFunc("POST "+lambdamicrovmStopPath, s.stopHandler)
 	return mux
@@ -107,9 +120,21 @@ const (
 	lambdamicrovmStopPath      = "/xagent/stop"
 )
 
-// ListenAndServe serves both surfaces on addr until ctx is cancelled.
-func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
-	srv := &http.Server{Addr: addr, Handler: s.Handler()}
+// ListenAndServe serves the two surfaces on two separate ports until ctx is
+// cancelled: the AWS lifecycle hooks on hookAddr (control-plane-internal) and
+// the xagent control surface on ctrlAddr (the ingress port the runner reaches
+// over the proxy). It returns if either server fails.
+func (s *Server) ListenAndServe(ctx context.Context, ctrlAddr, hookAddr string) error {
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error { return serve(ctx, hookAddr, s.HooksHandler()) })
+	g.Go(func() error { return serve(ctx, ctrlAddr, s.ControlHandler()) })
+	return g.Wait()
+}
+
+// serve runs an http.Server on addr with handler until ctx is cancelled, then
+// shuts it down gracefully.
+func serve(ctx context.Context, addr string, handler http.Handler) error {
+	srv := &http.Server{Addr: addr, Handler: handler}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
