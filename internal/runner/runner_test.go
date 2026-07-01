@@ -66,6 +66,11 @@ func TestRunnerStart(t *testing.T) {
 		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 			return &xagentv1.GetTaskDetailsResponse{Task: task.Proto("")}, nil
 		},
+		// The driver reads its task at startup to fork on shell_session; this
+		// task has none, so it takes the normal agent path.
+		GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+			return &xagentv1.GetTaskResponse{Task: task.Proto("")}, nil
+		},
 	}
 
 	// Create httptest server with the mock
