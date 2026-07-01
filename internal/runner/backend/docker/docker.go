@@ -305,8 +305,14 @@ func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode,
 	select {
 	case <-ctx.Done():
 		return 0, ctx.Err()
-	case <-errCh:
+	case err := <-errCh:
+		// A canceled ctx aborts the SDK's request, surfacing here as an error
+		// when the select races ctx.Done(). That is cancellation, not an exit.
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
 		// Removed (NotFound) or a wait error: no code to recover → report lost.
+		b.log.Error("container wait failed", "container", h.ID, "error", err)
 		return backend.ExitLost, nil
 	case res := <-okCh:
 		return backend.ExitCode(res.StatusCode), nil

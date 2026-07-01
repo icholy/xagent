@@ -140,7 +140,10 @@ func (r *Runner) Poll(ctx context.Context) error {
 		return err
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
+	// Plain group (limit + join only): WithContext's derived ctx is canceled
+	// when Wait returns, which would kill the supervise goroutines Start spawns
+	// on this ctx. supervise must outlive the poll cycle.
+	var g errgroup.Group
 	g.SetLimit(int(r.concurrency))
 
 	for _, pbTask := range resp.Tasks {
