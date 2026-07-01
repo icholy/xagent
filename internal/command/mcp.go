@@ -91,10 +91,11 @@ var McpCommand = &cli.Command{
 					Token:    cmd.String("token"),
 					ClientID: clientID,
 					Handler: func(n model.Notification) {
-						if n.ChannelMessage == "" {
+						msg, ok := channelMessage(n)
+						if !ok {
 							return
 						}
-						if err := transport.SendChannel(ctx, mcpchannel.Params{Content: n.ChannelMessage}); err != nil {
+						if err := transport.SendChannel(ctx, mcpchannel.Params{Content: msg}); err != nil {
 							slog.Warn("xagent channel: failed to send", "error", err)
 						}
 					},

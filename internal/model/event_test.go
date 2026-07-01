@@ -1,10 +1,75 @@
 package model
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"gotest.tools/v3/assert"
 )
+
+func TestEvent_JSONRoundTrip(t *testing.T) {
+	t.Parallel()
+	created := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name    string
+		payload EventPayload
+	}{
+		{
+			name:    "instruction",
+			payload: &InstructionPayload{Text: "do the thing", URL: "https://example.com/1"},
+		},
+		{
+			name:    "external",
+			payload: &ExternalPayload{Description: "PR comment", URL: "https://example.com/2", Data: "xagent: go"},
+		},
+		{
+			name:    "report",
+			payload: &ReportPayload{Content: "made progress"},
+		},
+		{
+			name: "lifecycle",
+			payload: &LifecyclePayload{
+				Kind:       LifecycleKindSandboxExited,
+				Actor:      RunnerActor,
+				FromStatus: "Running",
+				ToStatus:   "Completed",
+				Message:    "done",
+				Fields:     []string{"status"},
+			},
+		},
+		{
+			name:    "link",
+			payload: &LinkPayload{LinkID: 9, Relevance: "trigger", URL: "https://example.com/3", Title: "PR", Subscribe: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			want := &Event{ID: 42, TaskID: 7, OrgID: 3, Wake: true, Payload: tt.payload, CreatedAt: created}
+
+			data, err := json.Marshal(want)
+			assert.NilError(t, err)
+
+			// The discriminator is carried inline so the sealed Payload can be
+			// reconstructed on decode.
+			var envelope struct {
+				Type string `json:"type"`
+			}
+			assert.NilError(t, json.Unmarshal(data, &envelope))
+			assert.Equal(t, envelope.Type, tt.payload.Type())
+
+			var got Event
+			assert.NilError(t, json.Unmarshal(data, &got))
+			assert.Equal(t, got.ID, want.ID)
+			assert.Equal(t, got.TaskID, want.TaskID)
+			assert.Equal(t, got.OrgID, want.OrgID)
+			assert.Equal(t, got.Wake, want.Wake)
+			assert.Assert(t, got.CreatedAt.Equal(want.CreatedAt))
+			assert.DeepEqual(t, got.Payload, want.Payload)
+		})
+	}
+}
 
 func TestLifecyclePayload_ProtoRoundTrip(t *testing.T) {
 	t.Parallel()

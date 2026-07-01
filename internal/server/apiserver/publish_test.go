@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -12,6 +11,27 @@ import (
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 )
+
+// lifecycleEvent asserts the notification carries a lifecycle event and returns
+// its payload. The notification now carries the causal task event rather than a
+// hand-rolled ChannelMessage/TaskStatus, so the publish tests assert on the
+// event's kind and to_status instead.
+func lifecycleEvent(t *testing.T, n model.Notification) *model.LifecyclePayload {
+	t.Helper()
+	assert.Assert(t, n.TaskEvent != nil, "expected a TaskEvent on the notification")
+	lc, ok := n.TaskEvent.Payload.(*model.LifecyclePayload)
+	assert.Assert(t, ok, "expected a lifecycle payload, got %T", n.TaskEvent.Payload)
+	return lc
+}
+
+func contains(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
 
 func TestCreateTask_Publishes(t *testing.T) {
 	t.Parallel()
@@ -40,7 +60,10 @@ func TestCreateTask_Publishes(t *testing.T) {
 		OrgID:  org.OrgID,
 		Runner: "r",
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "TaskEvent"))
+	lc := lifecycleEvent(t, calls[0].N)
+	assert.Equal(t, lc.Kind, model.LifecycleKindCreated)
+	assert.Equal(t, lc.ToStatus, model.TaskStatusPending.Label())
 }
 
 func TestUpdateTask_Publishes(t *testing.T) {
@@ -76,7 +99,9 @@ func TestUpdateTask_Publishes(t *testing.T) {
 		OrgID:  org.OrgID,
 		Runner: "r",
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "TaskEvent"))
+	lc := lifecycleEvent(t, calls[0].N)
+	assert.Equal(t, lc.Kind, model.LifecycleKindUpdated)
 }
 
 func TestCancelTask_Publishes(t *testing.T) {
@@ -109,7 +134,10 @@ func TestCancelTask_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "TaskEvent"))
+	lc := lifecycleEvent(t, calls[0].N)
+	assert.Equal(t, lc.Kind, model.LifecycleKindCancelled)
+	assert.Equal(t, lc.ToStatus, model.TaskStatusCancelled.Label())
 }
 
 func TestArchiveTask_Publishes(t *testing.T) {
@@ -148,9 +176,9 @@ func TestArchiveTask_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
-	msg := calls[0].N.ChannelMessage
-	assert.Assert(t, strings.Contains(msg, "archived"), "expected archived in message, got %q", msg)
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "TaskEvent"))
+	lc := lifecycleEvent(t, calls[0].N)
+	assert.Equal(t, lc.Kind, model.LifecycleKindArchived)
 }
 
 func TestUploadLogs_Publishes(t *testing.T) {
@@ -185,7 +213,9 @@ func TestUploadLogs_Publishes(t *testing.T) {
 		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
 		UserID:    org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	// UploadLogs carries no channel-relevant event.
+	assert.Assert(t, calls[0].N.TaskEvent == nil)
 }
 
 func TestCreateLink_Publishes(t *testing.T) {
@@ -222,10 +252,12 @@ func TestCreateLink_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time"))
+	// CreateLink carries no channel-relevant event.
+	assert.Assert(t, calls[0].N.TaskEvent == nil)
 }
 
-func TestUpdateTask_ChannelMessage_QueuedOnStart(t *testing.T) {
+func TestUpdateTask_TaskEvent_QueuedOnStart(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
@@ -258,11 +290,16 @@ func TestUpdateTask_ChannelMessage_QueuedOnStart(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	msg := calls[0].N.ChannelMessage
-	assert.Assert(t, strings.Contains(msg, "queued"), "expected queued in message, got %q", msg)
+	// Re-queueing on Start leaves pending runner work, and the causal Updated
+	// event records the status change — the channel bridge forwards this case
+	// (Updated + Runner != "").
+	assert.Assert(t, calls[0].N.Runner != "", "expected pending runner on re-queue")
+	lc := lifecycleEvent(t, calls[0].N)
+	assert.Equal(t, lc.Kind, model.LifecycleKindUpdated)
+	assert.Assert(t, contains(lc.Fields, "status"), "expected status in changed fields: %v", lc.Fields)
 }
 
-func TestUpdateTask_NoChannelMessage_NameOnly(t *testing.T) {
+func TestUpdateTask_NoRunner_NameOnly(t *testing.T) {
 	t.Parallel()
 
 	pub := &pubsub.PublisherMock{
@@ -294,7 +331,11 @@ func TestUpdateTask_NoChannelMessage_NameOnly(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.ChannelMessage, "")
+	// A name-only update on a running task leaves no pending runner work, so the
+	// channel bridge suppresses the Updated event (gated on Runner != "").
+	assert.Equal(t, calls[0].N.Runner, "")
+	lc := lifecycleEvent(t, calls[0].N)
+	assert.Equal(t, lc.Kind, model.LifecycleKindUpdated)
 }
 
 func TestSubmitRunnerEvents_Publishes(t *testing.T) {
@@ -335,7 +376,12 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "TaskEvent"))
+	// The Started runner event folds to Running and rides a SandboxStarted
+	// lifecycle event (non-terminal, so consumers stay silent).
+	lc := lifecycleEvent(t, calls[0].N)
+	assert.Equal(t, lc.Kind, model.LifecycleKindSandboxStarted)
+	assert.Assert(t, !lc.IsTerminal())
 }
 
 func TestSubmitRunnerEvents_NotApplied_DoesNotPublish(t *testing.T) {

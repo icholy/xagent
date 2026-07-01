@@ -169,18 +169,16 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 }
 
 // attach creates a task-scoped event for a task and publishes a change
-// notification. Both wake modes share the event-create + publish; they differ
-// only on whether the task is restarted.
+// notification carrying that external event. Both wake modes share the
+// event-create + publish; they differ only on whether the task is restarted.
 //
-// When wake is true (the default behavior), it starts the task, logs the
-// action, and sets the wake ChannelMessage only when the attach restarts a
-// task that had finished its run (IsDone); an empty ChannelMessage keeps the
-// agent channel silent (PR #725's gate) for already-running / already-queued
-// tasks while the FE still receives the same notification.
+// When wake is true (the default behavior), it starts the task. When wake is
+// false (a rule with Wakeup: false), it leaves the task untouched — no
+// task.Start() — but still publishes the same notification.
 //
-// When wake is false (a rule with Wakeup: false), it leaves the task untouched
-// — no task.Start(), no audit log — but still emits a channel notification
-// unconditionally so the event isn't silently swallowed.
+// The external event rides on the notification as TaskEvent in both modes; the
+// channel bridge (mcp.go) decides whether and how to forward it, so the router
+// no longer hand-rolls a wake/silent ChannelMessage here.
 func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, orgID int64, wake bool) error {
 	event := &model.Event{
 		TaskID: taskID,
@@ -201,22 +199,24 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 		if err := r.Store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
+		// The external event is the cause of this notification on both wake modes;
+		// the channel bridge renders the forwarded line from it (see mcp.go).
+		notification.TaskEvent = event
 		if !wake {
 			// No-wake path: the event is attached and the FE is notified, but the
-			// task is not restarted. Emit a channel message unconditionally —
-			// otherwise the event would reach the task with no signal at all.
+			// task is not restarted. The external event still rides along so the
+			// channel bridge surfaces it — otherwise it would reach the task with no
+			// signal at all.
 			notification.Resources = []model.NotificationResource{
 				{Action: "updated", Type: "task", ID: taskID},
 				{Action: "updated", Type: "event", ID: event.ID},
 			}
-			notification.ChannelMessage = fmt.Sprintf("Task %d: %s (%s)", taskID, input.Description, input.URL)
 			return tx.Commit()
 		}
 		task, err := r.Store.GetTaskForUpdate(ctx, tx, taskID, event.OrgID)
 		if err != nil {
 			return err
 		}
-		wasDone := task.IsDone()
 		task.Start()
 		if err := r.Store.UpdateTask(ctx, tx, task); err != nil {
 			return err
@@ -232,9 +232,6 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
 		notification.Runner = task.PendingRunner()
-		if wasDone {
-			notification.ChannelMessage = fmt.Sprintf("Task %d woken by event %d: %s (%s)", task.ID, event.ID, input.Description, input.URL)
-		}
 		return tx.Commit()
 	})
 	if err != nil {
@@ -277,8 +274,9 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		// Emit the external (trigger) event first so it leads the timeline (ordered
 		// by event id), the same way it appears when an event wakes an existing task
 		// (see attach). The event that caused the task to exist should precede the
-		// "Created" lifecycle event it triggered.
-		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+		// "Created" lifecycle event it triggered. This external trigger is also the
+		// causal event attached to the notification below.
+		externalEvent := &model.Event{
 			TaskID: task.ID,
 			OrgID:  orgID,
 			Payload: &model.ExternalPayload{
@@ -286,7 +284,8 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 				URL:         input.URL,
 				Data:        input.Data,
 			},
-		}); err != nil {
+		}
+		if err := r.Store.CreateEvent(ctx, tx, externalEvent); err != nil {
 			return err
 		}
 		// Record the creation as a lifecycle event. The router (not a user) created
@@ -351,8 +350,12 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 				{Action: "created", Type: "task", ID: task.ID},
 				{Action: "appended", Type: "task_logs", ID: task.ID},
 			},
-			Runner:         task.PendingRunner(),
-			ChannelMessage: fmt.Sprintf("Task %d created by routing rule for event: %s (%s)", task.ID, input.Description, input.URL),
+			Runner: task.PendingRunner(),
+			// Attach the external trigger (carrying the event's description/url)
+			// rather than the Created lifecycle event: the channel bridge renders
+			// the "Task N: <desc> (<url>)" wake line from it. The "by routing rule"
+			// framing is inferable from the router actor and the task's own stream.
+			TaskEvent: externalEvent,
 		}
 		return tx.Commit()
 	})

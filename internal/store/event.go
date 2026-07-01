@@ -116,42 +116,10 @@ func toModelEvents(rows []sqlc.Event) ([]*model.Event, error) {
 }
 
 // toEventPayload picks the concrete model.EventPayload for a stored row by
-// switching on its type discriminator, then decodes the jsonb body into it.
+// dispatching on its type discriminator, then decodes the jsonb body into it.
 // This is the only place the events.type column is consumed — it is a storage
-// detail, not a field on the Event value.
+// detail, not a field on the Event value. The arm switch itself lives in the
+// model package (model.EventPayloadFromType), shared with the SSE-wire decoder.
 func toEventPayload(typ string, data []byte) (model.EventPayload, error) {
-	switch typ {
-	case model.EventTypeInstruction:
-		var p model.InstructionPayload
-		if err := json.Unmarshal(data, &p); err != nil {
-			return nil, fmt.Errorf("unmarshal instruction payload: %w", err)
-		}
-		return &p, nil
-	case model.EventTypeExternal:
-		var p model.ExternalPayload
-		if err := json.Unmarshal(data, &p); err != nil {
-			return nil, fmt.Errorf("unmarshal external payload: %w", err)
-		}
-		return &p, nil
-	case model.EventTypeReport:
-		var p model.ReportPayload
-		if err := json.Unmarshal(data, &p); err != nil {
-			return nil, fmt.Errorf("unmarshal report payload: %w", err)
-		}
-		return &p, nil
-	case model.EventTypeLifecycle:
-		var p model.LifecyclePayload
-		if err := json.Unmarshal(data, &p); err != nil {
-			return nil, fmt.Errorf("unmarshal lifecycle payload: %w", err)
-		}
-		return &p, nil
-	case model.EventTypeLink:
-		var p model.LinkPayload
-		if err := json.Unmarshal(data, &p); err != nil {
-			return nil, fmt.Errorf("unmarshal link payload: %w", err)
-		}
-		return &p, nil
-	default:
-		return nil, fmt.Errorf("unknown event type %q", typ)
-	}
+	return model.EventPayloadFromType(typ, data)
 }

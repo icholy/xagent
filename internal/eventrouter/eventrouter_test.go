@@ -246,7 +246,19 @@ func TestRouteSkipsEventsWithoutXAgentPrefix(t *testing.T) {
 	assert.Equal(t, n, 0)
 }
 
-func TestRouter_AttachSetsWakeMessage(t *testing.T) {
+// externalEvent asserts the notification carries an external event and returns
+// its payload. The router now attaches the causal external event to the
+// notification instead of a hand-rolled ChannelMessage; the channel bridge
+// renders the forwarded line from it.
+func externalEvent(t *testing.T, n model.Notification) *model.ExternalPayload {
+	t.Helper()
+	assert.Assert(t, n.TaskEvent != nil, "expected a TaskEvent on the notification")
+	ext, ok := n.TaskEvent.Payload.(*model.ExternalPayload)
+	assert.Assert(t, ok, "expected an external payload, got %T", n.TaskEvent.Payload)
+	return ext
+}
+
+func TestRouter_AttachCarriesExternalEvent(t *testing.T) {
 	t.Parallel()
 
 	s := teststore.New(t)
@@ -279,15 +291,14 @@ func TestRouter_AttachSetsWakeMessage(t *testing.T) {
 
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	msg := calls[0].N.ChannelMessage
-	assert.Assert(t, msg != "", "expected non-empty ChannelMessage, got empty")
-	assert.Assert(t, strings.Contains(msg, "Task "), "expected task id in message: %q", msg)
-	assert.Assert(t, strings.Contains(msg, "woken by event"), "expected wake phrase in message: %q", msg)
-	assert.Assert(t, strings.Contains(msg, "PR comment from alice"), "expected description in message: %q", msg)
-	assert.Assert(t, strings.Contains(msg, url), "expected URL in message: %q", msg)
+	// The notification carries the external trigger event; the channel bridge
+	// renders the wake line from its description/url.
+	ext := externalEvent(t, calls[0].N)
+	assert.Equal(t, ext.Description, "PR comment from alice")
+	assert.Equal(t, ext.URL, url)
 }
 
-func TestRouter_AttachToRunningTaskStaysSilent(t *testing.T) {
+func TestRouter_AttachToRunningTaskCarriesExternalEvent(t *testing.T) {
 	t.Parallel()
 
 	s := teststore.New(t)
@@ -318,13 +329,17 @@ func TestRouter_AttachToRunningTaskStaysSilent(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
 
-	// The notification still publishes with the usual resources so the FE
-	// invalidates, but ChannelMessage is empty — PR #725's gate keeps the
-	// agent channel silent on a no-transition attach.
+	// The notification publishes with the usual resources so the FE invalidates,
+	// and now always carries the external trigger event regardless of whether the
+	// attach restarted the task. The old wasDone gate (PR #725) that kept the
+	// channel silent on a no-transition attach is gone: the forward decision now
+	// lives entirely in the channel bridge, which forwards every external event.
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	assert.Equal(t, calls[0].N.ChannelMessage, "")
 	assert.Equal(t, len(calls[0].N.Resources), 3)
+	ext := externalEvent(t, calls[0].N)
+	assert.Equal(t, ext.Description, "PR comment from alice")
+	assert.Equal(t, ext.URL, url)
 }
 
 func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
@@ -372,14 +387,13 @@ func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(events), 1)
 
-	// A channel notification is published unconditionally so the event isn't
-	// silently swallowed, even though the task wasn't restarted.
+	// A notification is published unconditionally, carrying the external event so
+	// it isn't silently swallowed even though the task wasn't restarted.
 	calls := pub.PublishCalls()
 	assert.Equal(t, len(calls), 1)
-	msg := calls[0].N.ChannelMessage
-	assert.Assert(t, msg != "", "expected non-empty ChannelMessage, got empty")
-	assert.Assert(t, strings.Contains(msg, "PR comment from alice"), "expected description in message: %q", msg)
-	assert.Assert(t, strings.Contains(msg, url), "expected URL in message: %q", msg)
+	ext := externalEvent(t, calls[0].N)
+	assert.Equal(t, ext.Description, "PR comment from alice")
+	assert.Equal(t, ext.URL, url)
 }
 
 func TestRouteWakeEnabledRestartsTask(t *testing.T) {

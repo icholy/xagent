@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -88,6 +87,15 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	if req.AutoArchive != nil {
 		task.AutoArchive = req.AutoArchive.AsDuration()
 	}
+	// The causal lifecycle event, captured in-tx (CreateEvent stamps its ID) and
+	// attached to the notification published after commit.
+	createdEvent := &model.Event{
+		Payload: &model.LifecyclePayload{
+			Kind:     model.LifecycleKindCreated,
+			Actor:    model.UserActor(caller.AuditName()),
+			ToStatus: task.Status.Label(),
+		},
+	}
 	err = s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := s.store.CreateTask(ctx, tx, task); err != nil {
 			return err
@@ -96,15 +104,9 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		// the materialized projection). A freshly created task has no prior status,
 		// so from is unspecified. Emit it before the instruction events so the
 		// timeline (ordered by event id) shows "Created" first.
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Payload: &model.LifecyclePayload{
-				Kind:     model.LifecycleKindCreated,
-				Actor:    model.UserActor(caller.AuditName()),
-				ToStatus: task.Status.Label(),
-			},
-		}); err != nil {
+		createdEvent.TaskID = task.ID
+		createdEvent.OrgID = task.OrgID
+		if err := s.store.CreateEvent(ctx, tx, createdEvent); err != nil {
 			return err
 		}
 		// Seed the stream with the initial instructions as instruction events
@@ -136,12 +138,12 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 			{Action: "created", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		},
-		OrgID:          caller.OrgID,
-		Runner:         task.PendingRunner(),
-		UserID:         caller.ID,
-		ClientID:       caller.ClientID,
-		Time:           time.Now(),
-		ChannelMessage: fmt.Sprintf("Task %d created on %s/%s.", task.ID, task.Runner, task.Workspace),
+		OrgID:     caller.OrgID,
+		Runner:    task.PendingRunner(),
+		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
+		Time:      time.Now(),
+		TaskEvent: createdEvent,
 	})
 	return &xagentv1.CreateTaskResponse{
 		Task: task.Proto(s.baseURL),
@@ -257,7 +259,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+		event := &model.Event{
 			TaskID: task.ID,
 			OrgID:  task.OrgID,
 			Payload: &model.LifecyclePayload{
@@ -267,7 +269,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 				ToStatus:   task.Status.Label(),
 				Fields:     changed,
 			},
-		}); err != nil {
+		}
+		if err := s.store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -275,9 +278,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			{Action: "updated", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
-		if req.Start {
-			notification.ChannelMessage = fmt.Sprintf("Task %d queued: %s.", task.ID, strings.Join(changed, ", "))
-		}
+		notification.TaskEvent = event
 		return tx.Commit()
 	})
 	if err != nil {
@@ -326,7 +327,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+		event := &model.Event{
 			TaskID: task.ID,
 			OrgID:  task.OrgID,
 			Payload: &model.LifecyclePayload{
@@ -335,7 +336,8 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 				FromStatus: from.Label(),
 				ToStatus:   task.Status.Label(),
 			},
-		}); err != nil {
+		}
+		if err := s.store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -343,7 +345,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 			{Action: "archived", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
-		notification.ChannelMessage = fmt.Sprintf("Task %d archived.", task.ID)
+		notification.TaskEvent = event
 		return tx.Commit()
 	})
 	if err != nil {
@@ -392,7 +394,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+		event := &model.Event{
 			TaskID: task.ID,
 			OrgID:  task.OrgID,
 			Payload: &model.LifecyclePayload{
@@ -401,7 +403,8 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 				FromStatus: from.Label(),
 				ToStatus:   task.Status.Label(),
 			},
-		}); err != nil {
+		}
+		if err := s.store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -409,6 +412,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 			{Action: "unarchived", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
+		notification.TaskEvent = event
 		return tx.Commit()
 	})
 	if err != nil {
@@ -457,7 +461,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+		event := &model.Event{
 			TaskID: task.ID,
 			OrgID:  task.OrgID,
 			Payload: &model.LifecyclePayload{
@@ -466,7 +470,8 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 				FromStatus: from.Label(),
 				ToStatus:   task.Status.Label(),
 			},
-		}); err != nil {
+		}
+		if err := s.store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -474,12 +479,12 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 			{Action: "cancelled", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
-		// Only the Pending->Cancelled branch is terminal here; the Running->
-		// Cancelling branch will produce its terminal "cancelled" message via
-		// SubmitRunnerEvents once the runner stops the container.
-		if task.Status == model.TaskStatusCancelled {
-			notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
-		}
+		// Attach the Cancelled lifecycle event unconditionally. Consumers read the
+		// ToStatus themselves: only the Pending->Cancelled branch lands on a
+		// terminal Cancelled status (which notify and the channel bridge surface);
+		// the Running->Cancelling branch is non-terminal and its terminal event
+		// arrives later from the runner via SubmitRunnerEvents.
+		notification.TaskEvent = event
 		return tx.Commit()
 	})
 	if err != nil {
@@ -528,7 +533,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		if err := s.store.UpdateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+		event := &model.Event{
 			TaskID: task.ID,
 			OrgID:  task.OrgID,
 			Payload: &model.LifecyclePayload{
@@ -537,7 +542,8 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 				FromStatus: from.Label(),
 				ToStatus:   task.Status.Label(),
 			},
-		}); err != nil {
+		}
+		if err := s.store.CreateEvent(ctx, tx, event); err != nil {
 			return err
 		}
 		notification.Runner = task.PendingRunner()
@@ -545,7 +551,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 			{Action: "restarted", Type: "task", ID: task.ID},
 			{Action: "appended", Type: "task_logs", ID: task.ID},
 		}
-		notification.ChannelMessage = fmt.Sprintf("Task %d restart requested.", task.ID)
+		notification.TaskEvent = event
 		return tx.Commit()
 	})
 	if err != nil {

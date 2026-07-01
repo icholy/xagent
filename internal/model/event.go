@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -65,6 +66,14 @@ type ExternalPayload struct {
 
 func (*ExternalPayload) Type() string    { return EventTypeExternal }
 func (*ExternalPayload) isEventPayload() {}
+
+// Summary renders an external event as a human-readable line — the description
+// followed by its source URL. It is the external-event counterpart of
+// LifecyclePayload.Summary, used to render the wake line forwarded to the agent
+// channel.
+func (p *ExternalPayload) Summary() string {
+	return fmt.Sprintf("%s (%s)", p.Description, p.URL)
+}
 
 func (p *ExternalPayload) SetPayloadProto(pb *xagentv1.Event) {
 	pb.Payload = &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
@@ -251,6 +260,29 @@ func (p *LifecyclePayload) Summary() string {
 	return s
 }
 
+// IsTerminal reports whether this lifecycle event marks the end of a run — the
+// outcomes a watcher like `xagent notify` should surface. That is:
+//   - SandboxExited into a terminal ToStatus (Completed / Failed), the runner's
+//     normal end-of-run transition,
+//   - SandboxFailed, a container-level failure, and
+//   - Cancelled with a terminal ToStatus (the direct Pending->Cancelled cancel;
+//     a Running->Cancelling cancel is not terminal here — its terminal
+//     SandboxExited/Cancelled arrives later from the runner).
+//
+// AutoArchived does NOT count: it is housekeeping, not a run outcome. Non-run
+// lifecycle kinds (Created, Updated, Restarted, Archived, Unarchived,
+// SandboxStarted) are likewise not terminal.
+func (p *LifecyclePayload) IsTerminal() bool {
+	switch p.Kind {
+	case LifecycleKindSandboxExited, LifecycleKindCancelled:
+		return TaskStatusFromLabel(p.ToStatus).IsTerminal()
+	case LifecycleKindSandboxFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Event is one row of a task's event stream. Its body is a typed, sealed
 // payload; the events.type column is materialized from Payload.Type() purely as
 // a storage discriminator and is not carried on the value.
@@ -330,4 +362,109 @@ func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 	default:
 		return nil
 	}
+}
+
+// EventPayloadFromType decodes data into the concrete EventPayload named by
+// typ, dispatching on the same EventType* discriminators as the store's type
+// column. It is the single arm switch shared by both decode paths: the on-disk
+// decode (store.toEventPayload delegates here) and the SSE-wire decode
+// (Event.UnmarshalJSON). It returns an error for an unknown type.
+func EventPayloadFromType(typ string, data []byte) (EventPayload, error) {
+	switch typ {
+	case EventTypeInstruction:
+		var p InstructionPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("unmarshal instruction payload: %w", err)
+		}
+		return &p, nil
+	case EventTypeExternal:
+		var p ExternalPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("unmarshal external payload: %w", err)
+		}
+		return &p, nil
+	case EventTypeReport:
+		var p ReportPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("unmarshal report payload: %w", err)
+		}
+		return &p, nil
+	case EventTypeLifecycle:
+		var p LifecyclePayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("unmarshal lifecycle payload: %w", err)
+		}
+		return &p, nil
+	case EventTypeLink:
+		var p LinkPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("unmarshal link payload: %w", err)
+		}
+		return &p, nil
+	default:
+		return nil, fmt.Errorf("unknown event type %q", typ)
+	}
+}
+
+// eventJSON is the wire shape of an Event. The Payload interface can't be
+// json.Unmarshal'd directly (a sealed interface has no concrete target), so the
+// discriminator is embedded as "type" beside the raw "payload" body and
+// re-dispatched on decode via EventPayloadFromType. This mirrors what the store
+// does on disk with a separate type column; the wire has no such column, so the
+// codec carries the discriminator inline.
+type eventJSON struct {
+	ID        int64           `json:"id"`
+	TaskID    int64           `json:"task_id"`
+	OrgID     int64           `json:"org_id"`
+	Wake      bool            `json:"wake"`
+	Type      string          `json:"type"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
+// MarshalJSON emits the Event with its payload discriminator inlined as "type",
+// so UnmarshalJSON can reconstruct the sealed Payload. A value receiver keeps
+// both Event and *Event marshalable (the Notification carries a *Event).
+func (e Event) MarshalJSON() ([]byte, error) {
+	out := eventJSON{
+		ID:        e.ID,
+		TaskID:    e.TaskID,
+		OrgID:     e.OrgID,
+		Wake:      e.Wake,
+		CreatedAt: e.CreatedAt,
+	}
+	if e.Payload != nil {
+		out.Type = e.Payload.Type()
+		data, err := json.Marshal(e.Payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal event payload: %w", err)
+		}
+		out.Payload = data
+	}
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON reads the inlined "type" discriminator and decodes the raw
+// "payload" into the matching concrete EventPayload via EventPayloadFromType. An
+// empty type (e.g. a payload-less event) leaves Payload nil.
+func (e *Event) UnmarshalJSON(data []byte) error {
+	var in eventJSON
+	if err := json.Unmarshal(data, &in); err != nil {
+		return err
+	}
+	e.ID = in.ID
+	e.TaskID = in.TaskID
+	e.OrgID = in.OrgID
+	e.Wake = in.Wake
+	e.CreatedAt = in.CreatedAt
+	if in.Type == "" {
+		e.Payload = nil
+		return nil
+	}
+	payload, err := EventPayloadFromType(in.Type, in.Payload)
+	if err != nil {
+		return err
+	}
+	e.Payload = payload
+	return nil
 }

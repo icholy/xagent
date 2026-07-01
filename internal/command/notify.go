@@ -16,8 +16,9 @@ import (
 // terminal state (completed, failed, or cancelled).
 //
 // It reuses the same per-org SSE stream as the runner and the mcp channel
-// bridge. Notifications are gated on the terminal TaskStatus so the daemon
-// only surfaces outcomes that need attention, rather than every change.
+// bridge. Notifications are gated on the notification's causal lifecycle event
+// being a terminal run outcome so the daemon only surfaces outcomes that need
+// attention, rather than every change.
 var NotifyCommand = &cli.Command{
 	Name:  "notify",
 	Usage: "Subscribe to server notifications and emit system notifications",
@@ -46,13 +47,16 @@ var NotifyCommand = &cli.Command{
 			BaseURL: cmd.String("server"),
 			Token:   cmd.String("token"),
 			Handler: func(n model.Notification) {
-				// Only surface terminal task transitions (completed,
-				// failed, cancelled) — these are the outcomes that need
-				// attention. Every other change is left silent.
-				if !n.TaskStatus.IsTerminal() {
+				// Only surface terminal run outcomes (sandbox exited into a
+				// terminal status, sandbox failed, or a direct cancel) — these
+				// are the outcomes that need attention. The causal lifecycle
+				// event on the notification carries the transition; every other
+				// change is left silent.
+				lc, ok := lifecycleOf(n.TaskEvent)
+				if !ok || !lc.IsTerminal() {
 					return
 				}
-				if err := notify.Send(title, n.ChannelMessage); err != nil {
+				if err := notify.Send(title, lc.Summary()); err != nil {
 					slog.Warn("failed to send system notification", "error", err)
 				}
 			},

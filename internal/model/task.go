@@ -35,6 +35,21 @@ func (s TaskStatus) Label() string {
 	return s.String()
 }
 
+// TaskStatusFromLabel is the inverse of Label: it maps a status label back to
+// its TaskStatus. The empty string (Label's rendering of the unspecified
+// status) and any unrecognized label both map to TaskStatusUnspecified.
+func TaskStatusFromLabel(label string) TaskStatus {
+	if label == "" {
+		return TaskStatusUnspecified
+	}
+	for s := TaskStatusPending; s <= TaskStatusCancelled; s++ {
+		if s.String() == label {
+			return s
+		}
+	}
+	return TaskStatusUnspecified
+}
+
 // IsTerminal reports whether the status is a finished run state:
 // completed, failed, or cancelled.
 func (s TaskStatus) IsTerminal() bool {
