@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.1](https://github.com/icholy/xagent/compare/v2.5.0...v2.5.1) (2026-07-01)
+
+
+### Bug Fixes
+
+* **runner:** keep supervise on the runner's root context ([#1103](https://github.com/icholy/xagent/issues/1103)) ([78afecd](https://github.com/icholy/xagent/commit/78afecd6a1a3d83f42337ebd08ec61673e8ab846))
+
 ## [2.5.0](https://github.com/icholy/xagent/compare/v2.4.0...v2.5.0) (2026-07-01)
 
 
