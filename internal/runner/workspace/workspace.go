@@ -182,9 +182,9 @@ type Container struct {
 	Volumes    []string `yaml:"volumes"`
 	Networks   []string `yaml:"networks"`
 	// NetworkMode sets the container's Docker network mode (e.g. "host"). Empty
-	// uses the default bridge. Now that agents connect to the control server directly over
+	// uses the default bridge. Now that agents connect to the server directly over
 	// the network instead of a bind-mounted socket, a workspace can use this to
-	// control how the container reaches the control server.
+	// control how the container reaches the server.
 	NetworkMode string            `yaml:"network_mode"`
 	GroupAdd    []string          `yaml:"group_add"`
 	Environment map[string]string `yaml:"environment"`
@@ -224,7 +224,7 @@ type LambdaMicroVM struct {
 	// runner's, never the guest's.
 	ExecutionRole string `yaml:"execution_role"`
 	// EgressConnector is the network connector ARN granting outbound access so
-	// the driver can reach the control server (INTERNET_EGRESS or a VPC connector).
+	// the driver can reach the server (INTERNET_EGRESS or a VPC connector).
 	EgressConnector string `yaml:"egress_connector"`
 	// IngressConnector is the network connector ARN granting inbound access so
 	// the runner can reach the in-VM shim over AWS's managed proxy (SSE lifecycle

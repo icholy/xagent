@@ -19,14 +19,14 @@ running one.
 
 ## Design
 
-### Principle: the driver is the shell, the control server is the rendezvous
+### Principle: the driver is the shell, the server is the rendezvous
 
 The sandbox is egress-only and the operator's terminal (browser tab or laptop
-CLI) isn't reachable either — so **both ends dial into the control server**, which bridges
+CLI) isn't reachable either — so **both ends dial into the server**, which bridges
 the two streams. Rather than reach into each backend's substrate (`docker exec`,
 the AWS `create-microvm-shell-auth-token` + `SHELL_INGRESS` path, `kubectl exec`,
 …), the **driver** — the one component present in every sandbox, already holding
-an authenticated connection to the control server via the task token — implements the shell.
+an authenticated connection to the server via the task token — implements the shell.
 One implementation, every backend, no substrate credentials, and the existing
 egress-only path already works through NAT.
 
@@ -83,7 +83,7 @@ if task.ShellSession != "" {
 ```
 
 `runShell` allocates a PTY, spawns a login shell, and connects a WebSocket to the
-control server for `shell_session`, piping the PTY master over it.
+server for `shell_session`, piping the PTY master over it.
 
 ### Runner: unchanged, and deliberately oblivious
 
@@ -100,21 +100,21 @@ later refinement.
 
 Open a shell for task `N`:
 
-1. The control server creates a rendezvous session `S` (server-side registry) for the task.
-2. The control server sets `tasks.shell_session = S`, **then** issues a normal `START`/`RESTART`.
+1. The server creates a rendezvous session `S` (server-side registry) for the task.
+2. The server sets `tasks.shell_session = S`, **then** issues a normal `START`/`RESTART`.
    Ordering matters: the field must be set before the sandbox boots, since the
    driver reads it once.
 3. The runner brings the sandbox up (obliviously; `Launch`/resume re-spawns the
    driver against the preserved disk for a finished task).
 4. The re-spawned driver reads `shell_session`, forks into `runShell`, dials the
-   control server WebSocket for `S`.
-5. The operator's client dials the control server WebSocket for `S`, authenticated with a
-   Bearer token (see Security); the control server bridges the two.
+   server WebSocket for `S`.
+5. The operator's client dials the server WebSocket for `S`, authenticated with a
+   Bearer token (see Security); the server bridges the two.
 
 ```mermaid
 sequenceDiagram
     actor Op as Operator (CLI/FE)
-    participant Server as Control Server
+    participant Server
     participant Runner
     participant Driver as Driver (in sandbox)
 
@@ -150,7 +150,7 @@ sequenceDiagram
 ```
 
 Close: when the session ends — the shell exits and the driver's WebSocket drops —
-the control server observes the rendezvous teardown and clears `shell_session` itself. Neither
+the server observes the rendezvous teardown and clears `shell_session` itself. Neither
 the driver nor the runner ever writes the field, so the next `START` is a plain
 agent run.
 
@@ -159,13 +159,13 @@ operator — are not connected within it, the session is deleted and any
 already-connected client is disconnected. The attach leg is single-occupancy —
 at most one operator is bridged to a session at a time.
 
-### Transport: WebSocket on both legs, control server as a byte-relay
+### Transport: WebSocket on both legs, server as a byte-relay
 
-Both legs are client-initiated WebSockets to the control server; the control server is a **mode-agnostic
+Both legs are client-initiated WebSockets to the server; the server is a **mode-agnostic
 byte pump** that only tracks session lifecycle and copies frames verbatim. WS
 (not Connect bidi streaming) because the web FE is a wanted-eventually consumer
 and browsers cannot do client/bidi streaming over Connect — WS + xterm.js is the
-only browser-native option, and using WS for both legs keeps the control server bridge
+only browser-native option, and using WS for both legs keeps the server bridge
 symmetric.
 
 New server endpoints (alongside the existing Connect handler and the raw `/events`
@@ -178,7 +178,7 @@ SSE endpoint in `internal/server/server.go`):
 - `GET /shell/{session}/attach` (WebSocket) — the operator leg, authed with a
   Bearer token; the caller's org comes from its token claims (`caller.OrgID`).
 
-**Framing** is an end-to-end contract between driver and client (the control server does not
+**Framing** is an end-to-end contract between driver and client (the server does not
 parse it): **binary** WS frames, `[1-byte type][payload]`:
 
 - `0x00 data`   — raw PTY bytes (a PTY master is one combined stream)
@@ -191,13 +191,13 @@ The subprotocol negotiates a version only:
 the request, not the subprotocol.
 
 Both legs use `github.com/coder/websocket`. The session registry is in-memory,
-which assumes a single control server instance; cross-instance rendezvous (routing both legs
+which assumes a single server instance; cross-instance rendezvous (routing both legs
 to the session owner, or a shared bus) is out of scope for v1 and dealt with if
-and when the control server is horizontally scaled.
+and when the server is horizontally scaled.
 
 ### CLI
 
-`xagent shell <task>` is reimplemented against the control server: call `OpenShell`, connect
+`xagent shell <task>` is reimplemented against the server: call `OpenShell`, connect
 the `/attach` WebSocket, put the local terminal in raw mode, and pump frames. The
 Docker-direct implementation in `internal/command/shell.go` is removed. Result:
 one command that works for every backend and for remote runners.
@@ -208,7 +208,7 @@ This is, deliberately, a driver-hosted debug shell present in every sandbox. It
 runs as the driver (root inside the sandbox) and can see the repo and any
 injected tokens. It must be gated accordingly:
 
-- control-server-side authorization on who may `OpenShell` for a given task/org.
+- server-side authorization on who may `OpenShell` for a given task/org.
 - The operator (attach) leg reuses the existing auth system rather than a bespoke
   credential: it authenticates with a Bearer token and takes the org from the
   token claims (`caller.OrgID`), the same mechanism the Connect API already uses.
@@ -219,7 +219,7 @@ injected tokens. It must be gated accordingly:
   — so access control is by org membership, not by possession of the id.
 - The driver leg is authed with the task token, bound to the session's
   task so an authenticated driver cannot seize another task's session.
-- Audit (who attached, when) and optional session recording — free, since the control server
+- Audit (who attached, when) and optional session recording — free, since the server
   is in the byte path.
 - WS ping/pong + a hard idle/max-session timeout, so a forgotten shell does not
   keep a billed microVM resumed indefinitely.

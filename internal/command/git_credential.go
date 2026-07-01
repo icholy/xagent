@@ -15,7 +15,7 @@ var GitCredentialCommand = &cli.Command{
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:    "server",
-			Usage:   "control server URL",
+			Usage:   "server URL",
 			Value:   xagentclient.DefaultURL,
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},

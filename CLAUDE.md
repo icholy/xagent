@@ -28,7 +28,7 @@ XAGENT is an async agent orchestrator using a central control plane architecture
 
 ### Core Components
 
-- **Control Server** (`internal/server/`) - Connect RPC API + Web UI, stores tasks and logs in PostgreSQL
+- **Server** (`internal/server/`) - Connect RPC API + Web UI, stores tasks and logs in PostgreSQL
 - **Runner** (`internal/runner/`) - Polls for pending tasks, manages Docker container lifecycle, creates Unix socket proxy for container-to-server communication
 - **Agent** (`internal/agent/`) - Runs inside containers, executes Claude Code CLI (`claude --print`)
 - **Store** (`internal/store/`) - PostgreSQL persistence layer using pgx driver
@@ -65,10 +65,10 @@ Use `create_link` with `subscribe=true` for resources that may need follow-up (P
 ### CLI Subcommands
 
 ```
-xagent server     # Start control server
+xagent server     # Start server
 xagent runner     # Start container orchestrator
 xagent driver     # Run agent (inside container, started by runner)
-xagent mcp        # Local user-facing stdio MCP server that proxies to the control server
+xagent mcp        # Local user-facing stdio MCP server that proxies to the server
 xagent notify     # Subscribe to server notifications and emit system notifications
 xagent tool agent-mcp # In-container MCP server providing xagent tools to the agent
 xagent task       # Task CRUD (list, create, update, delete)

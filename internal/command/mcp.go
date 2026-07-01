@@ -15,7 +15,7 @@ import (
 )
 
 // McpCommand runs a local stdio MCP bridge that re-exposes the
-// user-facing xagent tools by proxying calls to the control server's
+// user-facing xagent tools by proxying calls to the server's
 // Connect RPC API, and pushes task change notifications to the host
 // Claude Code session as `notifications/claude/channel` events.
 //
@@ -31,7 +31,7 @@ var McpCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "server",
 			Aliases: []string{"s"},
-			Usage:   "control server URL",
+			Usage:   "server URL",
 			Value:   xagentclient.DefaultURL,
 		},
 		&cli.StringFlag{

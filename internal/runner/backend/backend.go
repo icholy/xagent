@@ -26,12 +26,12 @@ import (
 var ErrGone = errors.New("backend: sandbox is gone")
 
 // ExitCode reports why a sandbox stopped. 0 means the driver reported its own
-// terminal outcome to the control server (no runner event owed); non-zero means the report
+// terminal outcome to the server (no runner event owed); non-zero means the report
 // was lost and the runner must emit "failed" on the driver's behalf.
 type ExitCode int
 
 // ExitLost is the sentinel ExitCode for the report-lost case: the driver's
-// terminal report never reached the control server (stream gone + control plane terminal,
+// terminal report never reached the server (stream gone + control plane terminal,
 // container removed, VM reaped), so the runner emits "failed" on its behalf.
 const ExitLost ExitCode = -1
 

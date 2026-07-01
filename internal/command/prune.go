@@ -20,7 +20,7 @@ var PruneCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "server",
 			Aliases: []string{"s"},
-			Usage:   "control server URL",
+			Usage:   "server URL",
 			Value:   xagentclient.DefaultURL,
 		},
 	},

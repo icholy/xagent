@@ -92,7 +92,7 @@ report-lost case (replacing the magic `-1`):
 
 ```go
 // ExitCode reports why a sandbox stopped. 0 means the driver reported its own
-// terminal outcome to the control server (no runner event owed); non-zero means the report
+// terminal outcome to the server (no runner event owed); non-zero means the report
 // was lost and the runner must emit "failed" on the driver's behalf.
 type ExitCode int
 

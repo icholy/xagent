@@ -73,7 +73,7 @@ func TestRunnerStart(t *testing.T) {
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
-	// Create runner. The agent connects to the control server directly over the network, so
+	// Create runner. The agent connects to the server directly over the network, so
 	// the container shares the host network namespace (NetworkMode "host") to
 	// reach the httptest server on 127.0.0.1, and ServerURL is the same URL.
 	client := xagentclient.New(xagentclient.Options{BaseURL: ts.URL})
@@ -337,7 +337,7 @@ func TestRunnerPoll_StopSignalled(t *testing.T) {
 func TestRunnerSupervise_ReportLost(t *testing.T) {
 	t.Parallel()
 	// Arrange - Wait reports the exit as lost (non-zero code): the driver's
-	// terminal report never reached the control server, so the runner emits "failed".
+	// terminal report never reached the server, so the runner emits "failed".
 	mock := &xagentclient.ClientMock{
 		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil

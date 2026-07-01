@@ -17,7 +17,7 @@ var AgentMcpCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "server",
 			Aliases: []string{"s"},
-			Usage:   "control server URL",
+			Usage:   "server URL",
 			Value:   xagentclient.DefaultURL,
 		},
 		&cli.Int64Flag{
