@@ -144,12 +144,14 @@ sequenceDiagram
         C2->>Op: data
     end
 
-    Note over Driver,C2: exit(code) on close
-    Driver->>C2: clear shell_session
+    Note over Driver,C2: shell exits → exit(code), driver WS closes
+    C2->>C2: clear tasks.shell_session
 ```
 
-Close: the C2 (or the driver on exit) clears `shell_session` when the session
-ends — never the runner — so the next `START` is a plain agent run.
+Close: when the session ends — the shell exits and the driver's WebSocket drops —
+the C2 observes the rendezvous teardown and clears `shell_session` itself. Neither
+the driver nor the runner ever writes the field, so the next `START` is a plain
+agent run.
 
 ### Transport: WebSocket on both legs, C2 as a byte-relay
 
@@ -241,8 +243,6 @@ is then purely an FE task (xterm.js against `/shell/{session}/attach`).
   until the next run. Should the lifecycle events carry a mode tag ("shell run
   failed" vs "agent run failed") while keeping identical `started/exited/failed`
   semantics, or be indistinguishable?
-- **Who clears `shell_session`** — the C2 on session teardown, the driver on
-  exit, or both (idempotent)?
 - **WebSocket library** — new dependency; `github.com/coder/websocket` (minimal,
   modern) vs. `github.com/gorilla/websocket` (`gorilla/mux` is already an indirect
   dep).
