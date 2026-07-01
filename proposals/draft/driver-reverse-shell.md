@@ -4,8 +4,8 @@ Issue: https://github.com/icholy/xagent/issues/1110
 
 ## Problem
 
-`xagent shell` and `xagent logs` talk directly to the local Docker daemon: they
-find the task's container by the `xagent.task=<id>` label and `docker exec -it`
+`xagent shell` talks directly to the local Docker daemon: it finds the task's
+container by the `xagent.task=<id>` label and `docker exec -it`
 (`internal/command/shell.go`). That assumes the CLI runs on the same host as the
 daemon, the Docker naming/label convention, and a single backend. None of that
 survives hosted/remote runners or non-Docker backends (Lambda MicroVMs today,
@@ -92,7 +92,9 @@ supervision. It does not read `shell_session`. Crucially, the sandbox lifecycle
 events ("Sandbox started", "Sandbox exited (… -> …)") describe the **sandbox
 run**, not the agent — so a shell run emits the identical events, and a shell run
 that errors surfaces as "failed" in the timeline exactly like an agent run. No
-shell-specific exit handling in the runner.
+shell-specific exit handling in the runner. Shell and agent runs are
+indistinguishable in the timeline for now; tagging the run type is a possible
+later refinement.
 
 ### Orchestration
 
@@ -153,6 +155,10 @@ the C2 observes the rendezvous teardown and clears `shell_session` itself. Neith
 the driver nor the runner ever writes the field, so the next `START` is a plain
 agent run.
 
+The ticket is single-use, and the rendezvous has a connection-establishment
+timeout: if both legs — driver and operator — are not connected within it, the
+session is deleted and any already-connected client is disconnected.
+
 ### Transport: WebSocket on both legs, C2 as a byte-relay
 
 Both legs are client-initiated WebSockets to the C2; the C2 is a **mode-agnostic
@@ -182,6 +188,11 @@ parse it): **binary** WS frames, `[1-byte type][payload]`:
 
 The subprotocol negotiates a version and carries the ticket:
 `Sec-WebSocket-Protocol: xagent-shell.v1, <ticket>`.
+
+Both legs use `github.com/coder/websocket`. The session registry is in-memory,
+which assumes a single C2 instance; cross-instance rendezvous (routing both legs
+to the session owner, or a shared bus) is out of scope for v1 and dealt with if
+and when the C2 is horizontally scaled.
 
 ### CLI
 
@@ -231,27 +242,9 @@ is then purely an FE task (xterm.js against `/shell/{session}/attach`).
 - **WebSocket vs. Connect bidi streaming.** Connect bidi is in-framework and fine
   for a Go CLI, but `connect-web`/`grpc-web` have no browser bidi, which strands
   the wanted web terminal. WS both legs is browser-ready and symmetric.
-- **Shell vs. shipping logs to the C2.** An interactive shell subsumes the
-  debug-logs use case (inspect state directly); the curated driver→C2 event
-  stream already covers the "what did the agent do" transcript. So this replaces,
-  rather than complements, the raw-log-shipping idea.
 
 ## Open Questions
 
-- **Timeline labeling (presentation only).** Since the run outcome drives task
-  status uniformly, a shell session that errors leaves the task *showing* failed
-  until the next run. Should the lifecycle events carry a mode tag ("shell run
-  failed" vs "agent run failed") while keeping identical `started/exited/failed`
-  semantics, or be indistinguishable?
-- **WebSocket library** — new dependency; `github.com/coder/websocket` (minimal,
-  modern) vs. `github.com/gorilla/websocket` (`gorilla/mux` is already an indirect
-  dep).
-- **Multi-instance C2 rendezvous.** Single-instance today → in-memory session
-  registry. Horizontally scaled on Fly → the two WS legs may land on different
-  instances; route both to the session owner or bridge via a shared bus
-  (Postgres `LISTEN/NOTIFY`, Redis). Put the registry behind an interface now.
-- **Ticket details** — TTL, single-use vs. reusable, exact scope.
-- **Idle/max-session timeout defaults**, given a live shell holds a resumed
-  (billed) microVM.
-- **`xagent logs`** — remove/reimplement against the C2 now, or leave the
-  Docker-direct path until shell lands?
+- **Idle/max-session timeout defaults** for an established session, given a live
+  shell holds a resumed (billed) microVM. (Distinct from the connection-
+  establishment timeout above, which is decided.)
