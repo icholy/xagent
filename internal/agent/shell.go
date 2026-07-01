@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -35,6 +36,9 @@ func (d *Driver) runShell(ctx context.Context, session string) error {
 
 	shell := cmp.Or(os.Getenv("SHELL"), "/bin/sh")
 	cmd := exec.Command(shell)
+	// A leading "-" in argv[0] is the conventional signal for a login shell,
+	// so it sources the profile files an operator would expect.
+	cmd.Args[0] = "-" + filepath.Base(shell)
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to start pty: %w", err)
