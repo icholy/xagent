@@ -460,14 +460,28 @@ driver already exited.
 
 Because the application must be the shim and the binary must be pre-baked,
 **MicroVM images are purpose-built** (the same portability cost AgentCore
-accepts, and unlike Docker/Firecracker which consume an unmodified image). The
-image is `<workspace base image>` + the host-arch xagent binary at
-`backend.BinaryPath` + an application that runs `xagent tool microvm-shim`,
-expressed as the `Dockerfile` that `create-microvm-image` builds. xagent ships a
-base image and a `Dockerfile` fragment to make this a short build; full
-auto-build/push is an open question. The image cache key includes the xagent
-version, since the image embeds the driver binary (same reasoning as the
-Firecracker rootfs and AgentCore runtime caches).
+accepts, and unlike Docker/Firecracker which consume an unmodified image).
+MicroVMs are **ARM64-only** (`Architecture = ARM_64`), so the in-VM binary must
+be `linux/arm64`. An image is a **zip of a `Dockerfile` + the app**, uploaded to
+S3 and built with `create-microvm-image --code-artifact uri=s3://…/app.zip
+--base-image-arn <al2023> --build-role-arn <role> --hooks '{"port":9000,...}'`.
+Two distinct bases are involved: the Dockerfile `FROM` is the **container** base
+(e.g. `public.ecr.aws/lambda/microvms:al2023-minimal`) into which the arm64
+xagent binary (at `backend.BinaryPath`) and the `xagent tool microvm-shim`
+entrypoint are installed; `--base-image-arn` (`…:aws:microvm-image:al2023-1`) is
+the **separate MicroVM OS base** the snapshot boots on. The snapshot is gated by
+the **`/ready` build hook returning 200**; hooks (including the build-time
+`ready`/`validate` and the runtime `run`/`resume`/`suspend`/`terminate`) are
+declared **at image-creation time** via `--hooks port=9000` (matching
+`awsmicrovm.HookPort`) with **required per-hook timeouts** (image hooks ≤3600s,
+microvm hooks ≤60s) — they are NOT baked into the Dockerfile. The build role
+trusts `lambda.amazonaws.com` (`sts:AssumeRole` + `sts:TagSession`) and allows
+`s3:GetObject` on the artifact plus CloudWatch Logs. xagent ships a base image
+and a `Dockerfile` fragment to make this a short build; full auto-build/push is
+an open question. The image cache key includes the xagent version, since the
+image embeds the driver binary (same reasoning as the Firecracker rootfs and
+AgentCore runtime caches). See `internal/runner/backend/lambdamicrovm/README.md`
+for the full recipe and IAM policies.
 
 ### Workspace config
 

@@ -101,6 +101,8 @@ func (s *Server) HooksHandler() http.Handler {
 		Resume:    s.resumeHook,
 		Suspend:   s.suspendHook,
 		Terminate: s.terminateHook,
+		Ready:     s.readyHook,
+		Validate:  s.validateHook,
 	}
 }
 
@@ -217,6 +219,20 @@ func (s *Server) suspendHook(_ context.Context, _ awsmicrovm.SuspendHookRequest)
 // it; graceful stop is /xagent/stop.
 func (s *Server) terminateHook(_ context.Context, _ awsmicrovm.TerminateHookRequest) error {
 	s.stopDriver()
+	return nil
+}
+
+// readyHook handles the AWS /ready build hook, called by Lambda during image
+// creation to gate the snapshot. The shim answering here means its HTTP server
+// is up and the application is running, so it returns 200 (nil) unconditionally.
+func (s *Server) readyHook(context.Context, awsmicrovm.ReadyHookRequest) error {
+	return nil
+}
+
+// validateHook handles the AWS /validate build hook, called by Lambda during
+// image creation to validate the image before the snapshot is finalized. The
+// shim has no image-level assertions to make, so it returns 200 (nil).
+func (s *Server) validateHook(context.Context, awsmicrovm.ValidateHookRequest) error {
 	return nil
 }
 

@@ -1,19 +1,24 @@
 # Example Dockerfile for a Lambda MicroVMs image whose application is the xagent
-# shim. Package this with `create-microvm-image` (zip -> S3 -> create) to produce
-# the image_identifier ARN a workspace references.
+# shim. This is the *container* layer of the image: it is packaged with the
+# in-VM xagent binary into a zip, uploaded to S3, and built with
+# `create-microvm-image --code-artifact uri=s3://…/app.zip --base-image-arn <al2023>
+# --build-role-arn <role> --hooks '{"port":9000,...}'`. The resulting snapshot
+# ARN is the image_identifier a workspace references. See README.md for the full
+# recipe (S3 upload, base-image-arn, build-role IAM policy, per-hook timeouts).
 #
-# The base image carries the agent toolchain (claude CLI, git, language
-# runtimes) exactly like a Docker-backend workspace image.
-FROM ghcr.io/icholy/xagent-workspace-debian:latest
+# MicroVMs are ARM64-only, so FROM the arm64 container base and provide a
+# linux/arm64 xagent binary. The `--base-image-arn` (…:aws:microvm-image:al2023-1)
+# is the *separate* MicroVM OS base, NOT this container FROM.
+FROM public.ecr.aws/lambda/microvms:al2023-minimal
 
-# The driver binary must live at backend.BinaryPath. Provide a host-arch
-# xagent binary alongside this Dockerfile when building the image.
+# The driver binary must live at backend.BinaryPath. Build a linux/arm64 xagent
+# binary and place it alongside this Dockerfile before zipping:
+#   GOOS=linux GOARCH=arm64 go build -o xagent ./cmd/xagent
 COPY xagent /usr/local/bin/xagent
 RUN chmod 0755 /usr/local/bin/xagent
 
-# The shim serves the AWS lifecycle hooks and the xagent control surface on port
-# 8080, fetches the task spec on /run, (re-)spawns the driver on /run and
-# /resume, and streams the driver's exit on /xagent/lifecycle. It holds no AWS
-# credentials.
-EXPOSE 8080
+# The shim serves the AWS lifecycle + build hooks on the dedicated hook port 9000
+# (awsmicrovm.HookPort — must match `--hooks port=9000`) and the xagent control
+# surface (/xagent/lifecycle + /xagent/stop) on the ingress port 8080. Hook
+# config is NOT baked here: hooks are declared at create-microvm-image time.
 ENTRYPOINT ["/usr/local/bin/xagent", "tool", "microvm-shim"]
