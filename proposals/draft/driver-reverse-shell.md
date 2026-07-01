@@ -123,10 +123,13 @@ sequenceDiagram
     C2->>C2: issue command = START
     C2-->>Op: session S + ticket
 
-    Note over Runner: sees START only (oblivious to shell)
+    C2--)Runner: SSE notification (task changed)
+    Runner->>C2: poll tasks
+    C2-->>Runner: task { command: START }
+    Note over Runner: acts on START (oblivious to shell_session)
     Runner->>Driver: Launch/resume sandbox (re-spawns driver)
 
-    Driver->>C2: get_my_task
+    Driver->>C2: GetTask RPC
     C2-->>Driver: task { shell_session: S }
     Note over Driver: shell_session set → runShell (PTY + /bin/sh)
 
