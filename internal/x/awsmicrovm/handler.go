@@ -7,8 +7,8 @@ import (
 	"net/http"
 )
 
-// Lifecycle hook paths Lambda calls on the application (served on port 8080 by
-// default). The application exposes these so Lambda can drive the MicroVM
+// Lifecycle hook paths Lambda calls on the application (served on the dedicated
+// HookPort). The application exposes these so Lambda can drive the MicroVM
 // lifecycle.
 const (
 	HookBase      = "/aws/lambda-microvms/runtime/v1"
@@ -17,8 +17,17 @@ const (
 	HookResume    = HookBase + "/resume"
 	HookTerminate = HookBase + "/terminate"
 
-	// DefaultPort is the port Lambda routes MicroVM ingress to by default.
+	// DefaultPort is the port Lambda routes MicroVM ingress to by default. The
+	// xagent control surface (/xagent/lifecycle + /xagent/stop) is served here so
+	// the runner can reach it over the managed proxy.
 	DefaultPort = 8080
+
+	// HookPort is the dedicated port the AWS lifecycle hooks are served on. It is
+	// control-plane-internal (Lambda → shim, NOT reached over the ingress proxy)
+	// and MUST match the port declared to create-microvm-image via `--hooks
+	// port=...`. Lambda cannot reach the hooks on the ingress port, so they get
+	// their own port here.
+	HookPort = 9000
 )
 
 // RunHookRequest is delivered to the /run hook after a MicroVM starts. Payload

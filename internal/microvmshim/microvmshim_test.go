@@ -110,7 +110,7 @@ func TestRunProvisionsOnceAndSpawns(t *testing.T) {
 			return proc, nil
 		},
 	}
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(srv.HooksHandler())
 	defer ts.Close()
 
 	postHook(t, ts.URL, awsmicrovm.HookRun, "vm1", "http://staged")
@@ -136,7 +136,7 @@ func TestResumeRespawnsWithoutReprovision(t *testing.T) {
 			return p, nil
 		},
 	}
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(srv.HooksHandler())
 	defer ts.Close()
 
 	postHook(t, ts.URL, awsmicrovm.HookRun, "vm1", "http://staged")
@@ -150,7 +150,7 @@ func TestResumeRespawnsWithoutReprovision(t *testing.T) {
 func TestStopGracefulSIGTERM(t *testing.T) {
 	proc := newFakeProcess(0, true) // honors SIGTERM
 	srv := newSpawnedServer(t, proc)
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(srv.ControlHandler())
 	defer ts.Close()
 
 	resp, err := http.Post(ts.URL+lambdamicrovmStopPath, "", nil)
@@ -166,7 +166,7 @@ func TestStopEscalatesToSIGKILL(t *testing.T) {
 	proc := newFakeProcess(0, false) // ignores SIGTERM
 	srv := newSpawnedServer(t, proc)
 	srv.Grace = 30 * time.Millisecond
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(srv.ControlHandler())
 	defer ts.Close()
 
 	resp, err := http.Post(ts.URL+lambdamicrovmStopPath, "", nil)
@@ -179,7 +179,7 @@ func TestStopEscalatesToSIGKILL(t *testing.T) {
 func TestTerminateHookSignalsDriver(t *testing.T) {
 	proc := newFakeProcess(0, true)
 	srv := newSpawnedServer(t, proc)
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(srv.HooksHandler())
 	defer ts.Close()
 
 	postHook(t, ts.URL, awsmicrovm.HookTerminate, "vm1", "")
@@ -189,7 +189,7 @@ func TestTerminateHookSignalsDriver(t *testing.T) {
 func TestLifecycleStreamsDriverExited(t *testing.T) {
 	proc := newFakeProcess(5, false)
 	srv := newSpawnedServer(t, proc)
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(srv.ControlHandler())
 	defer ts.Close()
 
 	// Open the stream, then exit the driver.
@@ -204,7 +204,7 @@ func TestLifecycleStreamsDriverExited(t *testing.T) {
 func TestLifecycleStickyReplayToLateConnection(t *testing.T) {
 	proc := newFakeProcess(9, false)
 	srv := newSpawnedServer(t, proc)
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(srv.ControlHandler())
 	defer ts.Close()
 
 	// Driver exits BEFORE anyone connects.
@@ -233,18 +233,44 @@ func TestNoControlPlaneCredentials(t *testing.T) {
 			return p, nil
 		},
 	}
-	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
+	hooks := httptest.NewServer(srv.HooksHandler())
+	defer hooks.Close()
+	control := httptest.NewServer(srv.ControlHandler())
+	defer control.Close()
 
-	// run → exit → suspend hook → resume → stop. No creds, no panics.
-	postHook(t, ts.URL, awsmicrovm.HookRun, "vm1", "http://staged")
+	// run → exit → suspend hook → resume → stop. No creds, no panics. The AWS
+	// hooks and the xagent control surface are served on separate ports.
+	postHook(t, hooks.URL, awsmicrovm.HookRun, "vm1", "http://staged")
 	(<-procs).exit()
-	postHook(t, ts.URL, awsmicrovm.HookSuspend, "vm1", "")
-	postHook(t, ts.URL, awsmicrovm.HookResume, "vm1", "")
-	resp, err := http.Post(ts.URL+lambdamicrovmStopPath, "", nil)
+	postHook(t, hooks.URL, awsmicrovm.HookSuspend, "vm1", "")
+	postHook(t, hooks.URL, awsmicrovm.HookResume, "vm1", "")
+	resp, err := http.Post(control.URL+lambdamicrovmStopPath, "", nil)
 	assert.NilError(t, err)
 	resp.Body.Close()
 	(<-procs).exit()
+}
+
+// TestSurfacesAreSeparate confirms the two handlers are disjoint: the AWS hooks
+// are not reachable on the control handler (the ingress port) and the xagent
+// control routes are not reachable on the hooks handler (the hook port).
+func TestSurfacesAreSeparate(t *testing.T) {
+	srv := &Server{}
+	control := httptest.NewServer(srv.ControlHandler())
+	defer control.Close()
+	hooks := httptest.NewServer(srv.HooksHandler())
+	defer hooks.Close()
+
+	// AWS hooks are NOT on the control (ingress) handler.
+	resp, err := http.Post(control.URL+awsmicrovm.HookRun, "application/json", bytes.NewReader(nil))
+	assert.NilError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
+
+	// The xagent control surface is NOT on the hooks handler.
+	resp, err = http.Post(hooks.URL+lambdamicrovmStopPath, "", nil)
+	assert.NilError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
 }
 
 // --- helpers ---
