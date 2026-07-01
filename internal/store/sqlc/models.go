@@ -54,18 +54,19 @@ type SchemaMigration struct {
 }
 
 type Task struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Runner      string    `json:"runner"`
-	Workspace   string    `json:"workspace"`
-	Status      int32     `json:"status"`
-	Command     int32     `json:"command"`
-	Version     int64     `json:"version"`
-	OrgID       int64     `json:"org_id"`
-	Archived    bool      `json:"archived"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	AutoArchive int64     `json:"auto_archive"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
+	Version      int64     `json:"version"`
+	OrgID        int64     `json:"org_id"`
+	Archived     bool      `json:"archived"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	AutoArchive  int64     `json:"auto_archive"`
+	ShellSession string    `json:"shell_session"`
 }
 
 type TaskLink struct {

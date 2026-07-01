@@ -443,7 +443,11 @@ type Task struct {
 	//	zero (or unset): never auto-archive (default)
 	//	negative:        archive immediately on terminal status
 	//	positive:        archive that long after reaching terminal status
-	AutoArchive   *durationpb.Duration `protobuf:"bytes,15,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
+	AutoArchive *durationpb.Duration `protobuf:"bytes,15,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
+	// Non-empty => this sandbox run is a reverse shell for this rendezvous
+	// session id (see proposals/draft/driver-reverse-shell.md). Empty => normal
+	// agent run. Persistent and server-owned; the runner never touches it.
+	ShellSession  string `protobuf:"bytes,16,opt,name=shell_session,json=shellSession,proto3" json:"shell_session,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -567,6 +571,13 @@ func (x *Task) GetAutoArchive() *durationpb.Duration {
 		return x.AutoArchive
 	}
 	return nil
+}
+
+func (x *Task) GetShellSession() string {
+	if x != nil {
+		return x.ShellSession
+	}
+	return ""
 }
 
 type McpServer struct {
@@ -5641,7 +5652,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x06cancel\x18\x02 \x01(\bR\x06cancel\x12\x18\n" +
 	"\arestart\x18\x03 \x01(\bR\arestart\x12\x14\n" +
 	"\x05start\x18\x04 \x01(\bR\x05start\x12\x1c\n" +
-	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\xfb\x03\n" +
+	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\xa0\x04\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
@@ -5658,7 +5669,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\aactions\x18\f \x01(\v2\x16.xagent.v1.TaskActionsR\aactions\x12\x1a\n" +
 	"\barchived\x18\r \x01(\bR\barchived\x12\x10\n" +
 	"\x03url\x18\x0e \x01(\tR\x03url\x12<\n" +
-	"\fauto_archive\x18\x0f \x01(\v2\x19.google.protobuf.DurationR\vautoArchiveJ\x04\b\x03\x10\x04J\x04\b\x06\x10\a\"\xb6\x01\n" +
+	"\fauto_archive\x18\x0f \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\x12#\n" +
+	"\rshell_session\x18\x10 \x01(\tR\fshellSessionJ\x04\b\x03\x10\x04J\x04\b\x06\x10\a\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
