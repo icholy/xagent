@@ -26,10 +26,6 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 		SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
-		// The normal agent path forks on an empty shell_session.
-		GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
-			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id}}, nil
-		},
 	}
 	return &Driver{TaskID: 1, Client: mock, Log: slog.Default()}, mock
 }

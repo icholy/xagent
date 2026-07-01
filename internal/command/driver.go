@@ -37,9 +37,7 @@ var DriverCommand = &cli.Command{
 				BaseURL: cmd.String("server"),
 				Token:   cmd.String("token"),
 			}),
-			Log:       slog.Default(),
-			ServerURL: cmd.String("server"),
-			Token:     cmd.String("token"),
+			Log: slog.Default(),
 		}
 		return driver.Run(ctx)
 	},

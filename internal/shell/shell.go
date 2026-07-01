@@ -1,10 +1,24 @@
-package agent
+// Package shell implements the driver leg of the reverse debug shell (step 3 of
+// the design in proposals/draft/driver-reverse-shell.md).
+//
+// Serve allocates a PTY, spawns a login shell, dials the server's shell relay
+// WebSocket for a rendezvous session, and pipes the PTY over it using the
+// shellwire framing. It is a plain library function: it takes the server URL,
+// the caller's token, and the session id, and does not depend on the driver or
+// agent packages. The driver wiring that decides when to call Serve lands in a
+// later step.
+//
+// The wire contract lives entirely in internal/shellwire; this package does not
+// import the server-side relay (internal/server/shellrelay). The relay bridges
+// this driver leg to the operator's attach leg and never parses the frames.
+package shell
 
 import (
 	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,7 +28,6 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
-	"github.com/icholy/xagent/internal/server/shellrelay"
 	"github.com/icholy/xagent/internal/shellwire"
 )
 
@@ -22,17 +35,22 @@ import (
 // shell process has exited.
 const exitReportTimeout = 5 * time.Second
 
-// runShell serves an interactive debug shell for a reverse-shell task run. It
-// allocates a PTY, spawns a login shell, dials the server's shell relay
-// WebSocket for the given rendezvous session, and pipes the PTY over it using
-// the shellwire framing. The relay bridges this driver leg to the operator's
-// attach leg and never parses the frames.
+// Serve runs an interactive debug shell for a rendezvous session. It allocates a
+// PTY, spawns a login shell ($SHELL, else /bin/sh), dials the server's shell
+// relay WebSocket at GET {serverURL}/shell/{session}/driver authenticating with
+// token as a Bearer header, negotiates the xagent-shell.v1 subprotocol, and
+// pipes the PTY over the WebSocket using the shellwire framing.
 //
-// The session id is carried by the task's shell_session field; this driver
-// never sets or clears it. When the shell exits, runShell sends an exit frame
-// with the shell's exit code and closes the WebSocket cleanly.
-func (d *Driver) runShell(ctx context.Context, session string) error {
-	d.Log.Info("starting reverse shell", "session", session)
+// Incoming data frames are written to the PTY master, resize frames are applied
+// to the PTY, and PTY output is streamed back as data frames. When the shell
+// exits, Serve sends an exit frame with the shell's exit code and closes the
+// WebSocket cleanly. A dropped operator leg or a canceled ctx closes the PTY so
+// the shell gets EOF, exits, and Serve returns rather than leaking a shell.
+func Serve(ctx context.Context, serverURL, token, session string, log *slog.Logger) error {
+	if log == nil {
+		log = slog.Default()
+	}
+	log.Info("starting reverse shell", "session", session)
 
 	shell := cmp.Or(os.Getenv("SHELL"), "/bin/sh")
 	cmd := exec.Command(shell)
@@ -45,13 +63,13 @@ func (d *Driver) runShell(ctx context.Context, session string) error {
 	}
 	defer func() { _ = ptmx.Close() }()
 
-	url, err := shellWebSocketURL(d.ServerURL, session)
+	url, err := webSocketURL(serverURL, session)
 	if err != nil {
 		return err
 	}
 	conn, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
-		Subprotocols: []string{shellrelay.Subprotocol},
-		HTTPHeader:   http.Header{"Authorization": {"Bearer " + d.Token}},
+		Subprotocols: []string{shellwire.Subprotocol},
+		HTTPHeader:   http.Header{"Authorization": {"Bearer " + token}},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to dial shell relay: %w", err)
@@ -59,9 +77,8 @@ func (d *Driver) runShell(ctx context.Context, session string) error {
 	defer conn.CloseNow()
 
 	// WebSocket -> PTY: apply incoming data/resize frames. On any read error —
-	// the operator leg dropped, the session was torn down, or the parent context
-	// was canceled (SIGTERM) — close the PTY so the shell gets EOF, exits, and
-	// cmd.Wait returns.
+	// the operator leg dropped, the session was torn down, or ctx was canceled —
+	// close the PTY so the shell gets EOF, exits, and cmd.Wait returns.
 	go func() {
 		for {
 			typ, msg, err := conn.Read(ctx)
@@ -113,19 +130,19 @@ func (d *Driver) runShell(ctx context.Context, session string) error {
 	}()
 
 	waitErr := cmd.Wait()
-	// Wait for the output pump to stop before sending the exit frame: the relay
-	// only tolerates one writer at a time.
+	// Wait for the output pump to stop before sending the exit frame: only one
+	// writer may touch the connection at a time.
 	<-ptyDone
 
 	// Send the exit frame on a context detached from ctx so it still goes out
-	// during a SIGTERM-driven shutdown.
+	// during a cancellation-driven shutdown.
 	exitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), exitReportTimeout)
 	defer cancel()
 	if err := conn.Write(exitCtx, websocket.MessageBinary, shellwire.Exit(exitCode(waitErr))); err != nil {
-		d.Log.Debug("failed to send shell exit frame", "session", session, "error", err)
+		log.Debug("failed to send shell exit frame", "session", session, "error", err)
 	}
 	conn.Close(websocket.StatusNormalClosure, "shell exited")
-	d.Log.Info("reverse shell ended", "session", session, "exit_code", exitCode(waitErr))
+	log.Info("reverse shell ended", "session", session, "exit_code", exitCode(waitErr))
 	return nil
 }
 
@@ -143,9 +160,9 @@ func exitCode(err error) int {
 	return 1
 }
 
-// shellWebSocketURL builds the ws(s) URL for the driver leg of a session from
-// the server's base URL.
-func shellWebSocketURL(serverURL, session string) (string, error) {
+// webSocketURL builds the ws(s) URL for the driver leg of a session from the
+// server's base URL.
+func webSocketURL(serverURL, session string) (string, error) {
 	if serverURL == "" {
 		return "", fmt.Errorf("shell: empty server URL")
 	}

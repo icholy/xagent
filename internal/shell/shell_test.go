@@ -1,4 +1,4 @@
-package agent
+package shell_test
 
 import (
 	"bytes"
@@ -13,39 +13,39 @@ import (
 	"github.com/coder/websocket"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/server/shellrelay"
+	"github.com/icholy/xagent/internal/shell"
 	"github.com/icholy/xagent/internal/shellwire"
 	"gotest.tools/v3/assert"
 )
 
-// shellTestOrg owns the seeded shell session in these tests.
-const shellTestOrg int64 = 1
+// testOrg owns the seeded shell session in these tests.
+const testOrg int64 = 1
 
-// newShellRelayServer mounts the real relay's two legs on an httptest server.
-// The attach leg is wrapped with apiauth.WithTestUser so a caller in callerOrg
-// is injected into the request context, standing in for the Bearer auth
-// middleware that guards the route in production.
-func newShellRelayServer(t *testing.T, reg *shellrelay.Registry, callerOrg int64) *httptest.Server {
+// newRelayServer mounts the real relay's two legs on an httptest server. The
+// attach leg is wrapped with apiauth.WithTestUser so a caller in callerOrg is
+// injected into the request context, standing in for the Bearer auth middleware
+// that guards the route in production. Cleanups run LIFO: the registry is torn
+// down before the server so parked handler goroutines are unblocked.
+func newRelayServer(t *testing.T, reg *shellrelay.Registry, callerOrg int64) *httptest.Server {
 	t.Helper()
 	caller := &apiauth.UserInfo{ID: "tester", OrgID: callerOrg}
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
 	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), caller))
 	srv := httptest.NewServer(mux)
-	// Cleanups run LIFO: tear down the registry before the server so parked
-	// handler goroutines are unblocked.
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
 	return srv
 }
 
-// dialShellAttach connects the operator leg negotiating the shell subprotocol.
-func dialShellAttach(t *testing.T, srv *httptest.Server, session string) *websocket.Conn {
+// dialAttach connects the operator leg negotiating the shell subprotocol.
+func dialAttach(t *testing.T, srv *httptest.Server, session string) *websocket.Conn {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/shell/" + session + "/attach"
 	conn, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
-		Subprotocols: []string{shellrelay.Subprotocol},
+		Subprotocols: []string{shellwire.Subprotocol},
 	})
 	assert.NilError(t, err)
 	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
@@ -102,18 +102,17 @@ func readExitCode(t *testing.T, conn *websocket.Conn) int {
 	}
 }
 
-func TestRunShell(t *testing.T) {
+func TestServe(t *testing.T) {
 	t.Parallel()
-	// Arrange: real relay, a seeded session, and a driver pointed at it.
+	// Arrange: real relay, a seeded session, and Serve pointed at it.
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newShellRelayServer(t, reg, shellTestOrg)
-	assert.NilError(t, reg.Seed("s1", shellTestOrg))
-	d := &Driver{ServerURL: srv.URL, Token: "driver-token", Log: slog.Default()}
+	srv := newRelayServer(t, reg, testOrg)
+	assert.NilError(t, reg.Seed("s1", testOrg))
 
-	shellErr := make(chan error, 1)
-	go func() { shellErr <- d.runShell(t.Context(), "s1") }()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- shell.Serve(t.Context(), srv.URL, "driver-token", "s1", slog.Default()) }()
 
-	attach := dialShellAttach(t, srv, "s1")
+	attach := dialAttach(t, srv, "s1")
 
 	// Act + Assert: a command echoes back through the PTY as data frames.
 	sendData(t, attach, "echo hello\n")
@@ -132,25 +131,24 @@ func TestRunShell(t *testing.T) {
 	assert.Equal(t, readExitCode(t, attach), 0)
 
 	select {
-	case err := <-shellErr:
+	case err := <-serveErr:
 		assert.NilError(t, err)
 	case <-time.After(10 * time.Second):
-		t.Fatal("runShell did not return after shell exited")
+		t.Fatal("Serve did not return after shell exited")
 	}
 }
 
-func TestRunShell_ExitCode(t *testing.T) {
+func TestServe_ExitCode(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newShellRelayServer(t, reg, shellTestOrg)
-	assert.NilError(t, reg.Seed("s2", shellTestOrg))
-	d := &Driver{ServerURL: srv.URL, Token: "driver-token", Log: slog.Default()}
+	srv := newRelayServer(t, reg, testOrg)
+	assert.NilError(t, reg.Seed("s2", testOrg))
 
-	shellErr := make(chan error, 1)
-	go func() { shellErr <- d.runShell(t.Context(), "s2") }()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- shell.Serve(t.Context(), srv.URL, "driver-token", "s2", slog.Default()) }()
 
-	attach := dialShellAttach(t, srv, "s2")
+	attach := dialAttach(t, srv, "s2")
 
 	// Act: exit with a non-zero status.
 	sendData(t, attach, "exit 7\n")
@@ -158,9 +156,9 @@ func TestRunShell_ExitCode(t *testing.T) {
 	// Assert: the exit frame carries the shell's exit code.
 	assert.Equal(t, readExitCode(t, attach), 7)
 	select {
-	case err := <-shellErr:
+	case err := <-serveErr:
 		assert.NilError(t, err)
 	case <-time.After(10 * time.Second):
-		t.Fatal("runShell did not return after shell exited")
+		t.Fatal("Serve did not return after shell exited")
 	}
 }

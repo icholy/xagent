@@ -22,12 +22,6 @@ type Driver struct {
 	TaskID int64
 	Client xagentclient.Client
 	Log    *slog.Logger
-
-	// ServerURL and Token are the driver's existing server credentials, reused
-	// to dial the shell relay WebSocket when the task is a reverse-shell run.
-	// They mirror the values passed to xagentclient.New for the Client above.
-	ServerURL string
-	Token     string
 }
 
 // Run executes the task and reports its outcome to the server. The driver
@@ -92,24 +86,8 @@ func (d *Driver) submit(ctx context.Context, event model.RunnerEventType) error 
 	return nil
 }
 
-// run reads the task and forks into one of two mutually exclusive modes: a
-// reverse-shell run when the task carries a shell_session, or the normal agent
-// path otherwise. A sandbox run is one mode, chosen once (see the design in
-// proposals/draft/driver-reverse-shell.md).
+// run executes the setup commands and the agent prompt.
 func (d *Driver) run(ctx context.Context) error {
-	resp, err := d.Client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: d.TaskID})
-	if err != nil {
-		return fmt.Errorf("failed to get task: %w", err)
-	}
-	if session := resp.GetTask().GetShellSession(); session != "" {
-		return d.runShell(ctx, session)
-	}
-	return d.runAgent(ctx)
-}
-
-// runAgent executes the setup commands and the agent prompt. This is the normal
-// (non-shell) sandbox run.
-func (d *Driver) runAgent(ctx context.Context) error {
 	// Load config
 	cfg, err := LoadConfig(d.TaskID)
 	if err != nil {
