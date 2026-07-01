@@ -4,12 +4,12 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"path"
 	"regexp"
-	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/agent"
@@ -25,18 +25,8 @@ import (
 )
 
 type Runner struct {
-	backend backend.Backend
-	store   *taskstate.Store
-	// launchMu serializes a Start's Launch+record-write against Monitor's
-	// id→task resolution. A container is created and started inside Launch but
-	// its record is written only after Launch returns; without this lock a
-	// sandbox that exits in that window delivers its die event to Monitor before
-	// the record exists, so store.ByID misses — dropping the terminal event and
-	// leaking the concurrency slot. Holding the same lock across Launch+Write
-	// and around the watch handler's ByID parks a mid-window exit until the
-	// record is committed. (A runner *crash* in that window is the orphan gap
-	// the Docker name-conflict adoption in ensure self-heals on the next Start.)
-	launchMu    sync.Mutex
+	backend     backend.Backend
+	store       *taskstate.Store
 	client      xagentclient.Client
 	serverURL   string
 	workspaces  *workspace.Config
@@ -252,50 +242,62 @@ func (r *Runner) Poll(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (r *Runner) Reconcile(ctx context.Context) error {
-	sandboxes, err := r.List(ctx)
+// Load rehydrates this runner's sandboxes at boot, before Poll admits new work.
+// The statefile enumerates; Probe answers liveness per record. A running sandbox
+// gets the same per-handle supervise goroutine as the live path (Wait
+// re-attaches); an exited husk or a gone sandbox is a lost-report backstop, and a
+// gone sandbox's dangling record is dropped (nothing to reuse or destroy). The
+// semaphore is seeded with the running count last, so it may exceed capacity in
+// over-limit scenarios — that's fine.
+func (r *Runner) Load(ctx context.Context) error {
+	recs, err := r.store.List()
 	if err != nil {
-		return fmt.Errorf("failed to list sandboxes: %w", err)
+		return fmt.Errorf("failed to list records: %w", err)
 	}
-
-	// Count already-running sandboxes and set semaphore accordingly.
-	// The count can exceed capacity in over-limit scenarios.
 	var running int64
-	for _, sb := range sandboxes {
-		if sb.State == backend.StateRunning {
+	for _, rec := range recs {
+		h := backend.Handle{Type: rec.Type, ID: rec.ID, Data: rec.Data}
+		st, err := r.backend.Probe(ctx, h)
+		if err != nil {
+			r.log.Error("load: probe", "task", rec.TaskID, "error", err)
+			continue
+		}
+		switch st {
+		case backend.StateRunning: // container up / VM RUNNING: re-attach
+			go r.supervise(ctx, rec.TaskID, h)
 			running++
+		case backend.StateExited: // stopped container / SUSPENDED VM (husk preserved)
+			r.failIfTaskRunning(ctx, rec.TaskID)
+		case backend.StateGone: // removed / TERMINATED: the bound sandbox vanished
+			r.failIfTaskRunning(ctx, rec.TaskID)
+			if err := r.store.Remove(rec.TaskID); err != nil {
+				r.log.Error("load: remove dangling record", "task", rec.TaskID, "error", err)
+			}
 		}
 	}
 	r.sem.Set(running)
 	r.log.Info("initialized running sandbox count", "count", running)
-
-	for _, sb := range sandboxes {
-		if sb.State != backend.StateExited {
-			continue
-		}
-
-		// Check if task is still running
-		task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: sb.TaskID})
-		if err != nil {
-			r.log.Error("failed to get task", "task", sb.TaskID, "error", err)
-			continue
-		}
-		if task.Task.Status != xagentv1.TaskStatus_RUNNING {
-			continue
-		}
-
-		// An exited sandbox whose task is still running means the driver's
-		// report was lost — "failed" is the honest outcome regardless of exit
-		// code (see the driver-owned-events proposal).
-		r.log.Error("reconcile: sandbox exited without reporting", "task", sb.TaskID)
-		// Use version 0 to bypass version check (spontaneous events)
-		r.queue.Enqueue(model.RunnerEvent{
-			TaskID: sb.TaskID,
-			Event:  model.RunnerEventFailed,
-		})
-	}
-
 	return nil
+}
+
+// failIfTaskRunning emits a "failed" event for a task whose sandbox is no longer
+// running but whose C2 status is still RUNNING — the driver's terminal report was
+// lost, so "failed" is the honest outcome (see the driver-owned-events proposal).
+func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
+	task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	if err != nil {
+		r.log.Error("failed to get task", "task", taskID, "error", err)
+		return
+	}
+	if task.Task.Status != xagentv1.TaskStatus_RUNNING {
+		return
+	}
+	r.log.Error("load: sandbox exited without reporting", "task", taskID)
+	// Use version 0 to bypass version check (spontaneous events)
+	r.queue.Enqueue(model.RunnerEvent{
+		TaskID: taskID,
+		Event:  model.RunnerEventFailed,
+	})
 }
 
 // handle returns the tracked handle for a task. ok is false when no record
@@ -437,15 +439,19 @@ func (r *Runner) spec(ctx context.Context, task *model.Task) (*backend.Spec, err
 	}, nil
 }
 
-// Start ensures the task's sandbox is running and records its handle. It is
-// idempotent: if the tracked handle is already running it returns without
-// relaunching. Otherwise the prior handle (if any) is passed to Launch so the
-// backend can adopt or clean up the existing sandbox, and the returned handle
-// is persisted — the store write is the runner's job, not the backend's.
+// Start ensures the task's sandbox is running, records its handle, and spawns a
+// supervise goroutine to observe its exit. It is idempotent: if the tracked
+// handle is already running it returns without relaunching. Otherwise the prior
+// handle (if any) is passed to Launch so the backend adopts the existing sandbox;
+// a vanished sandbox surfaces as backend.ErrGone, which fails the task and drops
+// the dangling record. The returned handle is persisted BEFORE supervise starts —
+// the store write is the runner's job, not the backend's.
 func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 	// Resolve the tracked handle first: a still-running sandbox makes Start a
 	// no-op, and we skip minting a token for it. An exited handle is passed to
-	// Launch so the backend can adopt or clean up the existing sandbox.
+	// Launch so the backend can adopt the existing sandbox. A pre-Launch Probe
+	// short-circuits a gone sandbox without minting a token, but Launch's ErrGone
+	// guard is the authoritative one (Probe→Launch is racy).
 	var reuse *backend.Handle
 	if h, ok, err := r.handle(task.ID); err != nil {
 		return err
@@ -457,6 +463,9 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 		if state == backend.StateRunning {
 			return nil
 		}
+		if state == backend.StateGone {
+			return r.gone(task.ID)
+		}
 		reuse = &h
 	}
 
@@ -465,13 +474,10 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 		return err
 	}
 
-	// Launch and record the handle atomically with respect to Monitor: the
-	// container starts inside Launch, so its die event must not be able to reach
-	// Monitor's store.ByID before the record exists. See launchMu.
-	r.launchMu.Lock()
-	defer r.launchMu.Unlock()
-
 	h, err := r.backend.Launch(ctx, spec, reuse)
+	if errors.Is(err, backend.ErrGone) {
+		return r.gone(task.ID)
+	}
 	if err != nil {
 		return err
 	}
@@ -483,45 +489,48 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 	}); err != nil {
 		return fmt.Errorf("failed to record task handle: %w", err)
 	}
+	// Observe the exit on the runner's root context: Wait is level-triggered and
+	// spawned after the record is persisted, so an exit in the launch→persist
+	// window is not lost.
+	go r.supervise(ctx, task.ID, h)
 	return nil
 }
 
-// Monitor watches for sandbox exits and reports the ones the driver
-// couldn't: a non-zero exit means the driver died without reporting its
-// outcome, so the runner emits "failed" on its behalf. Exit 0 means the
-// driver already reported (see the driver-owned-events proposal), so no
-// event is emitted.
-func (r *Runner) Monitor(ctx context.Context) error {
-	return r.backend.Watch(ctx, func(exit backend.HandleExit) {
-		// Resolve the handle id back to a task. Take launchMu so an exit that
-		// fires while a Start is mid-Launch parks here until that Start commits
-		// its record, closing the race where ByID would miss a just-started
-		// container. Ids the store doesn't track aren't ours (or were already
-		// removed), so ignore them — no slot was held and no task event is owed.
-		r.launchMu.Lock()
-		rec, ok, err := r.store.ByID(exit.ID)
-		r.launchMu.Unlock()
-		if err != nil {
-			r.log.Error("failed to resolve sandbox exit", "id", exit.ID, "error", err)
-			return
-		}
-		if !ok {
-			r.log.Debug("ignoring exit for untracked sandbox", "id", exit.ID)
-			return
-		}
+// gone handles a vanished bound sandbox: the task's recorded sandbox no longer
+// exists, so drop the dangling record (nothing to reuse or destroy) and return
+// backend.ErrGone. The caller's error path emits "failed" and releases the
+// acquired sem slot. A subsequent explicit start/restart, having no handle, is
+// then a legitimate first-start-fresh.
+func (r *Runner) gone(taskID int64) error {
+	if err := r.store.Remove(taskID); err != nil {
+		r.log.Error("failed to remove dangling record", "task", taskID, "error", err)
+	}
+	return backend.ErrGone
+}
 
-		r.sem.Release(1)
-		r.wake.Wake()
-		if exit.ExitCode == 0 {
-			r.log.Info("sandbox exited, driver already reported", "task", rec.TaskID)
-			return
-		}
-		r.log.Error("sandbox exited without reporting", "task", rec.TaskID, "exitCode", exit.ExitCode)
-		// Use version 0 to bypass version check (spontaneous events)
-		r.queue.Enqueue(model.RunnerEvent{
-			TaskID: rec.TaskID,
-			Event:  model.RunnerEventFailed,
-		})
+// supervise blocks in the backend's per-handle Wait until the sandbox reaches a
+// terminal outcome, then releases the concurrency slot and reports the exit. A
+// context.Canceled error means the runner is shutting down — the sandbox stays
+// alive for next-boot rehydration, so no slot is released and no event emitted.
+// Otherwise a non-zero exit code means the driver's report was lost, so "failed"
+// is the honest outcome (see the driver-owned-events proposal); exit 0 means the
+// driver already reported and nothing is owed.
+func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) {
+	code, err := r.backend.Wait(ctx, h)
+	if errors.Is(err, context.Canceled) {
+		return // shutdown: leave the sandbox alive for next-boot rehydration
+	}
+	r.sem.Release(1)
+	r.wake.Wake()
+	if code == 0 {
+		r.log.Info("sandbox exited, driver already reported", "task", taskID)
+		return
+	}
+	r.log.Error("sandbox exited without reporting", "task", taskID, "exitCode", int(code))
+	// Use version 0 to bypass version check (spontaneous events)
+	r.queue.Enqueue(model.RunnerEvent{
+		TaskID: taskID,
+		Event:  model.RunnerEventFailed,
 	})
 }
 
@@ -532,9 +541,11 @@ func (r *Runner) Prune(ctx context.Context) error {
 		return fmt.Errorf("failed to list sandboxes: %w", err)
 	}
 
-	// Check each exited sandbox's task status and remove if archived
+	// Check each non-running sandbox's task status and remove if archived. Both
+	// an exited husk and a gone sandbox count as "no live sandbox"; Destroy is
+	// idempotent, so removing a gone record's (absent) sandbox is a no-op.
 	for _, sb := range sandboxes {
-		if sb.State != backend.StateExited {
+		if sb.State == backend.StateRunning {
 			continue
 		}
 		// Fetch task

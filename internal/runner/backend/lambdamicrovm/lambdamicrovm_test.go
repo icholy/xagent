@@ -3,6 +3,7 @@ package lambdamicrovm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,10 +23,9 @@ func newTestBackend(t *testing.T) (*Backend, *fakeCloud, *fakeStager) {
 	cloud := newFakeCloud()
 	stager := newFakeStager()
 	be, err := New(Options{
-		Cloud:             cloud,
-		Stager:            stager,
-		RunnerID:          "runner-1",
-		ReconcileInterval: 20 * time.Millisecond,
+		Cloud:    cloud,
+		Stager:   stager,
+		RunnerID: "runner-1",
 	})
 	assert.NilError(t, err)
 	return be, cloud, stager
@@ -118,7 +118,7 @@ func TestLaunchFresh(t *testing.T) {
 
 func TestLaunchReuseResumes(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
-	cloud.add("mvm-9", awsmicrovm.MicrovmStateSuspended, "mvm-9.example.com", "runner-1")
+	cloud.add("mvm-9", awsmicrovm.MicrovmStateSuspended, "mvm-9.example.com")
 	reuse := &backend.Handle{Type: HandleType, ID: "mvm-9", Data: mustData(t, handleData{Endpoint: "mvm-9.example.com"})}
 
 	h, err := be.Launch(context.Background(), testSpec(9), reuse)
@@ -131,25 +131,36 @@ func TestLaunchReuseResumes(t *testing.T) {
 	assert.Equal(t, cloud.state("mvm-9"), awsmicrovm.MicrovmStateRunning)
 }
 
-func TestLaunchReuseTerminatedFallsBackToFresh(t *testing.T) {
+func TestLaunchReuseGoneReturnsErrGone(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
-	cloud.add("mvm-dead", awsmicrovm.MicrovmStateTerminated, "", "runner-1")
+	cloud.add("mvm-dead", awsmicrovm.MicrovmStateTerminated, "")
 	reuse := &backend.Handle{Type: HandleType, ID: "mvm-dead", Data: mustData(t, handleData{StageBucket: "bucket", StageKey: "runner-1/3.json"})}
 
-	h, err := be.Launch(context.Background(), testSpec(3), reuse)
-	assert.NilError(t, err)
+	_, err := be.Launch(context.Background(), testSpec(3), reuse)
 
-	// A terminated VM cannot resume: a fresh VM is launched instead.
+	// One sandbox per task: a terminated VM cannot resume, and Launch never
+	// creates a fresh one on the reuse path — it surfaces ErrGone.
+	assert.Assert(t, errors.Is(err, backend.ErrGone))
 	assert.Equal(t, len(cloud.resumed), 0)
-	assert.Assert(t, cloud.lastRun != nil)
-	assert.Assert(t, h.ID != "mvm-dead")
+	assert.Assert(t, cloud.lastRun == nil, "should not launch fresh on a gone reuse handle")
+}
+
+func TestLaunchReuseNotFoundReturnsErrGone(t *testing.T) {
+	be, cloud, _ := newTestBackend(t)
+	// The reuse handle points at a VM the control plane no longer knows.
+	reuse := &backend.Handle{Type: HandleType, ID: "mvm-missing", Data: mustData(t, handleData{StageBucket: "bucket", StageKey: "runner-1/3.json"})}
+
+	_, err := be.Launch(context.Background(), testSpec(3), reuse)
+
+	assert.Assert(t, errors.Is(err, backend.ErrGone))
+	assert.Assert(t, cloud.lastRun == nil)
 }
 
 func TestProbe(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
-	cloud.add("run", awsmicrovm.MicrovmStateRunning, "e", "runner-1")
-	cloud.add("susp", awsmicrovm.MicrovmStateSuspended, "e", "runner-1")
-	cloud.add("term", awsmicrovm.MicrovmStateTerminated, "e", "runner-1")
+	cloud.add("run", awsmicrovm.MicrovmStateRunning, "e")
+	cloud.add("susp", awsmicrovm.MicrovmStateSuspended, "e")
+	cloud.add("term", awsmicrovm.MicrovmStateTerminated, "e")
 
 	mustState := func(id string) backend.State {
 		s, err := be.Probe(context.Background(), backend.Handle{ID: id})
@@ -157,14 +168,14 @@ func TestProbe(t *testing.T) {
 		return s
 	}
 	assert.Equal(t, mustState("run"), backend.StateRunning)
-	assert.Equal(t, mustState("susp"), backend.StateExited) // suspended looks exited
-	assert.Equal(t, mustState("term"), backend.StateExited)
-	assert.Equal(t, mustState("gone"), backend.StateExited) // not found
+	assert.Equal(t, mustState("susp"), backend.StateExited) // suspended husk preserved
+	assert.Equal(t, mustState("term"), backend.StateGone)   // terminated: nothing to resume
+	assert.Equal(t, mustState("gone"), backend.StateGone)   // not found
 }
 
 func TestSignalPostsStop(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
-	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, "", "runner-1")
+	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, "")
 
 	var gotPath, gotToken string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +203,7 @@ func TestSignalNoEndpoint(t *testing.T) {
 
 func TestDestroyTerminatesAndCleansStaging(t *testing.T) {
 	be, cloud, stager := newTestBackend(t)
-	cloud.add("mvm-1", awsmicrovm.MicrovmStateSuspended, "e", "runner-1")
+	cloud.add("mvm-1", awsmicrovm.MicrovmStateSuspended, "e")
 	stager.objects["runner-1/1.json"] = []byte("x")
 	h := backend.Handle{ID: "mvm-1", Data: mustData(t, handleData{StageBucket: "bucket", StageKey: "runner-1/1.json"})}
 
@@ -207,7 +218,7 @@ func TestDestroyAbsentIsNoError(t *testing.T) {
 	assert.NilError(t, be.Destroy(context.Background(), backend.Handle{ID: "gone"}))
 }
 
-// --- Watch ---
+// --- Wait ---
 
 // sseTestServer serves /xagent/lifecycle, invoking handler with a per-connection
 // counter so a test can drop the first connection and emit on the second.
@@ -233,55 +244,67 @@ func driverExited(code int) sse.Event {
 	return sse.Event{Event: EventDriverExited, Data: data}
 }
 
-func runWatch(t *testing.T, be *Backend) (<-chan backend.HandleExit, context.CancelFunc) {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	exits := make(chan backend.HandleExit, 8)
-	go func() { _ = be.Watch(ctx, func(e backend.HandleExit) { exits <- e }) }()
-	return exits, cancel
+// waitResult is the outcome of a Wait call run in a goroutine.
+type waitResult struct {
+	code backend.ExitCode
+	err  error
 }
 
-func waitExit(t *testing.T, exits <-chan backend.HandleExit) backend.HandleExit {
+// runWait invokes Wait for a handle whose endpoint is set to the given URL, on a
+// cancellable context, returning a channel that receives the single result.
+func runWait(t *testing.T, be *Backend, id, endpoint string) (<-chan waitResult, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	h := backend.Handle{Type: HandleType, ID: id, Data: mustData(t, handleData{Endpoint: endpoint})}
+	res := make(chan waitResult, 1)
+	go func() {
+		code, err := be.Wait(ctx, h)
+		res <- waitResult{code, err}
+	}()
+	return res, cancel
+}
+
+func awaitResult(t *testing.T, res <-chan waitResult) waitResult {
 	t.Helper()
 	select {
-	case e := <-exits:
-		return e
+	case r := <-res:
+		return r
 	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for exit")
-		return backend.HandleExit{}
+		t.Fatal("timed out waiting for Wait to return")
+		return waitResult{}
 	}
 }
 
-func assertNoExit(t *testing.T, exits <-chan backend.HandleExit, d time.Duration) {
+func assertNoResult(t *testing.T, res <-chan waitResult, d time.Duration) {
 	t.Helper()
 	select {
-	case e := <-exits:
-		t.Fatalf("unexpected exit: %+v", e)
+	case r := <-res:
+		t.Fatalf("unexpected Wait result: %+v", r)
 	case <-time.After(d):
 	}
 }
 
-func TestWatchCleanExitSuspends(t *testing.T) {
+func TestWaitCleanExitSuspends(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
 	srv := sseTestServer(t, func(_ int, sw *sse.ServerWriter, r *http.Request) {
 		_ = sw.Write(driverExited(7))
 		<-r.Context().Done()
 	})
 	defer srv.Close()
-	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, srv.URL, "runner-1")
+	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, srv.URL)
 
-	exits, cancel := runWatch(t, be)
+	res, cancel := runWait(t, be, "mvm-1", srv.URL)
 	defer cancel()
 
-	e := waitExit(t, exits)
-	assert.Equal(t, e.ID, "mvm-1")
-	assert.Equal(t, e.ExitCode, 7)
+	r := awaitResult(t, res)
+	assert.NilError(t, r.err)
+	assert.Equal(t, r.code, backend.ExitCode(7))
 	// The runner — not the guest — suspended the VM.
 	assert.DeepEqual(t, cloud.suspended, []string{"mvm-1"})
 	assert.Equal(t, cloud.state("mvm-1"), awsmicrovm.MicrovmStateSuspended)
 }
 
-func TestWatchDropWithRunningReconnects(t *testing.T) {
+func TestWaitDropWithRunningReconnects(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
 	srv := sseTestServer(t, func(conn int, sw *sse.ServerWriter, r *http.Request) {
 		if conn == 1 {
@@ -291,57 +314,72 @@ func TestWatchDropWithRunningReconnects(t *testing.T) {
 		<-r.Context().Done()
 	})
 	defer srv.Close()
-	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, srv.URL, "runner-1")
+	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, srv.URL)
 
-	exits, cancel := runWatch(t, be)
+	res, cancel := runWait(t, be, "mvm-1", srv.URL)
 	defer cancel()
 
-	e := waitExit(t, exits)
-	assert.Equal(t, e.ExitCode, 3) // exactly one exit — the reconnect's, not the drop
-	assertNoExit(t, exits, 200*time.Millisecond)
+	r := awaitResult(t, res)
+	assert.NilError(t, r.err)
+	assert.Equal(t, r.code, backend.ExitCode(3)) // the reconnect's exit, not the drop
 }
 
-func TestWatchDropWithTerminatedEmitsExit(t *testing.T) {
+func TestWaitDropWithTerminatedReportsLost(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
 	srv := sseTestServer(t, func(_ int, _ *sse.ServerWriter, r *http.Request) {
 		// Drop the connection, and the VM is terminal by the time we arbitrate.
 		cloud.setState("mvm-1", awsmicrovm.MicrovmStateTerminated)
 	})
 	defer srv.Close()
-	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, srv.URL, "runner-1")
+	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, srv.URL)
 
-	exits, cancel := runWatch(t, be)
+	res, cancel := runWait(t, be, "mvm-1", srv.URL)
 	defer cancel()
 
-	e := waitExit(t, exits)
-	assert.Equal(t, e.ID, "mvm-1")
-	assert.Equal(t, e.ExitCode, -1) // no SSE code was seen → report lost
+	r := awaitResult(t, res)
+	assert.NilError(t, r.err)
+	assert.Equal(t, r.code, backend.ExitLost) // no SSE code was seen → report lost
 	assert.Equal(t, cloud.suspendCount(), 0)
-	assertNoExit(t, exits, 200*time.Millisecond)
 }
 
-func TestWatchReconcileSweepReapsTerminated(t *testing.T) {
-	be, cloud, _ := newTestBackend(t)
-	// A VM reaped (max_duration) while the runner never streamed it: TERMINATED
-	// with no endpoint. Only the reconcile sweep can catch it.
-	cloud.add("mvm-1", awsmicrovm.MicrovmStateTerminated, "", "runner-1")
+func TestWaitAlreadyGoneReportsLost(t *testing.T) {
+	be, _, _ := newTestBackend(t)
+	// A rehydrated-already-dead sandbox: the stream drops and the control plane
+	// has no record of the VM (GetMicrovm 404s), so Wait reports lost.
+	srv := sseTestServer(t, func(_ int, _ *sse.ServerWriter, _ *http.Request) {
+		// Return immediately: the stream ends with no event.
+	})
+	defer srv.Close()
+	// Note: the VM is intentionally NOT registered in the cloud fake.
 
-	exits, cancel := runWatch(t, be)
+	res, cancel := runWait(t, be, "mvm-missing", srv.URL)
 	defer cancel()
 
-	e := waitExit(t, exits)
-	assert.Equal(t, e.ID, "mvm-1")
-	assert.Equal(t, e.ExitCode, -1)
-	assertNoExit(t, exits, 200*time.Millisecond)
+	r := awaitResult(t, res)
+	assert.NilError(t, r.err)
+	assert.Equal(t, r.code, backend.ExitLost)
 }
 
-func TestWatchIgnoresOtherRunnersVMs(t *testing.T) {
+func TestWaitShutdownReturnsCanceled(t *testing.T) {
 	be, cloud, _ := newTestBackend(t)
-	cloud.add("mvm-other", awsmicrovm.MicrovmStateTerminated, "", "runner-2")
+	// A stream that stays open with no event: Wait is parked until ctx cancel.
+	srv := sseTestServer(t, func(_ int, _ *sse.ServerWriter, r *http.Request) {
+		<-r.Context().Done()
+	})
+	defer srv.Close()
+	cloud.add("mvm-1", awsmicrovm.MicrovmStateRunning, srv.URL)
 
-	exits, cancel := runWatch(t, be)
-	defer cancel()
-	assertNoExit(t, exits, 200*time.Millisecond)
+	res, cancel := runWait(t, be, "mvm-1", srv.URL)
+	assertNoResult(t, res, 100*time.Millisecond)
+
+	// Act - runner shutdown.
+	cancel()
+
+	// Assert - Wait returns a cancellation error and does NOT suspend the VM (it
+	// stays alive for next-boot rehydration).
+	r := awaitResult(t, res)
+	assert.Assert(t, errors.Is(r.err, context.Canceled))
+	assert.Equal(t, cloud.suspendCount(), 0)
 }
 
 func mustData(t *testing.T, hd handleData) []byte {

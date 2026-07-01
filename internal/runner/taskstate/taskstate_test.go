@@ -45,17 +45,6 @@ func TestRead_Absent(t *testing.T) {
 	assert.Equal(t, ok, false)
 }
 
-func TestByID_Absent(t *testing.T) {
-	s, err := Open(t.TempDir())
-	assert.NilError(t, err)
-	assert.NilError(t, s.Write(Record{TaskID: 1, Type: "docker", ID: "known"}))
-
-	_, ok, err := s.ByID("unknown")
-
-	assert.NilError(t, err)
-	assert.Equal(t, ok, false)
-}
-
 func TestWrite_Overwrite(t *testing.T) {
 	s, err := Open(t.TempDir())
 	assert.NilError(t, err)
@@ -114,20 +103,6 @@ func TestList(t *testing.T) {
 	}
 	sort.Strings(ids)
 	assert.DeepEqual(t, ids, []string{"c1", "c2", "c3"})
-}
-
-func TestByID(t *testing.T) {
-	s, err := Open(t.TempDir())
-	assert.NilError(t, err)
-	assert.NilError(t, s.Write(Record{TaskID: 10, Type: "docker", ID: "handle-a"}))
-	assert.NilError(t, s.Write(Record{TaskID: 20, Type: "lambda-microvm", ID: "handle-b"}))
-
-	got, ok, err := s.ByID("handle-b")
-
-	assert.NilError(t, err)
-	assert.Equal(t, ok, true)
-	assert.Equal(t, got.TaskID, int64(20))
-	assert.Equal(t, got.Type, "lambda-microvm")
 }
 
 func TestWrite_ConcurrentDifferentTasks(t *testing.T) {

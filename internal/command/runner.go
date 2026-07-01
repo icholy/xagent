@@ -90,12 +90,6 @@ var RunnerCommand = &cli.Command{
 			Usage:   "AWS region for the lambda-microvm backend (defaults to the SDK-resolved region)",
 			Sources: cli.EnvVars("XAGENT_LAMBDA_MICROVM_REGION"),
 		},
-		&cli.DurationFlag{
-			Name:    "lambda-microvm-reconcile",
-			Usage:   "Interval of the lambda-microvm backend's ListMicrovms reconcile sweep",
-			Value:   30 * time.Second,
-			Sources: cli.EnvVars("XAGENT_LAMBDA_MICROVM_RECONCILE"),
-		},
 		&cli.BoolFlag{
 			Name:  "debug",
 			Usage: "Enable debug logging",
@@ -173,12 +167,11 @@ var RunnerCommand = &cli.Command{
 				return fmt.Errorf("lambda-microvm backend: %w", err)
 			}
 			be, err = lambdamicrovm.New(lambdamicrovm.Options{
-				Cloud:             awsmicrovm.NewClient(awsCfg),
-				Stager:            awsmvm.NewS3Stager(awsCfg),
-				RunnerID:          runnerID,
-				Region:            awsCfg.Region,
-				ReconcileInterval: cmd.Duration("lambda-microvm-reconcile"),
-				Log:               log,
+				Cloud:    awsmicrovm.NewClient(awsCfg),
+				Stager:   awsmvm.NewS3Stager(awsCfg),
+				RunnerID: runnerID,
+				Region:   awsCfg.Region,
+				Log:      log,
 			})
 			if err != nil {
 				return err
@@ -217,23 +210,11 @@ var RunnerCommand = &cli.Command{
 			log.Warn("failed to register workspaces", "error", err)
 		}
 
-		// Start container monitor in background
-		go func() {
-			for {
-				err := r.Monitor(ctx)
-				if errors.Is(err, context.Canceled) {
-					break
-				}
-				log.Error("monitor error, restarting", "error", err)
-				if !common.SleepContext(ctx, time.Second) {
-					break
-				}
-			}
-		}()
-
-		// Reconcile any tasks that were running when the runner was stopped
-		if err := r.Reconcile(ctx); err != nil {
-			return fmt.Errorf("failed to reconcile: %w", err)
+		// Rehydrate sandboxes that were running when the runner was stopped: this
+		// re-attaches a supervise goroutine per running sandbox and seeds the
+		// concurrency semaphore. It runs once, before Poll admits new work.
+		if err := r.Load(ctx); err != nil {
+			return fmt.Errorf("failed to load sandboxes: %w", err)
 		}
 
 		// Start event queue drain goroutine

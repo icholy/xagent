@@ -2,9 +2,8 @@
 // task→sandbox-handle mapping.
 //
 // The backing store is one atomic per-task JSON file (<dir>/<id>.json). The
-// store is backend-agnostic: it persists, lists, reads, and removes records and
-// never decodes a record's opaque Data. ID is the only field it indexes on, via
-// a reverse lookup used to resolve a backend handle id back to its task.
+// store is backend-agnostic: it persists, lists, reads, and removes records
+// keyed by task id and never decodes a record's opaque Data.
 //
 // It is a dependency-free leaf: it must not import the backend package or
 // anything backend-specific.
@@ -26,7 +25,7 @@ import (
 type Record struct {
 	TaskID int64           `json:"task_id"`
 	Type   string          `json:"type"`           // "docker", "lambda-microvm", ... (informational; never read for logic)
-	ID     string          `json:"id"`             // backend-produced handle id; the reverse-index key
+	ID     string          `json:"id"`             // backend-produced handle id
 	Data   json.RawMessage `json:"data,omitempty"` // opaque, backend-defined; the store NEVER decodes it
 }
 
@@ -161,21 +160,6 @@ func (s *Store) List() ([]Record, error) {
 		records = append(records, rec)
 	}
 	return records, nil
-}
-
-// ByID resolves a backend handle id to its record (reverse lookup). ok is false
-// (with a nil error) when no record has that id.
-func (s *Store) ByID(id string) (Record, bool, error) {
-	records, err := s.List()
-	if err != nil {
-		return Record{}, false, err
-	}
-	for _, rec := range records {
-		if rec.ID == id {
-			return rec, true, nil
-		}
-	}
-	return Record{}, false, nil
 }
 
 // parseRecordName reports whether name is a valid <int64>.json record file and

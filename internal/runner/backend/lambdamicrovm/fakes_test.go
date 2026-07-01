@@ -126,15 +126,14 @@ func (f *fakeCloud) ListMicrovms(_ context.Context, in *awsmicrovm.ListMicrovmsI
 	return out, nil
 }
 
-// add registers a VM with explicit id/state/endpoint and the runner tag.
-func (f *fakeCloud) add(id string, state awsmicrovm.MicrovmState, endpoint, runner string) {
+// add registers a VM with explicit id/state/endpoint.
+func (f *fakeCloud) add(id string, state awsmicrovm.MicrovmState, endpoint string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.vms[id] = &awsmicrovm.Microvm{
 		MicrovmID: id,
 		State:     state,
 		Endpoint:  endpoint,
-		Tags:      map[string]string{tagRunner: runner},
 	}
 }
 
