@@ -101,7 +101,9 @@ func TestLaunchFresh(t *testing.T) {
 	assert.Equal(t, in.ImageIdentifier, "arn:aws:lambda:us-east-1:123:microvm-image/x")
 	assert.Equal(t, in.ExecutionRoleArn, "arn:aws:iam::123:role/x")
 	assert.DeepEqual(t, in.EgressNetworkConnectors, []string{"arn:aws:lambda:us-east-1:aws:network-connector:aws-network-connector:INTERNET_EGRESS"})
-	assert.Assert(t, len(in.IngressNetworkConnectors) == 1 && strings.Contains(in.IngressNetworkConnectors[0], "NO_INGRESS"))
+	// An ingress connector is required to reach the shim over the managed proxy;
+	// unset defaults to the managed ALL_INGRESS connector (bug 2 of #1088).
+	assert.Assert(t, len(in.IngressNetworkConnectors) == 1 && strings.Contains(in.IngressNetworkConnectors[0], "ALL_INGRESS"))
 	assert.Equal(t, in.MaximumDurationInSeconds, defaultMaxDuration)
 	assert.Assert(t, in.IdlePolicy == nil) // omitted: the service cannot express "never auto-suspend"
 	assert.Equal(t, in.RunHookPayload, "https://bucket.staging.example.com/runner-1/7.json")
@@ -114,6 +116,20 @@ func TestLaunchFresh(t *testing.T) {
 	assert.DeepEqual(t, b.Cmd, testSpec(7).Cmd)
 	assert.DeepEqual(t, b.Env, []string{"FOO=bar", "XAGENT_TASK_ID=1"})
 	assert.Equal(t, len(b.Files), 2)
+}
+
+func TestLaunchFreshCustomIngressConnector(t *testing.T) {
+	be, cloud, _ := newTestBackend(t)
+
+	spec := testSpec(7)
+	// An operator-supplied port-scoped ingress connector is passed through
+	// verbatim rather than the ALL_INGRESS default.
+	custom := "arn:aws:lambda:us-east-1:123:network-connector/port-8080"
+	spec.Workspace.LambdaMicroVM.IngressConnector = custom
+
+	_, err := be.Launch(context.Background(), spec, nil)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, cloud.lastRun.IngressNetworkConnectors, []string{custom})
 }
 
 func TestLaunchReuseResumes(t *testing.T) {

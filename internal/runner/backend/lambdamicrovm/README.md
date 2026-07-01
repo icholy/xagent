@@ -51,6 +51,12 @@ workspaces:
       image_identifier: arn:aws:lambda:us-east-1:123456789012:microvm-image/xagent-example
       execution_role: arn:aws:iam::123456789012:role/xagent-microvm
       egress_connector: arn:aws:lambda:us-east-1:aws:network-connector:aws-network-connector:INTERNET_EGRESS
+      # Optional. Grants inbound access so the runner can reach the in-VM shim
+      # over AWS's managed proxy (SSE lifecycle stream + /xagent/stop). Defaults
+      # to the managed ALL_INGRESS connector; supply a port-scoped connector for
+      # tighter, defense-in-depth security (the proxy auth token is already
+      # scoped to the shim port).
+      ingress_connector: arn:aws:lambda:us-east-1:aws:network-connector:aws-network-connector:ALL_INGRESS
       staging_bucket: my-xagent-staging
       max_duration_seconds: 14400
       environment:
