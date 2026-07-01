@@ -110,6 +110,41 @@ Open a shell for task `N`:
 5. The operator's client dials the C2 WebSocket for `S` with its ticket; the C2
    bridges the two.
 
+```mermaid
+sequenceDiagram
+    actor Op as Operator (CLI/FE)
+    participant C2
+    participant Runner
+    participant Driver as Driver (in sandbox)
+
+    Op->>C2: OpenShell(task_id)
+    Note over C2: create rendezvous S, mint ticket
+    C2->>C2: set tasks.shell_session = S
+    C2->>C2: issue command = START
+    C2-->>Op: session S + ticket
+
+    Note over Runner: sees START only (oblivious to shell)
+    Runner->>Driver: Launch/resume sandbox (re-spawns driver)
+
+    Driver->>C2: get_my_task
+    C2-->>Driver: task { shell_session: S }
+    Note over Driver: shell_session set → runShell (PTY + /bin/sh)
+
+    Driver->>C2: WS /shell/S/driver (task token)
+    Op->>C2: WS /shell/S/attach (ticket)
+    Note over C2: bridge the two streams
+
+    loop interactive session
+        Op->>C2: data (keystrokes)
+        C2->>Driver: data
+        Driver->>C2: data (PTY output)
+        C2->>Op: data
+    end
+
+    Note over Driver,C2: exit(code) on close
+    Driver->>C2: clear shell_session
+```
+
 Close: the C2 (or the driver on exit) clears `shell_session` when the session
 ends — never the runner — so the next `START` is a plain agent run.
 
