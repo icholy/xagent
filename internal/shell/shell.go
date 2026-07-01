@@ -16,6 +16,8 @@ package shell
 import (
 	"cmp"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -34,6 +36,18 @@ import (
 // exitReportTimeout bounds the best-effort send of the final exit frame once the
 // shell process has exited.
 const exitReportTimeout = 5 * time.Second
+
+// CreateSessionID returns an unguessable rendezvous id for a debug-shell
+// session. It is not a secret — the attach leg is authorized by org membership,
+// not by knowing the id — but a random id keeps sessions from colliding and from
+// being enumerable.
+func CreateSessionID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generating shell session id: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
 
 // Serve runs an interactive debug shell for a rendezvous session. It allocates a
 // PTY, spawns a login shell ($SHELL, else /bin/sh), dials the server's shell

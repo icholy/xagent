@@ -109,6 +109,9 @@ var _ Client = &ClientMock{}
 //			ListWorkspacesFunc: func(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error) {
 //				panic("mock out the ListWorkspaces method")
 //			},
+//			OpenShellFunc: func(contextMoqParam context.Context, openShellRequest *xagentv1.OpenShellRequest) (*xagentv1.OpenShellResponse, error) {
+//				panic("mock out the OpenShell method")
+//			},
 //			PingFunc: func(contextMoqParam context.Context, pingRequest *xagentv1.PingRequest) (*xagentv1.PingResponse, error) {
 //				panic("mock out the Ping method")
 //			},
@@ -238,6 +241,9 @@ type ClientMock struct {
 
 	// ListWorkspacesFunc mocks the ListWorkspaces method.
 	ListWorkspacesFunc func(contextMoqParam context.Context, listWorkspacesRequest *xagentv1.ListWorkspacesRequest) (*xagentv1.ListWorkspacesResponse, error)
+
+	// OpenShellFunc mocks the OpenShell method.
+	OpenShellFunc func(contextMoqParam context.Context, openShellRequest *xagentv1.OpenShellRequest) (*xagentv1.OpenShellResponse, error)
 
 	// PingFunc mocks the Ping method.
 	PingFunc func(contextMoqParam context.Context, pingRequest *xagentv1.PingRequest) (*xagentv1.PingResponse, error)
@@ -484,6 +490,13 @@ type ClientMock struct {
 			// ListWorkspacesRequest is the listWorkspacesRequest argument value.
 			ListWorkspacesRequest *xagentv1.ListWorkspacesRequest
 		}
+		// OpenShell holds details about calls to the OpenShell method.
+		OpenShell []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// OpenShellRequest is the openShellRequest argument value.
+			OpenShellRequest *xagentv1.OpenShellRequest
+		}
 		// Ping holds details about calls to the Ping method.
 		Ping []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -592,6 +605,7 @@ type ClientMock struct {
 	lockListRunnerTasks                sync.RWMutex
 	lockListTasks                      sync.RWMutex
 	lockListWorkspaces                 sync.RWMutex
+	lockOpenShell                      sync.RWMutex
 	lockPing                           sync.RWMutex
 	lockRegisterWorkspaces             sync.RWMutex
 	lockRemoveOrgMember                sync.RWMutex
@@ -1682,6 +1696,42 @@ func (mock *ClientMock) ListWorkspacesCalls() []struct {
 	mock.lockListWorkspaces.RLock()
 	calls = mock.calls.ListWorkspaces
 	mock.lockListWorkspaces.RUnlock()
+	return calls
+}
+
+// OpenShell calls OpenShellFunc.
+func (mock *ClientMock) OpenShell(contextMoqParam context.Context, openShellRequest *xagentv1.OpenShellRequest) (*xagentv1.OpenShellResponse, error) {
+	if mock.OpenShellFunc == nil {
+		panic("ClientMock.OpenShellFunc: method is nil but Client.OpenShell was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam  context.Context
+		OpenShellRequest *xagentv1.OpenShellRequest
+	}{
+		ContextMoqParam:  contextMoqParam,
+		OpenShellRequest: openShellRequest,
+	}
+	mock.lockOpenShell.Lock()
+	mock.calls.OpenShell = append(mock.calls.OpenShell, callInfo)
+	mock.lockOpenShell.Unlock()
+	return mock.OpenShellFunc(contextMoqParam, openShellRequest)
+}
+
+// OpenShellCalls gets all the calls that were made to OpenShell.
+// Check the length with:
+//
+//	len(mockedClient.OpenShellCalls())
+func (mock *ClientMock) OpenShellCalls() []struct {
+	ContextMoqParam  context.Context
+	OpenShellRequest *xagentv1.OpenShellRequest
+} {
+	var calls []struct {
+		ContextMoqParam  context.Context
+		OpenShellRequest *xagentv1.OpenShellRequest
+	}
+	mock.lockOpenShell.RLock()
+	calls = mock.calls.OpenShell
+	mock.lockOpenShell.RUnlock()
 	return calls
 }
 

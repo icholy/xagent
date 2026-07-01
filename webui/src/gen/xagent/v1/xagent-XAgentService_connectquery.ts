@@ -65,6 +65,11 @@ export const cancelTask = XAgentService.method.cancelTask;
 export const restartTask = XAgentService.method.restartTask;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.OpenShell
+ */
+export const openShell = XAgentService.method.openShell;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.UploadLogs
  */
 export const uploadLogs = XAgentService.method.uploadLogs;
