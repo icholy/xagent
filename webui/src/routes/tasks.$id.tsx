@@ -21,6 +21,7 @@ import {
 import { eventsToTimeline } from '@/lib/timeline'
 import { ArchivedBadge } from '@/components/archived-badge'
 import { ArchiveButton } from '@/components/archive-button'
+import { AutoArchiveControl } from '@/components/auto-archive-control'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -71,6 +72,7 @@ function TaskDetail() {
   }
 
   const updateMutation = useMutation(updateTask, { onSuccess: refetchAll })
+  const autoArchiveMutation = useMutation(updateTask, { onSuccess: refetchAll })
   const archiveMutation = useMutation(archiveTask, { onSuccess: refetchAll })
   const unarchiveMutation = useMutation(unarchiveTask, { onSuccess: refetchAll })
   const cancelMutation = useMutation(cancelTask, { onSuccess: refetchAll })
@@ -152,7 +154,13 @@ function TaskDetail() {
     <div className="container mx-auto py-8 px-4 space-y-6">
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <AutoArchiveControl
+            task={task}
+            onChange={(autoArchive) => autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })}
+            pending={autoArchiveMutation.isPending}
+            disabled={isArchivedTask(task)}
+          />
           {canCancelTask(task) && (
             <Button variant="destructive" size="sm" onClick={handleCancel} disabled={isMutating}>
               {cancelMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
