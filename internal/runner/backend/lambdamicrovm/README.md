@@ -29,11 +29,12 @@ The guest holds **no** AWS credentials.
   the driver; on `/resume` it re-spawns the driver against the preserved disk
   (no re-provision). It supervises the driver and streams `driver-exited{code}`
   on `GET /xagent/lifecycle` (SSE, sticky-replayed) over AWS's managed proxy.
-- The runner consumes that stream (over the proxy, with a short-lived
-  `CreateMicrovmAuthToken` token) and, on `driver-exited`, **suspends** the VM
-  itself and records the true exit code. A stream drop is arbitrated via
-  `GetMicrovm` (the liveness authority): a running VM reconnects, a non-running
-  one emits one exit. A periodic `ListMicrovms` reconcile sweep is the backstop.
+- The runner's per-handle `Wait` consumes that stream (over the proxy, with a
+  short-lived `CreateMicrovmAuthToken` token) and, on `driver-exited`,
+  **suspends** the VM itself and returns the true exit code. A stream drop is
+  arbitrated via `GetMicrovm` (the liveness authority): a running VM reconnects,
+  a non-running one returns a report-lost outcome. The runner's boot-time `Load`
+  probe re-attaches `Wait` to VMs still running after a restart.
 - `Signal` (graceful stop) POSTs `/xagent/stop` over the proxy (SIGTERM → grace →
   SIGKILL the driver); the resulting exit suspends the VM like any completion.
 - AWS control-plane calls go through the `Cloud`/`Stager` interfaces; the live

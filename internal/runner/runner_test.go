@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/docker/docker/api/types/container"
@@ -200,6 +201,11 @@ func TestRunnerStart_AdoptReuse(t *testing.T) {
 			assert.Equal(t, reuse.ID, "old-id")
 			return backend.Handle{ID: "new-id"}, nil
 		},
+		// Start spawns a supervise goroutine; park it until the test's ctx ends.
+		WaitFunc: func(ctx context.Context, _ backend.Handle) (backend.ExitCode, error) {
+			<-ctx.Done()
+			return 0, ctx.Err()
+		},
 	}
 	mock := &xagentclient.ClientMock{
 		CreateTaskTokenFunc: func(_ context.Context, _ *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
@@ -328,51 +334,92 @@ func TestRunnerPoll_StopSignalled(t *testing.T) {
 	assert.Equal(t, queue.Len(), 0)
 }
 
-func TestRunnerMonitor(t *testing.T) {
+func TestRunnerSupervise_ReportLost(t *testing.T) {
 	t.Parallel()
-	// Arrange - two tracked sandboxes plus one untracked exit the runner must
-	// ignore.
+	// Arrange - Wait reports the exit as lost (non-zero code): the driver's
+	// terminal report never reached the C2, so the runner emits "failed".
 	mock := &xagentclient.ClientMock{
 		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
 	}
 	be := &backend.BackendMock{
-		WatchFunc: func(_ context.Context, handle func(backend.HandleExit)) error {
-			handle(backend.HandleExit{ID: "c1", ExitCode: 0})
-			handle(backend.HandleExit{ID: "c2", ExitCode: 137})
-			handle(backend.HandleExit{ID: "unknown", ExitCode: 1})
-			return nil
+		WaitFunc: func(_ context.Context, h backend.Handle) (backend.ExitCode, error) {
+			assert.Equal(t, h.ID, "c2")
+			return backend.ExitLost, nil
 		},
 	}
-	store := testStore(t,
-		taskstate.Record{TaskID: 1, Type: "docker", ID: "c1"},
-		taskstate.Record{TaskID: 2, Type: "docker", ID: "c2"},
-	)
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
-	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
+	assert.Assert(t, r.sem.TryAcquire(1)) // the slot supervise will release
 
 	// Act
-	err = r.Monitor(t.Context())
-	assert.NilError(t, err)
+	r.supervise(t.Context(), 2, backend.Handle{ID: "c2"})
 
-	// Assert - c1 exit 0 means the driver already reported; c2 non-zero means
-	// the report was lost so the runner emits "failed"; the untracked id is
-	// ignored.
+	// Assert - a failed event is emitted and the concurrency slot is released.
 	events := submitted(t, mock, queue)
 	assert.Equal(t, len(events), 1)
 	assert.Equal(t, events[0].Event, "failed")
 	assert.Equal(t, events[0].TaskId, int64(2))
 	assert.Equal(t, events[0].Version, int64(0))
+	assert.Assert(t, r.sem.TryAcquire(1)) // the slot was released
 }
 
-func TestRunnerReconcile(t *testing.T) {
+func TestRunnerSupervise_CleanExit(t *testing.T) {
 	t.Parallel()
-	// Arrange
+	// Arrange - Wait returns a clean exit (0): the driver already reported, so
+	// no event is owed, but the slot is still released.
+	mock := &xagentclient.ClientMock{}
+	be := &backend.BackendMock{
+		WaitFunc: func(_ context.Context, _ backend.Handle) (backend.ExitCode, error) {
+			return 0, nil
+		},
+	}
+	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
+	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	assert.NilError(t, err)
+	assert.Assert(t, r.sem.TryAcquire(1))
+
+	// Act
+	r.supervise(t.Context(), 3, backend.Handle{ID: "c3"})
+
+	// Assert - no event, slot released.
+	assert.Equal(t, queue.Len(), 0)
+	assert.Assert(t, r.sem.TryAcquire(1))
+}
+
+func TestRunnerSupervise_Shutdown(t *testing.T) {
+	t.Parallel()
+	// Arrange - Wait returns context.Canceled: the runner is shutting down, the
+	// sandbox stays alive for next-boot rehydration. No event, slot NOT released.
+	mock := &xagentclient.ClientMock{}
+	be := &backend.BackendMock{
+		WaitFunc: func(_ context.Context, _ backend.Handle) (backend.ExitCode, error) {
+			return 0, context.Canceled
+		},
+	}
+	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
+	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	assert.NilError(t, err)
+	assert.Assert(t, r.sem.TryAcquire(1))
+
+	// Act
+	r.supervise(t.Context(), 4, backend.Handle{ID: "c4"})
+
+	// Assert - no event, and the slot is still held (not released on shutdown).
+	assert.Equal(t, queue.Len(), 0)
+	assert.Assert(t, !r.sem.TryAcquire(1))
+}
+
+func TestRunnerLoad(t *testing.T) {
+	t.Parallel()
+	// Arrange - a running sandbox (re-attached), an exited husk whose task is
+	// still running (lost-report backstop), and a gone sandbox whose record is
+	// dropped.
 	status := map[int64]xagentv1.TaskStatus{
 		2: xagentv1.TaskStatus_RUNNING,
-		3: xagentv1.TaskStatus_COMPLETED,
+		3: xagentv1.TaskStatus_RUNNING,
 	}
 	mock := &xagentclient.ClientMock{
 		GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
@@ -385,11 +432,17 @@ func TestRunnerReconcile(t *testing.T) {
 	state := map[string]backend.State{
 		"c1": backend.StateRunning,
 		"c2": backend.StateExited,
-		"c3": backend.StateExited,
+		"c3": backend.StateGone,
 	}
+	waited := make(chan string, 1)
 	be := &backend.BackendMock{
 		ProbeFunc: func(_ context.Context, h backend.Handle) (backend.State, error) {
 			return state[h.ID], nil
+		},
+		WaitFunc: func(ctx context.Context, h backend.Handle) (backend.ExitCode, error) {
+			waited <- h.ID // the running sandbox got a supervise goroutine
+			<-ctx.Done()
+			return 0, ctx.Err()
 		},
 	}
 	store := testStore(t,
@@ -398,19 +451,43 @@ func TestRunnerReconcile(t *testing.T) {
 		taskstate.Record{TaskID: 3, Type: "docker", ID: "c3"},
 	)
 	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
-	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 5, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
-	err = r.Reconcile(t.Context())
+	err = r.Load(ctx)
 	assert.NilError(t, err)
 
-	// Assert - only the exited sandbox whose task is still running means the
-	// driver's report was lost.
+	// Assert - the exited husk and gone sandbox (both still-running tasks) each
+	// emit "failed"; the gone record is dropped, the others kept.
 	events := submitted(t, mock, queue)
-	assert.Equal(t, len(events), 1)
-	assert.Equal(t, events[0].Event, "failed")
-	assert.Equal(t, events[0].TaskId, int64(2))
+	var failed []int64
+	for _, e := range events {
+		assert.Equal(t, e.Event, "failed")
+		failed = append(failed, e.TaskId)
+	}
+	assert.DeepEqual(t, failed, []int64{2, 3})
+
+	_, ok, err := store.Read(3)
+	assert.NilError(t, err)
+	assert.Equal(t, ok, false) // gone record dropped
+	_, ok, err = store.Read(1)
+	assert.NilError(t, err)
+	assert.Equal(t, ok, true) // running record kept
+
+	// The running sandbox was re-attached via a supervise goroutine.
+	select {
+	case id := <-waited:
+		assert.Equal(t, id, "c1")
+	case <-time.After(3 * time.Second):
+		t.Fatal("running sandbox was not supervised")
+	}
+
+	// The semaphore was seeded with the one running sandbox.
+	assert.Assert(t, r.sem.TryAcquire(4))
+	assert.Assert(t, !r.sem.TryAcquire(1))
 }
 
 func TestRunnerPrune(t *testing.T) {
@@ -471,64 +548,69 @@ func TestRunnerPrune(t *testing.T) {
 	assert.Equal(t, ok, true)
 }
 
-func TestRunnerStart_ExitDuringLaunch(t *testing.T) {
+func TestRunnerStart_Gone(t *testing.T) {
 	t.Parallel()
-	// Arrange - a task whose container exits in the window between Launch
-	// returning and the runner writing its record. Monitor must still resolve
-	// the exit (not drop it) because both halves take launchMu.
+	// Arrange - a task whose recorded sandbox has vanished. Launch returns
+	// ErrGone (it never creates a fresh sandbox on the reuse path), so Start
+	// drops the dangling record and propagates ErrGone to its caller.
 	task := &model.Task{ID: 8, Runner: "test-runner", Workspace: "test", Version: 1}
-	store := testStore(t)
-	entered := make(chan struct{})
-	release := make(chan struct{})
+	store := testStore(t, taskstate.Record{TaskID: 8, Type: "docker", ID: "old-id"})
 	be := &backend.BackendMock{
 		ValidateWorkspaceFunc: func(_ *workspace.Workspace) error { return nil },
-		LaunchFunc: func(_ context.Context, _ *backend.Spec, _ *backend.Handle) (backend.Handle, error) {
-			// Park inside Launch (holding launchMu) until the test releases us.
-			close(entered)
-			<-release
-			return backend.Handle{ID: "c8"}, nil
+		ProbeFunc: func(_ context.Context, _ backend.Handle) (backend.State, error) {
+			// Probe races Launch; report exited so the reuse handle is passed on
+			// and Launch's ErrGone guard is the authoritative one.
+			return backend.StateExited, nil
 		},
-		WatchFunc: func(_ context.Context, fn func(backend.HandleExit)) error {
-			fn(backend.HandleExit{ID: "c8", ExitCode: 1})
-			return nil
+		LaunchFunc: func(_ context.Context, _ *backend.Spec, reuse *backend.Handle) (backend.Handle, error) {
+			assert.Assert(t, reuse != nil)
+			return backend.Handle{}, backend.ErrGone
 		},
 	}
 	mock := &xagentclient.ClientMock{
 		CreateTaskTokenFunc: func(_ context.Context, _ *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
 			return &xagentv1.CreateTaskTokenResponse{Token: "t"}, nil
 		},
-		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
-			return &xagentv1.SubmitRunnerEventsResponse{}, nil
+	}
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: NewEventQueue(EventQueueOptions{Client: mock}), Workspaces: testWorkspaces()})
+	assert.NilError(t, err)
+
+	// Act
+	err = r.Start(t.Context(), task)
+
+	// Assert - ErrGone surfaced (the caller emits failed + releases the slot) and
+	// the dangling record was removed. No supervise goroutine was spawned.
+	assert.Assert(t, errors.Is(err, backend.ErrGone))
+	_, ok, err := store.Read(8)
+	assert.NilError(t, err)
+	assert.Equal(t, ok, false)
+}
+
+func TestRunnerStart_GoneViaProbe(t *testing.T) {
+	t.Parallel()
+	// Arrange - the pre-Launch Probe already reports the sandbox gone, so Start
+	// short-circuits without minting a token or calling Launch.
+	task := &model.Task{ID: 9, Runner: "test-runner", Workspace: "test", Version: 1}
+	store := testStore(t, taskstate.Record{TaskID: 9, Type: "docker", ID: "old-id"})
+	be := &backend.BackendMock{
+		ProbeFunc: func(_ context.Context, _ backend.Handle) (backend.State, error) {
+			return backend.StateGone, nil
 		},
 	}
-	queue := NewEventQueue(EventQueueOptions{Client: mock, Log: slog.Default()})
-	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue, Workspaces: testWorkspaces()})
+	mock := &xagentclient.ClientMock{}
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: NewEventQueue(EventQueueOptions{Client: mock})})
 	assert.NilError(t, err)
 
-	// Act - Start parks inside Launch holding launchMu; the die event arrives
-	// while it is parked. Monitor's handler blocks on launchMu (or, if it runs
-	// after the unlock, finds the committed record), so ByID resolves either
-	// way and the exit is never dropped.
-	startErr := make(chan error, 1)
-	go func() { startErr <- r.Start(t.Context(), task) }()
-	<-entered
+	// Act
+	err = r.Start(t.Context(), task)
 
-	monErr := make(chan error, 1)
-	go func() { monErr <- r.Monitor(t.Context()) }()
-
-	close(release)
-	assert.NilError(t, <-startErr)
-	assert.NilError(t, <-monErr)
-
-	// Assert - the exit resolved to task 8 and produced a failed event.
-	rec, ok, err := store.Read(8)
+	// Assert - gone short-circuits: ErrGone, record dropped, no Launch, no token.
+	assert.Assert(t, errors.Is(err, backend.ErrGone))
+	assert.Equal(t, len(be.LaunchCalls()), 0)
+	assert.Equal(t, len(mock.CreateTaskTokenCalls()), 0)
+	_, ok, err := store.Read(9)
 	assert.NilError(t, err)
-	assert.Equal(t, ok, true)
-	assert.Equal(t, rec.ID, "c8")
-	events := submitted(t, mock, queue)
-	assert.Equal(t, len(events), 1)
-	assert.Equal(t, events[0].Event, "failed")
-	assert.Equal(t, events[0].TaskId, int64(8))
+	assert.Equal(t, ok, false)
 }
 
 // testWorkspaces returns a minimal workspace config with a "test" workspace.

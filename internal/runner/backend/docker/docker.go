@@ -11,14 +11,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/icholy/xagent/internal/runner/backend"
@@ -79,9 +76,11 @@ func (b *Backend) inspectID(ctx context.Context, ref string) (string, bool, erro
 }
 
 // Launch ensures the task's container exists and starts it, returning the
-// handle the runner persists (the container id). A reuse handle or a
-// name-conflicting container is adopted in place so its filesystem persists
-// across restarts; otherwise a fresh xagent-{taskID} container is created.
+// handle the runner persists (the container id). With a reuse handle the exact
+// recorded container is adopted in place so its filesystem persists across
+// restarts; if that container is gone Launch returns backend.ErrGone rather than
+// creating a fresh one. Without a reuse handle a fresh xagent-{taskID} container
+// is created (a task's first start).
 func (b *Backend) Launch(ctx context.Context, spec *backend.Spec, reuse *backend.Handle) (backend.Handle, error) {
 	containerID, err := b.ensure(ctx, spec, reuse)
 	if err != nil {
@@ -93,29 +92,21 @@ func (b *Backend) Launch(ctx context.Context, spec *backend.Spec, reuse *backend
 	return backend.Handle{Type: HandleType, ID: containerID}, nil
 }
 
-// ensure resolves the container to start: the reuse handle's container if it
-// still exists, an existing container with the deterministic name (the orphan
-// self-heal / name-conflict case), or a freshly created one.
+// ensure resolves the container to start, enforcing the one-sandbox-per-task
+// invariant: with a reuse handle it adopts the exact recorded container, or
+// returns backend.ErrGone if that container has vanished — it never falls
+// through to create. A fresh container is created only when reuse is nil (a
+// task's first start).
 func (b *Backend) ensure(ctx context.Context, spec *backend.Spec, reuse *backend.Handle) (string, error) {
-	// Adopt the prior handle's container if it still exists.
+	// Reuse path: adopt the exact recorded container, or surface it as gone.
 	if reuse != nil && reuse.ID != "" {
 		id, ok, err := b.inspectID(ctx, reuse.ID)
 		if err != nil {
 			return "", err
 		}
-		if ok {
-			return b.adopt(ctx, spec, id)
+		if !ok {
+			return "", backend.ErrGone
 		}
-	}
-
-	// Adopt a container that already holds the deterministic name. This covers
-	// the create-then-record orphan gap: a lost store-write leaves the runner
-	// with no reuse handle, so the next Launch hits the existing name instead
-	// of spawning a duplicate.
-	name := fmt.Sprintf("xagent-%d", spec.TaskID)
-	if id, ok, err := b.inspectID(ctx, name); err != nil {
-		return "", err
-	} else if ok {
 		return b.adopt(ctx, spec, id)
 	}
 
@@ -235,11 +226,11 @@ func (b *Backend) copyFiles(ctx context.Context, containerID string, files []bac
 }
 
 // Probe reports the liveness of a single handle by inspecting its container.
-// A missing container is treated as exited.
+// A missing container is gone (removed); a stopped one is an exited husk.
 func (b *Backend) Probe(ctx context.Context, h backend.Handle) (backend.State, error) {
 	info, err := b.docker.ContainerInspect(ctx, h.ID)
 	if cerrdefs.IsNotFound(err) {
-		return backend.StateExited, nil
+		return backend.StateGone, nil
 	}
 	if err != nil {
 		return backend.StateUnknown, fmt.Errorf("failed to inspect container: %w", err)
@@ -299,39 +290,25 @@ func (b *Backend) Destroy(ctx context.Context, h backend.Handle) error {
 	return nil
 }
 
-// Watch subscribes to docker die events for this runner's containers and
-// invokes handle once per exit, keyed by container id. The runner resolves
-// id→task via the store; the labels only scope the event stream to this
-// runner's containers — no task id is parsed out of them. An unparseable exit
-// code is reported as non-zero: by the driver-owned-events invariant that means
-// "report lost", and the status guard rejects the resulting failed event if the
-// driver already reported.
-func (b *Backend) Watch(ctx context.Context, handle func(backend.HandleExit)) error {
-	eventCh, errCh := b.docker.Events(ctx, events.ListOptions{
-		Filters: filters.NewArgs(
-			filters.Arg("type", "container"),
-			filters.Arg("event", "die"),
-			filters.Arg("label", "xagent=true"),
-			filters.Arg("label", "xagent.runner="+b.runnerID),
-		),
-	})
-
-	for {
-		select {
-		case event := <-eventCh:
-			containerID := event.Actor.ID
-			exitCode, err := strconv.Atoi(event.Actor.Attributes["exitCode"])
-			if err != nil {
-				b.log.Error("invalid exit code in container event", "container", containerID, "exitCode", event.Actor.Attributes["exitCode"], "error", err)
-				exitCode = -1
-			}
-			handle(backend.HandleExit{ID: containerID, ExitCode: exitCode})
-
-		case err := <-errCh:
-			return fmt.Errorf("docker events error: %w", err)
-
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+// Wait blocks until the handle's container stops, returning its exit code. It
+// waits on WaitConditionNotRunning, which is level-triggered: the daemon returns
+// an already-stopped container's stored exit code immediately, closing the
+// launch→persist race and the boot Probe→Wait TOCTOU without a manual inspect
+// (WaitConditionNextExit is edge-triggered and would block forever on a
+// container that already exited before this call). A removed container (NotFound)
+// or any other wait error has no recoverable code, so it is reported as lost.
+func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode, error) {
+	okCh, errCh := b.docker.ContainerWait(ctx, h.ID, container.WaitConditionNotRunning)
+	// The single select must always drain one channel: the SDK's result channel
+	// is unbuffered and its send is not ctx-aware, so returning without receiving
+	// a ready result would leak the SDK's wait goroutine.
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case <-errCh:
+		// Removed (NotFound) or a wait error: no code to recover → report lost.
+		return backend.ExitLost, nil
+	case res := <-okCh:
+		return backend.ExitCode(res.StatusCode), nil
 	}
 }

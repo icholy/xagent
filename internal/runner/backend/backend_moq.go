@@ -37,8 +37,8 @@ var _ Backend = &BackendMock{}
 //			ValidateWorkspaceFunc: func(ws *workspace.Workspace) error {
 //				panic("mock out the ValidateWorkspace method")
 //			},
-//			WatchFunc: func(ctx context.Context, handle func(HandleExit)) error {
-//				panic("mock out the Watch method")
+//			WaitFunc: func(ctx context.Context, h Handle) (ExitCode, error) {
+//				panic("mock out the Wait method")
 //			},
 //		}
 //
@@ -65,8 +65,8 @@ type BackendMock struct {
 	// ValidateWorkspaceFunc mocks the ValidateWorkspace method.
 	ValidateWorkspaceFunc func(ws *workspace.Workspace) error
 
-	// WatchFunc mocks the Watch method.
-	WatchFunc func(ctx context.Context, handle func(HandleExit)) error
+	// WaitFunc mocks the Wait method.
+	WaitFunc func(ctx context.Context, h Handle) (ExitCode, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -108,12 +108,12 @@ type BackendMock struct {
 			// Ws is the ws argument value.
 			Ws *workspace.Workspace
 		}
-		// Watch holds details about calls to the Watch method.
-		Watch []struct {
+		// Wait holds details about calls to the Wait method.
+		Wait []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Handle is the handle argument value.
-			Handle func(HandleExit)
+			// H is the h argument value.
+			H Handle
 		}
 	}
 	lockClose             sync.RWMutex
@@ -122,7 +122,7 @@ type BackendMock struct {
 	lockProbe             sync.RWMutex
 	lockSignal            sync.RWMutex
 	lockValidateWorkspace sync.RWMutex
-	lockWatch             sync.RWMutex
+	lockWait              sync.RWMutex
 }
 
 // Close calls CloseFunc.
@@ -332,38 +332,38 @@ func (mock *BackendMock) ValidateWorkspaceCalls() []struct {
 	return calls
 }
 
-// Watch calls WatchFunc.
-func (mock *BackendMock) Watch(ctx context.Context, handle func(HandleExit)) error {
-	if mock.WatchFunc == nil {
-		panic("BackendMock.WatchFunc: method is nil but Backend.Watch was just called")
+// Wait calls WaitFunc.
+func (mock *BackendMock) Wait(ctx context.Context, h Handle) (ExitCode, error) {
+	if mock.WaitFunc == nil {
+		panic("BackendMock.WaitFunc: method is nil but Backend.Wait was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		Handle func(HandleExit)
+		Ctx context.Context
+		H   Handle
 	}{
-		Ctx:    ctx,
-		Handle: handle,
+		Ctx: ctx,
+		H:   h,
 	}
-	mock.lockWatch.Lock()
-	mock.calls.Watch = append(mock.calls.Watch, callInfo)
-	mock.lockWatch.Unlock()
-	return mock.WatchFunc(ctx, handle)
+	mock.lockWait.Lock()
+	mock.calls.Wait = append(mock.calls.Wait, callInfo)
+	mock.lockWait.Unlock()
+	return mock.WaitFunc(ctx, h)
 }
 
-// WatchCalls gets all the calls that were made to Watch.
+// WaitCalls gets all the calls that were made to Wait.
 // Check the length with:
 //
-//	len(mockedBackend.WatchCalls())
-func (mock *BackendMock) WatchCalls() []struct {
-	Ctx    context.Context
-	Handle func(HandleExit)
+//	len(mockedBackend.WaitCalls())
+func (mock *BackendMock) WaitCalls() []struct {
+	Ctx context.Context
+	H   Handle
 } {
 	var calls []struct {
-		Ctx    context.Context
-		Handle func(HandleExit)
+		Ctx context.Context
+		H   Handle
 	}
-	mock.lockWatch.RLock()
-	calls = mock.calls.Watch
-	mock.lockWatch.RUnlock()
+	mock.lockWait.RLock()
+	calls = mock.calls.Wait
+	mock.lockWait.RUnlock()
 	return calls
 }
