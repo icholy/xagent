@@ -6,7 +6,7 @@ Issue: https://github.com/icholy/xagent/issues/466
 
 A common way to drive xagent is from a local Claude Code session: a developer runs `claude` on their workstation, and that session creates and supervises xagent tasks through xagent's user-facing MCP server. Today, after creating a task, the local Claude has no way to know when something changes — it must poll `get_task` or `list_tasks` to discover new logs, new instructions, status transitions, or completion. Polling wastes turns, delays reactions, and bloats the model's context with repeated reads.
 
-Claude Code Channels (research preview, v2.1.80+) provide exactly the primitive that's missing: an MCP server can push `notifications/claude/channel` events into a running session as `<channel>` tags in Claude's context, so the model reacts on the next turn without polling. The C2 server already publishes structured change notifications for every task mutation; the gap is the transport that delivers them to the local Claude.
+Claude Code Channels (research preview, v2.1.80+) provide exactly the primitive that's missing: an MCP server can push `notifications/claude/channel` events into a running session as `<channel>` tags in Claude's context, so the model reacts on the next turn without polling. The server already publishes structured change notifications for every task mutation; the gap is the transport that delivers them to the local Claude.
 
 ## Background: How Channels Work
 
@@ -37,7 +37,7 @@ Task 42 was updated.
 
 The proposal hinges on distinguishing the two xagent MCP servers in the tree today:
 
-1. **User-facing MCP server** (`internal/server/mcpserver/mcpserver.go`, backed by package `mcpserver`). Served as MCP **Streamable HTTP** via `mcp.NewStreamableHTTPHandler` with `Stateless: true`, mounted on the C2 HTTP API at `/mcp`. Exposes `list_workspaces`, `create_task`, `get_task`, `list_tasks`, `update_task`. This is what the developer's local Claude Code talks to today.
+1. **User-facing MCP server** (`internal/server/mcpserver/mcpserver.go`, backed by package `mcpserver`). Served as MCP **Streamable HTTP** via `mcp.NewStreamableHTTPHandler` with `Stateless: true`, mounted on the server HTTP API at `/mcp`. Exposes `list_workspaces`, `create_task`, `get_task`, `list_tasks`, `update_task`. This is what the developer's local Claude Code talks to today.
 
 2. **In-container agent MCP server** (`internal/command/mcp.go` — `McpCommand` — backed by `internal/agentmcp`). stdio transport. Spawned by the runner inside each task's container. Exposes `get_my_task`, `update_my_task`, `report`, `create_link`, and the child-task tools. (A separate task is moving this command out of the top-level `mcp` slot to `xagent tool agent-mcp`, freeing `xagent mcp` for the new bridge described below.)
 
@@ -57,7 +57,7 @@ xagent mcp [--server URL] [--token TOKEN]
 
 A local stdio MCP server that the developer's `.mcp.json` launches. It does two things:
 
-1. **Re-exposes the user-facing tools** (`list_workspaces`, `create_task`, `get_task`, `list_tasks`, `update_task`) over stdio, proxying each call to the C2 server via `xagentclient.New(...)` (the existing Connect RPC client). For a CLI-driven setup this replaces the remote HTTP MCP entry, so the developer only needs **one** MCP entry instead of an HTTP endpoint plus a separate channel process.
+1. **Re-exposes the user-facing tools** (`list_workspaces`, `create_task`, `get_task`, `list_tasks`, `update_task`) over stdio, proxying each call to the server via `xagentclient.New(...)` (the existing Connect RPC client). For a CLI-driven setup this replaces the remote HTTP MCP entry, so the developer only needs **one** MCP entry instead of an HTTP endpoint plus a separate channel process.
 
 2. **Declares the `claude/channel` capability** and pushes `notifications/claude/channel` events for task changes by translating an SSE subscription to the existing notification stream.
 
@@ -70,7 +70,7 @@ Local Claude Code session
     ↕ stdio (MCP tools + notifications/claude/channel)
 xagent mcp  (NEW local bridge — proxies tools, translates SSE → channel)
     ↕ HTTP: Connect RPC (tools)  +  SSE subscription (notifyserver)
-xagent C2 server  (already publishes task notifications on every change)
+xagent server  (already publishes task notifications on every change)
 ```
 
 ### Reusing the existing notification pipeline
@@ -104,7 +104,7 @@ This is a translator, not a new event system. The pieces are already in place:
 
 The bridge:
 
-1. Connects to the C2 SSE endpoint (`GET /events`, `Accept: text/event-stream`) using the same auth token configured for the RPC client.
+1. Connects to the server SSE endpoint (`GET /events`, `Accept: text/event-stream`) using the same auth token configured for the RPC client.
 2. Reads `model.Notification` JSON payloads via `internal/x/sse.Reader`.
 3. Filters down to task-relevant resources (`type` in `{task, log, link, task_logs, event}`).
 4. For each surviving `NotificationResource`, emits one `notifications/claude/channel`:
@@ -158,7 +158,7 @@ var McpCommand = &cli.Command{
     Name:  "mcp",
     Usage: "Local stdio MCP bridge: re-exposes xagent tools and pushes task change notifications as Claude Code channel events",
     Flags: []cli.Flag{
-        &cli.StringFlag{Name: "server", Value: xagentclient.DefaultURL, Usage: "C2 server URL"},
+        &cli.StringFlag{Name: "server", Value: xagentclient.DefaultURL, Usage: "server URL"},
         &cli.StringFlag{Name: "token",  Required: true,                 Usage: "API token"},
     },
     Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -234,7 +234,7 @@ The earlier draft of this proposal proposed:
 
 All three are superseded:
 
-- The C2 server **already publishes a `model.Notification` on every relevant mutation** and **already fans them out over SSE** at `/events`. A new table and a new polling RPC would duplicate that pipeline.
+- The server **already publishes a `model.Notification` on every relevant mutation** and **already fans them out over SSE** at `/events`. A new table and a new polling RPC would duplicate that pipeline.
 - The use case has moved to the local-developer Claude that drives the user-facing MCP server, not to in-container agents. The original framing of "replace the in-container agent's `get_my_task` polling with channels" is preserved as future work but is no longer the primary motivation.
 
 The "Capability Declaration", "Server.Run Refactoring", and "Runner Integration" sections from the prior draft are replaced by the bridge command and `AddTools` refactor described above; "Database Changes" and "Event Polling" are removed entirely.

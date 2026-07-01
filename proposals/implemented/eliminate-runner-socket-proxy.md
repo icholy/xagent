@@ -1,4 +1,4 @@
-# Direct driver–C2 connection: eliminate the runner socket proxy
+# Direct driver–server connection: eliminate the runner socket proxy
 
 Issue: https://github.com/icholy/xagent/issues/890
 
@@ -7,7 +7,7 @@ Builds on: [`proposals/draft/scope-based-permissions.md`](../draft/scope-based-p
 
 ## Problem
 
-In-container agents never talk to the C2 server directly. The runner stands up a
+In-container agents never talk to the server directly. The runner stands up a
 Unix-socket proxy at `/xagent/socket` inside every container
 (`internal/runner/proxy.go`, `internal/xagentclient/unix.go`) and bind-mounts its
 parent directory into the container (`internal/runner/runner.go`). The driver and
@@ -41,7 +41,7 @@ remarkably little new machinery, because the task token is just a narrow app JWT
 
 ## Design
 
-The driver and the injected `xagent` MCP server connect **directly to the C2 over
+The driver and the injected `xagent` MCP server connect **directly to the server over
 the network**, presenting a **server-minted app JWT with a reduced scope set** — an
 ordinary `apiauth` token, no new credential type. The server verifies it on the
 normal app-JWT path, gets a caller with `OrgID` + `Scopes` like any other, and the
@@ -378,18 +378,18 @@ injects, per container:
 
 After this change:
 
-- The runner calls `CreateTaskToken(task_id, ws.Capabilities)` on the C2 (replacing
+- The runner calls `CreateTaskToken(task_id, ws.Capabilities)` on the server (replacing
   the local `r.proxy.TaskToken(task, ws.Capabilities)` call in `runner.create`) and
   injects the **returned** app JWT as `--token` / `XAGENT_TOKEN`, unchanged in shape
   from the driver/MCP point of view.
-- `--server` / `XAGENT_SERVER` becomes the **real C2 URL** instead of
+- `--server` / `XAGENT_SERVER` becomes the **real server URL** instead of
   `xagentclient.AgentSocketURL`. `xagentclient.New` already speaks both `unix://`
   and `http(s)://`; dropping the `unix://` branch is the only client change.
 - The **socket bind mount and the socket-existence preflight are deleted** from
   `runner.create`.
 
-**Network reachability & TLS.** The container must now reach the C2 over the network.
-The runner already knows the C2 URL (its own `--server` / `XAGENT_SERVER`); it passes
+**Network reachability & TLS.** The container must now reach the server over the network.
+The runner already knows the server URL (its own `--server` / `XAGENT_SERVER`); it passes
 that same URL to the container. For the common single-host dev setup the container
 needs that URL to resolve from inside its network namespace (e.g. the compose service
 name, or `host.docker.internal`), which is a workspace networking concern
@@ -401,7 +401,7 @@ in-container URL when the runner's own `--server` is loopback is Open Question #
 
 ### 7. What authorizes the runner to call `CreateTaskToken`
 
-The runner authenticates to the C2 with its org-scoped `xat_` key
+The runner authenticates to the server with its org-scoped `xat_` key
 (`internal/command/runner.go`). It needs a capability to mint task tokens. Add a new
 op to the taxonomy:
 
@@ -464,7 +464,7 @@ tests that survived the #902 conversion) plus the empty-scopes completeness test
 
 **Phase 2 — cutover.** Atomically: (a) the minter `agentauth.Scopes` begins emitting
 `task.archived:"false"`; (b) `runner.create` calls `CreateTaskToken` and injects the
-real C2 URL instead of the socket URL, dropping the bind mount for **new** containers.
+real server URL instead of the socket URL, dropping the bind mount for **new** containers.
 The archived-constrained scopes now exist **only** in direct-path app JWTs, consumed
 **only** by the §5 handlers (which pass `task.archived`). `AgentProxy.TaskToken` is no
 longer invoked for new containers; any restart of a legacy container goes through the
@@ -557,9 +557,9 @@ runner restart). Acceptable as an operational event; a dedicated key would decou
 the lifetimes at the cost of the second-credential machinery we just removed. (Open
 Question #3.)
 
-**Direct network exposure.** Every container now opens a connection to the C2 rather
+**Direct network exposure.** Every container now opens a connection to the server rather
 than to a local socket. That is the point (agents can run anywhere they can reach the
-C2), but it widens the network surface: the C2 must be reachable from container
+server), but it widens the network surface: the server must be reachable from container
 networks, and a leaked task token is usable from anywhere until its task is archived.
 Mitigations: TLS everywhere (already true in prod), the token is strictly task-narrow,
 and archiving revokes it. Net: the trust model is *simpler and stronger* (one
@@ -572,7 +572,7 @@ authority, server-verifiable identity) even as the network surface grows.
    now (the minted token is strictly narrower than the runner's key, so no
    escalation), add runner-id binding when key identities support it.
 
-2. **In-container C2 URL defaulting (§6).** When the runner's own `--server` is a
+2. **In-container server URL defaulting (§6).** When the runner's own `--server` is a
    loopback/compose address, what URL does the container get so it resolves from inside
    its network namespace? Options: reuse the runner's `--server` verbatim (works when
    both share a network), a separate `--agent-server` override, or derive from

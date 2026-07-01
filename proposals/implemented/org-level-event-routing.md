@@ -342,7 +342,7 @@ The trade-off is that Atlassian account IDs are opaque to users, but the UI can 
 
 ### Regex matching vs simple string matching for mentions
 
-**Chosen: regex with word boundaries.** Simple `strings.Contains(body, "@"+username)` would match substrings (e.g. `@bot` matching `@botmaster`). Word boundary regex is slightly more expensive but correct. The overhead is negligible at webhook traffic volumes.
+**Chosen: regex with word boundaries.** Simple `strings.Contains(body, "@"+username)` would match substrings (e.g. `@bot` matching `@bottega`). Word boundary regex is slightly more expensive but correct. The overhead is negligible at webhook traffic volumes.
 
 ### Filtering all events vs only comment events
 

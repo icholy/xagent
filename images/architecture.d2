@@ -30,5 +30,5 @@ usermcp -> backend.server: create / manage tasks
 events.github -> backend.server: webhook
 events.jira -> backend.server: webhook
 runner -> backend.server: fetch/update tasks, mint task token
-runner -> container: manages lifecycle (injects C2 URL + token)
+runner -> container: manages lifecycle (injects server URL + token)
 container -> backend.server: driver + MCP connect directly (task token)

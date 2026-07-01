@@ -234,7 +234,7 @@ The bridge would then look up a template per `Kind` and render the sentence clie
 
 Rejected because:
 
-- **The renderer would live in the bridge,** not in the C2 server. Adding a new event kind would mean updating two places (publish site + renderer table). Today's `ForwardNotification` is a pure relay; the kind table re-introduces the coupling we're trying to eliminate.
+- **The renderer would live in the bridge,** not in the server. Adding a new event kind would mean updating two places (publish site + renderer table). Today's `ForwardNotification` is a pure relay; the kind table re-introduces the coupling we're trying to eliminate.
 - **Channel content is for humans** (well, an LLM that reads English). Structuring the payload only to turn it back into English at the edge is busywork. The publishing site already has the raw values formatted in its log lines; it's the natural place to write the sentence.
 - **A free-text field doesn't preclude structure later.** If a future consumer needs `Kind`-style routing, it can be added additively; the message becomes the human-readable fallback.
 

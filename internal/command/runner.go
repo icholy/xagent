@@ -47,7 +47,7 @@ var RunnerCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "server",
 			Aliases: []string{"s"},
-			Usage:   "C2 server URL",
+			Usage:   "server URL",
 			Value:   xagentclient.DefaultURL,
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},
