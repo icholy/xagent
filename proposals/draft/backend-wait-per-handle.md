@@ -109,18 +109,21 @@ type ExitCode int
 3. **Runner shutting down** → `(_, ctx.Err())` where
    `errors.Is(err, context.Canceled)`. This means *the runner stopped watching*,
    **not** that the sandbox stopped running. The sandbox keeps running and is
-   rehydrated next boot; the controller must **not** emit `failed`.
+   rehydrated next boot; the `supervise` goroutine must **not** emit `failed`.
 
 A well-behaved backend returns a non-nil `error` **only** for outcome 3.
 Unrecoverable runtime conditions are expressed as the `(-1, nil)` report-lost
 outcome, not as an error, so the runner never has to guess whether a non-cancel
 error left the sandbox alive.
 
-### Runner: a controller per running sandbox
+### Runner: a supervise goroutine per running sandbox
 
-The runner holds `map[taskID]*controller` under a mutex; a controller exists
-**iff** the sandbox is running on this runner. It is created right after `Launch`
-persists, and removed when `Wait` returns a terminal outcome (1 or 2):
+The persisted `taskstate` store is the source of truth for which sandboxes belong
+to this runner; `Probe` derives their liveness; and exit observation is one
+fire-and-forget goroutine per running sandbox, parked in `Wait` on the runner's
+root context. **The runner needs no new in-memory task state** — no controller
+map, no mutex, no `WaitGroup`. It keeps only what it has today: the semaphore
+(concurrency), the event queue, and the wake channel.
 
 ```go
 func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) {
@@ -128,9 +131,6 @@ func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) 
     if errors.Is(err, context.Canceled) {
         return // shutdown: leave the sandbox alive for next-boot rehydration
     }
-    r.mu.Lock()
-    delete(r.controllers, taskID)
-    r.mu.Unlock()
     r.sem.Release(1)
     r.wake.Wake()
     if code != 0 {
@@ -140,16 +140,10 @@ func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) 
 }
 ```
 
-This map is the runner's authoritative "what's running here", which **deletes
-most `Probe` RPCs on the live path**: the `Running(taskID)` check
-(`runner.go:313`) and `Start`'s already-running check (`runner.go:450-461`)
-become in-memory map lookups. `Probe` shrinks to a startup-only role (below).
-
 `Start` (`runner.go:445`) reorders to: resolve reuse → `Launch` → `store.Write`
-→ register controller → `go supervise`. Because `Wait` is spawned **after** the
-record is persisted and is level-triggered (it re-derives liveness from the
-handle), an exit in the launch→persist window is not lost, and the controller
-already knows its task — so:
+→ `go supervise`. Because `Wait` is spawned **after** the record is persisted and
+is level-triggered (it re-derives liveness from the handle), an exit in the
+launch→persist window is not lost, and the goroutine already knows its task — so:
 
 - `launchMu` (`runner.go:39`) is **deleted**. It existed only to serialize
   `Launch`+`Write` against `Monitor`'s `store.ByID`; there is no reverse lookup
@@ -157,13 +151,27 @@ already knows its task — so:
 - `taskstate.Store.ByID` (`taskstate.go:168`) is **deleted** — nothing resolves
   id→task.
 
+The `start`-command idempotency check keeps its current shape:
+`Running(taskID)` = `store.Read` + `Probe` (`runner.go:313-323`). No in-memory
+"what's running here" map is required to prevent a duplicate launch: `Load`
+(below) completes before `Poll` admits work, polls are sequential, and after boot
+only `Start` spawns a `supervise` — and only when `Probe` reports not-running (on
+a `Probe` error the handler skips rather than launches, `runner.go:220-222`), so
+two `Wait`s can never exist for one task. Graceful shutdown is a single root-ctx
+cancel — every `Wait` returns `ctx.Err()` and its goroutine exits; there is
+deliberately nothing to drain, since on cancel `Wait` abandons *without*
+suspending so the sandbox persists for rehydration.
+
+An in-memory running-set could later cache these `Probe` results as a pure
+optimization; it is intentionally out of the core design (see Trade-offs).
+
 ### Restart / rehydration: the loader
 
 A `Load` step runs once at boot, *before* `Poll` admits new work. It folds
 together today's `Reconcile` (`runner.go:255`) and the global `Monitor`
 goroutine (`command/runner.go:221-237`): the statefile enumerates, the runtime
 answers liveness per id, and every running sandbox gets the same per-handle
-controller as the live path.
+`supervise` goroutine as the live path.
 
 ```go
 func (r *Runner) Load(ctx context.Context) error {
@@ -181,7 +189,6 @@ func (r *Runner) Load(ctx context.Context) error {
         }
         switch st {
         case backend.StateRunning: // container up / VM RUNNING
-            r.track(rec.TaskID, h)
             go r.supervise(ctx, rec.TaskID, h) // Wait RE-ATTACHES
             running++
         case backend.StateExited: // stopped container / SUSPENDED VM (husk preserved)
@@ -293,9 +300,10 @@ fakes are structurally unaffected; the `watcher`-specific tests in
 ## Trade-offs
 
 **vs. #1091's `Sandbox` interface.** Both proposals produce the *same* runner-side
-rewrite (controller map, loader folding in `Reconcile`+`Monitor`, the
-shutdown-safe `Wait` contract, elimination of `launchMu` and the lost-exit race).
-The difference is entirely in the backend surface:
+rewrite (per-sandbox `supervise` goroutine, loader folding in
+`Reconcile`+`Monitor`, the shutdown-safe `Wait` contract, elimination of
+`launchMu` and the lost-exit race). The difference is entirely in the backend
+surface:
 
 | | #1091 (`Sandbox`) | This proposal (`Backend.Wait`) |
 |---|---|---|
@@ -321,11 +329,23 @@ start-failure-vs-exit harder to distinguish. The explicit `Launch` → persist �
 `Wait` split keeps the store write in the runner, between two backend calls,
 where the only writer lives.
 
-**Keeping `Probe` (not folding it into `Wait`).** The live path no longer needs
-`Probe` (the controller map answers "running here?"), but the loader still needs
-a synchronous per-record liveness read to seed the semaphore and to branch
-running/exited/gone. Probe-then-branch avoids opening a doomed SSE stream per
-dead VM at boot.
+**Keeping `Probe` (not folding it into `Wait`).** The loader needs a synchronous
+per-record liveness read to seed the semaphore and to branch
+running/exited/gone; the `start`-command idempotency check reuses the same
+`Probe`. Probe-then-branch avoids opening a doomed SSE stream per dead VM at boot.
+
+**No in-memory running-set (deferrable optimization).** The store + `Probe` +
+`supervise` goroutines are a complete model on their own, so the runner carries
+no authoritative in-memory task state. The only thing an in-memory
+`map[taskID]` running-set would buy is skipping the `Probe` on the
+`start`-command idempotency check during the launch→`started` window. For Docker
+that `Probe` is a local `ContainerInspect` (free); for Lambda it is a
+`GetMicrovm` (a rate-limited control-plane call) per poll per not-yet-started
+task. Because such a set is a pure fast-path in front of the existing `Probe`
+check — no interface, `taskstate`-schema, `Wait`-contract, or rehydration impact,
+and nothing else needs to know it exists — it is intentionally left out of the
+core design and can be added later if `GetMicrovm` volume on Lambda proves to
+matter.
 
 **`StateGone` is separable.** The `Watch`→`Wait` change stands on its own;
 `StateGone` is a small refinement the loader wants so it can garbage-collect
