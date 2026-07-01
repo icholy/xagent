@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
@@ -118,14 +117,6 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("org member added", "org_id", caller.OrgID, "user_id", user.ID, "email", req.Email)
-	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "added", Type: "org_members"}},
-		OrgID:     caller.OrgID,
-		UserID:    caller.ID,
-		ClientID:  caller.ClientID,
-		Time:      time.Now(),
-	})
 	return &xagentv1.AddOrgMemberResponse{
 		Member: &xagentv1.OrgMember{
 			OrgId:  member.OrgID,
@@ -156,14 +147,6 @@ func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMem
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("org member removed", "org_id", caller.OrgID, "user_id", req.UserId)
-	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "removed", Type: "org_members"}},
-		OrgID:     caller.OrgID,
-		UserID:    caller.ID,
-		ClientID:  caller.ClientID,
-		Time:      time.Now(),
-	})
 	return &xagentv1.RemoveOrgMemberResponse{}, nil
 }
 

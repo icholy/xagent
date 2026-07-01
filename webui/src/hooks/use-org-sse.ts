@@ -7,9 +7,6 @@ import {
   listExternalEvents,
   listEventsByTask,
   getEvent,
-  listWorkspaces,
-  listOrgMembers,
-  listKeys,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { useNotificationSSE } from '@/lib/services'
 import type { Notification, NotificationResource } from '@/lib/notification-sse'
@@ -60,21 +57,6 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
           input: { id: BigInt(r.id) },
           cardinality: 'finite',
         }),
-      })
-      break
-    case 'workspaces':
-      qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listWorkspaces, cardinality: 'finite' }),
-      })
-      break
-    case 'org_members':
-      qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listOrgMembers, cardinality: 'finite' }),
-      })
-      break
-    case 'keys':
-      qc.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listKeys, cardinality: 'finite' }),
       })
       break
     default:

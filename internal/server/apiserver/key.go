@@ -43,14 +43,6 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("key created", "id", key.ID, "org_id", caller.OrgID)
-	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "created", Type: "keys"}},
-		OrgID:     caller.OrgID,
-		UserID:    caller.ID,
-		ClientID:  caller.ClientID,
-		Time:      time.Now(),
-	})
 	return &xagentv1.CreateKeyResponse{
 		Key:      key.Proto(),
 		RawToken: rawKey,
@@ -80,13 +72,5 @@ func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("key deleted", "id", req.Id)
-	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "deleted", Type: "keys"}},
-		OrgID:     caller.OrgID,
-		UserID:    caller.ID,
-		ClientID:  caller.ClientID,
-		Time:      time.Now(),
-	})
 	return &xagentv1.DeleteKeyResponse{}, nil
 }

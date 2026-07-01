@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
@@ -33,14 +32,6 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "org_id", caller.OrgID, "count", len(req.Workspaces))
-	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "registered", Type: "workspaces"}},
-		OrgID:     caller.OrgID,
-		UserID:    caller.ID,
-		ClientID:  caller.ClientID,
-		Time:      time.Now(),
-	})
 	return &xagentv1.RegisterWorkspacesResponse{}, nil
 }
 
@@ -72,13 +63,5 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 		}
 		s.log.Info("workspaces cleared", "org_id", caller.OrgID)
 	}
-	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "cleared", Type: "workspaces"}},
-		OrgID:     caller.OrgID,
-		UserID:    caller.ID,
-		ClientID:  caller.ClientID,
-		Time:      time.Now(),
-	})
 	return &xagentv1.ClearWorkspacesResponse{}, nil
 }
