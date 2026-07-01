@@ -266,9 +266,18 @@ already-exited (not-yet-removed) container's stored exit status immediately,
 which is exactly what closes the launch→persist race without `launchMu`. A single
 `select` must always drain one channel — the SDK's `resultC` is unbuffered, so a
 returned-but-undrained result would leak the SDK's wait goroutine (its bare
-`resultC <- res` send is not ctx-aware). The `xagent`/`xagent.runner` labels stay
-(they still scope name-adoption in `ensure`, `docker.go:99`), but no id filtering
-is needed since the runner only ever `Wait`s on handles it persisted.
+`resultC <- res` send is not ctx-aware). No id filtering is needed since the
+runner only ever `Wait`s on handles it persisted.
+
+`ensure` (`docker.go:99`) is also simplified: the deterministic-name adoption
+block (`docker.go:113-120`) is **removed**. `Start` reuses a container only via
+the handle id recorded in the statefile — it never re-discovers a container by
+its `xagent-{taskID}` name. The name is still assigned at `create` (readability,
+and it makes a name conflict *fail* the create, which prevents a second driver
+from being launched for a task whose sandbox the runner has lost track of), and
+the `xagent`/`xagent.runner` labels stay — but both now serve tooling and a
+future orphan-scanner, not adoption. Reclaiming a container leaked by a crash in
+the launch→persist window is explicitly out of scope (see Open Questions).
 
 **Lambda** (`lambdamicrovm.go`). The per-handle `Wait` *is* today's per-VM
 `stream()` loop (`lambdamicrovm.go:590-634`), lifted to the top level and given
@@ -361,11 +370,20 @@ loader retaining a record (and re-`Probe`ing a 404) for each terminated VM until
 
 ## Open Questions
 
-1. **Orphan race is unchanged.** A crash between `Launch` (the VM/container is
-   started inside it) and the post-`Launch` `store.Write` still leaks a sandbox
-   the runner has no record of. This proposal does not fix it; it remains bounded
-   by name-adoption (Docker `ensure`, `docker.go:114`) and `max_duration`
-   (Lambda). Same as today.
+1. **Orphan reclamation is explicitly deferred.** A crash between `Launch` (the
+   VM/container is started inside it) and the post-`Launch` `store.Write` leaks a
+   sandbox the runner has no record of. `Start` adopts **only** the handle id in
+   the statefile — Docker's deterministic-name adoption is removed
+   (`docker.go:113-120`), because re-discovering a container by name risks
+   adopting the wrong one and can silently resume a sandbox whose state the runner
+   never recorded. So neither backend self-heals a leaked sandbox now: Docker
+   leaks a container (a same-name `create` conflict simply fails the launch,
+   preventing a duplicate driver), Lambda leaks a VM billed until `max_duration`
+   (no id, no owner-scoped list — #1088). There is no good way to reclaim these
+   safely inline, so it is left unhandled here. A future **orphan-scanner** —
+   enumerating leaked sandboxes (Docker by `xagent`/`xagent.runner` label; Lambda
+   by `ListMicrovms` within a single-tenant scope) and reaping those with no
+   statefile record — is the intended fix, tracked separately.
 
 2. **Hot-orphan window + `idlePolicy`** (from #1091 OQ1). Suspend-on-exit is
    runner-driven (the guest holds no AWS creds), so a runner dying *after*
