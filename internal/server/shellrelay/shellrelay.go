@@ -44,9 +44,22 @@ var (
 type Registry struct {
 	log              *slog.Logger
 	establishTimeout time.Duration
+	onClose          func(session string, orgID int64)
 
 	mu       sync.Mutex
 	sessions map[string]*session
+}
+
+// Option configures a Registry.
+type Option func(*Registry)
+
+// WithOnClose registers a hook invoked once when a session tears down (for any
+// reason: normal exit, a dropped leg, the establishment timeout, or registry
+// shutdown). The server uses it to clear the task's shell_session so a later
+// restart is a normal agent run — neither the driver nor the runner writes that
+// field, so the server owns clearing it here, tied to the shell's own lifecycle.
+func WithOnClose(fn func(session string, orgID int64)) Option {
+	return func(r *Registry) { r.onClose = fn }
 }
 
 // session holds the two legs of a rendezvous plus its lifecycle state. All
@@ -70,18 +83,22 @@ type session struct {
 // NewRegistry creates a session registry. establishTimeout <= 0 falls back to
 // DefaultEstablishTimeout. Tests inject a small timeout to exercise the
 // establishment-timeout path without sleeping the real default.
-func NewRegistry(log *slog.Logger, establishTimeout time.Duration) *Registry {
+func NewRegistry(log *slog.Logger, establishTimeout time.Duration, opts ...Option) *Registry {
 	if log == nil {
 		log = slog.Default()
 	}
 	if establishTimeout <= 0 {
 		establishTimeout = DefaultEstablishTimeout
 	}
-	return &Registry{
+	r := &Registry{
 		log:              log,
 		establishTimeout: establishTimeout,
 		sessions:         make(map[string]*session),
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // Seed registers a new rendezvous session owned by orgID and starts the
@@ -168,6 +185,9 @@ func (r *Registry) teardown(s *session, reason string) {
 		}
 		if attach != nil {
 			attach.Close(websocket.StatusNormalClosure, reason)
+		}
+		if r.onClose != nil {
+			r.onClose(s.id, s.orgID)
 		}
 		r.log.Debug("shell session torn down", "session", s.id, "reason", reason)
 	})

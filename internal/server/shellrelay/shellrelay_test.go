@@ -253,3 +253,29 @@ func TestSeedRejectsDuplicate(t *testing.T) {
 	// Assert
 	assert.ErrorContains(t, err, "already exists")
 }
+
+func TestOnCloseFiresOnTeardown(t *testing.T) {
+	t.Parallel()
+	// Arrange: a registry with an onClose hook.
+	type closeCall struct {
+		session string
+		orgID   int64
+	}
+	closed := make(chan closeCall, 4)
+	reg := shellrelay.NewRegistry(nil, time.Minute, shellrelay.WithOnClose(func(session string, orgID int64) {
+		closed <- closeCall{session: session, orgID: orgID}
+	}))
+	assert.NilError(t, reg.Seed("s1", testOrg))
+
+	// Act: tearing the session down fires the hook.
+	reg.Close()
+
+	// Assert: onClose fired once with the session id and owning org.
+	select {
+	case c := <-closed:
+		assert.Equal(t, c.session, "s1")
+		assert.Equal(t, c.orgID, testOrg)
+	case <-time.After(time.Second):
+		t.Fatal("onClose was not called on teardown")
+	}
+}

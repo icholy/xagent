@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"crypto/ed25519"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
@@ -55,7 +57,17 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	shell := shellrelay.NewRegistry(log, shellrelay.DefaultEstablishTimeout)
+	// When a shell rendezvous tears down, clear the task's shell_session so a
+	// later restart is a normal agent run. The relay observes teardown; the
+	// server owns the field.
+	shell := shellrelay.NewRegistry(log, shellrelay.DefaultEstablishTimeout,
+		shellrelay.WithOnClose(func(session string, orgID int64) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := opts.Store.ClearShellSession(ctx, nil, session, orgID); err != nil {
+				log.Warn("failed to clear shell_session on teardown", "session", session, "error", err)
+			}
+		}))
 	apiOpts := apiserver.Options{
 		Log:       log,
 		Store:     opts.Store,

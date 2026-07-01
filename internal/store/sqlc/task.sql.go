@@ -10,6 +10,22 @@ import (
 	"time"
 )
 
+const clearShellSession = `-- name: ClearShellSession :exec
+UPDATE tasks
+SET shell_session = ''
+WHERE shell_session = $1 AND org_id = $2
+`
+
+type ClearShellSessionParams struct {
+	ShellSession string `json:"shell_session"`
+	OrgID        int64  `json:"org_id"`
+}
+
+func (q *Queries) ClearShellSession(ctx context.Context, arg ClearShellSessionParams) error {
+	_, err := q.db.ExecContext(ctx, clearShellSession, arg.ShellSession, arg.OrgID)
+	return err
+}
+
 const createTask = `-- name: CreateTask :one
 INSERT INTO tasks (name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)

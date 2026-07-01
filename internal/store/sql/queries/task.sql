@@ -31,6 +31,11 @@ UPDATE tasks
 SET name = $1, runner = $2, workspace = $3, status = $4, command = $5, version = $6, updated_at = $7, archived = $8, auto_archive = $9, shell_session = $10
 WHERE id = $11 AND org_id = $12;
 
+-- name: ClearShellSession :exec
+UPDATE tasks
+SET shell_session = ''
+WHERE shell_session = $1 AND org_id = $2;
+
 -- name: ListTasksDueForArchive :many
 SELECT id, version, org_id
 FROM tasks
