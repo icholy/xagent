@@ -11,23 +11,24 @@ import (
 )
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO tasks (name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id
 `
 
 type CreateTaskParams struct {
-	Name        string    `json:"name"`
-	Runner      string    `json:"runner"`
-	Workspace   string    `json:"workspace"`
-	Status      int32     `json:"status"`
-	Command     int32     `json:"command"`
-	Version     int64     `json:"version"`
-	OrgID       int64     `json:"org_id"`
-	Archived    bool      `json:"archived"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	AutoArchive int64     `json:"auto_archive"`
+	Name         string    `json:"name"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
+	Version      int64     `json:"version"`
+	OrgID        int64     `json:"org_id"`
+	Archived     bool      `json:"archived"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	AutoArchive  int64     `json:"auto_archive"`
+	ShellSession string    `json:"shell_session"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, error) {
@@ -43,6 +44,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, 
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.AutoArchive,
+		arg.ShellSession,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -64,7 +66,7 @@ func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
 FROM tasks
 WHERE id = $1 AND org_id = $2
 `
@@ -90,12 +92,13 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AutoArchive,
+		&i.ShellSession,
 	)
 	return i, err
 }
 
 const getTaskForUpdate = `-- name: GetTaskForUpdate :one
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
 FROM tasks
 WHERE id = $1 AND org_id = $2
 FOR UPDATE
@@ -122,12 +125,13 @@ func (q *Queries) GetTaskForUpdate(ctx context.Context, arg GetTaskForUpdatePara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AutoArchive,
+		&i.ShellSession,
 	)
 	return i, err
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
 FROM tasks
 WHERE archived = FALSE AND org_id = $1
 ORDER BY created_at DESC
@@ -155,6 +159,7 @@ func (q *Queries) ListTasks(ctx context.Context, orgID int64) ([]Task, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.AutoArchive,
+			&i.ShellSession,
 		); err != nil {
 			return nil, err
 		}
@@ -211,7 +216,7 @@ func (q *Queries) ListTasksDueForArchive(ctx context.Context, limit int32) ([]Li
 }
 
 const listTasksForRunner = `-- name: ListTasksForRunner :many
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
 FROM tasks
 WHERE runner = $1 AND org_id = $2 AND command != 0 AND archived = FALSE
 ORDER BY created_at DESC
@@ -244,6 +249,7 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.AutoArchive,
+			&i.ShellSession,
 		); err != nil {
 			return nil, err
 		}
@@ -260,22 +266,23 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 
 const updateTask = `-- name: UpdateTask :exec
 UPDATE tasks
-SET name = $1, runner = $2, workspace = $3, status = $4, command = $5, version = $6, updated_at = $7, archived = $8, auto_archive = $9
-WHERE id = $10 AND org_id = $11
+SET name = $1, runner = $2, workspace = $3, status = $4, command = $5, version = $6, updated_at = $7, archived = $8, auto_archive = $9, shell_session = $10
+WHERE id = $11 AND org_id = $12
 `
 
 type UpdateTaskParams struct {
-	Name        string    `json:"name"`
-	Runner      string    `json:"runner"`
-	Workspace   string    `json:"workspace"`
-	Status      int32     `json:"status"`
-	Command     int32     `json:"command"`
-	Version     int64     `json:"version"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Archived    bool      `json:"archived"`
-	AutoArchive int64     `json:"auto_archive"`
-	ID          int64     `json:"id"`
-	OrgID       int64     `json:"org_id"`
+	Name         string    `json:"name"`
+	Runner       string    `json:"runner"`
+	Workspace    string    `json:"workspace"`
+	Status       int32     `json:"status"`
+	Command      int32     `json:"command"`
+	Version      int64     `json:"version"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Archived     bool      `json:"archived"`
+	AutoArchive  int64     `json:"auto_archive"`
+	ShellSession string    `json:"shell_session"`
+	ID           int64     `json:"id"`
+	OrgID        int64     `json:"org_id"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {
@@ -289,6 +296,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) error {
 		arg.UpdatedAt,
 		arg.Archived,
 		arg.AutoArchive,
+		arg.ShellSession,
 		arg.ID,
 		arg.OrgID,
 	)

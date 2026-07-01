@@ -12,17 +12,18 @@ import (
 func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	now := time.Now().UTC()
 	id, err := s.q(tx).CreateTask(ctx, sqlc.CreateTaskParams{
-		Name:        task.Name,
-		Runner:      task.Runner,
-		Workspace:   task.Workspace,
-		Status:      int32(task.Status),
-		Command:     int32(task.Command),
-		Version:     task.Version,
-		OrgID:       task.OrgID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		Archived:    task.Archived,
-		AutoArchive: task.AutoArchive.Microseconds(),
+		Name:         task.Name,
+		Runner:       task.Runner,
+		Workspace:    task.Workspace,
+		Status:       int32(task.Status),
+		Command:      int32(task.Command),
+		Version:      task.Version,
+		OrgID:        task.OrgID,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		Archived:     task.Archived,
+		AutoArchive:  task.AutoArchive.Microseconds(),
+		ShellSession: task.ShellSession,
 	})
 	if err != nil {
 		return err
@@ -77,17 +78,18 @@ func (s *Store) ListTasksForRunner(ctx context.Context, tx *sql.Tx, runner strin
 func (s *Store) UpdateTask(ctx context.Context, tx *sql.Tx, task *model.Task) error {
 	task.UpdatedAt = time.Now().UTC()
 	return s.q(tx).UpdateTask(ctx, sqlc.UpdateTaskParams{
-		Name:        task.Name,
-		Runner:      task.Runner,
-		Workspace:   task.Workspace,
-		Status:      int32(task.Status),
-		Command:     int32(task.Command),
-		Version:     task.Version,
-		UpdatedAt:   task.UpdatedAt,
-		Archived:    task.Archived,
-		AutoArchive: task.AutoArchive.Microseconds(),
-		ID:          task.ID,
-		OrgID:       task.OrgID,
+		Name:         task.Name,
+		Runner:       task.Runner,
+		Workspace:    task.Workspace,
+		Status:       int32(task.Status),
+		Command:      int32(task.Command),
+		Version:      task.Version,
+		UpdatedAt:    task.UpdatedAt,
+		Archived:     task.Archived,
+		AutoArchive:  task.AutoArchive.Microseconds(),
+		ShellSession: task.ShellSession,
+		ID:           task.ID,
+		OrgID:        task.OrgID,
 	})
 }
 
@@ -122,18 +124,19 @@ func (s *Store) DeleteTask(ctx context.Context, tx *sql.Tx, id int64, orgID int6
 
 func toModelTask(row sqlc.Task) (*model.Task, error) {
 	return &model.Task{
-		ID:          row.ID,
-		Name:        row.Name,
-		Runner:      row.Runner,
-		Workspace:   row.Workspace,
-		Status:      model.TaskStatus(row.Status),
-		Command:     model.TaskCommand(row.Command),
-		Version:     row.Version,
-		OrgID:       row.OrgID,
-		Archived:    row.Archived,
-		CreatedAt:   row.CreatedAt,
-		UpdatedAt:   row.UpdatedAt,
-		AutoArchive: time.Duration(row.AutoArchive) * time.Microsecond,
+		ID:           row.ID,
+		Name:         row.Name,
+		Runner:       row.Runner,
+		Workspace:    row.Workspace,
+		Status:       model.TaskStatus(row.Status),
+		Command:      model.TaskCommand(row.Command),
+		Version:      row.Version,
+		OrgID:        row.OrgID,
+		Archived:     row.Archived,
+		CreatedAt:    row.CreatedAt,
+		UpdatedAt:    row.UpdatedAt,
+		AutoArchive:  time.Duration(row.AutoArchive) * time.Microsecond,
+		ShellSession: row.ShellSession,
 	}, nil
 }
 

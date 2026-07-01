@@ -176,7 +176,8 @@ CREATE TABLE public.tasks (
     archived boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    auto_archive bigint DEFAULT 0 NOT NULL
+    auto_archive bigint DEFAULT 0 NOT NULL,
+    shell_session text DEFAULT ''::text NOT NULL
 );
 
 
@@ -595,4 +596,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260614000002'),
     ('20260614000003'),
     ('20260621000001'),
-    ('20260621000002');
+    ('20260621000002'),
+    ('20260701000001');

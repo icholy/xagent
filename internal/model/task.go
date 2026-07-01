@@ -72,6 +72,11 @@ type Task struct {
 	// AutoArchive controls auto-archive after the task reaches a terminal
 	// status. 0 = never (default); <0 = archive immediately; >0 = delay.
 	AutoArchive time.Duration `json:"auto_archive,omitempty"`
+	// ShellSession is the rendezvous session id for a driver reverse-shell run.
+	// Non-empty => this sandbox run is a shell for that session; empty => normal
+	// agent run. Persistent and server-owned (see
+	// proposals/draft/driver-reverse-shell.md). Inert for now — no consumers yet.
+	ShellSession string `json:"shell_session,omitempty"`
 }
 
 // ScopeAttr returns the authscope attributes describing this task, for the
@@ -89,18 +94,19 @@ func (t *Task) ScopeAttr() []authscope.Attr {
 // Proto converts a Task to its protobuf representation.
 func (t *Task) Proto(baseURL string) *xagentv1.Task {
 	return &xagentv1.Task{
-		Id:          t.ID,
-		Name:        t.Name,
-		Runner:      t.Runner,
-		Workspace:   t.Workspace,
-		Status:      xagentv1.TaskStatus(t.Status),
-		Command:     xagentv1.TaskCommand(t.Command),
-		Version:     t.Version,
-		Archived:    t.Archived,
-		Url:         TaskURL(baseURL, t.ID, t.OrgID),
-		CreatedAt:   timestamppb.New(t.CreatedAt),
-		UpdatedAt:   timestamppb.New(t.UpdatedAt),
-		AutoArchive: durationpb.New(t.AutoArchive),
+		Id:           t.ID,
+		Name:         t.Name,
+		Runner:       t.Runner,
+		Workspace:    t.Workspace,
+		Status:       xagentv1.TaskStatus(t.Status),
+		Command:      xagentv1.TaskCommand(t.Command),
+		Version:      t.Version,
+		Archived:     t.Archived,
+		Url:          TaskURL(baseURL, t.ID, t.OrgID),
+		CreatedAt:    timestamppb.New(t.CreatedAt),
+		UpdatedAt:    timestamppb.New(t.UpdatedAt),
+		AutoArchive:  durationpb.New(t.AutoArchive),
+		ShellSession: t.ShellSession,
 		Actions: &xagentv1.TaskActions{
 			Archive:   t.CanArchive(),
 			Unarchive: t.CanUnarchive(),
@@ -121,17 +127,18 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		updatedAt = pb.UpdatedAt.AsTime()
 	}
 	return &Task{
-		ID:          pb.Id,
-		Name:        pb.Name,
-		Runner:      pb.Runner,
-		Workspace:   pb.Workspace,
-		Status:      TaskStatus(pb.Status),
-		Command:     TaskCommand(pb.Command),
-		Version:     pb.Version,
-		Archived:    pb.Archived,
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
-		AutoArchive: pb.AutoArchive.AsDuration(),
+		ID:           pb.Id,
+		Name:         pb.Name,
+		Runner:       pb.Runner,
+		Workspace:    pb.Workspace,
+		Status:       TaskStatus(pb.Status),
+		Command:      TaskCommand(pb.Command),
+		Version:      pb.Version,
+		Archived:     pb.Archived,
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
+		AutoArchive:  pb.AutoArchive.AsDuration(),
+		ShellSession: pb.ShellSession,
 	}
 }
 

@@ -109,6 +109,10 @@ message Task {
   //   negative:        archive immediately on terminal status
   //   positive:        archive that long after reaching terminal status
   google.protobuf.Duration auto_archive = 15;
+  // Non-empty => this sandbox run is a reverse shell for this rendezvous
+  // session id (see proposals/draft/driver-reverse-shell.md). Empty => normal
+  // agent run. Persistent and server-owned; the runner never touches it.
+  string shell_session = 16;
 }
 
 message McpServer {
