@@ -243,14 +243,17 @@ except that the loader may drop the record when the task is terminal.
 
 ```go
 func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode, error) {
-    okCh, errCh := b.docker.ContainerWait(ctx, h.ID, container.WaitConditionNextExit)
+    // WaitConditionNotRunning is level-triggered: the daemon returns the stored
+    // exit code immediately if the container has already stopped. This is what
+    // closes the launch→persist race (and the boot Probe→Wait TOCTOU) without a
+    // manual inspect. WaitConditionNextExit is edge-triggered and would block
+    // forever on a container that already exited before this call.
+    okCh, errCh := b.docker.ContainerWait(ctx, h.ID, container.WaitConditionNotRunning)
     select {
     case <-ctx.Done():
         return 0, ctx.Err()
-    case err := <-errCh:
-        if cerrdefs.IsNotFound(err) {
-            return -1, nil // container gone: report lost
-        }
+    case <-errCh:
+        // Removed (NotFound) or a wait error: no code to recover → report lost.
         return -1, nil
     case res := <-okCh:
         return backend.ExitCode(res.StatusCode), nil
@@ -258,9 +261,12 @@ func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode,
 }
 ```
 
-`ContainerWait` re-attaches to an already-exited (not-yet-removed) container and
-returns its stored exit status immediately — which is exactly what closes the
-launch→persist race without `launchMu`. The `xagent`/`xagent.runner` labels stay
+`WaitConditionNotRunning` re-derives liveness from the handle: it returns an
+already-exited (not-yet-removed) container's stored exit status immediately,
+which is exactly what closes the launch→persist race without `launchMu`. A single
+`select` must always drain one channel — the SDK's `resultC` is unbuffered, so a
+returned-but-undrained result would leak the SDK's wait goroutine (its bare
+`resultC <- res` send is not ctx-aware). The `xagent`/`xagent.runner` labels stay
 (they still scope name-adoption in `ensure`, `docker.go:99`), but no id filtering
 is needed since the runner only ever `Wait`s on handles it persisted.
 
