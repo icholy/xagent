@@ -1,0 +1,374 @@
+# Per-handle `Backend.Wait` (task-oriented exit observation)
+
+Issue: https://github.com/icholy/xagent/issues/1089
+
+## Problem
+
+The runner backend observes sandbox exits through a **fleet-oriented** model: one
+long-lived `Backend.Watch(ctx, func(HandleExit))` stream emits exits keyed by an
+opaque handle *id*, and the runner reverse-resolves each id back to a task via
+`taskstate.Store.ByID` (`runner.go:494-526`, `taskstate.go:168`). The Docker
+backend gets that stream for free from `docker events` (`docker.go:309`). The
+Lambda backend has no equivalent, so `lambdamicrovm.Watch` *manufactures* one:
+list all MicroVMs, tag-filter to find its own, keep an SSE stream per VM, and
+dedup exits across streams with `watcher.{streams,states,reported}`
+(`lambdamicrovm.go:442-544`).
+
+Per #1088 (bug 1), that discovery is **unimplementable against the real Lambda
+MicroVMs API**: `run-microvm` takes no tags, `get`/`list-microvms` return no
+tags, and a running MicroVM is not a taggable resource — so `Watch`'s tag filter
+(`lambdamicrovm.go:497`) matches nothing in production. The runner never learns
+of a driver exit, never suspends, never reconciles. `list-microvms` items also
+carry no `endpoint`, so even a "discovered" VM can't be streamed without a
+`GetMicrovm` per id. There is **no owner-scoped fleet query at all**.
+
+#1089 / #1091 resolve this by introducing a live `Sandbox` object per task, with
+`Backend.Marshal`/`Unmarshal` and a per-sandbox blocking `Wait`. This proposal
+reaches the same end state with a **much smaller** interface change: replace the
+fleet `Watch` with a per-handle blocking `Wait`, and keep the existing `Handle`,
+`Launch`, and `Probe` exactly as they are.
+
+## Design
+
+### The reframing
+
+- **Old (fleet):** one `Watch` stream → N opaque ids → reverse-resolve id→task.
+- **New (task):** N `Backend.Wait(ctx, handle)` calls, each in its own goroutine
+  that *already knows its task id* (the runner spawned it).
+
+The enabling invariant is unchanged from #1089: the runner-local `taskstate`
+statefile is the only owner-scoped enumeration of this runner's sandboxes that
+exists. Docker *could* enumerate via labels; Lambda *cannot*. So the statefile
+enumerates, and the runtime answers **liveness per id only** — never as an
+enumerator.
+
+The insight that shrinks the interface: `backend.Handle{Type, ID, Data}`
+(`backend.go:31`) is **already** the serializable identity #1089 wants to
+`Marshal` out of a live `Sandbox`, and it is **already** what
+`taskstate.Record{TaskID, Type, ID, Data}` persists (`taskstate.go:26`). So no
+`Sandbox` object, no `Marshal`/`Unmarshal`: `Wait` is a plain method that takes
+the persisted `Handle`, and its transient state (SSE stream, auth token, backoff)
+lives on the `Wait` call's own stack for the duration of the one call.
+
+### The interface change
+
+The whole backend-surface delta is one method on `backend.Backend`
+(`backend.go:96`):
+
+```go
+// delete:
+Watch(ctx context.Context, handle func(HandleExit)) error
+
+// add:
+// Wait blocks until the sandbox identified by h reaches a terminal outcome,
+// returning exactly once. It swallows transient failures internally (SSE drops,
+// token re-mint, reconnect/arbitrate, backoff). For Lambda it performs the
+// suspend-on-driver-exit before returning. It is safe to call on a sandbox this
+// process did not start (re-attach after a restart).
+Wait(ctx context.Context, h Handle) (ExitCode, error)
+```
+
+Everything else on `Backend` stays: `ValidateWorkspace`, `Launch(ctx, spec,
+reuse)`, `Probe(ctx, h)`, `Signal(ctx, h)`, `Destroy(ctx, h)`, `Close`.
+
+Deleted from `backend.go`:
+
+- `HandleExit{ID, ExitCode}` (`backend.go:42`) — no id-keyed callback anymore.
+- `Exit{TaskID, ExitCode}` (`backend.go:89`) — the runner built this by resolving
+  a `HandleExit` id back to a task; the `Wait` goroutine already holds the task
+  id and the code.
+
+Kept, and load-bearing for staying smaller than #1091:
+
+- `Handle{Type, ID, Data}` — unchanged; already the value-typed identity.
+- The `Sandbox{TaskID, State}` struct (`backend.go:80`) — the runner-composed
+  point-in-time view used by `List`/`Prune`. Because we introduce **no** `Sandbox`
+  *interface*, the name collision #1091 flags in its "interface details
+  unresolved" section never arises.
+
+`ExitCode` becomes a named type carrying the existing driver-owned-events
+invariant (today an `int` on `HandleExit`/`Exit`):
+
+```go
+// ExitCode reports why a sandbox stopped. 0 means the driver reported its own
+// terminal outcome to the C2 (no runner event owed); non-zero (e.g. -1) means
+// the report was lost and the runner must emit "failed" on the driver's behalf.
+type ExitCode int
+```
+
+### The `Wait` contract
+
+`Wait` returns **exactly once**, and its `error` return has exactly one meaning:
+
+1. **Terminal, driver reported** → `(0, nil)`. For Lambda, `Wait` performs the
+   suspend (preserve disk, stop compute) *before* returning; the orchestrator only
+   ever sees an exited/preserved sandbox, Docker-identically.
+2. **Terminal, report lost** → `(-1, nil)` (stream gone and the control plane says
+   the sandbox is non-running/terminal; VM reaped by `max_duration`; container
+   removed). A rehydrated-already-dead sandbox returns this immediately.
+3. **Runner shutting down** → `(_, ctx.Err())` where
+   `errors.Is(err, context.Canceled)`. This means *the runner stopped watching*,
+   **not** that the sandbox stopped running. The sandbox keeps running and is
+   rehydrated next boot; the controller must **not** emit `failed`.
+
+A well-behaved backend returns a non-nil `error` **only** for outcome 3.
+Unrecoverable runtime conditions are expressed as the `(-1, nil)` report-lost
+outcome, not as an error, so the runner never has to guess whether a non-cancel
+error left the sandbox alive.
+
+### Runner: a controller per running sandbox
+
+The runner holds `map[taskID]*controller` under a mutex; a controller exists
+**iff** the sandbox is running on this runner. It is created right after `Launch`
+persists, and removed when `Wait` returns a terminal outcome (1 or 2):
+
+```go
+func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) {
+    code, err := r.backend.Wait(ctx, h)
+    if errors.Is(err, context.Canceled) {
+        return // shutdown: leave the sandbox alive for next-boot rehydration
+    }
+    r.mu.Lock()
+    delete(r.controllers, taskID)
+    r.mu.Unlock()
+    r.sem.Release(1)
+    r.wake.Wake()
+    if code != 0 {
+        // report lost — "failed" is the honest outcome (driver-owned-events).
+        r.queue.Enqueue(model.RunnerEvent{TaskID: taskID, Event: model.RunnerEventFailed})
+    }
+}
+```
+
+This map is the runner's authoritative "what's running here", which **deletes
+most `Probe` RPCs on the live path**: the `Running(taskID)` check
+(`runner.go:313`) and `Start`'s already-running check (`runner.go:450-461`)
+become in-memory map lookups. `Probe` shrinks to a startup-only role (below).
+
+`Start` (`runner.go:445`) reorders to: resolve reuse → `Launch` → `store.Write`
+→ register controller → `go supervise`. Because `Wait` is spawned **after** the
+record is persisted and is level-triggered (it re-derives liveness from the
+handle), an exit in the launch→persist window is not lost, and the controller
+already knows its task — so:
+
+- `launchMu` (`runner.go:39`) is **deleted**. It existed only to serialize
+  `Launch`+`Write` against `Monitor`'s `store.ByID`; there is no reverse lookup
+  and no global watcher to race against anymore.
+- `taskstate.Store.ByID` (`taskstate.go:168`) is **deleted** — nothing resolves
+  id→task.
+
+### Restart / rehydration: the loader
+
+A `Load` step runs once at boot, *before* `Poll` admits new work. It folds
+together today's `Reconcile` (`runner.go:255`) and the global `Monitor`
+goroutine (`command/runner.go:221-237`): the statefile enumerates, the runtime
+answers liveness per id, and every running sandbox gets the same per-handle
+controller as the live path.
+
+```go
+func (r *Runner) Load(ctx context.Context) error {
+    recs, err := r.store.List()
+    if err != nil {
+        return err
+    }
+    var running int64
+    for _, rec := range recs {
+        h := backend.Handle{Type: rec.Type, ID: rec.ID, Data: rec.Data}
+        st, err := r.backend.Probe(ctx, h)
+        if err != nil {
+            r.log.Error("load: probe", "task", rec.TaskID, "error", err)
+            continue
+        }
+        switch st {
+        case backend.StateRunning: // container up / VM RUNNING
+            r.track(rec.TaskID, h)
+            go r.supervise(ctx, rec.TaskID, h) // Wait RE-ATTACHES
+            running++
+        case backend.StateExited: // stopped container / SUSPENDED VM (husk preserved)
+            r.failIfTaskRunning(ctx, rec.TaskID) // lost-report backstop
+        case backend.StateGone: // removed / TERMINATED — nothing to resume
+            r.failIfTaskRunning(ctx, rec.TaskID)
+            r.dropIfTaskTerminal(ctx, rec.TaskID)
+        }
+    }
+    r.sem.Set(running) // may exceed capacity; that's fine
+    return nil
+}
+```
+
+`command/runner.go` then calls `r.Load(ctx)` at startup and **deletes** the
+`go r.Monitor(ctx)` goroutine (`command/runner.go:221-232`) and the standalone
+`r.Reconcile(ctx)` call (`command/runner.go:235-237`). Probe-then-branch is
+preferred over "spawn `Wait` for everything": it yields a synchronous
+running-count for the semaphore and avoids opening a doomed SSE stream per dead
+VM.
+
+### New `StateGone`
+
+The loader needs to distinguish an **exited husk** (state preserved, resumable —
+a stopped container or a `SUSPENDED` VM) from a sandbox that is truly **gone**
+(removed container / `TERMINATED` VM). With only `StateExited` today
+(`backend.go:71`), the two are conflated, so the loader can't safely drop a
+record: dropping the record for a still-`SUSPENDED` VM would leak a billable husk
+it can no longer `Destroy`. Add:
+
+```go
+const (
+    StateUnknown State = iota
+    StateRunning
+    StateExited // husk preserved: stopped container / SUSPENDED VM
+    StateGone   // removed container / TERMINATED VM — nothing to resume or destroy
+)
+```
+
+- Docker `Probe` (`docker.go:239`): container `NotFound` → `StateGone` (was
+  `StateExited`); `exited`/`dead` → `StateExited`.
+- Lambda `Probe` (`lambdamicrovm.go:311`): `TERMINATED` / `IsNotFound` →
+  `StateGone`; `SUSPENDING`/`SUSPENDED` → `StateExited`;
+  `RUNNING`/`PENDING` → `StateRunning`.
+
+`List`/`Prune`/`Start`'s reuse resolution treat `StateGone` like `StateExited`
+except that the loader may drop the record when the task is terminal.
+
+### Backend implementations
+
+**Docker** (`docker.go`). `Watch` is replaced by:
+
+```go
+func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode, error) {
+    okCh, errCh := b.docker.ContainerWait(ctx, h.ID, container.WaitConditionNextExit)
+    select {
+    case <-ctx.Done():
+        return 0, ctx.Err()
+    case err := <-errCh:
+        if cerrdefs.IsNotFound(err) {
+            return -1, nil // container gone: report lost
+        }
+        return -1, nil
+    case res := <-okCh:
+        return backend.ExitCode(res.StatusCode), nil
+    }
+}
+```
+
+`ContainerWait` re-attaches to an already-exited (not-yet-removed) container and
+returns its stored exit status immediately — which is exactly what closes the
+launch→persist race without `launchMu`. The `xagent`/`xagent.runner` labels stay
+(they still scope name-adoption in `ensure`, `docker.go:99`), but no id filtering
+is needed since the runner only ever `Wait`s on handles it persisted.
+
+**Lambda** (`lambdamicrovm.go`). The per-handle `Wait` *is* today's per-VM
+`stream()` loop (`lambdamicrovm.go:590-634`), lifted to the top level and given
+the handle's endpoint from `Handle.Data`:
+
+- mint token → `readStream` → on `driver-exited{code}`: `SuspendMicrovm`, return
+  `(code, nil)`;
+- on a bare drop: `arbitrate` via `GetMicrovm` — RUNNING → reconnect (sticky
+  `driver-exited` covers a gap-exit); non-running / `IsNotFound` → return
+  `(-1, nil)`;
+- `ctx` cancelled → return `ctx.Err()`.
+
+Because one `Wait` owns exactly one VM, the entire fleet-multiplexing apparatus
+is **deleted**: `watcher` and its `streams`/`states`/`reported` maps, `sweep`,
+`ensureStream`/`removeStream`/`emit`, `listAll`, the `tagRunner` constant and its
+filter, and the reconcile ticker. The sweep's real job — catch a VM that went
+terminal while disconnected — is already covered by `Wait`'s own
+drop→`GetMicrovm`→arbitrate loop plus the loader's startup `Probe`. With the
+sweep gone, `defaultReconcile` / `Options.ReconcileInterval`
+(`lambdamicrovm.go:83,137`) and the `--lambda-microvm-reconcile` flag
+(`command/runner.go:93-98`) are removed.
+
+`Signal`/`Destroy`/`Probe`/`tryResume`/`launchFresh` are unchanged. Note `Signal`
+already re-mints its own token and opens its own request (`lambdamicrovm.go:332`),
+so it does not depend on sharing state with an in-flight `Wait`.
+
+### `backend_moq.go`
+
+`//go:generate go tool moq -out backend_moq.go . Backend` (`backend.go:13`)
+regenerates for the one-method change. There is no second interface to mock (the
+`Sandbox` #1091 proposes never exists). The lambda `fakes_test.go` Cloud/Stager
+fakes are structurally unaffected; the `watcher`-specific tests in
+`lambdamicrovm_test.go` are replaced by per-handle `Wait` tests.
+
+## Trade-offs
+
+**vs. #1091's `Sandbox` interface.** Both proposals produce the *same* runner-side
+rewrite (controller map, loader folding in `Reconcile`+`Monitor`, the
+shutdown-safe `Wait` contract, elimination of `launchMu` and the lost-exit race).
+The difference is entirely in the backend surface:
+
+| | #1091 (`Sandbox`) | This proposal (`Backend.Wait`) |
+|---|---|---|
+| Interface change | new `Sandbox` interface (6 methods) + `Backend.Create`/`Marshal`/`Unmarshal` | swap one `Backend` method (`Watch`→`Wait`) |
+| Persisted identity | `Marshal(sandbox) []byte` / `Unmarshal` | `Handle{Type,ID,Data}` — already persisted as `Record.Data` |
+| `Start`/persist seam | new `Create`→`Start` split | existing `Launch(reuse)→Handle`, already returns the persistable handle |
+| Resume endpoint mutation | internal to `Sandbox.Start` | existing `Launch(reuse)→new Handle` (`tryResume`, `lambdamicrovm.go:242-250`) |
+| `Sandbox` struct collision | must be reworked/deleted | none — no `Sandbox` interface introduced |
+| Mocks | `Backend` + `Sandbox` | `Backend` only |
+
+Both `Start`/`Wait`-split justifications #1089 gives are already satisfied by the
+current `Launch(ctx, spec, reuse *Handle) (Handle, error)`: identity is
+runtime-allocated and returned to the runner (which persists it before `Wait`),
+and resume mutates the endpoint by returning a new handle at the same seam. So the
+`Sandbox` object mainly re-packages machinery that `Launch`+`Handle`+`Probe`
+already provide.
+
+**vs. a single `Backend.Run(ctx, handle, checkpoint func([]byte) error)`.** A
+blocking call that launches *and* waits, with the runner passing its store-writer
+in, also avoids a fleet stream. Rejected for the same reason #1089 rejects it:
+it buries the "started and committed" seam in a callback and makes
+start-failure-vs-exit harder to distinguish. The explicit `Launch` → persist →
+`Wait` split keeps the store write in the runner, between two backend calls,
+where the only writer lives.
+
+**Keeping `Probe` (not folding it into `Wait`).** The live path no longer needs
+`Probe` (the controller map answers "running here?"), but the loader still needs
+a synchronous per-record liveness read to seed the semaphore and to branch
+running/exited/gone. Probe-then-branch avoids opening a doomed SSE stream per
+dead VM at boot.
+
+**`StateGone` is separable.** The `Watch`→`Wait` change stands on its own;
+`StateGone` is a small refinement the loader wants so it can garbage-collect
+records for truly-gone sandboxes. It could ship in a follow-up, at the cost of the
+loader retaining a record (and re-`Probe`ing a 404) for each terminated VM until
+`Prune` clears it.
+
+## Open Questions
+
+1. **Orphan race is unchanged.** A crash between `Launch` (the VM/container is
+   started inside it) and the post-`Launch` `store.Write` still leaks a sandbox
+   the runner has no record of. This proposal does not fix it; it remains bounded
+   by name-adoption (Docker `ensure`, `docker.go:114`) and `max_duration`
+   (Lambda). Same as today.
+
+2. **Hot-orphan window + `idlePolicy`** (from #1091 OQ1). Suspend-on-exit is
+   runner-driven (the guest holds no AWS creds), so a runner dying *after*
+   driver-exit but *before* the suspend leaves a VM hot until restart re-attaches
+   `Wait`, reads a sticky-replayed `driver-exited`, and suspends. Two
+   consequences: `Wait` must be safe to re-attach to a sandbox this process did
+   not start (Docker `ContainerWait` gives this free; the Lambda shim must
+   hold/replay the last lifecycle event), and the window is bounded only by
+   `max_duration` (hours). Worth reconsidering whether omitting `idlePolicy`
+   entirely (`lambdamicrovm.go:282-287`) is right — a bounded idle-suspend is
+   arguably the correct safety net for exactly this window, even though its 600s
+   floor can't express "never auto-suspend".
+
+3. **Blob-schema drift across a binary upgrade** (from #1091 OQ2). If a future
+   `Handle.Data` layout can't be parsed by an older/newer binary, the top-level
+   `Handle.ID` / `Record.ID` (`taskstate.go:29`) is a schema-stable terminate key,
+   so `Destroy(Type, ID)` still terminates the VM/container even when `Data`
+   won't decode. Caveat to confirm: Lambda `Destroy` uses `Data`'s
+   `StageBucket`/`StageKey` for S3 cleanup (`lambdamicrovm.go:376-380`), so an
+   unparseable `Data` terminates the VM but leaks the staged bundle object. Is
+   that acceptable, or should the stage location also be schema-stable?
+
+4. **`ExitCode` type vs bare `int`.** Defining `type ExitCode int` documents the
+   "0 = reported / non-zero = lost" invariant on the type; a bare `int` matches
+   the current `HandleExit`/`Exit` fields with less churn. Minor; pick one.
+
+5. **Resume stays a `Start`-command path, not a loader path.** The loader's
+   `StateExited`-husk branch (task still `RUNNING`) is treated as **report-lost →
+   failed**, not auto-resume. Resume happens only when a `start`/`restart` command
+   drives `Start` → `Launch(reuse)` → `tryResume` (`lambdamicrovm.go:220`),
+   unchanged. Confirm this is the intended boundary and that `Wait` only ever
+   attaches to an already-up sandbox.
