@@ -100,8 +100,7 @@ later refinement.
 
 Open a shell for task `N`:
 
-1. C2 creates a rendezvous session `S` (server-side registry) and mints a
-   short-lived **ticket** for the operator.
+1. C2 creates a rendezvous session `S` (server-side registry) for the task.
 2. C2 sets `tasks.shell_session = S`, **then** issues a normal `START`/`RESTART`.
    Ordering matters: the field must be set before the sandbox boots, since the
    driver reads it once.
@@ -109,8 +108,8 @@ Open a shell for task `N`:
    driver against the preserved disk for a finished task).
 4. The re-spawned driver reads `shell_session`, forks into `runShell`, dials the
    C2 WebSocket for `S`.
-5. The operator's client dials the C2 WebSocket for `S` with its ticket; the C2
-   bridges the two.
+5. The operator's client dials the C2 WebSocket for `S`, authenticated with a
+   Bearer token (see Security); the C2 bridges the two.
 
 ```mermaid
 sequenceDiagram
@@ -120,10 +119,10 @@ sequenceDiagram
     participant Driver as Driver (in sandbox)
 
     Op->>C2: OpenShell(task_id)
-    Note over C2: create rendezvous S, mint ticket
+    Note over C2: create rendezvous S
     C2->>C2: set tasks.shell_session = S
     C2->>C2: issue command = START
-    C2-->>Op: session S + ticket
+    C2-->>Op: session S
 
     C2--)Runner: SSE notification (task changed)
     Runner->>C2: poll tasks
@@ -136,7 +135,7 @@ sequenceDiagram
     Note over Driver: shell_session set → runShell (PTY + /bin/sh)
 
     Driver->>C2: WS /shell/S/driver (task token)
-    Op->>C2: WS /shell/S/attach (ticket)
+    Op->>C2: WS /shell/S/attach (Bearer token)
     Note over C2: bridge the two streams
 
     loop interactive session
@@ -155,9 +154,10 @@ the C2 observes the rendezvous teardown and clears `shell_session` itself. Neith
 the driver nor the runner ever writes the field, so the next `START` is a plain
 agent run.
 
-The ticket is single-use, and the rendezvous has a connection-establishment
-timeout: if both legs — driver and operator — are not connected within it, the
-session is deleted and any already-connected client is disconnected.
+The rendezvous has a connection-establishment timeout: if both legs — driver and
+operator — are not connected within it, the session is deleted and any
+already-connected client is disconnected. The attach leg is single-occupancy —
+at most one operator is bridged to a session at a time.
 
 ### Transport: WebSocket on both legs, C2 as a byte-relay
 
@@ -171,12 +171,12 @@ symmetric.
 New server endpoints (alongside the existing Connect handler and the raw `/events`
 SSE endpoint in `internal/server/server.go`):
 
-- Connect RPC `OpenShell(task_id) -> {session_id, ticket}` — creates `S`, sets
-  `shell_session`, issues the lifecycle command, returns the operator ticket.
+- Connect RPC `OpenShell(task_id) -> {session_id}` — creates `S`, sets
+  `shell_session`, issues the lifecycle command, returns the session id.
 - `GET /shell/{session}/driver` (WebSocket) — the driver leg, authed with the
   task token.
-- `GET /shell/{session}/attach` (WebSocket) — the operator leg, authed with the
-  ticket.
+- `GET /shell/{session}/attach` (WebSocket) — the operator leg, authed with a
+  Bearer token; the caller's org comes from its token claims (`caller.OrgID`).
 
 **Framing** is an end-to-end contract between driver and client (the C2 does not
 parse it): **binary** WS frames, `[1-byte type][payload]`:
@@ -186,8 +186,9 @@ parse it): **binary** WS frames, `[1-byte type][payload]`:
 - `0x02 exit`   — shell exit code
 - `0x03 ping`   — keepalive
 
-The subprotocol negotiates a version and carries the ticket:
-`Sec-WebSocket-Protocol: xagent-shell.v1, <ticket>`.
+The subprotocol negotiates a version only:
+`Sec-WebSocket-Protocol: xagent-shell.v1`. Operator-leg auth is a Bearer token on
+the request, not the subprotocol.
 
 Both legs use `github.com/coder/websocket`. The session registry is in-memory,
 which assumes a single C2 instance; cross-instance rendezvous (routing both legs
@@ -208,9 +209,16 @@ implant. It runs as the driver (root inside the sandbox) and can see the repo an
 any injected tokens. It must be gated accordingly:
 
 - C2-side authorization on who may `OpenShell` for a given task/org.
-- Short-lived, single-use, session-scoped tickets for the operator leg (the
-  browser WebSocket API cannot set an `Authorization` header, so auth must ride
-  the subprotocol/ticket, not a header).
+- The operator (attach) leg reuses the existing auth system rather than a bespoke
+  credential: it authenticates with a Bearer token and takes the org from the
+  token claims (`caller.OrgID`), the same mechanism the Connect API already uses.
+  Attach is authorized iff the caller belongs to the org that owns the session's
+  task. The trust boundary is therefore the **org**: any member of the task's org
+  may attach (one at a time — the attach leg is single-occupancy). The session id
+  is not a secret — it is persisted in `shell_session` and returned by `GetTask`
+  — so access control is by org membership, not by possession of the id.
+- The driver (implant) leg is authed with the task token, bound to the session's
+  task so an authenticated driver cannot seize another task's session.
 - Audit (who attached, when) and optional session recording — free, since the C2
   is in the byte path.
 - WS ping/pong + a hard idle/max-session timeout, so a forgotten shell does not
@@ -218,12 +226,15 @@ any injected tokens. It must be gated accordingly:
 
 ### Web-FE-later, without a corner
 
-v1 can ship CLI-only, but the wire contract is frozen so the browser is just
-another client of it: WS both legs, ticket auth via subprotocol (not a header),
-**binary** frames (terminal output isn't UTF-8-safe), language-neutral
-`[type][payload]` framing (no Go-specific codec), versioned `xagent-shell.v1`,
-and a relay/driver that never know who is attached. Adding the web terminal later
-is then purely an FE task (xterm.js against `/shell/{session}/attach`).
+v1 is CLI-only and authenticates the attach leg with a Bearer token. The wire
+contract is deliberately frozen so the browser can be added later as just another
+client: WS both legs, **binary** frames (terminal output isn't UTF-8-safe),
+language-neutral `[type][payload]` framing (no Go-specific codec), versioned
+`xagent-shell.v1`, and a relay/driver that never know who is attached. The
+browser's one wrinkle — it can't set an `Authorization` header on a WebSocket —
+has a known solution (cookie auth plus an org query parameter, as other endpoints
+already do), so the web terminal stays a straightforward later addition rather
+than a corner. Working out those details is deferred.
 
 ## Trade-offs
 
@@ -242,6 +253,14 @@ is then purely an FE task (xterm.js against `/shell/{session}/attach`).
 - **WebSocket vs. Connect bidi streaming.** Connect bidi is in-framework and fine
   for a Go CLI, but `connect-web`/`grpc-web` have no browser bidi, which strands
   the wanted web terminal. WS both legs is browser-ready and symmetric.
+- **Existing auth vs. a bespoke ticket for the operator leg.** The CLI sets a
+  Bearer header, so the existing auth system already covers the operator leg; a
+  single-use ticket would add a parallel credential system for no benefit. (The
+  browser can't set that header, but it has a known cookie-based path, deferred
+  with the rest of the web work.) The cost is that the trust boundary is the org
+  (any org member may attach), not a per-session capability; given `OpenShell` is
+  itself authorized and the attach leg is single-occupancy, that is an accepted
+  simplification.
 
 ## Open Questions
 
