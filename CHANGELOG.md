@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.5.0](https://github.com/icholy/xagent/compare/v2.4.0...v2.5.0) (2026-07-01)
+
+
+### Features
+
+* add notify command for system notifications ([#1026](https://github.com/icholy/xagent/issues/1026)) ([5536efb](https://github.com/icholy/xagent/commit/5536efb2309f8d5a2d5731798fcaeaf10b386748))
+* **awsmicrovm:** add CreateMicrovmAuthToken and proxy request helper ([#1082](https://github.com/icholy/xagent/issues/1082)) ([4c28245](https://github.com/icholy/xagent/commit/4c28245fa139b1b0bc1ad4391df5c43567948ba7))
+* **awsmicrovm:** add general-purpose AWS Lambda MicroVMs package ([#1079](https://github.com/icholy/xagent/issues/1079)) ([dbcaa39](https://github.com/icholy/xagent/commit/dbcaa39e0f204af00bf805820dcebb750ad7e10d))
+* **awsmicrovm:** add SuspendMicrovm and ResumeMicrovm ([#1084](https://github.com/icholy/xagent/issues/1084)) ([c9d8d3b](https://github.com/icholy/xagent/commit/c9d8d3ba3f1431b6e40279ce77afcbd2410b364f))
+* **awsmicrovm:** add typed APIError and IsNotFound ([#1080](https://github.com/icholy/xagent/issues/1080)) ([b57dd98](https://github.com/icholy/xagent/commit/b57dd98ba8de05a0c4ade9eefef6b06aa9537950))
+* **runner:** add lambda-microvm backend with runner-driven SSE lifecycle ([#1087](https://github.com/icholy/xagent/issues/1087)) ([640bf5d](https://github.com/icholy/xagent/commit/640bf5d4f5046c72624725b1661cdf20574facb8))
+* **runner:** add taskstate store package ([#1077](https://github.com/icholy/xagent/issues/1077)) ([25fa9a9](https://github.com/icholy/xagent/commit/25fa9a98b539b931fa0a2874b51fbee52864d2a8))
+* **runner:** per-handle Backend.Wait for task-oriented exit observation ([#1098](https://github.com/icholy/xagent/issues/1098)) ([4d6206c](https://github.com/icholy/xagent/commit/4d6206c553971178a725e4b39163605321ce7e69))
+* **webui:** view and edit auto_archive on the task page ([#1102](https://github.com/icholy/xagent/issues/1102)) ([5a2f40a](https://github.com/icholy/xagent/commit/5a2f40a42219ec7988ed8452ad80596902e4b059)), closes [#1095](https://github.com/icholy/xagent/issues/1095)
+
+
+### Bug Fixes
+
+* **agentmcp:** remove auto_archive control from update_my_task ([#1096](https://github.com/icholy/xagent/issues/1096)) ([aeb23b7](https://github.com/icholy/xagent/commit/aeb23b7aee7b1772d60173b314ea58bb70745d22)), closes [#1094](https://github.com/icholy/xagent/issues/1094)
+* **archiver:** pin auto-archive deadline comparison to UTC ([#1093](https://github.com/icholy/xagent/issues/1093)) ([0eeb3f7](https://github.com/icholy/xagent/commit/0eeb3f7af5d0a1f481ac2173e5f912e4d8af2150))
+* **awsmicrovm:** add /ready + /validate build hooks and correct the image recipe ([#1101](https://github.com/icholy/xagent/issues/1101)) ([a8c42bb](https://github.com/icholy/xagent/commit/a8c42bb88b8a9093502dbece1111846d63d2e92a))
+* **awsmicrovm:** align client with the real lambda-microvms API ([4038f6d](https://github.com/icholy/xagent/commit/4038f6d1423883ccfb1029b48d6b366245c68437))
+* **lambdamicrovm:** launch with an ingress connector so the shim is reachable ([#1099](https://github.com/icholy/xagent/issues/1099)) ([512434d](https://github.com/icholy/xagent/commit/512434d07997d40458805d5f58d087d2ab0f2b01))
+* **microvmshim:** serve AWS hooks and the xagent control surface on separate ports ([#1100](https://github.com/icholy/xagent/issues/1100)) ([565c747](https://github.com/icholy/xagent/commit/565c747c15e4c20fa160ce380e2bd4e3b98bb294))
+
+
+### Miscellaneous
+
+* **deps:** update dependency @tanstack/react-router to v1.170.16 ([#1085](https://github.com/icholy/xagent/issues/1085)) ([fef52db](https://github.com/icholy/xagent/commit/fef52dbbc7170f6c020956bb218e3638dc50b0bb))
+* **deps:** update dependency typescript-eslint to v8.62.0 ([#1090](https://github.com/icholy/xagent/issues/1090)) ([2d55903](https://github.com/icholy/xagent/commit/2d55903d89a03965cee9885911abf31e7e263b88))
+* **deps:** update tanstack-query monorepo to v5.101.0 ([#1086](https://github.com/icholy/xagent/issues/1086)) ([eab29d2](https://github.com/icholy/xagent/commit/eab29d2695426404d84bc5958cf79bf7e3248628))
+* **runner:** make taskstate the source of truth for sandbox handles ([#1078](https://github.com/icholy/xagent/issues/1078)) ([52c8646](https://github.com/icholy/xagent/commit/52c8646e41abceac614d6b77700c43dd519b5785))
+
 ## [2.4.0](https://github.com/icholy/xagent/compare/v2.3.2...v2.4.0) (2026-06-28)
 
 
