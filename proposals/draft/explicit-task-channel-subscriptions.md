@@ -20,7 +20,7 @@ volume and timing make them behave like interrupts.
 The push half lives entirely in the local stdio bridge, `xagent mcp --channel`
 (`internal/command/mcp.go`):
 
-1. The bridge opens an SSE subscription to the C2 server's **per-org** stream
+1. The bridge opens an SSE subscription to the control server's **per-org** stream
    (`GET /events`) via `xagentclient.NewNotificationClient`.
 2. For every `model.Notification` that arrives, the handler forwards it to the
    host Claude Code session as a `notifications/claude/channel` event **iff**
@@ -216,7 +216,7 @@ Two things change beyond the gate:
 Three tools, registered on the bridge's MCP server **only when `--channel` is
 enabled** (without channels there is nothing to subscribe to). They are bridge
 tools, not server-proxy tools: they mutate the local subscription set and do not
-call the C2 RPC API, so they are registered by `Channel.AddTools` in
+call the control server RPC API, so they are registered by `Channel.AddTools` in
 `internal/mcpbridge` rather than by `mcpserver.AddTools` (whose handlers all proxy
 to the Connect service).
 
@@ -321,7 +321,7 @@ distinction explicitly.
   Claude Code session. A restarted session starts muted and re-watches what it
   cares about. This is correct: stale subscriptions from a previous session
   should not silently resurrect as interrupts.
-- **No schema, no proto, no migration.** Nothing is stored server-side. The C2
+- **No schema, no proto, no migration.** Nothing is stored server-side. The control server
   server, the runner consumer, the web UI consumer, and `model.Notification` are
   all untouched. The org-wide SSE stream still carries every notification to the
   bridge; the bridge filters client-side, exactly as it already does for

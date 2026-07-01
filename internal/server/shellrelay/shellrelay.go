@@ -1,4 +1,4 @@
-// Package shellrelay implements the C2-side rendezvous relay for the driver
+// Package shellrelay implements the control-server-side rendezvous relay for the driver
 // reverse shell (step 2 of the design in proposals/draft/driver-reverse-shell.md).
 //
 // A rendezvous session bridges two WebSocket legs: a driver leg (dialed from
@@ -7,9 +7,9 @@
 // frames verbatim in both directions. The relay is a mode-agnostic byte pump: it
 // never parses or interprets the frame payload. The end-to-end [1-byte type]
 // [payload] framing is a contract between the driver and the client, opaque to
-// the C2.
+// the control server.
 //
-// The registry is in-memory and therefore assumes a single C2 instance.
+// The registry is in-memory and therefore assumes a single control server instance.
 // Cross-instance rendezvous (routing both legs to the session owner, or a shared
 // bus) is explicitly out of scope for v1.
 package shellrelay
@@ -45,7 +45,7 @@ var (
 	errTornDown = errors.New("shellrelay: session torn down")
 )
 
-// Registry tracks rendezvous sessions by id for a single C2 instance.
+// Registry tracks rendezvous sessions by id for a single control server instance.
 type Registry struct {
 	log              *slog.Logger
 	establishTimeout time.Duration
@@ -220,7 +220,7 @@ func (s *session) peer(driver bool) *websocket.Conn {
 // DriverHandler handles GET /shell/{session}/driver, the driver leg.
 //
 // Authentication is expected to be enforced by the surrounding middleware: this
-// handler is mounted behind the same server auth as the other driver->C2
+// handler is mounted behind the same server auth as the other driver->control server
 // endpoints, which validates the driver's task token (a Bearer app JWT).
 //
 // TODO(step 4 / OpenShell, #1113): once OpenShell records the task id on the
@@ -307,7 +307,7 @@ func (r *Registry) relay(s *session, conn *websocket.Conn, driver bool) {
 
 // pump copies whole WebSocket messages from src to dst verbatim, preserving the
 // message type, until a read or write error occurs. It never inspects the
-// payload — the C2 is a mode-agnostic byte pump.
+// payload — the control server is a mode-agnostic byte pump.
 func pump(ctx context.Context, dst, src *websocket.Conn) error {
 	for {
 		typ, data, err := src.Read(ctx)

@@ -74,12 +74,12 @@ of the design rather than a deferred option.
 
 Five decisions frame the design.
 
-1. **Runner-owned, not the C2.** Sandbox-handle state is a runner concern. The
+1. **Runner-owned, not the control server.** Sandbox-handle state is a runner concern. The
    server already owns the task's logical state (status, events, links) and is
    deliberately ignorant of *how* a runner sandboxes a task. We do **not** push
-   the mapping into the C2: a handle is meaningful only to the runner that
+   the mapping into the control server: a handle is meaningful only to the runner that
    created it (a container id is local to one daemon; a microVM id to one
-   account/region), and persisting it server-side would couple the C2 to backend
+   account/region), and persisting it server-side would couple the control server to backend
    internals it has no reason to know. The store lives on the runner's local
    filesystem.
 

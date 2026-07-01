@@ -18,7 +18,7 @@ A new package `internal/runner/backend/firecracker` implements `backend.Backend`
 xagent runner --backend firecracker
 ```
 
-The backend's job per task: turn the workspace's OCI image into an ext4 root filesystem, boot a microVM from it with a guest kernel, run `spec.Cmd` (the driver) inside via a minimal PID-1 init, and report the driver's exit code back through `backend.Exit`. The orchestrator (`runner.Runner`), driver, C2 API, and database are untouched — the driver already connects directly to the C2 with its task token and neither knows nor cares what runtime launched it.
+The backend's job per task: turn the workspace's OCI image into an ext4 root filesystem, boot a microVM from it with a guest kernel, run `spec.Cmd` (the driver) inside via a minimal PID-1 init, and report the driver's exit code back through `backend.Exit`. The orchestrator (`runner.Runner`), driver, control server API, and database are untouched — the driver already connects directly to the control server with its task token and neither knows nor cares what runtime launched it.
 
 ### Host requirements
 
@@ -161,7 +161,7 @@ One deliberate difference from Docker reuse: because cmd/env are delivered fresh
 - One bridge per runner (`xagent0`, gateway at the subnet's first address), subnet from `--firecracker-subnet` (default `172.30.0.0/16`).
 - Per VM: a TAP device (`xat<task-id>`) attached to the bridge, a deterministic MAC derived from the task ID, and a guest IP allocated sequentially and persisted at `tasks/<id>/ip` so it is stable across restarts.
 - Egress via nftables masquerade of the subnet plus `ip_forward=1` — the same posture as Docker's default bridge.
-- Reachability constraint is unchanged from Docker bridge networking: the runner's `--server` URL must be reachable from the VM network. A localhost C2 must be addressed via the bridge gateway IP.
+- Reachability constraint is unchanged from Docker bridge networking: the runner's `--server` URL must be reachable from the VM network. A localhost control server must be addressed via the bridge gateway IP.
 
 ### Backend method mapping
 

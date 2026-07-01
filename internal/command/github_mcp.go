@@ -16,7 +16,7 @@ var GitHubMCPCommand = &cli.Command{
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:    "server",
-			Usage:   "C2 server URL",
+			Usage:   "control server URL",
 			Value:   xagentclient.DefaultURL,
 			Sources: cli.EnvVars("XAGENT_SERVER"),
 		},

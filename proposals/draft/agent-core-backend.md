@@ -84,11 +84,11 @@ Per task, the backend:
    backend's `config.tar` boot manifest.
 3. Calls `InvokeAgentRuntime` with `runtimeSessionId` derived from the task id,
    from a supervising goroutine. An in-image **shim** receives the payload,
-   provisions the files, and execs the driver — which connects to the C2 with
+   provisions the files, and execs the driver — which connects to the control server with
    its task token exactly as under Docker.
 
-The orchestrator (`runner.Runner`), the driver, the C2 API, the database, and
-the task state machine are untouched: the driver already connects to the C2 by
+The orchestrator (`runner.Runner`), the driver, the control server API, the database, and
+the task state machine are untouched: the driver already connects to the control server by
 URL + token and neither knows nor cares what launched it. That was the point of
 the socket-proxy elimination and driver-owned-events prerequisites.
 
@@ -110,8 +110,8 @@ xagent tool agentcore-shim      # beside `tool agent-mcp` and `tool vm-init`
 - `POST /invocations` → decode the payload (below), provision `files` if the
   session is fresh, then exec the driver with `cmd`/`env`, streaming its stdout
   as `text/event-stream` and returning the driver's **exit code** in a trailing
-  event. The driver reports its own terminal status to the C2 over the duration;
-  the shim's job is liveness + exit-code surfacing, not C2 communication.
+  event. The driver reports its own terminal status to the control server over the duration;
+  the shim's job is liveness + exit-code surfacing, not control server communication.
 
 The invocation payload is the shim's equivalent of the Firecracker boot
 manifest, carrying exactly what `backend.Spec` holds:
@@ -364,10 +364,10 @@ Things that don't translate cleanly, called out explicitly:
   AgentCore keeping the session/work alive and on `Reconcile` re-adopting it
   (see Risks).
 
-- **C2 reachability.** The driver inside the microVM must reach the runner's
-  `--server` URL. With `network_mode: PUBLIC` that means a public C2 endpoint;
-  `VPC` mode requires the C2 to be in or peered to that VPC. A localhost C2 will
-  not work — the same class of constraint as Firecracker's "address the C2 via
+- **control server reachability.** The driver inside the microVM must reach the runner's
+  `--server` URL. With `network_mode: PUBLIC` that means a public control server endpoint;
+  `VPC` mode requires the control server to be in or peered to that VPC. A localhost control server will
+  not work — the same class of constraint as Firecracker's "address the control server via
   the bridge gateway," but stricter because the microVM is off-host.
 
 - **No volumes / host mounts.** Like Firecracker, `container.volumes` has no
@@ -439,7 +439,7 @@ it as a uniform throttle."
 
 5. **Streaming the agent's stdout vs. driver-only reporting.** The shim could
    stream driver stdout back through the invocation response for observability,
-   but the driver already reports structured logs to the C2. Is the streamed
+   but the driver already reports structured logs to the control server. Is the streamed
    response worth anything beyond the trailing exit code, or should `/invocations`
    return only that?
 

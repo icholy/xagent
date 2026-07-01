@@ -124,7 +124,7 @@ Several facts about Lambda MicroVMs drive the design.
 7. **Networking is connector-based, no infrastructure to run.** Egress is
    selected with `--egress-network-connectors` (`INTERNET_EGRESS` or a VPC
    connector); ingress with `--ingress-network-connectors` (or the provided
-   `NO_INGRESS`). The driver only needs **egress** to reach the C2 and GitHub —
+   `NO_INGRESS`). The driver only needs **egress** to reach the control server and GitHub —
    it connects *out*, exactly as under Docker. The managed proxy (fact 6) is a
    separate path from ingress connectors, so the VM launches with `NO_INGRESS`
    and is still reachable by the runner over the proxy.
@@ -166,10 +166,10 @@ Per task, the backend:
    and the runner persists it as the task's handle.
 
 An in-image **shim** receives the `/run` hook, fetches the staged bundle,
-provisions the files, and execs the driver — which connects to the C2 with its
+provisions the files, and execs the driver — which connects to the control server with its
 task token exactly as under Docker. The orchestrator (`runner.Runner`), the
-driver, the C2 API, the database, and the task state machine are **untouched**:
-the driver already connects to the C2 by URL + token and neither knows nor cares
+driver, the control server API, the database, and the task state machine are **untouched**:
+the driver already connects to the control server by URL + token and neither knows nor cares
 what launched it. That was the point of the socket-proxy elimination and
 driver-owned-events prerequisites.
 
@@ -278,7 +278,7 @@ sequenceDiagram
     participant CP as Control plane
     participant Shim as Shim (in VM)
     participant Drv as Driver
-    participant C2
+    participant Server as Control Server
 
     R->>S3: stage spec bundle, presign GET URL
     R->>CP: RunMicrovm(image, NO_INGRESS, idle off, payload=presigned URL)
@@ -288,14 +288,14 @@ sequenceDiagram
     Shim->>S3: GET bundle (presigned URL)
     Shim->>Drv: provision files (once), spawn driver, supervise proc.Wait()
     Shim-->>CP: 200 OK
-    Drv->>C2: connect (task token), run task
+    Drv->>Server: connect (task token), run task
 
     R->>CP: CreateMicrovmAuthToken(microvmId, allowedPorts=8080)
     CP-->>R: token
     R->>Shim: GET /xagent/lifecycle (X-aws-proxy-auth, via proxy)
     Note over R,Shim: SSE stream open
 
-    Drv->>C2: report terminal status (driver-owned events)
+    Drv->>Server: report terminal status (driver-owned events)
     Drv--)Shim: process exits (proc.Wait returns)
     Shim--)R: SSE driver-exited{code} (sticky, replayed on reconnect)
     R->>CP: SuspendMicrovm(microvmId) using runner credentials
@@ -312,13 +312,13 @@ sequenceDiagram
     participant CP as Control plane
     participant Shim as Shim (in VM)
     participant Drv as Driver
-    participant C2
+    participant Server as Control Server
 
     Note over R: next run for the task — Launch(reuse=Handle)
     R->>CP: ResumeMicrovm(microvmId)
     CP->>Shim: POST /resume
     Shim->>Drv: re-spawn driver (files already provisioned), supervise proc.Wait()
-    Drv->>C2: connect (task token), process new work
+    Drv->>Server: connect (task token), process new work
     R->>Shim: reopen SSE /xagent/lifecycle (new token, via proxy)
     Note over R,Shim: runs until the next driver exit, then suspend again
 ```
@@ -358,12 +358,12 @@ sequenceDiagram
     participant S3
     participant Shim as Shim (in VM)
     participant Drv as Driver
-    participant C2
+    participant Server as Control Server
 
     Note over R: Signal (graceful stop)
     R->>Shim: POST /xagent/stop (via proxy)
     Shim->>Drv: SIGTERM, grace period, then SIGKILL
-    Drv->>C2: report terminal status
+    Drv->>Server: report terminal status
     Drv--)Shim: process exits
     Shim--)R: SSE driver-exited{code}
     R->>CP: SuspendMicrovm(microvmId)
@@ -597,7 +597,7 @@ the runner's.
 | `ValidateWorkspace` | Require `execution_role`, `staging_bucket`, `egress_connector`, and `image_identifier` or `image_source`; bound `max_duration_seconds`. |
 | `Launch` | **Fresh (`reuse` nil):** ensure the MicroVM image ARN for the workspace (use `image_identifier`, else build from `image_source` via S3 zip + `create-microvm-image`, cached by digest+version). Build the bundle from `spec`, upload to `s3://<staging_bucket>/<runner>/<task>.json`, presign a GET URL. `run-microvm` with the image ARN, `NO_INGRESS`, the egress connector, idle policy disabled, `--maximum-duration-in-seconds`, and the presigned URL as `--run-hook-payload`. Tag the returned VM (`xagent.task`, `xagent.runner`). Return the `Handle` (id = `microvmId`, `Data` = endpoint + image + staging). **Reuse (`reuse` non-nil):** `resume-microvm` the suspended VM identified by the handle, preserving memory + disk; the `/resume` hook re-spawns the driver. This is the resume path — the MicroVM analog of reusing an exited Docker container. |
 | `Probe` | `GetMicrovm` on the handle id. `RUNNING` → `StateRunning`; **`SUSPENDED`** / `TERMINATED` / `FAILED` / not-found → **`StateExited`**. A suspended-after-completion VM must look like an exited-but-preserved container so the existing restart/archive machinery works unchanged: `Start` → `Probe StateExited` → `Launch(reuse)` → resume, and `Prune`-on-archive → `Destroy` → terminate. |
-| `Signal` | Graceful stop: over the managed proxy, POST the shim's `/xagent/stop` endpoint (SIGTERM → grace → SIGKILL the driver). The driver catches SIGTERM and owns its terminal report to the C2; the shim emits `driver-exited` over SSE, and `Watch` then suspends the VM like any other completion. Returns `signalled=true` if a running VM was reached. Does **not** POST the AWS `/terminate` hook and does **not** `terminate-microvm` — that is `Destroy`'s job. |
+| `Signal` | Graceful stop: over the managed proxy, POST the shim's `/xagent/stop` endpoint (SIGTERM → grace → SIGKILL the driver). The driver catches SIGTERM and owns its terminal report to the control server; the shim emits `driver-exited` over SSE, and `Watch` then suspends the VM like any other completion. Returns `signalled=true` if a running VM was reached. Does **not** POST the AWS `/terminate` hook and does **not** `terminate-microvm` — that is `Destroy`'s job. |
 | `Destroy` | The **only** terminate path, reached via `Prune` on task archive/delete: `terminate-microvm` on the handle id (idempotent; also fires `/terminate` as a final SIGTERM backstop), then delete the staged S3 object. Destroying an absent/already-terminated VM is not an error. |
 | `Watch` | Maintain a per-VM SSE stream for each of this runner's tracked VMs (discovered via `ListMicrovms` tag-filtered to the runner, endpoints from the listing): mint a token, connect, and on `driver-exited{code}` **call `suspend-microvm` itself**, then `handle(HandleExit{ID: microvmId, ExitCode: code})`. Because the suspend is done in the backend, the orchestrator stays untouched — it sees a sandbox that "exited" (Docker-identically) and never knows the VM is merely suspended. On a stream drop, arbitrate via `GetMicrovm` — reconnect if `RUNNING` (the sticky `driver-exited` covers an exit during the gap), emit an exit only if non-`RUNNING` (last SSE code, else `-1`). A periodic `ListMicrovms` sweep is the reconcile backstop for VMs that went terminal while disconnected. Emits no exit on a bare drop. |
 | `Close` | Stop the SSE streams and the reconcile sweep; leave microVMs running/suspended — they outlive the runner, exactly as containers do today. |
@@ -607,7 +607,7 @@ observes the driver's **true** process exit code in real time, not the VM's stat
 — which is the point, since after a clean completion the VM is `SUSPENDED`, not
 terminal, and VM state alone could never carry the code. The driver-owned-events
 invariant still governs correctness: the driver reports its terminal status
-directly to the C2, and the runner's `Reconcile` treats an exited sandbox whose
+directly to the control server, and the runner's `Reconcile` treats an exited sandbox whose
 task is still `RUNNING` as a lost report (`failed`), regardless of code. When no
 SSE event was seen and the control plane shows the VM non-`RUNNING`, the runner
 reports `-1` ("report lost") and lets the state machine's status guard in
@@ -797,7 +797,7 @@ to one small, testable place — the same reasoning that made `vm-init` and
 payload caps at 16 KB, which a real agent config (with a large prompt and MCP
 server definitions) can exceed. Staging the bundle in S3 and passing a presigned
 URL removes the size limit, reuses the exact `spec.Files` content, and keeps the
-backend self-contained (no new C2 RPC to fetch config). The cost is an S3
+backend self-contained (no new control server RPC to fetch config). The cost is an S3
 dependency and a short-lived presigned URL per task — cheap and operationally
 familiar in an AWS deployment that is already running microVMs.
 
@@ -865,7 +865,7 @@ backpressure rather than a hard `Launch` failure.
    re-adoption enumerate `ListMicrovms` filtered to the runner tag; the `taskstate`
    store is the primary task↔handle source. If tag-filtered listing turns out
    unavailable (current docs filter by image, not arbitrary tag), is per-image
-   listing + the store's id index enough, or do we need the C2 to persist
+   listing + the store's id index enough, or do we need the control server to persist
    `taskID ↔ microvmId`?
 5. **Region / multi-region.** One backend instance targets one region
    (`--lambda-microvm-region`). Is single-region per runner acceptable, or should a

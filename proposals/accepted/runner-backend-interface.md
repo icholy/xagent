@@ -10,7 +10,7 @@ We want to be able to run task sandboxes on other runtimes — Kubernetes, AWS E
 
 Two prior changes make this seam clean:
 
-- **Socket proxy elimination** (proposals/implemented/eliminate-runner-socket-proxy.md): the driver and the injected MCP server connect directly to the C2 with a server-minted task JWT. The runner no longer shares a Unix socket — or any filesystem — with the sandbox, so a sandbox no longer has to be co-located with the runner.
+- **Socket proxy elimination** (proposals/implemented/eliminate-runner-socket-proxy.md): the driver and the injected MCP server connect directly to the control server with a server-minted task JWT. The runner no longer shares a Unix socket — or any filesystem — with the sandbox, so a sandbox no longer has to be co-located with the runner.
 - **Driver-owned events** (proposals/accepted/driver-owned-events.md): the driver reports `started`/`stopped`/`failed` itself. The only thing the runner needs from the runtime is "the sandbox for task X exited, zero or non-zero".
 
 ## Design
@@ -170,7 +170,7 @@ One behavioral nit: today the token is only minted when a container is created; 
 `spec.Cmd` references `/usr/local/bin/xagent`; making that binary present and executable is part of the backend's `Start` contract, not a `File` in the spec. Two reasons:
 
 1. **Architecture selection is runtime-specific.** The Docker backend learns the arch from `ImageEnsure`'s inspect result and reads the matching prebuilt binary. A Kubernetes backend can't know node architecture when building a pod spec.
-2. **Injection mechanics are runtime-specific.** Docker copies a tar into the created container. Kubernetes/ECS sandboxes will need a different strategy — the binary baked into the workspace image, or a bootstrap/init step that downloads it (plausibly from the C2; see Open Questions).
+2. **Injection mechanics are runtime-specific.** Docker copies a tar into the created container. Kubernetes/ECS sandboxes will need a different strategy — the binary baked into the workspace image, or a bootstrap/init step that downloads it (plausibly from the control server; see Open Questions).
 
 The `prebuilt` package stays as-is and becomes a dependency of the Docker backend.
 
@@ -226,14 +226,14 @@ internal/runner/
 
 ### Testing
 
-`runner_test.go` currently mocks the C2 (`xagentclient.ClientMock`) but requires a real Docker daemon and the prebuilt binaries. With the seam in place:
+`runner_test.go` currently mocks the control server (`xagentclient.ClientMock`) but requires a real Docker daemon and the prebuilt binaries. With the seam in place:
 
 - The orchestrator (`Poll` dispatch, reconcile/prune policy, monitor handling, semaphore accounting) gets unit tests against a moq-generated `BackendMock` — same pattern as `xagentclient.ClientMock` and the existing `dockerx` moq interfaces — with no Docker dependency.
 - The existing end-to-end tests move to `backend/docker` (and stay as the integration tests for `runner` wired to the real Docker backend).
 
 ### No proto, schema, or driver changes
 
-The C2 API, database schema, driver (`internal/agent/driver.go`), task state machine, and event system are untouched. The driver already connects to the C2 by URL + token and neither knows nor cares what runtime launched it — that was the point of the two prerequisite changes.
+The control server API, database schema, driver (`internal/agent/driver.go`), task state machine, and event system are untouched. The driver already connects to the control server by URL + token and neither knows nor cares what runtime launched it — that was the point of the two prerequisite changes.
 
 ## Trade-offs
 
@@ -250,6 +250,6 @@ The C2 API, database schema, driver (`internal/agent/driver.go`), task state mac
 ## Open Questions
 
 1. **Per-backend workspace validation.** Should `Backend` grow a `ValidateWorkspace(*workspace.Workspace) error` so each backend validates its own config section at startup, or is that premature before a second backend exists?
-2. **Driver binary distribution for remote backends.** Kubernetes/ECS sandboxes can't receive a tar copy from the runner. Should the C2 serve the prebuilt binaries over HTTP (so a bootstrap/init container can fetch them with the task token), or do we require workspace images for those backends to bake the binary in?
+2. **Driver binary distribution for remote backends.** Kubernetes/ECS sandboxes can't receive a tar copy from the runner. Should the control server serve the prebuilt binaries over HTTP (so a bootstrap/init container can fetch them with the task token), or do we require workspace images for those backends to bake the binary in?
 3. **Sandbox GC for remote backends.** `Prune` assumes sandboxes persist after exit and need explicit removal (Docker containers do). Runtimes that garbage-collect their own sandboxes (ECS, AgentCore) would implement `Remove` as a no-op — is `List`/`Remove` the right shape, or should prune policy move behind the interface entirely?
 4. **Concurrency accounting.** The semaphore counts sandboxes started by this runner process and reconciles from `List` at startup. For backends with their own schedulers (Kubernetes), runner-side concurrency may be redundant with cluster-side limits — keep it as a uniform throttle, or let backends opt out?

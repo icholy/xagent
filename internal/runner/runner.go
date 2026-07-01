@@ -45,9 +45,9 @@ type Options struct {
 	// Store is the runner-local source of truth for the task→sandbox-handle
 	// mapping. The runner is the only writer; backends never touch it.
 	Store *taskstate.Store
-	// ServerURL is the C2 URL injected into sandboxes so the driver and the
-	// injected xagent MCP server connect directly to the C2. It is the runner's
-	// own configured --server value; the sandbox reaches the same C2 the runner
+	// ServerURL is the control server URL injected into sandboxes so the driver and the
+	// injected xagent MCP server connect directly to the control server. It is the runner's
+	// own configured --server value; the sandbox reaches the same control server the runner
 	// does. The runner authenticates the token-minting RPC with its own xat_ key.
 	ServerURL   string
 	Workspaces  *workspace.Config
@@ -284,7 +284,7 @@ func (r *Runner) Load(ctx context.Context) error {
 }
 
 // failIfTaskRunning emits a "failed" event for a task whose sandbox is no longer
-// running but whose C2 status is still RUNNING — the driver's terminal report was
+// running but whose control server status is still RUNNING — the driver's terminal report was
 // lost, so "failed" is the honest outcome (see the driver-owned-events proposal).
 func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
 	task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
@@ -384,10 +384,10 @@ func (r *Runner) spec(ctx context.Context, task *model.Task) (*backend.Spec, err
 		return nil, fmt.Errorf("invalid workspace %q: %w", task.Workspace, err)
 	}
 
-	// Mint the task token via the C2 rather than signing it locally: the runner
+	// Mint the task token via the control server rather than signing it locally: the runner
 	// supplies only the task id and capability flags and the server derives the
 	// task's workspace/runner/org from the row and signs a narrow app JWT. The
-	// driver and injected MCP server present it directly to the C2.
+	// driver and injected MCP server present it directly to the control server.
 	tokenResp, err := r.client.CreateTaskToken(ctx, &xagentv1.CreateTaskTokenRequest{
 		TaskId:       task.ID,
 		Capabilities: ws.Capabilities,

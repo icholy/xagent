@@ -32,7 +32,7 @@ The "split" framing is about **role**, not about forcing two apps. If an operato
 When an agent calls `CreateGitHubToken` over the Unix socket, the runner picks a backend in this order:
 
 1. **Runner-local agent app**, if `--github-app-id` and `--github-private-key` are configured on the runner.
-2. **Server-side central app**, by forwarding to the existing `CreateGitHubToken` RPC on the C2 server (current behavior).
+2. **Server-side central app**, by forwarding to the existing `CreateGitHubToken` RPC on the control server (current behavior).
 3. **Not configured** — the runner returns `FailedPrecondition` and the agent surfaces a clear error. Operators using PATs / env-injection bypass this path entirely; their tokens come from `${env:...}` / `${sh:...}` workspace config and never call `CreateGitHubToken`.
 
 PAT-based workflows are completely orthogonal to this proposal — they don't go through `CreateGitHubToken` and aren't affected by either option above.

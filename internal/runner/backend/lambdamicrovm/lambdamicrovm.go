@@ -316,7 +316,7 @@ func (b *Backend) Probe(ctx context.Context, h backend.Handle) (backend.State, e
 
 // Signal gracefully stops the driver: over the managed proxy it POSTs the shim's
 // /xagent/stop endpoint (SIGTERM → grace → SIGKILL). The driver catches SIGTERM
-// and owns its terminal report to the C2; its exit then drives the suspend like
+// and owns its terminal report to the control server; its exit then drives the suspend like
 // any other completion (Wait). It reports signalled=true if a running VM was
 // reached, and does NOT terminate or suspend — that is Destroy's / Wait's job.
 func (b *Backend) Signal(ctx context.Context, h backend.Handle) (bool, error) {

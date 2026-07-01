@@ -22,7 +22,7 @@ The exit code is therefore a single bit meaning "did the driver report?", and th
 
 ### Authorization
 
-No new authorization surface is needed. The driver already talks directly to the C2 with a task-scoped JWT (see proposals/implemented/eliminate-runner-socket-proxy.md), and `SubmitRunnerEvents` authorizes each event against the loaded task row — the task token's `task.write` scope only matches the driver's own task.
+No new authorization surface is needed. The driver already talks directly to the control server with a task-scoped JWT (see proposals/implemented/eliminate-runner-socket-proxy.md), and `SubmitRunnerEvents` authorizes each event against the loaded task row — the task token's `task.write` scope only matches the driver's own task.
 
 Driver-emitted events use `Version: 0` (same convention as today's monitor — spontaneous events bypass the version check).
 
@@ -78,7 +78,7 @@ Duplicate events become rare (the monitor no longer mirrors every exit), but rac
 
 In the old model, a driver that died before its `failed` event was delivered could exit 0, and the monitor's exit-0 `stopped` fallback would silently mark the task `completed`. That race is now structurally impossible: there is no exit-0 fallback. An unacked terminal submit exits non-zero, and the only thing the monitor ever emits on `die` is `failed`.
 
-The trade-off: a successful run whose `stopped` ack fails (C2 briefly unreachable at the moment of completion) lands in `failed` rather than `completed` — an explicit "the report was lost" rather than a silent wrong answer. If false `failed`s show up in practice, the driver can retry the submit briefly before giving up.
+The trade-off: a successful run whose `stopped` ack fails (control server briefly unreachable at the moment of completion) lands in `failed` rather than `completed` — an explicit "the report was lost" rather than a silent wrong answer. If false `failed`s show up in practice, the driver can retry the submit briefly before giving up.
 
 ---
 

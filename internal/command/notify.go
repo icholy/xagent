@@ -25,7 +25,7 @@ var NotifyCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "server",
 			Aliases: []string{"s"},
-			Usage:   "C2 server URL",
+			Usage:   "control server URL",
 			Value:   xagentclient.DefaultURL,
 		},
 		&cli.StringFlag{
