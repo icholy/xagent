@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.6.0](https://github.com/icholy/xagent/compare/v2.5.1...v2.6.0) (2026-07-01)
+
+
+### Features
+
+* add C2 shell rendezvous relay ([#1118](https://github.com/icholy/xagent/issues/1118)) ([df17327](https://github.com/icholy/xagent/commit/df17327ca0b2382e9748f6ce20a34a3c320e3681))
+* add driver-side debug shell (runShell) ([#1123](https://github.com/icholy/xagent/issues/1123)) ([4fb3229](https://github.com/icholy/xagent/commit/4fb3229a3ca0ce359651469e3eecc286f0a4da54))
+* add OpenShell RPC for debug shells ([#1124](https://github.com/icholy/xagent/issues/1124)) ([1c5b6ac](https://github.com/icholy/xagent/commit/1c5b6acf007d14605468bb7cee3fe323eb990c9b))
+* add shell_session field to Task ([#1114](https://github.com/icholy/xagent/issues/1114)) ([5f48cc9](https://github.com/icholy/xagent/commit/5f48cc9d26fce57781511ece624ab473610a0ee4))
+* fork driver into debug shell on shell_session ([#1125](https://github.com/icholy/xagent/issues/1125)) ([ead1e9d](https://github.com/icholy/xagent/commit/ead1e9db7b517f5026651f8144b8a767ceeafb7b))
+
+
+### Bug Fixes
+
+* **webui:** remove redundant auto-archive deadline text ([#1117](https://github.com/icholy/xagent/issues/1117)) ([bf8842e](https://github.com/icholy/xagent/commit/bf8842e3f145bad0683f6c6a85f8ec4d8b5dbf1d))
+
+
+### Miscellaneous
+
+* correct internal/proto note (checked in, not gitignored) ([#1116](https://github.com/icholy/xagent/issues/1116)) ([1c282bd](https://github.com/icholy/xagent/commit/1c282bd37674bc27b8565890abec17461fe6dfbb))
+* **lambdamicrovm:** correct the create-microvm-image recipe ([5fc3a09](https://github.com/icholy/xagent/commit/5fc3a091c68b9f800b3398d7dfea64ca35afe182))
+* replace C2/botnet analogy with neutral control-plane terms ([#1122](https://github.com/icholy/xagent/issues/1122)) ([433de88](https://github.com/icholy/xagent/commit/433de88a7038ebbf9039adfbfb23c2ae4ef2e8b6))
+
 ## [2.5.1](https://github.com/icholy/xagent/compare/v2.5.0...v2.5.1) (2026-07-01)
 
 
