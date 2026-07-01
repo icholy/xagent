@@ -6,8 +6,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { RelativeTime } from '@/components/relative-time'
-import { autoArchiveDeadline } from '@/lib/task'
 import {
   AUTO_ARCHIVE_IMMEDIATE,
   AUTO_ARCHIVE_NEVER,
@@ -32,9 +30,8 @@ const PRESETS: { value: string; label: string }[] = [
 ]
 
 // AutoArchiveControl shows and edits a task's auto_archive window. It renders the
-// current value as a Select and, for terminal-but-not-archived tasks with a
-// positive delay, the resulting archive deadline. Changing the Select calls
-// onChange with the Duration to persist via UpdateTask.
+// current value as a Select. Changing the Select calls onChange with the
+// Duration to persist via UpdateTask.
 export function AutoArchiveControl({
   task,
   onChange,
@@ -46,7 +43,6 @@ export function AutoArchiveControl({
   pending?: boolean
   disabled?: boolean
 }) {
-  const deadline = autoArchiveDeadline(task)
   const current = autoArchiveSelectValue(task.autoArchive)
   // A task's auto_archive can be any duration the API set, not just a preset
   // (e.g. 30m). When it's off-preset, inject an option showing the real value so
@@ -75,11 +71,6 @@ export function AutoArchiveControl({
         </SelectContent>
       </Select>
       {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-      {deadline && (
-        <span className="text-muted-foreground text-xs">
-          archives <RelativeTime date={deadline} />
-        </span>
-      )}
     </div>
   )
 }
