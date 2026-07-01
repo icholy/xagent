@@ -88,8 +88,106 @@ that authority lives only with the runner's credentials.
 
 ## Building a MicroVM image
 
-A MicroVM image is built once per workspace (zip + `create-microvm-image`) from a
-`Dockerfile` whose application is the shim. The xagent binary must be at
-`/usr/local/bin/xagent` (`backend.BinaryPath`). See `microvm.Dockerfile` for an
-example. `image_source` build-on-demand from the runner is a documented
-follow-up; for now build the image out of band and set `image_identifier`.
+A MicroVM image is built once per workspace and referenced by its snapshot ARN as
+`image_identifier`. MicroVMs are **ARM64-only** (`Architecture = ARM_64`), so the
+in-VM xagent binary must be `linux/arm64` and the container base must be arm64.
+
+An image is a **zip of a `Dockerfile` + the app**, uploaded to S3 and built with
+`create-microvm-image`. Two distinct bases are involved:
+
+- The Dockerfile `FROM` is the **container** base (e.g.
+  `public.ecr.aws/lambda/microvms:al2023-minimal`) — the layer the app is
+  installed into.
+- `--base-image-arn` (`…:aws:microvm-image:al2023-1`) is the **separate MicroVM
+  OS base** the snapshot boots on.
+
+The app is started via the Dockerfile `ENTRYPOINT`/`CMD` (our shim,
+`xagent tool microvm-shim`). The snapshot is gated by the **`/ready` build hook
+returning 200**; `/validate` runs a health check. Hooks are declared **at image
+creation** via `--hooks port=9000` (must match `awsmicrovm.HookPort`), **not**
+baked into the Dockerfile. See `microvm.Dockerfile` for the container layer.
+
+### Recipe
+
+```bash
+# 1. Build the linux/arm64 in-VM binary next to microvm.Dockerfile.
+GOOS=linux GOARCH=arm64 go build -o xagent ./cmd/xagent
+
+# 2. Zip the Dockerfile + app and upload to S3.
+zip app.zip microvm.Dockerfile xagent
+aws s3 cp app.zip s3://my-xagent-staging/images/app.zip
+
+# 3. Build the image. --hooks declares the hook port and the per-hook timeouts.
+#    Image hooks (ready/validate) allow ≤3600s; microvm hooks
+#    (run/resume/suspend/terminate) allow ≤60s. Per-hook timeouts are REQUIRED
+#    for every enabled hook.
+aws lambda create-microvm-image \
+  --code-artifact uri=s3://my-xagent-staging/images/app.zip \
+  --base-image-arn arn:aws:lambda:us-east-1:aws:microvm-image:al2023-1 \
+  --build-role-arn arn:aws:iam::123456789012:role/xagent-microvm-build-role \
+  --hooks '{
+    "port": 9000,
+    "ready":     {"timeoutSeconds": 300},
+    "validate":  {"timeoutSeconds": 60},
+    "run":       {"timeoutSeconds": 60},
+    "resume":    {"timeoutSeconds": 60},
+    "suspend":   {"timeoutSeconds": 60},
+    "terminate": {"timeoutSeconds": 60}
+  }'
+```
+
+The returned image ARN is the `image_identifier`.
+
+### Build role
+
+`--build-role-arn` is a role Lambda assumes to run the build. It must trust
+`lambda.amazonaws.com` (both `sts:AssumeRole` and `sts:TagSession`) and allow
+reading the code artifact from S3 plus writing CloudWatch Logs.
+
+Trust policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Service": "lambda.amazonaws.com" },
+      "Action": ["sts:AssumeRole", "sts:TagSession"]
+    }
+  ]
+}
+```
+
+Permissions policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::my-xagent-staging/images/app.zip"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda-microvms/*"
+    }
+  ]
+}
+```
+
+This build role is distinct from the workspace `execution_role` (the in-VM role,
+read-mostly) and from the runner's own credentials (which hold the MicroVM
+control-plane verbs).
+
+`image_source` build-on-demand from the runner (having the runner run this recipe
+automatically when `image_identifier` is unset) is a **documented open question**,
+not implemented — `ValidateWorkspace` still requires a pre-built
+`image_identifier`. Build the image out of band and set it.

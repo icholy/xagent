@@ -40,9 +40,23 @@ func TestHandlerRoutesAndDispatches(t *testing.T) {
 	assert.Equal(t, terminatedID, "mvm-1")
 }
 
+func TestHandlerRoutesBuildHooks(t *testing.T) {
+	var ready, validate int
+	h := &Handler{
+		Ready:    func(context.Context, ReadyHookRequest) error { ready++; return nil },
+		Validate: func(context.Context, ValidateHookRequest) error { validate++; return nil },
+	}
+
+	assert.Equal(t, post(t, h, HookReady, "").Code, http.StatusOK)
+	assert.Equal(t, ready, 1)
+
+	assert.Equal(t, post(t, h, HookValidate, "").Code, http.StatusOK)
+	assert.Equal(t, validate, 1)
+}
+
 func TestHandlerNilFieldsDefaultTo200(t *testing.T) {
 	h := &Handler{} // no hooks set
-	for _, path := range []string{HookRun, HookTerminate, HookSuspend, HookResume} {
+	for _, path := range []string{HookRun, HookTerminate, HookSuspend, HookResume, HookReady, HookValidate} {
 		assert.Equal(t, post(t, h, path, "").Code, http.StatusOK, "path %s with nil hook", path)
 	}
 }

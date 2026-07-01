@@ -250,6 +250,30 @@ func TestNoControlPlaneCredentials(t *testing.T) {
 	(<-procs).exit()
 }
 
+// TestBuildHooksReturn200 confirms the /ready and /validate build hooks (which
+// gate the image snapshot) answer 200 on the hook handler even before any driver
+// has been spawned — the shim serving means the app is up.
+func TestBuildHooksReturn200(t *testing.T) {
+	srv := &Server{}
+	hooks := httptest.NewServer(srv.HooksHandler())
+	defer hooks.Close()
+
+	for _, path := range []string{awsmicrovm.HookReady, awsmicrovm.HookValidate} {
+		resp, err := http.Post(hooks.URL+path, "application/json", bytes.NewReader(nil))
+		assert.NilError(t, err)
+		resp.Body.Close()
+		assert.Equal(t, resp.StatusCode, http.StatusOK, "path %s", path)
+	}
+
+	// The build hooks are NOT on the xagent control (ingress) surface.
+	control := httptest.NewServer(srv.ControlHandler())
+	defer control.Close()
+	resp, err := http.Post(control.URL+awsmicrovm.HookReady, "application/json", bytes.NewReader(nil))
+	assert.NilError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
+}
+
 // TestSurfacesAreSeparate confirms the two handlers are disjoint: the AWS hooks
 // are not reachable on the control handler (the ingress port) and the xagent
 // control routes are not reachable on the hooks handler (the hook port).

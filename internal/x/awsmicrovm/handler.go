@@ -7,15 +7,23 @@ import (
 	"net/http"
 )
 
-// Lifecycle hook paths Lambda calls on the application (served on the dedicated
-// HookPort). The application exposes these so Lambda can drive the MicroVM
-// lifecycle.
+// Hook paths Lambda calls on the application (served on the dedicated HookPort).
+// The application exposes these so Lambda can drive the MicroVM lifecycle at
+// runtime and gate the snapshot at image-creation time.
 const (
 	HookBase      = "/aws/lambda-microvms/runtime/v1"
 	HookRun       = HookBase + "/run"
 	HookSuspend   = HookBase + "/suspend"
 	HookResume    = HookBase + "/resume"
 	HookTerminate = HookBase + "/terminate"
+
+	// Build-time image hooks, called by Lambda during create-microvm-image (not
+	// at runtime, and before any MicroVM exists). /ready gates the snapshot — it
+	// must return 200 once the application is up; /validate lets the image assert
+	// its own health before the snapshot is finalized. Both are declared to
+	// create-microvm-image via --hooks with per-hook timeouts (≤3600s).
+	HookReady    = HookBase + "/ready"
+	HookValidate = HookBase + "/validate"
 
 	// DefaultPort is the port Lambda routes MicroVM ingress to by default. The
 	// xagent control surface (/xagent/lifecycle + /xagent/stop) is served here so
@@ -56,6 +64,15 @@ type ResumeHookRequest struct {
 	MicrovmID string
 }
 
+// ReadyHookRequest is delivered to the /ready build hook during image creation
+// to check whether the application is up before the snapshot is taken. It
+// carries no MicroVM id — no MicroVM exists yet at build time.
+type ReadyHookRequest struct{}
+
+// ValidateHookRequest is delivered to the /validate build hook during image
+// creation to let the image assert its own health before the snapshot.
+type ValidateHookRequest struct{}
+
 // Handler is the http.Handler an application exposes to receive MicroVM
 // lifecycle hooks. It owns routing, the JSON wire format, and status codes; the
 // consumer owns behavior by setting the func fields. A nil field responds 200
@@ -66,6 +83,8 @@ type Handler struct {
 	Terminate func(ctx context.Context, req TerminateHookRequest) error
 	Suspend   func(ctx context.Context, req SuspendHookRequest) error
 	Resume    func(ctx context.Context, req ResumeHookRequest) error
+	Ready     func(ctx context.Context, req ReadyHookRequest) error
+	Validate  func(ctx context.Context, req ValidateHookRequest) error
 }
 
 // ServeHTTP implements http.Handler.
@@ -98,6 +117,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 			return h.Resume(r.Context(), ResumeHookRequest{MicrovmID: body.MicrovmID})
+		})
+	case HookReady:
+		h.serve(w, r, func(hookBody) error {
+			if h.Ready == nil {
+				return nil
+			}
+			return h.Ready(r.Context(), ReadyHookRequest{})
+		})
+	case HookValidate:
+		h.serve(w, r, func(hookBody) error {
+			if h.Validate == nil {
+				return nil
+			}
+			return h.Validate(r.Context(), ValidateHookRequest{})
 		})
 	default:
 		http.NotFound(w, r)
