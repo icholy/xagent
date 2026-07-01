@@ -501,6 +501,9 @@ func TestRunnerPrune(t *testing.T) {
 			}
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Archived: archived[req.Id]}}, nil
 		},
+		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+			return &xagentv1.SubmitRunnerEventsResponse{}, nil
+		},
 	}
 	state := map[string]backend.State{
 		"c1": backend.StateExited,  // archived -> removed
@@ -546,6 +549,14 @@ func TestRunnerPrune(t *testing.T) {
 	_, ok, err := store.Read(2)
 	assert.NilError(t, err)
 	assert.Equal(t, ok, true)
+
+	// Each successful destroy emits a "deleted" lifecycle event for its task.
+	var deleted []int64
+	for _, e := range submitted(t, mock, queue) {
+		assert.Equal(t, e.Event, string(model.RunnerEventDeleted))
+		deleted = append(deleted, e.TaskId)
+	}
+	assert.DeepEqual(t, deleted, []int64{1, 4})
 }
 
 func TestRunnerStart_Gone(t *testing.T) {

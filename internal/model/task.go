@@ -142,6 +142,7 @@ const (
 	RunnerEventStarted RunnerEventType = "started"
 	RunnerEventStopped RunnerEventType = "stopped"
 	RunnerEventFailed  RunnerEventType = "failed"
+	RunnerEventDeleted RunnerEventType = "deleted"
 )
 
 // RunnerEvent represents an event from the runner about a task's container.
@@ -193,6 +194,11 @@ func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
 		return t.applyRunnerEventStopped()
 	case RunnerEventFailed:
 		return t.applyRunnerEventFailed()
+	case RunnerEventDeleted:
+		// The sandbox was destroyed after the task reached a terminal state; the
+		// task row (status/command) is left untouched. It carries a lifecycle
+		// event but folds no status, so report "not applied".
+		return false
 	default:
 		return false
 	}
@@ -293,6 +299,8 @@ func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) 
 		return lifecycle(LifecycleKindSandboxExited, ""), true
 	case RunnerEventFailed:
 		return lifecycle(LifecycleKindSandboxFailed, "container failed"), true
+	case RunnerEventDeleted:
+		return lifecycle(LifecycleKindSandboxDeleted, ""), true
 	default:
 		return nil, false
 	}

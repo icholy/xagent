@@ -123,6 +123,9 @@ export function lifecycleSummary(p: LifecyclePayload): string {
       s = 'Sandbox failed'
       if (p.message) s += `: ${p.message}`
       break
+    case LifecycleKind.SANDBOX_DELETED:
+      s = 'Sandbox deleted'
+      break
     default:
       s = 'Lifecycle event'
   }
@@ -149,6 +152,7 @@ function lifecycleCategory(p: LifecyclePayload): LifecycleCategory {
     case LifecycleKind.ARCHIVED:
     case LifecycleKind.UNARCHIVED:
     case LifecycleKind.AUTO_ARCHIVED:
+    case LifecycleKind.SANDBOX_DELETED:
       return 'archived'
     default:
       return 'updated'

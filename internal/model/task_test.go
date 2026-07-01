@@ -360,6 +360,18 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: false,
 		},
 
+		// Deleted events never fold into status
+		{
+			name: "deleted: completed task unchanged",
+			before: Task{
+				Status: TaskStatusCompleted,
+			},
+			event: RunnerEvent{
+				Event: RunnerEventDeleted,
+			},
+			changed: false,
+		},
+
 		// Unknown event type
 		{
 			name: "unknown event type returns false",

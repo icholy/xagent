@@ -156,6 +156,7 @@ const (
 	LifecycleKind_LIFECYCLE_KIND_SANDBOX_STARTED LifecycleKind = 8
 	LifecycleKind_LIFECYCLE_KIND_SANDBOX_EXITED  LifecycleKind = 9
 	LifecycleKind_LIFECYCLE_KIND_SANDBOX_FAILED  LifecycleKind = 10
+	LifecycleKind_LIFECYCLE_KIND_SANDBOX_DELETED LifecycleKind = 11
 )
 
 // Enum value maps for LifecycleKind.
@@ -172,6 +173,7 @@ var (
 		8:  "LIFECYCLE_KIND_SANDBOX_STARTED",
 		9:  "LIFECYCLE_KIND_SANDBOX_EXITED",
 		10: "LIFECYCLE_KIND_SANDBOX_FAILED",
+		11: "LIFECYCLE_KIND_SANDBOX_DELETED",
 	}
 	LifecycleKind_value = map[string]int32{
 		"LIFECYCLE_KIND_UNSPECIFIED":     0,
@@ -185,6 +187,7 @@ var (
 		"LIFECYCLE_KIND_SANDBOX_STARTED": 8,
 		"LIFECYCLE_KIND_SANDBOX_EXITED":  9,
 		"LIFECYCLE_KIND_SANDBOX_FAILED":  10,
+		"LIFECYCLE_KIND_SANDBOX_DELETED": 11,
 	}
 )
 
@@ -5971,7 +5974,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04NONE\x10\x00\x12\v\n" +
 	"\aRESTART\x10\x01\x12\b\n" +
 	"\x04STOP\x10\x02\x12\t\n" +
-	"\x05START\x10\x03*\xeb\x02\n" +
+	"\x05START\x10\x03*\x8f\x03\n" +
 	"\rLifecycleKind\x12\x1e\n" +
 	"\x1aLIFECYCLE_KIND_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16LIFECYCLE_KIND_CREATED\x10\x01\x12\x1a\n" +
@@ -5984,7 +5987,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x1eLIFECYCLE_KIND_SANDBOX_STARTED\x10\b\x12!\n" +
 	"\x1dLIFECYCLE_KIND_SANDBOX_EXITED\x10\t\x12!\n" +
 	"\x1dLIFECYCLE_KIND_SANDBOX_FAILED\x10\n" +
-	"2\x84\x1b\n" +
+	"\x12\"\n" +
+	"\x1eLIFECYCLE_KIND_SANDBOX_DELETED\x10\v2\x84\x1b\n" +
 	"\rXAgentService\x127\n" +
 	"\x04Ping\x12\x16.xagent.v1.PingRequest\x1a\x17.xagent.v1.PingResponse\x12I\n" +
 	"\n" +

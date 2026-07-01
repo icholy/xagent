@@ -53,12 +53,39 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				"status", task.Status,
 				"applied", applied,
 			)
-			if !applied {
+			// The "deleted" event annotates the timeline without folding into
+			// status: the sandbox is gone but the task row (status/command) is
+			// untouched, so it records a lifecycle event even though
+			// ApplyRunnerEvent reports no status change. Status-folding events
+			// (started/stopped/failed) update the row — and may message a channel
+			// — only when they actually apply.
+			if applied {
+				if err := s.store.UpdateTask(ctx, tx, task); err != nil {
+					return err
+				}
+				notification.Runner = task.PendingRunner()
+				// Only terminal statuses produce a channel message. Completed,
+				// Failed, and Cancelled are unambiguous and agent-actionable; the
+				// non-terminal runner transitions (running, restarting, pending
+				// re-queue) don't carry enough context to say anything useful
+				// without re-deriving why, so we stay silent and let the
+				// eventual terminal event speak. The terminal status is also
+				// stamped on the notification so subscribers like `xagent notify`
+				// can filter to task outcomes that need attention.
+				switch task.Status {
+				case model.TaskStatusCompleted:
+					notification.TaskStatus = task.Status
+					notification.ChannelMessage = fmt.Sprintf("Task %d completed.", task.ID)
+				case model.TaskStatusFailed:
+					notification.TaskStatus = task.Status
+					notification.ChannelMessage = fmt.Sprintf("Task %d failed.", task.ID)
+				case model.TaskStatusCancelled:
+					notification.TaskStatus = task.Status
+					notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
+				}
+			} else if event.Event != model.RunnerEventDeleted {
 				notification.Ignore = true
 				return nil
-			}
-			if err := s.store.UpdateTask(ctx, tx, task); err != nil {
-				return err
 			}
 			// Append the sandbox lifecycle event beside the status fold (status is
 			// the materialized projection; the fold logic is unchanged). from is the
@@ -67,26 +94,6 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				if err := s.store.CreateEvent(ctx, tx, ev); err != nil {
 					return err
 				}
-			}
-			notification.Runner = task.PendingRunner()
-			// Only terminal statuses produce a channel message. Completed,
-			// Failed, and Cancelled are unambiguous and agent-actionable; the
-			// non-terminal runner transitions (running, restarting, pending
-			// re-queue) don't carry enough context to say anything useful
-			// without re-deriving why, so we stay silent and let the
-			// eventual terminal event speak. The terminal status is also
-			// stamped on the notification so subscribers like `xagent notify`
-			// can filter to task outcomes that need attention.
-			switch task.Status {
-			case model.TaskStatusCompleted:
-				notification.TaskStatus = task.Status
-				notification.ChannelMessage = fmt.Sprintf("Task %d completed.", task.ID)
-			case model.TaskStatusFailed:
-				notification.TaskStatus = task.Status
-				notification.ChannelMessage = fmt.Sprintf("Task %d failed.", task.ID)
-			case model.TaskStatusCancelled:
-				notification.TaskStatus = task.Status
-				notification.ChannelMessage = fmt.Sprintf("Task %d cancelled.", task.ID)
 			}
 			return tx.Commit()
 		})

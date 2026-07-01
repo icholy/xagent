@@ -359,6 +359,17 @@ func (r *Runner) Remove(ctx context.Context, taskID int64) error {
 	if err := r.backend.Destroy(ctx, h); err != nil {
 		return err
 	}
+	// The sandbox is gone: annotate the task timeline with a "deleted" lifecycle
+	// event, mirroring the driver's "started"/"stopped" reports. Enqueued only
+	// after a successful Destroy of a tracked handle, so an already-gone sandbox
+	// (no handle, returned above) or a failed Destroy emits nothing. Version 0
+	// marks it as a spontaneous annotation that never folds into task status. If
+	// the task itself was deleted (Prune's not-found path), the C2 rejects the
+	// event with NotFound and the queue drops it as permanent.
+	r.queue.Enqueue(model.RunnerEvent{
+		TaskID: taskID,
+		Event:  model.RunnerEventDeleted,
+	})
 	return r.store.Remove(taskID)
 }
 

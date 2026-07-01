@@ -58,6 +58,11 @@ func TestLifecyclePayload_Summary(t *testing.T) {
 			want:    "Sandbox failed: boom",
 		},
 		{
+			name:    "sandbox deleted",
+			payload: LifecyclePayload{Kind: LifecycleKindSandboxDeleted, Actor: RunnerActor, FromStatus: "Completed", ToStatus: "Completed"},
+			want:    "Sandbox deleted",
+		},
+		{
 			name:    "updated with fields by user",
 			payload: LifecyclePayload{Kind: LifecycleKindUpdated, Actor: UserActor("icholy"), Fields: []string{"name", "status"}},
 			want:    "Updated name, status by icholy",

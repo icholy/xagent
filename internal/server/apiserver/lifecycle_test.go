@@ -164,3 +164,41 @@ func TestLifecycle_RunnerEventsAppendSandboxEvents(t *testing.T) {
 	assert.Equal(t, events[0].Message, "container failed")
 	assert.Equal(t, events[0].ToStatus, "Failed")
 }
+
+func TestLifecycle_DeletedAppendsEventWithoutStatusChange(t *testing.T) {
+	t.Parallel()
+	srv, ctx := lifecycleTestServer(t)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	taskID := resp.Task.Id
+
+	// Drive the task to a terminal status: started, then stopped -> COMPLETED.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "started", Version: 0}},
+	})
+	assert.NilError(t, err)
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "stopped", Version: 0}},
+	})
+	assert.NilError(t, err)
+
+	// deleted: the sandbox is destroyed after the task is already terminal.
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "deleted", Version: 0}},
+	})
+	assert.NilError(t, err)
+
+	// It appends a SANDBOX_DELETED lifecycle event...
+	events := lifecycleEvents(t, srv, ctx, taskID)
+	assert.Equal(t, events[0].Kind, xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_DELETED)
+	assert.Equal(t, events[0].Actor.Kind, "runner")
+	// ...without folding into the materialized status projection.
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.Status, xagentv1.TaskStatus_COMPLETED)
+}

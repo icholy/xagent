@@ -168,6 +168,7 @@ const (
 	LifecycleKindSandboxStarted = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_STARTED)
 	LifecycleKindSandboxExited  = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_EXITED)
 	LifecycleKindSandboxFailed  = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_FAILED)
+	LifecycleKindSandboxDeleted = LifecycleKind(xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_DELETED)
 )
 
 // LifecyclePayload is the body of a lifecycle event — an about-task record of a
@@ -239,6 +240,8 @@ func (p *LifecyclePayload) Summary() string {
 		if p.Message != "" {
 			s += ": " + p.Message
 		}
+	case LifecycleKindSandboxDeleted:
+		s = "Sandbox deleted"
 	default:
 		s = "Lifecycle event"
 	}
