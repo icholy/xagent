@@ -26,13 +26,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/shellwire"
 )
-
-// Subprotocol is the WebSocket subprotocol version token negotiated on both
-// legs (Sec-WebSocket-Protocol: xagent-shell.v1). It carries no credential: the
-// attach leg authenticates with a Bearer token on the request, the same
-// mechanism the Connect API uses.
-const Subprotocol = "xagent-shell.v1"
 
 // DefaultEstablishTimeout is the default connection-establishment timeout: if
 // both legs are not connected within it, the session is torn down and any
@@ -254,7 +249,7 @@ func (r *Registry) DriverHandler() http.Handler {
 func (r *Registry) AttachHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		id := req.PathValue("session")
-		if version := parseVersion(req); version != Subprotocol {
+		if version := parseVersion(req); version != shellwire.Subprotocol {
 			http.Error(w, "unsupported subprotocol", http.StatusBadRequest)
 			return
 		}
@@ -273,7 +268,7 @@ func (r *Registry) AttachHandler() http.Handler {
 			return
 		}
 		conn, err := websocket.Accept(w, req, &websocket.AcceptOptions{
-			Subprotocols: []string{Subprotocol},
+			Subprotocols: []string{shellwire.Subprotocol},
 		})
 		if err != nil {
 			r.log.Debug("attach leg accept failed", "session", id, "error", err)

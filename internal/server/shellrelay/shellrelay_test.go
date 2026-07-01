@@ -11,6 +11,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/server/shellrelay"
+	"github.com/icholy/xagent/internal/shellwire"
 	"gotest.tools/v3/assert"
 )
 
@@ -99,10 +100,10 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 	srv := newTestServer(t, reg, testOrg)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 	driver := dialDriver(t, srv, "s1")
-	attach, resp, err := dialAttach(t, srv, "s1", shellrelay.Subprotocol)
+	attach, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
 	assert.NilError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusSwitchingProtocols)
-	assert.Equal(t, attach.Subprotocol(), shellrelay.Subprotocol)
+	assert.Equal(t, attach.Subprotocol(), shellwire.Subprotocol)
 	t.Cleanup(func() { attach.Close(websocket.StatusNormalClosure, "test done") })
 
 	// Act + Assert: driver -> attach, including arbitrary non-UTF-8 bytes.
@@ -129,7 +130,7 @@ func TestAttachAcceptsMatchingOrg(t *testing.T) {
 	dialDriver(t, srv, "s1")
 
 	// Act
-	attach, resp, err := dialAttach(t, srv, "s1", shellrelay.Subprotocol)
+	attach, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
 
 	// Assert
 	assert.NilError(t, err)
@@ -145,7 +146,7 @@ func TestAttachRejectsDifferentOrg(t *testing.T) {
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
 	// Act
-	_, resp, err := dialAttach(t, srv, "s1", shellrelay.Subprotocol)
+	_, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
 
 	// Assert
 	assert.Assert(t, err != nil)
@@ -174,7 +175,7 @@ func TestAttachRejectsUnknownSession(t *testing.T) {
 	srv := newTestServer(t, reg, testOrg)
 
 	// Act
-	_, resp, err := dialAttach(t, srv, "nope", shellrelay.Subprotocol)
+	_, resp, err := dialAttach(t, srv, "nope", shellwire.Subprotocol)
 
 	// Assert
 	assert.Assert(t, err != nil)
@@ -222,7 +223,7 @@ func TestClosingOneLegTearsDownSession(t *testing.T) {
 	srv := newTestServer(t, reg, testOrg)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 	driver := dialDriver(t, srv, "s1")
-	attach, _, err := dialAttach(t, srv, "s1", shellrelay.Subprotocol)
+	attach, _, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
 	assert.NilError(t, err)
 	// Round-trip once so both legs are actively relaying.
 	send(t, driver, []byte{0x00, 'x'})
