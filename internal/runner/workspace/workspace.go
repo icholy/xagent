@@ -226,6 +226,13 @@ type LambdaMicroVM struct {
 	// EgressConnector is the network connector ARN granting outbound access so
 	// the driver can reach the C2 (INTERNET_EGRESS or a VPC connector).
 	EgressConnector string `yaml:"egress_connector"`
+	// IngressConnector is the network connector ARN granting inbound access so
+	// the runner can reach the in-VM shim over AWS's managed proxy (SSE lifecycle
+	// stream + /xagent/stop). Empty defaults to the managed ALL_INGRESS connector.
+	// An operator may instead supply a connector scoped to the xagent
+	// control-surface port for tighter, defense-in-depth security (the proxy auth
+	// token is already port-scoped).
+	IngressConnector string `yaml:"ingress_connector"`
 	// StagingBucket is the S3 bucket the backend stages the spec bundle in.
 	StagingBucket string `yaml:"staging_bucket"`
 	// MaxDurationSeconds caps the MicroVM's lifetime (run-microvm

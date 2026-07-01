@@ -56,11 +56,15 @@ type DriverExited struct {
 	Code int `json:"code"`
 }
 
-// noIngressConnector is the Lambda-provided connector that disables inbound
-// connectivity. The driver connects out to the C2, and the runner reaches the
-// shim over the managed proxy (a separate path from ingress connectors), so
-// MicroVMs need no ingress.
-const noIngressConnector = "arn:aws:lambda:%s:aws:network-connector:aws-network-connector:NO_INGRESS"
+// allIngressConnector is the Lambda-managed connector granting inbound
+// connectivity. Reaching the shim endpoint over AWS's managed auth-token proxy
+// (where the runner consumes the SSE lifecycle stream and POSTs /xagent/stop)
+// requires an ingress connector — the managed proxy is not a path separate from
+// ingress connectors. This is the default when a workspace does not pin a
+// port-scoped connector; %s is the region. The proxy token is already
+// port-scoped to shimPort (see mintToken), so the token layer bounds reachable
+// ports even with all-ingress. Validated against real AWS in #1088.
+const allIngressConnector = "arn:aws:lambda:%s:aws:network-connector:aws-network-connector:ALL_INGRESS"
 
 // defaultMaxDuration is used when a workspace does not set max_duration_seconds.
 // Lambda caps the value at 28800 (8h).
@@ -251,12 +255,17 @@ func (b *Backend) launchFresh(ctx context.Context, spec *backend.Spec) (backend.
 		return backend.Handle{}, fmt.Errorf("stage bundle: %w", err)
 	}
 
+	// The shim endpoint is reached over the managed proxy, which requires an
+	// ingress connector. Default to the managed all-ingress connector; a
+	// workspace may pin a port-scoped one for tighter, defense-in-depth security.
+	ingressConnector := cmp.Or(cfg.IngressConnector, fmt.Sprintf(allIngressConnector, b.region))
+
 	b.log.Info("running microvm", "task", spec.TaskID, "image", cfg.ImageIdentifier)
 	res, err := b.cloud.RunMicrovm(ctx, &awsmicrovm.RunMicrovmInput{
 		ImageIdentifier:          cfg.ImageIdentifier,
 		ExecutionRoleArn:         cfg.ExecutionRole,
 		EgressNetworkConnectors:  []string{cfg.EgressConnector},
-		IngressNetworkConnectors: []string{fmt.Sprintf(noIngressConnector, b.region)},
+		IngressNetworkConnectors: []string{ingressConnector},
 		MaximumDurationInSeconds: maxDuration,
 		RunHookPayload:           url,
 		// No idle policy: the runner drives suspend explicitly off the driver-exit
