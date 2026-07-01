@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"context"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -10,51 +9,30 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// newShellMock returns a ShellRegistry mock whose Seed always succeeds.
-func newShellMock() *ShellRegistryMock {
-	return &ShellRegistryMock{
-		SeedFunc: func(id string, orgID int64) error { return nil },
-	}
-}
+func TestOpenShell(t *testing.T) {
+	t.Parallel()
+	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID int64) error { return nil }}
+	srv := New(Options{Store: teststore.New(t), Shells: shell})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
 
-// createTask creates a task and returns its id.
-func createTask(t *testing.T, srv *Server, ctx context.Context) int64 {
-	t.Helper()
-	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+	// Create a task and drive it to a terminal (completed) status so it can be
+	// shelled. Runner events use version 0 to bypass the version check.
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
 		Name:      "Task",
 		Runner:    "test-runner",
 		Workspace: "test-workspace",
 	})
 	assert.NilError(t, err)
-	return resp.Task.Id
-}
-
-// event drives a task through a runner lifecycle event (version 0 bypasses the
-// version check).
-func event(t *testing.T, srv *Server, ctx context.Context, taskID int64, e string) {
-	t.Helper()
-	_, err := srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: e, Version: 0}},
+	taskID := createResp.Task.Id
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "started", Version: 0}},
 	})
 	assert.NilError(t, err)
-}
-
-// completedTask creates a task and drives it to a terminal (completed) status.
-func completedTask(t *testing.T, srv *Server, ctx context.Context) int64 {
-	t.Helper()
-	id := createTask(t, srv, ctx)
-	event(t, srv, ctx, id, "started")
-	event(t, srv, ctx, id, "stopped")
-	return id
-}
-
-func TestOpenShell(t *testing.T) {
-	t.Parallel()
-	shell := newShellMock()
-	srv := New(Options{Store: teststore.New(t), Shells: shell})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctx := createCtx(t, org)
-	taskID := completedTask(t, srv, ctx)
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "stopped", Version: 0}},
+	})
+	assert.NilError(t, err)
 
 	// Act
 	resp, err := srv.OpenShell(ctx, &xagentv1.OpenShellRequest{TaskId: taskID})
@@ -78,44 +56,91 @@ func TestOpenShell(t *testing.T) {
 	assert.Equal(t, calls[0].OrgID, org.OrgID)
 }
 
-func TestOpenShell_RejectsNonTerminal(t *testing.T) {
+func TestOpenShell_RejectsPending(t *testing.T) {
 	t.Parallel()
-	shell := newShellMock()
+	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID int64) error { return nil }}
 	srv := New(Options{Store: teststore.New(t), Shells: shell})
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctx := createCtx(t, org)
 
-	// A pending task and a running task are both non-terminal: opening a shell
-	// must fail rather than displace a live (or about-to-be-live) run.
-	pending := createTask(t, srv, ctx)
-	running := createTask(t, srv, ctx)
-	event(t, srv, ctx, running, "started")
+	// A freshly created task is PENDING (non-terminal).
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
 
-	for _, taskID := range []int64{pending, running} {
-		_, err := srv.OpenShell(ctx, &xagentv1.OpenShellRequest{TaskId: taskID})
-		assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
-	}
-	// Nothing was seeded, and neither task had a shell session recorded.
+	// Act
+	_, err = srv.OpenShell(ctx, &xagentv1.OpenShellRequest{TaskId: createResp.Task.Id})
+
+	// Assert: rejected, nothing seeded, no shell session recorded.
+	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
 	assert.Equal(t, len(shell.SeedCalls()), 0)
-	for _, taskID := range []int64{pending, running} {
-		getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
-		assert.NilError(t, err)
-		assert.Equal(t, getResp.Task.ShellSession, "")
-	}
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.ShellSession, "")
+}
+
+func TestOpenShell_RejectsRunning(t *testing.T) {
+	t.Parallel()
+	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID int64) error { return nil }}
+	srv := New(Options{Store: teststore.New(t), Shells: shell})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	// Drive the task to RUNNING: opening a shell must not displace a live run.
+	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	taskID := createResp.Task.Id
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "started", Version: 0}},
+	})
+	assert.NilError(t, err)
+
+	// Act
+	_, err = srv.OpenShell(ctx, &xagentv1.OpenShellRequest{TaskId: taskID})
+
+	// Assert: rejected, nothing seeded, no shell session recorded.
+	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
+	assert.Equal(t, len(shell.SeedCalls()), 0)
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.ShellSession, "")
 }
 
 func TestOpenShell_CrossOrgDenied(t *testing.T) {
 	t.Parallel()
-	shell := newShellMock()
+	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID int64) error { return nil }}
 	srv := New(Options{Store: teststore.New(t), Shells: shell})
 	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctxA := createCtx(t, orgA)
 	ctxB := createCtx(t, orgB)
-	taskID := completedTask(t, srv, ctxA)
+
+	// Completed task owned by orgA.
+	createResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
+		Name:      "Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	taskID := createResp.Task.Id
+	_, err = srv.SubmitRunnerEvents(ctxA, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "started", Version: 0}},
+	})
+	assert.NilError(t, err)
+	_, err = srv.SubmitRunnerEvents(ctxA, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "stopped", Version: 0}},
+	})
+	assert.NilError(t, err)
 
 	// A caller in another org cannot open a shell for orgA's task.
-	_, err := srv.OpenShell(ctxB, &xagentv1.OpenShellRequest{TaskId: taskID})
+	_, err = srv.OpenShell(ctxB, &xagentv1.OpenShellRequest{TaskId: taskID})
 	assert.Assert(t, err != nil)
 	assert.Equal(t, len(shell.SeedCalls()), 0)
 }
