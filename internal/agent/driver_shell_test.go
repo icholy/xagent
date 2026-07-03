@@ -30,7 +30,9 @@ func TestRun_ForksIntoShell(t *testing.T) {
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{
-		ID: "driver", OrgID: 1, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: 1}),
+		ID:     "driver",
+		OrgID:  1,
+		Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: 1}),
 	}))
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: 1}))
 	srv := httptest.NewServer(mux)

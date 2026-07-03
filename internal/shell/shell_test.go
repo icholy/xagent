@@ -40,7 +40,9 @@ func newRelayServer(t *testing.T, reg *shellserver.Registry) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{
-		ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask}),
+		ID:     "driver",
+		OrgID:  testOrg,
+		Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask}),
 	}))
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
