@@ -22,7 +22,7 @@ type WinSize struct {
 }
 
 // Attach runs the operator side of a debug-shell session. It dials the server's
-// shell relay WebSocket at GET {serverURL}/shell/{session}/attach authenticating
+// shell relay WebSocket at GET {serverURL}/shell/attach?session={session} authenticating
 // with token as a Bearer header, negotiates the xagent-shell.v1 subprotocol, puts
 // the local terminal into raw mode, tracks its size (initial size plus SIGWINCH),
 // and pipes stdin/stdout through the WebSocket using the shellwire framing until

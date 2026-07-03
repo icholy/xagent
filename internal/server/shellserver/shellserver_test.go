@@ -55,8 +55,8 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 	// check admits it, standing in for the Bearer auth middleware in production.
 	reg := shellserver.New(nil, time.Minute)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -65,10 +65,10 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	base := "ws" + strings.TrimPrefix(srv.URL, "http")
-	driver, _, err := websocket.Dial(ctx, base+"/shell/s1/driver", nil)
+	driver, _, err := websocket.Dial(ctx, base+"/shell/driver?session=s1", nil)
 	assert.NilError(t, err)
 	t.Cleanup(func() { driver.Close(websocket.StatusNormalClosure, "test done") })
-	attach, resp, err := websocket.Dial(ctx, base+"/shell/s1/attach", &websocket.DialOptions{
+	attach, resp, err := websocket.Dial(ctx, base+"/shell/attach?session=s1", &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
 	})
 	assert.NilError(t, err)
@@ -95,7 +95,7 @@ func TestAttachRejectsVersionMismatch(t *testing.T) {
 	t.Parallel()
 	reg := shellserver.New(nil, time.Minute)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -106,7 +106,7 @@ func TestAttachRejectsVersionMismatch(t *testing.T) {
 	// by the handler as a policy violation rather than rejected pre-upgrade.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/s1/attach", &websocket.DialOptions{
+	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session=s1", &websocket.DialOptions{
 		Subprotocols: []string{"xagent-shell.v99"},
 	})
 	assert.NilError(t, err)
@@ -123,14 +123,14 @@ func TestAttachRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 	reg := shellserver.New(nil, time.Minute)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/nope/attach", &websocket.DialOptions{
+	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session=nope", &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
 	})
 
@@ -143,7 +143,7 @@ func TestAttachRejectsForeignOrg(t *testing.T) {
 	// The caller belongs to a different org than the session's owner.
 	reg := shellserver.New(nil, time.Minute)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg + 1}))
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg + 1}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -151,7 +151,7 @@ func TestAttachRejectsForeignOrg(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/s1/attach", &websocket.DialOptions{
+	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session=s1", &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
 	})
 
@@ -165,7 +165,7 @@ func TestAttachRejectsMissingCaller(t *testing.T) {
 	// 401 path.
 	reg := shellserver.New(nil, time.Minute)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/attach", reg.AttachHandler())
+	mux.Handle("GET /shell/attach", reg.AttachHandler())
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -173,7 +173,7 @@ func TestAttachRejectsMissingCaller(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/s1/attach", &websocket.DialOptions{
+	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session=s1", &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
 	})
 
@@ -185,14 +185,33 @@ func TestDriverRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 	reg := shellserver.New(nil, time.Minute)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/nope/driver", nil)
+	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/driver?session=nope", nil)
+
+	assert.Assert(t, err != nil)
+	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
+}
+
+func TestDriverRejectsMissingSession(t *testing.T) {
+	t.Parallel()
+	// A request with no ?session= query param falls through lookup to the same 404
+	// as an unknown session (the empty id is never seeded).
+	reg := shellserver.New(nil, time.Minute)
+	mux := http.NewServeMux()
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Cleanup(reg.Close)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/driver", nil)
 
 	assert.Assert(t, err != nil)
 	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
@@ -203,7 +222,7 @@ func TestEstablishTimeoutEvictsSession(t *testing.T) {
 	// Short, injected establishment timeout: connect only the driver leg.
 	reg := shellserver.New(nil, 100*time.Millisecond)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -211,7 +230,7 @@ func TestEstablishTimeoutEvictsSession(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	driver, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/s1/driver", nil)
+	driver, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/driver?session=s1", nil)
 	assert.NilError(t, err)
 	t.Cleanup(func() { driver.Close(websocket.StatusNormalClosure, "test done") })
 
@@ -225,8 +244,8 @@ func TestClosingOneLegEvictsSession(t *testing.T) {
 	t.Parallel()
 	reg := shellserver.New(nil, time.Minute)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -235,10 +254,10 @@ func TestClosingOneLegEvictsSession(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	base := "ws" + strings.TrimPrefix(srv.URL, "http")
-	driver, _, err := websocket.Dial(ctx, base+"/shell/s1/driver", nil)
+	driver, _, err := websocket.Dial(ctx, base+"/shell/driver?session=s1", nil)
 	assert.NilError(t, err)
 	t.Cleanup(func() { driver.Close(websocket.StatusNormalClosure, "test done") })
-	attach, _, err := websocket.Dial(ctx, base+"/shell/s1/attach", &websocket.DialOptions{
+	attach, _, err := websocket.Dial(ctx, base+"/shell/attach?session=s1", &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
 	})
 	assert.NilError(t, err)

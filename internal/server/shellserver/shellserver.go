@@ -120,14 +120,14 @@ func (r *Registry) lookup(id string) *entry {
 	return r.sessions[id]
 }
 
-// DriverHandler handles the driver leg (GET /shell/{session}/driver).
+// DriverHandler handles the driver leg (GET /shell/driver?session=<id>).
 //
 // Authentication is expected to be enforced by the surrounding middleware: this
 // handler is mounted behind the same server auth as the other driver->server
 // endpoints, which validates the driver's task token (a Bearer app JWT).
 func (r *Registry) DriverHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		id := req.PathValue("session")
+		id := req.URL.Query().Get("session")
 		e := r.lookup(id)
 		if e == nil {
 			http.Error(w, "unknown session", http.StatusNotFound)
@@ -142,7 +142,7 @@ func (r *Registry) DriverHandler() http.Handler {
 	})
 }
 
-// AttachHandler handles the operator leg (GET /shell/{session}/attach).
+// AttachHandler handles the operator leg (GET /shell/attach?session=<id>).
 //
 // The session id is not a secret, so access control is by org membership: the
 // authenticated caller (populated by the Bearer auth middleware) must belong to
@@ -155,7 +155,7 @@ func (r *Registry) DriverHandler() http.Handler {
 // upgrade-then-close rather than a pre-upgrade rejection.
 func (r *Registry) AttachHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		id := req.PathValue("session")
+		id := req.URL.Query().Get("session")
 		e := r.lookup(id)
 		if e == nil {
 			http.Error(w, "unknown session", http.StatusNotFound)
