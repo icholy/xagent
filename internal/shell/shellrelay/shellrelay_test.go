@@ -9,8 +9,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/server/shellrelay"
+	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/shellwire"
 	"gotest.tools/v3/assert"
 )
@@ -18,18 +17,20 @@ import (
 // testOrg is the org that owns seeded sessions in these tests.
 const testOrg int64 = 1
 
-// newTestServer mounts the relay's two legs on an httptest server. The attach
-// leg is wrapped so a caller with the given org is injected into the request
-// context — apiauth.WithTestUser stands in for the Bearer auth middleware that
-// guards the route in production, the same helper other server tests use.
-// Cleanups run LIFO, so the registry is torn down before the server is closed —
-// that unblocks any handler goroutine parked waiting for its peer.
-func newTestServer(t *testing.T, reg *shellrelay.Registry, callerOrg int64) *httptest.Server {
+// allowAll is an AuthorizeAttach that admits every attach request. The org
+// policy is exercised at the server layer (internal/server/shellserver); these
+// tests cover the relay's transport mechanics.
+func allowAll(http.ResponseWriter, *http.Request, int64) bool { return true }
+
+// newTestServer mounts the relay's two legs on an httptest server, wiring the
+// attach leg with the given authorizer. Cleanups run LIFO, so the registry is
+// torn down before the server is closed — that unblocks any handler goroutine
+// parked waiting for its peer.
+func newTestServer(t *testing.T, reg *shellrelay.Registry, authorize shellrelay.AuthorizeAttach) *httptest.Server {
 	t.Helper()
-	caller := &apiauth.UserInfo{ID: "tester", OrgID: callerOrg}
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), caller))
+	mux.Handle("GET /shell/{session}/attach", reg.AttachHandler(authorize))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -97,7 +98,7 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, testOrg)
+	srv := newTestServer(t, reg, allowAll)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 	driver := dialDriver(t, srv, "s1")
 	attach, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
@@ -121,43 +122,11 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 	assert.DeepEqual(t, got, reply)
 }
 
-func TestAttachAcceptsMatchingOrg(t *testing.T) {
-	t.Parallel()
-	// Arrange: session and caller share an org.
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, testOrg)
-	assert.NilError(t, reg.Seed("s1", testOrg))
-	dialDriver(t, srv, "s1")
-
-	// Act
-	attach, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, resp.StatusCode, http.StatusSwitchingProtocols)
-	t.Cleanup(func() { attach.Close(websocket.StatusNormalClosure, "test done") })
-}
-
-func TestAttachRejectsDifferentOrg(t *testing.T) {
-	t.Parallel()
-	// Arrange: caller's org differs from the session's owning org.
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, testOrg+1)
-	assert.NilError(t, reg.Seed("s1", testOrg))
-
-	// Act
-	_, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
-
-	// Assert
-	assert.Assert(t, err != nil)
-	assert.Equal(t, resp.StatusCode, http.StatusForbidden)
-}
-
 func TestAttachRejectsVersionMismatch(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, testOrg)
+	srv := newTestServer(t, reg, allowAll)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
 	// Act: wrong version token.
@@ -172,7 +141,7 @@ func TestAttachRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 	// Arrange: no session seeded.
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, testOrg)
+	srv := newTestServer(t, reg, allowAll)
 
 	// Act
 	_, resp, err := dialAttach(t, srv, "nope", shellwire.Subprotocol)
@@ -182,11 +151,31 @@ func TestAttachRejectsUnknownSession(t *testing.T) {
 	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
 }
 
+func TestAttachRunsAuthorizer(t *testing.T) {
+	t.Parallel()
+	// Arrange: an authorizer that rejects, standing in for a failed org check.
+	reg := shellrelay.NewRegistry(nil, time.Minute)
+	reject := func(w http.ResponseWriter, _ *http.Request, orgID int64) bool {
+		assert.Equal(t, orgID, testOrg)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	srv := newTestServer(t, reg, reject)
+	assert.NilError(t, reg.Seed("s1", testOrg))
+
+	// Act
+	_, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
+
+	// Assert
+	assert.Assert(t, err != nil)
+	assert.Equal(t, resp.StatusCode, http.StatusForbidden)
+}
+
 func TestDriverRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, testOrg)
+	srv := newTestServer(t, reg, allowAll)
 
 	// Act
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -202,7 +191,7 @@ func TestEstablishTimeoutTearsDownLoneLeg(t *testing.T) {
 	t.Parallel()
 	// Arrange: short, injected establishment timeout.
 	reg := shellrelay.NewRegistry(nil, 100*time.Millisecond)
-	srv := newTestServer(t, reg, testOrg)
+	srv := newTestServer(t, reg, allowAll)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
 	// Act: connect only the driver leg.
@@ -220,7 +209,7 @@ func TestClosingOneLegTearsDownSession(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs connected.
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, testOrg)
+	srv := newTestServer(t, reg, allowAll)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 	driver := dialDriver(t, srv, "s1")
 	attach, _, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)

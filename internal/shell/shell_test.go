@@ -1,19 +1,19 @@
 package shell_test
 
 import (
-	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/server/shellrelay"
 	"github.com/icholy/xagent/internal/shell"
+	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/shellwire"
 	"gotest.tools/v3/assert"
 )
@@ -21,17 +21,20 @@ import (
 // testOrg owns the seeded shell session in these tests.
 const testOrg int64 = 1
 
-// newRelayServer mounts the real relay's two legs on an httptest server. The
-// attach leg is wrapped with apiauth.WithTestUser so a caller in callerOrg is
-// injected into the request context, standing in for the Bearer auth middleware
-// that guards the route in production. Cleanups run LIFO: the registry is torn
-// down before the server so parked handler goroutines are unblocked.
-func newRelayServer(t *testing.T, reg *shellrelay.Registry, callerOrg int64) *httptest.Server {
+// allowAll admits every attach request; the org policy is covered by
+// internal/server/shellserver. These tests exercise the three legs — driver
+// (shell.Serve), relay, and operator (shell.Operate) — against each other for
+// real over httptest WebSockets.
+func allowAll(http.ResponseWriter, *http.Request, int64) bool { return true }
+
+// newRelayServer mounts the real relay's two legs on an httptest server. Cleanups
+// run LIFO: the registry is torn down before the server so parked handler
+// goroutines are unblocked.
+func newRelayServer(t *testing.T, reg *shellrelay.Registry) *httptest.Server {
 	t.Helper()
-	caller := &apiauth.UserInfo{ID: "tester", OrgID: callerOrg}
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), caller))
+	mux.Handle(shell.DriverRoute, reg.DriverHandler())
+	mux.Handle(shell.AttachRoute, reg.AttachHandler(allowAll))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -43,7 +46,8 @@ func dialAttach(t *testing.T, srv *httptest.Server, session string) *websocket.C
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/shell/" + session + "/attach"
+	url, err := shell.AttachURL(srv.URL, session)
+	assert.NilError(t, err)
 	conn, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
 	})
@@ -52,83 +56,132 @@ func dialAttach(t *testing.T, srv *httptest.Server, session string) *websocket.C
 	return conn
 }
 
-// sendData writes a data frame carrying the given input.
-func sendData(t *testing.T, conn *websocket.Conn, input string) {
+// waitForCond polls cond until it holds or the deadline passes.
+func waitForCond(t *testing.T, timeout time.Duration, cond func() bool) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	assert.NilError(t, conn.Write(ctx, websocket.MessageBinary, shellwire.Data([]byte(input))))
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	assert.Assert(t, cond(), "condition not met within %s", timeout)
 }
 
-// readUntil accumulates data frames until their concatenation contains substr,
-// failing on an unexpected exit frame or timeout.
-func readUntil(t *testing.T, conn *websocket.Conn, substr string) string {
+// syncBuffer is a goroutine-safe buffer collecting the operator's stdout.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// operator drives shell.Operate over conn: stdin writes are sent as data frames,
+// stdout is collected, and resize forwards terminal sizes. done carries the exit
+// code once the shell exits.
+type operator struct {
+	stdin  *io.PipeWriter
+	stdout *syncBuffer
+	resize chan shell.WinSize
+	done   chan opResult
+}
+
+type opResult struct {
+	code int
+	err  error
+}
+
+// runOperator starts shell.Operate against conn in the background.
+func runOperator(t *testing.T, conn *websocket.Conn) *operator {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	var buf bytes.Buffer
-	for {
-		typ, msg, err := conn.Read(ctx)
-		assert.NilError(t, err, "waiting for %q, got so far: %q", substr, buf.String())
-		assert.Equal(t, typ, websocket.MessageBinary)
-		frame, err := shellwire.Parse(msg)
-		assert.NilError(t, err)
-		assert.Assert(t, frame.Type != shellwire.TypeExit, "unexpected exit frame; output so far: %q", buf.String())
-		if frame.Type == shellwire.TypeData {
-			buf.Write(frame.Payload)
-			if strings.Contains(buf.String(), substr) {
-				return buf.String()
-			}
+	inR, inW := io.Pipe()
+	t.Cleanup(func() { _ = inW.Close() })
+	op := &operator{
+		stdin:  inW,
+		stdout: &syncBuffer{},
+		resize: make(chan shell.WinSize, 1),
+		done:   make(chan opResult, 1),
+	}
+	go func() {
+		code, err := shell.Operate(t.Context(), conn, inR, op.stdout, op.resize)
+		op.done <- opResult{code: code, err: err}
+	}()
+	return op
+}
+
+// send writes input to the operator's stdin.
+func (op *operator) send(t *testing.T, input string) {
+	t.Helper()
+	_, err := op.stdin.Write([]byte(input))
+	assert.NilError(t, err)
+}
+
+// waitFor blocks until the operator's stdout contains substr.
+func (op *operator) waitFor(t *testing.T, substr string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(op.stdout.String(), substr) {
+			return
 		}
+		select {
+		case r := <-op.done:
+			t.Fatalf("operator exited before %q appeared (code=%d err=%v); output: %q", substr, r.code, r.err, op.stdout.String())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	t.Fatalf("timed out waiting for %q; output: %q", substr, op.stdout.String())
+}
+
+// waitExit waits for shell.Operate to return and yields the exit code.
+func (op *operator) waitExit(t *testing.T) int {
+	t.Helper()
+	select {
+	case r := <-op.done:
+		assert.NilError(t, r.err)
+		return r.code
+	case <-time.After(10 * time.Second):
+		t.Fatal("operator did not return after shell exit")
+		return 0
 	}
 }
 
-// readExitCode reads frames until an exit frame arrives and returns its code.
-func readExitCode(t *testing.T, conn *websocket.Conn) int {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	for {
-		typ, msg, err := conn.Read(ctx)
-		assert.NilError(t, err)
-		assert.Equal(t, typ, websocket.MessageBinary)
-		frame, err := shellwire.Parse(msg)
-		assert.NilError(t, err)
-		if frame.Type == shellwire.TypeExit {
-			code, err := frame.ExitCode()
-			assert.NilError(t, err)
-			return code
-		}
-	}
-}
-
-func TestServe(t *testing.T) {
+func TestServeAndOperate(t *testing.T) {
 	t.Parallel()
-	// Arrange: real relay, a seeded session, and Serve pointed at it.
+	// Arrange: real relay, a seeded session, the driver leg (Serve), and the
+	// operator leg (Operate) both dialed against the httptest server.
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newRelayServer(t, reg, testOrg)
+	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- shell.Serve(t.Context(), srv.URL, "driver-token", "s1", slog.Default()) }()
 
-	attach := dialAttach(t, srv, "s1")
+	op := runOperator(t, dialAttach(t, srv, "s1"))
 
-	// Act + Assert: a command echoes back through the PTY as data frames.
-	sendData(t, attach, "echo hello\n")
-	readUntil(t, attach, "hello")
+	// Act + Assert: operator stdin -> shell stdin -> shell stdout -> operator stdout.
+	op.send(t, "echo hello\n")
+	op.waitFor(t, "hello")
 
-	// Act + Assert: a resize frame applies without error — stty reports the new
-	// size back through the PTY.
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	assert.NilError(t, attach.Write(ctx, websocket.MessageBinary, shellwire.Resize(40, 100)))
-	sendData(t, attach, "stty size\n")
-	readUntil(t, attach, "40 100")
+	// Act + Assert: a resize propagates — stty reports the new size back.
+	op.resize <- shell.WinSize{Rows: 40, Cols: 100}
+	op.send(t, "stty size\n")
+	op.waitFor(t, "40 100")
 
-	// Act + Assert: ending the shell delivers an exit frame carrying its code.
-	sendData(t, attach, "exit 0\n")
-	assert.Equal(t, readExitCode(t, attach), 0)
+	// Act + Assert: ending the shell propagates the exit code and Serve returns.
+	op.send(t, "exit 0\n")
+	assert.Equal(t, op.waitExit(t), 0)
 
 	select {
 	case err := <-serveErr:
@@ -142,23 +195,82 @@ func TestServe_ExitCode(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newRelayServer(t, reg, testOrg)
+	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s2", testOrg))
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- shell.Serve(t.Context(), srv.URL, "driver-token", "s2", slog.Default()) }()
 
-	attach := dialAttach(t, srv, "s2")
+	op := runOperator(t, dialAttach(t, srv, "s2"))
 
 	// Act: exit with a non-zero status.
-	sendData(t, attach, "exit 7\n")
+	op.send(t, "exit 7\n")
 
-	// Assert: the exit frame carries the shell's exit code.
-	assert.Equal(t, readExitCode(t, attach), 7)
+	// Assert: the operator observes the shell's exit code.
+	assert.Equal(t, op.waitExit(t), 7)
 	select {
 	case err := <-serveErr:
 		assert.NilError(t, err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("Serve did not return after shell exited")
 	}
+}
+
+func TestSessionTornDownWhenOperatorDisconnects(t *testing.T) {
+	t.Parallel()
+	// Arrange: both legs connected and actively relaying. Serve runs on a context
+	// canceled during cleanup so a leaked shell can't outlive the test.
+	reg := shellrelay.NewRegistry(nil, time.Minute)
+	srv := newRelayServer(t, reg)
+	assert.NilError(t, reg.Seed("s3", testOrg))
+
+	serveCtx, cancelServe := context.WithCancel(t.Context())
+	t.Cleanup(cancelServe)
+	go func() { _ = shell.Serve(serveCtx, srv.URL, "driver-token", "s3", slog.Default()) }()
+
+	attach := dialAttach(t, srv, "s3")
+	op := runOperator(t, attach)
+	op.send(t, "echo up\n")
+	op.waitFor(t, "up")
+
+	// Act: the operator leg disconnects abruptly.
+	attach.CloseNow()
+
+	// Assert: dropping one leg tears the whole session down, and the operator's
+	// pump returns an error rather than blocking.
+	waitForCond(t, 5*time.Second, func() bool { return !reg.Has("s3") })
+	select {
+	case r := <-op.done:
+		assert.Assert(t, r.err != nil, "Operate should error once its leg is closed")
+	case <-time.After(5 * time.Second):
+		t.Fatal("operator did not return after its leg was closed")
+	}
+}
+
+func TestDriverURL(t *testing.T) {
+	t.Parallel()
+	url, err := shell.DriverURL("https://example.com", "abc")
+	assert.NilError(t, err)
+	assert.Equal(t, url, "wss://example.com/shell/abc/driver")
+
+	url, err = shell.DriverURL("http://example.com/", "abc")
+	assert.NilError(t, err)
+	assert.Equal(t, url, "ws://example.com/shell/abc/driver")
+
+	_, err = shell.DriverURL("", "abc")
+	assert.ErrorContains(t, err, "empty server URL")
+}
+
+func TestAttachURL(t *testing.T) {
+	t.Parallel()
+	url, err := shell.AttachURL("https://example.com", "abc")
+	assert.NilError(t, err)
+	assert.Equal(t, url, "wss://example.com/shell/abc/attach")
+
+	url, err = shell.AttachURL("http://example.com/", "abc")
+	assert.NilError(t, err)
+	assert.Equal(t, url, "ws://example.com/shell/abc/attach")
+
+	_, err = shell.AttachURL("", "abc")
+	assert.ErrorContains(t, err, "empty server URL")
 }

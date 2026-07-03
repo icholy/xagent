@@ -1,16 +1,18 @@
-// Package shell implements the driver leg of the reverse debug shell (step 3 of
-// the design in proposals/draft/driver-reverse-shell.md).
+// Package shell holds the client-side core of the reverse debug shell (the
+// design in proposals/draft/driver-reverse-shell.md): the driver leg (Serve) and
+// the operator leg (Attach), plus the shared route/URL helpers both legs and the
+// server route registration use. The server-side rendezvous relay lives in the
+// shellrelay sub-package, and the wire framing lives in internal/shellwire.
 //
 // Serve allocates a PTY, spawns a login shell, dials the server's shell relay
 // WebSocket for a rendezvous session, and pipes the PTY over it using the
-// shellwire framing. It is a plain library function: it takes the server URL,
-// the caller's token, and the session id, and does not depend on the driver or
-// agent packages. The driver wiring that decides when to call Serve lands in a
-// later step.
+// shellwire framing. Attach is its operator-side counterpart: it dials the
+// attach leg, drives the local terminal, and returns the shell's exit code. Both
+// are plain library functions that take the server URL, the caller's token, and
+// the session id, and do not depend on the driver, agent, or server packages.
 //
-// The wire contract lives entirely in internal/shellwire; this package does not
-// import the server-side relay (internal/server/shellrelay). The relay bridges
-// this driver leg to the operator's attach leg and never parses the frames.
+// The wire contract lives entirely in internal/shellwire; the relay passes frames
+// through opaquely and never parses them.
 package shell
 
 import (
@@ -25,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -77,7 +78,7 @@ func Serve(ctx context.Context, serverURL, token, session string, log *slog.Logg
 	}
 	defer func() { _ = ptmx.Close() }()
 
-	url, err := webSocketURL(serverURL, session)
+	url, err := DriverURL(serverURL, session)
 	if err != nil {
 		return err
 	}
@@ -172,19 +173,4 @@ func exitCode(err error) int {
 		return ee.ExitCode()
 	}
 	return 1
-}
-
-// webSocketURL builds the ws(s) URL for the driver leg of a session from the
-// server's base URL.
-func webSocketURL(serverURL, session string) (string, error) {
-	if serverURL == "" {
-		return "", fmt.Errorf("shell: empty server URL")
-	}
-	switch {
-	case strings.HasPrefix(serverURL, "https://"):
-		serverURL = "wss://" + strings.TrimPrefix(serverURL, "https://")
-	case strings.HasPrefix(serverURL, "http://"):
-		serverURL = "ws://" + strings.TrimPrefix(serverURL, "http://")
-	}
-	return strings.TrimSuffix(serverURL, "/") + "/shell/" + session + "/driver", nil
 }
