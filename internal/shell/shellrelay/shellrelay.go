@@ -173,9 +173,16 @@ func (s *Session) teardown(reason string) {
 
 		close(s.done)
 
+		// CloseNow rather than a graceful Close: the pump goroutine is parked in
+		// Read holding the conn's read lock, so the close handshake's
+		// waitCloseHandshake could never acquire it and would burn its full timeout
+		// (2 legs × ~5s, serialized, on every teardown and on Registry.Close at
+		// shutdown). CloseNow skips the handshake — the pump's Read just errors,
+		// which is already the teardown signal — and close(s.done) above has already
+		// fired, so Done semantics are unaffected.
 		for _, leg := range legs {
 			if leg != nil {
-				leg.Close(websocket.StatusNormalClosure, reason)
+				_ = leg.CloseNow()
 			}
 		}
 		s.log.Debug("shell session torn down", "reason", reason)
