@@ -10,57 +10,46 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/icholy/xagent/internal/shell/shellrelay"
-	"github.com/icholy/xagent/internal/shell/shellwire"
 	"gotest.tools/v3/assert"
 )
 
-// testOrg is the org that owns seeded sessions in these tests.
-const testOrg int64 = 1
-
-// allowAll is an AuthorizeAttach that admits every attach request. The org
-// policy is exercised at the server layer (internal/server/shellserver); these
-// tests cover the relay's transport mechanics.
-func allowAll(http.ResponseWriter, *http.Request, int64) bool { return true }
-
-// newTestServer mounts the relay's two legs on an httptest server, wiring the
-// attach leg with the given authorizer. Cleanups run LIFO, so the registry is
-// torn down before the server is closed — that unblocks any handler goroutine
-// parked waiting for its peer.
-func newTestServer(t *testing.T, reg *shellrelay.Registry, authorize shellrelay.AuthorizeAttach) *httptest.Server {
+// joinServer stands up an httptest server whose sole handler accepts the
+// WebSocket and hands it to s.Join. Both legs dial the same handler; the Session
+// pairs them by arrival order. Cleanups run LIFO, so the session is closed before
+// the server — that unblocks any handler goroutine parked waiting for its peer.
+func joinServer(t *testing.T, s *shellrelay.Session) *httptest.Server {
 	t.Helper()
-	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", reg.AttachHandler(authorize))
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		conn, err := websocket.Accept(w, req, nil)
+		if err != nil {
+			return
+		}
+		_ = s.Join(req.Context(), conn)
+	}))
 	t.Cleanup(srv.Close)
-	t.Cleanup(reg.Close)
+	t.Cleanup(s.Close)
 	return srv
 }
 
-func wsURL(srv *httptest.Server, path string) string {
-	return "ws" + strings.TrimPrefix(srv.URL, "http") + path
+func wsURL(srv *httptest.Server) string {
+	return "ws" + strings.TrimPrefix(srv.URL, "http")
 }
 
-// dialDriver connects the driver leg. The relay handler mounts behind auth
-// middleware in production; here we exercise the relay directly.
-func dialDriver(t *testing.T, srv *httptest.Server, session string) *websocket.Conn {
+// dial connects a leg to the join server.
+func dial(t *testing.T, srv *httptest.Server) (*websocket.Conn, *http.Response, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	conn, _, err := websocket.Dial(ctx, wsURL(srv, "/shell/"+session+"/driver"), nil)
+	return websocket.Dial(ctx, wsURL(srv), nil)
+}
+
+// dialLeg connects a leg and fails the test if the handshake errors.
+func dialLeg(t *testing.T, srv *httptest.Server) *websocket.Conn {
+	t.Helper()
+	conn, _, err := dial(t, srv)
 	assert.NilError(t, err)
 	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
 	return conn
-}
-
-// dialAttach connects the operator leg with the given subprotocol tokens.
-func dialAttach(t *testing.T, srv *httptest.Server, session string, subprotocols ...string) (*websocket.Conn, *http.Response, error) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	return websocket.Dial(ctx, wsURL(srv, "/shell/"+session+"/attach"), &websocket.DialOptions{
-		Subprotocols: subprotocols,
-	})
 }
 
 // send writes a binary message and fails the test on error.
@@ -81,164 +70,124 @@ func recv(t *testing.T, conn *websocket.Conn) (websocket.MessageType, []byte) {
 	return typ, data
 }
 
-// waitFor polls cond until it holds or the deadline passes.
-func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(2 * time.Millisecond)
-	}
-	assert.Assert(t, cond(), "condition not met within %s", timeout)
-}
-
-func TestRelayPassesBytesBothDirections(t *testing.T) {
+func TestSessionPassesBytesBothDirections(t *testing.T) {
 	t.Parallel()
-	// Arrange
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, allowAll)
-	assert.NilError(t, reg.Seed("s1", testOrg))
-	driver := dialDriver(t, srv, "s1")
-	attach, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
-	assert.NilError(t, err)
-	assert.Equal(t, resp.StatusCode, http.StatusSwitchingProtocols)
-	assert.Equal(t, attach.Subprotocol(), shellwire.Subprotocol)
-	t.Cleanup(func() { attach.Close(websocket.StatusNormalClosure, "test done") })
+	// Arrange: both legs joined.
+	s := shellrelay.NewSession(time.Minute, nil)
+	srv := joinServer(t, s)
+	legA := dialLeg(t, srv)
+	legB := dialLeg(t, srv)
 
-	// Act + Assert: driver -> attach, including arbitrary non-UTF-8 bytes.
+	// Act + Assert: A -> B, including arbitrary non-UTF-8 bytes.
 	payload := []byte{0x00, 0x01, 0xff, 0xfe, 0x80, 'h', 'i', 0x00}
-	send(t, driver, payload)
-	typ, got := recv(t, attach)
+	send(t, legA, payload)
+	typ, got := recv(t, legB)
 	assert.Equal(t, typ, websocket.MessageBinary)
 	assert.DeepEqual(t, got, payload)
 
-	// Act + Assert: attach -> driver.
+	// Act + Assert: B -> A.
 	reply := []byte{0x02, 0xde, 0xad, 0xbe, 0xef}
-	send(t, attach, reply)
-	typ, got = recv(t, driver)
+	send(t, legB, reply)
+	typ, got = recv(t, legA)
 	assert.Equal(t, typ, websocket.MessageBinary)
 	assert.DeepEqual(t, got, reply)
 }
 
-func TestAttachRejectsVersionMismatch(t *testing.T) {
+func TestSessionRejectsThirdLeg(t *testing.T) {
 	t.Parallel()
-	// Arrange
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, allowAll)
-	assert.NilError(t, reg.Seed("s1", testOrg))
+	// Arrange: both legs joined and actively relaying.
+	s := shellrelay.NewSession(time.Minute, nil)
+	srv := joinServer(t, s)
+	legA := dialLeg(t, srv)
+	legB := dialLeg(t, srv)
+	send(t, legA, []byte{0x00, 'x'})
+	recv(t, legB)
 
-	// Act: wrong version token.
-	_, resp, err := dialAttach(t, srv, "s1", "xagent-shell.v99")
-
-	// Assert
-	assert.Assert(t, err != nil)
-	assert.Equal(t, resp.StatusCode, http.StatusBadRequest)
-}
-
-func TestAttachRejectsUnknownSession(t *testing.T) {
-	t.Parallel()
-	// Arrange: no session seeded.
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, allowAll)
-
-	// Act
-	_, resp, err := dialAttach(t, srv, "nope", shellwire.Subprotocol)
-
-	// Assert
-	assert.Assert(t, err != nil)
-	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
-}
-
-func TestAttachRunsAuthorizer(t *testing.T) {
-	t.Parallel()
-	// Arrange: an authorizer that rejects, standing in for a failed org check.
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	reject := func(w http.ResponseWriter, _ *http.Request, orgID int64) bool {
-		assert.Equal(t, orgID, testOrg)
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return false
-	}
-	srv := newTestServer(t, reg, reject)
-	assert.NilError(t, reg.Seed("s1", testOrg))
-
-	// Act
-	_, resp, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
-
-	// Assert
-	assert.Assert(t, err != nil)
-	assert.Equal(t, resp.StatusCode, http.StatusForbidden)
-}
-
-func TestDriverRejectsUnknownSession(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, allowAll)
-
-	// Act
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	// Act: a third leg dials in. The handshake succeeds (the reject is a policy
+	// close after Accept), so the leg is closed as soon as it reads.
+	third := dialLeg(t, srv)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	_, resp, err := websocket.Dial(ctx, wsURL(srv, "/shell/nope/driver"), nil)
+	_, _, err := third.Read(ctx)
 
-	// Assert
-	assert.Assert(t, err != nil)
-	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
+	// Assert: the third leg is closed, and the first two are undisturbed.
+	assert.Assert(t, err != nil, "third leg should be rejected")
+	send(t, legB, []byte{0x00, 'y'})
+	typ, got := recv(t, legA)
+	assert.Equal(t, typ, websocket.MessageBinary)
+	assert.DeepEqual(t, got, []byte{0x00, 'y'})
 }
 
-func TestEstablishTimeoutTearsDownLoneLeg(t *testing.T) {
+func TestSessionEstablishTimeoutTearsDownLoneLeg(t *testing.T) {
 	t.Parallel()
 	// Arrange: short, injected establishment timeout.
-	reg := shellrelay.NewRegistry(nil, 100*time.Millisecond)
-	srv := newTestServer(t, reg, allowAll)
-	assert.NilError(t, reg.Seed("s1", testOrg))
+	s := shellrelay.NewSession(100*time.Millisecond, nil)
+	srv := joinServer(t, s)
 
-	// Act: connect only the driver leg.
-	driver := dialDriver(t, srv, "s1")
+	// Act: connect only one leg.
+	lone := dialLeg(t, srv)
 
 	// Assert: the session is torn down and the lone leg is closed.
-	waitFor(t, 3*time.Second, func() bool { return !reg.Has("s1") })
+	select {
+	case <-s.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("session was not torn down by the establishment timeout")
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	_, _, err := driver.Read(ctx)
-	assert.Assert(t, err != nil, "lone driver leg should be closed after establishment timeout")
+	_, _, err := lone.Read(ctx)
+	assert.Assert(t, err != nil, "lone leg should be closed after establishment timeout")
 }
 
-func TestClosingOneLegTearsDownSession(t *testing.T) {
+func TestSessionClosingOneLegTearsDownPeer(t *testing.T) {
 	t.Parallel()
-	// Arrange: both legs connected.
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	srv := newTestServer(t, reg, allowAll)
-	assert.NilError(t, reg.Seed("s1", testOrg))
-	driver := dialDriver(t, srv, "s1")
-	attach, _, err := dialAttach(t, srv, "s1", shellwire.Subprotocol)
-	assert.NilError(t, err)
-	// Round-trip once so both legs are actively relaying.
-	send(t, driver, []byte{0x00, 'x'})
-	recv(t, attach)
+	// Arrange: both legs connected and actively relaying.
+	s := shellrelay.NewSession(time.Minute, nil)
+	srv := joinServer(t, s)
+	legA := dialLeg(t, srv)
+	legB := dialLeg(t, srv)
+	send(t, legA, []byte{0x00, 'x'})
+	recv(t, legB)
 
-	// Act: close the driver leg.
-	driver.Close(websocket.StatusNormalClosure, "bye")
+	// Act: close one leg.
+	legA.Close(websocket.StatusNormalClosure, "bye")
 
-	// Assert: the attach leg is closed and the session removed.
+	// Assert: the peer leg is closed and the session is done.
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	_, _, readErr := attach.Read(ctx)
+	_, _, readErr := legB.Read(ctx)
 	assert.Assert(t, readErr != nil, "peer leg should be closed when one leg closes")
-	waitFor(t, 3*time.Second, func() bool { return !reg.Has("s1") })
+	select {
+	case <-s.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("session was not torn down when a leg closed")
+	}
 }
 
-func TestSeedRejectsDuplicate(t *testing.T) {
+func TestSessionCloseTearsDownAndSignalsDone(t *testing.T) {
 	t.Parallel()
-	// Arrange
-	reg := shellrelay.NewRegistry(nil, time.Minute)
-	t.Cleanup(reg.Close)
-	assert.NilError(t, reg.Seed("s1", testOrg))
+	// Arrange: both legs joined.
+	s := shellrelay.NewSession(time.Minute, nil)
+	srv := joinServer(t, s)
+	legA := dialLeg(t, srv)
+	legB := dialLeg(t, srv)
+	send(t, legA, []byte{0x00, 'x'})
+	recv(t, legB)
 
-	// Act
-	err := reg.Seed("s1", testOrg)
+	// Act: explicit Close, twice to prove idempotence.
+	s.Close()
+	s.Close()
 
-	// Assert
-	assert.ErrorContains(t, err, "already exists")
+	// Assert: Done fires and both legs are closed.
+	select {
+	case <-s.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("Done was not signaled after Close")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	_, _, errA := legA.Read(ctx)
+	_, _, errB := legB.Read(ctx)
+	assert.Assert(t, errA != nil, "leg A should be closed after Close")
+	assert.Assert(t, errB != nil, "leg B should be closed after Close")
 }

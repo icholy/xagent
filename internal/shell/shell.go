@@ -38,14 +38,6 @@ import (
 // shell process has exited.
 const exitReportTimeout = 5 * time.Second
 
-// ReadLimit is the per-message read limit applied to every *websocket.Conn on
-// every leg of a shell session. coder/websocket defaults to 32768 bytes, but the
-// driver frames PTY output with a 32*1024 buffer, so a full read yields a
-// 1 + 32768 = 32769-byte data frame that trips the default limit and tears the
-// session down on the first large output burst. 1 MiB comfortably covers a full
-// output chunk (or a large operator paste) with room to spare.
-const ReadLimit = 1 << 20
-
 // CreateSessionID returns an unguessable rendezvous id for a debug-shell
 // session. It is not a secret — the attach leg is authorized by org membership,
 // not by knowing the id — but a random id keeps sessions from colliding and from
@@ -98,7 +90,7 @@ func Serve(ctx context.Context, serverURL, token, session string, log *slog.Logg
 		return fmt.Errorf("failed to dial shell relay: %w", err)
 	}
 	defer conn.CloseNow()
-	conn.SetReadLimit(ReadLimit)
+	conn.SetReadLimit(shellwire.ReadLimit)
 
 	// WebSocket -> PTY: apply incoming data/resize frames. On any read error —
 	// the operator leg dropped, the session was torn down, or ctx was canceled —
