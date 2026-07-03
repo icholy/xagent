@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.6.0](https://github.com/icholy/xagent/compare/v2.5.1...v2.6.0) (2026-07-03)
+
+
+### Features
+
+* add C2 shell rendezvous relay ([#1118](https://github.com/icholy/xagent/issues/1118)) ([df17327](https://github.com/icholy/xagent/commit/df17327ca0b2382e9748f6ce20a34a3c320e3681))
+* add driver-side debug shell (runShell) ([#1123](https://github.com/icholy/xagent/issues/1123)) ([4fb3229](https://github.com/icholy/xagent/commit/4fb3229a3ca0ce359651469e3eecc286f0a4da54))
+* add OpenShell RPC for debug shells ([#1124](https://github.com/icholy/xagent/issues/1124)) ([1c5b6ac](https://github.com/icholy/xagent/commit/1c5b6acf007d14605468bb7cee3fe323eb990c9b))
+* add shell_session field to Task ([#1114](https://github.com/icholy/xagent/issues/1114)) ([5f48cc9](https://github.com/icholy/xagent/commit/5f48cc9d26fce57781511ece624ab473610a0ee4))
+* clear shell_session when the shell rendezvous ends ([#1138](https://github.com/icholy/xagent/issues/1138)) ([e97eb3b](https://github.com/icholy/xagent/commit/e97eb3bde85e134c7ce63c5cf426e49c29444665))
+* fork driver into debug shell on shell_session ([#1125](https://github.com/icholy/xagent/issues/1125)) ([ead1e9d](https://github.com/icholy/xagent/commit/ead1e9db7b517f5026651f8144b8a767ceeafb7b))
+* reimplement xagent shell against the server ([#1127](https://github.com/icholy/xagent/issues/1127)) ([4d4350d](https://github.com/icholy/xagent/commit/4d4350d9a1803f24fee396319f3fd8a66a425474))
+
+
+### Bug Fixes
+
+* bind the driver reverse-shell leg to the session's task ([#1140](https://github.com/icholy/xagent/issues/1140)) ([05c428e](https://github.com/icholy/xagent/commit/05c428e4a549cd3f8b1f8ca86e60a0256af61c38))
+* raise websocket read limit on all debug-shell legs ([#1134](https://github.com/icholy/xagent/issues/1134)) ([e1e612e](https://github.com/icholy/xagent/commit/e1e612e0bac4097c4c916cb546aa35f781fcf532))
+* **webui:** remove redundant auto-archive deadline text ([#1117](https://github.com/icholy/xagent/issues/1117)) ([bf8842e](https://github.com/icholy/xagent/commit/bf8842e3f145bad0683f6c6a85f8ec4d8b5dbf1d))
+
+
+### Miscellaneous
+
+* carry shell session id as a query param ([#1137](https://github.com/icholy/xagent/issues/1137)) ([c31259e](https://github.com/icholy/xagent/commit/c31259eff44fc0601586c146764626233b6cc4dc))
+* consolidate debug shell core into internal/shell ([#1131](https://github.com/icholy/xagent/issues/1131)) ([7bb9032](https://github.com/icholy/xagent/commit/7bb903277bdddad6032c0659516233c0b7e1474b))
+* correct internal/proto note (checked in, not gitignored) ([#1116](https://github.com/icholy/xagent/issues/1116)) ([1c282bd](https://github.com/icholy/xagent/commit/1c282bd37674bc27b8565890abec17461fe6dfbb))
+* **deps:** update dependency @bufbuild/protobuf to v2.12.1 ([#1129](https://github.com/icholy/xagent/issues/1129)) ([84d1252](https://github.com/icholy/xagent/commit/84d12524fecc6ac654cc8e96a955a7e62665a13d))
+* **deps:** update dependency @bufbuild/protoc-gen-es to v2.12.1 ([#1130](https://github.com/icholy/xagent/issues/1130)) ([e9a8da0](https://github.com/icholy/xagent/commit/e9a8da035aa5fd3e604333b5cb9d63aa72838180))
+* **deps:** update dependency @vitejs/plugin-react to v6.0.3 ([#1132](https://github.com/icholy/xagent/issues/1132)) ([40187f9](https://github.com/icholy/xagent/commit/40187f97fe5dd9fe1bcede9c3a3b951942156d45))
+* **deps:** update dependency flyctl to v0.4.61 ([#1135](https://github.com/icholy/xagent/issues/1135)) ([05bddf6](https://github.com/icholy/xagent/commit/05bddf6804a4662b6f501d0221c44b9c3840ceea))
+* **deps:** update module golang.org/x/tools to v0.47.0 ([#1128](https://github.com/icholy/xagent/issues/1128)) ([978e2a9](https://github.com/icholy/xagent/commit/978e2a97acdad960b3a7bda5da897d1fa4ade866))
+* **lambdamicrovm:** correct the create-microvm-image recipe ([5fc3a09](https://github.com/icholy/xagent/commit/5fc3a091c68b9f800b3398d7dfea64ca35afe182))
+* move shellwire under internal/shell ([#1133](https://github.com/icholy/xagent/issues/1133)) ([0b5d42a](https://github.com/icholy/xagent/commit/0b5d42a1872fe260b2e8d4f8a58066e192dee809))
+* replace C2/botnet analogy with neutral control-plane terms ([#1122](https://github.com/icholy/xagent/issues/1122)) ([433de88](https://github.com/icholy/xagent/commit/433de88a7038ebbf9039adfbfb23c2ae4ef2e8b6))
+* split shellrelay into a leg-agnostic Session and server-owned registry ([#1136](https://github.com/icholy/xagent/issues/1136)) ([8eced10](https://github.com/icholy/xagent/commit/8eced10e833ff6b43dc2529855ef22054bb23765))
+* use options structs for shell and shellserver APIs ([#1139](https://github.com/icholy/xagent/issues/1139)) ([89185f8](https://github.com/icholy/xagent/commit/89185f83f4b3549460b2a50f398005015f341fd2))
+
 ## [2.5.1](https://github.com/icholy/xagent/compare/v2.5.0...v2.5.1) (2026-07-01)
 
 
