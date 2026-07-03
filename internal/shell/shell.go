@@ -2,7 +2,7 @@
 // design in proposals/draft/driver-reverse-shell.md): the driver leg (Serve) and
 // the operator leg (Attach), plus the shared route/URL helpers both legs and the
 // server route registration use. The server-side rendezvous relay lives in the
-// shellrelay sub-package, and the wire framing lives in internal/shellwire.
+// shellrelay sub-package, and the wire framing lives in internal/shell/shellwire.
 //
 // Serve allocates a PTY, spawns a login shell, dials the server's shell relay
 // WebSocket for a rendezvous session, and pipes the PTY over it using the
@@ -11,7 +11,7 @@
 // are plain library functions that take the server URL, the caller's token, and
 // the session id, and do not depend on the driver, agent, or server packages.
 //
-// The wire contract lives entirely in internal/shellwire; the relay passes frames
+// The wire contract lives entirely in internal/shell/shellwire; the relay passes frames
 // through opaquely and never parses them.
 package shell
 
@@ -31,7 +31,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
-	"github.com/icholy/xagent/internal/shellwire"
+	"github.com/icholy/xagent/internal/shell/shellwire"
 )
 
 // exitReportTimeout bounds the best-effort send of the final exit frame once the

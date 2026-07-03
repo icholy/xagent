@@ -3,7 +3,7 @@ package shellwire_test
 import (
 	"testing"
 
-	"github.com/icholy/xagent/internal/shellwire"
+	"github.com/icholy/xagent/internal/shell/shellwire"
 	"gotest.tools/v3/assert"
 )
 

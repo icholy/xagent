@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/icholy/xagent/internal/shellwire"
+	"github.com/icholy/xagent/internal/shell/shellwire"
 )
 
 // DefaultEstablishTimeout is the default connection-establishment timeout: if
