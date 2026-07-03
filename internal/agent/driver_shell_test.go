@@ -26,7 +26,7 @@ func TestRun_ForksIntoShell(t *testing.T) {
 	// Real server-owned registry with both legs; the attach leg is admitted by a
 	// test caller in the session's org (the org policy is exercised in the server
 	// package).
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: 1}))

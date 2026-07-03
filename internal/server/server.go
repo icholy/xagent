@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/ed25519"
 	"log/slog"
 	"net/http"
@@ -57,7 +58,15 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	shell := shellserver.New(log, shellrelay.DefaultEstablishTimeout)
+	// When a debug-shell rendezvous tears down, clear the task's shell_session so
+	// a later restart of that task boots the agent rather than another shell. Best
+	// effort: log a warning on error, never fail teardown on it.
+	onShellClose := func(session string, orgID int64) {
+		if err := opts.Store.ClearShellSession(context.Background(), nil, session, orgID); err != nil {
+			log.Warn("failed to clear shell_session", "session", session, "org", orgID, "error", err)
+		}
+	}
+	shell := shellserver.New(log, shellrelay.DefaultEstablishTimeout, onShellClose)
 	apiOpts := apiserver.Options{
 		Log:       log,
 		Store:     opts.Store,

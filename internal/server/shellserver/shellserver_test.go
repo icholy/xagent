@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,27 @@ import (
 	"github.com/icholy/xagent/internal/shell/shellwire"
 	"gotest.tools/v3/assert"
 )
+
+// closeRecorder captures the args of every onClose invocation. The callback runs
+// on the session's teardown goroutine, so access is mutex-guarded.
+type closeRecorder struct {
+	mu    sync.Mutex
+	calls [][2]any // {session string, orgID int64}
+}
+
+func (c *closeRecorder) fn() func(string, int64) {
+	return func(session string, orgID int64) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.calls = append(c.calls, [2]any{session, orgID})
+	}
+}
+
+func (c *closeRecorder) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.calls)
+}
 
 // testOrg owns seeded sessions in these tests.
 const testOrg int64 = 1
@@ -53,7 +75,7 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 	t.Parallel()
 	// The attach leg is wrapped with a test caller in testOrg so the inline org
 	// check admits it, standing in for the Bearer auth middleware in production.
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
@@ -93,7 +115,7 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 
 func TestAttachRejectsVersionMismatch(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
@@ -121,7 +143,7 @@ func TestAttachRejectsVersionMismatch(t *testing.T) {
 
 func TestAttachRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
@@ -141,7 +163,7 @@ func TestAttachRejectsUnknownSession(t *testing.T) {
 func TestAttachRejectsForeignOrg(t *testing.T) {
 	t.Parallel()
 	// The caller belongs to a different org than the session's owner.
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg + 1}))
 	srv := httptest.NewServer(mux)
@@ -163,7 +185,7 @@ func TestAttachRejectsMissingCaller(t *testing.T) {
 	t.Parallel()
 	// The attach handler is mounted without a caller in context, exercising the
 	// 401 path.
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", reg.AttachHandler())
 	srv := httptest.NewServer(mux)
@@ -183,7 +205,7 @@ func TestAttachRejectsMissingCaller(t *testing.T) {
 
 func TestDriverRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
@@ -202,7 +224,7 @@ func TestDriverRejectsMissingSession(t *testing.T) {
 	t.Parallel()
 	// A request with no ?session= query param falls through lookup to the same 404
 	// as an unknown session (the empty id is never seeded).
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
@@ -220,7 +242,7 @@ func TestDriverRejectsMissingSession(t *testing.T) {
 func TestEstablishTimeoutEvictsSession(t *testing.T) {
 	t.Parallel()
 	// Short, injected establishment timeout: connect only the driver leg.
-	reg := shellserver.New(nil, 100*time.Millisecond)
+	reg := shellserver.New(nil, 100*time.Millisecond, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
@@ -242,7 +264,7 @@ func TestEstablishTimeoutEvictsSession(t *testing.T) {
 
 func TestClosingOneLegEvictsSession(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
@@ -273,7 +295,7 @@ func TestClosingOneLegEvictsSession(t *testing.T) {
 
 func TestSeedRejectsDuplicate(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	t.Cleanup(reg.Close)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
@@ -284,10 +306,87 @@ func TestSeedRejectsDuplicate(t *testing.T) {
 
 func TestSeedRejectsEmptyID(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	t.Cleanup(reg.Close)
 
 	err := reg.Seed("", testOrg)
 
 	assert.ErrorContains(t, err, "empty session id")
+}
+
+func TestOnCloseFiresOnLegDrop(t *testing.T) {
+	t.Parallel()
+	// Establish both legs, then drop one: teardown should fire onClose exactly once
+	// with the session id and owning org.
+	rec := &closeRecorder{}
+	reg := shellserver.New(nil, time.Minute, rec.fn())
+	mux := http.NewServeMux()
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Cleanup(reg.Close)
+	assert.NilError(t, reg.Seed("s1", testOrg))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	base := "ws" + strings.TrimPrefix(srv.URL, "http")
+	driver, _, err := websocket.Dial(ctx, base+"/shell/driver?session=s1", nil)
+	assert.NilError(t, err)
+	t.Cleanup(func() { driver.Close(websocket.StatusNormalClosure, "test done") })
+	attach, _, err := websocket.Dial(ctx, base+"/shell/attach?session=s1", &websocket.DialOptions{
+		Subprotocols: []string{shellwire.Subprotocol},
+	})
+	assert.NilError(t, err)
+	t.Cleanup(func() { attach.Close(websocket.StatusNormalClosure, "test done") })
+	send(t, driver, []byte{0x00, 'x'})
+	recv(t, attach)
+
+	driver.Close(websocket.StatusNormalClosure, "bye")
+
+	waitFor(t, 3*time.Second, func() bool { return rec.count() == 1 })
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	assert.DeepEqual(t, rec.calls[0], [2]any{"s1", testOrg})
+}
+
+func TestOnCloseFiresOnEstablishTimeout(t *testing.T) {
+	t.Parallel()
+	// Only the driver leg connects: the establishment timeout tears the session
+	// down, which must also fire onClose.
+	rec := &closeRecorder{}
+	reg := shellserver.New(nil, 100*time.Millisecond, rec.fn())
+	mux := http.NewServeMux()
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Cleanup(reg.Close)
+	assert.NilError(t, reg.Seed("s1", testOrg))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	driver, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/driver?session=s1", nil)
+	assert.NilError(t, err)
+	t.Cleanup(func() { driver.Close(websocket.StatusNormalClosure, "test done") })
+
+	waitFor(t, 3*time.Second, func() bool { return rec.count() == 1 })
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	assert.DeepEqual(t, rec.calls[0], [2]any{"s1", testOrg})
+}
+
+func TestOnCloseFiresOnRegistryClose(t *testing.T) {
+	t.Parallel()
+	// A never-connected session torn down by Close (server shutdown) still fires
+	// onClose once.
+	rec := &closeRecorder{}
+	reg := shellserver.New(nil, time.Minute, rec.fn())
+	assert.NilError(t, reg.Seed("s1", testOrg))
+
+	reg.Close()
+
+	waitFor(t, 3*time.Second, func() bool { return rec.count() == 1 })
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	assert.DeepEqual(t, rec.calls[0], [2]any{"s1", testOrg})
 }
