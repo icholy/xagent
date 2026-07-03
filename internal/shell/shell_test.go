@@ -14,7 +14,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/icholy/xagent/internal/shell"
 	"github.com/icholy/xagent/internal/shell/shellrelay"
-	"github.com/icholy/xagent/internal/shellwire"
+	"github.com/icholy/xagent/internal/shell/shellwire"
 	"gotest.tools/v3/assert"
 )
 

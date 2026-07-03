@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/coder/websocket"
-	"github.com/icholy/xagent/internal/shellwire"
+	"github.com/icholy/xagent/internal/shell/shellwire"
 	"golang.org/x/term"
 )
 
