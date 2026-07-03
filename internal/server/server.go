@@ -16,6 +16,7 @@ import (
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
+	"github.com/icholy/xagent/internal/server/shellserver"
 	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/x/otelx"
@@ -32,7 +33,7 @@ type Server struct {
 	oauth     *oauthflow.Auth
 	cors      bool
 	notify    *notifyserver.Server
-	shell     *shellrelay.Registry
+	shell     *shellserver.Registry
 }
 
 type Options struct {
@@ -55,7 +56,7 @@ func New(opts Options) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	shell := shellrelay.NewRegistry(log, shellrelay.DefaultEstablishTimeout)
+	shell := shellserver.New(log, shellrelay.DefaultEstablishTimeout)
 	apiOpts := apiserver.Options{
 		Log:       log,
 		Store:     opts.Store,
@@ -134,7 +135,7 @@ func (s *Server) Handler() http.Handler {
 	// the driver leg with its task token, the operator (attach) leg with a Bearer
 	// token whose org claim must match the session's owning org.
 	mux.Handle("GET /shell/{session}/driver", alice.New(s.auth.RequireAuth()).Then(s.shell.DriverHandler()))
-	mux.Handle("GET /shell/{session}/attach", alice.New(s.auth.RequireAuth()).Then(s.shell.AttachHandler(authorizeShellAttach)))
+	mux.Handle("GET /shell/{session}/attach", alice.New(s.auth.RequireAuth()).Then(s.shell.AttachHandler()))
 	// MCP endpoint (protected by auth middleware)
 	mux.Handle("/mcp", alice.New(s.auth.RequireAuth()).Then(mcpserver.Handler(s.api)))
 	// React UI (SPA with client-side routing, protected by cookie auth)

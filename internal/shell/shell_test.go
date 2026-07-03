@@ -12,8 +12,9 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/server/shellserver"
 	"github.com/icholy/xagent/internal/shell"
-	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/shell/shellwire"
 	"gotest.tools/v3/assert"
 )
@@ -21,20 +22,18 @@ import (
 // testOrg owns the seeded shell session in these tests.
 const testOrg int64 = 1
 
-// allowAll admits every attach request; the org policy is covered by
-// internal/server/shellserver. These tests exercise the three legs — driver
-// (shell.Serve), relay, and operator (shell.Operate) — against each other for
-// real over httptest WebSockets.
-func allowAll(http.ResponseWriter, *http.Request, int64) bool { return true }
-
-// newRelayServer mounts the real relay's two legs on an httptest server. Cleanups
-// run LIFO: the registry is torn down before the server so parked handler
-// goroutines are unblocked.
-func newRelayServer(t *testing.T, reg *shellrelay.Registry) *httptest.Server {
+// newRelayServer mounts the real server-owned registry's two legs on an httptest
+// server. The attach leg is wrapped with a test caller in testOrg so the org
+// check admits it (the org policy itself is covered by internal/server/shellserver).
+// These tests exercise the three legs — driver (shell.Serve), relay, and operator
+// (shell.Operate) — against each other for real over httptest WebSockets.
+// Cleanups run LIFO: the registry is torn down before the server so parked
+// handler goroutines are unblocked.
+func newRelayServer(t *testing.T, reg *shellserver.Registry) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", reg.AttachHandler(allowAll))
+	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -161,7 +160,7 @@ func TestServeAndOperate(t *testing.T) {
 	t.Parallel()
 	// Arrange: real relay, a seeded session, the driver leg (Serve), and the
 	// operator leg (Operate) both dialed against the httptest server.
-	reg := shellrelay.NewRegistry(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute)
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
@@ -205,7 +204,7 @@ func TestServe_LargeBurstSurvivesReadLimit(t *testing.T) {
 	// trip it in a test — the kernel caps a single PTY master read well under
 	// 32 KiB — so this drives the burst through stdin.) The test asserts every byte
 	// crosses all three legs intact and the session survives.
-	reg := shellrelay.NewRegistry(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute)
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("burst", testOrg))
 
@@ -254,7 +253,7 @@ func TestServe_LargeBurstSurvivesReadLimit(t *testing.T) {
 func TestServe_ExitCode(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	reg := shellrelay.NewRegistry(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute)
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s2", testOrg))
 
@@ -280,7 +279,7 @@ func TestSessionTornDownWhenOperatorDisconnects(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs connected and actively relaying. Serve runs on a context
 	// canceled during cleanup so a leaked shell can't outlive the test.
-	reg := shellrelay.NewRegistry(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute)
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s3", testOrg))
 

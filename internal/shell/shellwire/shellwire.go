@@ -28,6 +28,19 @@ import (
 // contract from a single package.
 const Subprotocol = "xagent-shell.v1"
 
+// ReadLimit is the per-message read limit applied to every *websocket.Conn on
+// every leg of a shell session (both dial legs and both relay legs). It lives
+// here — the common leaf both the client legs and the server-side relay import —
+// so the value has a single definition and neither side has to reach across to
+// the other's package for it.
+//
+// coder/websocket defaults to 32768 bytes, but the driver frames PTY output with
+// a 32*1024 buffer, so a full read yields a 1 + 32768 = 32769-byte data frame
+// that trips the default limit and tears the session down on the first large
+// output burst. 1 MiB comfortably covers a full output chunk (or a large
+// operator paste) with room to spare.
+const ReadLimit = 1 << 20
+
 // Type is the one-byte frame discriminator.
 type Type byte
 
