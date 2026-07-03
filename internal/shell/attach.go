@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,12 +20,11 @@ type WinSize struct {
 	Rows, Cols uint16
 }
 
-// AttachOptions configures Attach. A nil Log falls back to slog.Default.
+// AttachOptions configures Attach.
 type AttachOptions struct {
 	ServerURL string
 	Token     string
 	Session   string
-	Log       *slog.Logger
 }
 
 // Attach runs the operator side of a debug-shell session. It dials the server's
@@ -40,12 +38,6 @@ type AttachOptions struct {
 // thin wrapper: it asks the server to open a session via the OpenShell RPC and
 // then hands the session off to Attach.
 func Attach(ctx context.Context, opts AttachOptions) (int, error) {
-	log := opts.Log
-	if log == nil {
-		log = slog.Default()
-	}
-	_ = log
-
 	url, err := AttachURL(opts.ServerURL, opts.Session)
 	if err != nil {
 		return 1, err
