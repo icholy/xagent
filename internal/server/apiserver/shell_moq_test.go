@@ -17,7 +17,7 @@ var _ ShellRegistry = &ShellRegistryMock{}
 //
 //		// make and configure a mocked ShellRegistry
 //		mockedShellRegistry := &ShellRegistryMock{
-//			SeedFunc: func(id string, orgID int64) error {
+//			SeedFunc: func(id string, orgID int64, taskID int64) error {
 //				panic("mock out the Seed method")
 //			},
 //		}
@@ -28,7 +28,7 @@ var _ ShellRegistry = &ShellRegistryMock{}
 //	}
 type ShellRegistryMock struct {
 	// SeedFunc mocks the Seed method.
-	SeedFunc func(id string, orgID int64) error
+	SeedFunc func(id string, orgID int64, taskID int64) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -38,27 +38,31 @@ type ShellRegistryMock struct {
 			ID string
 			// OrgID is the orgID argument value.
 			OrgID int64
+			// TaskID is the taskID argument value.
+			TaskID int64
 		}
 	}
 	lockSeed sync.RWMutex
 }
 
 // Seed calls SeedFunc.
-func (mock *ShellRegistryMock) Seed(id string, orgID int64) error {
+func (mock *ShellRegistryMock) Seed(id string, orgID int64, taskID int64) error {
 	if mock.SeedFunc == nil {
 		panic("ShellRegistryMock.SeedFunc: method is nil but ShellRegistry.Seed was just called")
 	}
 	callInfo := struct {
-		ID    string
-		OrgID int64
+		ID     string
+		OrgID  int64
+		TaskID int64
 	}{
-		ID:    id,
-		OrgID: orgID,
+		ID:     id,
+		OrgID:  orgID,
+		TaskID: taskID,
 	}
 	mock.lockSeed.Lock()
 	mock.calls.Seed = append(mock.calls.Seed, callInfo)
 	mock.lockSeed.Unlock()
-	return mock.SeedFunc(id, orgID)
+	return mock.SeedFunc(id, orgID, taskID)
 }
 
 // SeedCalls gets all the calls that were made to Seed.
@@ -66,12 +70,14 @@ func (mock *ShellRegistryMock) Seed(id string, orgID int64) error {
 //
 //	len(mockedShellRegistry.SeedCalls())
 func (mock *ShellRegistryMock) SeedCalls() []struct {
-	ID    string
-	OrgID int64
+	ID     string
+	OrgID  int64
+	TaskID int64
 } {
 	var calls []struct {
-		ID    string
-		OrgID int64
+		ID     string
+		OrgID  int64
+		TaskID int64
 	}
 	mock.lockSeed.RLock()
 	calls = mock.calls.Seed

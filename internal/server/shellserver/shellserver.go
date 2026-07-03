@@ -23,6 +23,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/shell/shellwire"
 )
@@ -37,11 +38,13 @@ type Registry struct {
 	sessions map[string]*entry
 }
 
-// entry is a registered session plus the org that owns it: the attach leg is
-// authorized iff the caller belongs to orgID.
+// entry is a registered session plus the identity that owns it: the attach leg
+// is authorized iff the caller belongs to orgID, and the driver leg iff the
+// caller's token is scoped to taskID (the task whose sandbox serves the shell).
 type entry struct {
 	session *shellrelay.Session
 	orgID   int64
+	taskID  int64
 }
 
 // Options configures New.
@@ -79,9 +82,10 @@ func New(opts Options) *Registry {
 	}
 }
 
-// Seed registers a new rendezvous session owned by orgID and starts its
-// establishment timeout. The attach leg is authorized against this org.
-func (r *Registry) Seed(id string, orgID int64) error {
+// Seed registers a new rendezvous session owned by orgID and served by taskID's
+// sandbox, and starts its establishment timeout. The attach leg is authorized
+// against this org; the driver leg against this task.
+func (r *Registry) Seed(id string, orgID, taskID int64) error {
 	if id == "" {
 		return errors.New("shellserver: empty session id")
 	}
@@ -91,7 +95,7 @@ func (r *Registry) Seed(id string, orgID int64) error {
 		return fmt.Errorf("shellserver: session %q already exists", id)
 	}
 	session := shellrelay.NewSession(r.establishTimeout, r.log.With("session", id))
-	r.sessions[id] = &entry{session: session, orgID: orgID}
+	r.sessions[id] = &entry{session: session, orgID: orgID, taskID: taskID}
 	// Evict the session from the map once it tears down — regardless of which path
 	// (establishment timeout with zero or one leg, a dropped leg, or Close) got
 	// there. This is the single place a session leaves the map.
@@ -143,15 +147,37 @@ func (r *Registry) lookup(id string) *entry {
 
 // DriverHandler handles the driver leg (GET /shell/driver?session=<id>).
 //
-// Authentication is expected to be enforced by the surrounding middleware: this
-// handler is mounted behind the same server auth as the other driver->server
-// endpoints, which validates the driver's task token (a Bearer app JWT).
+// The surrounding RequireAuth middleware validates the driver's task token (a
+// Bearer app JWT) and populates the caller, but a valid token only proves the
+// caller is *some* task in the org — not the task that owns this session. Without
+// a further check, a compromised agent in task A (holding task A's valid token)
+// could dial task B's driver leg and seize B's driver slot (first-leg-wins, and
+// the sandbox takes seconds to boot, so there is a race window), landing the
+// operator in an attacker-controlled shell.
+//
+// So we bind the leg to the session's task using the same scope engine GetTask
+// uses for its own-task read: the caller must hold task-read scoped to the
+// session's task id. Legitimate driver tokens carry
+// task.read:{task.id:<own>, task.archived:false} (see agentauth.Scopes), so the
+// request must present both the task id and archived:false to satisfy that
+// predicate — a token scoped to a different task fails the task.id predicate and
+// is rejected before the WebSocket upgrade.
 func (r *Registry) DriverHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		id := req.URL.Query().Get("session")
 		e := r.lookup(id)
 		if e == nil {
 			http.Error(w, "unknown session", http.StatusNotFound)
+			return
+		}
+		caller := apiauth.Caller(req.Context())
+		if caller == nil {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		if !caller.Scopes.Allow(authscope.OpTaskRead,
+			authscope.WithTaskID(e.taskID), authscope.WithTaskArchived(false)) {
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 		conn, err := websocket.Accept(w, req, nil)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/server/shellserver"
@@ -28,12 +29,16 @@ func TestRun_ForksIntoShell(t *testing.T) {
 	// package).
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{
+		ID:     "driver",
+		OrgID:  1,
+		Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: 1}),
+	}))
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: 1}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
-	assert.NilError(t, reg.Seed("s1", 1))
+	assert.NilError(t, reg.Seed("s1", 1, 1))
 
 	// A driver whose task carries the shell_session, pointed at the relay.
 	mock := &xagentclient.ClientMock{

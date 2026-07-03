@@ -49,7 +49,7 @@ type Server struct {
 // operator legs can meet on the relay. Backed by *shellserver.Registry in
 // production; an interface here keeps apiserver testable without the relay.
 type ShellRegistry interface {
-	Seed(id string, orgID int64) error
+	Seed(id string, orgID, taskID int64) error
 }
 
 type Options struct {
