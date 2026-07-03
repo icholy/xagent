@@ -122,6 +122,17 @@ func (s *Store) DeleteTask(ctx context.Context, tx *sql.Tx, id int64, orgID int6
 	})
 }
 
+// ClearShellSession resets shell_session to empty for the task in orgID that
+// currently holds session. Called when a debug-shell rendezvous tears down so a
+// later restart of that task is a normal agent run, not another shell. A no-op
+// if no task holds the session.
+func (s *Store) ClearShellSession(ctx context.Context, tx *sql.Tx, session string, orgID int64) error {
+	return s.q(tx).ClearShellSession(ctx, sqlc.ClearShellSessionParams{
+		ShellSession: session,
+		OrgID:        orgID,
+	})
+}
+
 func toModelTask(row sqlc.Task) (*model.Task, error) {
 	return &model.Task{
 		ID:           row.ID,

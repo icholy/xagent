@@ -31,6 +31,7 @@ import (
 type Registry struct {
 	log              *slog.Logger
 	establishTimeout time.Duration
+	onClose          func(session string, orgID int64)
 
 	mu       sync.Mutex
 	sessions map[string]*entry
@@ -47,7 +48,13 @@ type entry struct {
 // shellrelay.DefaultEstablishTimeout; tests inject a small timeout to exercise
 // the establishment-timeout path without sleeping the real default. A nil log
 // falls back to slog.Default.
-func New(log *slog.Logger, establishTimeout time.Duration) *Registry {
+//
+// onClose, if non-nil, is invoked exactly once per session after it tears down
+// and is evicted from the registry — regardless of teardown reason (normal
+// exit, dropped leg, establishment timeout, or Close). It receives the session
+// id and owning org, letting the caller react to teardown (e.g. clear the
+// task's shell_session) while keeping the registry decoupled from the store.
+func New(log *slog.Logger, establishTimeout time.Duration, onClose func(session string, orgID int64)) *Registry {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -57,6 +64,7 @@ func New(log *slog.Logger, establishTimeout time.Duration) *Registry {
 	return &Registry{
 		log:              log,
 		establishTimeout: establishTimeout,
+		onClose:          onClose,
 		sessions:         make(map[string]*entry),
 	}
 }
@@ -80,6 +88,9 @@ func (r *Registry) Seed(id string, orgID int64) error {
 	go func() {
 		<-session.Done()
 		r.remove(id)
+		if r.onClose != nil {
+			r.onClose(id, orgID)
+		}
 	}()
 	return nil
 }

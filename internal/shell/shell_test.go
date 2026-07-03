@@ -160,7 +160,7 @@ func TestServeAndOperate(t *testing.T) {
 	t.Parallel()
 	// Arrange: real relay, a seeded session, the driver leg (Serve), and the
 	// operator leg (Operate) both dialed against the httptest server.
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
@@ -204,7 +204,7 @@ func TestServe_LargeBurstSurvivesReadLimit(t *testing.T) {
 	// trip it in a test — the kernel caps a single PTY master read well under
 	// 32 KiB — so this drives the burst through stdin.) The test asserts every byte
 	// crosses all three legs intact and the session survives.
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("burst", testOrg))
 
@@ -253,7 +253,7 @@ func TestServe_LargeBurstSurvivesReadLimit(t *testing.T) {
 func TestServe_ExitCode(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s2", testOrg))
 
@@ -279,7 +279,7 @@ func TestSessionTornDownWhenOperatorDisconnects(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs connected and actively relaying. Serve runs on a context
 	// canceled during cleanup so a leaked shell can't outlive the test.
-	reg := shellserver.New(nil, time.Minute)
+	reg := shellserver.New(nil, time.Minute, nil)
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s3", testOrg))
 
