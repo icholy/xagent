@@ -45,17 +45,6 @@ const (
 	testTask int64 = 7
 )
 
-// driverCaller builds the UserInfo a driver token mints for taskID, using the
-// production scope minter so the tests track real grants. The driver leg admits
-// a caller iff its scopes are bound to the session's task.
-func driverCaller(taskID int64) *apiauth.UserInfo {
-	return &apiauth.UserInfo{
-		ID:     "driver",
-		OrgID:  testOrg,
-		Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: taskID}),
-	}
-}
-
 // send writes a binary message and fails the test on error.
 func send(t *testing.T, conn *websocket.Conn, data []byte) {
 	t.Helper()
@@ -93,7 +82,7 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 	// check admits it, standing in for the Bearer auth middleware in production.
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask})}))
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -223,7 +212,7 @@ func TestDriverRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask})}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -242,7 +231,7 @@ func TestDriverRejectsMissingSession(t *testing.T) {
 	// as an unknown session (the empty id is never seeded).
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask})}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -263,7 +252,7 @@ func TestDriverBindsToSessionTask(t *testing.T) {
 	// which the handler's WithTaskID+WithTaskArchived(false) request satisfies.
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask})}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -286,7 +275,7 @@ func TestDriverRejectsForeignTask(t *testing.T) {
 	// never seizes the driver slot.
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask+1)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask + 1})}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -329,7 +318,7 @@ func TestEstablishTimeoutEvictsSession(t *testing.T) {
 	// Short, injected establishment timeout: connect only the driver leg.
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: 100 * time.Millisecond})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask})}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -351,7 +340,7 @@ func TestClosingOneLegEvictsSession(t *testing.T) {
 	t.Parallel()
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask})}))
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -406,7 +395,7 @@ func TestOnCloseFiresOnLegDrop(t *testing.T) {
 	rec := &closeRecorder{}
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute, OnClose: rec.fn()})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask})}))
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -442,7 +431,7 @@ func TestOnCloseFiresOnEstablishTimeout(t *testing.T) {
 	rec := &closeRecorder{}
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: 100 * time.Millisecond, OnClose: rec.fn()})
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), driverCaller(testTask)))
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask})}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
