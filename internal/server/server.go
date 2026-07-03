@@ -66,7 +66,11 @@ func New(opts Options) *Server {
 			log.Warn("failed to clear shell_session", "session", session, "org", orgID, "error", err)
 		}
 	}
-	shell := shellserver.New(log, shellrelay.DefaultEstablishTimeout, onShellClose)
+	shell := shellserver.New(shellserver.Options{
+		Log:              log,
+		EstablishTimeout: shellrelay.DefaultEstablishTimeout,
+		OnClose:          onShellClose,
+	})
 	apiOpts := apiserver.Options{
 		Log:       log,
 		Store:     opts.Store,

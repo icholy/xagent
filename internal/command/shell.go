@@ -62,7 +62,11 @@ var ShellCommand = &cli.Command{
 			return fmt.Errorf("server returned an empty shell session id")
 		}
 
-		code, err := shell.Attach(ctx, serverURL, cfg.Token, session, nil)
+		code, err := shell.Attach(ctx, shell.AttachOptions{
+			ServerURL: serverURL,
+			Token:     cfg.Token,
+			Session:   session,
+		})
 		if err != nil {
 			return err
 		}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,9 +20,16 @@ type WinSize struct {
 	Rows, Cols uint16
 }
 
+// AttachOptions configures Attach.
+type AttachOptions struct {
+	ServerURL string
+	Token     string
+	Session   string
+}
+
 // Attach runs the operator side of a debug-shell session. It dials the server's
-// shell relay WebSocket at GET {serverURL}/shell/attach?session={session} authenticating
-// with token as a Bearer header, negotiates the xagent-shell.v1 subprotocol, puts
+// shell relay WebSocket at GET {ServerURL}/shell/attach?session={Session} authenticating
+// with Token as a Bearer header, negotiates the xagent-shell.v1 subprotocol, puts
 // the local terminal into raw mode, tracks its size (initial size plus SIGWINCH),
 // and pipes stdin/stdout through the WebSocket using the shellwire framing until
 // the shell exits. It returns the shell's exit code.
@@ -31,18 +37,14 @@ type WinSize struct {
 // It is the operator-side counterpart to Serve. internal/command/shell.go is a
 // thin wrapper: it asks the server to open a session via the OpenShell RPC and
 // then hands the session off to Attach.
-func Attach(ctx context.Context, serverURL, token, session string, log *slog.Logger) (int, error) {
-	if log == nil {
-		log = slog.Default()
-	}
-
-	url, err := AttachURL(serverURL, session)
+func Attach(ctx context.Context, opts AttachOptions) (int, error) {
+	url, err := AttachURL(opts.ServerURL, opts.Session)
 	if err != nil {
 		return 1, err
 	}
 	conn, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
-		HTTPHeader:   http.Header{"Authorization": {"Bearer " + token}},
+		HTTPHeader:   http.Header{"Authorization": {"Bearer " + opts.Token}},
 	})
 	if err != nil {
 		return 1, fmt.Errorf("failed to attach to shell: %w", err)
@@ -83,7 +85,12 @@ func Attach(ctx context.Context, serverURL, token, session string, log *slog.Log
 		}
 	}()
 
-	code, err := Operate(ctx, conn, os.Stdin, os.Stdout, resize)
+	code, err := Operate(ctx, OperateOptions{
+		Conn:   conn,
+		In:     os.Stdin,
+		Out:    os.Stdout,
+		Resize: resize,
+	})
 	if err != nil {
 		return code, fmt.Errorf("shell session ended: %w", err)
 	}
@@ -91,16 +98,25 @@ func Attach(ctx context.Context, serverURL, token, session string, log *slog.Log
 	return code, nil
 }
 
-// Operate runs the operator side of the shellwire protocol over conn until an
+// OperateOptions configures Operate.
+type OperateOptions struct {
+	Conn   *websocket.Conn
+	In     io.Reader
+	Out    io.Writer
+	Resize <-chan WinSize
+}
+
+// Operate runs the operator side of the shellwire protocol over Conn until an
 // Exit frame arrives — returning its code — or the connection errors. It reads
-// local input from in and sends it as Data frames, writes incoming Data frames to
-// out, and forwards terminal sizes from resize as Resize frames. Ping frames are
+// local input from In and sends it as Data frames, writes incoming Data frames to
+// Out, and forwards terminal sizes from Resize as Resize frames. Ping frames are
 // keepalives and ignored.
 //
 // Attach wraps Operate with the dial and terminal setup; it is exported so the
 // operator leg can be exercised end-to-end against a real relay over a WebSocket
 // without a controlling terminal.
-func Operate(ctx context.Context, conn *websocket.Conn, in io.Reader, out io.Writer, resize <-chan WinSize) (int, error) {
+func Operate(ctx context.Context, opts OperateOptions) (int, error) {
+	conn, in, out, resize := opts.Conn, opts.In, opts.Out, opts.Resize
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

@@ -105,7 +105,12 @@ func (d *Driver) run(ctx context.Context) error {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
 	if session := resp.GetTask().GetShellSession(); session != "" {
-		return shell.Serve(ctx, d.ServerURL, d.Token, session, d.Log)
+		return shell.Serve(ctx, shell.ServeOptions{
+			ServerURL: d.ServerURL,
+			Token:     d.Token,
+			Session:   session,
+			Log:       d.Log,
+		})
 	}
 	return d.runAgent(ctx)
 }

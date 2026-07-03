@@ -113,7 +113,12 @@ func runOperator(t *testing.T, conn *websocket.Conn) *operator {
 		done:   make(chan opResult, 1),
 	}
 	go func() {
-		code, err := shell.Operate(t.Context(), conn, inR, op.stdout, op.resize)
+		code, err := shell.Operate(t.Context(), shell.OperateOptions{
+			Conn:   conn,
+			In:     inR,
+			Out:    op.stdout,
+			Resize: op.resize,
+		})
 		op.done <- opResult{code: code, err: err}
 	}()
 	return op
@@ -160,12 +165,14 @@ func TestServeAndOperate(t *testing.T) {
 	t.Parallel()
 	// Arrange: real relay, a seeded session, the driver leg (Serve), and the
 	// operator leg (Operate) both dialed against the httptest server.
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- shell.Serve(t.Context(), srv.URL, "driver-token", "s1", slog.Default()) }()
+	go func() {
+		serveErr <- shell.Serve(t.Context(), shell.ServeOptions{ServerURL: srv.URL, Token: "driver-token", Session: "s1", Log: slog.Default()})
+	}()
 
 	op := runOperator(t, dialAttach(t, srv, "s1"))
 
@@ -204,12 +211,14 @@ func TestServe_LargeBurstSurvivesReadLimit(t *testing.T) {
 	// trip it in a test — the kernel caps a single PTY master read well under
 	// 32 KiB — so this drives the burst through stdin.) The test asserts every byte
 	// crosses all three legs intact and the session survives.
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("burst", testOrg))
 
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- shell.Serve(t.Context(), srv.URL, "driver-token", "burst", slog.Default()) }()
+	go func() {
+		serveErr <- shell.Serve(t.Context(), shell.ServeOptions{ServerURL: srv.URL, Token: "driver-token", Session: "burst", Log: slog.Default()})
+	}()
 
 	op := runOperator(t, dialAttach(t, srv, "burst"))
 
@@ -253,12 +262,14 @@ func TestServe_LargeBurstSurvivesReadLimit(t *testing.T) {
 func TestServe_ExitCode(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s2", testOrg))
 
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- shell.Serve(t.Context(), srv.URL, "driver-token", "s2", slog.Default()) }()
+	go func() {
+		serveErr <- shell.Serve(t.Context(), shell.ServeOptions{ServerURL: srv.URL, Token: "driver-token", Session: "s2", Log: slog.Default()})
+	}()
 
 	op := runOperator(t, dialAttach(t, srv, "s2"))
 
@@ -279,13 +290,15 @@ func TestSessionTornDownWhenOperatorDisconnects(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs connected and actively relaying. Serve runs on a context
 	// canceled during cleanup so a leaked shell can't outlive the test.
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s3", testOrg))
 
 	serveCtx, cancelServe := context.WithCancel(t.Context())
 	t.Cleanup(cancelServe)
-	go func() { _ = shell.Serve(serveCtx, srv.URL, "driver-token", "s3", slog.Default()) }()
+	go func() {
+		_ = shell.Serve(serveCtx, shell.ServeOptions{ServerURL: srv.URL, Token: "driver-token", Session: "s3", Log: slog.Default()})
+	}()
 
 	attach := dialAttach(t, srv, "s3")
 	op := runOperator(t, attach)
