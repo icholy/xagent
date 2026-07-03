@@ -75,7 +75,7 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 	t.Parallel()
 	// The attach leg is wrapped with a test caller in testOrg so the inline org
 	// check admits it, standing in for the Bearer auth middleware in production.
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
@@ -115,7 +115,7 @@ func TestRelayPassesBytesBothDirections(t *testing.T) {
 
 func TestAttachRejectsVersionMismatch(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
@@ -143,7 +143,7 @@ func TestAttachRejectsVersionMismatch(t *testing.T) {
 
 func TestAttachRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
@@ -163,7 +163,7 @@ func TestAttachRejectsUnknownSession(t *testing.T) {
 func TestAttachRejectsForeignOrg(t *testing.T) {
 	t.Parallel()
 	// The caller belongs to a different org than the session's owner.
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg + 1}))
 	srv := httptest.NewServer(mux)
@@ -185,7 +185,7 @@ func TestAttachRejectsMissingCaller(t *testing.T) {
 	t.Parallel()
 	// The attach handler is mounted without a caller in context, exercising the
 	// 401 path.
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", reg.AttachHandler())
 	srv := httptest.NewServer(mux)
@@ -205,7 +205,7 @@ func TestAttachRejectsMissingCaller(t *testing.T) {
 
 func TestDriverRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
@@ -224,7 +224,7 @@ func TestDriverRejectsMissingSession(t *testing.T) {
 	t.Parallel()
 	// A request with no ?session= query param falls through lookup to the same 404
 	// as an unknown session (the empty id is never seeded).
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
@@ -242,7 +242,7 @@ func TestDriverRejectsMissingSession(t *testing.T) {
 func TestEstablishTimeoutEvictsSession(t *testing.T) {
 	t.Parallel()
 	// Short, injected establishment timeout: connect only the driver leg.
-	reg := shellserver.New(nil, 100*time.Millisecond, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: 100 * time.Millisecond})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
@@ -264,7 +264,7 @@ func TestEstablishTimeoutEvictsSession(t *testing.T) {
 
 func TestClosingOneLegEvictsSession(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
@@ -295,7 +295,7 @@ func TestClosingOneLegEvictsSession(t *testing.T) {
 
 func TestSeedRejectsDuplicate(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	t.Cleanup(reg.Close)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
@@ -306,7 +306,7 @@ func TestSeedRejectsDuplicate(t *testing.T) {
 
 func TestSeedRejectsEmptyID(t *testing.T) {
 	t.Parallel()
-	reg := shellserver.New(nil, time.Minute, nil)
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	t.Cleanup(reg.Close)
 
 	err := reg.Seed("", testOrg)
@@ -319,7 +319,7 @@ func TestOnCloseFiresOnLegDrop(t *testing.T) {
 	// Establish both legs, then drop one: teardown should fire onClose exactly once
 	// with the session id and owning org.
 	rec := &closeRecorder{}
-	reg := shellserver.New(nil, time.Minute, rec.fn())
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute, OnClose: rec.fn()})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
@@ -355,7 +355,7 @@ func TestOnCloseFiresOnEstablishTimeout(t *testing.T) {
 	// Only the driver leg connects: the establishment timeout tears the session
 	// down, which must also fire onClose.
 	rec := &closeRecorder{}
-	reg := shellserver.New(nil, 100*time.Millisecond, rec.fn())
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: 100 * time.Millisecond, OnClose: rec.fn()})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", reg.DriverHandler())
 	srv := httptest.NewServer(mux)
@@ -380,7 +380,7 @@ func TestOnCloseFiresOnRegistryClose(t *testing.T) {
 	// A never-connected session torn down by Close (server shutdown) still fires
 	// onClose once.
 	rec := &closeRecorder{}
-	reg := shellserver.New(nil, time.Minute, rec.fn())
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute, OnClose: rec.fn()})
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
 	reg.Close()

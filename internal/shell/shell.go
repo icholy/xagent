@@ -50,10 +50,18 @@ func CreateSessionID() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// ServeOptions configures Serve. A nil Log falls back to slog.Default.
+type ServeOptions struct {
+	ServerURL string
+	Token     string
+	Session   string
+	Log       *slog.Logger
+}
+
 // Serve runs an interactive debug shell for a rendezvous session. It allocates a
 // PTY, spawns a login shell ($SHELL, else /bin/sh), dials the server's shell
-// relay WebSocket at GET {serverURL}/shell/driver?session={session} authenticating with
-// token as a Bearer header, negotiates the xagent-shell.v1 subprotocol, and
+// relay WebSocket at GET {ServerURL}/shell/driver?session={Session} authenticating with
+// Token as a Bearer header, negotiates the xagent-shell.v1 subprotocol, and
 // pipes the PTY over the WebSocket using the shellwire framing.
 //
 // Incoming data frames are written to the PTY master, resize frames are applied
@@ -61,10 +69,12 @@ func CreateSessionID() (string, error) {
 // exits, Serve sends an exit frame with the shell's exit code and closes the
 // WebSocket cleanly. A dropped operator leg or a canceled ctx closes the PTY so
 // the shell gets EOF, exits, and Serve returns rather than leaking a shell.
-func Serve(ctx context.Context, serverURL, token, session string, log *slog.Logger) error {
+func Serve(ctx context.Context, opts ServeOptions) error {
+	log := opts.Log
 	if log == nil {
 		log = slog.Default()
 	}
+	session := opts.Session
 	log.Info("starting reverse shell", "session", session)
 
 	shell := cmp.Or(os.Getenv("SHELL"), "/bin/sh")
@@ -78,13 +88,13 @@ func Serve(ctx context.Context, serverURL, token, session string, log *slog.Logg
 	}
 	defer func() { _ = ptmx.Close() }()
 
-	url, err := DriverURL(serverURL, session)
+	url, err := DriverURL(opts.ServerURL, session)
 	if err != nil {
 		return err
 	}
 	conn, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
-		HTTPHeader:   http.Header{"Authorization": {"Bearer " + token}},
+		HTTPHeader:   http.Header{"Authorization": {"Bearer " + opts.Token}},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to dial shell relay: %w", err)
