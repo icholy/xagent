@@ -191,6 +191,66 @@ func TestServeAndOperate(t *testing.T) {
 	}
 }
 
+func TestServe_LargeBurstSurvivesReadLimit(t *testing.T) {
+	t.Parallel()
+	// Regression for the 32768-vs-32769 read-limit bug. coder/websocket defaults to
+	// a 32768-byte read limit, but both legs frame payloads with a 32*1024 buffer,
+	// so a full read yields a 1+32768 = 32769-byte data frame — one byte over the
+	// limit. No leg raised it, so the first >=32 KiB burst tripped
+	// StatusMessageTooBig and tore the whole three-leg session down.
+	//
+	// The operator's stdin path is the reliable trigger: a >32 KiB paste is read
+	// into a single 32769-byte frame that the relay's attach leg and the driver leg
+	// both read at the default limit. (The PTY-output direction can't be used to
+	// trip it in a test — the kernel caps a single PTY master read well under
+	// 32 KiB — so this drives the burst through stdin.) The test asserts every byte
+	// crosses all three legs intact and the session survives.
+	reg := shellrelay.NewRegistry(nil, time.Minute)
+	srv := newRelayServer(t, reg)
+	assert.NilError(t, reg.Seed("burst", testOrg))
+
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- shell.Serve(t.Context(), srv.URL, "driver-token", "burst", slog.Default()) }()
+
+	op := runOperator(t, dialAttach(t, srv, "burst"))
+
+	// Establish liveness before the burst so a teardown is unambiguously the burst.
+	op.send(t, "echo ready\n")
+	op.waitFor(t, "ready")
+
+	// Put the tty in raw mode with echo off, announce readiness, then have `head -c`
+	// consume exactly the paste and `wc -c` report the byte count. Raw mode avoids
+	// the canonical line-length limit (which would truncate a newline-less paste)
+	// and keeps stdout free of echo noise. Markers are split ('PAS''TE') so the
+	// echoed command line doesn't itself contain them.
+	const burst = 100000
+	op.send(t, "stty raw -echo; printf 'PAS''TE'; head -c 100000 | wc -c; printf ';EN''D\\n'\n")
+	op.waitFor(t, "PASTE")
+
+	// Send the whole burst as one write. Without the fix the first 32769-byte frame
+	// trips the read limit and the session is torn down, so this write may block on
+	// a dead pipe — do it in the background and let waitFor observe the teardown via
+	// the operator exiting. t.Cleanup closes the pipe writer, unblocking it.
+	go func() { _, _ = op.stdin.Write([]byte(strings.Repeat("x", burst))) }()
+
+	// With the fix, every byte crosses driver+relay+operator and wc reports 100000.
+	op.waitFor(t, "END")
+	out := op.stdout.String()
+	between := out[strings.Index(out, "PASTE"):]
+	assert.Assert(t, strings.Contains(between, "100000"),
+		"shell did not receive all %d pasted bytes; saw: %q", burst, between)
+
+	// The session survived the burst: the shell still responds and exits cleanly.
+	op.send(t, "stty sane; exit 0\n")
+	assert.Equal(t, op.waitExit(t), 0)
+	select {
+	case err := <-serveErr:
+		assert.NilError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Serve did not return after shell exited")
+	}
+}
+
 func TestServe_ExitCode(t *testing.T) {
 	t.Parallel()
 	// Arrange

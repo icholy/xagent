@@ -48,6 +48,7 @@ func Attach(ctx context.Context, serverURL, token, session string, log *slog.Log
 		return 1, fmt.Errorf("failed to attach to shell: %w", err)
 	}
 	defer conn.CloseNow()
+	conn.SetReadLimit(ReadLimit)
 
 	// Put the terminal into raw mode so keystrokes reach the remote shell
 	// unbuffered and unechoed; always restore it on the way out.
