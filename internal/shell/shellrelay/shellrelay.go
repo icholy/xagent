@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/icholy/xagent/internal/shell"
 	"github.com/icholy/xagent/internal/shell/shellwire"
 )
 
@@ -240,6 +241,7 @@ func (r *Registry) DriverHandler() http.Handler {
 			r.log.Debug("driver leg accept failed", "session", id, "error", err)
 			return
 		}
+		conn.SetReadLimit(shell.ReadLimit)
 		r.relay(s, conn, true)
 	})
 }
@@ -273,6 +275,7 @@ func (r *Registry) AttachHandler(authorize AuthorizeAttach) http.Handler {
 			r.log.Debug("attach leg accept failed", "session", id, "error", err)
 			return
 		}
+		conn.SetReadLimit(shell.ReadLimit)
 		r.relay(s, conn, false)
 	})
 }
