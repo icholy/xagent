@@ -16,7 +16,7 @@ import (
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
-	"github.com/icholy/xagent/internal/server/shellrelay"
+	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/justinas/alice"
@@ -134,7 +134,7 @@ func (s *Server) Handler() http.Handler {
 	// the driver leg with its task token, the operator (attach) leg with a Bearer
 	// token whose org claim must match the session's owning org.
 	mux.Handle("GET /shell/{session}/driver", alice.New(s.auth.RequireAuth()).Then(s.shell.DriverHandler()))
-	mux.Handle("GET /shell/{session}/attach", alice.New(s.auth.RequireAuth()).Then(s.shell.AttachHandler()))
+	mux.Handle("GET /shell/{session}/attach", alice.New(s.auth.RequireAuth()).Then(s.shell.AttachHandler(authorizeShellAttach)))
 	// MCP endpoint (protected by auth middleware)
 	mux.Handle("/mcp", alice.New(s.auth.RequireAuth()).Then(mcpserver.Handler(s.api)))
 	// React UI (SPA with client-side routing, protected by cookie auth)

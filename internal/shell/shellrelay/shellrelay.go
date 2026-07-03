@@ -1,5 +1,5 @@
 // Package shellrelay implements the server-side rendezvous relay for the driver
-// reverse shell (step 2 of the design in proposals/draft/driver-reverse-shell.md).
+// reverse shell (the design in proposals/draft/driver-reverse-shell.md).
 //
 // A rendezvous session bridges two WebSocket legs: a driver leg (dialed from
 // inside the sandbox) and an attach leg (dialed by the operator's CLI or, later,
@@ -8,6 +8,12 @@
 // never parses or interprets the frame payload. The end-to-end [1-byte type]
 // [payload] framing is a contract between the driver and the client, opaque to
 // the server.
+//
+// This package holds only the transport mechanics: the session registry, the
+// two-leg rendezvous, the establishment timeout, the verbatim pump, and the
+// subprotocol negotiation. Authorization policy that depends on the caller (the
+// attach leg's org check) is injected by the server layer as an AuthorizeAttach
+// callback — see internal/server/shellserver.
 //
 // The registry is in-memory and therefore assumes a single server instance.
 // Cross-instance rendezvous (routing both legs to the session owner, or a shared
@@ -25,7 +31,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/shellwire"
 )
 
@@ -39,6 +44,16 @@ var (
 	errLegTaken = errors.New("shellrelay: leg already connected")
 	errTornDown = errors.New("shellrelay: session torn down")
 )
+
+// AuthorizeAttach authorizes an attach request against the session's owning org.
+// It runs after the subprotocol and session-existence checks pass but before the
+// WebSocket is accepted. It returns true to allow the connection; on rejection it
+// must write the HTTP response itself and return false.
+//
+// The org-match policy lives at the server layer (internal/server/shellserver),
+// which reads the authenticated caller from the request context. The relay only
+// knows the session's owning org, so it hands that org to the callback.
+type AuthorizeAttach func(w http.ResponseWriter, req *http.Request, sessionOrgID int64) bool
 
 // Registry tracks rendezvous sessions by id for a single server instance.
 type Registry struct {
@@ -54,8 +69,8 @@ type Registry struct {
 type session struct {
 	id string
 	// orgID owns the session: the attach leg is authorized iff the caller
-	// belongs to this org. In this step it is supplied directly via Seed; step 4
-	// (OpenShell) will populate it from the real task.
+	// belongs to this org. It is supplied via Seed (OpenShell derives it from the
+	// target task).
 	orgID int64
 
 	mu        sync.Mutex
@@ -86,11 +101,6 @@ func NewRegistry(log *slog.Logger, establishTimeout time.Duration) *Registry {
 
 // Seed registers a new rendezvous session owned by orgID and starts the
 // establishment timeout. The attach leg is authorized against this org.
-//
-// TODO(step 4 / OpenShell, #1113): OpenShell will create the session and derive
-// orgID from the target task (rather than taking it directly), and will bind the
-// driver leg's task token to the session's task so an authenticated driver
-// cannot seize another task's session.
 func (r *Registry) Seed(id string, orgID int64) error {
 	if id == "" {
 		return errors.New("shellrelay: empty session id")
@@ -212,15 +222,11 @@ func (s *session) peer(driver bool) *websocket.Conn {
 	return s.driver
 }
 
-// DriverHandler handles GET /shell/{session}/driver, the driver leg.
+// DriverHandler handles the driver leg (GET /shell/{session}/driver).
 //
 // Authentication is expected to be enforced by the surrounding middleware: this
 // handler is mounted behind the same server auth as the other driver->server
 // endpoints, which validates the driver's task token (a Bearer app JWT).
-//
-// TODO(step 4 / OpenShell, #1113): once OpenShell records the task id on the
-// session, verify the presented task token is scoped to that task, so an
-// authenticated caller cannot attach the driver leg of another task's session.
 func (r *Registry) DriverHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		id := req.PathValue("session")
@@ -238,24 +244,17 @@ func (r *Registry) DriverHandler() http.Handler {
 	})
 }
 
-// AttachHandler handles GET /shell/{session}/attach, the operator leg.
+// AttachHandler handles the operator leg (GET /shell/{session}/attach).
 //
-// Authentication is enforced by the surrounding middleware (the same Bearer auth
-// as the other authenticated endpoints); this handler reads the resulting caller
-// from the context and authorizes it. The caller's org must match the session's
-// owning org — any member of the task's org may attach (one at a time). The
-// session id is not a secret, so access control is by org membership. The
-// subprotocol negotiates the version token only; it carries no credential.
-func (r *Registry) AttachHandler() http.Handler {
+// The subprotocol negotiates the version token only; it carries no credential.
+// The session id is not a secret, so access control is by org membership: the
+// authorize callback (wired by the server layer) decides whether the caller may
+// attach to the session's owning org.
+func (r *Registry) AttachHandler(authorize AuthorizeAttach) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		id := req.PathValue("session")
 		if version := parseVersion(req); version != shellwire.Subprotocol {
 			http.Error(w, "unsupported subprotocol", http.StatusBadRequest)
-			return
-		}
-		caller := apiauth.Caller(req.Context())
-		if caller == nil {
-			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
 		s := r.lookup(id)
@@ -263,8 +262,8 @@ func (r *Registry) AttachHandler() http.Handler {
 			http.Error(w, "unknown session", http.StatusNotFound)
 			return
 		}
-		if s.orgID != caller.OrgID {
-			http.Error(w, "forbidden", http.StatusForbidden)
+		if !authorize(w, req, s.orgID) {
+			// The callback wrote the rejection response.
 			return
 		}
 		conn, err := websocket.Accept(w, req, &websocket.AcceptOptions{

@@ -3,9 +3,9 @@
 //
 // Frames travel as binary WebSocket messages between the driver (which owns the
 // PTY) and the operator's client. The server-side relay
-// (internal/server/shellrelay) passes them through opaquely and never parses
+// (internal/shell/shellrelay) passes them through opaquely and never parses
 // them — the framing is a contract between the two endpoints only. Both the
-// driver leg (this repo, step 3) and the CLI client (step 5) import this codec
+// driver leg (shell.Serve) and the operator leg (shell.Attach) import this codec
 // so the wire format has a single definition.
 //
 // A frame is [1-byte type][payload]:

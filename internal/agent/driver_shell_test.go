@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/icholy/xagent/internal/auth/apiauth"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"github.com/icholy/xagent/internal/server/shellrelay"
+	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/shellwire"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"gotest.tools/v3/assert"
@@ -23,12 +22,12 @@ import (
 // wiring the driver's credentials through to shell.Serve.
 func TestRun_ForksIntoShell(t *testing.T) {
 	t.Parallel()
-	// Real relay with both legs; the attach leg is authorized as a caller in org 1.
+	// Real relay with both legs; the attach leg admits every caller here (the org
+	// policy is exercised in the server package).
 	reg := shellrelay.NewRegistry(nil, time.Minute)
-	caller := &apiauth.UserInfo{ID: "op", OrgID: 1}
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), caller))
+	mux.Handle("GET /shell/{session}/attach", reg.AttachHandler(func(http.ResponseWriter, *http.Request, int64) bool { return true }))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
