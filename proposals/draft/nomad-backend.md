@@ -64,8 +64,9 @@ client, err := api.NewClient(cfg)
 
 No xagent-specific connection flags are introduced; operators point at their
 cluster with the standard `NOMAD_*` variables, exactly as they do with the
-`nomad` CLI. An optional `--nomad-namespace` flag overrides `NOMAD_NAMESPACE`
-per runner.
+`nomad` CLI. Namespace comes from `NOMAD_NAMESPACE` (resolved by
+`api.DefaultConfig()`), with an optional per-workspace `nomad.namespace`
+override for workspaces that must land in a specific namespace.
 
 ### Workspace config
 
@@ -261,14 +262,15 @@ spurious `failed` if the driver did report before the alloc died.
 
 ```
 xagent runner --backend nomad \
-  [--nomad-namespace default] \
   [--nomad-artifact-addr http://<runner-ip>:<port>]
 ```
 
-Both flags have `XAGENT_NOMAD_*` env sources. Connection details
-(`NOMAD_ADDR`, `NOMAD_TOKEN`, TLS) come from the standard `NOMAD_*` variables via
-`api.DefaultConfig()`. `internal/command/runner.go`'s backend switch gains a
-`nomad` case that constructs `nomad.New(...)`.
+`--nomad-artifact-addr` has an `XAGENT_NOMAD_ARTIFACT_ADDR` env source.
+Connection details (`NOMAD_ADDR`, `NOMAD_TOKEN`, `NOMAD_NAMESPACE`, TLS) all come
+from the standard `NOMAD_*` variables via `api.DefaultConfig()` — the backend
+introduces no flag for namespace or any other connection setting.
+`internal/command/runner.go`'s backend switch gains a `nomad` case that
+constructs `nomad.New(...)`.
 
 ### Testing
 
