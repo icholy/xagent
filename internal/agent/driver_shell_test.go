@@ -28,8 +28,8 @@ func TestRun_ForksIntoShell(t *testing.T) {
 	// package).
 	reg := shellserver.New(nil, time.Minute)
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: 1}))
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: 1}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -49,7 +49,7 @@ func TestRun_ForksIntoShell(t *testing.T) {
 	// Connect the operator leg and exercise the shell the fork spawned.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	attach, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/s1/attach", &websocket.DialOptions{
+	attach, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session=s1", &websocket.DialOptions{
 		Subprotocols: []string{shellwire.Subprotocol},
 	})
 	assert.NilError(t, err)

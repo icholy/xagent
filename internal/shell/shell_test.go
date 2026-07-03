@@ -32,8 +32,8 @@ const testOrg int64 = 1
 func newRelayServer(t *testing.T, reg *shellserver.Registry) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
-	mux.Handle("GET /shell/{session}/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
+	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
@@ -310,11 +310,16 @@ func TestDriverURL(t *testing.T) {
 	t.Parallel()
 	url, err := shell.DriverURL("https://example.com", "abc")
 	assert.NilError(t, err)
-	assert.Equal(t, url, "wss://example.com/shell/abc/driver")
+	assert.Equal(t, url, "wss://example.com/shell/driver?session=abc")
 
 	url, err = shell.DriverURL("http://example.com/", "abc")
 	assert.NilError(t, err)
-	assert.Equal(t, url, "ws://example.com/shell/abc/driver")
+	assert.Equal(t, url, "ws://example.com/shell/driver?session=abc")
+
+	// The session id is escaped into the query, not concatenated raw.
+	url, err = shell.DriverURL("https://example.com", "a b&c")
+	assert.NilError(t, err)
+	assert.Equal(t, url, "wss://example.com/shell/driver?session=a+b%26c")
 
 	_, err = shell.DriverURL("", "abc")
 	assert.ErrorContains(t, err, "empty server URL")
@@ -324,11 +329,11 @@ func TestAttachURL(t *testing.T) {
 	t.Parallel()
 	url, err := shell.AttachURL("https://example.com", "abc")
 	assert.NilError(t, err)
-	assert.Equal(t, url, "wss://example.com/shell/abc/attach")
+	assert.Equal(t, url, "wss://example.com/shell/attach?session=abc")
 
 	url, err = shell.AttachURL("http://example.com/", "abc")
 	assert.NilError(t, err)
-	assert.Equal(t, url, "ws://example.com/shell/abc/attach")
+	assert.Equal(t, url, "ws://example.com/shell/attach?session=abc")
 
 	_, err = shell.AttachURL("", "abc")
 	assert.ErrorContains(t, err, "empty server URL")

@@ -134,8 +134,8 @@ sequenceDiagram
     Server-->>Driver: task { shell_session: S }
     Note over Driver: shell_session set → runShell (PTY + /bin/sh)
 
-    Driver->>Server: WS /shell/S/driver (task token)
-    Op->>Server: WS /shell/S/attach (Bearer token)
+    Driver->>Server: WS /shell/driver?session=S (task token)
+    Op->>Server: WS /shell/attach?session=S (Bearer token)
     Note over Server: bridge the two streams
 
     loop interactive session
@@ -173,9 +173,9 @@ SSE endpoint in `internal/server/server.go`):
 
 - Connect RPC `OpenShell(task_id) -> {session_id}` — creates `S`, sets
   `shell_session`, issues the lifecycle command, returns the session id.
-- `GET /shell/{session}/driver` (WebSocket) — the driver leg, authed with the
+- `GET /shell/driver?session=<id>` (WebSocket) — the driver leg, authed with the
   task token.
-- `GET /shell/{session}/attach` (WebSocket) — the operator leg, authed with a
+- `GET /shell/attach?session=<id>` (WebSocket) — the operator leg, authed with a
   Bearer token; the caller's org comes from its token claims (`caller.OrgID`).
 
 **Framing** is an end-to-end contract between driver and client (the server does not

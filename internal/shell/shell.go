@@ -52,7 +52,7 @@ func CreateSessionID() (string, error) {
 
 // Serve runs an interactive debug shell for a rendezvous session. It allocates a
 // PTY, spawns a login shell ($SHELL, else /bin/sh), dials the server's shell
-// relay WebSocket at GET {serverURL}/shell/{session}/driver authenticating with
+// relay WebSocket at GET {serverURL}/shell/driver?session={session} authenticating with
 // token as a Bearer header, negotiates the xagent-shell.v1 subprotocol, and
 // pipes the PTY over the WebSocket using the shellwire framing.
 //
