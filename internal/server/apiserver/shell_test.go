@@ -11,7 +11,7 @@ import (
 
 func TestOpenShell(t *testing.T) {
 	t.Parallel()
-	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID int64) error { return nil }}
+	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID, taskID int64) error { return nil }}
 	srv := New(Options{Store: teststore.New(t), Shells: shell})
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctx := createCtx(t, org)
@@ -49,16 +49,18 @@ func TestOpenShell(t *testing.T) {
 	assert.Equal(t, getResp.Task.Command, xagentv1.TaskCommand_START)
 	assert.Equal(t, getResp.Task.Status, xagentv1.TaskStatus_PENDING)
 
-	// ...and the rendezvous is seeded with the caller's org.
+	// ...and the rendezvous is seeded with the caller's org and the task id, so
+	// the driver leg can be bound to the task that owns the session.
 	calls := shell.SeedCalls()
 	assert.Equal(t, len(calls), 1)
 	assert.Equal(t, calls[0].ID, resp.SessionId)
 	assert.Equal(t, calls[0].OrgID, org.OrgID)
+	assert.Equal(t, calls[0].TaskID, taskID)
 }
 
 func TestOpenShell_RejectsPending(t *testing.T) {
 	t.Parallel()
-	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID int64) error { return nil }}
+	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID, taskID int64) error { return nil }}
 	srv := New(Options{Store: teststore.New(t), Shells: shell})
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctx := createCtx(t, org)
@@ -84,7 +86,7 @@ func TestOpenShell_RejectsPending(t *testing.T) {
 
 func TestOpenShell_RejectsRunning(t *testing.T) {
 	t.Parallel()
-	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID int64) error { return nil }}
+	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID, taskID int64) error { return nil }}
 	srv := New(Options{Store: teststore.New(t), Shells: shell})
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctx := createCtx(t, org)
@@ -115,7 +117,7 @@ func TestOpenShell_RejectsRunning(t *testing.T) {
 
 func TestOpenShell_CrossOrgDenied(t *testing.T) {
 	t.Parallel()
-	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID int64) error { return nil }}
+	shell := &ShellRegistryMock{SeedFunc: func(id string, orgID, taskID int64) error { return nil }}
 	srv := New(Options{Store: teststore.New(t), Shells: shell})
 	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})

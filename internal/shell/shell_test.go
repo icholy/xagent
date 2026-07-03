@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/server/shellserver"
 	"github.com/icholy/xagent/internal/shell"
@@ -19,12 +20,18 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// testOrg owns the seeded shell session in these tests.
-const testOrg int64 = 1
+// testOrg owns the seeded shell session in these tests, and testTask is the task
+// whose sandbox serves it — the driver leg is bound to this task.
+const (
+	testOrg  int64 = 1
+	testTask int64 = 7
+)
 
 // newRelayServer mounts the real server-owned registry's two legs on an httptest
 // server. The attach leg is wrapped with a test caller in testOrg so the org
-// check admits it (the org policy itself is covered by internal/server/shellserver).
+// check admits it, and the driver leg with a task-scoped caller for testTask so
+// the driver binding admits it (both policies are covered on their own in
+// internal/server/shellserver).
 // These tests exercise the three legs — driver (shell.Serve), relay, and operator
 // (shell.Operate) — against each other for real over httptest WebSockets.
 // Cleanups run LIFO: the registry is torn down before the server so parked
@@ -32,7 +39,9 @@ const testOrg int64 = 1
 func newRelayServer(t *testing.T, reg *shellserver.Registry) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.Handle("GET /shell/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{
+		ID: "driver", OrgID: testOrg, Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask}),
+	}))
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -167,7 +176,7 @@ func TestServeAndOperate(t *testing.T) {
 	// operator leg (Operate) both dialed against the httptest server.
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
-	assert.NilError(t, reg.Seed("s1", testOrg))
+	assert.NilError(t, reg.Seed("s1", testOrg, testTask))
 
 	serveErr := make(chan error, 1)
 	go func() {
@@ -213,7 +222,7 @@ func TestServe_LargeBurstSurvivesReadLimit(t *testing.T) {
 	// crosses all three legs intact and the session survives.
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
-	assert.NilError(t, reg.Seed("burst", testOrg))
+	assert.NilError(t, reg.Seed("burst", testOrg, testTask))
 
 	serveErr := make(chan error, 1)
 	go func() {
@@ -264,7 +273,7 @@ func TestServe_ExitCode(t *testing.T) {
 	// Arrange
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
-	assert.NilError(t, reg.Seed("s2", testOrg))
+	assert.NilError(t, reg.Seed("s2", testOrg, testTask))
 
 	serveErr := make(chan error, 1)
 	go func() {
@@ -292,7 +301,7 @@ func TestSessionTornDownWhenOperatorDisconnects(t *testing.T) {
 	// canceled during cleanup so a leaked shell can't outlive the test.
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
-	assert.NilError(t, reg.Seed("s3", testOrg))
+	assert.NilError(t, reg.Seed("s3", testOrg, testTask))
 
 	serveCtx, cancelServe := context.WithCancel(t.Context())
 	t.Cleanup(cancelServe)

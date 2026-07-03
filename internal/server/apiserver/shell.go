@@ -113,7 +113,7 @@ func (s *Server) OpenShell(ctx context.Context, req *xagentv1.OpenShellRequest) 
 	// Register the rendezvous only after the task update commits, so a failed
 	// transaction can't leave a session dangling. The sandbox takes seconds to
 	// boot, so the session is ready well before the driver dials.
-	if err := s.shells.Seed(sessionID, caller.OrgID); err != nil {
+	if err := s.shells.Seed(sessionID, caller.OrgID, req.TaskId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("register shell session: %w", err))
 	}
 	s.log.Info("shell session opened", "task", req.TaskId, "session", sessionID)
