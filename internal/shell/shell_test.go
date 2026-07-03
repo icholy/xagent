@@ -33,8 +33,8 @@ func allowAll(http.ResponseWriter, *http.Request, int64) bool { return true }
 func newRelayServer(t *testing.T, reg *shellrelay.Registry) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.Handle(shell.DriverRoute, reg.DriverHandler())
-	mux.Handle(shell.AttachRoute, reg.AttachHandler(allowAll))
+	mux.Handle("GET /shell/{session}/driver", reg.DriverHandler())
+	mux.Handle("GET /shell/{session}/attach", reg.AttachHandler(allowAll))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)

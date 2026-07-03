@@ -46,7 +46,7 @@ type Server struct {
 }
 
 // ShellRegistry registers a debug-shell rendezvous session so the driver and
-// operator legs can meet on the relay. Backed by *shellserver.Registry in
+// operator legs can meet on the relay. Backed by *shellrelay.Registry in
 // production; an interface here keeps apiserver testable without the relay.
 type ShellRegistry interface {
 	Seed(id string, orgID int64) error

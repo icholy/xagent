@@ -6,22 +6,13 @@ import (
 )
 
 // The two legs of a rendezvous session are exposed under a shared path prefix.
-// The path segments are defined once here and reused by the client URL builders
-// below and by the server's route registration (shell.DriverRoute /
-// shell.AttachRoute), so the wire path has a single definition.
+// The segments are defined once here so the client URL builders below share a
+// single definition of the wire path; the server registers the matching routes
+// as literals.
 const (
-	routePrefix     = "/shell/"
-	sessionWildcard = "{session}"
-	driverLeg       = "/driver"
-	attachLeg       = "/attach"
-)
-
-// DriverRoute and AttachRoute are the ServeMux patterns for the two legs. The
-// {session} wildcard is read back by the relay handlers with
-// req.PathValue("session").
-const (
-	DriverRoute = "GET " + routePrefix + sessionWildcard + driverLeg
-	AttachRoute = "GET " + routePrefix + sessionWildcard + attachLeg
+	routePrefix = "/shell/"
+	driverLeg   = "/driver"
+	attachLeg   = "/attach"
 )
 
 // DriverURL builds the ws(s) URL for the driver leg of a session from the
