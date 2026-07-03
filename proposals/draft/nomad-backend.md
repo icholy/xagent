@@ -188,19 +188,19 @@ Assembled per task with the `api` types (sketch):
 
 ```go
 job := &api.Job{
-	ID:          ptr("xagent-<task-id>"),
-	Type:        ptr("batch"),
-	Namespace:   ptr(ns),
+	ID:          new("xagent-<task-id>"),
+	Type:        new("batch"),
+	Namespace:   new(ns),
 	Datacenters: ws.Nomad.Datacenters,
 	TaskGroups: []*api.TaskGroup{{
-		Name:  ptr("agent"),
-		Count: ptr(1),
+		Name:  new("agent"),
+		Count: new(1),
 		// No reschedule/restart: a task is bound 1:1 to its sandbox. A dead
 		// alloc is a terminal outcome the runner observes, not something Nomad
 		// silently retries elsewhere.
-		ReschedulePolicy: &api.ReschedulePolicy{Attempts: ptr(0), Unlimited: ptr(false)},
-		RestartPolicy:    &api.RestartPolicy{Attempts: ptr(0)},
-		EphemeralDisk:    &api.EphemeralDisk{Sticky: ptr(true), Migrate: ptr(true)},
+		ReschedulePolicy: &api.ReschedulePolicy{Attempts: new(0), Unlimited: new(false)},
+		RestartPolicy:    &api.RestartPolicy{Attempts: new(0)},
+		EphemeralDisk:    &api.EphemeralDisk{Sticky: new(true), Migrate: new(true)},
 		Tasks: []*api.Task{{
 			Name:   "agent",
 			Driver: "docker",
@@ -215,7 +215,7 @@ job := &api.Job{
 			Env:          envMap(ws.Nomad.Environment, spec.Env),
 			User:         ws.Nomad.User,
 			KillSignal:   "SIGTERM",
-			KillTimeout:  ptr(30 * time.Second), // SIGTERM -> SIGKILL grace, matches Docker
+			KillTimeout:  new(30 * time.Second), // SIGTERM -> SIGKILL grace, matches Docker
 			Templates:    configTemplates(spec.Files),
 			Artifacts:    []*api.TaskArtifact{driverBinaryArtifact()},
 			Resources:    &api.Resources{CPU: &cpu, MemoryMB: &mem},
