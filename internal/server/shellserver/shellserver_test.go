@@ -101,14 +101,22 @@ func TestAttachRejectsVersionMismatch(t *testing.T) {
 	t.Cleanup(reg.Close)
 	assert.NilError(t, reg.Seed("s1", testOrg))
 
+	// The subprotocol is negotiated by websocket.Accept, so an unsupported version
+	// completes the upgrade (no matching subprotocol selected) and is then closed
+	// by the handler as a policy violation rather than rejected pre-upgrade.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/s1/attach", &websocket.DialOptions{
+	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/s1/attach", &websocket.DialOptions{
 		Subprotocols: []string{"xagent-shell.v99"},
 	})
+	assert.NilError(t, err)
+	assert.Equal(t, resp.StatusCode, http.StatusSwitchingProtocols)
+	assert.Equal(t, conn.Subprotocol(), "") // the server declined the unknown token
 
-	assert.Assert(t, err != nil)
-	assert.Equal(t, resp.StatusCode, http.StatusBadRequest)
+	// The connection is unusable: the handler closed it with a policy violation.
+	_, _, readErr := conn.Read(ctx)
+	assert.Assert(t, readErr != nil)
+	assert.Equal(t, websocket.CloseStatus(readErr), websocket.StatusPolicyViolation)
 }
 
 func TestAttachRejectsUnknownSession(t *testing.T) {

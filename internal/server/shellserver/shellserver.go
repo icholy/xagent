@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -148,17 +147,18 @@ func (r *Registry) DriverHandler() http.Handler {
 // The session id is not a secret, so access control is by org membership: the
 // authenticated caller (populated by the Bearer auth middleware) must belong to
 // the session's owning org. Any member of that org may attach (one at a time).
-// The subprotocol negotiates the version token only; it carries no credential.
+//
+// Session existence (404) and the org check (401/403) are enforced before the
+// upgrade. The subprotocol is negotiated by websocket.Accept and validated after
+// it: it is a non-secret version token, not a credential, and access is already
+// gated by the pre-upgrade org check, so a bad/missing subprotocol is an
+// upgrade-then-close rather than a pre-upgrade rejection.
 func (r *Registry) AttachHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		id := req.PathValue("session")
 		e := r.lookup(id)
 		if e == nil {
 			http.Error(w, "unknown session", http.StatusNotFound)
-			return
-		}
-		if version := parseVersion(req); version != shellwire.Subprotocol {
-			http.Error(w, "unsupported subprotocol", http.StatusBadRequest)
 			return
 		}
 		caller := apiauth.Caller(req.Context())
@@ -177,20 +177,12 @@ func (r *Registry) AttachHandler() http.Handler {
 			r.log.Debug("attach leg accept failed", "session", id, "error", err)
 			return
 		}
+		// Accept negotiates the subprotocol; an empty result means the client did
+		// not offer the version token we speak.
+		if conn.Subprotocol() != shellwire.Subprotocol {
+			conn.Close(websocket.StatusPolicyViolation, "unsupported subprotocol")
+			return
+		}
 		_ = e.session.Join(req.Context(), conn)
 	})
-}
-
-// parseVersion returns the first entry of the client's Sec-WebSocket-Protocol
-// offer, which per the contract is the version token. The header is a
-// comma-separated list; a missing header yields "".
-func parseVersion(req *http.Request) string {
-	for _, v := range req.Header.Values("Sec-WebSocket-Protocol") {
-		for _, p := range strings.Split(v, ",") {
-			if p = strings.TrimSpace(p); p != "" {
-				return p
-			}
-		}
-	}
-	return ""
 }
