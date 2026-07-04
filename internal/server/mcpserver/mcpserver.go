@@ -2,8 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -11,6 +9,7 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
+	"github.com/icholy/xagent/internal/x/mcpx"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -128,7 +127,7 @@ type listWorkspacesInput struct{}
 func (h *handlers) listWorkspaces(ctx context.Context, req *mcp.CallToolRequest, input listWorkspacesInput) (*mcp.CallToolResult, any, error) {
 	resp, err := h.service.ListWorkspaces(ctx, &xagentv1.ListWorkspacesRequest{})
 	if err != nil {
-		return errorResult("failed to list workspaces: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to list workspaces: %v", err), nil, nil
 	}
 	type workspace struct {
 		Name        string `json:"name"`
@@ -143,7 +142,7 @@ func (h *handlers) listWorkspaces(ctx context.Context, req *mcp.CallToolRequest,
 			RunnerID:    ws.RunnerId,
 		}
 	}
-	return jsonResult(result), nil, nil
+	return mcpx.JSONResult(result), nil, nil
 }
 
 type createTaskInput struct {
@@ -167,15 +166,15 @@ func (h *handlers) createTask(ctx context.Context, _ *mcp.CallToolRequest, input
 	if input.AutoArchive != "" {
 		d, err := time.ParseDuration(input.AutoArchive)
 		if err != nil {
-			return errorResult("invalid auto_archive %q: %v", input.AutoArchive, err), nil, nil
+			return mcpx.ErrorResult("invalid auto_archive %q: %v", input.AutoArchive, err), nil, nil
 		}
 		req.AutoArchive = durationpb.New(d)
 	}
 	resp, err := h.service.CreateTask(ctx, req)
 	if err != nil {
-		return errorResult("failed to create task: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to create task: %v", err), nil, nil
 	}
-	return jsonResult(taskSummaryOf(resp.Task)), nil, nil
+	return mcpx.JSONResult(taskSummaryOf(resp.Task)), nil, nil
 }
 
 type getTaskInput struct {
@@ -187,7 +186,7 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 		Id: input.ID,
 	})
 	if err != nil {
-		return errorResult("failed to get task: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to get task: %v", err), nil, nil
 	}
 	type instruction struct {
 		Text string `json:"text"`
@@ -260,7 +259,7 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 			Subscribe: l.Subscribe,
 		})
 	}
-	return jsonResult(result), nil, nil
+	return mcpx.JSONResult(result), nil, nil
 }
 
 type listTasksInput struct{}
@@ -268,13 +267,13 @@ type listTasksInput struct{}
 func (h *handlers) listTasks(ctx context.Context, req *mcp.CallToolRequest, input listTasksInput) (*mcp.CallToolResult, any, error) {
 	resp, err := h.service.ListTasks(ctx, &xagentv1.ListTasksRequest{})
 	if err != nil {
-		return errorResult("failed to list tasks: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to list tasks: %v", err), nil, nil
 	}
 	result := make([]taskSummary, len(resp.Tasks))
 	for i, t := range resp.Tasks {
 		result[i] = taskSummaryOf(t)
 	}
-	return jsonResult(result), nil, nil
+	return mcpx.JSONResult(result), nil, nil
 }
 
 type updateTaskInput struct {
@@ -293,13 +292,13 @@ func (h *handlers) updateTask(ctx context.Context, req *mcp.CallToolRequest, inp
 		},
 	})
 	if err != nil {
-		return errorResult("failed to update task: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to update task: %v", err), nil, nil
 	}
 	resp, err := h.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
 	if err != nil {
-		return errorResult("failed to get updated task: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to get updated task: %v", err), nil, nil
 	}
-	return jsonResult(taskSummaryOf(resp.Task)), nil, nil
+	return mcpx.JSONResult(taskSummaryOf(resp.Task)), nil, nil
 }
 
 type archiveTaskInput struct {
@@ -311,13 +310,13 @@ func (h *handlers) archiveTask(ctx context.Context, req *mcp.CallToolRequest, in
 		Id: input.ID,
 	})
 	if err != nil {
-		return errorResult("failed to archive task: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to archive task: %v", err), nil, nil
 	}
 	resp, err := h.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
 	if err != nil {
-		return errorResult("failed to get archived task: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to get archived task: %v", err), nil, nil
 	}
-	return jsonResult(taskSummaryOf(resp.Task)), nil, nil
+	return mcpx.JSONResult(taskSummaryOf(resp.Task)), nil, nil
 }
 
 type taskSummary struct {
@@ -335,26 +334,5 @@ func taskSummaryOf(t *xagentv1.Task) taskSummary {
 		Workspace: t.Workspace,
 		Status:    t.Status.String(),
 		URL:       t.Url,
-	}
-}
-
-func errorResult(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: fmt.Sprintf(format, args...)},
-		},
-		IsError: true,
-	}
-}
-
-func jsonResult(v any) *mcp.CallToolResult {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return errorResult("failed to format response: %v", err)
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(data)},
-		},
 	}
 }

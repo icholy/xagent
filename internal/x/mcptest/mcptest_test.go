@@ -9,6 +9,15 @@ import (
 	"github.com/icholy/xagent/internal/x/mcptest"
 )
 
+func TestCallToolResultText(t *testing.T) {
+	t.Parallel()
+	res := &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "boom"}},
+		IsError: true,
+	}
+	assert.Equal(t, mcptest.CallToolResultText(t, res), "boom")
+}
+
 func TestUnmarshalCallToolResult(t *testing.T) {
 	t.Parallel()
 	res := &mcp.CallToolResult{

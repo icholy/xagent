@@ -9,10 +9,10 @@ import (
 	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/x/mcpx"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 type Server struct {
@@ -78,7 +78,7 @@ func (s *Server) createLink(ctx context.Context, req *mcp.CallToolRequest, input
 		Subscribe: input.Subscribe,
 	})
 	if err != nil {
-		return errorResult("failed to create link: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to create link: %v", err), nil, nil
 	}
 
 	return textResult("Link created: %s", input.URL), nil, nil
@@ -99,7 +99,7 @@ func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input rep
 		},
 	})
 	if err != nil {
-		return errorResult("failed to upload log: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to upload log: %v", err), nil, nil
 	}
 
 	return textResult("Report submitted"), nil, nil
@@ -108,10 +108,10 @@ func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input rep
 func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input any) (*mcp.CallToolResult, any, error) {
 	resp, err := s.client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: s.task.ID})
 	if err != nil {
-		return errorResult("failed to get task: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to get task: %v", err), nil, nil
 	}
 
-	return jsonResult(taskDetailsToMap(resp)), nil, nil
+	return mcpx.JSONResult(taskDetailsToMap(resp)), nil, nil
 }
 
 type updateMyTaskInput struct {
@@ -126,7 +126,7 @@ func (s *Server) updateMyTask(ctx context.Context, _ *mcp.CallToolRequest, input
 		Id:   s.task.ID,
 		Name: input.Name,
 	}); err != nil {
-		return errorResult("failed to update task: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to update task: %v", err), nil, nil
 	}
 
 	return textResult("Task updated"), nil, nil
@@ -137,49 +137,16 @@ type getGitHubTokenInput struct{}
 func (s *Server) getGitHubToken(ctx context.Context, req *mcp.CallToolRequest, input getGitHubTokenInput) (*mcp.CallToolResult, any, error) {
 	resp, err := s.client.CreateGitHubToken(ctx, &xagentv1.CreateGitHubTokenRequest{})
 	if err != nil {
-		return errorResult("failed to create github token: %v", err), nil, nil
+		return mcpx.ErrorResult("failed to create github token: %v", err), nil, nil
 	}
 
-	return protojsonResult(resp), nil, nil
+	return mcpx.ProtoJSONResult(resp), nil, nil
 }
 
 func textResult(format string, args ...any) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: fmt.Sprintf(format, args...)},
-		},
-	}
-}
-
-func errorResult(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: fmt.Sprintf(format, args...)},
-		},
-		IsError: true,
-	}
-}
-
-func protojsonResult(m proto.Message) *mcp.CallToolResult {
-	data, err := protojson.MarshalOptions{Indent: "  "}.Marshal(m)
-	if err != nil {
-		return errorResult("failed to format response: %v", err)
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(data)},
-		},
-	}
-}
-
-func jsonResult(v any) *mcp.CallToolResult {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return errorResult("failed to format response: %v", err)
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(data)},
 		},
 	}
 }
