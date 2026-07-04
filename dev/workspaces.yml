@@ -18,3 +18,17 @@ workspaces:
             arguments:
               message: hello from the dummy agent
         sleep: 2
+  dummy-error:
+    description: Dummy workspace whose agent errors out — exercises failure handling
+    container:
+      image: alpine:3.21
+      # Join the dev compose network so the task container can reach the
+      # server by its service name (see docker-compose.dev.yml).
+      networks:
+        - xagent-dev
+    agent:
+      type: dummy
+      dummy:
+        # Run a command that exits non-zero so the agent reports a failure.
+        commands:
+          - exit 1
