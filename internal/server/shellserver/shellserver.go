@@ -151,7 +151,11 @@ func (r *Registry) Seed(id string, orgID, taskID int64) error {
 	if _, ok := r.sessions[id]; ok {
 		return fmt.Errorf("shellserver: session %q already exists", id)
 	}
-	session := shellrelay.NewSession(r.establishTimeout, r.idleTimeout, r.log.With("session", id))
+	session := shellrelay.NewSession(shellrelay.SessionOptions{
+		EstablishTimeout: r.establishTimeout,
+		IdleTimeout:      r.idleTimeout,
+		Log:              r.log.With("session", id),
+	})
 	r.sessions[id] = &entry{session: session, orgID: orgID, taskID: taskID}
 	// Evict the session from the map once it tears down — regardless of which path
 	// (establishment timeout with zero or one leg, a dropped leg, or Close) got

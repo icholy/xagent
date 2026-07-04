@@ -66,22 +66,32 @@ type Session struct {
 	closeOnce sync.Once
 }
 
-// NewSession creates a rendezvous session and starts its establishment timeout.
-// establishTimeout <= 0 falls back to DefaultEstablishTimeout; tests inject a
+// SessionOptions configures NewSession.
+//
+// EstablishTimeout <= 0 falls back to DefaultEstablishTimeout; tests inject a
 // small timeout to exercise the establishment-timeout path without sleeping the
-// real default. idleTimeout is the idle timeout applied once both legs connect;
-// idleTimeout <= 0 disables the idle timeout entirely. A nil log falls back to
+// real default. IdleTimeout is the idle timeout applied once both legs connect;
+// IdleTimeout <= 0 disables the idle timeout entirely. A nil Log falls back to
 // slog.Default.
-func NewSession(establishTimeout, idleTimeout time.Duration, log *slog.Logger) *Session {
+type SessionOptions struct {
+	EstablishTimeout time.Duration
+	IdleTimeout      time.Duration
+	Log              *slog.Logger
+}
+
+// NewSession creates a rendezvous session and starts its establishment timeout.
+func NewSession(opts SessionOptions) *Session {
+	log := opts.Log
 	if log == nil {
 		log = slog.Default()
 	}
+	establishTimeout := opts.EstablishTimeout
 	if establishTimeout <= 0 {
 		establishTimeout = DefaultEstablishTimeout
 	}
 	s := &Session{
 		log:         log,
-		idleTimeout: idleTimeout,
+		idleTimeout: opts.IdleTimeout,
 		ready:       make(chan struct{}),
 		done:        make(chan struct{}),
 	}

@@ -73,7 +73,7 @@ func recv(t *testing.T, conn *websocket.Conn) (websocket.MessageType, []byte) {
 func TestSessionPassesBytesBothDirections(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs joined.
-	s := shellrelay.NewSession(time.Minute, 0, nil)
+	s := shellrelay.NewSession(shellrelay.SessionOptions{EstablishTimeout: time.Minute})
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
@@ -96,7 +96,7 @@ func TestSessionPassesBytesBothDirections(t *testing.T) {
 func TestSessionRejectsThirdLeg(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs joined and actively relaying.
-	s := shellrelay.NewSession(time.Minute, 0, nil)
+	s := shellrelay.NewSession(shellrelay.SessionOptions{EstablishTimeout: time.Minute})
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
@@ -121,7 +121,7 @@ func TestSessionRejectsThirdLeg(t *testing.T) {
 func TestSessionEstablishTimeoutTearsDownLoneLeg(t *testing.T) {
 	t.Parallel()
 	// Arrange: short, injected establishment timeout.
-	s := shellrelay.NewSession(100*time.Millisecond, 0, nil)
+	s := shellrelay.NewSession(shellrelay.SessionOptions{EstablishTimeout: 100 * time.Millisecond})
 	srv := joinServer(t, s)
 
 	// Act: connect only one leg.
@@ -143,7 +143,7 @@ func TestSessionIdleTimeoutTearsDownEstablishedSession(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs connected but silent, with a short idle timeout and a long
 	// establishment timeout (so it's unmistakably the idle timer that fires).
-	s := shellrelay.NewSession(time.Minute, 100*time.Millisecond, nil)
+	s := shellrelay.NewSession(shellrelay.SessionOptions{EstablishTimeout: time.Minute, IdleTimeout: 100 * time.Millisecond})
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
@@ -168,7 +168,7 @@ func TestSessionIdleTimeoutResetByActivity(t *testing.T) {
 	// Arrange: both legs connected, with an idle timeout far shorter than the total
 	// span of traffic we're about to drive across it.
 	const idle = 300 * time.Millisecond
-	s := shellrelay.NewSession(time.Minute, idle, nil)
+	s := shellrelay.NewSession(shellrelay.SessionOptions{EstablishTimeout: time.Minute, IdleTimeout: idle})
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
@@ -206,7 +206,7 @@ func TestSessionIdleTimeoutResetByActivity(t *testing.T) {
 func TestSessionClosingOneLegTearsDownPeer(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs connected and actively relaying.
-	s := shellrelay.NewSession(time.Minute, 0, nil)
+	s := shellrelay.NewSession(shellrelay.SessionOptions{EstablishTimeout: time.Minute})
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
@@ -231,7 +231,7 @@ func TestSessionClosingOneLegTearsDownPeer(t *testing.T) {
 func TestSessionCloseTearsDownAndSignalsDone(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs joined.
-	s := shellrelay.NewSession(time.Minute, 0, nil)
+	s := shellrelay.NewSession(shellrelay.SessionOptions{EstablishTimeout: time.Minute})
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
