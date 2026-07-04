@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/icholy/xagent/internal/mcpbridge"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/server/mcpserver"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
@@ -80,24 +81,27 @@ var McpCommand = &cli.Command{
 		mcpserver.AddTools(server, client, toolOpts...)
 
 		transport := mcpchannel.NewTransport(&mcp.StdioTransport{})
+
+		// The mute set and its channel_mute/channel_unmute/channel_muted
+		// tools only exist when there's a channel stream to filter. Without
+		// --channel the bridge behaves exactly as before.
+		var ch *mcpbridge.Channel
+		if cmd.Bool("channel") {
+			ch = mcpbridge.NewChannel(transport)
+			ch.AddTools(server)
+		}
+
 		session, err := server.Connect(ctx, transport, nil)
 		if err != nil {
 			return err
 		}
-		if cmd.Bool("channel") {
+		if ch != nil {
 			go func() {
 				nc := xagentclient.NewNotificationClient(xagentclient.NotificationClientOptions{
 					BaseURL:  cmd.String("server"),
 					Token:    cmd.String("token"),
 					ClientID: clientID,
-					Handler: func(n model.Notification) {
-						if n.ChannelMessage == "" {
-							return
-						}
-						if err := transport.SendChannel(ctx, mcpchannel.Params{Content: n.ChannelMessage}); err != nil {
-							slog.Warn("xagent channel: failed to send", "error", err)
-						}
-					},
+					Handler:  func(n model.Notification) { ch.Forward(ctx, n) },
 				})
 				if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					slog.Warn("xagent channel: stream ended", "error", err)
