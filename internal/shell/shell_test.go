@@ -402,12 +402,15 @@ func TestServe_ContextCancelForceKillsUnresponsiveShell(t *testing.T) {
 	// it and closing the PTY can't either — only the WaitDelay SIGKILL will. The
 	// short inner sleep keeps the lone orphaned child (the caveat) short-lived.
 	//
-	// Install the traps BEFORE echoing the readiness marker so that observing
-	// "armed" guarantees they are in place: otherwise the cancel below can race
-	// ahead of the trap command, and the SIGHUP from the PTY closing kills the
-	// still-unprotected shell in milliseconds instead of exercising the backstop.
-	op.send(t, "trap '' TERM HUP; echo armed; while :; do sleep 1; done\n")
-	op.waitFor(t, "armed")
+	// The traps must be installed before the cancel below, or the SIGHUP from the
+	// PTY closing kills the still-unprotected shell in milliseconds instead of
+	// exercising the backstop. Install them first, then print a readiness marker —
+	// but the PTY echoes the typed command line, so a plain marker would match the
+	// echo of the input before the shell has run anything. Split it ('ARM''ED') so
+	// the echoed command shows ARM''ED while only the executed printf emits ARMED;
+	// waiting for ARMED then guarantees the traps are in place.
+	op.send(t, "trap '' TERM HUP; printf 'ARM''ED\\n'; while :; do sleep 1; done\n")
+	op.waitFor(t, "ARMED")
 
 	// Act: the driver received SIGTERM — Serve's context is canceled.
 	start := time.Now()
