@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
+	"connectrpc.com/connect"
+
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/cenkalti/backoff/v5"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/model"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/runner/backend"
 	dockerbackend "github.com/icholy/xagent/internal/runner/backend/docker"
@@ -20,6 +25,7 @@ import (
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/awsmicrovm"
 	"github.com/icholy/xagent/internal/x/common"
+	"github.com/icholy/xagent/internal/x/outbox"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
@@ -140,10 +146,30 @@ var RunnerCommand = &cli.Command{
 			Token:   cfg.Token,
 		})
 
-		queue := runner.NewEventQueue(runner.EventQueueOptions{
-			Client:        client,
-			Log:           log,
-			RetryInterval: pollInterval,
+		// The outbox is durable: it lives under the runner's persistent state
+		// directory (a sibling of the taskstate dir, on the same volume), so
+		// runner lifecycle events survive a restart and are redelivered on the
+		// next Run pass rather than being lost with an in-memory buffer.
+		outboxDir := filepath.Join(filepath.Dir(cmd.String("state-dir")), "outbox")
+		outboxStore, err := outbox.Open(outboxDir)
+		if err != nil {
+			return fmt.Errorf("failed to open outbox store: %w", err)
+		}
+		queue := outbox.New(outbox.Options[model.RunnerEvent]{
+			Store: outboxStore,
+			// Deliver converts a model.RunnerEvent to the proto SubmitRunnerEvents
+			// request and sends it. isPermanentError classifies the failure so the
+			// outbox dead-letters unrecoverable events instead of retrying forever.
+			Deliver: func(ctx context.Context, ev model.RunnerEvent) (permanent bool, err error) {
+				_, err = client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+					Events: []*xagentv1.RunnerEvent{ev.Proto()},
+				})
+				return isPermanentError(err), err
+			},
+			// Reproduce the old EventQueue's fixed retry interval (the poll
+			// interval) with a constant backoff, for a drop-in match.
+			Backoff: backoff.NewConstantBackOff(pollInterval),
+			Log:     log,
 		})
 
 		backendName := cmd.String("backend")
@@ -217,7 +243,8 @@ var RunnerCommand = &cli.Command{
 			return fmt.Errorf("failed to load sandboxes: %w", err)
 		}
 
-		// Start event queue drain goroutine
+		// Start the outbox delivery goroutine. Its first pass redelivers any
+		// events that were persisted but not yet acknowledged before a restart.
 		go queue.Run(ctx)
 
 		// Start autoprune goroutine
@@ -257,4 +284,16 @@ var RunnerCommand = &cli.Command{
 			}
 		}
 	},
+}
+
+// isPermanentError returns true if the error indicates a condition that
+// will never succeed on retry (e.g. task not found, invalid argument). The
+// outbox dead-letters permanent failures instead of retrying them.
+func isPermanentError(err error) bool {
+	switch connect.CodeOf(err) {
+	case connect.CodeNotFound, connect.CodeInvalidArgument, connect.CodePermissionDenied:
+		return true
+	default:
+		return false
+	}
 }
