@@ -160,10 +160,17 @@ the correct resting state and next boot resumes on demand.
 
 The driver re-spawn must look **identical to the shim** whether the VM was cold
 (un-snapshotted by `ResumeMicrovm`) or warm (never suspended). So the runner owns
-the re-spawn trigger uniformly: a single `POST /xagent/start` on the control
+the re-spawn trigger uniformly: a single `POST /xagent/run` on the control
 surface is the *only* way the driver is re-started, and the shim cannot tell
 which path led there. This retires the one place the shim currently distinguishes
 them — the AWS `/resume` hook re-spawning on its own.
+
+The runner POSTs `/xagent/run` **only on the driver-is-dead paths** (a warm claim
+or a cold resume — in both, the previous driver has exited). It is never sent to
+adopt a VM whose driver is still alive. That makes "a driver is already running"
+an **invariant violation**, so `/xagent/run` **errors (409)** on it rather than
+silently no-op'ing: a spurious re-run is a runner bug and should surface loudly,
+not be swallowed.
 
 **Shim: one re-spawn entry point, resume hook demoted to a thaw seam.** Today
 `resumeHook` re-spawns the driver (`resumeHook` → `spawn`). Move that trigger to
@@ -171,22 +178,22 @@ the control surface and make the resume hook a pure thaw seam — symmetric with
 `suspendHook`, which is already a pure flush seam:
 
 ```go
-const lambdamicrovmStartPath = "/xagent/start"
+const lambdamicrovmRunPath = "/xagent/run"
 
 func (s *Server) ControlHandler() http.Handler {
     mux := http.NewServeMux()
     mux.HandleFunc("GET "+lambdamicrovmLifecyclePath, s.lifecycleHandler)
     mux.HandleFunc("POST "+lambdamicrovmStopPath, s.stopHandler)
-    mux.HandleFunc("POST "+lambdamicrovmStartPath, s.startHandler)
+    mux.HandleFunc("POST "+lambdamicrovmRunPath, s.runHandler)
     return mux
 }
 
-// startHandler (re)spawns the driver from the retained bundle. It is the sole
+// runHandler (re)spawns the driver from the retained bundle. It is the sole
 // re-spawn trigger — used identically after a cold ResumeMicrovm and a warm
-// reclaim — so the shim never distinguishes the two. Idempotent: a no-op if a
-// driver is already running (a duplicate POST, or a restart that beat the
-// suspend), a 409 before first provisioning.
-func (s *Server) startHandler(w http.ResponseWriter, _ *http.Request) {
+// reclaim — so the shim never distinguishes the two. It errors (409) if a driver
+// is already running or the VM was never provisioned: the runner only calls it
+// on a dead driver, so either is a runner-side bug worth surfacing.
+func (s *Server) runHandler(w http.ResponseWriter, _ *http.Request) {
     s.mu.Lock()
     running := s.current != nil && !isDone(s.current)
     bundle, started := s.bundle, s.started
@@ -196,7 +203,7 @@ func (s *Server) startHandler(w http.ResponseWriter, _ *http.Request) {
         return
     }
     if running {
-        w.WriteHeader(http.StatusOK) // already running: idempotent no-op
+        http.Error(w, "driver already running", http.StatusConflict)
         return
     }
     if err := s.spawn(bundle); err != nil {
@@ -207,31 +214,34 @@ func (s *Server) startHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 // resumeHook becomes a thaw seam: the VM un-snapshots, but the driver is
-// re-spawned by the runner's /xagent/start, not here.
+// re-spawned by the runner's /xagent/run, not here.
 func (s *Server) resumeHook(context.Context, awsmicrovm.ResumeHookRequest) error {
     return nil
 }
 ```
 
-The shim still legitimately separates *first provisioning* (the `/run` hook —
-fetch bundle, provision files once, first spawn) from *re-spawn* (`/xagent/start`
-— retained bundle, no re-fetch). That is a provisioning distinction, not a
-warm/cold one. `spawn` already clears the sticky `driver-exited`
-(`s.lc.reset()`), so the fresh `Wait` the runner starts blocks for the *new*
-run's exit rather than replaying the old one.
+The shim still legitimately separates *first provisioning* (the AWS `/run` hook —
+fetch bundle, provision files once, first spawn) from *re-spawn* (`/xagent/run` —
+retained bundle, no re-fetch). That is a provisioning distinction, not a warm/cold
+one; the two live on different surfaces (the hook port vs. the ingress control
+port) and share the "run the driver" name. `spawn` already clears the sticky
+`driver-exited` (`s.lc.reset()`), so the fresh `Wait` the runner starts blocks for
+the *new* run's exit rather than replaying the old one.
 
-**Runner: `tryResume` re-spawns the same way on every path.** After optionally
-un-snapshotting, `tryResume` POSTs `/xagent/start` in all cases — warm claim,
-cold resume, or plain adoption. Idempotency makes this safe uniformly (adopting a
-still-running driver → the POST is a no-op):
+**Runner: `tryResume` re-spawns the same way on every dead-driver path.**
+`tryResume` posts `/xagent/run` **iff** the driver is dead — after a warm claim or
+a cold resume — and never when adopting a VM whose driver is still alive:
 
 ```go
 func (b *Backend) tryResume(ctx context.Context, reuse *backend.Handle) (bool, backend.Handle, error) {
     hd, _ := decodeData(reuse.Data)
 
+    runDriver := false
     if b.warm.Claim(reuse.ID) {
-        // Warm: won the race against the suspend timer; VM never left RUNNING,
-        // so skip ResumeMicrovm entirely.
+        // Warm: won the race against the suspend timer; the driver exited (that
+        // is what scheduled the suspend) but the VM never left RUNNING, so skip
+        // ResumeMicrovm entirely and re-run the driver.
+        runDriver = true
     } else {
         out, err := b.cloud.GetMicrovm(ctx, &awsmicrovm.GetMicrovmInput{MicrovmID: reuse.ID})
         if awsmicrovm.IsNotFound(err) {
@@ -242,11 +252,14 @@ func (b *Backend) tryResume(ctx context.Context, reuse *backend.Handle) (bool, b
         }
         switch out.Microvm.State {
         case awsmicrovm.MicrovmStateRunning, awsmicrovm.MicrovmStatePending:
-            // Adopt; /xagent/start below is a no-op if the driver still runs.
+            // Adopt a VM whose driver is still alive (a restart that beat the
+            // suspend, or an externally-resumed VM). Nothing to run — posting
+            // /xagent/run here would (correctly) 409 against the live driver.
         case awsmicrovm.MicrovmStateSuspended:
             if _, err := b.cloud.ResumeMicrovm(ctx, &awsmicrovm.ResumeMicrovmInput{MicrovmID: reuse.ID}); err != nil {
                 return false, backend.Handle{}, fmt.Errorf("resume microvm: %w", err)
             }
+            runDriver = true // un-snapshotted; the driver is dead, re-run it
         default: // SUSPENDING / TERMINATING / TERMINATED
             return false, backend.Handle{}, nil
         }
@@ -255,10 +268,11 @@ func (b *Backend) tryResume(ctx context.Context, reuse *backend.Handle) (bool, b
         }
     }
 
-    // One uniform re-spawn trigger, warm or cold. Retried over the same managed
-    // proxy the SSE stream uses; /xagent/start is idempotent.
-    if err := b.respawn(ctx, reuse.ID, hd.Endpoint); err != nil {
-        return false, backend.Handle{}, fmt.Errorf("respawn driver: %w", err)
+    if runDriver {
+        // The one uniform re-spawn trigger — identical for warm and cold.
+        if err := b.respawn(ctx, reuse.ID, hd.Endpoint); err != nil {
+            return false, backend.Handle{}, fmt.Errorf("run driver: %w", err)
+        }
     }
     data, _ := json.Marshal(hd)
     return true, backend.Handle{Type: HandleType, ID: reuse.ID, Data: data}, nil
@@ -272,11 +286,13 @@ window simply elapsed. Exactly one of {suspend fires, claim wins} completes; the
 loser is a no-op. `Destroy` likewise `Claim`s (discarding the result) so an
 archive during the window cancels the pending timer before terminating.
 
-`respawn` mints a proxy token and POSTs `/xagent/start`, retried with backoff
-over the same managed-proxy reachability the SSE stream already depends on (the
-runner must reach the shim to observe the driver at all). Because `/xagent/start`
-is idempotent, a retry — or a POST to a VM whose driver is already running — is a
-safe no-op.
+`respawn` mints a proxy token and POSTs `/xagent/run`, retrying **only on
+transport/reachability failures** (no HTTP response) — the same managed-proxy
+reachability the SSE stream already depends on, since the runner must reach the
+shim to observe the driver at all. Any HTTP response is terminal: a 200 means the
+driver was spawned; a 409 is surfaced as an error because, on a dead-driver path,
+it cannot happen under correct operation. Retrying only on transport errors keeps
+one intended run from becoming two.
 
 ### Configuration
 
@@ -321,18 +337,19 @@ in-flight handles.
    that the field round-trips through `handleData` and that validation rejects
    negative / `>= max_duration` values.
 
-2. **Unify the shim re-spawn trigger** — Add `startHandler` (`POST
-   /xagent/start`) as the sole driver re-spawn entry point, idempotent with an
-   already-running guard, and demote `resumeHook` to a thaw-seam no-op. `tryResume`
-   POSTs `/xagent/start` after every resume/adopt (via a `respawn` helper retried
-   over the proxy) so the cold-resume path re-spawns the same way the warm path
-   will. Delivers: one uniform re-spawn path the shim can't distinguish; the
-   existing cold resume keeps working through it. Depends on: nothing new
+2. **Unify the shim re-spawn trigger** — Add `runHandler` (`POST /xagent/run`) as
+   the sole driver re-spawn entry point — 200 on spawn, **409 if a driver is
+   already running** or the VM was never provisioned — and demote `resumeHook` to
+   a thaw-seam no-op. `tryResume` POSTs `/xagent/run` on each dead-driver path
+   (cold resume today; warm claim in slice 5) via a `respawn` helper that retries
+   only on transport errors, so the cold-resume path re-spawns the same way the
+   warm path will. Delivers: one uniform re-spawn path the shim can't distinguish;
+   the existing cold resume keeps working through it. Depends on: nothing new
    (reworks the existing resume path). Verifiable by: shim unit tests — after a
-   driver exit `POST /xagent/start` re-spawns and publishes a fresh
-   `driver-exited`, a second POST while running is a no-op, a POST before
-   provisioning is a 409, and the resume hook alone no longer spawns; backend test
-   that a cold resume POSTs `/xagent/start`.
+   driver exit `POST /xagent/run` re-spawns and publishes a fresh `driver-exited`,
+   a POST while running is a 409, a POST before provisioning is a 409, and the
+   resume hook alone no longer spawns; backend test that a cold resume POSTs
+   `/xagent/run`.
 
 3. **`WarmCache` struct** — Add the `WarmCache` (schedule / claim / pending /
    flush) with its own tests, independent of the backend. Delivers: the
@@ -353,10 +370,10 @@ in-flight handles.
 
 5. **Warm claim in `Launch(reuse)`** — Have `tryResume` `Claim` a pending
    warm entry (skipping `ResumeMicrovm`) and re-spawn through the same
-   `/xagent/start` the cold path already uses, falling through to the cold branch
+   `/xagent/run` the cold path already uses, falling through to the cold branch
    when the suspend won the race. Delivers: end-to-end warm reuse. Depends on: (2)
    and (4). Verifiable by: backend unit tests — a reuse during the window skips
-   the suspend and calls **no** `ResumeMicrovm` (but still POSTs `/xagent/start`);
+   the suspend and calls **no** `ResumeMicrovm` (but still POSTs `/xagent/run`);
    a reuse after the window resumes cold; a reuse racing the fired suspend
    resolves to exactly one outcome.
 
@@ -383,16 +400,26 @@ in-flight handles.
 - **One re-spawn trigger vs. two.** Reusing a `RUNNING` VM needs a driver
   re-spawn without a control-plane resume. Rather than add a *second* spawn
   trigger next to the AWS `/resume` hook (leaving the shim to behave differently
-  warm vs. cold), the runner owns the re-spawn uniformly via `/xagent/start` and
-  the resume hook becomes a thaw-seam no-op — so the shim genuinely cannot tell
-  the two apart. The cost is that this reworks the *existing* cold-resume trigger,
-  not just the new warm one: cold resumes now depend on the runner POSTing
-  `/xagent/start` (retried over the same proxy reachability the SSE stream already
-  needs) instead of the in-VM hook self-spawning. The payoff is a single,
-  idempotent code path and a shim with one less thing to know. The rejected
-  alternative — suspend on driver-exit and always resume — is today's behavior and
-  the thing we are trying to avoid; a "resume a VM we never suspended" API does
-  not exist.
+  warm vs. cold), the runner owns the re-spawn uniformly via `/xagent/run` and the
+  resume hook becomes a thaw-seam no-op — so the shim genuinely cannot tell the
+  two apart. The cost is that this reworks the *existing* cold-resume trigger, not
+  just the new warm one: cold resumes now depend on the runner POSTing
+  `/xagent/run` (retried over the same proxy reachability the SSE stream already
+  needs) instead of the in-VM hook self-spawning. The payoff is a single code path
+  and a shim with one less thing to know. The rejected alternative — suspend on
+  driver-exit and always resume — is today's behavior and the thing we are trying
+  to avoid; a "resume a VM we never suspended" API does not exist.
+
+- **`/xagent/run` errors on a live driver vs. idempotent no-op.** The runner only
+  posts `/xagent/run` on a dead-driver path (warm claim or cold resume), never to
+  adopt a live driver, so "a driver is already running" is an invariant violation
+  and the shim 409s rather than swallowing it — surfacing the runner bug instead
+  of hiding it. This costs the blind retry-safety a no-op would give: `respawn`
+  must therefore retry only on transport errors and treat any HTTP response as
+  terminal, so a single intended run never becomes two. The one residual edge — a
+  200 whose ack is lost, whose transport retry then 409s against the now-live
+  driver — is narrow and self-correcting (the driver the runner wanted *is*
+  running); it is called out below rather than papered over with a no-op.
 
 - **Cost.** A lingering VM bills compute for up to `suspend_delay_seconds`; a
   suspended VM is snapshot-storage only. The default of `0` keeps the current
@@ -417,6 +444,12 @@ in-flight handles.
   acceptable for the reuse path too.
 - **Metrics.** Worth emitting a counter for warm-claim hits vs. cold-resume
   fallbacks so the chosen delay can be tuned against real follow-up latencies?
+- **`/xagent/run` lost-ack handling.** With the 409-on-live-driver invariant,
+  `respawn` retries only on transport errors. In the narrow window where a 200 is
+  produced but its ack is lost, the transport retry would 409. Should the runner
+  treat a 409 that follows a prior send as "already running ⇒ proceed" (the driver
+  it wanted is up) while still logging it, or fail the reuse and let the normal
+  Start machinery re-drive? Leaning toward the former, but calling it out.
 - **Idle-policy relationship.** The backend still omits `run-microvm`'s
   `idlePolicy` (600s floor, can't express "never auto-suspend"). The
   runner-driven linger keeps suspend authority on our side; no change there, but
