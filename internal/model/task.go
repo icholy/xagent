@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/authscope"
@@ -306,11 +307,7 @@ func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) 
 	case RunnerEventFailed:
 		// The reason is passed through as-is; fall back to the legacy constant
 		// only when a producer left it empty (old runners/drivers).
-		msg := e.Reason
-		if msg == "" {
-			msg = "container failed"
-		}
-		return lifecycle(LifecycleKindSandboxFailed, msg), true
+		return lifecycle(LifecycleKindSandboxFailed, cmp.Or(e.Reason, "container failed")), true
 	default:
 		return nil, false
 	}
