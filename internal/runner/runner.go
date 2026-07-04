@@ -62,8 +62,8 @@ type Options struct {
 	// Fatal terminates the runner by cancelling its root context with the given
 	// cause. It is invoked by die when a durable local-store write fails; the
 	// command layer wraps ctx with context.WithCancelCause and passes the
-	// CancelCauseFunc here. When nil, die is a no-op (durable-write failures fall
-	// back to the pre-existing log-and-continue behaviour).
+	// CancelCauseFunc here. When nil it defaults to a no-op, so die never crashes
+	// (durable-write failures fall back to the pre-existing behaviour).
 	Fatal context.CancelCauseFunc
 }
 
@@ -96,6 +96,14 @@ func New(opts Options) (*Runner, error) {
 
 	log := cmp.Or(opts.Log, slog.Default())
 
+	// Default Fatal to a no-op so die can call r.fatal unconditionally. A nil
+	// Fatal means the caller opted out of crash-on-write-failure (only tests that
+	// never trigger die); production always wires the CancelCauseFunc.
+	fatal := opts.Fatal
+	if fatal == nil {
+		fatal = func(error) {}
+	}
+
 	return &Runner{
 		backend:     opts.Backend,
 		store:       opts.Store,
@@ -108,7 +116,7 @@ func New(opts Options) (*Runner, error) {
 		log:         log,
 		queue:       opts.Queue,
 		wake:        wakeup.New(),
-		fatal:       opts.Fatal,
+		fatal:       fatal,
 	}, nil
 }
 
@@ -131,11 +139,7 @@ func (e FatalStoreError) Unwrap() error { return e.err }
 // detach-don't-kill teardown — in-flight sandboxes stay alive and are re-adopted
 // by Load on the next boot. First cause wins (WithCancelCause is idempotent), so
 // the first failure is the one reported.
-func (r *Runner) die(err error) {
-	if r.fatal != nil {
-		r.fatal(FatalStoreError{err})
-	}
-}
+func (r *Runner) die(err error) { r.fatal(FatalStoreError{err}) }
 
 // WakeC returns a channel that receives one value per coalesced burst of
 // internally-generated wake-ups. Currently signalled when a concurrency
