@@ -312,7 +312,7 @@ func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode,
 			return 0, ctx.Err()
 		}
 		// Removed (NotFound) or a wait error: no code to recover → report lost.
-		b.log.Error("container wait failed", "container", h.ID, "error", err)
+		b.log.Error("container wait failed", "container", h.ID, "err", err)
 		return backend.ExitLost, nil
 	case res := <-okCh:
 		return backend.ExitCode(res.StatusCode), nil

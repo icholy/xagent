@@ -145,7 +145,7 @@ func (a *ClaudeAgent) handleStreamEvent(data []byte) bool {
 		for _, block := range event.Message.Content {
 			if block.Type == "tool_result" {
 				if block.IsError {
-					a.log.Error("tool_result", "tool_use_id", block.ToolUseID, "error", block.Content)
+					a.log.Error("tool_result", "tool_use_id", block.ToolUseID, "err", block.Content)
 				} else {
 					a.log.Debug("tool_result", "tool_use_id", block.ToolUseID)
 				}

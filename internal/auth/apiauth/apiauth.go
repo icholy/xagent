@@ -343,7 +343,7 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 		if a.resolver != nil {
 			resolved, err := a.resolver.ResolveOrg(r.Context(), user.ID, orgID)
 			if err != nil {
-				slog.Error("failed to resolve org", "error", err, "user_id", user.ID)
+				slog.Error("failed to resolve org", "err", err, "user_id", user.ID)
 				http.Error(w, "failed to resolve org", http.StatusForbidden)
 				return
 			}

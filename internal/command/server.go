@@ -299,7 +299,7 @@ var ServerCommand = &cli.Command{
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			if err := httpServer.Shutdown(shutdownCtx); err != nil {
-				slog.Error("shutdown error", "error", err)
+				slog.Error("shutdown error", "err", err)
 			}
 		}()
 

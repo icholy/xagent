@@ -1,0 +1,16 @@
+version: "2"
+
+# Scoped intentionally narrow: this repo does not yet run golangci-lint, so we
+# enable only sloglint for now to enforce the structured-logging conventions
+# without pulling in a large backlog of pre-existing findings from the default
+# linter set. Additional linters can be enabled in follow-up changes.
+linters:
+  default: none
+  enable:
+    - sloglint
+  settings:
+    sloglint:
+      # Standardize the error attribute key on "err" by forbidding "error".
+      # https://github.com/go-simpler/sloglint
+      forbidden-keys:
+        - error

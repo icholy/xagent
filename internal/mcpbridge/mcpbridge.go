@@ -112,7 +112,7 @@ func (c *Channel) Forward(ctx context.Context, n model.Notification) {
 		return // this task has been muted by the agent
 	}
 	if err := c.sender.SendChannel(ctx, mcpchannel.Params{Content: n.ChannelMessage}); err != nil {
-		slog.Warn("xagent channel: failed to send", "error", err)
+		slog.Warn("xagent channel: failed to send", "err", err)
 	}
 }
 

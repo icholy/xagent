@@ -74,7 +74,7 @@ func (q *EventQueue) Drain(ctx context.Context) error {
 		})
 		if err != nil {
 			if isPermanentError(err) {
-				q.log.Warn("event dropped due to permanent error", "task", ev.TaskID, "event", ev.Event, "error", err)
+				q.log.Warn("event dropped due to permanent error", "task", ev.TaskID, "event", ev.Event, "err", err)
 				q.events.Remove(el)
 				continue
 			}
@@ -111,7 +111,7 @@ func (q *EventQueue) Run(ctx context.Context) {
 			if err == nil {
 				break
 			}
-			q.log.Warn("event delivery failed, will retry", "error", err, "queued", q.Len(), "failures", i)
+			q.log.Warn("event delivery failed, will retry", "err", err, "queued", q.Len(), "failures", i)
 			if !common.SleepContext(ctx, q.retryInterval) {
 				return
 			}

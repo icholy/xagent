@@ -1,0 +1,36 @@
+name: Lint
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - '**.md'
+      - '.release-please-manifest.json'
+      - 'images/**'
+      - 'n8n-node/**'
+  pull_request:
+    branches: [ master ]
+    paths-ignore:
+      - '**.md'
+      - '.release-please-manifest.json'
+      - 'images/**'
+      - 'n8n-node/**'
+
+jobs:
+  golangci-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Create placeholder index.html for go:embed
+        run: mkdir -p internal/server/webui && echo '<!DOCTYPE html><html><body>placeholder</body></html>' > internal/server/webui/index.html
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2

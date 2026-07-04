@@ -53,7 +53,7 @@ var NotifyCommand = &cli.Command{
 					return
 				}
 				if err := notify.Send(title, n.ChannelMessage); err != nil {
-					slog.Warn("failed to send system notification", "error", err)
+					slog.Warn("failed to send system notification", "err", err)
 				}
 			},
 		})

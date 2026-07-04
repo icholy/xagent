@@ -84,7 +84,7 @@ func (s *Server) OAuthLink() *oauthlink.Handler {
 			}
 			me, err := atlassian.FetchMe(r.Context(), token.AccessToken)
 			if err != nil {
-				s.log.Error("failed to fetch Atlassian user", "error", err)
+				s.log.Error("failed to fetch Atlassian user", "err", err)
 				http.Error(w, "failed to fetch Atlassian user", http.StatusInternalServerError)
 				return
 			}

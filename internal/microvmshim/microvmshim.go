@@ -163,17 +163,17 @@ func (s *Server) runHook(_ context.Context, req awsmicrovm.RunHookRequest) error
 
 	data, err := s.fetch(context.Background(), req.Payload)
 	if err != nil {
-		s.log().Error("fetch bundle", "error", err)
+		s.log().Error("fetch bundle", "err", err)
 		return fmt.Errorf("fetch bundle: %w", err)
 	}
 	var bundle lambdamicrovm.Bundle
 	if err := json.Unmarshal(data, &bundle); err != nil {
-		s.log().Error("decode bundle", "error", err)
+		s.log().Error("decode bundle", "err", err)
 		return fmt.Errorf("decode bundle: %w", err)
 	}
 
 	if err := s.provision(bundle); err != nil {
-		s.log().Error("provision files", "error", err)
+		s.log().Error("provision files", "err", err)
 		return fmt.Errorf("provision files: %w", err)
 	}
 
@@ -291,7 +291,7 @@ func (s *Server) spawn(bundle lambdamicrovm.Bundle) error {
 
 	proc, err := s.start(context.Background(), bundle)
 	if err != nil {
-		s.log().Error("start driver", "error", err)
+		s.log().Error("start driver", "err", err)
 		return fmt.Errorf("start driver: %w", err)
 	}
 	d := &driverProc{proc: proc, done: make(chan struct{})}
@@ -309,7 +309,7 @@ func (s *Server) spawn(bundle lambdamicrovm.Bundle) error {
 func (s *Server) supervise(d *driverProc) {
 	code, err := d.proc.Wait()
 	close(d.done)
-	s.log().Info("driver exited", "code", code, "error", err)
+	s.log().Info("driver exited", "code", code, "err", err)
 	payload, _ := json.Marshal(lambdamicrovm.DriverExited{Code: code})
 	s.lc.publish(sse.Event{Event: lambdamicrovm.EventDriverExited, Data: payload})
 }
@@ -325,7 +325,7 @@ func (s *Server) stopDriver() {
 	}
 	grace := cmp.Or(s.Grace, defaultGrace)
 	if err := d.proc.Signal(syscall.SIGTERM); err != nil {
-		s.log().Warn("SIGTERM driver", "error", err)
+		s.log().Warn("SIGTERM driver", "err", err)
 	}
 	select {
 	case <-d.done:

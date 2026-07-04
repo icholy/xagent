@@ -63,7 +63,7 @@ func New(opts Options) *Server {
 	// effort: log a warning on error, never fail teardown on it.
 	onShellClose := func(session string, orgID int64) {
 		if err := opts.Store.ClearShellSession(context.Background(), nil, session, orgID); err != nil {
-			log.Warn("failed to clear shell_session", "session", session, "org", orgID, "error", err)
+			log.Warn("failed to clear shell_session", "session", session, "org", orgID, "err", err)
 		}
 	}
 	shell := shellserver.New(shellserver.Options{
@@ -112,7 +112,7 @@ func (s *Server) Handler() http.Handler {
 	// Connect interceptor enforces auth with proper RPC error responses
 	otelInterceptor, err := otelconnect.NewInterceptor()
 	if err != nil {
-		s.log.Error("failed to create otelconnect interceptor", "error", err)
+		s.log.Error("failed to create otelconnect interceptor", "err", err)
 	}
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s.api,
 		connect.WithInterceptors(otelInterceptor, apiauth.RequireUserInterceptor()),

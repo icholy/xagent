@@ -76,7 +76,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 			seq++
 			data, err := json.Marshal(n)
 			if err != nil {
-				s.log.Warn("failed to marshal notification", "error", err)
+				s.log.Warn("failed to marshal notification", "err", err)
 				continue
 			}
 			if err := sw.Write(sse.Event{

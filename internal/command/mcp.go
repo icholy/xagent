@@ -104,7 +104,7 @@ var McpCommand = &cli.Command{
 					Handler:  func(n model.Notification) { ch.Forward(ctx, n) },
 				})
 				if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					slog.Warn("xagent channel: stream ended", "error", err)
+					slog.Warn("xagent channel: stream ended", "err", err)
 				}
 			}()
 		}

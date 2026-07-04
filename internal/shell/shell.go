@@ -186,7 +186,7 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	exitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), exitReportTimeout)
 	defer cancel()
 	if err := conn.Write(exitCtx, websocket.MessageBinary, shellwire.Exit(exitCode(waitErr))); err != nil {
-		log.Debug("failed to send shell exit frame", "session", session, "error", err)
+		log.Debug("failed to send shell exit frame", "session", session, "err", err)
 	}
 	conn.Close(websocket.StatusNormalClosure, "shell exited")
 	log.Info("reverse shell ended", "session", session, "exit_code", exitCode(waitErr))

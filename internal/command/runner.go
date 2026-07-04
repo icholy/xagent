@@ -207,7 +207,7 @@ var RunnerCommand = &cli.Command{
 
 		// Register workspaces with the server (non-fatal if it fails)
 		if err := r.RegisterWorkspaces(ctx); err != nil {
-			log.Warn("failed to register workspaces", "error", err)
+			log.Warn("failed to register workspaces", "err", err)
 		}
 
 		// Rehydrate sandboxes that were running when the runner was stopped: this
@@ -224,7 +224,7 @@ var RunnerCommand = &cli.Command{
 		go func() {
 			for common.SleepContext(ctx, pollInterval) {
 				if err := r.Prune(ctx); err != nil {
-					log.Error("failed to prune containers", "error", err)
+					log.Error("failed to prune containers", "err", err)
 				}
 			}
 		}()
@@ -241,13 +241,13 @@ var RunnerCommand = &cli.Command{
 				Handler: func(model.Notification) { r.Wake() },
 			})
 			if err := nc.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				log.Error("notification client stopped", "error", err)
+				log.Error("notification client stopped", "err", err)
 			}
 		}()
 
 		for {
 			if err := r.Poll(ctx); err != nil {
-				log.Error("failed to poll tasks", "error", err)
+				log.Error("failed to poll tasks", "err", err)
 			}
 			select {
 			case <-r.WakeC():

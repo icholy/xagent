@@ -24,13 +24,13 @@ type WebhookHandler struct {
 func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		slog.Error("failed to read webhook body", "error", err)
+		slog.Error("failed to read webhook body", "err", err)
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
 	webhookEvent, err := githubx.ParseWebHook(body, r.Header, []byte(h.WebhookSecret))
 	if err != nil {
-		slog.Error("failed to parse GitHub webhook", "error", err)
+		slog.Error("failed to parse GitHub webhook", "err", err)
 		http.Error(w, "invalid webhook", http.StatusBadRequest)
 		return
 	}
@@ -57,7 +57,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "no linked account")
 			return
 		}
-		slog.Error("failed to look up GitHub account", "error", err)
+		slog.Error("failed to look up GitHub account", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -65,7 +65,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Update cached username if it changed
 	if meta.AuthorLogin != "" && meta.AuthorLogin != user.GitHubUsername {
 		if err := h.Store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, meta.AuthorLogin); err != nil {
-			slog.Warn("failed to update GitHub username", "error", err)
+			slog.Warn("failed to update GitHub username", "err", err)
 		}
 	}
 
@@ -73,7 +73,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	input.UserID = user.ID
 	totalRouted, err := h.Router.Route(r.Context(), *input)
 	if err != nil {
-		slog.Error("failed to route event", "error", err)
+		slog.Error("failed to route event", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -98,7 +98,7 @@ func (h *WebhookHandler) handleInstallationEvent(w http.ResponseWriter, r *http.
 		return
 	}
 	if err := h.Store.ClearGitHubInstallation(r.Context(), nil, installationID); err != nil {
-		slog.Error("failed to clear github installation", "error", err, "installation_id", installationID)
+		slog.Error("failed to clear github installation", "err", err, "installation_id", installationID)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
