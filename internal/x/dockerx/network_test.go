@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
+	"github.com/icholy/xagent/internal/x/testx"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -154,12 +155,10 @@ func TestRepairNetworks_MixedDriftAndHealthy(t *testing.T) {
 	assert.DeepEqual(t, repaired, []string{"stale"})
 
 	disc := m.NetworkDisconnectCalls()
-	assert.Assert(t, cmp.Len(disc, 1))
-	assert.Equal(t, disc[0].NetworkID, "stale")
+	assert.DeepEqual(t, testx.ExtractField(disc, "NetworkID"), []string{"stale"})
 
 	conn := m.NetworkConnectCalls()
-	assert.Assert(t, cmp.Len(conn, 1))
-	assert.Equal(t, conn[0].NetworkID, "stale")
+	assert.DeepEqual(t, testx.ExtractField(conn, "NetworkID"), []string{"stale"})
 }
 
 func TestRepairNetworks_DisconnectNotConnectedIsSwallowed(t *testing.T) {
