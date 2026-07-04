@@ -18,6 +18,7 @@ import (
 	"github.com/icholy/xagent/internal/runner/backend"
 	"github.com/icholy/xagent/internal/runner/taskstate"
 	"github.com/icholy/xagent/internal/runner/workspace"
+	"github.com/icholy/xagent/internal/x/outbox"
 	"github.com/icholy/xagent/internal/x/safesem"
 	"github.com/icholy/xagent/internal/x/wakeup"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -34,7 +35,7 @@ type Runner struct {
 	concurrency int64
 	sem         *safesem.Semaphore
 	log         *slog.Logger
-	queue       *EventQueue
+	queue       *outbox.Outbox[model.RunnerEvent]
 	wake        wakeup.Chan
 }
 
@@ -54,7 +55,9 @@ type Options struct {
 	Concurrency int
 	RunnerID    string
 	Log         *slog.Logger
-	Queue       *EventQueue
+	// Queue is the durable outbox that delivers runner lifecycle events to the
+	// server, buffering them across transient outages and restarts.
+	Queue *outbox.Outbox[model.RunnerEvent]
 }
 
 var reRunnerID = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
@@ -167,11 +170,13 @@ func (r *Runner) Poll(ctx context.Context) error {
 				// No running sandbox to signal: there is no driver to
 				// complete the cancel, so emit "stopped" to land the task in
 				// cancelled instead of sticking in cancelling.
-				r.queue.Enqueue(model.RunnerEvent{
+				if err := r.queue.Enqueue(model.RunnerEvent{
 					TaskID:  task.ID,
 					Event:   model.RunnerEventStopped,
 					Version: task.Version,
-				})
+				}); err != nil {
+					r.log.Error("failed to enqueue event", "task", task.ID, "event", model.RunnerEventStopped, "err", err)
+				}
 				return nil
 			})
 		case model.TaskCommandRestart:
@@ -191,12 +196,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "err", err)
-					r.queue.Enqueue(model.RunnerEvent{
+					if err := r.queue.Enqueue(model.RunnerEvent{
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
 						Version: task.Version,
 						Reason:  err.Error(),
-					})
+					}); err != nil {
+						r.log.Error("failed to enqueue event", "task", task.ID, "event", model.RunnerEventFailed, "err", err)
+					}
 					return nil
 				}
 				// The "started" event is submitted by the driver on startup
@@ -230,12 +237,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "err", err)
-					r.queue.Enqueue(model.RunnerEvent{
+					if err := r.queue.Enqueue(model.RunnerEvent{
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
 						Version: task.Version,
 						Reason:  err.Error(),
-					})
+					}); err != nil {
+						r.log.Error("failed to enqueue event", "task", task.ID, "event", model.RunnerEventFailed, "err", err)
+					}
 					return nil
 				}
 				// The "started" event is submitted by the driver on startup
@@ -299,11 +308,13 @@ func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
 	}
 	r.log.Error("load: sandbox exited without reporting", "task", taskID)
 	// Use version 0 to bypass version check (spontaneous events)
-	r.queue.Enqueue(model.RunnerEvent{
+	if err := r.queue.Enqueue(model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
 		Reason: "sandbox exited",
-	})
+	}); err != nil {
+		r.log.Error("failed to enqueue event", "task", taskID, "event", model.RunnerEventFailed, "err", err)
+	}
 }
 
 // handle returns the tracked handle for a task. ok is false when no record
@@ -534,11 +545,13 @@ func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) 
 	}
 	r.log.Error("sandbox exited without reporting", "task", taskID, "exitCode", int(code))
 	// Use version 0 to bypass version check (spontaneous events)
-	r.queue.Enqueue(model.RunnerEvent{
+	if err := r.queue.Enqueue(model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
 		Reason: fmt.Sprintf("sandbox exited with status code %d", code),
-	})
+	}); err != nil {
+		r.log.Error("failed to enqueue event", "task", taskID, "event", model.RunnerEventFailed, "err", err)
+	}
 }
 
 // Prune removes sandboxes for archived tasks.
