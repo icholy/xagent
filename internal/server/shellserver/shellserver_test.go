@@ -3,6 +3,7 @@ package shellserver_test
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -170,25 +171,43 @@ func TestAttachRejectsUnknownSession(t *testing.T) {
 	assert.Equal(t, resp.StatusCode, http.StatusNotFound)
 }
 
-func TestAttachRejectsForeignOrg(t *testing.T) {
+func TestAttachForeignOrgIndistinguishableFromMissing(t *testing.T) {
 	t.Parallel()
-	// The caller belongs to a different org than the session's owner.
+	// A caller in the wrong org must not be able to tell an existing-but-foreign
+	// session apart from a nonexistent one: both must return the identical
+	// not-found response (same status and body). Otherwise a 403-vs-404
+	// difference would leak session existence across orgs (issue #1141).
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	mux := http.NewServeMux()
+	// The caller belongs to a different org than the session's owner.
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{ID: "op", OrgID: testOrg + 1}))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Cleanup(reg.Close)
+	// "s1" exists but is owned by a foreign org; "nope" was never seeded.
 	assert.NilError(t, reg.Seed("s1", testOrg, testTask))
 
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session=s1", &websocket.DialOptions{
-		Subprotocols: []string{shellwire.Subprotocol},
-	})
+	attach := func(session string) (int, string) {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session="+session, &websocket.DialOptions{
+			Subprotocols: []string{shellwire.Subprotocol},
+		})
+		assert.Assert(t, err != nil)
+		body, readErr := io.ReadAll(resp.Body)
+		assert.NilError(t, readErr)
+		assert.NilError(t, resp.Body.Close())
+		return resp.StatusCode, string(body)
+	}
 
-	assert.Assert(t, err != nil)
-	assert.Equal(t, resp.StatusCode, http.StatusForbidden)
+	foreignStatus, foreignBody := attach("s1")
+	missingStatus, missingBody := attach("nope")
+
+	// The wrong-org attach returns not-found...
+	assert.Equal(t, foreignStatus, http.StatusNotFound)
+	// ...and is byte-for-byte identical to attaching a nonexistent session.
+	assert.Equal(t, foreignStatus, missingStatus)
+	assert.Equal(t, foreignBody, missingBody)
 }
 
 func TestAttachRejectsMissingCaller(t *testing.T) {
