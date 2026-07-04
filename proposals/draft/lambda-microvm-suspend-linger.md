@@ -156,43 +156,19 @@ runner stops. This differs deliberately from the mid-task shutdown contract
 survives for rehydration): here the driver has already exited, so `SUSPENDED` is
 the correct resting state and next boot resumes on demand.
 
-### Warm claim in `Launch(reuse)`
+### A single re-spawn path: the shim does not distinguish warm from cold
 
-`tryResume` asks the cache to `Claim` before touching the control plane. If the
-claim wins, the VM is still `RUNNING`; it re-spawns the driver over the proxy,
-with **no** `ResumeMicrovm`:
+The driver re-spawn must look **identical to the shim** whether the VM was cold
+(un-snapshotted by `ResumeMicrovm`) or warm (never suspended). So the runner owns
+the re-spawn trigger uniformly: a single `POST /xagent/start` on the control
+surface is the *only* way the driver is re-started, and the shim cannot tell
+which path led there. This retires the one place the shim currently distinguishes
+them — the AWS `/resume` hook re-spawning on its own.
 
-```go
-func (b *Backend) tryResume(ctx context.Context, reuse *backend.Handle) (bool, backend.Handle, error) {
-    if b.warm.Claim(reuse.ID) { // won the race against the suspend timer
-        hd, _ := decodeData(reuse.Data)
-        if err := b.respawn(ctx, reuse.ID, hd.Endpoint); err != nil {
-            return false, backend.Handle{}, fmt.Errorf("warm respawn: %w", err)
-        }
-        return true, backend.Handle{Type: HandleType, ID: reuse.ID, Data: reuse.Data}, nil
-    }
-    // ...existing GetMicrovm + resume-if-SUSPENDED path (cold fallback)...
-}
-```
-
-`Claim` transitions the entry to its terminal state under the cache mutex and
-returns `true` only if it beat the suspend timer. If the suspend already fired
-(or nothing was pending), it returns `false` and execution falls through to the
-existing cold-resume path — the window simply elapsed. Exactly one of {suspend
-fires, claim wins} completes; the loser is a no-op. `Destroy` likewise `Claim`s
-(discarding the result) so an archive during the window cancels the pending
-timer before terminating.
-
-`respawn` POSTs a new shim control endpoint (below). The VM never left `RUNNING`,
-so the un-snapshot cost is skipped entirely; only the driver re-spawn remains.
-
-### New shim control endpoint: `POST /xagent/start`
-
-The shim (`internal/microvmshim/microvmshim.go`) already re-spawns the driver
-from the retained bundle on the AWS `/resume` hook (`resumeHook` → `spawn`). Add
-a sibling to `/xagent/stop` on the ingress control surface that does the same
-thing, triggered by the runner over the managed proxy instead of by an AWS
-resume:
+**Shim: one re-spawn entry point, resume hook demoted to a thaw seam.** Today
+`resumeHook` re-spawns the driver (`resumeHook` → `spawn`). Move that trigger to
+the control surface and make the resume hook a pure thaw seam — symmetric with
+`suspendHook`, which is already a pure flush seam:
 
 ```go
 const lambdamicrovmStartPath = "/xagent/start"
@@ -205,9 +181,11 @@ func (s *Server) ControlHandler() http.Handler {
     return mux
 }
 
-// startHandler re-spawns the driver from the retained bundle for a warm reuse
-// (runner-triggered analog of resumeHook). No-op / 409 if a driver is already
-// running, so a duplicate claim cannot double-spawn.
+// startHandler (re)spawns the driver from the retained bundle. It is the sole
+// re-spawn trigger — used identically after a cold ResumeMicrovm and a warm
+// reclaim — so the shim never distinguishes the two. Idempotent: a no-op if a
+// driver is already running (a duplicate POST, or a restart that beat the
+// suspend), a 409 before first provisioning.
 func (s *Server) startHandler(w http.ResponseWriter, _ *http.Request) {
     s.mu.Lock()
     running := s.current != nil && !isDone(s.current)
@@ -227,13 +205,78 @@ func (s *Server) startHandler(w http.ResponseWriter, _ *http.Request) {
     }
     w.WriteHeader(http.StatusOK)
 }
+
+// resumeHook becomes a thaw seam: the VM un-snapshots, but the driver is
+// re-spawned by the runner's /xagent/start, not here.
+func (s *Server) resumeHook(context.Context, awsmicrovm.ResumeHookRequest) error {
+    return nil
+}
 ```
 
-`spawn` already clears the sticky `driver-exited` (`s.lc.reset()`), so the new
-`Wait` the runner starts after re-persisting the handle blocks for the *new*
-run's exit rather than replaying the old one. The warm respawn reuses the
-retained in-VM bundle — identical to `/resume` semantics, where the bundle is
-never re-fetched.
+The shim still legitimately separates *first provisioning* (the `/run` hook —
+fetch bundle, provision files once, first spawn) from *re-spawn* (`/xagent/start`
+— retained bundle, no re-fetch). That is a provisioning distinction, not a
+warm/cold one. `spawn` already clears the sticky `driver-exited`
+(`s.lc.reset()`), so the fresh `Wait` the runner starts blocks for the *new*
+run's exit rather than replaying the old one.
+
+**Runner: `tryResume` re-spawns the same way on every path.** After optionally
+un-snapshotting, `tryResume` POSTs `/xagent/start` in all cases — warm claim,
+cold resume, or plain adoption. Idempotency makes this safe uniformly (adopting a
+still-running driver → the POST is a no-op):
+
+```go
+func (b *Backend) tryResume(ctx context.Context, reuse *backend.Handle) (bool, backend.Handle, error) {
+    hd, _ := decodeData(reuse.Data)
+
+    if b.warm.Claim(reuse.ID) {
+        // Warm: won the race against the suspend timer; VM never left RUNNING,
+        // so skip ResumeMicrovm entirely.
+    } else {
+        out, err := b.cloud.GetMicrovm(ctx, &awsmicrovm.GetMicrovmInput{MicrovmID: reuse.ID})
+        if awsmicrovm.IsNotFound(err) {
+            return false, backend.Handle{}, nil
+        }
+        if err != nil {
+            return false, backend.Handle{}, fmt.Errorf("get microvm for resume: %w", err)
+        }
+        switch out.Microvm.State {
+        case awsmicrovm.MicrovmStateRunning, awsmicrovm.MicrovmStatePending:
+            // Adopt; /xagent/start below is a no-op if the driver still runs.
+        case awsmicrovm.MicrovmStateSuspended:
+            if _, err := b.cloud.ResumeMicrovm(ctx, &awsmicrovm.ResumeMicrovmInput{MicrovmID: reuse.ID}); err != nil {
+                return false, backend.Handle{}, fmt.Errorf("resume microvm: %w", err)
+            }
+        default: // SUSPENDING / TERMINATING / TERMINATED
+            return false, backend.Handle{}, nil
+        }
+        if out.Microvm.Endpoint != "" {
+            hd.Endpoint = out.Microvm.Endpoint
+        }
+    }
+
+    // One uniform re-spawn trigger, warm or cold. Retried over the same managed
+    // proxy the SSE stream uses; /xagent/start is idempotent.
+    if err := b.respawn(ctx, reuse.ID, hd.Endpoint); err != nil {
+        return false, backend.Handle{}, fmt.Errorf("respawn driver: %w", err)
+    }
+    data, _ := json.Marshal(hd)
+    return true, backend.Handle{Type: HandleType, ID: reuse.ID, Data: data}, nil
+}
+```
+
+`Claim` transitions the cache entry to its terminal state under the cache mutex
+and returns `true` only if it beat the suspend timer; if the suspend already
+fired (or nothing was pending) it returns `false` and the cold branch runs — the
+window simply elapsed. Exactly one of {suspend fires, claim wins} completes; the
+loser is a no-op. `Destroy` likewise `Claim`s (discarding the result) so an
+archive during the window cancels the pending timer before terminating.
+
+`respawn` mints a proxy token and POSTs `/xagent/start`, retried with backoff
+over the same managed-proxy reachability the SSE stream already depends on (the
+runner must reach the shim to observe the driver at all). Because `/xagent/start`
+is idempotent, a retry — or a POST to a VM whose driver is already running — is a
+safe no-op.
 
 ### Configuration
 
@@ -278,13 +321,18 @@ in-flight handles.
    that the field round-trips through `handleData` and that validation rejects
    negative / `>= max_duration` values.
 
-2. **Shim `/xagent/start` respawn endpoint** — Add `startHandler` to the shim
-   control surface, re-spawning the driver from the retained bundle with an
-   already-running guard. Delivers: runner-triggered warm respawn. Depends on:
-   nothing (independent of the runner). Verifiable by: shim unit tests — after a
-   driver exit, `POST /xagent/start` re-spawns and publishes a fresh
-   `driver-exited` on the next run; a second POST while running is a no-op; a POST
-   before provisioning is a 409.
+2. **Unify the shim re-spawn trigger** — Add `startHandler` (`POST
+   /xagent/start`) as the sole driver re-spawn entry point, idempotent with an
+   already-running guard, and demote `resumeHook` to a thaw-seam no-op. `tryResume`
+   POSTs `/xagent/start` after every resume/adopt (via a `respawn` helper retried
+   over the proxy) so the cold-resume path re-spawns the same way the warm path
+   will. Delivers: one uniform re-spawn path the shim can't distinguish; the
+   existing cold resume keeps working through it. Depends on: nothing new
+   (reworks the existing resume path). Verifiable by: shim unit tests — after a
+   driver exit `POST /xagent/start` re-spawns and publishes a fresh
+   `driver-exited`, a second POST while running is a no-op, a POST before
+   provisioning is a 409, and the resume hook alone no longer spawns; backend test
+   that a cold resume POSTs `/xagent/start`.
 
 3. **`WarmCache` struct** — Add the `WarmCache` (schedule / claim / pending /
    flush) with its own tests, independent of the backend. Delivers: the
@@ -304,13 +352,13 @@ in-flight handles.
    `delay == 0` suspends inline as today.
 
 5. **Warm claim in `Launch(reuse)`** — Have `tryResume` `Claim` a pending
-   warm entry (cancelling the suspend) and `respawn` via `POST /xagent/start`
-   instead of `ResumeMicrovm`, falling through to the cold-resume path when the
-   suspend already won the race. Delivers: end-to-end warm reuse. Depends on: (2)
-   and (4). Verifiable by: backend unit tests — a reuse during the window cancels
-   the suspend, POSTs `/xagent/start`, and calls **no** `ResumeMicrovm`; a reuse
-   after the window resumes cold; a reuse racing the fired suspend resolves to
-   exactly one outcome.
+   warm entry (skipping `ResumeMicrovm`) and re-spawn through the same
+   `/xagent/start` the cold path already uses, falling through to the cold branch
+   when the suspend won the race. Delivers: end-to-end warm reuse. Depends on: (2)
+   and (4). Verifiable by: backend unit tests — a reuse during the window skips
+   the suspend and calls **no** `ResumeMicrovm` (but still POSTs `/xagent/start`);
+   a reuse after the window resumes cold; a reuse racing the fired suspend
+   resolves to exactly one outcome.
 
 ## Trade-offs
 
@@ -332,11 +380,19 @@ in-flight handles.
   is one extra type and a small indirection; the payoff is that the race-prone
   logic is isolated and independently verifiable (implementation slice 3).
 
-- **Warm respawn vs. suspend/resume anyway.** Reusing a `RUNNING` VM needs a
-  driver re-spawn without a control-plane resume, which is why a new shim
-  endpoint is required. The alternative — suspend on driver-exit and always
-  resume — is today's behavior and the thing we are trying to avoid; a "resume a
-  VM we never suspended" API does not exist.
+- **One re-spawn trigger vs. two.** Reusing a `RUNNING` VM needs a driver
+  re-spawn without a control-plane resume. Rather than add a *second* spawn
+  trigger next to the AWS `/resume` hook (leaving the shim to behave differently
+  warm vs. cold), the runner owns the re-spawn uniformly via `/xagent/start` and
+  the resume hook becomes a thaw-seam no-op — so the shim genuinely cannot tell
+  the two apart. The cost is that this reworks the *existing* cold-resume trigger,
+  not just the new warm one: cold resumes now depend on the runner POSTing
+  `/xagent/start` (retried over the same proxy reachability the SSE stream already
+  needs) instead of the in-VM hook self-spawning. The payoff is a single,
+  idempotent code path and a shim with one less thing to know. The rejected
+  alternative — suspend on driver-exit and always resume — is today's behavior and
+  the thing we are trying to avoid; a "resume a VM we never suspended" API does
+  not exist.
 
 - **Cost.** A lingering VM bills compute for up to `suspend_delay_seconds`; a
   suspended VM is snapshot-storage only. The default of `0` keeps the current
