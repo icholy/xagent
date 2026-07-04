@@ -47,7 +47,7 @@ func (a *DummyAgent) doError() error {
 	if a.options == nil || a.options.Error == "" {
 		return nil
 	}
-	a.log.Info("dummy agent returning error", "error", a.options.Error)
+	a.log.Info("dummy agent returning error", "err", a.options.Error)
 	return errors.New(a.options.Error)
 }
 
