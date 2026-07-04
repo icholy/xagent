@@ -37,6 +37,8 @@ import (
 // interface notifyserver declares for its SSE handler; the browser attach leg
 // authenticates the same way (cookie session for identity, org_id query param
 // for the active org).
+//
+//go:generate go tool moq -out org_resolver_moq_test.go . OrgResolver
 type OrgResolver interface {
 	ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error)
 }

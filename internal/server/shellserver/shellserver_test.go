@@ -2,6 +2,7 @@ package shellserver_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -212,21 +213,6 @@ func TestAttachRejectsMissingCaller(t *testing.T) {
 	assert.Equal(t, resp.StatusCode, http.StatusUnauthorized)
 }
 
-// fakeOrgResolver stands in for the store-backed OrgResolver: it maps a user to
-// the single org it may attach to, resolving any requested org to it and erroring
-// for any other user (i.e. non-membership).
-type fakeOrgResolver struct {
-	userID string
-	orgID  int64
-}
-
-func (f fakeOrgResolver) ResolveOrg(_ context.Context, userID string, _ int64) (int64, error) {
-	if userID != f.userID {
-		return 0, http.ErrAbortHandler // any non-nil error stands for "not a member"
-	}
-	return f.orgID, nil
-}
-
 func TestAttachCookieCallerResolvesOrg(t *testing.T) {
 	t.Parallel()
 	// A browser operator authenticates via its cookie session (no org claim on the
@@ -234,7 +220,11 @@ func TestAttachCookieCallerResolvesOrg(t *testing.T) {
 	// owning org, so the attach succeeds.
 	reg := shellserver.New(shellserver.Options{
 		EstablishTimeout: time.Minute,
-		OrgResolver:      fakeOrgResolver{userID: "op", orgID: testOrg},
+		OrgResolver: &shellserver.OrgResolverMock{
+			ResolveOrgFunc: func(_ context.Context, _ string, _ int64) (int64, error) {
+				return testOrg, nil
+			},
+		},
 	})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{
@@ -277,9 +267,14 @@ func TestAttachCookieCallerRejectsInvalidOrgID(t *testing.T) {
 	t.Parallel()
 	// A cookie caller with a non-numeric org_id is a bad request, rejected before
 	// the resolver is consulted.
+	resolver := &shellserver.OrgResolverMock{
+		ResolveOrgFunc: func(_ context.Context, _ string, _ int64) (int64, error) {
+			return testOrg, nil
+		},
+	}
 	reg := shellserver.New(shellserver.Options{
 		EstablishTimeout: time.Minute,
-		OrgResolver:      fakeOrgResolver{userID: "op", orgID: testOrg},
+		OrgResolver:      resolver,
 	})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{
@@ -298,6 +293,8 @@ func TestAttachCookieCallerRejectsInvalidOrgID(t *testing.T) {
 	})
 	assert.Assert(t, err != nil)
 	assert.Equal(t, resp.StatusCode, http.StatusBadRequest)
+	// The bad org_id is rejected before the resolver is ever consulted.
+	assert.Equal(t, len(resolver.ResolveOrgCalls()), 0)
 }
 
 func TestAttachCookieCallerRejectsNonMember(t *testing.T) {
@@ -307,7 +304,11 @@ func TestAttachCookieCallerRejectsNonMember(t *testing.T) {
 	// a cookie operator.
 	reg := shellserver.New(shellserver.Options{
 		EstablishTimeout: time.Minute,
-		OrgResolver:      fakeOrgResolver{userID: "member", orgID: testOrg},
+		OrgResolver: &shellserver.OrgResolverMock{
+			ResolveOrgFunc: func(_ context.Context, _ string, _ int64) (int64, error) {
+				return 0, errors.New("not a member")
+			},
+		},
 	})
 	mux := http.NewServeMux()
 	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{
