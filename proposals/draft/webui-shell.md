@@ -20,10 +20,13 @@ browser, install and configure the CLI, and authenticate separately.
 We want an **in-browser terminal** on the task detail page that attaches to the
 task's sandbox, reusing the existing rendezvous machinery unchanged. The browser
 raises exactly one problem the CLI never had: `WebSocket` cannot set an
-`Authorization: Bearer` header, but `/shell/attach` is gated by `RequireAuth` plus
-an org-membership check (`internal/server/shellserver/shellserver.go`
-`AttachHandler`). Everything else — the relay, the framing, the driver, the
-`OpenShell` RPC — already works and stays as-is.
+`Authorization: Bearer` header, but `/shell/attach` is gated by auth plus an
+org-membership check (`internal/server/shellserver/shellserver.go`
+`AttachHandler`). We solve it the same way the SSE stream already does — a
+same-origin browser WebSocket carries the session cookie automatically, so the
+browser authenticates via its cookie session and passes the active org as an
+`org_id` query parameter that the handler resolves. Everything else — the relay,
+the framing, the driver, the `OpenShell` RPC — already works and stays as-is.
 
 ## Design
 
@@ -35,8 +38,9 @@ The browser is just another operator leg. The flow mirrors the CLI:
 2. The UI calls the existing `openShell` RPC (already generated at
    `webui/src/gen/xagent/v1/xagent-XAgentService_connectquery.ts:68`) with the
    task id and gets back a `session_id`.
-3. The UI opens a `WebSocket` to `/shell/attach?session=<id>`, authenticating via
-   the app JWT it already holds (see **Authenticating the WebSocket** below).
+3. The UI opens a `WebSocket` to `/shell/attach?session=<id>&org_id=<n>`,
+   authenticating via the browser's cookie session (see **Authenticating the
+   WebSocket** below).
 4. A TypeScript port of the `shellwire` codec frames keystrokes / resizes and
    decodes shell output; an xterm.js terminal renders it.
 5. On `Exit` frame or socket close, the terminal shows the exit code and offers a
@@ -49,44 +53,70 @@ backend change is teaching the attach leg to accept a browser-friendly credentia
 
 The CLI passes `Authorization: Bearer <app-jwt>` as an HTTP header on the dial
 (`internal/shell/attach.go:47`). The browser `WebSocket` constructor exposes no
-header API, so we need another channel for the token. Three options were weighed
-(see **Trade-offs**); the chosen approach is the **`Sec-WebSocket-Protocol`
-subprotocol** carrier, which is the standard workaround and keeps the token out of
-URLs (and therefore out of access logs / `Referer`).
+header API, so a Bearer token cannot ride on the request. But the webui is served
+same-origin from the server, and a browser WebSocket handshake **does** send the
+site's cookies automatically — so the browser authenticates exactly the way its
+SSE stream (`/events`) already does: **cookie session for identity, `org_id` query
+parameter for the active org.**
 
-The browser offers two subprotocols on the dial:
+This is already a solved problem in the codebase. The notification SSE handler
+(`internal/server/notifyserver/sse.go:20-35`) takes `caller.OrgID` for token
+callers, but for a cookie caller — which carries no org claim, so `caller.OrgID`
+is `0` — it reads `org_id` from the query and resolves it through the same
+`OrgResolver.ResolveOrg` the `/auth/token` exchange uses. We apply the identical
+pattern to the attach leg.
 
-```ts
-new WebSocket(url, ['xagent-shell.v1', `xagent-bearer.${token}`])
-```
-
-The server side gains a tiny pre-auth adapter, applied only on the attach route,
-that runs *before* `RequireAuth`: if the request carries no `Authorization`
-header, it scans the `Sec-WebSocket-Protocol` request header for an
-`xagent-bearer.<token>` entry and, if present, synthesizes
-`Authorization: Bearer <token>` on the request before delegating. `RequireAuth`
-and the existing org-membership check in `AttachHandler` then work unchanged — the
-token is a normal org-scoped app JWT with an org claim, so `caller.OrgID` is
-populated exactly as it is for the CLI.
+**Route change.** Match `/events` and mount the attach route under `CheckAuth()`
+(populate-but-don't-redirect) instead of `RequireAuth()`, so an unauthenticated
+WebSocket gets a clean pre-upgrade `401` rather than a `302` to the login page:
 
 ```go
-// internal/server/shellserver/ (new bearerFromSubprotocol middleware), wired on
-// the attach route in internal/server/server.go alongside RequireAuth:
-mux.Handle(shell.AttachRoute, alice.New(
-    bearerFromSubprotocol,        // NEW: Sec-WebSocket-Protocol -> Authorization
-    s.auth.RequireAuth(),
-).Then(s.shell.AttachHandler()))
+// internal/server/server.go — attach route now mirrors the /events wiring.
+mux.Handle(shell.AttachRoute, alice.New(s.auth.CheckAuth()).Then(s.shell.AttachHandler()))
 ```
 
-The token subprotocol is a valid HTTP token (a JWT is `base64url.base64url.base64url`;
-all those characters plus `.` are legal in a subprotocol name). It is **not**
-echoed back: `AttachHandler` already calls `websocket.Accept` with
-`Subprotocols: []string{shellwire.Subprotocol}` (shellserver.go:220), so the
-handshake selects only `xagent-shell.v1` and the bearer entry is silently dropped
-from the response. The subprotocol-version check (shellserver.go:229) is unchanged.
+The driver route (`/shell/driver`) keeps `RequireAuth()` and the task-token check
+unchanged.
 
-The driver leg (`/shell/driver`) is untouched — it authenticates with the task
-token as it does today.
+**Handler change.** `AttachHandler` gains an `OrgResolver` (injected via
+`shellserver.Options`, the same interface `notifyserver` declares) and resolves
+the operator's org the SSE way before the existing membership comparison:
+
+```go
+// internal/server/shellserver/shellserver.go, AttachHandler, replacing the
+// current `caller.OrgID != e.orgID` check:
+orgID := caller.OrgID
+if caller.Type == apiauth.AuthTypeCookie {
+    // Cookie sessions carry no org claim; take it from the query and resolve
+    // membership exactly like notifyserver's SSE handler.
+    orgID, err = strconv.ParseInt(req.URL.Query().Get("org_id"), 10, 64)
+    if err != nil {
+        http.Error(w, "invalid org_id", http.StatusBadRequest)
+        return
+    }
+    orgID, err = r.orgResolver.ResolveOrg(req.Context(), caller.ID, orgID)
+    if err != nil {
+        http.Error(w, "forbidden", http.StatusForbidden)
+        return
+    }
+}
+if orgID != e.orgID {
+    http.Error(w, "forbidden", http.StatusForbidden)
+    return
+}
+```
+
+For a token caller (the CLI) nothing changes: `caller.Type != AuthTypeCookie`, so
+`caller.OrgID` is used as before. `ResolveOrg` is the authorization boundary — it
+returns an error if the cookie user is not a member of the requested org — so a
+cookie session (which today carries the omnipotent `authscope.Admin()` scope) can
+still only attach to an org it actually belongs to. The browser therefore sends no
+token at all; it dials `/shell/attach?session=<id>&org_id=<n>` and relies on the
+cookie.
+
+The subprotocol handling in `AttachHandler` (shellserver.go:220-232) is unchanged:
+the browser offers only `['xagent-shell.v1']` and the server negotiates it exactly
+as the CLI does.
 
 ### Frame codec in TypeScript
 
@@ -159,27 +189,33 @@ Gating and constraints, surfaced in the UI rather than discovered on failure:
 
 ## Trade-offs
 
-**WebSocket auth — why the subprotocol carrier.** Three options:
+**WebSocket auth — why the cookie session.** Three options:
 
-1. **`Sec-WebSocket-Protocol` subprotocol (chosen).** Token never appears in a
-   URL, so it stays out of server access logs, browser history, and `Referer`
-   headers. Reuses the existing app-JWT / org-claim path with a ~10-line
-   pre-auth adapter and zero changes to `RequireAuth` or the org check. The one
-   wart is smuggling a credential through a field meant for protocol negotiation,
-   but it is a well-worn pattern (Kubernetes, many WS gateways do this) and the
-   token is discarded from the handshake response.
-2. **`?token=<jwt>` query parameter.** Simplest to implement, but tokens in URLs
-   leak into access logs and proxies; rejected on those grounds even though the
-   session id there is already non-secret.
-3. **Cookie session.** The server already supports cookie auth for the web UI
-   (`internal/auth/apiauth/apiauth.go`), and a same-origin browser WebSocket sends
-   the cookie automatically — no token plumbing at all. Rejected because cookie
-   callers today resolve to `OrgID = 0` (org is resolved only in the `/auth/token`
-   exchange, `HandleToken`), so the org-membership check in `AttachHandler` would
-   need a separate org-resolution step and a `?org_id=` param, and it broadens the
-   omnipotent cookie-session surface (`User()` grants `authscope.Admin()`) onto a
-   raw byte relay. Reusing the narrowly-scoped app JWT the webui already fetches is
-   the smaller, better-audited surface.
+1. **Cookie session + `org_id` query param (chosen).** No token plumbing on the
+   client at all: a same-origin browser WebSocket sends the cookie automatically,
+   so the browser dials with nothing but the session id and org. It reuses a
+   pattern already proven and audited in this codebase — the SSE handler
+   (`internal/server/notifyserver/sse.go`) authenticates the exact same way — so
+   the attach leg stays consistent with the rest of the web UI's streaming
+   surface. The cost is that the org check moves from a single field comparison to
+   a `ResolveOrg` call for cookie callers, and the handler takes an `OrgResolver`
+   dependency; both already exist for SSE.
+2. **`Sec-WebSocket-Protocol` subprotocol carrier for an app JWT.** Keeps the
+   token out of URLs and reuses the org-scoped app JWT the webui fetches, but it
+   smuggles a credential through a field meant for protocol negotiation and adds a
+   pre-auth adapter the codebase has no other precedent for. Rejected in favour of
+   the cookie path the SSE stream already establishes.
+3. **`?token=<jwt>` query parameter.** Simplest to write, but tokens in URLs leak
+   into access logs, proxies, and browser history; rejected outright.
+
+The one property worth calling out: a cookie session is granted the omnipotent
+`authscope.Admin()` scope (`internal/auth/apiauth/apiauth.go` `User()`), so the
+attach leg's *only* authorization boundary for a browser operator is
+`ResolveOrg` confirming org membership. That is the same trust model the SSE
+stream already runs under, and the relay exposes a shell the operator's org owns —
+not cross-org data — so the boundary is appropriate. If cookie scopes are ever
+tightened (there is a `TODO` to that effect on `User()`), this leg inherits the
+improvement for free.
 
 **xterm.js vs. hand-rolled.** A real VT emulator is required for anything beyond
 `echo` (cursor movement, colors, `vim`, `htop`). xterm.js is the de-facto standard,
