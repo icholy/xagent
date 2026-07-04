@@ -73,8 +73,9 @@ type ServeOptions struct {
 // Incoming data frames are written to the PTY master, resize frames are applied
 // to the PTY, and PTY output is streamed back as data frames. When the shell
 // exits, Serve sends an exit frame with the shell's exit code and closes the
-// WebSocket cleanly. A dropped operator leg or a canceled ctx closes the PTY so
-// the shell gets EOF, exits, and Serve returns rather than leaking a shell.
+// WebSocket cleanly. A dropped operator leg or a canceled ctx both run the same
+// robust teardown (see cmd.Cancel below), so the shell is always reaped and
+// Serve returns rather than leaking a shell or hanging the driver.
 func Serve(ctx context.Context, opts ServeOptions) error {
 	log := opts.Log
 	if log == nil {
@@ -84,10 +85,16 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	log.Info("starting reverse shell", "session", session)
 
 	shell := cmp.Or(os.Getenv("SHELL"), "/bin/sh")
-	// exec.CommandContext (not exec.Command) installs the ctx watchdog that
-	// auto-invokes cmd.Cancel when ctx is canceled. pty.Start calls cmd.Start
+	// cmdCtx drives the shell's lifecycle. It is canceled on ctx cancellation
+	// (SIGTERM) via exec.CommandContext's watchdog, and explicitly by the
+	// WebSocket->PTY goroutine when the operator leg drops — routing both teardown
+	// triggers through the single robust cmd.Cancel path below.
+	cmdCtx, cancelCmd := context.WithCancel(ctx)
+	defer cancelCmd()
+	// exec.CommandContext (not exec.Command) installs the cmdCtx watchdog that
+	// auto-invokes cmd.Cancel when cmdCtx is canceled. pty.Start calls cmd.Start
 	// under the hood, so the watchdog still gets wired up — they compose.
-	cmd := exec.CommandContext(ctx, shell)
+	cmd := exec.CommandContext(cmdCtx, shell)
 	// A leading "-" in argv[0] is the conventional signal for a login shell,
 	// so it sources the profile files an operator would expect.
 	cmd.Args[0] = "-" + filepath.Base(shell)
@@ -106,9 +113,10 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	defer conn.CloseNow()
 	conn.SetReadLimit(shellwire.ReadLimit)
 
-	// Tear the session down promptly when ctx is canceled — e.g. the driver
-	// received SIGTERM. The read loop below closes the PTY on cancellation, but a
-	// shell blocked in a foreground child (an editor, a pager, anything the
+	// Tear the session down promptly when cmdCtx is canceled — either the driver
+	// received SIGTERM (ctx canceled) or the operator leg dropped (the WebSocket->PTY
+	// goroutine cancels cmdCtx). Relying on the shell noticing the PTY closing is not
+	// enough: a shell blocked in a foreground child (an editor, a pager, anything the
 	// operator left running) may never notice the resulting EOF, so cmd.Wait would
 	// hang and the driver would never exit. Cmd.Cancel runs on cancellation: it
 	// closes the connection first — unblocking both WS pumps immediately and giving
@@ -136,12 +144,15 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 
 	// WebSocket -> PTY: apply incoming data/resize frames. On any read error —
 	// the operator leg dropped, the session was torn down, or ctx was canceled —
-	// close the PTY so the shell gets EOF, exits, and cmd.Wait returns.
+	// cancel cmdCtx so the shared cmd.Cancel teardown runs (close the conn, SIGTERM
+	// the shell's process group, force-kill via WaitDelay), guaranteeing the shell
+	// dies and cmd.Wait returns even if it is blocked in a foreground child that
+	// would never notice the PTY closing.
 	go func() {
 		for {
 			typ, msg, err := conn.Read(ctx)
 			if err != nil {
-				_ = ptmx.Close()
+				cancelCmd()
 				return
 			}
 			if typ != websocket.MessageBinary {
