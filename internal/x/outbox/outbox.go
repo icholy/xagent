@@ -1,7 +1,11 @@
-// Package outbox is a durable, crash-safe backing store for an at-least-once
-// outbox. This layer provides only the Store interface, the Record type, and a
-// filesystem implementation (FileStore); the outbox engine that drives delivery
-// is a separate concern layered on top.
+// Package outbox is a durable, at-least-once outbox generic over a
+// JSON-serializable payload type and a pluggable backing store. It persists
+// each message before attempting delivery, survives restarts, and retries
+// transient failures with backoff.
+//
+// The Store interface and Record type define the durable, crash-safe FIFO queue
+// the outbox drives; FileStore is a stdlib-only filesystem implementation. The
+// Outbox engine (see engine.go) delivers persisted messages in order.
 //
 // The filesystem implementation ports the proven pattern from the runner's
 // taskstate package: one atomic per-record JSON file, written via temp-file +
