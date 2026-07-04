@@ -49,20 +49,18 @@ func NewStoreUserResolver(s *store.Store) *StoreUserResolver {
 	return &StoreUserResolver{store: s}
 }
 
-func (r *StoreUserResolver) Provision(ctx context.Context, user *apiauth.UserInfo) (int64, error) {
-	var orgID int64
+func (r *StoreUserResolver) Provision(ctx context.Context, user *apiauth.UserInfo) (*model.User, error) {
+	u := &model.User{
+		ID:    user.ID,
+		Email: user.Email,
+		Name:  user.Name,
+	}
 	err := r.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
-		u := &model.User{
-			ID:    user.ID,
-			Email: user.Email,
-			Name:  user.Name,
-		}
 		if err := r.store.UpsertUser(ctx, tx, u); err != nil {
 			return err
 		}
-		orgID = u.DefaultOrgID
 		// If the user has no default org, create one
-		if orgID == 0 {
+		if u.DefaultOrgID == 0 {
 			org := &model.Org{
 				Name:  user.Name + "'s Org",
 				Owner: user.ID,
@@ -80,11 +78,16 @@ func (r *StoreUserResolver) Provision(ctx context.Context, user *apiauth.UserInf
 			if err := r.store.UpdateDefaultOrgID(ctx, tx, user.ID, org.ID); err != nil {
 				return err
 			}
-			orgID = org.ID
+			// Reflect the freshly created org on the returned user so it is
+			// internally consistent and callers don't have to re-resolve it.
+			u.DefaultOrgID = org.ID
 		}
 		return tx.Commit()
 	})
-	return orgID, err
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
 }
 
 func (r *StoreUserResolver) ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error) {

@@ -178,7 +178,7 @@ var ServerCommand = &cli.Command{
 				Email: "dev@localhost",
 				Name:  "Developer",
 			}
-			orgID, err := resolver.Provision(ctx, devUser)
+			devUserModel, err := resolver.Provision(ctx, devUser)
 			if err != nil {
 				return fmt.Errorf("failed to provision dev user: %w", err)
 			}
@@ -191,7 +191,7 @@ var ServerCommand = &cli.Command{
 				ID:        uuid.NewString(),
 				Name:      "dev-runner",
 				TokenHash: apiauth.HashKey("xat_dev"),
-				OrgID:     orgID,
+				OrgID:     devUserModel.DefaultOrgID,
 				Scopes:    authscope.Admin(),
 			}); err != nil {
 				slog.Warn("failed to provision dev API key", "err", err)

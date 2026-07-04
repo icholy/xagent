@@ -12,6 +12,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/authscope"
+	"github.com/icholy/xagent/internal/model"
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authentication"
@@ -88,9 +89,9 @@ type KeyValidator interface {
 type UserResolver interface {
 	// Provision creates the user and their default org on first login.
 	// Called from the OIDC callback via WithOnAuthenticated. It returns the
-	// user's resolved default org id (the pre-existing one, or the one just
-	// created).
-	Provision(ctx context.Context, user *UserInfo) (int64, error)
+	// provisioned user with DefaultOrgID populated (the pre-existing org, or
+	// the one just created).
+	Provision(ctx context.Context, user *UserInfo) (*model.User, error)
 	// ResolveOrg resolves the org for token issuance.
 	// orgID is the requested org from the query param, or 0 to use the user's default.
 	// Returns the resolved org ID or an error if the user is not a member.
