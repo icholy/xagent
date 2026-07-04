@@ -1,7 +1,6 @@
 package model
 
 import (
-	"strings"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -396,10 +395,8 @@ func TestRunnerEvent_LifecycleEvent_FailedReason(t *testing.T) {
 		want   string
 	}{
 		{"empty falls back to constant", "", "container failed"},
-		{"blank falls back to constant", "   \n ", "container failed"},
-		{"reason threaded through", "setup command 0 failed: exit status 1", "setup command 0 failed: exit status 1"},
-		{"multiline collapses to first line", "wrapper failed:\ncause here\nmore", "wrapper failed:"},
-		{"trims surrounding whitespace", "  boom  ", "boom"},
+		{"reason passed through as-is", "setup command 0 failed: exit status 1", "setup command 0 failed: exit status 1"},
+		{"multiline reason preserved", "wrapper failed:\ncause here\nmore", "wrapper failed:\ncause here\nmore"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -411,16 +408,6 @@ func TestRunnerEvent_LifecycleEvent_FailedReason(t *testing.T) {
 			assert.Equal(t, lp.Message, tt.want)
 		})
 	}
-}
-
-func TestRunnerEvent_LifecycleEvent_ReasonTruncated(t *testing.T) {
-	t.Parallel()
-	task := &Task{ID: 1, Status: TaskStatusFailed}
-	e := RunnerEvent{Event: RunnerEventFailed, Reason: strings.Repeat("x", maxReasonLen+50)}
-	ev, ok := e.LifecycleEvent(task, TaskStatusRunning)
-	assert.Assert(t, ok)
-	lp := ev.Payload.(*LifecyclePayload)
-	assert.Equal(t, lp.Message, strings.Repeat("x", maxReasonLen)+"…")
 }
 
 func TestTask_IsDone(t *testing.T) {

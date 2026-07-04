@@ -1,7 +1,6 @@
 package model
 
 import (
-	"strings"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/authscope"
@@ -305,7 +304,9 @@ func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) 
 	case RunnerEventStopped:
 		return lifecycle(LifecycleKindSandboxExited, ""), true
 	case RunnerEventFailed:
-		msg := sanitizeReason(e.Reason)
+		// The reason is passed through as-is; fall back to the legacy constant
+		// only when a producer left it empty (old runners/drivers).
+		msg := e.Reason
 		if msg == "" {
 			msg = "container failed"
 		}
@@ -313,32 +314,6 @@ func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) 
 	default:
 		return nil, false
 	}
-}
-
-// maxReasonLen bounds the failure reason stored on a lifecycle event. Reasons
-// are attacker-adjacent free text (error strings that can be long, multi-line,
-// or echo command output), and the timeline is a summary surface, not a log
-// viewer, so we cap the stored message.
-const maxReasonLen = 1024
-
-// sanitizeReason collapses a runner event reason to a single line and truncates
-// it to maxReasonLen. Enforcing the bound here (rather than at each producer)
-// keeps the cap consistent regardless of which producer set the reason.
-func sanitizeReason(reason string) string {
-	reason = strings.TrimSpace(reason)
-	if reason == "" {
-		return ""
-	}
-	// Collapse to the first non-empty line so multi-line errors don't break
-	// the timeline rendering; the wrapper line usually names the phase
-	// (e.g. `setup command 0 failed: ...`).
-	if i := strings.IndexAny(reason, "\r\n"); i >= 0 {
-		reason = strings.TrimSpace(reason[:i])
-	}
-	if len(reason) > maxReasonLen {
-		reason = reason[:maxReasonLen] + "…"
-	}
-	return reason
 }
 
 // IsDone reports whether the task has finished its run: completed, failed,
