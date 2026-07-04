@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
@@ -16,6 +16,7 @@ import {
   canUnarchiveTask,
   canCancelTask,
   canRestartTask,
+  canOpenShell,
   isArchivedTask,
 } from '@/lib/task'
 import { eventsToTimeline } from '@/lib/timeline'
@@ -25,10 +26,11 @@ import { AutoArchiveControl } from '@/components/auto-archive-control'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { TaskTimeline } from '@/components/task-timeline'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, TerminalSquare } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -172,6 +174,31 @@ function TaskDetail() {
               {restartMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Restart
             </Button>
+          )}
+          {canOpenShell(task) ? (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/tasks/$id/shell" params={{ id }}>
+                <TerminalSquare className="mr-2 h-4 w-4" />
+                Open shell
+              </Link>
+            </Button>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* A disabled button swallows pointer events, so wrap it so the
+                    tooltip still fires on hover. */}
+                <span className="inline-block">
+                  <Button variant="outline" size="sm" disabled>
+                    <TerminalSquare className="mr-2 h-4 w-4" />
+                    Open shell
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                The shell attaches to a finished task&apos;s filesystem. Available once the
+                task completes, fails, or is cancelled.
+              </TooltipContent>
+            </Tooltip>
           )}
           {canArchiveTask(task) && (
             <ArchiveButton

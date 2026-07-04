@@ -212,6 +212,122 @@ func TestAttachRejectsMissingCaller(t *testing.T) {
 	assert.Equal(t, resp.StatusCode, http.StatusUnauthorized)
 }
 
+// fakeOrgResolver stands in for the store-backed OrgResolver: it maps a user to
+// the single org it may attach to, resolving any requested org to it and erroring
+// for any other user (i.e. non-membership).
+type fakeOrgResolver struct {
+	userID string
+	orgID  int64
+}
+
+func (f fakeOrgResolver) ResolveOrg(_ context.Context, userID string, _ int64) (int64, error) {
+	if userID != f.userID {
+		return 0, http.ErrAbortHandler // any non-nil error stands for "not a member"
+	}
+	return f.orgID, nil
+}
+
+func TestAttachCookieCallerResolvesOrg(t *testing.T) {
+	t.Parallel()
+	// A browser operator authenticates via its cookie session (no org claim on the
+	// caller) and passes org_id in the query; the resolver maps it to the session's
+	// owning org, so the attach succeeds.
+	reg := shellserver.New(shellserver.Options{
+		EstablishTimeout: time.Minute,
+		OrgResolver:      fakeOrgResolver{userID: "op", orgID: testOrg},
+	})
+	mux := http.NewServeMux()
+	mux.Handle("GET /shell/driver", apiauth.WithTestUser(reg.DriverHandler(), &apiauth.UserInfo{
+		ID:     "driver",
+		OrgID:  testOrg,
+		Scopes: agentauth.Scopes(agentauth.ScopeOptions{TaskID: testTask}),
+	}))
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{
+		ID:   "op",
+		Type: apiauth.AuthTypeCookie,
+	}))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Cleanup(reg.Close)
+	assert.NilError(t, reg.Seed("s1", testOrg, testTask))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	base := "ws" + strings.TrimPrefix(srv.URL, "http")
+	driver, _, err := websocket.Dial(ctx, base+"/shell/driver?session=s1", nil)
+	assert.NilError(t, err)
+	t.Cleanup(func() { driver.Close(websocket.StatusNormalClosure, "test done") })
+	attach, resp, err := websocket.Dial(ctx, base+"/shell/attach?session=s1&org_id=1", &websocket.DialOptions{
+		Subprotocols: []string{shellwire.Subprotocol},
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, resp.StatusCode, http.StatusSwitchingProtocols)
+	assert.Equal(t, attach.Subprotocol(), shellwire.Subprotocol)
+	t.Cleanup(func() { attach.Close(websocket.StatusNormalClosure, "test done") })
+
+	// The relay is live: a byte from the driver reaches the browser operator.
+	payload := []byte{0x00, 'h', 'i'}
+	send(t, driver, payload)
+	typ, got := recv(t, attach)
+	assert.Equal(t, typ, websocket.MessageBinary)
+	assert.DeepEqual(t, got, payload)
+}
+
+func TestAttachCookieCallerRejectsInvalidOrgID(t *testing.T) {
+	t.Parallel()
+	// A cookie caller with a non-numeric org_id is a bad request, rejected before
+	// the resolver is consulted.
+	reg := shellserver.New(shellserver.Options{
+		EstablishTimeout: time.Minute,
+		OrgResolver:      fakeOrgResolver{userID: "op", orgID: testOrg},
+	})
+	mux := http.NewServeMux()
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{
+		ID:   "op",
+		Type: apiauth.AuthTypeCookie,
+	}))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Cleanup(reg.Close)
+	assert.NilError(t, reg.Seed("s1", testOrg, testTask))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session=s1&org_id=abc", &websocket.DialOptions{
+		Subprotocols: []string{shellwire.Subprotocol},
+	})
+	assert.Assert(t, err != nil)
+	assert.Equal(t, resp.StatusCode, http.StatusBadRequest)
+}
+
+func TestAttachCookieCallerRejectsNonMember(t *testing.T) {
+	t.Parallel()
+	// The resolver errors for a user that isn't a member of the requested org, so
+	// the attach is forbidden — the resolver is the sole authorization boundary for
+	// a cookie operator.
+	reg := shellserver.New(shellserver.Options{
+		EstablishTimeout: time.Minute,
+		OrgResolver:      fakeOrgResolver{userID: "member", orgID: testOrg},
+	})
+	mux := http.NewServeMux()
+	mux.Handle("GET /shell/attach", apiauth.WithTestUser(reg.AttachHandler(), &apiauth.UserInfo{
+		ID:   "intruder",
+		Type: apiauth.AuthTypeCookie,
+	}))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Cleanup(reg.Close)
+	assert.NilError(t, reg.Seed("s1", testOrg, testTask))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/shell/attach?session=s1&org_id=1", &websocket.DialOptions{
+		Subprotocols: []string{shellwire.Subprotocol},
+	})
+	assert.Assert(t, err != nil)
+	assert.Equal(t, resp.StatusCode, http.StatusForbidden)
+}
+
 func TestDriverRejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})

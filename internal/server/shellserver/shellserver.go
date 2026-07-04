@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -31,11 +32,21 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
+// OrgResolver validates that a user can attach to the requested org and returns
+// the resolved org id (e.g. the user's default if 0 was passed). It is the same
+// interface notifyserver declares for its SSE handler; the browser attach leg
+// authenticates the same way (cookie session for identity, org_id query param
+// for the active org).
+type OrgResolver interface {
+	ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error)
+}
+
 // Registry tracks rendezvous sessions by id for a single server instance.
 type Registry struct {
 	log              *slog.Logger
 	establishTimeout time.Duration
 	onClose          func(session string, orgID int64)
+	orgResolver      OrgResolver
 
 	mu       sync.Mutex
 	sessions map[string]*entry
@@ -65,6 +76,12 @@ type Options struct {
 	Log              *slog.Logger
 	EstablishTimeout time.Duration
 	OnClose          func(session string, orgID int64)
+	// OrgResolver authorizes cookie-authenticated (browser) operators on the
+	// attach leg: a cookie session carries no org claim, so the handler takes
+	// the org from the request's org_id query param and resolves membership
+	// through this. Token callers (the CLI) never touch it. Required when the
+	// attach route is served under cookie-capable auth.
+	OrgResolver OrgResolver
 }
 
 // New creates a session registry.
@@ -81,6 +98,7 @@ func New(opts Options) *Registry {
 		log:              log,
 		establishTimeout: establishTimeout,
 		onClose:          opts.OnClose,
+		orgResolver:      opts.OrgResolver,
 		sessions:         make(map[string]*entry),
 	}
 	r.registerMetrics()
@@ -220,13 +238,22 @@ func (r *Registry) DriverHandler() http.Handler {
 // AttachHandler handles the operator leg (GET /shell/attach?session=<id>).
 //
 // The session id is not a secret, so access control is by org membership: the
-// authenticated caller (populated by the Bearer auth middleware) must belong to
-// the session's owning org. Any member of that org may attach (one at a time).
+// authenticated caller (populated by the auth middleware) must belong to the
+// session's owning org. Any member of that org may attach (one at a time).
 //
-// Session existence (404) and the org check (401/403) are enforced before the
-// upgrade. The subprotocol is negotiated by websocket.Accept and validated after
-// it: it is a non-secret version token, not a credential, and access is already
-// gated by the pre-upgrade org check, so a bad/missing subprotocol is an
+// Two operator flavours reach this leg. The CLI dials with a Bearer app JWT
+// whose org claim populates caller.OrgID, so the org check is a field
+// comparison. The browser dials a same-origin WebSocket that cannot set an
+// Authorization header, so it authenticates via its cookie session (as the SSE
+// stream does) and passes the active org as an org_id query param. A cookie
+// caller carries no org claim (caller.OrgID is 0), so the handler resolves the
+// requested org through OrgResolver — the same authorization boundary
+// notifyserver's SSE handler uses — before the membership comparison.
+//
+// Session existence (404) and the org check (400/401/403) are enforced before
+// the upgrade. The subprotocol is negotiated by websocket.Accept and validated
+// after it: it is a non-secret version token, not a credential, and access is
+// already gated by the pre-upgrade org check, so a bad/missing subprotocol is an
 // upgrade-then-close rather than a pre-upgrade rejection.
 func (r *Registry) AttachHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -241,7 +268,26 @@ func (r *Registry) AttachHandler() http.Handler {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
-		if caller.OrgID != e.orgID {
+		orgID := caller.OrgID
+		if caller.Type == apiauth.AuthTypeCookie {
+			// Cookie sessions carry no org claim; take it from the query and
+			// resolve membership exactly like notifyserver's SSE handler.
+			if r.orgResolver == nil {
+				http.Error(w, "org resolver not configured", http.StatusInternalServerError)
+				return
+			}
+			requested, err := strconv.ParseInt(req.URL.Query().Get("org_id"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid org_id", http.StatusBadRequest)
+				return
+			}
+			orgID, err = r.orgResolver.ResolveOrg(req.Context(), caller.ID, requested)
+			if err != nil {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+		}
+		if orgID != e.orgID {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

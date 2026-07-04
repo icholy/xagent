@@ -24,6 +24,7 @@ import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as KeysNewRouteImport } from './routes/keys.new'
 import { Route as GithubSetupRouteImport } from './routes/github.setup'
 import { Route as EventsIdRouteImport } from './routes/events.$id'
+import { Route as TasksIdShellRouteImport } from './routes/tasks.$id.shell'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -100,6 +101,11 @@ const EventsIdRoute = EventsIdRouteImport.update({
   path: '/events/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TasksIdShellRoute = TasksIdShellRouteImport.update({
+  id: '/shell',
+  path: '/shell',
+  getParentRoute: () => TasksIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,13 +116,14 @@ export interface FileRoutesByFullPath {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
-  '/tasks/$id': typeof TasksIdRoute
+  '/tasks/$id': typeof TasksIdRouteWithChildren
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
   '/keys/': typeof KeysIndexRoute
   '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
+  '/tasks/$id/shell': typeof TasksIdShellRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -127,13 +134,14 @@ export interface FileRoutesByTo {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
-  '/tasks/$id': typeof TasksIdRoute
+  '/tasks/$id': typeof TasksIdRouteWithChildren
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
   '/keys': typeof KeysIndexRoute
   '/members': typeof MembersIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
+  '/tasks/$id/shell': typeof TasksIdShellRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -145,13 +153,14 @@ export interface FileRoutesById {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
-  '/tasks/$id': typeof TasksIdRoute
+  '/tasks/$id': typeof TasksIdRouteWithChildren
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
   '/keys/': typeof KeysIndexRoute
   '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
+  '/tasks/$id/shell': typeof TasksIdShellRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/members/'
     | '/tasks/'
     | '/workspaces/'
+    | '/tasks/$id/shell'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/members'
     | '/tasks'
     | '/workspaces'
+    | '/tasks/$id/shell'
   id:
     | '__root__'
     | '/'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/members/'
     | '/tasks/'
     | '/workspaces/'
+    | '/tasks/$id/shell'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -216,7 +228,7 @@ export interface RootRouteChildren {
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   RoutingIndexRoute: typeof RoutingIndexRoute
   RoutingNewRoute: typeof RoutingNewRoute
-  TasksIdRoute: typeof TasksIdRoute
+  TasksIdRoute: typeof TasksIdRouteWithChildren
   TasksNewRoute: typeof TasksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
   KeysIndexRoute: typeof KeysIndexRoute
@@ -332,8 +344,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tasks/$id/shell': {
+      id: '/tasks/$id/shell'
+      path: '/shell'
+      fullPath: '/tasks/$id/shell'
+      preLoaderRoute: typeof TasksIdShellRouteImport
+      parentRoute: typeof TasksIdRoute
+    }
   }
 }
+
+interface TasksIdRouteChildren {
+  TasksIdShellRoute: typeof TasksIdShellRoute
+}
+
+const TasksIdRouteChildren: TasksIdRouteChildren = {
+  TasksIdShellRoute: TasksIdShellRoute,
+}
+
+const TasksIdRouteWithChildren =
+  TasksIdRoute._addFileChildren(TasksIdRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -344,7 +374,7 @@ const rootRouteChildren: RootRouteChildren = {
   OauthAuthorizeRoute: OauthAuthorizeRoute,
   RoutingIndexRoute: RoutingIndexRoute,
   RoutingNewRoute: RoutingNewRoute,
-  TasksIdRoute: TasksIdRoute,
+  TasksIdRoute: TasksIdRouteWithChildren,
   TasksNewRoute: TasksNewRoute,
   EventsIndexRoute: EventsIndexRoute,
   KeysIndexRoute: KeysIndexRoute,
