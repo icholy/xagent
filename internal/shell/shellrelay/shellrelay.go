@@ -130,7 +130,7 @@ func (s *Session) Join(ctx context.Context, conn *websocket.Conn) error {
 	// Pump until either side errors/closes; the read error is the normal
 	// end-of-session signal. Each relayed frame resets the idle timer, so activity
 	// in either direction keeps the session alive.
-	pumpErr := pump(ctx, s.peer(conn), conn, s.resetIdle)
+	pumpErr := s.pump(ctx, s.peer(conn), conn)
 	s.teardown(closeReason(pumpErr))
 	return pumpErr
 }
@@ -243,15 +243,15 @@ func (s *Session) teardown(reason string) {
 
 // pump copies whole WebSocket messages from src to dst verbatim, preserving the
 // message type, until a read or write error occurs. It never inspects the
-// payload — the server is a mode-agnostic byte pump. onActivity is invoked for
-// each message received, so the caller can treat a relayed frame as liveness.
-func pump(ctx context.Context, dst, src *websocket.Conn, onActivity func()) error {
+// payload — the server is a mode-agnostic byte pump. Each received message resets
+// the idle timer, so traffic in either direction counts as liveness.
+func (s *Session) pump(ctx context.Context, dst, src *websocket.Conn) error {
 	for {
 		typ, data, err := src.Read(ctx)
 		if err != nil {
 			return err
 		}
-		onActivity()
+		s.resetIdle()
 		if err := dst.Write(ctx, typ, data); err != nil {
 			return err
 		}
