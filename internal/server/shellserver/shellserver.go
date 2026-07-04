@@ -47,6 +47,7 @@ type OrgResolver interface {
 type Registry struct {
 	log              *slog.Logger
 	establishTimeout time.Duration
+	idleTimeout      time.Duration
 	onClose          func(session string, orgID int64)
 	orgResolver      OrgResolver
 
@@ -67,7 +68,9 @@ type entry struct {
 //
 // A nil Log falls back to slog.Default. EstablishTimeout <= 0 falls back to
 // shellrelay.DefaultEstablishTimeout; tests inject a small timeout to exercise
-// the establishment-timeout path without sleeping the real default.
+// the establishment-timeout path without sleeping the real default. IdleTimeout
+// <= 0 falls back to shellrelay.DefaultIdleTimeout — the idle timeout applied
+// once a session is established; tests inject a small value to exercise it.
 //
 // OnClose, if non-nil, is invoked exactly once per session after it tears down
 // and is evicted from the registry — regardless of teardown reason (normal
@@ -77,6 +80,7 @@ type entry struct {
 type Options struct {
 	Log              *slog.Logger
 	EstablishTimeout time.Duration
+	IdleTimeout      time.Duration
 	OnClose          func(session string, orgID int64)
 	// OrgResolver authorizes cookie-authenticated (browser) operators on the
 	// attach leg: a cookie session carries no org claim, so the handler takes
@@ -96,9 +100,14 @@ func New(opts Options) *Registry {
 	if establishTimeout <= 0 {
 		establishTimeout = shellrelay.DefaultEstablishTimeout
 	}
+	idleTimeout := opts.IdleTimeout
+	if idleTimeout <= 0 {
+		idleTimeout = shellrelay.DefaultIdleTimeout
+	}
 	r := &Registry{
 		log:              log,
 		establishTimeout: establishTimeout,
+		idleTimeout:      idleTimeout,
 		onClose:          opts.OnClose,
 		orgResolver:      opts.OrgResolver,
 		sessions:         make(map[string]*entry),
@@ -142,7 +151,7 @@ func (r *Registry) Seed(id string, orgID, taskID int64) error {
 	if _, ok := r.sessions[id]; ok {
 		return fmt.Errorf("shellserver: session %q already exists", id)
 	}
-	session := shellrelay.NewSession(r.establishTimeout, r.log.With("session", id))
+	session := shellrelay.NewSession(r.establishTimeout, r.idleTimeout, r.log.With("session", id))
 	r.sessions[id] = &entry{session: session, orgID: orgID, taskID: taskID}
 	// Evict the session from the map once it tears down — regardless of which path
 	// (establishment timeout with zero or one leg, a dropped leg, or Close) got

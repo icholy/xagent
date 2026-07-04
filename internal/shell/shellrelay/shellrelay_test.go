@@ -73,7 +73,7 @@ func recv(t *testing.T, conn *websocket.Conn) (websocket.MessageType, []byte) {
 func TestSessionPassesBytesBothDirections(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs joined.
-	s := shellrelay.NewSession(time.Minute, nil)
+	s := shellrelay.NewSession(time.Minute, 0, nil)
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
@@ -96,7 +96,7 @@ func TestSessionPassesBytesBothDirections(t *testing.T) {
 func TestSessionRejectsThirdLeg(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs joined and actively relaying.
-	s := shellrelay.NewSession(time.Minute, nil)
+	s := shellrelay.NewSession(time.Minute, 0, nil)
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
@@ -121,7 +121,7 @@ func TestSessionRejectsThirdLeg(t *testing.T) {
 func TestSessionEstablishTimeoutTearsDownLoneLeg(t *testing.T) {
 	t.Parallel()
 	// Arrange: short, injected establishment timeout.
-	s := shellrelay.NewSession(100*time.Millisecond, nil)
+	s := shellrelay.NewSession(100*time.Millisecond, 0, nil)
 	srv := joinServer(t, s)
 
 	// Act: connect only one leg.
@@ -139,10 +139,74 @@ func TestSessionEstablishTimeoutTearsDownLoneLeg(t *testing.T) {
 	assert.Assert(t, err != nil, "lone leg should be closed after establishment timeout")
 }
 
+func TestSessionIdleTimeoutTearsDownEstablishedSession(t *testing.T) {
+	t.Parallel()
+	// Arrange: both legs connected but silent, with a short idle timeout and a long
+	// establishment timeout (so it's unmistakably the idle timer that fires).
+	s := shellrelay.NewSession(time.Minute, 100*time.Millisecond, nil)
+	srv := joinServer(t, s)
+	legA := dialLeg(t, srv)
+	legB := dialLeg(t, srv)
+
+	// Assert: with no traffic, the idle timer tears the session down and closes
+	// both legs.
+	select {
+	case <-s.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("session was not torn down by the idle timeout")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	_, _, errA := legA.Read(ctx)
+	_, _, errB := legB.Read(ctx)
+	assert.Assert(t, errA != nil, "leg A should be closed after idle timeout")
+	assert.Assert(t, errB != nil, "leg B should be closed after idle timeout")
+}
+
+func TestSessionIdleTimeoutResetByActivity(t *testing.T) {
+	t.Parallel()
+	// Arrange: both legs connected, with an idle timeout far shorter than the total
+	// span of traffic we're about to drive across it.
+	const idle = 300 * time.Millisecond
+	s := shellrelay.NewSession(time.Minute, idle, nil)
+	srv := joinServer(t, s)
+	legA := dialLeg(t, srv)
+	legB := dialLeg(t, srv)
+
+	// Act: relay a frame every idle/10 for well over one idle period, alternating
+	// directions so both legs' activity is exercised. Each relayed frame must reset
+	// the idle timer.
+	for i := 0; i < 20; i++ {
+		if i%2 == 0 {
+			send(t, legA, []byte{0x00, byte(i)})
+			recv(t, legB)
+		} else {
+			send(t, legB, []byte{0x00, byte(i)})
+			recv(t, legA)
+		}
+		// Assert: the session is never torn down while traffic is flowing, even
+		// though the elapsed time exceeds the idle timeout several times over.
+		select {
+		case <-s.Done():
+			t.Fatalf("session torn down while traffic was flowing (iteration %d)", i)
+		default:
+		}
+		time.Sleep(idle / 10)
+	}
+
+	// Assert: once traffic stops, the idle timer eventually fires — the reset path
+	// re-arms the timer rather than disabling it.
+	select {
+	case <-s.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("session was not torn down after traffic stopped")
+	}
+}
+
 func TestSessionClosingOneLegTearsDownPeer(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs connected and actively relaying.
-	s := shellrelay.NewSession(time.Minute, nil)
+	s := shellrelay.NewSession(time.Minute, 0, nil)
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
@@ -167,7 +231,7 @@ func TestSessionClosingOneLegTearsDownPeer(t *testing.T) {
 func TestSessionCloseTearsDownAndSignalsDone(t *testing.T) {
 	t.Parallel()
 	// Arrange: both legs joined.
-	s := shellrelay.NewSession(time.Minute, nil)
+	s := shellrelay.NewSession(time.Minute, 0, nil)
 	srv := joinServer(t, s)
 	legA := dialLeg(t, srv)
 	legB := dialLeg(t, srv)
