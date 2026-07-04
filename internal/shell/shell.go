@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/coder/websocket"
@@ -101,6 +102,26 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	}
 	defer conn.CloseNow()
 	conn.SetReadLimit(shellwire.ReadLimit)
+
+	// Tear the session down promptly when ctx is canceled — e.g. the driver
+	// received SIGTERM. The read loop below closes the PTY on cancellation, but
+	// a shell blocked in a foreground child (an editor, a pager, anything the
+	// operator left running) may never notice the resulting EOF, so cmd.Wait
+	// would hang and the driver would never exit. Kill the shell's whole process
+	// group outright — pty.Start puts the shell in its own session, so its PGID
+	// equals its PID — and close the connection to unblock the read loop. The
+	// stop channel retires this goroutine once Serve returns on its own.
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			_ = ptmx.Close()
+			conn.CloseNow()
+		case <-stop:
+		}
+	}()
 
 	// WebSocket -> PTY: apply incoming data/resize frames. On any read error —
 	// the operator leg dropped, the session was torn down, or ctx was canceled —
