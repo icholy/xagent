@@ -379,6 +379,52 @@ func TestServe_ContextCancelTearsDownBlockedShell(t *testing.T) {
 	waitForCond(t, 5*time.Second, func() bool { return !reg.Has("s4") })
 }
 
+func TestServe_OperatorDisconnectTearsDownBlockedShell(t *testing.T) {
+	t.Parallel()
+	// Regression for the sandbox not being reaped when the operator disconnects
+	// (the web UI "Close shell", or the browser closing the attach WebSocket). The
+	// relay closes the driver leg, so Serve's WebSocket->PTY read errors. If teardown
+	// relied on the shell noticing the PTY closing, a shell blocked in a foreground
+	// child would never exit and Serve (and the driver, and the container) would hang.
+	// The read error now cancels the shell's context, running the same robust teardown
+	// as SIGTERM: cmd.Cancel SIGTERMs the process group and WaitDelay force-kills, so
+	// Serve returns promptly and the session is torn down.
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
+	srv := newRelayServer(t, reg)
+	assert.NilError(t, reg.Seed("s6", testOrg, testTask))
+
+	// Serve runs on a context canceled during cleanup so a leaked shell can't
+	// outlive the test — but the teardown under test is the operator disconnect,
+	// not this cancellation.
+	serveCtx, cancelServe := context.WithCancel(t.Context())
+	t.Cleanup(cancelServe)
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- shell.Serve(serveCtx, shell.ServeOptions{ServerURL: srv.URL, Token: "driver-token", Session: "s6", Log: slog.Default()})
+	}()
+
+	attach := dialAttach(t, srv, "s6")
+	op := runOperator(t, attach)
+
+	// Run a foreground child that blocks forever, so closing the PTY alone would
+	// not make the shell exit — only signaling the process group does.
+	op.send(t, "echo up; sleep 100\n")
+	op.waitFor(t, "up")
+
+	// Act: the operator leg disconnects abruptly (browser closed the attach socket).
+	attach.CloseNow()
+
+	// Assert: Serve returns promptly rather than blocking on cmd.Wait, and the
+	// relay session is torn down — so the driver exits and the container stops.
+	select {
+	case err := <-serveErr:
+		assert.NilError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Serve did not return after the operator disconnected")
+	}
+	waitForCond(t, 5*time.Second, func() bool { return !reg.Has("s6") })
+}
+
 func TestServe_ContextCancelForceKillsUnresponsiveShell(t *testing.T) {
 	t.Parallel()
 	// The WaitDelay backstop: even a shell that ignores SIGTERM (and SIGHUP, so
