@@ -22,7 +22,6 @@ import (
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/awsmicrovm"
 	"github.com/icholy/xagent/internal/x/common"
-	"github.com/icholy/xagent/internal/x/outbox"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
@@ -148,18 +147,17 @@ var RunnerCommand = &cli.Command{
 		// runner lifecycle events survive a restart and are redelivered on the
 		// next Run pass rather than being lost with an in-memory buffer.
 		outboxDir := filepath.Join(filepath.Dir(cmd.String("state-dir")), "outbox")
-		outboxStore, err := outbox.Open(outboxDir)
-		if err != nil {
-			return fmt.Errorf("failed to open outbox store: %w", err)
-		}
-		queue := runner.NewRunnerEventOutbox(runner.RunnerEventOutboxOptions{
-			Store:  outboxStore,
-			Client: client,
+		queue, err := runner.NewRunnerEventOutbox(runner.RunnerEventOutboxOptions{
+			StoreDir: outboxDir,
+			Client:   client,
 			// Reproduce the old EventQueue's fixed retry interval (the poll
 			// interval) with a constant backoff, for a drop-in match.
 			Backoff: backoff.NewConstantBackOff(pollInterval),
 			Log:     log,
 		})
+		if err != nil {
+			return fmt.Errorf("failed to create runner event outbox: %w", err)
+		}
 
 		backendName := cmd.String("backend")
 		var be backend.Backend

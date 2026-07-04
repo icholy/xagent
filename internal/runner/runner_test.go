@@ -173,12 +173,14 @@ func queueOver(t *testing.T, dir string, client xagentclient.Client) *outbox.Out
 	t.Helper()
 	store, err := outbox.Open(dir)
 	assert.NilError(t, err)
-	return NewRunnerEventOutbox(RunnerEventOutboxOptions{
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{
 		Store:   store,
 		Client:  client,
 		Backoff: backoff.NewConstantBackOff(0),
 		Log:     slog.Default(),
 	})
+	assert.NilError(t, err)
+	return queue
 }
 
 // assertEmpty asserts the outbox has drained to zero live records.

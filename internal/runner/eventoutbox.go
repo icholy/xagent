@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"connectrpc.com/connect"
@@ -15,9 +16,14 @@ import (
 
 // RunnerEventOutboxOptions configures the runner's durable event outbox.
 type RunnerEventOutboxOptions struct {
-	// Store is the durable backing store. The caller opens it: a FileStore under
-	// the runner's persistent state dir in production, a temp-dir store in tests.
+	// Store is the durable backing store. When nil, a FileStore is opened at
+	// StoreDir. Tests pass an already-opened store directly; production supplies
+	// StoreDir and lets the factory open it.
 	Store outbox.Store
+	// StoreDir is the directory for the FileStore opened when Store is nil. It
+	// must be durable (under the runner's persistent state dir), not a temp dir,
+	// so events survive a restart.
+	StoreDir string
 	// Client delivers events to the server via SubmitRunnerEvents.
 	Client xagentclient.Client
 	// Backoff is the retry policy for transient delivery failures.
@@ -31,10 +37,19 @@ type RunnerEventOutboxOptions struct {
 // truth for the Deliver closure — proto conversion + SubmitRunnerEvents, with
 // permanence classified by isPermanentError so unrecoverable events are
 // dead-lettered rather than retried forever — shared by the production wiring
-// and the tests.
-func NewRunnerEventOutbox(opts RunnerEventOutboxOptions) *outbox.Outbox[model.RunnerEvent] {
+// and the tests. When opts.Store is nil, it opens a durable FileStore at
+// opts.StoreDir.
+func NewRunnerEventOutbox(opts RunnerEventOutboxOptions) (*outbox.Outbox[model.RunnerEvent], error) {
+	store := opts.Store
+	if store == nil {
+		fileStore, err := outbox.Open(opts.StoreDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open outbox store: %w", err)
+		}
+		store = fileStore
+	}
 	return outbox.New(outbox.Options[model.RunnerEvent]{
-		Store: opts.Store,
+		Store: store,
 		Deliver: func(ctx context.Context, ev model.RunnerEvent) (permanent bool, err error) {
 			_, err = opts.Client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 				Events: []*xagentv1.RunnerEvent{ev.Proto()},
@@ -43,7 +58,7 @@ func NewRunnerEventOutbox(opts RunnerEventOutboxOptions) *outbox.Outbox[model.Ru
 		},
 		Backoff: opts.Backoff,
 		Log:     opts.Log,
-	})
+	}), nil
 }
 
 // isPermanentError returns true if the error indicates a condition that will
