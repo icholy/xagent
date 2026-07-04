@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/cmpx"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
@@ -232,8 +231,9 @@ func TestMuteTool_All(t *testing.T) {
 	assert.NilError(t, err)
 	var got muteState
 	mcptest.UnmarshalCallToolResult(t, res, &got)
+	assert.Assert(t, got.All)
 	// mute-all subsumes and clears the exception set: nothing is delivered.
-	assert.DeepEqual(t, got, muteState{All: true}, cmpx.OnlyFields("All", "Unmuted"), cmpopts.EquateEmpty())
+	assert.Equal(t, len(got.Unmuted), 0)
 }
 
 // TestForward_MuteAllThenUnmuteOne is the maintainer-requested workflow:
@@ -288,7 +288,8 @@ func TestUnmuteTool_AfterMuteAll(t *testing.T) {
 	assert.NilError(t, err)
 	var got muteState
 	mcptest.UnmarshalCallToolResult(t, res, &got)
-	assert.DeepEqual(t, got, muteState{All: true, Unmuted: []int64{7, 123}}, cmpx.OnlyFields("All", "Unmuted"))
+	assert.Assert(t, got.All)
+	assert.DeepEqual(t, got.Unmuted, []int64{7, 123})
 }
 
 // TestMuteTool_RemuteUnderMuteAll confirms muting a task that was unmuted
@@ -310,7 +311,8 @@ func TestMuteTool_RemuteUnderMuteAll(t *testing.T) {
 	// Assert: the exception is gone, so 123 is muted again.
 	var got muteState
 	mcptest.UnmarshalCallToolResult(t, res, &got)
-	assert.DeepEqual(t, got, muteState{All: true}, cmpx.OnlyFields("All", "Unmuted"), cmpopts.EquateEmpty())
+	assert.Assert(t, got.All)
+	assert.Equal(t, len(got.Unmuted), 0)
 	ch.Forward(context.Background(), model.Notification{
 		Type:           "change",
 		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 123}},
@@ -331,7 +333,7 @@ func TestMuteTool(t *testing.T) {
 	assert.NilError(t, err)
 	var got muteState
 	mcptest.UnmarshalCallToolResult(t, res, &got)
-	assert.DeepEqual(t, got, muteState{Muted: []int64{3, 9}}, cmpx.OnlyFields("Muted"))
+	assert.DeepEqual(t, got.Muted, []int64{3, 9})
 }
 
 func TestUnmuteTool(t *testing.T) {
@@ -349,7 +351,7 @@ func TestUnmuteTool(t *testing.T) {
 	assert.NilError(t, err)
 	var got muteState
 	mcptest.UnmarshalCallToolResult(t, res, &got)
-	assert.DeepEqual(t, got, muteState{Muted: []int64{1, 3}}, cmpx.OnlyFields("Muted"))
+	assert.DeepEqual(t, got.Muted, []int64{1, 3})
 }
 
 func TestUnmuteTool_All(t *testing.T) {
@@ -366,7 +368,7 @@ func TestUnmuteTool_All(t *testing.T) {
 	assert.NilError(t, err)
 	var got muteState
 	mcptest.UnmarshalCallToolResult(t, res, &got)
-	assert.DeepEqual(t, got, muteState{}, cmpx.OnlyFields("Muted"), cmpopts.EquateEmpty())
+	assert.Equal(t, len(got.Muted), 0)
 }
 
 func TestMutedTool(t *testing.T) {
@@ -383,5 +385,5 @@ func TestMutedTool(t *testing.T) {
 	assert.NilError(t, err)
 	var got muteState
 	mcptest.UnmarshalCallToolResult(t, res, &got)
-	assert.DeepEqual(t, got, muteState{Muted: []int64{1, 5}}, cmpx.OnlyFields("Muted"))
+	assert.DeepEqual(t, got.Muted, []int64{1, 5})
 }
