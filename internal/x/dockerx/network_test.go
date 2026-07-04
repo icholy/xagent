@@ -7,7 +7,6 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
-	"github.com/icholy/xagent/internal/x/cmpx"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -85,36 +84,14 @@ func TestRepairNetworks_StaleAttachment(t *testing.T) {
 
 	disc := m.NetworkDisconnectCalls()
 	assert.Assert(t, cmp.Len(disc, 1))
-	assert.DeepEqual(t,
-		disc[0],
-		struct {
-			Ctx         context.Context
-			NetworkID   string
-			ContainerID string
-			Force       bool
-		}{
-			NetworkID:   "compose-default",
-			ContainerID: "c1",
-			Force:       true,
-		},
-		cmpx.OnlyFields("NetworkID", "ContainerID", "Force"),
-	)
+	assert.Equal(t, disc[0].NetworkID, "compose-default")
+	assert.Equal(t, disc[0].ContainerID, "c1")
+	assert.Equal(t, disc[0].Force, true)
 
 	conn := m.NetworkConnectCalls()
 	assert.Assert(t, cmp.Len(conn, 1))
-	assert.DeepEqual(t,
-		conn[0],
-		struct {
-			Ctx         context.Context
-			NetworkID   string
-			ContainerID string
-			Config      *network.EndpointSettings
-		}{
-			NetworkID:   "compose-default",
-			ContainerID: "c1",
-		},
-		cmpx.OnlyFields("NetworkID", "ContainerID"),
-	)
+	assert.Equal(t, conn[0].NetworkID, "compose-default")
+	assert.Equal(t, conn[0].ContainerID, "c1")
 }
 
 func TestRepairNetworks_NotAttached(t *testing.T) {
