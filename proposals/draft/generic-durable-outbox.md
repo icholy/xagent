@@ -98,18 +98,20 @@ Disk is read only at startup; every write stays per-record atomic for durability
   ones, where `<seq>` is a 20-digit zero-padded `uint64` so lexical filename order equals
   numeric `Seq` order.
 - `Open`: read + unmarshal every `<uint64>.json` in the live directory into an in-memory
-  `map[uint64]Record` (ignoring temp files and non-`<uint64>.json` names as
-  `taskstate.parseRecordName` does at `taskstate.go:165-177`); a live record file that
-  can't be read or decoded fails `Open` so corrupt durable state surfaces loudly. Seed the
-  in-memory `Seq` counter from the max filename across both the live and dead directories
-  (the dead dir is scanned for filenames only), so sequence numbers never repeat even after
-  dead-lettering.
+  `[]Record` kept in ascending `Seq` order (ignoring temp files and non-`<uint64>.json`
+  names as `taskstate.parseRecordName` does at `taskstate.go:165-177`); a live record file
+  that can't be read or decoded fails `Open` so corrupt durable state surfaces loudly. Seed
+  the in-memory `Seq` counter from the max filename across both the live and dead
+  directories (the dead dir is scanned for filenames only), so sequence numbers never repeat
+  even after dead-lettering.
 - `Append`: assign the next `Seq`, marshal, write via temp-file + `fsync` + atomic `rename`
   (the write is factored into a small stdlib-only `internal/x/atomicio` package, the same
-  pattern as `taskstate.Store.Write`), then insert into the in-memory index.
-- `List`: copy the in-memory index values into a slice, sort by `Seq`, return — no disk
-  access, so the caller may `Remove`/`DeadLetter` while ranging the returned copy.
-- `Remove`: idempotent `os.Remove` of `<dir>/<seq>.json`, then drop from the index.
+  pattern as `taskstate.Store.Write`), then append to the in-memory index — a strictly
+  increasing `Seq` keeps it sorted.
+- `List`: `slices.Clone` the in-memory index and return — no disk access, so the caller may
+  `Remove`/`DeadLetter` while ranging the returned copy.
+- `Remove`: idempotent `os.Remove` of `<dir>/<seq>.json`, then drop from the index (binary
+  search, since it stays sorted).
 - `DeadLetter`: `rename` `<dir>/<seq>.json` → `<dir>/dead/<seq>.json`, then drop from the
   index (it has left the live set).
 

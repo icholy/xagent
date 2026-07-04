@@ -1,6 +1,7 @@
 package outbox
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,8 +31,8 @@ type FileStore struct {
 	mu      sync.Mutex
 	dir     string
 	deadDir string
-	next    uint64            // next Seq to assign; guarded by mu
-	records map[uint64]Record // live records, keyed by Seq; guarded by mu
+	next    uint64   // next Seq to assign; guarded by mu
+	records []Record // live records in ascending Seq order; guarded by mu
 }
 
 // Open returns a FileStore backed by dir, creating dir and its dead-letter
@@ -46,11 +47,7 @@ func Open(dir string) (*FileStore, error) {
 	if err := os.MkdirAll(deadDir, 0o755); err != nil {
 		return nil, fmt.Errorf("outbox: create dir: %w", err)
 	}
-	s := &FileStore{
-		dir:     dir,
-		deadDir: deadDir,
-		records: make(map[uint64]Record),
-	}
+	s := &FileStore{dir: dir, deadDir: deadDir}
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -73,9 +70,13 @@ func Open(dir string) (*FileStore, error) {
 		if err := json.Unmarshal(data, &rec); err != nil {
 			return nil, fmt.Errorf("outbox: unmarshal record %d: %w", seq, err)
 		}
-		s.records[seq] = rec
+		s.records = append(s.records, rec)
 		liveMax = max(liveMax, seq)
 	}
+	// os.ReadDir returns entries in filename order, which for zero-padded Seqs is
+	// ascending Seq order; sort defensively so the index invariant never relies
+	// on that.
+	slices.SortFunc(s.records, func(a, b Record) int { return cmp.Compare(a.Seq, b.Seq) })
 
 	deadMax, err := maxSeq(deadDir)
 	if err != nil {
@@ -113,7 +114,8 @@ func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
 	if err := atomicio.WriteFile(s.livePath(seq), data); err != nil {
 		return 0, err
 	}
-	s.records[seq] = rec
+	// Seq is strictly increasing, so appending keeps records in ascending order.
+	s.records = append(s.records, rec)
 	s.next = seq + 1
 	return seq, nil
 }
@@ -126,22 +128,7 @@ func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
 func (s *FileStore) List() ([]Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	records := make([]Record, 0, len(s.records))
-	for _, rec := range s.records {
-		records = append(records, rec)
-	}
-	slices.SortFunc(records, func(a, b Record) int {
-		switch {
-		case a.Seq < b.Seq:
-			return -1
-		case a.Seq > b.Seq:
-			return 1
-		default:
-			return 0
-		}
-	})
-	return records, nil
+	return slices.Clone(s.records), nil
 }
 
 // Remove deletes the record with the given Seq. It is idempotent: removing an
@@ -152,7 +139,7 @@ func (s *FileStore) Remove(seq uint64) error {
 	if err := os.Remove(s.livePath(seq)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("outbox: remove record %d: %w", seq, err)
 	}
-	delete(s.records, seq)
+	s.drop(seq)
 	return nil
 }
 
@@ -164,8 +151,19 @@ func (s *FileStore) DeadLetter(seq uint64) error {
 	if err := os.Rename(s.livePath(seq), s.deadPath(seq)); err != nil {
 		return fmt.Errorf("outbox: dead-letter record %d: %w", seq, err)
 	}
-	delete(s.records, seq)
+	s.drop(seq)
 	return nil
+}
+
+// drop removes the record with the given Seq from the in-memory index, if
+// present. The caller must hold s.mu. records stays sorted, so it binary
+// searches.
+func (s *FileStore) drop(seq uint64) {
+	if i, ok := slices.BinarySearchFunc(s.records, seq, func(r Record, target uint64) int {
+		return cmp.Compare(r.Seq, target)
+	}); ok {
+		s.records = slices.Delete(s.records, i, i+1)
+	}
 }
 
 // maxSeq returns the largest Seq among the <seq>.json record files in dir, or 0
