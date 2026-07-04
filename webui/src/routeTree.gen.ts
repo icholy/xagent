@@ -24,7 +24,6 @@ import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as KeysNewRouteImport } from './routes/keys.new'
 import { Route as GithubSetupRouteImport } from './routes/github.setup'
 import { Route as EventsIdRouteImport } from './routes/events.$id'
-import { Route as TasksIdShellRouteImport } from './routes/tasks.$id_.shell'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -101,11 +100,6 @@ const EventsIdRoute = EventsIdRouteImport.update({
   path: '/events/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TasksIdShellRoute = TasksIdShellRouteImport.update({
-  id: '/tasks/$id_/shell',
-  path: '/tasks/$id/shell',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -123,7 +117,6 @@ export interface FileRoutesByFullPath {
   '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
-  '/tasks/$id/shell': typeof TasksIdShellRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -141,7 +134,6 @@ export interface FileRoutesByTo {
   '/members': typeof MembersIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
-  '/tasks/$id/shell': typeof TasksIdShellRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -160,7 +152,6 @@ export interface FileRoutesById {
   '/members/': typeof MembersIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
-  '/tasks/$id_/shell': typeof TasksIdShellRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -180,7 +171,6 @@ export interface FileRouteTypes {
     | '/members/'
     | '/tasks/'
     | '/workspaces/'
-    | '/tasks/$id/shell'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -198,7 +188,6 @@ export interface FileRouteTypes {
     | '/members'
     | '/tasks'
     | '/workspaces'
-    | '/tasks/$id/shell'
   id:
     | '__root__'
     | '/'
@@ -216,7 +205,6 @@ export interface FileRouteTypes {
     | '/members/'
     | '/tasks/'
     | '/workspaces/'
-    | '/tasks/$id_/shell'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -235,7 +223,6 @@ export interface RootRouteChildren {
   MembersIndexRoute: typeof MembersIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
-  TasksIdShellRoute: typeof TasksIdShellRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -345,13 +332,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tasks/$id_/shell': {
-      id: '/tasks/$id_/shell'
-      path: '/tasks/$id/shell'
-      fullPath: '/tasks/$id/shell'
-      preLoaderRoute: typeof TasksIdShellRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -371,7 +351,6 @@ const rootRouteChildren: RootRouteChildren = {
   MembersIndexRoute: MembersIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
-  TasksIdShellRoute: TasksIdShellRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
