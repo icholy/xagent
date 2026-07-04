@@ -7,6 +7,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func TestOpenShell(t *testing.T) {
@@ -52,7 +53,7 @@ func TestOpenShell(t *testing.T) {
 	// ...and the rendezvous is seeded with the caller's org and the task id, so
 	// the driver leg can be bound to the task that owns the session.
 	calls := shell.SeedCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.Equal(t, calls[0].ID, resp.SessionId)
 	assert.Equal(t, calls[0].OrgID, org.OrgID)
 	assert.Equal(t, calls[0].TaskID, taskID)
@@ -78,7 +79,7 @@ func TestOpenShell_RejectsPending(t *testing.T) {
 
 	// Assert: rejected, nothing seeded, no shell session recorded.
 	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
-	assert.Equal(t, len(shell.SeedCalls()), 0)
+	assert.Assert(t, cmp.Len(shell.SeedCalls(), 0))
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.ShellSession, "")
@@ -109,7 +110,7 @@ func TestOpenShell_RejectsRunning(t *testing.T) {
 
 	// Assert: rejected, nothing seeded, no shell session recorded.
 	assert.Equal(t, connect.CodeOf(err), connect.CodeFailedPrecondition)
-	assert.Equal(t, len(shell.SeedCalls()), 0)
+	assert.Assert(t, cmp.Len(shell.SeedCalls(), 0))
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.ShellSession, "")
@@ -144,5 +145,5 @@ func TestOpenShell_CrossOrgDenied(t *testing.T) {
 	// A caller in another org cannot open a shell for orgA's task.
 	_, err = srv.OpenShell(ctxB, &xagentv1.OpenShellRequest{TaskId: taskID})
 	assert.Assert(t, err != nil)
-	assert.Equal(t, len(shell.SeedCalls()), 0)
+	assert.Assert(t, cmp.Len(shell.SeedCalls(), 0))
 }

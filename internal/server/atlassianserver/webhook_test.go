@@ -14,6 +14,7 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/atlassian"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func TestToAtlassianInputEvents(t *testing.T) {
@@ -301,7 +302,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, rec.Body.String(), "processed")
 
 	calls := router.RouteCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
 		Source:      "atlassian",
 		Type:        "comment_created",
@@ -358,7 +359,7 @@ func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
 	assert.Equal(t, rec.Body.String(), "processed")
 
 	calls := router.RouteCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
 		Source:      "atlassian",
 		Type:        "label_added",

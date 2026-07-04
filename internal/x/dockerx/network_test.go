@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func newInspectResponse(networks map[string]*network.EndpointSettings) container.InspectResponse {
@@ -28,7 +29,7 @@ func TestRepairNetworks_NoNetworks(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, len(repaired), 0)
-	assert.Equal(t, len(m.ContainerInspectCalls()), 0)
+	assert.Assert(t, cmp.Len(m.ContainerInspectCalls(), 0))
 }
 
 func TestRepairNetworks_AllInSync(t *testing.T) {
@@ -51,8 +52,8 @@ func TestRepairNetworks_AllInSync(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, len(repaired), 0)
-	assert.Equal(t, len(m.NetworkDisconnectCalls()), 0)
-	assert.Equal(t, len(m.NetworkConnectCalls()), 0)
+	assert.Assert(t, cmp.Len(m.NetworkDisconnectCalls(), 0))
+	assert.Assert(t, cmp.Len(m.NetworkConnectCalls(), 0))
 }
 
 func TestRepairNetworks_StaleAttachment(t *testing.T) {
@@ -82,13 +83,13 @@ func TestRepairNetworks_StaleAttachment(t *testing.T) {
 	assert.DeepEqual(t, repaired, []string{"compose-default"})
 
 	disc := m.NetworkDisconnectCalls()
-	assert.Equal(t, len(disc), 1)
+	assert.Assert(t, cmp.Len(disc, 1))
 	assert.Equal(t, disc[0].NetworkID, "compose-default")
 	assert.Equal(t, disc[0].ContainerID, "c1")
 	assert.Equal(t, disc[0].Force, true)
 
 	conn := m.NetworkConnectCalls()
-	assert.Equal(t, len(conn), 1)
+	assert.Assert(t, cmp.Len(conn, 1))
 	assert.Equal(t, conn[0].NetworkID, "compose-default")
 	assert.Equal(t, conn[0].ContainerID, "c1")
 }
@@ -114,8 +115,8 @@ func TestRepairNetworks_NotAttached(t *testing.T) {
 	assert.NilError(t, err)
 	assert.DeepEqual(t, repaired, []string{"new-net"})
 	// No disconnect when the container isn't attached.
-	assert.Equal(t, len(m.NetworkDisconnectCalls()), 0)
-	assert.Equal(t, len(m.NetworkConnectCalls()), 1)
+	assert.Assert(t, cmp.Len(m.NetworkDisconnectCalls(), 0))
+	assert.Assert(t, cmp.Len(m.NetworkConnectCalls(), 1))
 }
 
 func TestRepairNetworks_MixedDriftAndHealthy(t *testing.T) {
@@ -153,11 +154,11 @@ func TestRepairNetworks_MixedDriftAndHealthy(t *testing.T) {
 	assert.DeepEqual(t, repaired, []string{"stale"})
 
 	disc := m.NetworkDisconnectCalls()
-	assert.Equal(t, len(disc), 1)
+	assert.Assert(t, cmp.Len(disc, 1))
 	assert.Equal(t, disc[0].NetworkID, "stale")
 
 	conn := m.NetworkConnectCalls()
-	assert.Equal(t, len(conn), 1)
+	assert.Assert(t, cmp.Len(conn, 1))
 	assert.Equal(t, conn[0].NetworkID, "stale")
 }
 
@@ -188,7 +189,7 @@ func TestRepairNetworks_DisconnectNotConnectedIsSwallowed(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.DeepEqual(t, repaired, []string{"net"})
-	assert.Equal(t, len(m.NetworkConnectCalls()), 1)
+	assert.Assert(t, cmp.Len(m.NetworkConnectCalls(), 1))
 }
 
 func TestRepairNetworks_NetworkInspectError(t *testing.T) {
@@ -210,8 +211,8 @@ func TestRepairNetworks_NetworkInspectError(t *testing.T) {
 	// Assert — bail out before any disconnect/connect.
 	assert.ErrorContains(t, err, "inspect network \"net\"")
 	assert.Equal(t, len(repaired), 0)
-	assert.Equal(t, len(m.NetworkDisconnectCalls()), 0)
-	assert.Equal(t, len(m.NetworkConnectCalls()), 0)
+	assert.Assert(t, cmp.Len(m.NetworkDisconnectCalls(), 0))
+	assert.Assert(t, cmp.Len(m.NetworkConnectCalls(), 0))
 }
 
 func TestRepairNetworks_PartialRepairReturnedOnError(t *testing.T) {
@@ -283,5 +284,5 @@ func TestRepairNetworks_NilNetworkSettings(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.DeepEqual(t, repaired, []string{"net"})
-	assert.Equal(t, len(m.NetworkDisconnectCalls()), 0)
+	assert.Assert(t, cmp.Len(m.NetworkDisconnectCalls(), 0))
 }

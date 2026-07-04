@@ -17,6 +17,7 @@ import (
 	"github.com/icholy/xagent/internal/server/shellserver"
 	"github.com/icholy/xagent/internal/shell/shellwire"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 // closeRecorder captures the args of every onClose invocation. The callback runs
@@ -313,7 +314,7 @@ func TestAttachCookieCallerRejectsInvalidOrgID(t *testing.T) {
 	assert.Assert(t, err != nil)
 	assert.Equal(t, resp.StatusCode, http.StatusBadRequest)
 	// The bad org_id is rejected before the resolver is ever consulted.
-	assert.Equal(t, len(resolver.ResolveOrgCalls()), 0)
+	assert.Assert(t, cmp.Len(resolver.ResolveOrgCalls(), 0))
 }
 
 func TestAttachCookieCallerRejectsNonMember(t *testing.T) {

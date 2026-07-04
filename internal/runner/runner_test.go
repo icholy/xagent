@@ -23,6 +23,7 @@ import (
 	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 // testStore opens a fresh taskstate store in a temp dir, optionally seeded with
@@ -142,7 +143,7 @@ func TestRunnerStart(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Verify get_my_task was called
-	assert.Equal(t, len(mock.GetTaskDetailsCalls()), 1)
+	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 1))
 
 	// Verify the driver reported its own lifecycle: started, then stopped.
 	var events []string
@@ -186,8 +187,8 @@ func TestRunnerStart_Idempotent(t *testing.T) {
 
 	// Assert - the running sandbox is left alone: no Launch, no token minted.
 	assert.NilError(t, err)
-	assert.Equal(t, len(be.LaunchCalls()), 0)
-	assert.Equal(t, len(mock.CreateTaskTokenCalls()), 0)
+	assert.Assert(t, cmp.Len(be.LaunchCalls(), 0))
+	assert.Assert(t, cmp.Len(mock.CreateTaskTokenCalls(), 0))
 }
 
 func TestRunnerStart_AdoptReuse(t *testing.T) {
@@ -225,7 +226,7 @@ func TestRunnerStart_AdoptReuse(t *testing.T) {
 
 	// Assert - the new handle replaced the old record.
 	assert.NilError(t, err)
-	assert.Equal(t, len(be.LaunchCalls()), 1)
+	assert.Assert(t, cmp.Len(be.LaunchCalls(), 1))
 	rec, ok, err := store.Read(6)
 	assert.NilError(t, err)
 	assert.Equal(t, ok, true)
@@ -295,7 +296,7 @@ func TestRunnerPoll_StopWithoutSandbox(t *testing.T) {
 
 	// Assert - no record, so the backend is never signalled and the runner
 	// emits "stopped" itself.
-	assert.Equal(t, len(be.SignalCalls()), 0)
+	assert.Assert(t, cmp.Len(be.SignalCalls(), 0))
 	events := submitted(t, mock, queue)
 	assert.Equal(t, len(events), 1)
 	assert.Equal(t, events[0].Event, "stopped")
@@ -335,7 +336,7 @@ func TestRunnerPoll_StopSignalled(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Assert - the driver was signalled and owns the terminal report.
-	assert.Equal(t, len(be.SignalCalls()), 1)
+	assert.Assert(t, cmp.Len(be.SignalCalls(), 1))
 	assert.Equal(t, queue.Len(), 0)
 }
 
@@ -611,8 +612,8 @@ func TestRunnerStart_GoneViaProbe(t *testing.T) {
 
 	// Assert - gone short-circuits: ErrGone, record dropped, no Launch, no token.
 	assert.Assert(t, errors.Is(err, backend.ErrGone))
-	assert.Equal(t, len(be.LaunchCalls()), 0)
-	assert.Equal(t, len(mock.CreateTaskTokenCalls()), 0)
+	assert.Assert(t, cmp.Len(be.LaunchCalls(), 0))
+	assert.Assert(t, cmp.Len(mock.CreateTaskTokenCalls(), 0))
 	_, ok, err := store.Read(9)
 	assert.NilError(t, err)
 	assert.Equal(t, ok, false)
