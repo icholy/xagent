@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -35,7 +36,19 @@ func (a *DummyAgent) Prompt(ctx context.Context, prompt string, resume bool) err
 	if err := a.doSleep(ctx); err != nil {
 		return err
 	}
+	if err := a.doError(); err != nil {
+		return err
+	}
 	return nil
+}
+
+// doError returns the configured error, if any.
+func (a *DummyAgent) doError() error {
+	if a.options == nil || a.options.Error == "" {
+		return nil
+	}
+	a.log.Info("dummy agent returning error", "err", a.options.Error)
+	return errors.New(a.options.Error)
 }
 
 func (a *DummyAgent) doCommands(ctx context.Context) error {

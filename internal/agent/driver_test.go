@@ -72,6 +72,21 @@ func TestDriverRun_AgentError(t *testing.T) {
 	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "failed"})
 }
 
+func TestDriverRun_AgentConfiguredError(t *testing.T) {
+	// Arrange - the dummy agent is configured to return an error string
+	driver, mock := setupDriver(t, &Config{
+		Type:  TypeDummy,
+		Dummy: &DummyOptions{Error: "dummy agent failed on purpose"},
+	})
+
+	// Act
+	err := driver.Run(t.Context())
+
+	// Assert - the failure was reported and acked, so the driver exits 0
+	assert.NilError(t, err)
+	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "failed"})
+}
+
 func TestDriverRun_SetupCommandError(t *testing.T) {
 	// Arrange
 	driver, mock := setupDriver(t, &Config{
