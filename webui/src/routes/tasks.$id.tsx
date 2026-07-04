@@ -13,22 +13,14 @@ import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState, useRef, useLayoutEffect } from 'react'
 import type { TaskTab } from '@/lib/task'
 import { toTaskTab } from '@/lib/task'
-import {
-  canArchiveTask,
-  canUnarchiveTask,
-  canCancelTask,
-  canRestartTask,
-  canOpenShell,
-  isArchivedTask,
-} from '@/lib/task'
+import { canCancelTask, canRestartTask, canOpenShell, isArchivedTask } from '@/lib/task'
 import { eventsToTimeline } from '@/lib/timeline'
 import { useOrgId } from '@/hooks/use-org-id'
 import { useShellState } from '@/hooks/use-shell-state'
 import { isShellActive } from '@/lib/shell-sessions'
 import { cn } from '@/lib/utils'
 import { ArchivedBadge } from '@/components/archived-badge'
-import { ArchiveButton } from '@/components/archive-button'
-import { AutoArchiveControl } from '@/components/auto-archive-control'
+import { TaskActionsMenu } from '@/components/task-actions-menu'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -186,12 +178,6 @@ function TaskDetail() {
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <AutoArchiveControl
-            task={task}
-            onChange={(autoArchive) => autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })}
-            pending={autoArchiveMutation.isPending}
-            disabled={isArchivedTask(task)}
-          />
           {canCancelTask(task) && (
             <Button variant="destructive" size="sm" onClick={handleCancel} disabled={isMutating}>
               {cancelMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -204,20 +190,17 @@ function TaskDetail() {
               Restart
             </Button>
           )}
-          {canArchiveTask(task) && (
-            <ArchiveButton
-              task={task}
-              onArchive={handleArchive}
-              pending={archiveMutation.isPending}
-              disabled={isMutating}
-            />
-          )}
-          {canUnarchiveTask(task) && (
-            <Button variant="outline" size="sm" onClick={handleUnarchive} disabled={isMutating}>
-              {unarchiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Unarchive
-            </Button>
-          )}
+          <TaskActionsMenu
+            task={task}
+            onAutoArchiveChange={(autoArchive) =>
+              autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })
+            }
+            autoArchivePending={autoArchiveMutation.isPending}
+            onArchive={handleArchive}
+            archivePending={archiveMutation.isPending}
+            onUnarchive={handleUnarchive}
+            unarchivePending={unarchiveMutation.isPending}
+          />
         </div>
       </div>
 
