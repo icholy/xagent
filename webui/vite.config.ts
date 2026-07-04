@@ -33,6 +33,15 @@ export default defineConfig({
         target: 'http://localhost:6464',
         changeOrigin: true,
       },
+      // Shell attach WebSocket (/shell/attach). ws:true proxies the upgrade;
+      // changeOrigin is intentionally omitted so the forwarded Host stays
+      // localhost:5173 and matches the browser's Origin — coder/websocket's
+      // default accept check rejects a mismatch, and the backend sets no
+      // InsecureSkipVerify/OriginPatterns.
+      '/shell': {
+        target: 'http://localhost:6464',
+        ws: true,
+      },
     },
   },
 })
