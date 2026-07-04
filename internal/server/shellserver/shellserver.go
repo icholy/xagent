@@ -241,7 +241,9 @@ func (r *Registry) DriverHandler() http.Handler {
 //
 // The session id is not a secret, so access control is by org membership: the
 // authenticated caller (populated by the auth middleware) must belong to the
-// session's owning org. Any member of that org may attach (one at a time).
+// session's owning org. Any member of that org may attach (one at a time). A
+// caller in the wrong org gets the same 404 as a nonexistent session, so
+// session existence never leaks across orgs (issue #1141).
 //
 // Two operator flavours reach this leg. The CLI dials with a Bearer app JWT
 // whose org claim populates caller.OrgID, so the org check is a field
@@ -252,8 +254,8 @@ func (r *Registry) DriverHandler() http.Handler {
 // requested org through OrgResolver — the same authorization boundary
 // notifyserver's SSE handler uses — before the membership comparison.
 //
-// Session existence (404) and the org check (400/401/403) are enforced before
-// the upgrade. The subprotocol is negotiated by websocket.Accept and validated
+// Session existence and the org check (both 404, plus 400/401 for malformed or
+// unauthenticated requests) are enforced before the upgrade. The subprotocol is negotiated by websocket.Accept and validated
 // after it: it is a non-secret version token, not a credential, and access is
 // already gated by the pre-upgrade org check, so a bad/missing subprotocol is an
 // upgrade-then-close rather than a pre-upgrade rejection.
@@ -290,7 +292,12 @@ func (r *Registry) AttachHandler() http.Handler {
 			}
 		}
 		if orgID != e.orgID {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			// A session owned by another org must be indistinguishable from one
+			// that does not exist: return the exact same 404 the unknown-session
+			// branch does (same status, same body) so a caller in the wrong org
+			// cannot tell an existing-but-foreign session from a nonexistent one
+			// (issue #1141).
+			http.Error(w, "unknown session", http.StatusNotFound)
 			return
 		}
 		conn, err := websocket.Accept(w, req, &websocket.AcceptOptions{
