@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
@@ -23,17 +23,18 @@ import { eventsToTimeline } from '@/lib/timeline'
 import { useOrgId } from '@/hooks/use-org-id'
 import { useShellState } from '@/hooks/use-shell-state'
 import { isShellActive } from '@/lib/shell-sessions'
+import { cn } from '@/lib/utils'
 import { ArchivedBadge } from '@/components/archived-badge'
 import { ArchiveButton } from '@/components/archive-button'
 import { AutoArchiveControl } from '@/components/auto-archive-control'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { TaskTimeline } from '@/components/task-timeline'
-import { Send, Loader2 } from 'lucide-react'
+import { TaskShellPanel } from '@/components/task-shell-panel'
+import { Send, Loader2, List, Terminal } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -47,6 +48,7 @@ function TaskDetail() {
   // A shell session opened in this tab keeps the task in "running"; track it so
   // the Shell button stays reachable (and marked active) despite that status.
   const shellActive = isShellActive(useShellState(String(taskId)).phase)
+  const [tab, setTab] = useState<TabKey>('timeline')
   const [instruction, setInstruction] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -176,43 +178,6 @@ function TaskDetail() {
               Cancel
             </Button>
           )}
-          {canOpenShell(task) || shellActive ? (
-            // Enabled for a finished task, or whenever this tab holds a live shell
-            // session — the session itself keeps the task "running", but the user
-            // must still be able to return to it.
-            <Button asChild variant="outline" size="sm">
-              <Link
-                to="/tasks/$id/shell"
-                params={{ id }}
-                search={{ org: orgId }}
-                title={shellActive ? 'Shell session active' : undefined}
-              >
-                {shellActive && (
-                  <span
-                    className="h-2 w-2 rounded-full bg-green-500"
-                    aria-label="Shell session active"
-                  />
-                )}
-                Shell
-              </Link>
-            </Button>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* A disabled button swallows pointer events, so wrap it so the
-                    tooltip still fires on hover. */}
-                <span className="inline-block">
-                  <Button variant="outline" size="sm" disabled>
-                    Shell
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                The shell attaches to a finished task&apos;s filesystem. Available once the task
-                completes, fails, or is cancelled.
-              </TooltipContent>
-            </Tooltip>
-          )}
           {canRestartTask(task) && (
             <Button variant="outline" size="sm" onClick={handleRestart} disabled={isMutating}>
               {restartMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -236,9 +201,9 @@ function TaskDetail() {
         </div>
       </div>
 
-      {/* Details + activity in a single card: metadata header strip above the
-          activity timeline. */}
-      <div className="rounded-lg border">
+      {/* Details + activity in a single card: metadata header strip, an in-page
+          tab bar, then the selected view (timeline / shell / links). */}
+      <div className="overflow-hidden rounded-lg border">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b p-4 text-sm">
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Status:</span>
@@ -270,40 +235,118 @@ function TaskDetail() {
           )}
         </div>
 
-        <div className="p-6">
-          <TaskTimeline items={timeline} />
+        {/* In-page tab bar: switch between the timeline, the debug shell, and
+            the task's links without leaving the page. */}
+        <div className="flex items-center gap-1 border-b px-2">
+          <TabButton
+            active={tab === 'timeline'}
+            onClick={() => setTab('timeline')}
+            icon={<List className="h-4 w-4" />}
+            label="Timeline"
+            count={timeline.length}
+          />
+          <TabButton
+            active={tab === 'shell'}
+            onClick={() => setTab('shell')}
+            icon={<Terminal className="h-4 w-4" />}
+            label="Shell"
+            dot={shellActive}
+          />
         </div>
 
-        {/* Add instruction */}
-        {!isArchivedTask(task) && (
-          <div className="border-t p-4">
-            <form onSubmit={handleAddInstruction} className="flex items-end gap-2">
-              <Textarea
-                ref={textareaRef}
-                placeholder="Send an instruction…  (Enter to send, Shift+Enter for newline)"
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                onKeyDown={handleInstructionKeyDown}
-                rows={1}
-                className="max-h-60 min-h-[40px] flex-1 resize-none overflow-y-auto"
-                required
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={updateMutation.isPending}
-                title="Send instruction"
-              >
-                {updateMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </form>
-          </div>
+        {tab === 'timeline' && (
+          <>
+            <div className="p-6">
+              <TaskTimeline items={timeline} />
+            </div>
+
+            {/* Add instruction */}
+            {!isArchivedTask(task) && (
+              <div className="border-t p-4">
+                <form onSubmit={handleAddInstruction} className="flex items-end gap-2">
+                  <Textarea
+                    ref={textareaRef}
+                    placeholder="Send an instruction…  (Enter to send, Shift+Enter for newline)"
+                    value={instruction}
+                    onChange={(e) => setInstruction(e.target.value)}
+                    onKeyDown={handleInstructionKeyDown}
+                    rows={1}
+                    className="max-h-60 min-h-[40px] flex-1 resize-none overflow-y-auto"
+                    required
+                  />
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={updateMutation.isPending}
+                    title="Send instruction"
+                  >
+                    {updateMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </form>
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'shell' && (
+          <TaskShellPanel taskId={taskId} orgId={orgId} canOpen={canOpenShell(task)} />
         )}
       </div>
     </div>
+  )
+}
+
+type TabKey = 'timeline' | 'shell'
+
+// TabButton is one entry in the in-page tab bar: an underline-style tab with an
+// icon, a label, and either a count badge or a "session active" dot.
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+  dot,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+  count?: number
+  dot?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-selected={active}
+      className={cn(
+        // -mb-px pulls the active underline onto the bar's own bottom border.
+        'relative -mb-px flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors',
+        active
+          ? 'border-primary text-foreground'
+          : 'border-transparent text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {icon}
+      {label}
+      {dot && (
+        <span className="h-2 w-2 rounded-full bg-green-500" aria-label="Shell session active" />
+      )}
+      {count !== undefined && count > 0 && (
+        <span
+          className={cn(
+            'rounded-full px-2 py-0.5 text-xs font-medium',
+            active ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   )
 }
