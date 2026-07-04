@@ -3,18 +3,20 @@ name: Lint
 on:
   push:
     branches: [ master ]
-    paths-ignore:
-      - '**.md'
-      - '.release-please-manifest.json'
-      - 'images/**'
-      - 'n8n-node/**'
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+      - '.github/workflows/lint.yml'
   pull_request:
     branches: [ master ]
-    paths-ignore:
-      - '**.md'
-      - '.release-please-manifest.json'
-      - 'images/**'
-      - 'n8n-node/**'
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+      - '.github/workflows/lint.yml'
 
 jobs:
   golangci-lint:
