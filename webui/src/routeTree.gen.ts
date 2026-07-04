@@ -362,7 +362,8 @@ const TasksIdRouteChildren: TasksIdRouteChildren = {
   TasksIdShellRoute: TasksIdShellRoute,
 }
 
-const TasksIdRouteWithChildren = TasksIdRoute._addFileChildren(TasksIdRouteChildren)
+const TasksIdRouteWithChildren =
+  TasksIdRoute._addFileChildren(TasksIdRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
