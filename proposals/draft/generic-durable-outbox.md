@@ -112,7 +112,7 @@ package outbox
 type Options[T any] struct {
 	Store   Store
 	Deliver func(ctx context.Context, msg T) (permanent bool, err error) // the RPC/HTTP call
-	Backoff func() backoff.BackOff                                       // fresh policy per failure streak
+	Backoff backoff.BackOff                                              // retry policy; Reset on success, NextBackOff per failure
 	Log     *slog.Logger
 }
 
@@ -135,10 +135,12 @@ func (o *Outbox[T]) Len() (int, error)
 wakeup it `List`s the store, delivers each record in `Seq` order via `Deliver`, and
 `Remove`s it on success. `Deliver` reports whether a failure is permanent as its first
 return value, so the code that already holds the error classifies it inline — no separate
-predicate. A transient error (`permanent == false`) triggers a backoff sleep
-(`backoff.BackOff` from the already-vendored `github.com/cenkalti/backoff/v5`, replacing the
-current fixed `retryInterval`) and a retry from the same record; a permanent error
-(`permanent == true`) triggers `DeadLetter` and continues. On startup, `Run`'s first pass
+predicate. A transient error (`permanent == false`) sleeps for `Backoff.NextBackOff()` (a
+`backoff.BackOff` from the already-vendored `github.com/cenkalti/backoff/v5`, replacing the
+current fixed `retryInterval`) and retries from the same record; a permanent error
+(`permanent == true`) triggers `DeadLetter` and continues. `Run` calls `Backoff.Reset()`
+whenever the store fully drains, so each new failure streak starts from the initial interval.
+On startup, `Run`'s first pass
 naturally redelivers everything `List` returns — this is the durability payoff, and it
 requires no separate recovery path.
 
