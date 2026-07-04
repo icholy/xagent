@@ -146,9 +146,8 @@ var RunnerCommand = &cli.Command{
 		// directory (a sibling of the taskstate dir, on the same volume), so
 		// runner lifecycle events survive a restart and are redelivered on the
 		// next Run pass rather than being lost with an in-memory buffer.
-		outboxDir := filepath.Join(filepath.Dir(cmd.String("state-dir")), "outbox")
 		queue, err := runner.NewRunnerEventOutbox(runner.RunnerEventOutboxOptions{
-			StoreDir: outboxDir,
+			StoreDir: filepath.Join(filepath.Dir(cmd.String("state-dir")), "outbox"),
 			Client:   client,
 			// Reproduce the old EventQueue's fixed retry interval (the poll
 			// interval) with a constant backoff, for a drop-in match.
