@@ -335,8 +335,10 @@ func TestServe_ContextCancelTearsDownBlockedShell(t *testing.T) {
 	// Regression for the driver ignoring SIGTERM during a live shell session. The
 	// driver cancels Serve's context on SIGTERM; if teardown relied on the shell
 	// noticing the PTY closing, a shell blocked in a foreground child would never
-	// exit and Serve (and the driver) would hang. Serve must kill the shell and
-	// return promptly when its context is canceled.
+	// exit and Serve (and the driver) would hang. On cancellation cmd.Cancel closes
+	// the connection first (so the operator gets instant feedback), then SIGTERMs
+	// the shell's process group, and the WaitDelay backstop guarantees Serve returns
+	// within the grace window regardless — so the driver can never hang.
 	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
 	srv := newRelayServer(t, reg)
 	assert.NilError(t, reg.Seed("s4", testOrg, testTask))
@@ -350,12 +352,21 @@ func TestServe_ContextCancelTearsDownBlockedShell(t *testing.T) {
 	op := runOperator(t, dialAttach(t, srv, "s4"))
 
 	// Run a foreground child that blocks forever, so closing the PTY alone would
-	// not make the shell exit — only killing the process group does.
+	// not make the shell exit — only signaling the process group does.
 	op.send(t, "echo up; sleep 100\n")
 	op.waitFor(t, "up")
 
 	// Act: the driver received SIGTERM — Serve's context is canceled.
 	cancelServe()
+
+	// Assert: the operator's leg is closed promptly — cmd.Cancel closes the
+	// connection first, so the operator gets instant feedback rather than hanging.
+	select {
+	case r := <-op.done:
+		assert.Assert(t, r.err != nil, "operator should error once the connection is closed on teardown")
+	case <-time.After(5 * time.Second):
+		t.Fatal("operator did not return after the connection was closed on teardown")
+	}
 
 	// Assert: Serve returns promptly rather than blocking on cmd.Wait, and the
 	// relay session is torn down.
@@ -366,6 +377,49 @@ func TestServe_ContextCancelTearsDownBlockedShell(t *testing.T) {
 		t.Fatal("Serve did not return after its context was canceled")
 	}
 	waitForCond(t, 5*time.Second, func() bool { return !reg.Has("s4") })
+}
+
+func TestServe_ContextCancelForceKillsUnresponsiveShell(t *testing.T) {
+	t.Parallel()
+	// The WaitDelay backstop: even a shell that ignores SIGTERM (and SIGHUP, so
+	// the PTY closing can't take it down either) must not hang the driver. After
+	// the grace period os/exec force-kills the shell process with SIGKILL and
+	// cmd.Wait returns. This exercises the SIGTERM -> WaitDelay -> SIGKILL path.
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
+	srv := newRelayServer(t, reg)
+	assert.NilError(t, reg.Seed("s5", testOrg, testTask))
+
+	serveCtx, cancelServe := context.WithCancel(t.Context())
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- shell.Serve(serveCtx, shell.ServeOptions{ServerURL: srv.URL, Token: "driver-token", Session: "s5", Log: slog.Default()})
+	}()
+
+	op := runOperator(t, dialAttach(t, srv, "s5"))
+
+	// Make the login shell itself impervious to SIGTERM and SIGHUP, then keep it
+	// busy in the foreground so it never reads EOF. SIGTERM to the group can't stop
+	// it and closing the PTY can't either — only the WaitDelay SIGKILL will. The
+	// short inner sleep keeps the lone orphaned child (the caveat) short-lived.
+	op.send(t, "echo up; trap '' TERM HUP; while :; do sleep 1; done\n")
+	op.waitFor(t, "up")
+
+	// Act: the driver received SIGTERM — Serve's context is canceled.
+	start := time.Now()
+	cancelServe()
+
+	// Assert: Serve still returns — via the force-kill backstop — and only after
+	// the grace period elapsed (proving SIGTERM alone did not stop this shell).
+	select {
+	case err := <-serveErr:
+		assert.NilError(t, err)
+		elapsed := time.Since(start)
+		assert.Assert(t, elapsed >= 1500*time.Millisecond,
+			"Serve returned in %s — too fast for the WaitDelay backstop; SIGTERM must not have stopped this shell", elapsed)
+	case <-time.After(15 * time.Second):
+		t.Fatal("Serve did not return after its context was canceled — WaitDelay backstop did not fire")
+	}
+	waitForCond(t, 5*time.Second, func() bool { return !reg.Has("s5") })
 }
 
 func TestDriverURL(t *testing.T) {

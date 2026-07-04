@@ -39,6 +39,11 @@ import (
 // shell process has exited.
 const exitReportTimeout = 5 * time.Second
 
+// shellGracePeriod is how long the shell's process group has to exit after it is
+// sent SIGTERM on ctx cancellation before os/exec force-kills the shell process
+// and cmd.Wait returns. It bounds how long Serve can take to return on teardown.
+const shellGracePeriod = 3 * time.Second
+
 // CreateSessionID returns an unguessable rendezvous id for a debug-shell
 // session. It is not a secret — the attach leg is authorized by org membership,
 // not by knowing the id — but a random id keeps sessions from colliding and from
@@ -79,15 +84,13 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	log.Info("starting reverse shell", "session", session)
 
 	shell := cmp.Or(os.Getenv("SHELL"), "/bin/sh")
-	cmd := exec.Command(shell)
+	// exec.CommandContext (not exec.Command) installs the ctx watchdog that
+	// auto-invokes cmd.Cancel when ctx is canceled. pty.Start calls cmd.Start
+	// under the hood, so the watchdog still gets wired up — they compose.
+	cmd := exec.CommandContext(ctx, shell)
 	// A leading "-" in argv[0] is the conventional signal for a login shell,
 	// so it sources the profile files an operator would expect.
 	cmd.Args[0] = "-" + filepath.Base(shell)
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to start pty: %w", err)
-	}
-	defer func() { _ = ptmx.Close() }()
 
 	url, err := DriverURL(opts.ServerURL, session)
 	if err != nil {
@@ -104,24 +107,32 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	conn.SetReadLimit(shellwire.ReadLimit)
 
 	// Tear the session down promptly when ctx is canceled — e.g. the driver
-	// received SIGTERM. The read loop below closes the PTY on cancellation, but
-	// a shell blocked in a foreground child (an editor, a pager, anything the
-	// operator left running) may never notice the resulting EOF, so cmd.Wait
-	// would hang and the driver would never exit. Kill the shell's whole process
-	// group outright — pty.Start puts the shell in its own session, so its PGID
-	// equals its PID — and close the connection to unblock the read loop. The
-	// stop channel retires this goroutine once Serve returns on its own.
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			_ = ptmx.Close()
-			conn.CloseNow()
-		case <-stop:
-		}
-	}()
+	// received SIGTERM. The read loop below closes the PTY on cancellation, but a
+	// shell blocked in a foreground child (an editor, a pager, anything the
+	// operator left running) may never notice the resulting EOF, so cmd.Wait would
+	// hang and the driver would never exit. Cmd.Cancel runs on cancellation: it
+	// closes the connection first — unblocking both WS pumps immediately and giving
+	// the operator instant feedback — then sends SIGTERM to the shell's whole
+	// process group so it can exit gracefully. pty.Start sets Setsid, so the shell
+	// leads its own session and its PGID equals its PID, which is why the negative
+	// PID addresses the group.
+	cmd.Cancel = func() error {
+		conn.CloseNow()
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
+	// If the group doesn't exit within the grace period, os/exec force-kills and
+	// cmd.Wait returns, so the driver can never hang. Caveat: WaitDelay's force
+	// step is os.Process.Kill — a single-process SIGKILL of the shell, not the
+	// group — so a stubborn child could be orphaned at the backstop. For a debug
+	// shell that's acceptable: SIGTERM-to-group handles the normal case and
+	// WaitDelay only guarantees no hang.
+	cmd.WaitDelay = shellGracePeriod
+
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to start pty: %w", err)
+	}
+	defer func() { _ = ptmx.Close() }()
 
 	// WebSocket -> PTY: apply incoming data/resize frames. On any read error —
 	// the operator leg dropped, the session was torn down, or ctx was canceled —
