@@ -159,14 +159,14 @@ func TestLifecycle_RunnerEventsAppendSandboxEvents(t *testing.T) {
 			TaskId:  taskID,
 			Event:   "failed",
 			Version: 0,
-			Reason:  `setup command 0 failed: exit status 1`,
+			Reason:  "setup command 0 failed: exit status 1",
 		}},
 	})
 	assert.NilError(t, err)
 
 	events = lifecycleEvents(t, srv, ctx, taskID)
 	assert.Equal(t, events[0].Kind, xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_FAILED)
-	assert.Equal(t, events[0].Message, `setup command 0 failed: exit status 1`)
+	assert.Equal(t, events[0].Message, "setup command 0 failed: exit status 1")
 	assert.Equal(t, events[0].ToStatus, "Failed")
 }
 

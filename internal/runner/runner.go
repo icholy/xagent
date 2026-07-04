@@ -302,7 +302,7 @@ func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
 	r.queue.Enqueue(model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
-		Reason: "sandbox exited without reporting",
+		Reason: "sandbox exited",
 	})
 }
 
@@ -537,7 +537,7 @@ func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) 
 	r.queue.Enqueue(model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
-		Reason: fmt.Sprintf("sandbox exited without reporting (exit code %d)", code),
+		Reason: fmt.Sprintf("sandbox exited with status code %d", code),
 	})
 }
 
