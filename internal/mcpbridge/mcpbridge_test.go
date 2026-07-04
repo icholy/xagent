@@ -25,18 +25,20 @@ func mutedIDsFromResult(t *testing.T, res *mcp.CallToolResult) []int64 {
 	return out.Muted
 }
 
-// mutedAllFromResult extracts the all flag a tool handler returns.
-func mutedAllFromResult(t *testing.T, res *mcp.CallToolResult) bool {
+// muteStateFromResult extracts the full mute state a tool handler returns.
+func muteStateFromResult(t *testing.T, res *mcp.CallToolResult) (all bool, muted, unmuted []int64) {
 	t.Helper()
 	assert.Assert(t, !res.IsError)
 	assert.Equal(t, len(res.Content), 1)
 	text, ok := res.Content[0].(*mcp.TextContent)
 	assert.Assert(t, ok, "expected *mcp.TextContent, got %T", res.Content[0])
 	var out struct {
-		All bool `json:"all"`
+		All     bool    `json:"all"`
+		Muted   []int64 `json:"muted"`
+		Unmuted []int64 `json:"unmuted"`
 	}
 	assert.NilError(t, json.Unmarshal([]byte(text.Text), &out))
-	return out.All
+	return out.All, out.Muted, out.Unmuted
 }
 
 // TestForward_DefaultForwardsEverything is the byte-for-byte default: an
@@ -237,9 +239,88 @@ func TestMuteTool_All(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	assert.Assert(t, mutedAllFromResult(t, res))
-	// mute-all subsumes and clears the per-task set.
-	assert.Equal(t, len(mutedIDsFromResult(t, res)), 0)
+	all, _, unmuted := muteStateFromResult(t, res)
+	assert.Assert(t, all)
+	// mute-all subsumes and clears the exception set: nothing is delivered.
+	assert.Equal(t, len(unmuted), 0)
+}
+
+// TestForward_MuteAllThenUnmuteOne is the maintainer-requested workflow:
+// channel_mute(all=true) followed by channel_unmute(task_ids=[123]) mutes
+// every task except 123, which keeps delivering.
+func TestForward_MuteAllThenUnmuteOne(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	sender := &ChannelSenderMock{
+		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
+	}
+	ch := NewChannel(sender)
+	_, _, err := ch.muteTool(context.Background(), nil, muteInput{All: true})
+	assert.NilError(t, err)
+	_, _, err = ch.unmuteTool(context.Background(), nil, unmuteInput{TaskIDs: []int64{123}})
+	assert.NilError(t, err)
+
+	// Act
+	ch.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 123}},
+		ChannelMessage: "Task 123 completed.",
+	})
+	ch.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 7}},
+		ChannelMessage: "Task 7 completed.",
+	})
+
+	// Assert
+	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 123 completed.")
+}
+
+// TestUnmuteTool_AfterMuteAll reports the unmuted exceptions under mute-all.
+func TestUnmuteTool_AfterMuteAll(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	ch := NewChannel(&ChannelSenderMock{})
+	_, _, err := ch.muteTool(context.Background(), nil, muteInput{All: true})
+	assert.NilError(t, err)
+
+	// Act
+	res, _, err := ch.unmuteTool(context.Background(), nil, unmuteInput{TaskIDs: []int64{123, 7}})
+
+	// Assert
+	assert.NilError(t, err)
+	all, _, unmuted := muteStateFromResult(t, res)
+	assert.Assert(t, all)
+	assert.DeepEqual(t, unmuted, []int64{7, 123})
+}
+
+// TestMuteTool_RemuteUnderMuteAll confirms muting a task that was unmuted
+// under mute-all removes the exception, so it is muted with the rest again.
+func TestMuteTool_RemuteUnderMuteAll(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	sender := &ChannelSenderMock{
+		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
+	}
+	ch := NewChannel(sender)
+	_, _, err := ch.muteTool(context.Background(), nil, muteInput{All: true})
+	assert.NilError(t, err)
+	_, _, err = ch.unmuteTool(context.Background(), nil, unmuteInput{TaskIDs: []int64{123}})
+	assert.NilError(t, err)
+	res, _, err := ch.muteTool(context.Background(), nil, muteInput{TaskIDs: []int64{123}})
+	assert.NilError(t, err)
+
+	// Assert: the exception is gone, so 123 is muted again.
+	all, _, unmuted := muteStateFromResult(t, res)
+	assert.Assert(t, all)
+	assert.Equal(t, len(unmuted), 0)
+	ch.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 123}},
+		ChannelMessage: "Task 123 completed.",
+	})
+	assert.Equal(t, len(sender.SendChannelCalls()), 0)
 }
 
 func TestMuteTool(t *testing.T) {
