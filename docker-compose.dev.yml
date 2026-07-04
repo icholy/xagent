@@ -8,6 +8,8 @@ services:
       PGPORT: "5433"
     volumes:
       - postgres_data:/var/lib/postgresql
+    networks:
+      - xagent
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U xagent -p 5433"]
       interval: 5s
@@ -26,9 +28,54 @@ services:
       XAGENT_BASE_URL: http://localhost:6464
       XAGENT_CORS: "true"
       XAGENT_DATABASE_URL: postgres://xagent:xagent@postgres:5433/xagent?sslmode=disable
+    networks:
+      - xagent
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # Under --no-auth the server injects the fixed dev API key before the HTTP
+      # listener starts, so once it answers, the key the runner uses already
+      # exists. The runner waits on this healthcheck, so it never races the key.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:6464/ui/"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 3s
+
+  # A local runner that executes tasks on the host Docker daemon. It runs the
+  # same static binary as the server (Dockerfile.dev), so the runner injects
+  # its own executable as the task driver — no separate prebuilt dir needed.
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["./xagent", "runner", "--workspaces", "/etc/xagent/workspaces.yml"]
+    environment:
+      XAGENT_SERVER: http://server:6464
+      # Matches the fixed dev key the --no-auth server injects on startup
+      # (internal/command/server.go: provisionDevKey).
+      XAGENT_API_KEY: xat_dev
+      XAGENT_RUNNER_ID: dev-runner
+      XAGENT_BACKEND: docker
+      XAGENT_STATE_DIR: /var/lib/xagent/tasks
+    volumes:
+      # Spawn task containers on the host daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./dev/workspaces.yml:/etc/xagent/workspaces.yml:ro
+      - runner_state:/var/lib/xagent
+    networks:
+      - xagent
+    depends_on:
+      server:
+        condition: service_healthy
+
+networks:
+  # A fixed network name so the dummy workspace (dev/workspaces.yml) can attach
+  # its task containers to it and reach the server by its "server" service name.
+  xagent:
+    name: xagent-dev
 
 volumes:
   postgres_data:
+  runner_state:

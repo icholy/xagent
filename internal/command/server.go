@@ -10,8 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/auth/oauthflow"
+	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server"
 	"github.com/icholy/xagent/internal/server/archiver"
@@ -175,8 +178,23 @@ var ServerCommand = &cli.Command{
 				Email: "dev@localhost",
 				Name:  "Developer",
 			}
-			if err := resolver.Provision(ctx, devUser); err != nil {
+			orgID, err := resolver.Provision(ctx, devUser)
+			if err != nil {
 				return fmt.Errorf("failed to provision dev user: %w", err)
+			}
+			// Provision a fixed dev API key so a local runner can authenticate
+			// against the --no-auth server (the dev-user bypass only applies to
+			// requests with no auth header, but the runner always sends a key).
+			// keys.token_hash is UNIQUE, so on every restart after the first this
+			// is a duplicate-key no-op — that is the idempotency mechanism.
+			if err := st.CreateKey(ctx, nil, &model.Key{
+				ID:        uuid.NewString(),
+				Name:      "dev-runner",
+				TokenHash: apiauth.HashKey("xat_dev"),
+				OrgID:     orgID,
+				Scopes:    authscope.Admin(),
+			}); err != nil {
+				slog.Warn("failed to provision dev API key", "err", err)
 			}
 		}
 		auth, err := apiauth.New(ctx, apiauth.Config{

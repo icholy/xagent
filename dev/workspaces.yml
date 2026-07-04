@@ -1,0 +1,20 @@
+workspaces:
+  dummy:
+    description: Dummy workspace for exercising the local dev stack
+    container:
+      image: alpine:3.21
+      # Join the dev compose network so the task container can reach the
+      # server by its service name (see docker-compose.dev.yml).
+      networks:
+        - xagent-dev
+    agent:
+      type: dummy
+      dummy:
+        # Call the `report` tool on the injected `xagent` agent MCP so the
+        # message shows up in the Web UI — exercises the agent MCP end-to-end.
+        tool_calls:
+          - server: xagent
+            name: report
+            arguments:
+              message: hello from the dummy agent
+        sleep: 2

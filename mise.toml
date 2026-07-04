@@ -37,7 +37,7 @@ outputs = ["internal/server/webui/index.html"]
 run = "cd webui && pnpm install --frozen-lockfile && pnpm exec vite build"
 
 [tasks.dev]
-description = "Start a local server in Docker"
+description = "Start a local server + runner in Docker"
 depends = ["build:webui"]
 run = [
 	"CGO_ENABLED=0 GOOS=linux go build -o xagent ./cmd/xagent",
