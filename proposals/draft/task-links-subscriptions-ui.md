@@ -1,6 +1,13 @@
-# Task links & subscriptions panel
+# Task links & subscriptions tab
 
 Issue: https://github.com/icholy/xagent/issues/1158
+
+> **Update (2026-07):** the task detail page has since grown an in-page tab bar
+> (Timeline | Shell), added by "make task shell an in-page tab" (#1184, building
+> on the in-browser shell #1154). That bar is the natural home for links: this
+> revision places the feature in a **Links tab** beside Timeline and Shell rather
+> than in a standalone card, and reverses the earlier reasoning that rejected a
+> tabbed layout. The API/store/live-update design below is unchanged.
 
 ## Problem
 
@@ -28,7 +35,7 @@ instructions, reports, and lifecycle events. Two problems follow:
    stale one, or toggle whether a link is subscribed — even though that toggle
    is precisely what controls event routing.
 
-This proposal adds a dedicated **Links** panel to the task detail page that
+This proposal adds a dedicated **Links** tab to the task detail page that
 lists a task's links at a glance and supports add / remove / toggle-subscribe,
 plus the small API surface needed to back it.
 
@@ -42,7 +49,7 @@ The UI should be consistent about two closely-related words:
   a link whose toggle is on. Events matching its `routing_key` are routed to the
   task.
 
-The panel therefore shows **links**, and a per-link **Subscribed** toggle is how
+The tab therefore shows **links**, and a per-link **Subscribed** toggle is how
 a link becomes (or stops being) a subscription. We deliberately avoid a separate
 "Subscriptions" list — it would split one row across two places and invite the
 misconception that a subscription can exist without a link.
@@ -117,59 +124,87 @@ management half of this feature is a genuine API gap, not just a UI gap.
 
 - The task detail page calls `useQuery(getTaskDetails, { id }, { refetchInterval: 60000 })`
   and `useQuery(listEventsByTask, { taskId }, ...)`
-  (`webui/src/routes/tasks.$id.tsx:55-67`). `getTaskDetails` already returns
+  (`webui/src/routes/tasks.$id.tsx`). `getTaskDetails` already returns
   `links`, but the page currently ignores that field and renders links only from
   the events timeline.
+- The page already has an **in-page tab bar** inside the details card. `#1184`
+  introduced local `const [tab, setTab] = useState<TabKey>('timeline')` with
+  `type TabKey = 'timeline' | 'shell'`, a reusable `TabButton` component (an
+  underline-style tab that takes an `icon`, `label`, and either a `count` badge
+  or an "active" `dot`), and a tab bar that renders `<TabButton>` for Timeline
+  (with a `count` of timeline items) and Shell (with a `dot` when a shell session
+  is active). Each tab's body is a `{tab === '…' && (…)}` block: Timeline renders
+  `<TaskTimeline>` plus the instruction composer; Shell renders
+  `<TaskShellPanel>`. Adding a Links tab means extending `TabKey`, adding one
+  `<TabButton>`, and adding one conditional body — no new layout machinery.
 - Mutations follow `useMutation(rpc, { onSuccess: refetchAll })` and call
-  `mutateAsync(input)` (`tasks.$id.tsx:74-105`, e.g. the instruction composer
-  using `updateTask`).
+  `mutateAsync(input)` (e.g. the instruction composer using `updateTask`).
 - Live updates: `useOrgSSE` (`webui/src/hooks/use-org-sse.ts`) listens to the
   server's SSE notification stream and invalidates TanStack Query keys per
   resource. The `task_links` case already invalidates `getTaskDetails`
-  (`use-org-sse.ts:44-52`). So any RPC that publishes a `task_links` `change`
-  notification will refresh this panel on every connected client for free.
+  (`use-org-sse.ts`, `case 'task_links'`). So any RPC that publishes a
+  `task_links` `change` notification will refresh this tab on every connected
+  client for free.
 - Generated Connect-Query hooks are re-exported from
   `webui/src/gen/xagent/v1/xagent-XAgentService_connectquery.ts`; `createLink`
   and `listLinks` are already generated there.
 - shadcn/ui components already in `webui/src/components/ui/`: `Card`, `Dialog`,
   `Button`, `Input`, `Label`, `Textarea`, `Switch`, `Badge`, `Tooltip` — enough
-  to build the panel with no new primitives.
+  to build the tab with no new primitives.
 
 ## Design
 
-### 1. UI placement — a panel on the task detail page
+### 1. UI placement — a Links tab in the existing tab bar
 
-Add a **Links** section to `tasks.$id.tsx`, above the timeline and below the
-metadata strip, rather than a separate route.
+Add a **Links** tab to the in-page tab bar in `tasks.$id.tsx`, beside Timeline
+and Shell, rather than a separate route or a standalone card.
+
+Concretely:
+
+- Extend `type TabKey = 'timeline' | 'shell'` to `'timeline' | 'shell' | 'links'`.
+- Add a third `<TabButton>` with a links icon (e.g. `Link2` from `lucide-react`,
+  already used by `LinkRow`), the label **Links**, and a `count` of the task's
+  links — so the tab shows "Links 3" at a glance, mirroring Timeline's count.
+- Add a `{tab === 'links' && (<TaskLinksPanel … />)}` body that renders the list,
+  the add-link dialog, and the per-row controls described below.
 
 Rationale:
 
+- The tab bar already exists and is the page's established pattern for "switch
+  between views of this task without leaving the page". A links view belongs
+  there for the same reason the shell does — it is one more facet of the task,
+  not a separate destination.
 - Links are inherently *of a task*; a dedicated `/tasks/$id/links` route would
-  make the user navigate away from the timeline they were reading, and the data
-  (`getTaskDetails.links`) is already loaded on this page.
-- It keeps the timeline as the chronological narrative while giving links a
-  stable, always-visible home that does not scroll away as the timeline grows.
+  cost a navigation away from the page and a separate fetch, whereas the data
+  (`getTaskDetails.links`) is already loaded here.
+- The tab's `count` badge answers "what is this task attached to, and how much?"
+  from the bar itself, so links are discoverable even before the tab is opened —
+  which addresses the "where are the links" concern that originally argued
+  against tabs.
 
-A `<Tabs>` split (Timeline | Links) was considered and rejected: links are
-usually few (0–5), and hiding them behind a tab reintroduces the "where are the
-links" problem. A compact always-visible panel is better at the expected sizes.
-If a task ever accumulates many links, the panel can collapse older ones behind
-a "show all" affordance — noted as an open question, not built up front.
+> **Reversal of an earlier decision.** The first draft of this proposal rejected
+> a `<Tabs>` split in favour of an always-visible card, reasoning that hiding a
+> handful of links behind a tab would reintroduce the "where are the links"
+> problem. That reasoning no longer holds: the task page now *is* tab-organized
+> (Timeline | Shell), so a standalone card would be the inconsistent choice, and
+> the per-tab `count` badge keeps links discoverable from the bar. We therefore
+> adopt the tab.
 
 ### 2. Layout
 
-A `Card` titled **Links** with an **Add link** button in the header, and one row
-per link:
+The **Links** tab body renders an **Add link** button in a small header row
+(aligned like the timeline composer sits at the foot of the Timeline tab) and one
+row per link:
 
 ```
-┌ Links ─────────────────────────────────── [ + Add link ] ┐
-│  ○ fix: close operator shell leg           [Subscribed ●] │  ← github icon, title links to url
-│    github.com/icholy/xagent/pull/1149                  🗑 │
-│    Opened to resolve the exit hang                        │  ← relevance, muted
-│                                                           │
-│  ○ PROJ-42  Investigate flaky test         [Subscribed ○] │  ← jira icon
-│    acme.atlassian.net/browse/PROJ-42                   🗑 │
-└───────────────────────────────────────────────────────────┘
+│ Links  ·  Shell  ·  Timeline                                         │  ← in-page tab bar
+├─────────────────────────────────────────────────────── [ + Add link ]┤
+│  ○ fix: close operator shell leg                     [Subscribed ●] │  ← github icon, title links to url
+│    github.com/icholy/xagent/pull/1149                           🗑 │
+│    Opened to resolve the exit hang                                 │  ← relevance, muted
+│                                                                    │
+│  ○ PROJ-42  Investigate flaky test                   [Subscribed ○] │  ← jira icon
+│    acme.atlassian.net/browse/PROJ-42                            🗑 │
 ```
 
 Per link, show:
@@ -181,7 +216,7 @@ Per link, show:
 - **URL**, muted, below the title.
 - **Relevance** note, muted, when present.
 - **Subscribed** toggle — a `Switch` with a label. On = events on this URL wake
-  the task; the tooltip says exactly that. This is the panel's most important
+  the task; the tooltip says exactly that. This is the tab's most important
   control, so it is a labeled switch, not a bare icon.
 - **Remove** — a ghost trash `Button`; destructive, so it opens a small confirm
   `Dialog` ("Remove this link? Events for this URL will no longer reach the
@@ -192,8 +227,8 @@ task." with the same **Add link** button.
 
 The existing `LinkRow` in the timeline **stays** — it is the historical "a link
 was created at time T" record and reads naturally in the narrative. The new
-panel is the current-state view of the same underlying rows. (Divergence is not
-a concern: the panel reflects `task_links`, the timeline reflects the append-only
+tab is the current-state view of the same underlying rows. (Divergence is not
+a concern: the tab reflects `task_links`, the timeline reflects the append-only
 `link` events; both already share one source via `CreateLink`'s transaction.)
 
 ### 3. Add-link UX
@@ -302,7 +337,7 @@ a lightweight event for **delete** (so the narrative doesn't silently lose a
 resource) and **not** for a subscribe toggle (low-signal, high-churn) — but this
 is called out as an open question since it touches the event schema rather than
 just the projection. The `task_links` change notification is published
-regardless, so the panel stays live either way.
+regardless, so the tab stays live either way.
 
 Authorization: both new RPCs gate on `OpTaskWrite` exactly like `CreateLink`;
 listing already gates on `OpTaskRead`. No new scopes are introduced.
@@ -310,19 +345,21 @@ listing already gates on `OpTaskRead`. No new scopes are introduced.
 ### 6. Live updates
 
 No new mechanism. All three mutations publish a `change` notification whose
-`task_links` resource id is the task id; `use-org-sse.ts:44-52` already maps that
-to a `getTaskDetails` invalidation, and the panel reads `getTaskDetails.links`.
-So every connected client's panel refreshes on add / remove / toggle without any
-client-specific wiring. The 60 s `refetchInterval` remains the fallback.
+`task_links` resource id is the task id; `use-org-sse.ts` (`case 'task_links'`)
+already maps that to a `getTaskDetails` invalidation, and the tab reads
+`getTaskDetails.links`. So every connected client refreshes on add / remove /
+toggle without any client-specific wiring — and because the tab's `count` binds
+to the same `links` array, the tab-bar badge updates too, even while the user is
+on another tab. The 60 s `refetchInterval` remains the fallback.
 
-The panel should read links from the **`getTaskDetails.links`** field the page
+The tab should read links from the **`getTaskDetails.links`** field the page
 already fetches, rather than adding a second `listLinks` query — one fewer
 round-trip and one fewer cache key to invalidate. (`listLinks` remains available
 for other consumers such as the CLI.)
 
-### 7. Data source: use `getTaskDetails.links`, drop the timeline as the link source of truth for the panel
+### 7. Data source: use `getTaskDetails.links`, drop the timeline as the link source of truth for the tab
 
-The page already loads `getTaskDetails`, which returns `links`. The panel binds
+The page already loads `getTaskDetails`, which returns `links`. The tab binds
 to that array directly. Optimistic updates (add / toggle / remove) mutate the
 cached `getTaskDetails` entry; the subsequent SSE invalidation reconciles with
 the server. This is the same optimistic-then-invalidate pattern the instruction
@@ -330,7 +367,7 @@ composer implies.
 
 ## Scope
 
-**In scope:** the Links panel (list + add + remove + toggle-subscribe), the
+**In scope:** the Links tab (list + add + remove + toggle-subscribe), the
 `DeleteLink` and `UpdateLink` RPCs and their store/handler code, and the proto
 `optional` field-mask on update.
 
@@ -349,10 +386,14 @@ composer implies.
 
 ## Trade-offs
 
-- **Panel on the detail page vs. a dedicated route.** The panel keeps links next
-  to the timeline and reuses already-fetched data; a route would isolate the
-  feature but cost a navigation and a separate fetch. For 0–5 links per task the
-  panel wins. Chosen: panel.
+- **A tab vs. an always-visible card vs. a dedicated route.** A route isolates
+  the feature but costs a navigation and a separate fetch. An always-visible card
+  (the original proposal) keeps links on screen at all times but is now the
+  odd-one-out on a page that organizes Timeline and Shell as tabs, and it would
+  compete with the timeline for vertical space. A tab matches the page's existing
+  pattern, reuses already-fetched data (`getTaskDetails.links`), and keeps links
+  discoverable via the tab's `count` badge without permanently occupying screen
+  space. Chosen: tab.
 - **`UpdateLink` field-mask vs. a dedicated `SetLinkSubscribe` RPC.** A narrow
   `SetLinkSubscribe(id, subscribe)` is simpler to implement but ossifies as soon
   as we want to edit title/relevance. A small `optional`-field `UpdateLink`
@@ -364,11 +405,11 @@ composer implies.
   update is correct and cheap. Chosen: update.
 - **Keeping the timeline `LinkRow` vs. removing it.** Removing it would avoid two
   representations of a link, but the timeline row is a genuine historical event
-  ("added at T") while the panel is current state. They answer different
+  ("added at T") while the tab is current state. They answer different
   questions; both stay.
 - **Reading `getTaskDetails.links` vs. a dedicated `listLinks` query.** Reusing
   the page's existing query avoids a second fetch and a second invalidation
-  path; the trade-off is coupling the panel to `getTaskDetails`, which is
+  path; the trade-off is coupling the tab to `getTaskDetails`, which is
   acceptable since they share a page and a notification resource.
 
 ## Open questions
@@ -379,8 +420,10 @@ composer implies.
 2. **Confirm-on-remove.** Is a confirm dialog warranted, or is remove cheap
    enough (re-addable) to be a one-click action with undo? Leaning: confirm,
    because removing a subscription silently stops event routing.
-3. **Many-links UX.** At what count (10? 20?) should the panel collapse older
-   links behind "show all", and should it gain search/sort? Not built up front.
+3. **Many-links UX.** A tab scrolls independently, so a long list is less of a
+   problem than it would be in an always-visible card. Still, at some count
+   (10? 20?) the tab may want search/sort or grouping (subscribed first). Not
+   built up front.
 4. **Per-link event count.** Surfacing "N events routed here" per subscription is
    appealing but requires correlating `external` events to a link. Worth a
    follow-up once the router can attribute an event to the link id that matched.
