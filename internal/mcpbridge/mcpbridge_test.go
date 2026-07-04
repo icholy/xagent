@@ -93,7 +93,7 @@ func TestForward_MutedTaskDropped(t *testing.T) {
 		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
 	}
 	ch := NewChannel(sender)
-	ch.mute(42)
+	ch.filter.Mute(42)
 
 	// Act
 	ch.Forward(context.Background(), model.Notification{
@@ -122,7 +122,7 @@ func TestForward_NonTaskScopedAlwaysForwarded(t *testing.T) {
 		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
 	}
 	ch := NewChannel(sender)
-	ch.mute(42)
+	ch.filter.Mute(42)
 
 	// Act
 	ch.Forward(context.Background(), model.Notification{ChannelMessage: "System notice."})
@@ -140,8 +140,8 @@ func TestForward_Unmute(t *testing.T) {
 		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
 	}
 	ch := NewChannel(sender)
-	ch.mute(42)
-	ch.unmute(42)
+	ch.filter.Mute(42)
+	ch.filter.Unmute(42)
 
 	// Act
 	ch.Forward(context.Background(), model.Notification{
@@ -232,7 +232,7 @@ func TestMuteTool_All(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	ch := NewChannel(&ChannelSenderMock{})
-	ch.mute(7)
+	ch.filter.Mute(7)
 
 	// Act
 	res, _, err := ch.muteTool(context.Background(), nil, muteInput{All: true})
@@ -340,9 +340,9 @@ func TestUnmuteTool(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	ch := NewChannel(&ChannelSenderMock{})
-	ch.mute(1)
-	ch.mute(2)
-	ch.mute(3)
+	ch.filter.Mute(1)
+	ch.filter.Mute(2)
+	ch.filter.Mute(3)
 
 	// Act
 	res, _, err := ch.unmuteTool(context.Background(), nil, unmuteInput{TaskIDs: []int64{2}})
@@ -356,8 +356,8 @@ func TestUnmuteTool_All(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	ch := NewChannel(&ChannelSenderMock{})
-	ch.mute(1)
-	ch.mute(2)
+	ch.filter.Mute(1)
+	ch.filter.Mute(2)
 
 	// Act
 	res, _, err := ch.unmuteTool(context.Background(), nil, unmuteInput{All: true})
@@ -371,8 +371,8 @@ func TestMutedTool(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	ch := NewChannel(&ChannelSenderMock{})
-	ch.mute(5)
-	ch.mute(1)
+	ch.filter.Mute(5)
+	ch.filter.Mute(1)
 
 	// Act
 	res, _, err := ch.mutedTool(context.Background(), nil, mutedInput{})

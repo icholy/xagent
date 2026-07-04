@@ -24,8 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"slices"
-	"sync"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
@@ -39,92 +37,17 @@ type ChannelSender interface {
 	SendChannel(ctx context.Context, p mcpchannel.Params) error
 }
 
-// Channel owns the per-process mute set and the mute-aware forwarding
-// gate. One Channel is created per `xagent mcp --channel` process.
+// Channel owns the mute-aware forwarding gate. The mute state itself lives
+// in filter. One Channel is created per `xagent mcp --channel` process.
 type Channel struct {
 	sender ChannelSender
-
-	mu  sync.Mutex
-	all bool // when true every task is muted by default (mute-all)
-	// except holds the task ids whose mute state differs from the global
-	// default: when all is false these are the muted ids (a blocklist);
-	// when all is true these are the explicitly-unmuted ids that keep
-	// delivering (an allowlist of exceptions).
-	except map[int64]struct{}
+	filter *TaskFilter
 }
 
 // NewChannel returns a Channel that forwards through sender with an empty
 // mute set (subscribe-all by default).
 func NewChannel(sender ChannelSender) *Channel {
-	return &Channel{sender: sender, except: map[int64]struct{}{}}
-}
-
-func (c *Channel) mute(id int64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.all {
-		delete(c.except, id) // drop any unmute exception; id is muted again
-		return
-	}
-	c.except[id] = struct{}{} // add to the blocklist
-}
-
-// muteEverything mutes every task. The exception set is cleared so nothing
-// is delivered until a task is individually unmuted; unmute-all (clear)
-// resets back to the subscribe-all default.
-func (c *Channel) muteEverything() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.all = true
-	clear(c.except)
-}
-
-func (c *Channel) unmute(id int64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.all {
-		c.except[id] = struct{}{} // keep this task delivering under mute-all
-		return
-	}
-	delete(c.except, id) // remove from the blocklist
-}
-
-func (c *Channel) clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.all = false
-	clear(c.except)
-}
-
-func (c *Channel) isMuted(id int64) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	_, ok := c.except[id]
-	if c.all {
-		return !ok // muted unless this task is an explicit exception
-	}
-	return ok // muted only if in the blocklist
-}
-
-// mutedAll reports whether every task is currently muted.
-func (c *Channel) mutedAll() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.all
-}
-
-// exceptIDs returns the exception task ids, sorted ascending. When all is
-// false these are the muted ids; when all is true these are the
-// explicitly-unmuted ids.
-func (c *Channel) exceptIDs() []int64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ids := make([]int64, 0, len(c.except))
-	for id := range c.except {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
-	return ids
+	return &Channel{sender: sender, filter: NewTaskFilter()}
 }
 
 // primaryTaskID returns the id of the first task resource in the
@@ -150,7 +73,7 @@ func (c *Channel) Forward(ctx context.Context, n model.Notification) {
 	if n.ChannelMessage == "" {
 		return // summary gate: not channel-worthy
 	}
-	if id, ok := primaryTaskID(n); ok && c.isMuted(id) {
+	if id, ok := primaryTaskID(n); ok && c.filter.Muted(id) {
 		return // this task has been muted by the agent
 	}
 	if err := c.sender.SendChannel(ctx, mcpchannel.Params{Content: n.ChannelMessage}); err != nil {
@@ -202,10 +125,10 @@ type muteInput struct {
 
 func (c *Channel) muteTool(_ context.Context, _ *mcp.CallToolRequest, in muteInput) (*mcp.CallToolResult, any, error) {
 	if in.All {
-		c.muteEverything()
+		c.filter.MuteAll()
 	}
 	for _, id := range in.TaskIDs {
-		c.mute(id)
+		c.filter.Mute(id)
 	}
 	return c.mutedResult(), nil, nil
 }
@@ -217,10 +140,10 @@ type unmuteInput struct {
 
 func (c *Channel) unmuteTool(_ context.Context, _ *mcp.CallToolRequest, in unmuteInput) (*mcp.CallToolResult, any, error) {
 	if in.All {
-		c.clear()
+		c.filter.Clear()
 	}
 	for _, id := range in.TaskIDs {
-		c.unmute(id)
+		c.filter.Unmute(id)
 	}
 	return c.mutedResult(), nil, nil
 }
@@ -235,14 +158,14 @@ func (c *Channel) mutedTool(_ context.Context, _ *mcp.CallToolRequest, _ mutedIn
 // mute-all the exception set is reported as the unmuted (still-delivering)
 // tasks; otherwise it is reported as the muted tasks.
 func (c *Channel) mutedResult() *mcp.CallToolResult {
-	if c.mutedAll() {
+	if c.filter.All() {
 		return jsonResult(struct {
 			All     bool    `json:"all"`
 			Unmuted []int64 `json:"unmuted"`
 			Note    string  `json:"note"`
 		}{
 			All:     true,
-			Unmuted: c.exceptIDs(),
+			Unmuted: c.filter.Exceptions(),
 			Note: "Every task is muted except those in unmuted. Keep more tasks " +
 				"delivering with channel_unmute(task_ids=...), or channel_unmute(all=true) " +
 				"to resume everything. Muting is per bridge session and resets on restart.",
@@ -254,7 +177,7 @@ func (c *Channel) mutedResult() *mcp.CallToolResult {
 		Note  string  `json:"note"`
 	}{
 		All:   false,
-		Muted: c.exceptIDs(),
+		Muted: c.filter.Exceptions(),
 		Note:  "Channel notifications for all tasks except these are delivered. Muting is per bridge session and resets on restart.",
 	})
 }
