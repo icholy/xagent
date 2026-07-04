@@ -119,7 +119,7 @@ func (o *Outbox[T]) drain(ctx context.Context) {
 		permanent, err := o.deliver(ctx, msg)
 		switch {
 		case err == nil:
-			o.log.Info("outbox message delivered", "seq", rec.Seq)
+			o.log.Debug("outbox message delivered", "seq", rec.Seq)
 			if !o.drop(ctx, rec.Seq, false) {
 				return
 			}
