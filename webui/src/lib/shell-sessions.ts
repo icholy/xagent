@@ -18,9 +18,13 @@ import {
 // React StrictMode's dev mount→cleanup→mount double-invocation opened socket A,
 // closed it, then opened socket B — both to the same session. The relay tears a
 // session down when any operator leg drops, so B landed on a dead session and
-// reported "already attached". Moving socket ownership here, keyed per task with
-// ref-counted, grace-delayed teardown, means attach→detach→attach nets exactly
-// one live socket.
+// reported "already attached". Moving socket ownership here fixes that: the
+// socket is created only in open()/connect() (a user click), never in an effect,
+// so mounting/unmounting the shell page can't churn sockets.
+//
+// A session also persists across navigation: leaving the shell page does not end
+// it. It stays live until the shell process exits, an explicit close(), or the
+// browser unloads the tab (which drops the socket and lets the server reap it).
 
 // ShellPhase is the client-visible state of a task's shell.
 //   idle       — nothing opened yet (or after teardown)
@@ -60,10 +64,14 @@ const IDLE: ShellState = { phase: 'idle', exitCode: null, error: null, started: 
 // terminal, so a long-lived session can't grow the buffer without bound.
 const MAX_SCROLLBACK = 512 * 1024
 
-// DEFAULT_GRACE_MS is how long teardown is deferred after the last detach. It
-// only has to outlast React's synchronous StrictMode remount; a subsequent
-// attach cancels it. Kept short so navigating away frees the socket promptly.
-const DEFAULT_GRACE_MS = 250
+// isShellActive reports whether a phase represents a session with a live (or
+// opening) socket — one the user can return to. The task detail page uses it to
+// show the active indicator and to keep the Shell button enabled while the shell
+// itself holds the task in "running". exited/error/detached are not active: their
+// socket is closed (though the entry lingers so the page can offer a reconnect).
+export function isShellActive(phase: ShellPhase): boolean {
+  return phase === 'opening' || phase === 'starting' || phase === 'connected'
+}
 
 interface Entry {
   orgId: string
@@ -72,8 +80,6 @@ interface Entry {
   ws: WebSocket | null
   received: boolean
   gotExit: boolean
-  refcount: number
-  teardownTimer: ReturnType<typeof setTimeout> | null
   lastRows: number | null
   lastCols: number | null
   scrollback: Uint8Array[]
@@ -95,19 +101,16 @@ function exitMarker(code: number): Uint8Array {
 
 export interface ShellSessionsOptions {
   client: Client<typeof XAgentService>
-  graceMs?: number
 }
 
 export class ShellSessions {
   private readonly client: Client<typeof XAgentService>
-  private readonly graceMs: number
   private readonly entries = new Map<string, Entry>()
   private readonly stateListeners = new Map<string, Set<() => void>>()
   private readonly outputListeners = new Map<string, Set<(bytes: Uint8Array) => void>>()
 
   constructor(opts: ShellSessionsOptions) {
     this.client = opts.client
-    this.graceMs = opts.graceMs ?? DEFAULT_GRACE_MS
   }
 
   // fromTransport is the production constructor: it builds the XAgentService
@@ -116,27 +119,32 @@ export class ShellSessions {
     return new ShellSessions({ client: createClient(XAgentService, transport) })
   }
 
-  // attach registers interest in a task's shell and cancels any pending teardown.
-  // It does not open a socket — open() does. Pair every attach with a detach.
+  // attach registers interest in a task's shell, ensuring an entry exists so the
+  // singleton owns the session. It does not open a socket — open() does.
   attach(key: string, orgId: string): void {
-    const e = this.ensure(key, orgId)
-    if (e.teardownTimer !== null) {
-      clearTimeout(e.teardownTimer)
-      e.teardownTimer = null
-    }
-    e.refcount++
+    this.ensure(key, orgId)
   }
 
-  // detach drops one interest. When the last one goes, teardown is deferred by
-  // graceMs rather than run immediately, so a StrictMode remount (which detaches
-  // then re-attaches synchronously) keeps the socket alive.
+  // detach is intentionally a no-op: a shell session persists across navigation.
+  // Unmounting the shell page (or a StrictMode cleanup) must not tear the socket
+  // down — a session ends only on the shell process exiting, an explicit close(),
+  // or the browser unloading the tab. The StrictMode double-attach fix holds
+  // because the socket is only ever created in open()/connect() (a user click),
+  // never in an effect, so an attach/detach cycle can't churn sockets. Kept as
+  // the symmetric counterpart to attach so callers can pair the two.
   detach(key: string): void {
+    void key
+  }
+
+  // close ends a session explicitly: it drops the operator leg (so the relay
+  // reaps the sandbox) and removes the entry, returning the task to idle.
+  close(key: string): void {
     const e = this.entries.get(key)
     if (!e) return
-    e.refcount = Math.max(0, e.refcount - 1)
-    if (e.refcount === 0 && e.teardownTimer === null) {
-      e.teardownTimer = setTimeout(() => this.teardown(key), this.graceMs)
-    }
+    this.closeSocket(e)
+    this.entries.delete(key)
+    this.outputListeners.delete(key)
+    this.notifyState(key)
   }
 
   // open mints a fresh session via OpenShell and connects the attach socket.
@@ -156,7 +164,7 @@ export class ShellSessions {
     this.update(key, e, { phase: 'opening', exitCode: null, error: null })
     this.client.openShell({ taskId: BigInt(key) }).then(
       (resp) => {
-        // Ignore a resolution that races an intervening teardown/reopen.
+        // Ignore a resolution that races an intervening close()/reopen.
         if (this.entries.get(key) !== e) return
         this.update(key, e, { started: true })
         this.connect(key, e, resp.sessionId)
@@ -249,8 +257,6 @@ export class ShellSessions {
         ws: null,
         received: false,
         gotExit: false,
-        refcount: 0,
-        teardownTimer: null,
         lastRows: null,
         lastCols: null,
         scrollback: [],
@@ -335,8 +341,8 @@ export class ShellSessions {
     const ws = e.ws
     if (!ws) return
     e.ws = null
-    // Drop the handlers before closing so this teardown-triggered close can't
-    // flip the phase.
+    // Drop the handlers before closing so this deliberate close can't flip the
+    // phase via onclose.
     ws.onmessage = null
     ws.onerror = null
     ws.onclose = null
@@ -345,18 +351,6 @@ export class ShellSessions {
     } catch {
       // ignore: closing an already-closing/closed socket is fine
     }
-  }
-
-  private teardown(key: string): void {
-    const e = this.entries.get(key)
-    if (!e) return
-    e.teardownTimer = null
-    // A re-attach may have arrived after the timer fired but before this ran.
-    if (e.refcount > 0) return
-    this.closeSocket(e)
-    this.entries.delete(key)
-    // Wake subscribers (if any) so they re-read the now-IDLE snapshot.
-    this.notifyState(key)
   }
 
   private update(key: string, e: Entry, patch: Partial<ShellState>): void {

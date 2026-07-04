@@ -4,7 +4,7 @@ import { useShellSessions } from '@/lib/services'
 import { useShellState } from '@/hooks/use-shell-state'
 import { TaskShell } from '@/components/task-shell'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Loader2, TerminalSquare } from 'lucide-react'
+import { ArrowLeft, Loader2, Power, TerminalSquare } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id_/shell')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -37,6 +37,17 @@ function TaskShellPage() {
           <TerminalSquare className="h-4 w-4" />
           Shell · task {id}
         </div>
+        {started && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-destructive hover:text-destructive"
+            onClick={() => shell.close(key)}
+          >
+            <Power className="mr-1 h-4 w-4" />
+            Close shell
+          </Button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1">

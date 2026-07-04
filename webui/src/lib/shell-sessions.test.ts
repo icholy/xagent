@@ -1,74 +1,58 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { ShellSessions } from './shell-sessions'
+import { describe, it, expect, vi } from 'vitest'
+import { ShellSessions, isShellActive } from './shell-sessions'
 import type { Client } from '@connectrpc/connect'
 import type { XAgentService } from '@/gen/xagent/v1/xagent_pb'
 
-// The refcount / grace-teardown logic exercised here never calls open(), so the
+// These tests exercise the entry-lifecycle logic and never call open(), so the
 // client is never invoked; a bare cast stands in for it.
 const stubClient = {} as Client<typeof XAgentService>
 
-const GRACE = 100
 const KEY = '7'
 
 function newSessions() {
-  return new ShellSessions({ client: stubClient, graceMs: GRACE })
+  return new ShellSessions({ client: stubClient })
 }
 
-describe('ShellSessions refcount / grace teardown', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('creates an entry on attach and defers teardown past the grace window', () => {
+describe('ShellSessions persistence', () => {
+  it('creates an entry on attach', () => {
     const s = newSessions()
     s.attach(KEY, '0')
     expect(s.has(KEY)).toBe(true)
+  })
 
+  it('persists a session across navigation: detach does not remove it', () => {
+    const s = newSessions()
+    s.attach(KEY, '0')
+    // Leaving the shell page (and any StrictMode cleanup) must not end the session.
     s.detach(KEY)
-    // Still alive just before the grace window elapses.
-    vi.advanceTimersByTime(GRACE - 1)
     expect(s.has(KEY)).toBe(true)
+  })
 
-    // Torn down once it fully elapses.
-    vi.advanceTimersByTime(1)
+  it('survives the StrictMode attach → detach → attach cycle', () => {
+    const s = newSessions()
+    s.attach(KEY, '0')
+    s.detach(KEY)
+    s.attach(KEY, '0')
+    expect(s.has(KEY)).toBe(true)
+  })
+
+  it('close removes the entry and notifies subscribers', () => {
+    const s = newSessions()
+    const listener = vi.fn()
+    s.subscribe(KEY, listener)
+    s.attach(KEY, '0')
+
+    s.close(KEY)
+
     expect(s.has(KEY)).toBe(false)
+    expect(listener).toHaveBeenCalled()
+    expect(s.getSnapshot(KEY).phase).toBe('idle')
   })
 
-  it('cancels a pending teardown when a re-attach arrives within the grace window', () => {
-    const s = newSessions()
-
-    // This is the StrictMode shape: attach → detach → attach, synchronously.
-    s.attach(KEY, '0')
-    s.detach(KEY)
-    s.attach(KEY, '0')
-
-    // The teardown scheduled by the detach must not fire — the re-attach cancelled it.
-    vi.advanceTimersByTime(GRACE * 5)
-    expect(s.has(KEY)).toBe(true)
-  })
-
-  it('only tears down after the last interest is released (ref-counted)', () => {
-    const s = newSessions()
-    s.attach(KEY, '0')
-    s.attach(KEY, '0')
-
-    // One holder remains after a single detach — no teardown scheduled.
-    s.detach(KEY)
-    vi.advanceTimersByTime(GRACE * 2)
-    expect(s.has(KEY)).toBe(true)
-
-    // Releasing the last holder schedules teardown.
-    s.detach(KEY)
-    vi.advanceTimersByTime(GRACE)
-    expect(s.has(KEY)).toBe(false)
-  })
-
-  it('detach on an unknown task is a no-op', () => {
+  it('detach and close on an unknown task are no-ops', () => {
     const s = newSessions()
     expect(() => s.detach('nope')).not.toThrow()
+    expect(() => s.close('nope')).not.toThrow()
     expect(s.has('nope')).toBe(false)
   })
 
@@ -82,17 +66,28 @@ describe('ShellSessions refcount / grace teardown', () => {
     })
   })
 
-  it('notifies state subscribers when a grace teardown removes the entry', () => {
+  it('replays scrollback is empty for a fresh entry (subscribeOutput no-ops)', () => {
     const s = newSessions()
-    const listener = vi.fn()
-    s.subscribe(KEY, listener)
-
     s.attach(KEY, '0')
-    s.detach(KEY)
-    vi.advanceTimersByTime(GRACE)
+    const sink = vi.fn()
+    const unsubscribe = s.subscribeOutput(KEY, sink)
+    // No output has been produced, so nothing is replayed.
+    expect(sink).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+})
 
-    expect(s.has(KEY)).toBe(false)
-    expect(listener).toHaveBeenCalled()
-    expect(s.getSnapshot(KEY).phase).toBe('idle')
+describe('isShellActive', () => {
+  it('is true only while a socket is opening or live', () => {
+    expect(isShellActive('opening')).toBe(true)
+    expect(isShellActive('starting')).toBe(true)
+    expect(isShellActive('connected')).toBe(true)
+  })
+
+  it('is false when idle or in a terminal/closed phase', () => {
+    expect(isShellActive('idle')).toBe(false)
+    expect(isShellActive('exited')).toBe(false)
+    expect(isShellActive('detached')).toBe(false)
+    expect(isShellActive('error')).toBe(false)
   })
 })
