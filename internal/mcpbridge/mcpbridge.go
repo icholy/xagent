@@ -21,12 +21,11 @@ package mcpbridge
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log/slog"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
+	"github.com/icholy/xagent/internal/x/mcpx"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -170,7 +169,7 @@ type muteState struct {
 // tasks; otherwise it is reported as the muted tasks.
 func (c *Channel) mutedResult() *mcp.CallToolResult {
 	if c.filter.All() {
-		return jsonResult(muteState{
+		return mcpx.JSONResult(muteState{
 			All:     true,
 			Unmuted: c.filter.Exceptions(),
 			Note: "Every task is muted except those in unmuted. Keep more tasks " +
@@ -178,22 +177,9 @@ func (c *Channel) mutedResult() *mcp.CallToolResult {
 				"to resume everything. Muting is per bridge session and resets on restart.",
 		})
 	}
-	return jsonResult(muteState{
+	return mcpx.JSONResult(muteState{
 		All:   false,
 		Muted: c.filter.Exceptions(),
 		Note:  "Channel notifications for all tasks except these are delivered. Muting is per bridge session and resets on restart.",
 	})
-}
-
-func jsonResult(v any) *mcp.CallToolResult {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("failed to format response: %v", err)}},
-			IsError: true,
-		}
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: string(data)}},
-	}
 }
