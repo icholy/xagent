@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/cenkalti/backoff/v5"
 	"gotest.tools/v3/assert"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
@@ -22,11 +21,6 @@ func stubUnary(fn func() (connect.AnyResponse, error)) connect.UnaryFunc {
 	}
 }
 
-// fastBackOff keeps retry delays negligible so tests don't sleep.
-func fastBackOff() backoff.BackOff {
-	return backoff.NewConstantBackOff(time.Millisecond)
-}
-
 func newReq() connect.AnyRequest {
 	return connect.NewRequest(&xagentv1.GetTaskRequest{Id: 1})
 }
@@ -36,8 +30,9 @@ func TestRetryInterceptor_RetriesUntilSuccess(t *testing.T) {
 	// Arrange: fail with Unavailable twice, then succeed.
 	var calls atomic.Int64
 	interceptor := xagentclient.RetryInterceptor{
-		MaxRetries: 3,
-		NewBackOff: fastBackOff,
+		MaxRetries:     3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
 	}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		if calls.Add(1) < 3 {
@@ -60,8 +55,9 @@ func TestRetryInterceptor_ExhaustsRetries(t *testing.T) {
 	// Arrange: always fail with a retryable error.
 	var calls atomic.Int64
 	interceptor := xagentclient.RetryInterceptor{
-		MaxRetries: 2,
-		NewBackOff: fastBackOff,
+		MaxRetries:     2,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
 	}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		calls.Add(1)
@@ -81,8 +77,9 @@ func TestRetryInterceptor_DoesNotRetryPermanentError(t *testing.T) {
 	// Arrange
 	var calls atomic.Int64
 	interceptor := xagentclient.RetryInterceptor{
-		MaxRetries: 5,
-		NewBackOff: fastBackOff,
+		MaxRetries:     5,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
 	}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		calls.Add(1)
@@ -105,8 +102,8 @@ func TestRetryInterceptor_StopsOnCancelledContext(t *testing.T) {
 	cancel()
 	var calls atomic.Int64
 	interceptor := xagentclient.RetryInterceptor{
-		MaxRetries: 5,
-		NewBackOff: func() backoff.BackOff { return backoff.NewConstantBackOff(time.Hour) },
+		MaxRetries:     5,
+		InitialBackoff: time.Hour,
 	}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		calls.Add(1)
