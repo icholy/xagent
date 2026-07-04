@@ -14,6 +14,7 @@
 package shellserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -26,6 +27,8 @@ import (
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/shell/shellwire"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // Registry tracks rendezvous sessions by id for a single server instance.
@@ -74,11 +77,36 @@ func New(opts Options) *Registry {
 	if establishTimeout <= 0 {
 		establishTimeout = shellrelay.DefaultEstablishTimeout
 	}
-	return &Registry{
+	r := &Registry{
 		log:              log,
 		establishTimeout: establishTimeout,
 		onClose:          opts.OnClose,
 		sessions:         make(map[string]*entry),
+	}
+	r.registerMetrics()
+	return r
+}
+
+// registerMetrics registers an observable gauge reporting the number of
+// currently active shell rendezvous sessions. The callback reads the live
+// registry size, so it stays correct across seed and eviction without
+// increment/decrement bookkeeping. Registration failures are logged rather
+// than fatal — metrics are best-effort and must not block serving shells.
+func (r *Registry) registerMetrics() {
+	meter := otel.Meter("github.com/icholy/xagent/internal/server/shellserver")
+	_, err := meter.Int64ObservableGauge(
+		"xagent.shell.active_sessions",
+		metric.WithDescription("Number of currently active shell rendezvous sessions."),
+		metric.WithUnit("{session}"),
+		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			o.Observe(int64(len(r.sessions)))
+			return nil
+		}),
+	)
+	if err != nil {
+		r.log.Warn("failed to register shell session metric", "error", err)
 	}
 }
 
