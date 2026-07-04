@@ -126,7 +126,7 @@ func (e InputEvent) Attr(key string) []string
 Well-known attr keys, all lowercase singular: `body`, `url` (derived),
 `mention`, `assignee`, `label`, `state`. New dimensions are new keys.
 
-**Extractors normalize source-specific syntax at extraction time.** This is
+**Extractors parse source-specific syntax at extraction time.** This is
 the piece that moves source knowledge out of the router:
 
 - GitHub comment/review events emit `mention: ["alice", "bob"]` by scanning
@@ -138,6 +138,10 @@ the piece that moves source knowledge out of the router:
   Jira: all added labels — exactly today's `Values`).
 - `pull_request_closed` emits `state: ["merged"]` or `["closed"]`. `Data`
   keeps the same string for agent visibility and legacy-rule compatibility.
+
+Extractors emit attribute values verbatim as the source provides them —
+extraction locates the value in source-specific syntax, but does not rewrite
+it; matching is literal (§2).
 
 The router's matcher becomes purely generic — no `switch e.Source` anywhere
 in `eventrouter`. The deferred-Jira-assignee landmine disappears
@@ -176,11 +180,10 @@ Matching semantics:
 - Conditions AND together. OR is expressed as multiple rules, which
   first-match-wins per org already provides. Negation is deferred (an
   additive `negate bool` on Condition later, if ever needed).
-- Comparisons use case-insensitive folding (`strings.EqualFold` and folded
-  prefix/contains). Today `Mention`/`Assignee` are already
-  case-insensitive; `Prefix`/`Value` are case-sensitive. Uniform folding is
-  predictable and matches GitHub's own semantics for logins and labels; the
-  delta is called out under Compatibility.
+- Comparisons are literal: exact, case-sensitive string operations. No
+  folding, no per-attr normalization — the rule value must match the
+  attribute value as the extractor emitted it. Today `Mention`/`Assignee`
+  are case-insensitive; that delta is called out under Migration (§5).
 
 Today's matchers map to:
 
@@ -242,14 +245,12 @@ Consumed by:
 
 ```proto
 message RoutingRule {
+  // 3, 4, 6, 7, 8 were the legacy matcher fields (prefix, mention,
+  // assignee, url_prefix, value), removed outright — no deprecation window.
+  reserved 3, 4, 6, 7, 8;
   string source = 1;
   string type = 2;
-  string prefix = 3 [deprecated = true];
-  string mention = 4 [deprecated = true];
   CreateTaskAction create = 5;
-  string assignee = 6 [deprecated = true];
-  string url_prefix = 7 [deprecated = true];
-  string value = 8 [deprecated = true];
   bool wakeup = 9;
   repeated RuleCondition conditions = 10;
 }
@@ -273,27 +274,33 @@ rpc GetEventTypes(GetEventTypesRequest) returns (GetEventTypesResponse);
 Op stays a string (not an enum) to match the JSON storage form and the
 model; the server validates against the registry either way.
 
-### 5. Compatibility and migration
+### 5. Migration
 
-Storage is a JSONB blob of model JSON, so this is a decode-shape concern,
-not a schema migration:
+There are no external users, so no deprecation window: the legacy matcher
+fields are removed outright from the proto (numbers reserved, §4) and from
+`model.RoutingRule` — no decode-only fields, no fold at the proto boundary.
 
-- `model.RoutingRule` keeps the legacy fields as decode-only JSON fields.
-  A `normalize()` step at the store read boundary (`GetOrgRoutingRules`,
-  `GetRoutingRulesByOrgs`, `ListRoutingRulesForUser`) folds them into
-  `Conditions` per the table in §2 and clears them. `SetOrgRoutingRules`
-  persists canonical form only, so rules self-migrate on next save.
-- `RoutingRuleFromProto` applies the same fold, so an old webui or n8n
-  client sending legacy fields keeps working for as long as the deprecated
-  proto fields are kept (at least one release; webui ships with the server,
-  n8n-node is published separately and is the reason to keep them).
-- The `pull_request_closed` hack stays compatible: `Data` still carries
-  `"merged"`/`"closed"`, so a legacy `Prefix=merged` rule folds to
-  `{body, prefix, merged}` and still matches, while new rules use the
+Stored rules still need one honest step. `orgs.routing_rules` is a JSONB
+array in the legacy shape, and decoding it into a model without the legacy
+fields would silently *drop* matchers, leaving rules broader than the user
+wrote them (a `prefix` rule would start matching every comment). A one-time
+SQL migration in `internal/store/sql/migrations/` rewrites each stored rule
+into canonical form using the mapping table in §2 — e.g.
+`{"prefix": "xagent:"}` becomes
+`{"conditions": [{"attr": "body", "op": "prefix", "value": "xagent:"}]}` —
+and deletes the legacy keys. After the migration exactly one rule shape
+exists in the system.
+
+Behavior deltas, deliberate:
+
+- Matching is literal everywhere. `Mention`/`Assignee` matching is
+  case-insensitive today; after this change the rule value must match the
+  case the event carries (GitHub treats `@BotUser` and `@botuser` as the
+  same account, but only the literal form matches the rule).
+- The `pull_request_closed` arrangement survives by data, not compat code:
+  `Data` still carries `"merged"`/`"closed"`, so a migrated `Prefix=merged`
+  rule (`{body, prefix, merged}`) keeps matching, while new rules use the
   honest `{state, equals, merged}`.
-- Behavior delta: `body`-prefix and `label`-equals comparisons become
-  case-insensitive (§2). No known rule depends on case today; flagged here
-  so the change is deliberate.
 
 ### 6. What does not change
 
@@ -324,12 +331,11 @@ matching; actions (`Wakeup`, `Create`) stay top-level rule fields.
 
 ## Implementation Sketch
 
-- [ ] `internal/model/routing_rule.go`: add `Condition`, `Conditions` field;
-      keep legacy fields decode-only; `normalize()` fold; proto conversions.
+- [ ] `internal/model/routing_rule.go`: add `Condition`; replace the five
+      legacy matcher fields with `Conditions`; proto conversions.
 - [ ] `internal/eventrouter/rule.go`: rewrite `MatchRule` over
       `Attr`/conditions; delete `matchMention`/`matchAssignee`; port
-      `rule_test.go` cases to conditions (legacy-fold tests keep the old
-      cases alive).
+      `rule_test.go` cases to conditions.
 - [ ] `internal/eventrouter/eventrouter.go`: `Attrs` type, drop
       `Assignee`/`Values`, add `Attr()` accessor.
 - [ ] `internal/eventrouter/schema.go`: registry + `Validate(rule)`.
@@ -337,26 +343,26 @@ matching; actions (`Wakeup`, `Create`) stay top-level rule fields.
       `internal/server/atlassianserver/webhook.go`: emit attrs
       (mention extraction, assignee, label, state); move/alias `EventType*`
       constants to the registry.
-- [ ] `internal/store/org.go`: normalize on read.
-- [ ] `proto/xagent/v1/xagent.proto`: `RuleCondition`, field 10,
-      deprecations, `GetEventTypes`; `mise run generate`; regen `webui` and
-      `n8n-node` protos.
+- [ ] `internal/store/sql/migrations/`: one-time JSONB rewrite of
+      `orgs.routing_rules` to canonical condition form (§5).
+- [ ] `proto/xagent/v1/xagent.proto`: `RuleCondition`, `conditions` field,
+      reserve the removed matcher fields, `GetEventTypes`;
+      `mise run generate`; regen `webui` and `n8n-node` protos.
 - [ ] `internal/server/apiserver`: validate on `SetRoutingRules`; implement
       `GetEventTypes`.
 - [ ] `webui`: condition-list editor driven by `GetEventTypes`; delete
       `EVENT_TYPES`, `isAssignmentType`, `isLabelType`; keep per-attr
-      copy (the existing `mentionCopyForSource` etc. rekeyed by attr).
+      copy (the existing `mentionCopyForSource` etc. rekeyed by attr). The
+      condition editor is the only editing surface — no "simple mode"
+      rendering conditions as the legacy single fields.
 
-## Open Questions
+## Resolved Questions
 
-- Is uniform case-insensitive matching acceptable, or should sensitivity be
-  per-attr in the registry (labels are technically case-sensitive in Jira)?
-- Should `GetEventTypes` be an RPC (proposed — stays in sync with the
-  deployed server) or a TS artifact generated from the Go table at build
-  time (no runtime call, but can drift across deploys)?
-- How long do the deprecated proto fields live? The only externally-shipped
-  client is `n8n-node`; one minor release after it regenerates seems enough.
-- Should the webui keep a "simple mode" that renders common conditions as
-  the current friendly single fields (mention / label / assignee) on top of
-  the generic condition editor, or is the condition list alone acceptable
-  UX for v1?
+- **Case sensitivity:** literal matching everywhere. No folding, no
+  per-attr sensitivity flag in the registry.
+- **Registry delivery:** `GetEventTypes` is an RPC.
+- **Deprecated proto fields:** none. There are no external users; the
+  legacy matcher fields are removed immediately and their numbers reserved,
+  with a one-time SQL migration for stored rules (§5).
+- **Simple mode:** no. The generic condition editor is the only rule-editing
+  UI.
