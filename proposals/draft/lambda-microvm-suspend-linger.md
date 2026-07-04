@@ -188,12 +188,20 @@ func (s *Server) ControlHandler() http.Handler {
     return mux
 }
 
+// ShimResponseHeader marks a response as the shim's own word rather than one the
+// AWS managed proxy generated before the request reached the shim. The runner
+// treats only marked responses as authoritative (see respawn).
+const ShimResponseHeader = "X-Xagent-Shim"
+
 // runHandler (re)spawns the driver from the retained bundle. It is the sole
 // re-spawn trigger — used identically after a cold ResumeMicrovm and a warm
 // reclaim — so the shim never distinguishes the two. It errors (409) if a driver
 // is already running or the VM was never provisioned: the runner only calls it
-// on a dead driver, so either is a runner-side bug worth surfacing.
+// on a dead driver, so either is a runner-side bug worth surfacing. Every
+// response carries the shim marker so the runner can tell it apart from a
+// proxy-generated error.
 func (s *Server) runHandler(w http.ResponseWriter, _ *http.Request) {
+    w.Header().Set(ShimResponseHeader, "1")
     s.mu.Lock()
     running := s.current != nil && !isDone(s.current)
     bundle, started := s.bundle, s.started
@@ -286,13 +294,29 @@ window simply elapsed. Exactly one of {suspend fires, claim wins} completes; the
 loser is a no-op. `Destroy` likewise `Claim`s (discarding the result) so an
 archive during the window cancels the pending timer before terminating.
 
-`respawn` mints a proxy token and POSTs `/xagent/run`, retrying **only on
-transport/reachability failures** (no HTTP response) — the same managed-proxy
-reachability the SSE stream already depends on, since the runner must reach the
-shim to observe the driver at all. Any HTTP response is terminal: a 200 means the
-driver was spawned; a 409 is surfaced as an error because, on a dead-driver path,
-it cannot happen under correct operation. Retrying only on transport errors keeps
-one intended run from becoming two.
+`respawn` mints a proxy token and POSTs `/xagent/run` over the managed proxy. The
+subtlety here — raised in review — is that **the AWS proxy sits in front of the
+shim and can produce an HTTP response of its own before the request ever reaches
+the shim**: a `401/403` for an expired/invalid auth token, a `5xx`/`429` while the
+VM is still coming up or the proxy is throttling, a `404` for an unknown endpoint.
+So a status code alone is not trustworthy as "the shim's answer." `respawn`
+therefore classifies responses the same way the rest of the backend already treats
+the proxy — reachability/auth failures are retryable, never terminal — and only a
+response bearing the shim marker (`X-Xagent-Shim`) is authoritative:
+
+- **Transport error, or any response *without* `X-Xagent-Shim`** (proxy `5xx` /
+  `429` / `404`, etc.) → the request did not reach the shim: back off and retry,
+  re-minting the token on `401/403` (as `Wait` already does) and consulting
+  `GetMicrovm` to bail out if the VM has gone terminal (mirroring `arbitrate`).
+- **Shim-marked `200`** → the driver was spawned; done.
+- **Shim-marked `409`** → the invariant was violated (a driver was already
+  running); surface it as a runner bug.
+
+Because only a shim-marked response ends the retry loop and the runner sends
+`/xagent/run` exactly once per dead-driver path, one intended run never fans out
+into two. (The marker's pass-through behavior — the proxy forwarding shim response
+headers on success and *not* fabricating them on its own errors — is an assumption
+to confirm against real AWS, alongside the existing #1088 proxy validation.)
 
 ### Configuration
 
@@ -339,17 +363,20 @@ in-flight handles.
 
 2. **Unify the shim re-spawn trigger** — Add `runHandler` (`POST /xagent/run`) as
    the sole driver re-spawn entry point — 200 on spawn, **409 if a driver is
-   already running** or the VM was never provisioned — and demote `resumeHook` to
-   a thaw-seam no-op. `tryResume` POSTs `/xagent/run` on each dead-driver path
-   (cold resume today; warm claim in slice 5) via a `respawn` helper that retries
-   only on transport errors, so the cold-resume path re-spawns the same way the
-   warm path will. Delivers: one uniform re-spawn path the shim can't distinguish;
-   the existing cold resume keeps working through it. Depends on: nothing new
-   (reworks the existing resume path). Verifiable by: shim unit tests — after a
-   driver exit `POST /xagent/run` re-spawns and publishes a fresh `driver-exited`,
-   a POST while running is a 409, a POST before provisioning is a 409, and the
-   resume hook alone no longer spawns; backend test that a cold resume POSTs
-   `/xagent/run`.
+   already running** or the VM was never provisioned, every response stamped with
+   the `X-Xagent-Shim` marker — and demote `resumeHook` to a thaw-seam no-op.
+   `tryResume` POSTs `/xagent/run` on each dead-driver path (cold resume today;
+   warm claim in slice 5) via a `respawn` helper that treats only shim-marked
+   responses as terminal and retries proxy/transport/auth failures (re-mint token,
+   `GetMicrovm` bail-out), so the cold-resume path re-spawns the same way the warm
+   path will. Delivers: one uniform re-spawn path the shim can't distinguish; the
+   existing cold resume keeps working through it. Depends on: nothing new (reworks
+   the existing resume path). Verifiable by: shim unit tests — after a driver exit
+   `POST /xagent/run` re-spawns and publishes a fresh `driver-exited`, a POST while
+   running is a marked 409, a POST before provisioning is a marked 409, and the
+   resume hook alone no longer spawns; `respawn` unit tests — an unmarked
+   proxy-shaped `5xx`/`401` retries (re-mints), a marked `200` succeeds, a marked
+   `409` errors; backend test that a cold resume POSTs `/xagent/run`.
 
 3. **`WarmCache` struct** — Add the `WarmCache` (schedule / claim / pending /
    flush) with its own tests, independent of the backend. Delivers: the
@@ -414,12 +441,13 @@ in-flight handles.
   posts `/xagent/run` on a dead-driver path (warm claim or cold resume), never to
   adopt a live driver, so "a driver is already running" is an invariant violation
   and the shim 409s rather than swallowing it — surfacing the runner bug instead
-  of hiding it. This costs the blind retry-safety a no-op would give: `respawn`
-  must therefore retry only on transport errors and treat any HTTP response as
-  terminal, so a single intended run never becomes two. The one residual edge — a
-  200 whose ack is lost, whose transport retry then 409s against the now-live
-  driver — is narrow and self-correcting (the driver the runner wanted *is*
-  running); it is called out below rather than papered over with a no-op.
+  of hiding it. This costs the blind retry-safety a no-op would give, which is why
+  `respawn` distinguishes a shim-authoritative response (marked `X-Xagent-Shim`,
+  terminal) from a proxy-generated one (retryable): only a shim `200`/`409` ends
+  the loop, so a single intended run never becomes two. The one residual edge — a
+  shim `200` whose ack is lost, whose retry then hits a proxy/`409` — is narrow and
+  self-correcting (the driver the runner wanted *is* running); it is called out
+  below rather than papered over with a no-op.
 
 - **Cost.** A lingering VM bills compute for up to `suspend_delay_seconds`; a
   suspended VM is snapshot-storage only. The default of `0` keeps the current
@@ -444,12 +472,20 @@ in-flight handles.
   acceptable for the reuse path too.
 - **Metrics.** Worth emitting a counter for warm-claim hits vs. cold-resume
   fallbacks so the chosen delay can be tuned against real follow-up latencies?
-- **`/xagent/run` lost-ack handling.** With the 409-on-live-driver invariant,
-  `respawn` retries only on transport errors. In the narrow window where a 200 is
-  produced but its ack is lost, the transport retry would 409. Should the runner
-  treat a 409 that follows a prior send as "already running ⇒ proceed" (the driver
-  it wanted is up) while still logging it, or fail the reuse and let the normal
-  Start machinery re-drive? Leaning toward the former, but calling it out.
+- **Proxy vs. shim response marker.** The design leans on the AWS proxy
+  forwarding the shim's `X-Xagent-Shim` header on success and not fabricating it on
+  its own errors, so the runner can tell a shim `200`/`409` from a proxy `5xx`/
+  `401`. This needs validating against real AWS (as with the #1088 proxy work). If
+  the proxy strips arbitrary response headers, the fallback is to key off the
+  proxy's documented status-code conventions (retry `401/403/5xx/429`, treat a
+  `409` with the shim's JSON body as authoritative) — less clean, so the marker is
+  preferred if it survives the proxy.
+- **`/xagent/run` lost-ack handling.** In the narrow window where the shim's `200`
+  is produced but its ack is lost, the retry re-posts and finds the driver already
+  running. Should the runner treat a shim `409` that follows a prior send as
+  "already running ⇒ proceed" (the driver it wanted is up) while still logging it,
+  or fail the reuse and let the normal Start machinery re-drive? Leaning toward the
+  former, but calling it out.
 - **Idle-policy relationship.** The backend still omits `run-microvm`'s
   `idlePolicy` (600s floor, can't express "never auto-suspend"). The
   runner-driven linger keeps suspend authority on our side; no change there, but
