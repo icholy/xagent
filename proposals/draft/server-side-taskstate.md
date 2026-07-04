@@ -184,7 +184,7 @@ A new opaque message and three RPCs, plus one field on `Task`.
 ```proto
 // Opaque, backend-defined sandbox handle. The server stores and returns it
 // verbatim and never interprets any field. Mirrors taskstate.Record.
-message TaskSandbox {
+message Sandbox {
   int64  task_id     = 1;
   string runner      = 2;  // runner that produced the handle
   string backend     = 3;  // == taskstate.Record.Type; informational
@@ -194,7 +194,7 @@ message TaskSandbox {
 
 // Runner → server: persist the handle after backend.Launch. Idempotent upsert.
 message SetTaskSandboxRequest {
-  TaskSandbox sandbox = 1;
+  Sandbox sandbox = 1;
   // Optimistic guard: the task version the runner acted on. The server rejects
   // the write if the task advanced past it (a concurrent reassignment/restart),
   // mirroring the version guard SubmitRunnerEvents already uses.
@@ -209,7 +209,7 @@ message ClearTaskSandboxResponse {}
 // Runner → server: enumerate the handles this runner owns, for Load/Prune.
 // Replaces the local store.List() scan.
 message ListRunnerSandboxesRequest { string runner = 1; }
-message ListRunnerSandboxesResponse { repeated TaskSandbox sandboxes = 1; }
+message ListRunnerSandboxesResponse { repeated Sandbox sandboxes = 1; }
 ```
 
 ```proto
@@ -228,7 +228,7 @@ message Task {
   // ... existing fields ...
   // Sandbox handle for this task, if one is recorded. Populated by
   // ListRunnerTasks/GetTask so the runner resolves reuse without a second call.
-  TaskSandbox sandbox = 17;
+  Sandbox sandbox = 17;
 }
 ```
 
@@ -268,7 +268,7 @@ unauthenticated — it just moves the same trust boundary to the server.
 
 `internal/runner/taskstate` keeps its `Store` shape but gains a server-backed
 implementation. The cleanest form is an interface the runner depends on, with two
-implementations (local files today, server RPC after migration):
+implementations (local files today, server RPC after the cutover):
 
 ```go
 // same method set the runner already calls
@@ -295,34 +295,29 @@ existing resilience: the retrying `EventQueue` already used for `SubmitRunnerEve
 buffers a `SetTaskSandbox`/`ClearTaskSandbox` that races a server blip, so a
 transient outage does not lose a handle (see Failure modes).
 
-### Migration / back-compat
+### Rollout
 
-The transition is staged so a mixed fleet (old + new runners) is always correct;
-the server column is additive and nullable, and old runners simply ignore it.
+There is a single operator and a single runner today, so there is no mixed fleet to
+stay compatible with and no staged dual-write is needed — the change is a direct
+cutover:
 
-1. **Schema + RPCs land first, dormant.** `sandboxes` and the three RPCs ship;
-   nothing writes the table yet. Old runners are unaffected.
-2. **Dual-write, local-authoritative.** The runner writes **both** stores on every
-   `Write`/`Remove`; reads still come from the local store. This backfills the
-   server from live runners with zero risk — if the server write fails it is
-   retried via the `EventQueue` and the runner keeps working off local disk. A
-   one-time boot reconcile (`for rec in localStore.List(): SetTaskSandbox(rec)`)
-   seeds handles created before the upgrade.
-3. **Read from server, local as cache.** Flip reads to the server (`Read` via the
-   polled `Task.sandbox`, `List` via `ListRunnerSandboxes`). The local store is
-   demoted to a best-effort cache/fallback for a server-unreachable window, or
-   dropped to a tmpfs. This is the step that delivers the durability win: a runner
-   on a fresh volume now rehydrates from the server.
-4. **Drop the local store (optional).** Once operations trust the server path, the
-   local files can be removed entirely; `--state-dir` becomes a no-op or is
-   repurposed as the optional cache. Keeping a thin local cache is attractive for
-   the Docker backend (a same-host restart can re-attach without waiting on the
-   server), so "drop entirely vs. keep as cache" is left as a rollout choice rather
-   than forced.
+1. **Land the schema + RPCs.** `sandboxes` and the three RPCs ship together. The
+   table is written immediately; it does not need to be dormant-then-backfilled the
+   way a multi-runner rollout would.
+2. **Switch the runner to the server store.** `internal/command/runner.go`
+   constructs the `serverstore` implementation instead of the file store. A one-time
+   boot reconcile (`for rec in localStore.List(): SetTaskSandbox(rec)`) seeds any
+   handles the local disk still holds so no currently-running sandbox is orphaned by
+   the switch; after that the local files are unused.
+3. **Keep or drop the local store.** The file implementation stays in the tree as an
+   optional write-through cache (Open Question 2) or is removed outright — nothing
+   else depends on it, and either choice is safe.
 
-No data migration is destructive at any step: the server table is derived from the
-authoritative local store until step 3, and the two are reconciled by `Probe` (a
-handle in either store that no longer exists is cleared on the next `Load`).
+Because the server is the sole store from step 2 on, a runner rescheduled onto a
+fresh volume rehydrates entirely from the server — the durability win. If a broader
+fleet ever appears, the new table and the additive `Task.sandbox` field mean older
+runners simply ignore them, so a staged dual-write could be layered on then; that is
+explicitly not built now.
 
 ### Failure modes
 
@@ -369,7 +364,7 @@ internal/store/
     └── queries/sandbox.sql
 
 internal/server/apiserver/runner.go   + SetTaskSandbox/ClearTaskSandbox/ListRunnerSandboxes
-proto/xagent/v1/xagent.proto          + TaskSandbox, 3 RPCs, Task.sandbox
+proto/xagent/v1/xagent.proto          + Sandbox, 3 RPCs, Task.sandbox
 ```
 
 Nothing in `internal/runner/backend/` changes: backends still return a
@@ -388,7 +383,7 @@ transient server failures for the comparable `SubmitRunnerEvents` path.
 **Reintroduces a dependency the local store removed.** `shared-runner-taskstate.md`
 valued a runner that can track its sandboxes with the server unreachable. Server-backed
 taskstate couples handle persistence to server availability. Mitigated by keeping a
-local write-through **cache** (rollout step 3/4) so an already-launched sandbox is
+local write-through **cache** (Open Question 2) so an already-launched sandbox is
 still supervised during a server blip; the cache is best-effort and the server is
 authoritative. The net is a deliberate trade: slightly more coupling to the server
 (which the runner already cannot function without for polling and tokens) in
@@ -417,7 +412,7 @@ and only on the runner's own poll.
    runner identity as a separate, broader piece of work — it affects
    `ListRunnerTasks`, `RegisterWorkspaces`, and `SubmitRunnerEvents` too, not just
    this table.
-2. **Keep a local cache, or go server-only?** Rollout step 4 leaves this open. A
+2. **Keep a local cache, or go server-only?** The rollout leaves this open. A
    thin local write-through cache lets a same-host Docker restart re-attach without
    a server round trip and survives a brief server outage; server-only is simpler
    and is the only correct choice for a runner that expects to be rescheduled onto
