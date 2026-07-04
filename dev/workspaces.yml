@@ -10,6 +10,11 @@ workspaces:
     agent:
       type: dummy
       dummy:
-        commands:
-          - echo "hello from the dummy agent"
+        # Call the `report` tool on the injected `xagent` agent MCP so the
+        # message shows up in the Web UI — exercises the agent MCP end-to-end.
+        tool_calls:
+          - server: xagent
+            name: report
+            arguments:
+              message: hello from the dummy agent
         sleep: 2
