@@ -11,6 +11,8 @@
 // restarts (the set is in-memory only).
 package mcpbridge
 
+//go:generate go tool moq -pkg mcpbridge -out channel_sender_moq_test.go . ChannelSender
+
 import (
 	"context"
 	"encoding/json"

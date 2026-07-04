@@ -11,14 +11,12 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// fakeSender records the channel notifications forwarded through it.
-type fakeSender struct {
-	sent []mcpchannel.Params
-}
-
-func (s *fakeSender) SendChannel(_ context.Context, p mcpchannel.Params) error {
-	s.sent = append(s.sent, p)
-	return nil
+// newSender returns a ChannelSenderMock that records every forwarded
+// notification and succeeds.
+func newSender() *ChannelSenderMock {
+	return &ChannelSenderMock{
+		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
+	}
 }
 
 func taskNotification(id int64, msg string) model.Notification {
@@ -48,16 +46,16 @@ func mutedIDsFromResult(t *testing.T, res *mcp.CallToolResult) []int64 {
 func TestForward_DefaultForwardsEverything(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	sender := &fakeSender{}
+	sender := newSender()
 	ch := NewChannel(sender)
 
 	// Act
 	ch.Forward(context.Background(), taskNotification(42, "Task 42 completed."))
 
 	// Assert
-	assert.Equal(t, len(sender.sent), 1)
-	assert.Equal(t, sender.sent[0].Content, "Task 42 completed.")
-	assert.Assert(t, sender.sent[0].Meta == nil)
+	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 42 completed.")
+	assert.Assert(t, sender.SendChannelCalls()[0].P.Meta == nil)
 }
 
 // TestForward_EmptyChannelMessage keeps the summary gate: notifications
@@ -65,14 +63,14 @@ func TestForward_DefaultForwardsEverything(t *testing.T) {
 func TestForward_EmptyChannelMessage(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	sender := &fakeSender{}
+	sender := newSender()
 	ch := NewChannel(sender)
 
 	// Act
 	ch.Forward(context.Background(), taskNotification(42, ""))
 
 	// Assert
-	assert.Equal(t, len(sender.sent), 0)
+	assert.Equal(t, len(sender.SendChannelCalls()), 0)
 }
 
 // TestForward_MutedTaskDropped drops notifications for a muted task while
@@ -80,7 +78,7 @@ func TestForward_EmptyChannelMessage(t *testing.T) {
 func TestForward_MutedTaskDropped(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	sender := &fakeSender{}
+	sender := newSender()
 	ch := NewChannel(sender)
 	ch.mute(42)
 
@@ -89,8 +87,8 @@ func TestForward_MutedTaskDropped(t *testing.T) {
 	ch.Forward(context.Background(), taskNotification(7, "Task 7 completed."))
 
 	// Assert
-	assert.Equal(t, len(sender.sent), 1)
-	assert.Equal(t, sender.sent[0].Content, "Task 7 completed.")
+	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 7 completed.")
 }
 
 // TestForward_NonTaskScopedAlwaysForwarded confirms a message with no task
@@ -99,7 +97,7 @@ func TestForward_MutedTaskDropped(t *testing.T) {
 func TestForward_NonTaskScopedAlwaysForwarded(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	sender := &fakeSender{}
+	sender := newSender()
 	ch := NewChannel(sender)
 	ch.mute(42)
 
@@ -107,15 +105,15 @@ func TestForward_NonTaskScopedAlwaysForwarded(t *testing.T) {
 	ch.Forward(context.Background(), model.Notification{ChannelMessage: "System notice."})
 
 	// Assert
-	assert.Equal(t, len(sender.sent), 1)
-	assert.Equal(t, sender.sent[0].Content, "System notice.")
+	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "System notice.")
 }
 
 // TestForward_Unmute restores delivery for a previously muted task.
 func TestForward_Unmute(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	sender := &fakeSender{}
+	sender := newSender()
 	ch := NewChannel(sender)
 	ch.mute(42)
 	ch.unmute(42)
@@ -124,13 +122,13 @@ func TestForward_Unmute(t *testing.T) {
 	ch.Forward(context.Background(), taskNotification(42, "Task 42 completed."))
 
 	// Assert
-	assert.Equal(t, len(sender.sent), 1)
+	assert.Equal(t, len(sender.SendChannelCalls()), 1)
 }
 
 func TestMuteTool(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	ch := NewChannel(&fakeSender{})
+	ch := NewChannel(newSender())
 
 	// Act
 	res, _, err := ch.muteTool(context.Background(), nil, muteInput{TaskIDs: []int64{9, 3, 3}})
@@ -143,7 +141,7 @@ func TestMuteTool(t *testing.T) {
 func TestUnmuteTool(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	ch := NewChannel(&fakeSender{})
+	ch := NewChannel(newSender())
 	ch.mute(1)
 	ch.mute(2)
 	ch.mute(3)
@@ -159,7 +157,7 @@ func TestUnmuteTool(t *testing.T) {
 func TestUnmuteTool_All(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	ch := NewChannel(&fakeSender{})
+	ch := NewChannel(newSender())
 	ch.mute(1)
 	ch.mute(2)
 
@@ -174,7 +172,7 @@ func TestUnmuteTool_All(t *testing.T) {
 func TestMutedTool(t *testing.T) {
 	t.Parallel()
 	// Arrange
-	ch := NewChannel(&fakeSender{})
+	ch := NewChannel(newSender())
 	ch.mute(5)
 	ch.mute(1)
 
