@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMutation } from '@connectrpc/connect-query'
 import { openShell } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useOrgId } from '@/hooks/use-org-id'
 import { TaskShell } from '@/components/task-shell'
 import { Button } from '@/components/ui/button'
@@ -21,18 +21,16 @@ function TaskShellPage() {
   // OpenShell relaunches the finished task's sandbox as a reverse shell and
   // returns the rendezvous id. Reconnecting mints a fresh session (the relay has
   // no scrollback replay), so the same mutation drives both the initial open and
-  // every reconnect. The session id is set from the mutation's onSuccess callback
-  // rather than an awaited result so we never call setState inside the effect body.
+  // every reconnect. The session id is set from the mutation's onSuccess callback.
+  //
+  // Opening is deliberately behind an explicit click rather than an on-mount
+  // effect: navigating to this page must not relaunch the sandbox on its own, and
+  // dropping the effect also avoids React StrictMode's dev double-invocation
+  // firing OpenShell twice.
   const open = useMutation(openShell, {
     onSuccess: (resp) => setSession(resp.sessionId),
   })
   const openSession = () => open.mutate({ taskId })
-
-  useEffect(() => {
-    openSession()
-    // Open exactly once on mount; reconnects go through the button.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   return (
     <div className="flex h-screen flex-col">
@@ -59,7 +57,12 @@ function TaskShellPage() {
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3">
-            {open.error ? (
+            {open.isPending ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Opening shell…</p>
+              </>
+            ) : open.error ? (
               <>
                 <p className="text-sm text-destructive">
                   Failed to open shell: {open.error.message}
@@ -70,8 +73,13 @@ function TaskShellPage() {
               </>
             ) : (
               <>
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Opening shell…</p>
+                <p className="text-sm text-muted-foreground">
+                  Attach an interactive shell to this task&apos;s sandbox.
+                </p>
+                <Button size="sm" onClick={openSession}>
+                  <TerminalSquare className="mr-2 h-4 w-4" />
+                  Open shell
+                </Button>
               </>
             )}
           </div>

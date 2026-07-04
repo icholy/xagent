@@ -181,7 +181,7 @@ function TaskDetail() {
             <Button asChild variant="outline" size="sm">
               <Link to="/tasks/$id/shell" params={{ id }} search={{ org: orgId }}>
                 <TerminalSquare className="mr-2 h-4 w-4" />
-                Open shell
+                Shell
               </Link>
             </Button>
           ) : (
@@ -192,7 +192,7 @@ function TaskDetail() {
                 <span className="inline-block">
                   <Button variant="outline" size="sm" disabled>
                     <TerminalSquare className="mr-2 h-4 w-4" />
-                    Open shell
+                    Shell
                   </Button>
                 </span>
               </TooltipTrigger>
