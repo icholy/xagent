@@ -195,8 +195,8 @@ function TaskDetail() {
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                The shell attaches to a finished task&apos;s filesystem. Available once the
-                task completes, fails, or is cancelled.
+                The shell attaches to a finished task&apos;s filesystem. Available once the task
+                completes, fails, or is cancelled.
               </TooltipContent>
             </Tooltip>
           )}
