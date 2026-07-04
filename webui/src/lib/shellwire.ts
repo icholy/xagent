@@ -23,14 +23,12 @@ export const SUBPROTOCOL = 'xagent-shell.v1'
 export const READ_LIMIT = 1 << 20
 
 // FrameType is the one-byte frame discriminator, matching shellwire.Type.
-export const FrameType = {
-  Data: 0x00,
-  Resize: 0x01,
-  Exit: 0x02,
-  Ping: 0x03,
-} as const
-
-export type FrameType = (typeof FrameType)[keyof typeof FrameType]
+export enum FrameType {
+  Data = 0x00,
+  Resize = 0x01,
+  Exit = 0x02,
+  Ping = 0x03,
+}
 
 // A decoded wire frame. Only the field relevant to `type` is populated: `data`
 // for Data, `rows`/`cols` for Resize, `code` for Exit, nothing for Ping.
