@@ -10,8 +10,8 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
+	"github.com/icholy/xagent/internal/x/testx"
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/assert/cmp"
 )
 
 // newGitHubUserID returns a positive random GitHub user id. Random rather
@@ -42,8 +42,7 @@ func TestLinkGitHubInstallation(t *testing.T) {
 	})
 	assert.NilError(t, err)
 	calls := gh.VerifyInstallationAccessCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.Equal(t, calls[0].InstallationID, installationID)
+	assert.DeepEqual(t, testx.ExtractField(calls, "InstallationID"), []int64{installationID})
 
 	got, err := srv.store.GetOrg(ctx, nil, org.OrgID)
 	assert.NilError(t, err)

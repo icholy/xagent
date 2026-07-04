@@ -165,9 +165,28 @@ assert.Equal(t, calls[0].P.Content, "Task 7 completed.")
 assert.DeepEqual(t, got, muteState{Muted: []int64{3, 9}}, cmpx.OnlyFields("Muted"))
 ```
 
-So: reach for `OnlyFields` when you keep a few of many fields; when you ignore only one or two, `cmpopts.IgnoreFields` is shorter; and when you keep exactly one, assert on the field directly. `OnlyFields` does not apply to moq's anonymous per-call arg structs (you cannot write a clean literal for an unnamed type) -- assert those fields individually.
+So: reach for `OnlyFields` when you keep a few of many fields; when you ignore only one or two, `cmpopts.IgnoreFields` is shorter; and when you keep exactly one, assert on the field directly. `OnlyFields` does not apply to moq's anonymous per-call arg structs (you cannot write a clean literal for an unnamed type) -- assert those fields individually, or project a single field across the whole call-log with `testx.ExtractField` (see below).
 
 The same rule covers decoding a tool result into a named struct (e.g. via `mcptest.UnmarshalCallToolResult`): assert on the decoded field you care about (`got.Muted`) rather than rebuilding the whole struct to compare with `OnlyFields`.
+
+### Projecting one call-log field with `testx.ExtractField`
+
+When you assert on a **single field across every call** in an anonymous moq call-log -- e.g. each call's `InstallationID` -- `testx.ExtractField` folds the count check and the per-call field asserts into one declarative comparison. It reflects over the log and projects the named field into a concrete typed slice (`[]int64`, etc.) that you compare whole with `assert.DeepEqual`:
+
+```go
+// Bad: a count assert plus a per-call field assert
+calls := gh.VerifyInstallationAccessCalls()
+assert.Assert(t, cmp.Len(calls, 1))
+assert.Equal(t, calls[0].InstallationID, installationID)
+
+// Good: one assertion covers both the call count and the field values
+calls := gh.VerifyInstallationAccessCalls()
+assert.DeepEqual(t, testx.ExtractField(calls, "InstallationID"), []int64{installationID})
+```
+
+`ExtractField(calls any, name string) any` returns the projected slice boxed in an `any` whose dynamic type is the field's own type, so go-cmp compares it against the expected `[]int64{...}` literal structurally and cleanly (a `[]any` or a wrapper struct would reintroduce a type-mismatch diff). This is precisely the case `OnlyFields` can't handle: you never spell the unnamed element type -- you name one field and compare a plain typed slice. The slice's length also encodes the call count, so no separate `cmp.Len` is needed.
+
+Scope it to a single top-level field -- one `ExtractField` call per field you check. Bad input (a non-slice argument, or a field name absent from the element struct) panics with a descriptive message rather than failing the test, since the helper takes no `testing.TB`.
 
 ### Comparing proto messages
 
@@ -187,7 +206,7 @@ assert.DeepEqual(t,
 
 `protocmp.Transform()` is **required**, not optional: `assert.DeepEqual` runs go-cmp, and go-cmp refuses to touch the unexported internal state every proto embeds (`state`, `sizeCache`, `unknownFields`). Without the transform the assertion fails outright with `cannot handle unexported field at {*xagentv1.SubmitRunnerEventsRequest}.state`. The transform exposes the public fields (and applies proto equality semantics). Do **not** reach for `cmpx.OnlyFields` / `cmpopts.IgnoreFields` on a proto -- if a field is genuinely noise, drop it with `protocmp.IgnoreFields(&xagentv1.RunnerEvent{}, "field_name")` (proto snake_case names).
 
-Whole-value `assert.DeepEqual` pays off for proto messages and **named** structs, where the expected literal is clean. It does **not** pay off for moq's anonymous per-call arg structs (per the note above) -- there the literal means re-spelling the unnamed type inline, which reads worse than asserting the fields individually.
+Whole-value `assert.DeepEqual` pays off for proto messages and **named** structs, where the expected literal is clean. It does **not** pay off for moq's anonymous per-call arg structs (per the note above) -- there the literal means re-spelling the unnamed type inline, which reads worse than asserting the fields individually (or projecting one field across the log with `testx.ExtractField`).
 
 Put each `assert.DeepEqual` argument on its own line with a trailing comma, as above -- it stays readable as the comparison options grow and is gofmt-stable.
 
@@ -224,7 +243,7 @@ assert.DeepEqual(t, links[0], link,
 Do **not** collapse when:
 
 - the value is a **proto message** -- use the whole-message + `protocmp.Transform()` form above, never bare go-cmp;
-- it's a **moq anonymous call-log struct** (`...Calls()[i]`) -- the unnamed type carrying a live `context.Context` has no clean literal; assert its fields individually;
+- it's a **moq anonymous call-log struct** (`...Calls()[i]`) -- the unnamed type carrying a live `context.Context` has no clean literal; assert its fields individually, or project a single field across the log with `testx.ExtractField` (see "Asserting on Mock Calls");
 - there is only a **single** field to check -- assert it directly (`assert.Equal(t, got.Field, want)`);
 - the asserts are a **deliberate projection** of a big struct you don't fully control (a handful of fields of a DB row with many generated ones). Leave them field-by-field, or reach for `cmpx.OnlyFields` only when it documents intent -- it adds no coverage, so don't pretend it does.
 
