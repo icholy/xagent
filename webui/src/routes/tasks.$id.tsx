@@ -34,7 +34,8 @@ import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { TaskTimeline } from '@/components/task-timeline'
 import { TaskShellPanel } from '@/components/task-shell-panel'
-import { Send, Loader2, List, Terminal } from 'lucide-react'
+import { TaskLinksTab } from '@/components/task-links'
+import { Send, Loader2, List, Terminal, Link2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -145,6 +146,7 @@ function TaskDetail() {
   }
 
   const task = data?.task
+  const links = data?.links ?? []
   const timeline = eventsToTimeline(eventsData?.events ?? [])
 
   if (!task) {
@@ -252,6 +254,13 @@ function TaskDetail() {
             label="Shell"
             dot={shellActive}
           />
+          <TabButton
+            active={tab === 'links'}
+            onClick={() => setTab('links')}
+            icon={<Link2 className="h-4 w-4" />}
+            label="Links"
+            count={links.length}
+          />
         </div>
 
         {tab === 'timeline' && (
@@ -295,12 +304,14 @@ function TaskDetail() {
         {tab === 'shell' && (
           <TaskShellPanel taskId={taskId} orgId={orgId} canOpen={canOpenShell(task)} />
         )}
+
+        {tab === 'links' && <TaskLinksTab links={links} />}
       </div>
     </div>
   )
 }
 
-type TabKey = 'timeline' | 'shell'
+type TabKey = 'timeline' | 'shell' | 'links'
 
 // TabButton is one entry in the in-page tab bar: an underline-style tab with an
 // icon, a label, and either a count badge or a "session active" dot.

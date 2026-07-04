@@ -77,7 +77,7 @@ export type TimelineItem =
     }
 
 // Infer the external service from a URL.
-function sourceFromUrl(url: string): ExternalSource {
+export function sourceFromUrl(url: string): ExternalSource {
   if (/github\.com/i.test(url)) return 'github'
   if (/atlassian\.net|jira/i.test(url)) return 'jira'
   return 'other'
