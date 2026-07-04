@@ -105,7 +105,8 @@ Disk is read only at startup; every write stays per-record atomic for durability
   (the dead dir is scanned for filenames only), so sequence numbers never repeat even after
   dead-lettering.
 - `Append`: assign the next `Seq`, marshal, write via temp-file + `fsync` + atomic `rename`
-  (identical to `taskstate.Store.Write`), then insert into the in-memory index.
+  (the write is factored into a small stdlib-only `internal/x/atomicio` package, the same
+  pattern as `taskstate.Store.Write`), then insert into the in-memory index.
 - `List`: copy the in-memory index values into a slice, sort by `Seq`, return — no disk
   access, so the caller may `Remove`/`DeadLetter` while ranging the returned copy.
 - `Remove`: idempotent `os.Remove` of `<dir>/<seq>.json`, then drop from the index.

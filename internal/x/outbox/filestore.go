@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/icholy/xagent/internal/x/atomicio"
 )
 
 // seqDigits is the zero-padded width of a uint64 Seq in a filename, so lexical
@@ -108,7 +110,7 @@ func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("outbox: marshal record: %w", err)
 	}
-	if err := writeFileAtomic(s.dir, s.livePath(seq), data); err != nil {
+	if err := atomicio.WriteFile(s.livePath(seq), data); err != nil {
 		return 0, err
 	}
 	s.records[seq] = rec
@@ -163,42 +165,6 @@ func (s *FileStore) DeadLetter(seq uint64) error {
 		return fmt.Errorf("outbox: dead-letter record %d: %w", seq, err)
 	}
 	delete(s.records, seq)
-	return nil
-}
-
-// writeFileAtomic crash-safely writes data to path by marshalling to a temp file
-// in tmpDir (which must be on the same filesystem as path), fsync'ing it, and
-// renaming it over the target.
-func writeFileAtomic(tmpDir, path string, data []byte) error {
-	tmp, err := os.CreateTemp(tmpDir, ".tmp-*")
-	if err != nil {
-		return fmt.Errorf("outbox: create temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-
-	// Clean up the temp file on any error before the rename succeeds.
-	committed := false
-	defer func() {
-		if !committed {
-			_ = os.Remove(tmpName)
-		}
-	}()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("outbox: write temp file: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("outbox: fsync temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("outbox: close temp file: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("outbox: rename temp file: %w", err)
-	}
-	committed = true
 	return nil
 }
 
