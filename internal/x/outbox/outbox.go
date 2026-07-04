@@ -23,22 +23,21 @@ type Record struct {
 }
 
 // Store is the durable, crash-safe backing store for an outbox: a strict FIFO
-// queue. It is single-consumer — the head is stable between a Peek and the
-// Pop or DeadLetter that follows it — but Push may run concurrently with the
-// consumer. Implementations must be safe for concurrent use.
+// queue. It is single-consumer — the head is stable between a Peek and the Drop
+// that follows it — but Append may run concurrently with the consumer.
+// Implementations must be safe for concurrent use.
 type Store interface {
-	// Push durably appends payload to the tail. It must not return until the
+	// Append durably appends payload to the tail. It must not return until the
 	// record is durable.
-	Push(payload json.RawMessage) error
+	Append(payload json.RawMessage) error
 	// Peek returns the head record without removing it. ok is false when the
 	// queue is empty.
 	Peek() (rec Record, ok bool, err error)
-	// Pop durably removes the head record. Call it after the head has been
-	// delivered.
-	Pop() error
-	// DeadLetter moves the head record out of the live queue into the
-	// dead-letter area.
-	DeadLetter() error
+	// Drop durably removes the head record. If dead is true the record is moved
+	// to the dead-letter area; otherwise it is discarded. Call it after the head
+	// has been delivered (dead=false) or judged permanently undeliverable
+	// (dead=true). No-op on an empty queue.
+	Drop(dead bool) error
 	// Len reports the number of live records.
 	Len() (int, error)
 }

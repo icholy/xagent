@@ -102,12 +102,12 @@ func (s *FileStore) deadPath(seq uint64) string {
 	return filepath.Join(s.deadDir, formatSeq(seq)+".json")
 }
 
-// Push durably appends payload to the tail under a new, strictly increasing
+// Append durably appends payload to the tail under a new, strictly increasing
 // Seq. The write is crash-safe: the record is marshalled and written to a temp
 // file in the same directory, fsync'd, and renamed over the target, so a crash
 // never leaves a half-written record. The record is then appended to the
 // in-memory FIFO.
-func (s *FileStore) Push(payload json.RawMessage) error {
+func (s *FileStore) Append(payload json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -139,9 +139,12 @@ func (s *FileStore) Peek() (Record, bool, error) {
 	return front.Value.(Record), true, nil
 }
 
-// Pop durably removes the head record. The delete is idempotent: a missing file
-// (e.g. removed by a prior interrupted Pop) is not an error.
-func (s *FileStore) Pop() error {
+// Drop durably removes the head record from the live queue. If dead is true the
+// record's file is atomically renamed into the dead-letter area; otherwise it is
+// deleted (idempotent: a missing file, e.g. from a prior interrupted Drop, is
+// not an error). The record is then dropped from the in-memory FIFO. Dropping an
+// empty queue is a no-op.
+func (s *FileStore) Drop(dead bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	front := s.live.Front()
@@ -149,25 +152,14 @@ func (s *FileStore) Pop() error {
 		return nil
 	}
 	rec := front.Value.(Record)
-	if err := os.Remove(s.livePath(rec.Seq)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("outbox: remove record %d: %w", rec.Seq, err)
-	}
-	s.live.Remove(front)
-	return nil
-}
-
-// DeadLetter atomically moves the head record out of the live queue into the
-// dead-letter area and drops it from the in-memory FIFO.
-func (s *FileStore) DeadLetter() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	front := s.live.Front()
-	if front == nil {
-		return nil
-	}
-	rec := front.Value.(Record)
-	if err := os.Rename(s.livePath(rec.Seq), s.deadPath(rec.Seq)); err != nil {
-		return fmt.Errorf("outbox: dead-letter record %d: %w", rec.Seq, err)
+	if dead {
+		if err := os.Rename(s.livePath(rec.Seq), s.deadPath(rec.Seq)); err != nil {
+			return fmt.Errorf("outbox: dead-letter record %d: %w", rec.Seq, err)
+		}
+	} else {
+		if err := os.Remove(s.livePath(rec.Seq)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("outbox: remove record %d: %w", rec.Seq, err)
+		}
 	}
 	s.live.Remove(front)
 	return nil

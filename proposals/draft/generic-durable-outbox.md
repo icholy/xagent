@@ -73,28 +73,27 @@ type Record struct {
 }
 
 // Store is the durable, crash-safe backing store for an outbox: a strict FIFO
-// queue. It is single-consumer — the head is stable between a Peek and the Pop
-// or DeadLetter that follows it — but Push may run concurrently with the
-// consumer. Implementations must be safe for concurrent use.
+// queue. It is single-consumer — the head is stable between a Peek and the Drop
+// that follows it — but Append may run concurrently with the consumer.
+// Implementations must be safe for concurrent use.
 type Store interface {
-	// Push durably appends payload to the tail. It must not return until the
+	// Append durably appends payload to the tail. It must not return until the
 	// record is durable.
-	Push(payload json.RawMessage) error
+	Append(payload json.RawMessage) error
 	// Peek returns the head record without removing it. ok is false when the
 	// queue is empty.
 	Peek() (rec Record, ok bool, err error)
-	// Pop durably removes the head record. Call it after the head has been
-	// delivered.
-	Pop() error
-	// DeadLetter moves the head record out of the live queue into the
-	// dead-letter area.
-	DeadLetter() error
+	// Drop durably removes the head record. If dead is true the record is moved
+	// to the dead-letter area; otherwise it is discarded. Call it after the head
+	// has been delivered (dead=false) or judged permanently undeliverable
+	// (dead=true). No-op on an empty queue.
+	Drop(dead bool) error
 	// Len reports the number of live records.
 	Len() (int, error)
 }
 ```
 
-Keeping `Peek` and `Pop` separate preserves at-least-once: a combined
+Keeping `Peek` and `Drop` separate preserves at-least-once: a combined
 return-and-remove would drop a message on a crash between the remove and a
 successful delivery.
 
@@ -116,15 +115,14 @@ durability.
   in-memory `Seq` counter from the max filename across both the live and dead directories
   (the dead dir is scanned for filenames only), so sequence numbers never repeat even after
   dead-lettering.
-- `Push`: assign the next `Seq`, marshal, write via temp-file + `fsync` + atomic `rename`
+- `Append`: assign the next `Seq`, marshal, write via temp-file + `fsync` + atomic `rename`
   (the write is factored into a small stdlib-only `internal/x/atomicio` package, the same
   pattern as `taskstate.Store.Write`), then append the record to the tail.
 - `Peek`: return the head record from the in-memory FIFO (no disk access), or `ok == false`
   when empty.
-- `Pop`: idempotent `os.Remove` of the head's `<dir>/<seq>.json`, then drop it from the
-  front.
-- `DeadLetter`: `rename` the head's `<dir>/<seq>.json` → `<dir>/dead/<seq>.json`, then drop
-  it from the front (it has left the live set).
+- `Drop(dead bool)`: remove the head from disk — `dead=false` does an idempotent `os.Remove`
+  of the head's `<dir>/<seq>.json`, `dead=true` `rename`s it to `<dir>/dead/<seq>.json` — then
+  drop it from the front. No-op on an empty queue.
 - `Len`: the number of live records.
 
 No new dependency: the filesystem store is stdlib-only, exactly like `taskstate`.
@@ -157,18 +155,18 @@ func (o *Outbox[T]) Len() (int, error)
 ```
 
 `Run` is the durable analogue of today's `Run`/`Drain` pair (`eventqueue.go:66-120`): on
-wakeup it drains the store from the head — `Peek` → `Deliver` → `Pop` on success — looping
-until `Peek` reports the queue empty. `Deliver` reports whether a failure is permanent as its
-first return value, so the code that already holds the error classifies it inline — no
+wakeup it drains the store from the head — `Peek` → `Deliver` → `Drop(false)` on success —
+looping until `Peek` reports the queue empty. `Deliver` reports whether a failure is permanent
+as its first return value, so the code that already holds the error classifies it inline — no
 separate predicate. A transient error (`permanent == false`) sleeps for `Backoff.NextBackOff()`
 (a `backoff.BackOff` from the already-vendored `github.com/cenkalti/backoff/v5`, replacing the
 current fixed `retryInterval`) and retries from the same head; a permanent error
-(`permanent == true`) triggers `DeadLetter` and advances to the next head. `Run` calls
-`Backoff.Reset()` whenever the store fully drains, so each new failure streak starts from the
-initial interval. Because `Pop` runs only *after* `Deliver` returns success, a crash between
-delivery and `Pop` simply redelivers the head on restart — the at-least-once payoff. On
-startup, `Run`'s first pass naturally redelivers everything already persisted, so it requires
-no separate recovery path.
+(`permanent == true`) calls `Drop(true)` to dead-letter it and advances to the next head.
+`Run` calls `Backoff.Reset()` whenever the store fully drains, so each new failure streak
+starts from the initial interval. Because `Drop` runs only *after* `Deliver` returns success,
+a crash between delivery and `Drop` simply redelivers the head on restart — the at-least-once
+payoff. On startup, `Run`'s first pass naturally redelivers everything already persisted, so
+it requires no separate recovery path.
 
 In sketch, the loop is a faithful durable copy of `EventQueue.Drain`:
 
@@ -180,11 +178,11 @@ for {
 	permanent, err := deliver(ctx, decode(rec.Payload))
 	switch {
 	case err == nil:
-		store.Pop()
+		store.Drop(false) // delivered → discard head
 	case permanent:
-		store.DeadLetter()
+		store.Drop(true) // permanent → dead-letter head
 	default:
-		// transient: sleep Backoff.NextBackOff(), retry from the same head
+		// transient → backoff, leave head
 	}
 }
 ```
@@ -249,8 +247,8 @@ merge before the ones above it land.
 1. **Outbox store interface + filesystem implementation** — Delivers: the `outbox` package
    with the `Store` interface, `Record`, and `FileStore` (atomic per-record files, seq
    ordering, dead-letter dir), ported from the `taskstate` pattern. No engine yet.
-   Depends on: nothing. Verifiable by: unit tests over a temp dir — FIFO push/peek/pop
-   ordering, durable pop (gone after re-`Open`), dead-letter move, seq monotonicity across
+   Depends on: nothing. Verifiable by: unit tests over a temp dir — FIFO append/peek/drop
+   ordering, durable drop (gone after re-`Open`), dead-letter move, seq monotonicity across
    restart (re-`Open` the dir), `Open` failing on a corrupt record, and ignoring of
    temp/garbage files.
 
