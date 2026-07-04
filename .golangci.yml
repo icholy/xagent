@@ -1,11 +1,9 @@
 version: "2"
 
-# Scoped intentionally narrow: this repo does not yet run golangci-lint, so we
-# enable only sloglint for now to enforce the structured-logging conventions
-# without pulling in a large backlog of pre-existing findings from the default
-# linter set. Additional linters can be enabled in follow-up changes.
 linters:
-  default: none
+  # Enable the standard linter set (errcheck, govet, ineffassign, staticcheck,
+  # unused) plus sloglint for our structured-logging conventions.
+  default: standard
   enable:
     - sloglint
   settings:
@@ -14,3 +12,17 @@ linters:
       # https://github.com/go-simpler/sloglint
       forbidden-keys:
         - error
+    errcheck:
+      # Fire-and-forget cleanup calls whose errors are not actionable. These
+      # mirror Close (already excluded by the std-error-handling preset below):
+      # a WebSocket teardown and the deferred rollback idiom where Rollback is a
+      # no-op once the transaction has committed.
+      exclude-functions:
+        - (*github.com/coder/websocket.Conn).CloseNow
+        - (*database/sql.Tx).Rollback
+  exclusions:
+    # golangci-lint's built-in exclusions for cases where we genuinely don't
+    # care about the error value (e.g. deferred Close, writes to a
+    # ResponseWriter via fmt.Fprint*).
+    presets:
+      - std-error-handling

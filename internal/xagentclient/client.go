@@ -37,7 +37,7 @@ type Options struct {
 
 // New returns a Connect client.
 func New(opts Options) Client {
-	var transport http.RoundTripper = http.DefaultTransport
+	transport := http.DefaultTransport
 	if opts.Token != "" {
 		transport = &AuthTransport{
 			Transport: transport,
