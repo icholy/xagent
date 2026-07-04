@@ -30,10 +30,15 @@ type Store interface {
 	// returns the assigned Seq. It must not return until the record is durable.
 	Append(payload json.RawMessage) (uint64, error)
 	// List returns an iterator over all undelivered records in ascending Seq
-	// order. The iterator is a point-in-time snapshot: calling Remove or
-	// DeadLetter on records during iteration — including the record currently
-	// being yielded — is safe and does not affect the walk.
-	List() (iter.Seq[Record], error)
+	// order. The set of Seqs is a point-in-time snapshot taken when List is
+	// called; each record's payload is read lazily as it is yielded, so only one
+	// payload is materialized at a time. Calling Remove or DeadLetter on records
+	// during iteration — including the record currently being yielded — is safe:
+	// a record removed or dead-lettered after the snapshot but before it is
+	// reached in the walk is simply skipped. The outer error reports a failure to
+	// take the initial snapshot; per-record read/decode errors surface through
+	// the iterator's error half.
+	List() (iter.Seq2[Record, error], error)
 	// Remove deletes the record with the given Seq. It is idempotent.
 	Remove(seq uint64) error
 	// DeadLetter atomically moves the record with the given Seq out of the live

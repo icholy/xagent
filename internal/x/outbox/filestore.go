@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,11 +89,50 @@ func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
 // files that don't parse as <uint64>.json are ignored, so an interrupted write
 // can never corrupt a listing.
 //
-// The snapshot is fully materialized under the lock and the lock is released
-// before the caller iterates, so Remove or DeadLetter may be called on records
-// during iteration — including the record currently being yielded — without
-// deadlocking or affecting the walk.
-func (s *FileStore) List() (iter.Seq[Record], error) {
+// The set of Seqs is snapshotted under the lock — cheap (8 bytes/record), no
+// payloads read — and the lock is released before the caller iterates. Each
+// record's payload is then read lazily as it is yielded, so only one payload is
+// materialized at a time. Because nothing holds s.mu across the iterator's
+// yields, Remove or DeadLetter may be called on records during iteration —
+// including the record currently being yielded — without deadlocking. A record
+// removed or dead-lettered after the snapshot but before it is reached is
+// skipped; a genuine read/decode error is surfaced through the iterator's error
+// half without aborting the rest of the walk.
+func (s *FileStore) List() (iter.Seq2[Record, error], error) {
+	seqs, err := s.snapshot()
+	if err != nil {
+		return nil, err
+	}
+	return func(yield func(Record, error) bool) {
+		for _, seq := range seqs {
+			data, err := os.ReadFile(s.livePath(seq))
+			if errors.Is(err, os.ErrNotExist) {
+				// Removed or dead-lettered since the snapshot; skip it.
+				continue
+			}
+			if err != nil {
+				if !yield(Record{}, fmt.Errorf("outbox: read record %d: %w", seq, err)) {
+					return
+				}
+				continue
+			}
+			var rec Record
+			if err := json.Unmarshal(data, &rec); err != nil {
+				if !yield(Record{}, fmt.Errorf("outbox: unmarshal record %d: %w", seq, err)) {
+					return
+				}
+				continue
+			}
+			if !yield(rec, nil) {
+				return
+			}
+		}
+	}, nil
+}
+
+// snapshot returns the sorted Seqs of the live records at the moment of the call.
+// It reads no payloads, so it is cheap even for a backed-up outbox.
+func (s *FileStore) snapshot() ([]uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -103,31 +141,19 @@ func (s *FileStore) List() (iter.Seq[Record], error) {
 		return nil, fmt.Errorf("outbox: read dir: %w", err)
 	}
 
-	var records []Record
+	var seqs []uint64
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-		if _, ok := parseRecordName(entry.Name()); !ok {
+		seq, ok := parseRecordName(entry.Name())
+		if !ok {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(s.dir, entry.Name()))
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return nil, fmt.Errorf("outbox: read record %s: %w", entry.Name(), err)
-		}
-		var rec Record
-		if err := json.Unmarshal(data, &rec); err != nil {
-			return nil, fmt.Errorf("outbox: unmarshal record %s: %w", entry.Name(), err)
-		}
-		records = append(records, rec)
+		seqs = append(seqs, seq)
 	}
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].Seq < records[j].Seq
-	})
-	return slices.Values(records), nil
+	slices.Sort(seqs)
+	return seqs, nil
 }
 
 // Remove deletes the record with the given Seq. It is idempotent: removing an

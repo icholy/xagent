@@ -2,14 +2,26 @@ package outbox
 
 import (
 	"encoding/json"
+	"iter"
 	"os"
 	"path/filepath"
-	"slices"
 	"sync"
 	"testing"
 
 	"gotest.tools/v3/assert"
 )
+
+// collect drains a List iterator into a slice, failing the test on any
+// per-record error.
+func collect(t *testing.T, seq iter.Seq2[Record, error]) []Record {
+	t.Helper()
+	var records []Record
+	for rec, err := range seq {
+		assert.NilError(t, err)
+		records = append(records, rec)
+	}
+	return records
+}
 
 func TestAppendList(t *testing.T) {
 	// Arrange
@@ -29,9 +41,9 @@ func TestAppendList(t *testing.T) {
 	assert.Equal(t, seq2, uint64(2))
 	assert.Equal(t, seq3, uint64(3))
 
-	seq, err := s.List()
+	list, err := s.List()
 	assert.NilError(t, err)
-	records := slices.Collect(seq)
+	records := collect(t, list)
 	assert.Equal(t, len(records), 3)
 	assert.Equal(t, records[0].Seq, uint64(1))
 	assert.Equal(t, string(records[0].Payload), `{"n":1}`)
@@ -43,9 +55,9 @@ func TestList_Empty(t *testing.T) {
 	s, err := Open(t.TempDir())
 	assert.NilError(t, err)
 
-	seq, err := s.List()
+	list, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(slices.Collect(seq)), 0)
+	assert.Equal(t, len(collect(t, list)), 0)
 }
 
 func TestRemove(t *testing.T) {
@@ -58,7 +70,7 @@ func TestRemove(t *testing.T) {
 
 	list, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(slices.Collect(list)), 0)
+	assert.Equal(t, len(collect(t, list)), 0)
 }
 
 func TestRemove_Idempotent(t *testing.T) {
@@ -89,7 +101,7 @@ func TestDeadLetter(t *testing.T) {
 	// Assert: the dead-lettered record leaves the live set...
 	list, err := s.List()
 	assert.NilError(t, err)
-	records := slices.Collect(list)
+	records := collect(t, list)
 	assert.Equal(t, len(records), 1)
 	assert.Equal(t, records[0].Seq, seq2)
 
@@ -162,7 +174,7 @@ func TestList_IgnoresGarbage(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	records := slices.Collect(list)
+	records := collect(t, list)
 	assert.Equal(t, len(records), 2)
 	assert.Equal(t, records[0].Seq, uint64(1))
 	assert.Equal(t, records[1].Seq, uint64(2))
@@ -194,7 +206,7 @@ func TestAppend_Concurrent(t *testing.T) {
 	}
 	list, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(slices.Collect(list)), n)
+	assert.Equal(t, len(collect(t, list)), n)
 }
 
 func TestList_RemoveDuringIteration(t *testing.T) {
@@ -213,7 +225,8 @@ func TestList_RemoveDuringIteration(t *testing.T) {
 	list, err := s.List()
 	assert.NilError(t, err)
 	var visited []uint64
-	for rec := range list {
+	for rec, err := range list {
+		assert.NilError(t, err)
 		visited = append(visited, rec.Seq)
 		assert.NilError(t, s.Remove(rec.Seq))
 	}
@@ -222,7 +235,7 @@ func TestList_RemoveDuringIteration(t *testing.T) {
 	assert.DeepEqual(t, visited, []uint64{1, 2, 3})
 	remaining, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(slices.Collect(remaining)), 0)
+	assert.Equal(t, len(collect(t, remaining)), 0)
 }
 
 func TestList_DeadLetterDuringIteration(t *testing.T) {
@@ -238,7 +251,8 @@ func TestList_DeadLetterDuringIteration(t *testing.T) {
 	list, err := s.List()
 	assert.NilError(t, err)
 	var visited []uint64
-	for rec := range list {
+	for rec, err := range list {
+		assert.NilError(t, err)
 		visited = append(visited, rec.Seq)
 		assert.NilError(t, s.DeadLetter(rec.Seq))
 	}
@@ -247,5 +261,65 @@ func TestList_DeadLetterDuringIteration(t *testing.T) {
 	assert.DeepEqual(t, visited, []uint64{1, 2})
 	remaining, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(slices.Collect(remaining)), 0)
+	assert.Equal(t, len(collect(t, remaining)), 0)
+}
+
+func TestList_SkipsRecordRemovedAfterSnapshot(t *testing.T) {
+	// Arrange
+	s, err := Open(t.TempDir())
+	assert.NilError(t, err)
+	_, err = s.Append(json.RawMessage(`{"n":1}`))
+	assert.NilError(t, err)
+	seq2, err := s.Append(json.RawMessage(`{"n":2}`))
+	assert.NilError(t, err)
+	_, err = s.Append(json.RawMessage(`{"n":3}`))
+	assert.NilError(t, err)
+
+	// Act: take the snapshot, then remove a record that hasn't been reached yet.
+	list, err := s.List()
+	assert.NilError(t, err)
+	assert.NilError(t, s.Remove(seq2))
+
+	// Assert: the lazily-read record is gone by the time the walk reaches it, so
+	// it is skipped rather than yielded or erroring.
+	var visited []uint64
+	for rec, err := range list {
+		assert.NilError(t, err)
+		visited = append(visited, rec.Seq)
+	}
+	assert.DeepEqual(t, visited, []uint64{1, 3})
+}
+
+func TestList_SurfacesDecodeError(t *testing.T) {
+	// Arrange
+	dir := t.TempDir()
+	s, err := Open(dir)
+	assert.NilError(t, err)
+	_, err = s.Append(json.RawMessage(`{"n":1}`))
+	assert.NilError(t, err)
+	seq2, err := s.Append(json.RawMessage(`{"n":2}`))
+	assert.NilError(t, err)
+	_, err = s.Append(json.RawMessage(`{"n":3}`))
+	assert.NilError(t, err)
+
+	// Corrupt the middle record's file with undecodable JSON.
+	assert.NilError(t, os.WriteFile(s.livePath(seq2), []byte("{not json"), 0o644))
+
+	// Act
+	list, err := s.List()
+	assert.NilError(t, err)
+
+	// Assert: the bad record surfaces as a non-nil error through the iterator
+	// without aborting the walk — the surrounding records are still visited.
+	var visited []uint64
+	var gotErr error
+	for rec, err := range list {
+		if err != nil {
+			gotErr = err
+			continue
+		}
+		visited = append(visited, rec.Seq)
+	}
+	assert.ErrorContains(t, gotErr, "unmarshal record")
+	assert.DeepEqual(t, visited, []uint64{1, 3})
 }
