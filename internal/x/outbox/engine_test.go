@@ -14,20 +14,16 @@ import (
 	"github.com/icholy/xagent/internal/x/testx"
 )
 
-type msg struct {
-	N int
-}
-
 func TestOutbox_FIFO(t *testing.T) {
 	// Arrange
 	store, err := Open(t.TempDir())
 	assert.NilError(t, err)
 	var got testx.SafeSlice[int]
-	ob := New(Options[msg]{
+	ob := New(Options[int]{
 		Store:   store,
 		Backoff: backoff.NewConstantBackOff(0),
-		Deliver: func(ctx context.Context, m msg) (bool, error) {
-			got.Append(m.N)
+		Deliver: func(ctx context.Context, n int) (bool, error) {
+			got.Append(n)
 			return false, nil
 		},
 	})
@@ -37,9 +33,9 @@ func TestOutbox_FIFO(t *testing.T) {
 	go ob.Run(ctx)
 
 	// Act
-	assert.NilError(t, ob.Enqueue(msg{N: 1}))
-	assert.NilError(t, ob.Enqueue(msg{N: 2}))
-	assert.NilError(t, ob.Enqueue(msg{N: 3}))
+	assert.NilError(t, ob.Enqueue(1))
+	assert.NilError(t, ob.Enqueue(2))
+	assert.NilError(t, ob.Enqueue(3))
 
 	// Assert: delivered in enqueue order, then the store fully drains.
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -57,17 +53,17 @@ func TestOutbox_TransientRetry(t *testing.T) {
 	var got testx.SafeSlice[int]
 	var attempts int
 	var mu sync.Mutex
-	ob := New(Options[msg]{
+	ob := New(Options[int]{
 		Store:   store,
 		Backoff: backoff.NewConstantBackOff(time.Millisecond),
-		Deliver: func(ctx context.Context, m msg) (bool, error) {
-			got.Append(m.N)
-			if m.N == 1 {
+		Deliver: func(ctx context.Context, n int) (bool, error) {
+			got.Append(n)
+			if n == 1 {
 				mu.Lock()
 				attempts++
-				n := attempts
+				a := attempts
 				mu.Unlock()
-				if n < 4 {
+				if a < 4 {
 					return false, errFake("transient")
 				}
 			}
@@ -80,8 +76,8 @@ func TestOutbox_TransientRetry(t *testing.T) {
 	go ob.Run(ctx)
 
 	// Act
-	assert.NilError(t, ob.Enqueue(msg{N: 1}))
-	assert.NilError(t, ob.Enqueue(msg{N: 2}))
+	assert.NilError(t, ob.Enqueue(1))
+	assert.NilError(t, ob.Enqueue(2))
 
 	// Assert: head retried until success, everything delivered in order, and 2
 	// was never attempted before 1 succeeded.
@@ -98,12 +94,12 @@ func TestOutbox_PermanentDeadLetter(t *testing.T) {
 	store, err := Open(dir)
 	assert.NilError(t, err)
 	var got testx.SafeSlice[int]
-	ob := New(Options[msg]{
+	ob := New(Options[int]{
 		Store:   store,
 		Backoff: backoff.NewConstantBackOff(0),
-		Deliver: func(ctx context.Context, m msg) (bool, error) {
-			got.Append(m.N)
-			if m.N == 2 {
+		Deliver: func(ctx context.Context, n int) (bool, error) {
+			got.Append(n)
+			if n == 2 {
 				return true, errFake("permanent")
 			}
 			return false, nil
@@ -115,9 +111,9 @@ func TestOutbox_PermanentDeadLetter(t *testing.T) {
 	go ob.Run(ctx)
 
 	// Act
-	assert.NilError(t, ob.Enqueue(msg{N: 1}))
-	assert.NilError(t, ob.Enqueue(msg{N: 2}))
-	assert.NilError(t, ob.Enqueue(msg{N: 3}))
+	assert.NilError(t, ob.Enqueue(1))
+	assert.NilError(t, ob.Enqueue(2))
+	assert.NilError(t, ob.Enqueue(3))
 
 	// Assert: 2 is attempted once, then dead-lettered; 1 and 3 delivered; the
 	// live queue drains and the dead-letter file survives.
@@ -135,14 +131,14 @@ func TestOutbox_Len(t *testing.T) {
 	// Arrange: no Run, so nothing is delivered.
 	store, err := Open(t.TempDir())
 	assert.NilError(t, err)
-	ob := New(Options[msg]{
+	ob := New(Options[int]{
 		Store:   store,
-		Deliver: func(ctx context.Context, m msg) (bool, error) { return false, nil },
+		Deliver: func(ctx context.Context, n int) (bool, error) { return false, nil },
 	})
 
 	// Act
-	assert.NilError(t, ob.Enqueue(msg{N: 1}))
-	assert.NilError(t, ob.Enqueue(msg{N: 2}))
+	assert.NilError(t, ob.Enqueue(1))
+	assert.NilError(t, ob.Enqueue(2))
 
 	// Assert
 	n, err := ob.Len()
@@ -156,18 +152,18 @@ func TestOutbox_StartupRecovery(t *testing.T) {
 	dir := t.TempDir()
 	seed, err := Open(dir)
 	assert.NilError(t, err)
-	assert.NilError(t, seed.Append([]byte(`{"N":1}`)))
-	assert.NilError(t, seed.Append([]byte(`{"N":2}`)))
-	assert.NilError(t, seed.Append([]byte(`{"N":3}`)))
+	assert.NilError(t, seed.Append([]byte(`1`)))
+	assert.NilError(t, seed.Append([]byte(`2`)))
+	assert.NilError(t, seed.Append([]byte(`3`)))
 
 	store, err := Open(dir)
 	assert.NilError(t, err)
 	var got testx.SafeSlice[int]
-	ob := New(Options[msg]{
+	ob := New(Options[int]{
 		Store:   store,
 		Backoff: backoff.NewConstantBackOff(0),
-		Deliver: func(ctx context.Context, m msg) (bool, error) {
-			got.Append(m.N)
+		Deliver: func(ctx context.Context, n int) (bool, error) {
+			got.Append(n)
 			return false, nil
 		},
 	})
