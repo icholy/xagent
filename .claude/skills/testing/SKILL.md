@@ -169,6 +169,26 @@ So: reach for `OnlyFields` when you keep a few of many fields; when you ignore o
 
 The same rule covers decoding a tool result into a named struct (e.g. via `mcptest.UnmarshalCallToolResult`): assert on the decoded field you care about (`got.Muted`) rather than rebuilding the whole struct to compare with `OnlyFields`.
 
+### Comparing proto messages
+
+When the recorded argument (or any value) is a **protobuf message**, compare the whole message against a literal and pass `protocmp.Transform()` (`google.golang.org/protobuf/testing/protocmp`). It recurses into nested messages, so one whole-message compare covers the nested fields -- include every field that's actually set:
+
+```go
+calls := mock.SubmitRunnerEventsCalls()
+assert.Assert(t, cmp.Len(calls, 2))
+assert.DeepEqual(t,
+    calls[0].SubmitRunnerEventsRequest,
+    &xagentv1.SubmitRunnerEventsRequest{
+        Events: []*xagentv1.RunnerEvent{{TaskId: 1, Event: "stopped"}},
+    },
+    protocmp.Transform(),
+)
+```
+
+`protocmp.Transform()` is **required**, not optional: `assert.DeepEqual` runs go-cmp, and go-cmp refuses to touch the unexported internal state every proto embeds (`state`, `sizeCache`, `unknownFields`). Without the transform the assertion fails outright with `cannot handle unexported field at {*xagentv1.SubmitRunnerEventsRequest}.state`. The transform exposes the public fields (and applies proto equality semantics). Do **not** reach for `cmpx.OnlyFields` / `cmpopts.IgnoreFields` on a proto -- if a field is genuinely noise, drop it with `protocmp.IgnoreFields(&xagentv1.RunnerEvent{}, "field_name")` (proto snake_case names).
+
+Whole-value `assert.DeepEqual` pays off for proto messages and **named** structs, where the expected literal is clean. It does **not** pay off for moq's anonymous per-call arg structs (per the note above) -- there the literal means re-spelling the unnamed type inline, which reads worse than asserting the fields individually.
+
 Put each `assert.DeepEqual` argument on its own line with a trailing comma, as above -- it stays readable as the comparison options grow and is gofmt-stable.
 
 ## Prefer Duplication Over Helpers
