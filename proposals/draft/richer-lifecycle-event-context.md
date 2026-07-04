@@ -114,15 +114,45 @@ type RunnerEvent struct {
 
 ### 2. Producers populate the reason
 
-**Driver** (`internal/agent/driver.go`) — thread the error into `submit`:
+**Driver** (`internal/agent/driver.go`) — thread the error into the event.
+Rather than growing `submit`'s positional argument list as `RunnerEvent` gains
+fields, change its signature to take a `model.RunnerEvent` value and let the
+caller build it. `submit` today constructs the event internally from a bare
+`model.RunnerEventType`:
 
 ```go
-event, reason := model.RunnerEventStopped, ""
+func (d *Driver) submit(ctx context.Context, event model.RunnerEventType) error {
+    re := model.RunnerEvent{TaskID: d.TaskID, Event: event}
+    _, err := d.Client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+        Events: []*xagentv1.RunnerEvent{re.Proto()},
+    })
+    // ...
+}
+```
+
+Move the `RunnerEvent` construction out to the callers so the reason (and any
+future field) rides on the value:
+
+```go
+func (d *Driver) submit(ctx context.Context, re model.RunnerEvent) error {
+    _, err := d.Client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+        Events: []*xagentv1.RunnerEvent{re.Proto()},
+    })
+    // ...
+}
+```
+
+The `started` emit becomes `d.submit(eventCtx, model.RunnerEvent{TaskID: d.TaskID,
+Event: model.RunnerEventStarted})`, and the terminal emit fills in the reason on
+failure:
+
+```go
+re := model.RunnerEvent{TaskID: d.TaskID, Event: model.RunnerEventStopped}
 if err != nil {
     d.Log.Error("task failed", "error", err)
-    event, reason = model.RunnerEventFailed, err.Error()
+    re.Event, re.Reason = model.RunnerEventFailed, err.Error()
 }
-if serr := d.submit(eventCtx, event, reason); serr != nil { ... }
+if serr := d.submit(eventCtx, re); serr != nil { ... }
 ```
 
 The driver's error already distinguishes setup failures from agent failures
