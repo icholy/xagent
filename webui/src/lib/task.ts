@@ -40,6 +40,17 @@ export function canOpenShell(task: TaskLike): boolean {
   }
 }
 
+// TaskTab identifies which panel of the task detail page is shown. It is mirrored
+// in the URL's ?tab= search param so panels can be deep-linked and shared.
+export type TaskTab = 'timeline' | 'shell' | 'links'
+
+// toTaskTab normalizes an untrusted value (e.g. a URL search param) into a valid
+// tab, falling back to the default "timeline" panel.
+export function toTaskTab(value: unknown): TaskTab {
+  if (value === 'shell' || value === 'links') return value
+  return 'timeline'
+}
+
 // autoArchiveDeadline returns the time at which the task is scheduled to be
 // auto-archived, or null when it isn't. The timer only runs once a task is in a
 // terminal state, so this requires the task to be archivable (terminal and not
