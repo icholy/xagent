@@ -52,8 +52,12 @@ func TestCreateMicrovmAuthTokenAPIError(t *testing.T) {
 	_, err := newTestClient(srv).CreateMicrovmAuthToken(context.Background(), &CreateMicrovmAuthTokenInput{MicrovmID: "mvm-x"})
 	var apiErr *APIError
 	assert.Assert(t, errors.As(err, &apiErr), "error is not *APIError: %v", err)
-	assert.Equal(t, apiErr.Op, "CreateMicrovmAuthToken")
-	assert.Equal(t, apiErr.StatusCode, http.StatusNotFound)
+	assert.DeepEqual(t, apiErr, &APIError{
+		Op:         "CreateMicrovmAuthToken",
+		StatusCode: http.StatusNotFound,
+		Code:       "ResourceNotFoundException",
+		Message:    "microvm mvm-x not found",
+	})
 	assert.Assert(t, IsNotFound(err))
 }
 

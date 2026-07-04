@@ -145,10 +145,12 @@ func TestAPIErrorNotFound(t *testing.T) {
 	_, err := newTestClient(srv).GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-x"})
 	var apiErr *APIError
 	assert.Assert(t, errors.As(err, &apiErr), "error is not *APIError: %v", err)
-	assert.Equal(t, apiErr.StatusCode, http.StatusNotFound)
-	assert.Equal(t, apiErr.Op, "GetMicrovm")
-	assert.Equal(t, apiErr.Code, "ResourceNotFoundException")
-	assert.Equal(t, apiErr.Message, "microvm mvm-x not found")
+	assert.DeepEqual(t, apiErr, &APIError{
+		StatusCode: http.StatusNotFound,
+		Op:         "GetMicrovm",
+		Code:       "ResourceNotFoundException",
+		Message:    "microvm mvm-x not found",
+	})
 	assert.Assert(t, IsNotFound(err))
 }
 
@@ -169,8 +171,12 @@ func TestIsNotFound(t *testing.T) {
 	assert.Assert(t, !IsNotFound(err), "IsNotFound should be false for a 500: %v", err)
 	var apiErr *APIError
 	assert.Assert(t, errors.As(err, &apiErr))
-	assert.Equal(t, apiErr.Code, "InternalFailure")
-	assert.Equal(t, apiErr.Message, "oops")
+	assert.DeepEqual(t, apiErr, &APIError{
+		Op:         "GetMicrovm",
+		StatusCode: http.StatusInternalServerError,
+		Code:       "InternalFailure",
+		Message:    "oops",
+	})
 }
 
 func TestAPIErrorUnparseableBody(t *testing.T) {
@@ -183,9 +189,11 @@ func TestAPIErrorUnparseableBody(t *testing.T) {
 	_, err := newTestClient(srv).RunMicrovm(context.Background(), &RunMicrovmInput{ImageIdentifier: "arn:image"})
 	var apiErr *APIError
 	assert.Assert(t, errors.As(err, &apiErr), "error is not *APIError: %v", err)
-	assert.Equal(t, apiErr.StatusCode, http.StatusBadGateway)
-	assert.Equal(t, apiErr.Op, "RunMicrovm")
-	assert.Equal(t, apiErr.Message, "<html>502 Bad Gateway</html>")
+	assert.DeepEqual(t, apiErr, &APIError{
+		StatusCode: http.StatusBadGateway,
+		Op:         "RunMicrovm",
+		Message:    "<html>502 Bad Gateway</html>",
+	})
 }
 
 func TestAPIErrorEmptyBody(t *testing.T) {
@@ -197,8 +205,10 @@ func TestAPIErrorEmptyBody(t *testing.T) {
 	_, err := newTestClient(srv).GetMicrovm(context.Background(), &GetMicrovmInput{MicrovmID: "mvm-x"})
 	var apiErr *APIError
 	assert.Assert(t, errors.As(err, &apiErr), "error is not *APIError: %v", err)
-	assert.Equal(t, apiErr.StatusCode, http.StatusNotFound)
-	assert.Equal(t, apiErr.Message, "")
+	assert.DeepEqual(t, apiErr, &APIError{
+		StatusCode: http.StatusNotFound,
+		Op:         "GetMicrovm",
+	})
 	assert.Assert(t, IsNotFound(err))
 }
 

@@ -98,10 +98,7 @@ func TestNotificationClient_DecodesEvents(t *testing.T) {
 	}
 	assert.NilError(t, ps.Publish(t.Context(), want))
 	got := recv(t, received, time.Second, "change notification")
-	assert.Equal(t, got.Type, want.Type)
-	assert.Equal(t, got.OrgID, want.OrgID)
-	assert.Equal(t, got.Runner, want.Runner)
-	assert.DeepEqual(t, got.Resources, want.Resources)
+	assert.DeepEqual(t, got, want)
 }
 
 func TestNotificationClient_NoRunnerFilter(t *testing.T) {
@@ -123,8 +120,7 @@ func TestNotificationClient_NoRunnerFilter(t *testing.T) {
 
 	// Assert
 	got := recv(t, received, time.Second, "notification with no filter")
-	assert.Equal(t, got.Type, want.Type)
-	assert.Equal(t, got.Runner, want.Runner)
+	assert.DeepEqual(t, got, want)
 }
 
 func TestNotificationClient_ReconnectsOnDrop(t *testing.T) {
@@ -231,6 +227,5 @@ func TestNotificationClient_SkipsMalformedData(t *testing.T) {
 
 	// Act + Assert: malformed event is skipped; subsequent valid event arrives.
 	got := recv(t, received, time.Second, "change after malformed")
-	assert.Equal(t, got.Type, "change")
-	assert.Equal(t, got.OrgID, int64(9))
+	assert.DeepEqual(t, got, model.Notification{Type: "change", OrgID: 9})
 }

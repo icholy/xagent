@@ -191,6 +191,43 @@ Whole-value `assert.DeepEqual` pays off for proto messages and **named** structs
 
 Put each `assert.DeepEqual` argument on its own line with a trailing comma, as above -- it stays readable as the comparison options grow and is gofmt-stable.
 
+## Whole-Value Struct Assertions
+
+The mock-call guidance above is one instance of a general rule: when a test makes **two or more** field-by-field asserts against the **same named struct value** -- a local var, a return value, a decoded result, or a recorded mock argument -- collapse them into a single whole-value `assert.DeepEqual` against a struct literal.
+
+```go
+// Bad: piecemeal asserts silently ignore every field they don't name
+assert.Equal(t, apiErr.Op, "GetMicrovm")
+assert.Equal(t, apiErr.StatusCode, http.StatusNotFound)
+
+// Good: one literal covers the whole value and diffs on any mismatch
+assert.DeepEqual(t, apiErr, &APIError{
+    Op:         "GetMicrovm",
+    StatusCode: http.StatusNotFound,
+    Code:       "ResourceNotFoundException",
+    Message:    "microvm mvm-x not found",
+})
+```
+
+The literal must include **every field actually set** -- the whole-value compare covers strictly more than the piecemeal asserts, so it catches fields they ignored (here `Code` and `Message`) and prints a full diff on failure. That extra coverage is the point of collapsing, not just brevity.
+
+**Check the target type for unexported fields first -- go-cmp panics on them.** If the struct has any, either `cmpopts.IgnoreUnexported(T{})` or whitelist the fields you assert with `cmpx.OnlyFields(...)` (see above). Named struct types with all-exported fields (most `model.*` and payload types) need neither.
+
+**Drop only nondeterministic or generated fields** (timestamps, DB-assigned ids) with `cmpopts.IgnoreFields`, so the rest of the value is still checked whole. Comparing a stored-then-loaded row against the value you wrote is a clean fit:
+
+```go
+assert.DeepEqual(t, links[0], link,
+    cmpopts.IgnoreFields(model.Link{}, "CreatedAt"),
+)
+```
+
+Do **not** collapse when:
+
+- the value is a **proto message** -- use the whole-message + `protocmp.Transform()` form above, never bare go-cmp;
+- it's a **moq anonymous call-log struct** (`...Calls()[i]`) -- the unnamed type carrying a live `context.Context` has no clean literal; assert its fields individually;
+- there is only a **single** field to check -- assert it directly (`assert.Equal(t, got.Field, want)`);
+- the asserts are a **deliberate projection** of a big struct you don't fully control (a handful of fields of a DB row with many generated ones). Leave them field-by-field, or reach for `cmpx.OnlyFields` only when it documents intent -- it adds no coverage, so don't pretend it does.
+
 ## Prefer Duplication Over Helpers
 
 Do NOT create little factory/helper functions that build a struct for a couple of call sites. Inline and duplicate the values in each test case -- duplication in tests is preferred over this kind of indirection.
