@@ -29,10 +29,7 @@ func TestWriteRead(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, ok, true)
-	assert.Equal(t, got.TaskID, rec.TaskID)
-	assert.Equal(t, got.Type, rec.Type)
-	assert.Equal(t, got.ID, rec.ID)
-	assert.Equal(t, string(got.Data), string(rec.Data))
+	assert.DeepEqual(t, got, rec)
 }
 
 func TestRead_Absent(t *testing.T) {

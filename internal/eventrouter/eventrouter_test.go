@@ -484,8 +484,10 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// exactly the configured prompt and nothing else.
 	insts := taskInstructions(t, s, task.ID, org.OrgID)
 	assert.Equal(t, len(insts), 1)
-	assert.Equal(t, insts[0].Text, "Triage this issue.")
-	assert.Equal(t, insts[0].URL, "")
+	assert.DeepEqual(t, insts[0], &model.InstructionPayload{
+		Text: "Triage this issue.",
+		URL:  "",
+	})
 
 	// The subscription link keeps the trigger URL but carries no title — the
 	// trigger's description lives on the external event instead, so the link no
@@ -505,11 +507,13 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, len(linkEvents), 1)
 	linkPayload, ok := linkEvents[0].Payload.(*model.LinkPayload)
 	assert.Assert(t, ok)
-	assert.Equal(t, linkPayload.LinkID, links[0].ID)
-	assert.Equal(t, linkPayload.URL, url)
-	assert.Equal(t, linkPayload.Relevance, "trigger")
-	assert.Equal(t, linkPayload.Title, "")
-	assert.Equal(t, linkPayload.Subscribe, true)
+	assert.DeepEqual(t, linkPayload, &model.LinkPayload{
+		LinkID:    links[0].ID,
+		Relevance: "trigger",
+		URL:       url,
+		Title:     "",
+		Subscribe: true,
+	})
 	assert.Equal(t, linkEvents[0].Wake, false)
 
 	// The timeline (ordered by event id) must read
@@ -537,9 +541,11 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, len(externalEvents), 1)
 	externalPayload, ok := externalEvents[0].Payload.(*model.ExternalPayload)
 	assert.Assert(t, ok)
-	assert.Equal(t, externalPayload.Description, "alice commented on issue #1")
-	assert.Equal(t, externalPayload.URL, url)
-	assert.Equal(t, externalPayload.Data, "@icholy-bot please look at this")
+	assert.DeepEqual(t, externalPayload, &model.ExternalPayload{
+		Description: "alice commented on issue #1",
+		URL:         url,
+		Data:        "@icholy-bot please look at this",
+	})
 }
 
 func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {

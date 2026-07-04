@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
@@ -33,8 +34,7 @@ func TestCreateAndListLinksRoutingKey(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, len(links), 1)
-	assert.Equal(t, links[0].URL, "https://github.com/o/r/pull/5#issuecomment-9")
-	assert.Equal(t, links[0].RoutingKey, "https://github.com/o/r/pull/5")
+	assert.DeepEqual(t, links[0], link, cmpopts.IgnoreFields(model.Link{}, "CreatedAt"))
 }
 
 func TestFindSubscribedLinksForOrgsMatchesRoutingKey(t *testing.T) {

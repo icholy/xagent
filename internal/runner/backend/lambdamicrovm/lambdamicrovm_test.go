@@ -91,10 +91,12 @@ func TestLaunchFresh(t *testing.T) {
 	assert.Equal(t, h.ID, "mvm-1")
 	hd, ok := decodeData(h.Data)
 	assert.Assert(t, ok)
-	assert.Equal(t, hd.Endpoint, "mvm-1.example.com")
-	assert.Equal(t, hd.ImageARN, "arn:aws:lambda:us-east-1:123:microvm-image/x")
-	assert.Equal(t, hd.StageBucket, "bucket")
-	assert.Equal(t, hd.StageKey, "runner-1/7.json")
+	assert.DeepEqual(t, hd, handleData{
+		Endpoint:    "mvm-1.example.com",
+		ImageARN:    "arn:aws:lambda:us-east-1:123:microvm-image/x",
+		StageBucket: "bucket",
+		StageKey:    "runner-1/7.json",
+	})
 
 	// run-microvm assembly: connectors, idle omitted, payload pointer, no tags.
 	in := cloud.lastRun
