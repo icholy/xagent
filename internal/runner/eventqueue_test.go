@@ -13,6 +13,7 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
+	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -35,10 +36,12 @@ func TestEventQueue_DrainSuccess(t *testing.T) {
 	assert.Equal(t, q.Len(), 0)
 	calls := mock.SubmitRunnerEventsCalls()
 	assert.Assert(t, cmp.Len(calls, 2))
-	assert.Equal(t, calls[0].SubmitRunnerEventsRequest.Events[0].TaskId, int64(1))
-	assert.Equal(t, calls[0].SubmitRunnerEventsRequest.Events[0].Event, "stopped")
-	assert.Equal(t, calls[1].SubmitRunnerEventsRequest.Events[0].TaskId, int64(2))
-	assert.Equal(t, calls[1].SubmitRunnerEventsRequest.Events[0].Event, "failed")
+	assert.DeepEqual(t, calls[0].SubmitRunnerEventsRequest, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: 1, Event: "stopped"}},
+	}, protocmp.Transform())
+	assert.DeepEqual(t, calls[1].SubmitRunnerEventsRequest, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: 2, Event: "failed", Version: 5}},
+	}, protocmp.Transform())
 }
 
 func TestEventQueue_DrainBlocksOnFailure(t *testing.T) {
@@ -104,7 +107,9 @@ func TestEventQueue_RunDrainsImmediately(t *testing.T) {
 		assert.Equal(t, q.Len(), 0)
 		calls := mock.SubmitRunnerEventsCalls()
 		assert.Assert(t, cmp.Len(calls, 1))
-		assert.Equal(t, calls[0].SubmitRunnerEventsRequest.Events[0].TaskId, int64(1))
+		assert.DeepEqual(t, calls[0].SubmitRunnerEventsRequest, &xagentv1.SubmitRunnerEventsRequest{
+			Events: []*xagentv1.RunnerEvent{{TaskId: 1, Event: "started"}},
+		}, protocmp.Transform())
 	})
 }
 
