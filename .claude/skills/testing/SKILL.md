@@ -73,6 +73,71 @@ func TestCreateTask(t *testing.T) {
   - `testOrgOptions{}` creates only the user and org, no workspaces.
 - `testOrg` has `UserID` and `OrgID` fields.
 
+## Interface Test Doubles
+
+When a test needs a stand-in for an interface, **generate a mock with moq** -- do NOT hand-write a `fakeX` struct that implements the interface. This is a near-absolute default; a hand-written fake is only acceptable in genuinely exceptional cases.
+
+Add a `//go:generate` directive next to the interface and run `go generate ./...`. Generated mocks live beside the interface as `*_moq.go` (importable from production code) or `*_moq_test.go` (test-only). For example, `internal/server/notifyserver/notifyserver.go` declares:
+
+```go
+//go:generate go tool moq -out org_resolver_moq_test.go . OrgResolver
+```
+
+which generates `org_resolver_moq_test.go` containing `OrgResolverMock`. A test sets the mock's `...Func` fields to control behavior and asserts against the generated `...Calls()` accessor:
+
+```go
+// Good: configure behavior via the generated Func field
+mockedOrgResolver := &OrgResolverMock{
+    ResolveOrgFunc: func(ctx context.Context, userID string, orgID int64) (int64, error) {
+        return orgID, nil
+    },
+}
+
+srv := New(Options{OrgResolver: mockedOrgResolver})
+// ... exercise srv ...
+
+// assert the method was called exactly once
+assert.Equal(t, len(mockedOrgResolver.ResolveOrgCalls()), 1)
+
+// Bad: hand-written fake implementing the interface
+type fakeOrgResolver struct{}
+func (fakeOrgResolver) ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error) {
+    return orgID, nil
+}
+```
+
+See `internal/xagentclient/client_moq.go` (`ClientMock`) for a checked-in `*_moq.go` example.
+
+## Prefer Duplication Over Helpers
+
+Do NOT create little factory/helper functions that build a struct for a couple of call sites. Inline and duplicate the values in each test case -- duplication in tests is preferred over this kind of indirection.
+
+Only extract a helper for genuinely large shared setup (e.g. `setupTestServer` / `createTestOrg` above).
+
+```go
+// Bad: don't wrap a small struct literal in a helper
+func taskNotification(id int64, msg string) model.Notification {
+    return model.Notification{
+        Type:           "change",
+        Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: id}},
+        ChannelMessage: msg,
+    }
+}
+
+// Good: write the literal inline in each test case
+want := model.Notification{
+    Type:           "change",
+    Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 1}},
+    ChannelMessage: "first",
+}
+// ... and again in the next case ...
+want := model.Notification{
+    Type:           "change",
+    Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 2}},
+    ChannelMessage: "second",
+}
+```
+
 ## Assertions
 
 Use `gotest.tools/v3/assert` -- not the standard library `testing` package for assertions.
