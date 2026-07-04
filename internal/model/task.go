@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/authscope"
@@ -157,6 +158,9 @@ type RunnerEvent struct {
 	Event     RunnerEventType
 	Version   int64
 	Reconcile bool
+	// Reason is an optional human-readable detail (e.g. the failure reason).
+	// It is currently populated only for "failed" events and is empty otherwise.
+	Reason string
 }
 
 // Proto converts a RunnerEvent to its protobuf representation.
@@ -166,6 +170,7 @@ func (r *RunnerEvent) Proto() *xagentv1.RunnerEvent {
 		Event:     string(r.Event),
 		Version:   r.Version,
 		Reconcile: r.Reconcile,
+		Reason:    r.Reason,
 	}
 }
 
@@ -176,6 +181,7 @@ func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 		Event:     RunnerEventType(pb.Event),
 		Version:   pb.Version,
 		Reconcile: pb.Reconcile,
+		Reason:    pb.Reason,
 	}
 }
 
@@ -299,10 +305,40 @@ func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) 
 	case RunnerEventStopped:
 		return lifecycle(LifecycleKindSandboxExited, ""), true
 	case RunnerEventFailed:
-		return lifecycle(LifecycleKindSandboxFailed, "container failed"), true
+		msg := sanitizeReason(e.Reason)
+		if msg == "" {
+			msg = "container failed"
+		}
+		return lifecycle(LifecycleKindSandboxFailed, msg), true
 	default:
 		return nil, false
 	}
+}
+
+// maxReasonLen bounds the failure reason stored on a lifecycle event. Reasons
+// are attacker-adjacent free text (error strings that can be long, multi-line,
+// or echo command output), and the timeline is a summary surface, not a log
+// viewer, so we cap the stored message.
+const maxReasonLen = 1024
+
+// sanitizeReason collapses a runner event reason to a single line and truncates
+// it to maxReasonLen. Enforcing the bound here (rather than at each producer)
+// keeps the cap consistent regardless of which producer set the reason.
+func sanitizeReason(reason string) string {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return ""
+	}
+	// Collapse to the first non-empty line so multi-line errors don't break
+	// the timeline rendering; the wrapper line usually names the phase
+	// (e.g. `setup command 0 failed: ...`).
+	if i := strings.IndexAny(reason, "\r\n"); i >= 0 {
+		reason = strings.TrimSpace(reason[:i])
+	}
+	if len(reason) > maxReasonLen {
+		reason = reason[:maxReasonLen] + "…"
+	}
+	return reason
 }
 
 // IsDone reports whether the task has finished its run: completed, failed,

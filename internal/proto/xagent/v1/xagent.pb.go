@@ -3190,6 +3190,7 @@ type RunnerEvent struct {
 	Event         string                 `protobuf:"bytes,2,opt,name=event,proto3" json:"event,omitempty"`          // "started", "stopped", "failed"
 	Version       int64                  `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`     // Current version, or 0 for bypass
 	Reconcile     bool                   `protobuf:"varint,4,opt,name=reconcile,proto3" json:"reconcile,omitempty"` // True if from reconciliation, not real-time
+	Reason        string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`        // Optional human-readable detail (failure reason, etc.)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3250,6 +3251,13 @@ func (x *RunnerEvent) GetReconcile() bool {
 		return x.Reconcile
 	}
 	return false
+}
+
+func (x *RunnerEvent) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
 }
 
 type SubmitRunnerEventsRequest struct {
@@ -5914,12 +5922,13 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x17ListEventsByTaskRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\"D\n" +
 	"\x18ListEventsByTaskResponse\x12(\n" +
-	"\x06events\x18\x01 \x03(\v2\x10.xagent.v1.EventR\x06events\"t\n" +
+	"\x06events\x18\x01 \x03(\v2\x10.xagent.v1.EventR\x06events\"\x8c\x01\n" +
 	"\vRunnerEvent\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x14\n" +
 	"\x05event\x18\x02 \x01(\tR\x05event\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\x03R\aversion\x12\x1c\n" +
-	"\treconcile\x18\x04 \x01(\bR\treconcile\"K\n" +
+	"\treconcile\x18\x04 \x01(\bR\treconcile\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\"K\n" +
 	"\x19SubmitRunnerEventsRequest\x12.\n" +
 	"\x06events\x18\x01 \x03(\v2\x16.xagent.v1.RunnerEventR\x06events\"\x1c\n" +
 	"\x1aSubmitRunnerEventsResponse\"U\n" +

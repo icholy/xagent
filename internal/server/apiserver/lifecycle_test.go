@@ -153,14 +153,48 @@ func TestLifecycle_RunnerEventsAppendSandboxEvents(t *testing.T) {
 	assert.Equal(t, events[0].FromStatus, "Pending")
 	assert.Equal(t, events[0].ToStatus, "Running")
 
-	// failed: RUNNING -> FAILED, with the failure detail in message.
+	// failed: RUNNING -> FAILED, with the producer's reason threaded into message.
 	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "failed", Version: 0}},
+		Events: []*xagentv1.RunnerEvent{{
+			TaskId:  taskID,
+			Event:   "failed",
+			Version: 0,
+			Reason:  `setup command 0 failed: exit status 1`,
+		}},
 	})
 	assert.NilError(t, err)
 
 	events = lifecycleEvents(t, srv, ctx, taskID)
 	assert.Equal(t, events[0].Kind, xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_FAILED)
-	assert.Equal(t, events[0].Message, "container failed")
+	assert.Equal(t, events[0].Message, `setup command 0 failed: exit status 1`)
 	assert.Equal(t, events[0].ToStatus, "Failed")
+}
+
+// TestLifecycle_RunnerFailedFallsBackWhenNoReason verifies that a "failed" event
+// with an empty reason (an old runner/driver) keeps the legacy message.
+func TestLifecycle_RunnerFailedFallsBackWhenNoReason(t *testing.T) {
+	t.Parallel()
+	srv, ctx := lifecycleTestServer(t)
+
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+	assert.NilError(t, err)
+	taskID := resp.Task.Id
+
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "started", Version: 1}},
+	})
+	assert.NilError(t, err)
+
+	_, err = srv.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+		Events: []*xagentv1.RunnerEvent{{TaskId: taskID, Event: "failed", Version: 0}},
+	})
+	assert.NilError(t, err)
+
+	events := lifecycleEvents(t, srv, ctx, taskID)
+	assert.Equal(t, events[0].Kind, xagentv1.LifecycleKind_LIFECYCLE_KIND_SANDBOX_FAILED)
+	assert.Equal(t, events[0].Message, "container failed")
 }
