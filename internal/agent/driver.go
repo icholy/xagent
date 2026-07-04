@@ -64,18 +64,18 @@ func (d *Driver) Run(ctx context.Context) error {
 		d.Log.Info("agent stopped gracefully")
 		err = nil
 	}
-	re := model.RunnerEvent{TaskID: d.TaskID, Event: model.RunnerEventStopped}
+	event := model.RunnerEvent{TaskID: d.TaskID, Event: model.RunnerEventStopped}
 	if err != nil {
 		d.Log.Error("task failed", "err", err)
 		// The error already distinguishes setup failures from agent failures
 		// (different wrapped errors), so it carries that context into the
 		// timeline as the failure reason.
-		re.Event, re.Reason = model.RunnerEventFailed, err.Error()
+		event.Event, event.Reason = model.RunnerEventFailed, err.Error()
 	}
 	// The terminal ack decides the exit code: acked means the outcome is
 	// durably recorded and the driver exits 0 even on agent failure; a lost
 	// report exits non-zero so the monitor's "failed" fires.
-	if serr := d.submit(eventCtx, re); serr != nil {
+	if serr := d.submit(eventCtx, event); serr != nil {
 		return errors.Join(err, serr)
 	}
 	return nil
@@ -84,13 +84,13 @@ func (d *Driver) Run(ctx context.Context) error {
 // submit reports a runner event for the driver's task and waits for the ack.
 // The SubmitRunnerEvents handler commits the transaction before returning,
 // so a nil error means the state transition is durable.
-func (d *Driver) submit(ctx context.Context, re model.RunnerEvent) error {
+func (d *Driver) submit(ctx context.Context, event model.RunnerEvent) error {
 	// Version 0 bypasses the version check (spontaneous events).
 	_, err := d.Client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{re.Proto()},
+		Events: []*xagentv1.RunnerEvent{event.Proto()},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to submit %s event: %w", re.Event, err)
+		return fmt.Errorf("failed to submit %s event: %w", event.Event, err)
 	}
 	return nil
 }
