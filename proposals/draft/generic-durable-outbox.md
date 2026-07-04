@@ -110,11 +110,10 @@ No new dependency: the filesystem store is stdlib-only, exactly like `taskstate`
 package outbox
 
 type Options[T any] struct {
-	Store       Store
-	Deliver     func(ctx context.Context, msg T) error // the RPC/HTTP call
-	IsPermanent func(err error) bool                   // classify delivery errors
-	Backoff     func() backoff.BackOff                 // fresh policy per failure streak
-	Log         *slog.Logger
+	Store   Store
+	Deliver func(ctx context.Context, msg T) (permanent bool, err error) // the RPC/HTTP call
+	Backoff func() backoff.BackOff                                       // fresh policy per failure streak
+	Log     *slog.Logger
 }
 
 type Outbox[T any] struct { /* store, wakeup.Chan, opts */ }
@@ -134,10 +133,12 @@ func (o *Outbox[T]) Len() (int, error)
 
 `Run` is the durable analogue of today's `Run`/`Drain` pair (`eventqueue.go:66-120`): on
 wakeup it `List`s the store, delivers each record in `Seq` order via `Deliver`, and
-`Remove`s it on success. A transient error triggers a backoff sleep
+`Remove`s it on success. `Deliver` reports whether a failure is permanent as its first
+return value, so the code that already holds the error classifies it inline — no separate
+predicate. A transient error (`permanent == false`) triggers a backoff sleep
 (`backoff.BackOff` from the already-vendored `github.com/cenkalti/backoff/v5`, replacing the
 current fixed `retryInterval`) and a retry from the same record; a permanent error
-(`IsPermanent`) triggers `DeadLetter` and continues. On startup, `Run`'s first pass
+(`permanent == true`) triggers `DeadLetter` and continues. On startup, `Run`'s first pass
 naturally redelivers everything `List` returns — this is the durability payoff, and it
 requires no separate recovery path.
 
@@ -154,14 +155,13 @@ drop-in match.
 ```go
 ob := outbox.New[model.RunnerEvent](outbox.Options[model.RunnerEvent]{
 	Store: outboxStore, // outbox.FileStore under the runner state dir, next to taskstate
-	Deliver: func(ctx context.Context, ev model.RunnerEvent) error {
-		_, err := client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
+	Deliver: func(ctx context.Context, ev model.RunnerEvent) (permanent bool, err error) {
+		_, err = client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
 			Events: []*xagentv1.RunnerEvent{ev.Proto()},
 		})
-		return err
+		return isPermanentError(err), err
 	},
-	IsPermanent: isPermanentError, // moves unchanged out of eventqueue.go
-	Log:         log,
+	Log: log,
 })
 ...
 go ob.Run(ctx)
