@@ -72,20 +72,14 @@ func Open(dir string) (*FileStore, error) {
 			return nil, fmt.Errorf("outbox: unmarshal record %d: %w", seq, err)
 		}
 		s.records[seq] = rec
-		if seq > liveMax {
-			liveMax = seq
-		}
+		liveMax = max(liveMax, seq)
 	}
 
 	deadMax, err := maxSeq(deadDir)
 	if err != nil {
 		return nil, err
 	}
-	max := liveMax
-	if deadMax > max {
-		max = deadMax
-	}
-	s.next = max + 1
+	s.next = max(liveMax, deadMax) + 1
 	return s, nil
 }
 
@@ -215,7 +209,7 @@ func maxSeq(dir string) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("outbox: read dir: %w", err)
 	}
-	var max uint64
+	var highest uint64
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -224,11 +218,9 @@ func maxSeq(dir string) (uint64, error) {
 		if !ok {
 			continue
 		}
-		if seq > max {
-			max = seq
-		}
+		highest = max(highest, seq)
 	}
-	return max, nil
+	return highest, nil
 }
 
 // formatSeq renders seq as a 20-digit zero-padded string so lexical order equals
