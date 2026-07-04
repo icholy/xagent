@@ -29,6 +29,5 @@ workspaces:
     agent:
       type: dummy
       dummy:
-        # Run a command that exits non-zero so the agent reports a failure.
-        commands:
-          - exit 1
+        # Return an error so the agent reports a failure.
+        error: dummy agent failed on purpose

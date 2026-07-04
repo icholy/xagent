@@ -146,6 +146,8 @@ type DummyConfig struct {
 	ToolCalls []agent.DummyToolCall `yaml:"tool_calls"`
 	// Commands to run
 	Commands []string
+	// Error, when set, is returned as an error from the agent.
+	Error string `yaml:"error"`
 }
 
 func (w *Workspace) Validate() error {
@@ -398,6 +400,7 @@ func (w *Workspace) AgentConfig() agent.Config {
 			Sleep:     w.Agent.Dummy.Sleep,
 			ToolCalls: w.Agent.Dummy.ToolCalls,
 			Commands:  w.Agent.Dummy.Commands,
+			Error:     w.Agent.Dummy.Error,
 		}
 	}
 	maps.Copy(cfg.McpServers, w.Agent.McpServers)

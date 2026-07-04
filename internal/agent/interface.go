@@ -94,6 +94,8 @@ type DummyOptions struct {
 	ToolCalls []DummyToolCall
 	// Commands to run
 	Commands []string
+	// Error, when set, is returned as an error from Prompt.
+	Error string
 }
 
 // DummyToolCall specifies an MCP tool call to make.
