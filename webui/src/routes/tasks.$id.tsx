@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
@@ -11,6 +11,8 @@ import {
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState, useRef, useLayoutEffect } from 'react'
+import type { TaskTab } from '@/lib/task'
+import { toTaskTab } from '@/lib/task'
 import {
   canArchiveTask,
   canUnarchiveTask,
@@ -39,6 +41,12 @@ import { Send, Loader2, List, Terminal, Link2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
+  // The active panel is mirrored in ?tab= so shell/links can be deep-linked. The
+  // default "timeline" is left out of the URL to keep the common link clean.
+  validateSearch: (search: Record<string, unknown>): { tab?: 'shell' | 'links' } => {
+    const tab = toTaskTab(search.tab)
+    return tab === 'timeline' ? {} : { tab }
+  },
   component: TaskDetail,
 })
 
@@ -46,10 +54,20 @@ function TaskDetail() {
   const { id } = Route.useParams()
   const taskId = BigInt(id)
   const orgId = useOrgId()
+  const navigate = useNavigate()
   // A shell session opened in this tab keeps the task in "running"; track it so
   // the Shell button stays reachable (and marked active) despite that status.
   const shellActive = isShellActive(useShellState(String(taskId)).phase)
-  const [tab, setTab] = useState<TabKey>('timeline')
+  // The active tab lives in the URL (?tab=) so panels can be deep-linked. The
+  // default "timeline" is stored as an absent param, so strip it when switching.
+  const tab = toTaskTab(Route.useSearch().tab)
+  const setTab = (next: TaskTab) =>
+    navigate({
+      to: '/tasks/$id',
+      params: { id },
+      search: (prev) => ({ ...prev, tab: next === 'timeline' ? undefined : next }),
+      replace: true,
+    })
   const [instruction, setInstruction] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -310,8 +328,6 @@ function TaskDetail() {
     </div>
   )
 }
-
-type TabKey = 'timeline' | 'shell' | 'links'
 
 // TabButton is one entry in the in-page tab bar: an underline-style tab with an
 // icon, a label, and either a count badge or a "session active" dot.
