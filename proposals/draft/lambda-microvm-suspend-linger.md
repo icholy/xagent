@@ -58,77 +58,113 @@ report the lingering VM as *exited* so the runner re-enters through
 `Launch(reuse)`, and (d) give `Launch(reuse)` a way to re-spawn the driver in the
 warm VM without a suspend/resume round-trip.
 
-### Detached suspend + in-memory linger registry
+### `WarmCache`: the detached-suspend registry
 
-Add an in-memory registry to `Backend`, keyed by MicroVM id (which is 1:1 with a
-task):
+All of the linger state and its concurrency live in a dedicated `WarmCache`
+struct rather than as loose fields and methods on `Backend`. `Backend` holds one
+and delegates to it; the state machine (schedule → exactly one of {suspend,
+claim, flush}) is then testable in isolation, without a `Backend` or the
+`Cloud`/`Stager` fakes.
 
 ```go
-type lingerEntry struct {
-    mu       sync.Mutex
-    done     bool          // scheduled → exactly one of {suspended, claimed, cancelled}
-    cancel   context.CancelFunc
+// WarmCache tracks MicroVMs whose driver has exited but whose suspend is
+// deferred for a linger window, so a fast follow-up run can reclaim the still-
+// RUNNING VM instead of paying a cold resume. It is keyed by MicroVM id (1:1
+// with a task) and is safe for concurrent use.
+type WarmCache struct {
+    suspend func(id string) // fires the actual SuspendMicrovm (injected by Backend)
+    log     *slog.Logger
+
+    mu      sync.Mutex
+    ctx     context.Context    // cache-lifetime ctx (survives any single Wait)
+    cancel  context.CancelFunc
+    entries map[string]*warmEntry // microvmID → pending suspend
 }
 
-type Backend struct {
-    // ...existing fields...
-    lingerCtx context.Context    // backend-lifetime ctx (New → Close), so a
-    lingerStop context.CancelFunc // detached suspend outlives the supervise ctx
-    mu      sync.Mutex
-    linger  map[string]*lingerEntry // microvmID → pending suspend
+type warmEntry struct {
+    timer *time.Timer
+    done  bool // scheduled → exactly one terminal: {suspended, claimed, flushed}
+}
+
+// Schedule defers suspend(id) by delay. A follow-up Claim within the window
+// cancels it; the window elapsing fires it. delay == 0 suspends inline and
+// registers nothing.
+func (w *WarmCache) Schedule(id string, delay time.Duration)
+
+// Claim cancels a pending suspend and returns true if it won the race against
+// the timer (the VM is still RUNNING and safe to reclaim). It returns false if
+// the suspend already fired or none was pending — the caller falls back to the
+// cold resume path.
+func (w *WarmCache) Claim(id string) bool
+
+// Pending reports whether id has a live deferred suspend (drives Probe).
+func (w *WarmCache) Pending(id string) bool
+
+// Flush cancels every pending timer and suspends each VM now. Called from
+// Backend.Close so no warm VM keeps billing after the runner stops.
+func (w *WarmCache) Flush()
+```
+
+`Backend` owns one `WarmCache`, wiring `suspend` to the actual control-plane
+call so the cache itself stays free of AWS types:
+
+```go
+func New(opts Options) (*Backend, error) {
+    b := &Backend{ /* ...existing fields... */ }
+    b.warm = NewWarmCache(func(id string) {
+        if _, err := b.cloud.SuspendMicrovm(b.warm.ctx, &awsmicrovm.SuspendMicrovmInput{MicrovmID: id}); err != nil {
+            b.log.Warn("warm: suspend after linger", "microvm", id, "err", err)
+        }
+    }, opts.Log)
+    return b, nil
 }
 ```
 
 **`Wait` change.** On a clean `driver-exited`, instead of suspending inline,
-`Wait` schedules a detached suspend and returns immediately:
+`Wait` hands the VM to the cache and returns immediately:
 
 ```go
 if exited {
-    b.scheduleSuspend(id, suspendDelay) // no-op immediate-suspend when delay == 0
+    b.warm.Schedule(id, suspendDelay) // suspends inline when suspendDelay == 0
     return backend.ExitCode(code), nil
 }
 ```
 
-`scheduleSuspend` registers a `lingerEntry` and starts a goroutine on
-`b.lingerCtx` (not `ctx` — the supervise ctx dies as soon as `Wait` returns) that
-waits `suspendDelay`, then transitions the entry to `suspended` under its mutex
-and calls `SuspendMicrovm`. If `suspendDelay == 0` it suspends immediately and
-skips the registry entirely — byte-for-byte the current behavior, so the feature
-is inert until configured.
+Because `Schedule` registers the entry *before* `Wait` returns, it exists before
+any follow-up `Start` can observe the VM, closing the ordering gap. The timer
+runs on the cache's own lifetime context, not the supervise `ctx` (which dies as
+soon as `Wait` returns).
 
-Because the entry is registered *before* `Wait` returns, it exists before any
-follow-up `Start` can observe the VM, closing the ordering gap.
-
-**`Probe` change.** A VM with a pending `lingerEntry` reports `StateExited`
+**`Probe` change.** A VM the cache still holds reports `StateExited`
 (husk-preserved) even though `GetMicrovm` says `RUNNING`, so the runner's
 `Running()` guard does not short-circuit the follow-up and instead drives
 `Start` → `Probe` `StateExited` → `Launch(reuse)`:
 
 ```go
 func (b *Backend) Probe(ctx context.Context, h backend.Handle) (backend.State, error) {
-    if b.isLingering(h.ID) {
+    if b.warm.Pending(h.ID) {
         return backend.StateExited, nil // warm husk: drive reuse, not "already running"
     }
     // ...existing GetMicrovm switch...
 }
 ```
 
-**`Close` change.** `Close` cancels `lingerCtx` and **flushes** every pending
-suspend — i.e. suspends now rather than leaving warm VMs billing compute after
-the runner stops. This differs deliberately from the mid-task shutdown contract
+**`Close` change.** `Close` calls `b.warm.Flush()` — cancelling every pending
+timer and suspending now rather than leaving warm VMs billing compute after the
+runner stops. This differs deliberately from the mid-task shutdown contract
 (where `Wait` returns without suspending so a *still-running* driver's VM
 survives for rehydration): here the driver has already exited, so `SUSPENDED` is
 the correct resting state and next boot resumes on demand.
 
 ### Warm claim in `Launch(reuse)`
 
-`tryResume` consults the registry before touching the control plane. If the VM
-has a pending suspend, it **claims** it — atomically cancels the scheduled
-suspend and re-spawns the driver over the proxy, with **no** `ResumeMicrovm`:
+`tryResume` asks the cache to `Claim` before touching the control plane. If the
+claim wins, the VM is still `RUNNING`; it re-spawns the driver over the proxy,
+with **no** `ResumeMicrovm`:
 
 ```go
 func (b *Backend) tryResume(ctx context.Context, reuse *backend.Handle) (bool, backend.Handle, error) {
-    if b.claimLinger(reuse.ID) { // won the race against the suspend timer
+    if b.warm.Claim(reuse.ID) { // won the race against the suspend timer
         hd, _ := decodeData(reuse.Data)
         if err := b.respawn(ctx, reuse.ID, hd.Endpoint); err != nil {
             return false, backend.Handle{}, fmt.Errorf("warm respawn: %w", err)
@@ -139,11 +175,13 @@ func (b *Backend) tryResume(ctx context.Context, reuse *backend.Handle) (bool, b
 }
 ```
 
-`claimLinger` transitions the entry to `claimed` under its mutex and returns
-`true` only if it beat the suspend goroutine. If the suspend already fired
-(`done == true` via `suspended`), it returns `false` and execution falls through
-to the existing cold-resume path — the window simply elapsed. Exactly one of
-{suspend fires, claim wins} completes; the loser is a no-op.
+`Claim` transitions the entry to its terminal state under the cache mutex and
+returns `true` only if it beat the suspend timer. If the suspend already fired
+(or nothing was pending), it returns `false` and execution falls through to the
+existing cold-resume path — the window simply elapsed. Exactly one of {suspend
+fires, claim wins} completes; the loser is a no-op. `Destroy` likewise `Claim`s
+(discarding the result) so an archive during the window cancels the pending
+timer before terminating.
 
 `respawn` POSTs a new shim control endpoint (below). The VM never left `RUNNING`,
 so the un-snapshot cost is skipped entirely; only the driver re-spawn remains.
@@ -248,22 +286,28 @@ in-flight handles.
    `driver-exited` on the next run; a second POST while running is a no-op; a POST
    before provisioning is a 409.
 
-3. **Detached suspend + linger registry** — Replace the inline suspend in `Wait`
-   with `scheduleSuspend` (detached goroutine on a backend-lifetime context),
-   register/deregister `lingerEntry`, make `Probe` report a lingering VM as
-   `StateExited`, and flush pending suspends on `Close`. `Destroy` deregisters any
-   pending suspend for the terminated VM. Delivers: `Wait` returns promptly and
-   the suspend is deferred by the configured delay. Depends on: (1). Verifiable
-   by: backend unit tests against the `Cloud`/`Stager` fakes — driver-exit
-   schedules (not fires) the suspend, the suspend fires after the window, `Probe`
-   is `StateExited` during the window, `Close` flushes, and `delay == 0` suspends
-   inline as today.
+3. **`WarmCache` struct** — Add the `WarmCache` (schedule / claim / pending /
+   flush) with its own tests, independent of the backend. Delivers: the
+   deferred-suspend state machine in isolation. Depends on: nothing. Verifiable
+   by: `WarmCache` unit tests with an injected `suspend` func and a fake clock —
+   `Schedule` fires after the window, `Claim` wins before it and loses after,
+   `Pending` tracks liveness, `Flush` suspends all now, and exactly one terminal
+   transition per entry under concurrency.
 
-4. **Warm claim in `Launch(reuse)`** — Have `tryResume` claim a pending
-   `lingerEntry` (cancelling the suspend) and `respawn` via `POST /xagent/start`
+4. **Wire `WarmCache` into `Backend`** — Replace the inline suspend in `Wait`
+   with `b.warm.Schedule`, make `Probe` report `b.warm.Pending` VMs as
+   `StateExited`, `Flush` on `Close`, and `Claim` on `Destroy`. Delivers: `Wait`
+   returns promptly and the suspend is deferred by the configured delay. Depends
+   on: (1) and (3). Verifiable by: backend unit tests against the `Cloud`/`Stager`
+   fakes — driver-exit schedules (not fires) the suspend, it fires after the
+   window, `Probe` is `StateExited` during the window, `Close` flushes, and
+   `delay == 0` suspends inline as today.
+
+5. **Warm claim in `Launch(reuse)`** — Have `tryResume` `Claim` a pending
+   warm entry (cancelling the suspend) and `respawn` via `POST /xagent/start`
    instead of `ResumeMicrovm`, falling through to the cold-resume path when the
    suspend already won the race. Delivers: end-to-end warm reuse. Depends on: (2)
-   and (3). Verifiable by: backend unit tests — a reuse during the window cancels
+   and (4). Verifiable by: backend unit tests — a reuse during the window cancels
    the suspend, POSTs `/xagent/start`, and calls **no** `ResumeMicrovm`; a reuse
    after the window resumes cold; a reuse racing the fired suspend resolves to
    exactly one outcome.
@@ -278,6 +322,15 @@ in-flight handles.
   small `Probe`/`Close` change but is the only shape that actually keeps the VM
   reusable. It is also strictly better on resource use: idle lingering VMs no
   longer consume runner concurrency.
+
+- **`WarmCache` struct vs. fields on `Backend`.** The deferred-suspend state
+  machine (schedule / claim / flush, each entry exactly one terminal transition
+  under concurrency) is the subtlest part of the design. Housing it in its own
+  `WarmCache` — with the actual `SuspendMicrovm` call injected as a `suspend
+  func(id)` — lets it be unit-tested against a fake clock with no `Backend`,
+  `Cloud`, or `Stager`, and keeps `Backend`'s methods thin delegations. The cost
+  is one extra type and a small indirection; the payoff is that the race-prone
+  logic is isolated and independently verifiable (implementation slice 3).
 
 - **Warm respawn vs. suspend/resume anyway.** Reusing a `RUNNING` VM needs a
   driver re-spawn without a control-plane resume, which is why a new shim
