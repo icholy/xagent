@@ -96,8 +96,8 @@ mockedOrgResolver := &OrgResolverMock{
 srv := New(Options{OrgResolver: mockedOrgResolver})
 // ... exercise srv ...
 
-// assert the method was called exactly once
-assert.Equal(t, len(mockedOrgResolver.ResolveOrgCalls()), 1)
+// assert the method was called exactly once (see "Asserting on Mock Calls")
+moqassert.CalledTimes(t, mockedOrgResolver.ResolveOrgCalls(), 1)
 
 // Bad: hand-written fake implementing the interface
 type fakeOrgResolver struct{}
@@ -107,6 +107,47 @@ func (fakeOrgResolver) ResolveOrg(ctx context.Context, userID string, orgID int6
 ```
 
 See `internal/xagentclient/client_moq.go` (`ClientMock`) for a checked-in `*_moq.go` example.
+
+## Asserting on Mock Calls
+
+Assert on a mock's `...Calls()` log with `internal/x/moqassert` instead of hand-rolling `len(...)` and `[0]` indexing. The helpers are bounds-safe and read as intent:
+
+```go
+moqassert.NotCalled(t, sender.SendChannelCalls())        // len == 0
+moqassert.Called(t, sender.SendChannelCalls())           // len >= 1
+moqassert.CalledTimes(t, sender.SendChannelCalls(), 1)   // len == n
+call := moqassert.CallN(t, sender.SendChannelCalls(), 0) // nth recorded call (fails if absent)
+```
+
+`CallN` returns the recorded-args struct, so chain field access or a `DeepEqual` off it:
+
+```go
+// Bad: re-invokes the accessor and hand-rolls the bounds check
+assert.Equal(t, len(sender.SendChannelCalls()), 1)
+assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 7 completed.")
+
+// Good: store the log once, assert count, then index safely
+calls := sender.SendChannelCalls()
+moqassert.CalledTimes(t, calls, 1)
+assert.DeepEqual(t,
+    moqassert.CallN(t, calls, 0).P,
+    mcpchannel.Params{Content: "Task 7 completed."},
+)
+```
+
+When a recorded argument is a **named** struct and you only care about a subset of its fields, compare against a literal with `internal/x/cmpx`. `cmpx.OnlyFields` is the inverse of `cmpopts.IgnoreFields` -- it ignores everything *except* the named fields, so the selection documents what the test actually checks:
+
+```go
+assert.DeepEqual(t,
+    moqassert.CallN(t, calls, 0).P,
+    mcpchannel.Params{Content: "Task 7 completed."},
+    cmpx.OnlyFields("Content"),
+)
+```
+
+Reach for `OnlyFields` when you keep a few of many fields; when you ignore only one or two, `cmpopts.IgnoreFields` is shorter. It does not apply to moq's anonymous per-call arg structs (you cannot write a clean literal for an unnamed type) -- assert those fields individually.
+
+Put each `assert.DeepEqual` argument on its own line with a trailing comma, as above -- it stays readable as the comparison options grow and is gofmt-stable.
 
 ## Prefer Duplication Over Helpers
 

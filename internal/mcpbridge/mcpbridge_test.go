@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/x/cmpx"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
+	"github.com/icholy/xagent/internal/x/moqassert"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gotest.tools/v3/assert"
 )
@@ -58,10 +60,13 @@ func TestForward_DefaultForwardsEverything(t *testing.T) {
 		ChannelMessage: "Task 42 completed.",
 	})
 
-	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 1)
-	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 42 completed.")
-	assert.Assert(t, sender.SendChannelCalls()[0].P.Meta == nil)
+	// Assert: exactly one forward carrying the summary and no metadata.
+	calls := sender.SendChannelCalls()
+	moqassert.CalledTimes(t, calls, 1)
+	assert.DeepEqual(t,
+		moqassert.CallN(t, calls, 0).P,
+		mcpchannel.Params{Content: "Task 42 completed."},
+	)
 }
 
 // TestForward_EmptyChannelMessage keeps the summary gate: notifications
@@ -81,7 +86,7 @@ func TestForward_EmptyChannelMessage(t *testing.T) {
 	})
 
 	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 0)
+	moqassert.NotCalled(t, sender.SendChannelCalls())
 }
 
 // TestForward_MutedTaskDropped drops notifications for a muted task while
@@ -107,9 +112,14 @@ func TestForward_MutedTaskDropped(t *testing.T) {
 		ChannelMessage: "Task 7 completed.",
 	})
 
-	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 1)
-	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 7 completed.")
+	// Assert: only the un-muted task's notification survived.
+	calls := sender.SendChannelCalls()
+	moqassert.CalledTimes(t, calls, 1)
+	assert.DeepEqual(t,
+		moqassert.CallN(t, calls, 0).P,
+		mcpchannel.Params{Content: "Task 7 completed."},
+		cmpx.OnlyFields("Content"),
+	)
 }
 
 // TestForward_NonTaskScopedAlwaysForwarded confirms a message with no task
@@ -128,8 +138,13 @@ func TestForward_NonTaskScopedAlwaysForwarded(t *testing.T) {
 	ch.Forward(context.Background(), model.Notification{ChannelMessage: "System notice."})
 
 	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 1)
-	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "System notice.")
+	calls := sender.SendChannelCalls()
+	moqassert.CalledTimes(t, calls, 1)
+	assert.DeepEqual(t,
+		moqassert.CallN(t, calls, 0).P,
+		mcpchannel.Params{Content: "System notice."},
+		cmpx.OnlyFields("Content"),
+	)
 }
 
 // TestForward_Unmute restores delivery for a previously muted task.
@@ -151,7 +166,7 @@ func TestForward_Unmute(t *testing.T) {
 	})
 
 	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+	moqassert.CalledTimes(t, sender.SendChannelCalls(), 1)
 }
 
 // TestForward_MuteAllDropsEveryTask confirms mute-all suppresses
@@ -179,7 +194,7 @@ func TestForward_MuteAllDropsEveryTask(t *testing.T) {
 	})
 
 	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 0)
+	moqassert.NotCalled(t, sender.SendChannelCalls())
 }
 
 // TestForward_MuteAllStillForwardsNonTaskScoped confirms mute-all only
@@ -199,8 +214,13 @@ func TestForward_MuteAllStillForwardsNonTaskScoped(t *testing.T) {
 	ch.Forward(context.Background(), model.Notification{ChannelMessage: "System notice."})
 
 	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 1)
-	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "System notice.")
+	calls := sender.SendChannelCalls()
+	moqassert.CalledTimes(t, calls, 1)
+	assert.DeepEqual(t,
+		moqassert.CallN(t, calls, 0).P,
+		mcpchannel.Params{Content: "System notice."},
+		cmpx.OnlyFields("Content"),
+	)
 }
 
 // TestForward_MuteAllThenUnmuteAll confirms unmute-all lifts a mute-all and
@@ -225,7 +245,7 @@ func TestForward_MuteAllThenUnmuteAll(t *testing.T) {
 	})
 
 	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+	moqassert.CalledTimes(t, sender.SendChannelCalls(), 1)
 }
 
 func TestMuteTool_All(t *testing.T) {
@@ -272,9 +292,14 @@ func TestForward_MuteAllThenUnmuteOne(t *testing.T) {
 		ChannelMessage: "Task 7 completed.",
 	})
 
-	// Assert
-	assert.Equal(t, len(sender.SendChannelCalls()), 1)
-	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 123 completed.")
+	// Assert: only the un-muted exception (123) kept delivering.
+	calls := sender.SendChannelCalls()
+	moqassert.CalledTimes(t, calls, 1)
+	assert.DeepEqual(t,
+		moqassert.CallN(t, calls, 0).P,
+		mcpchannel.Params{Content: "Task 123 completed."},
+		cmpx.OnlyFields("Content"),
+	)
 }
 
 // TestUnmuteTool_AfterMuteAll reports the unmuted exceptions under mute-all.
@@ -320,7 +345,7 @@ func TestMuteTool_RemuteUnderMuteAll(t *testing.T) {
 		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 123}},
 		ChannelMessage: "Task 123 completed.",
 	})
-	assert.Equal(t, len(sender.SendChannelCalls()), 0)
+	moqassert.NotCalled(t, sender.SendChannelCalls())
 }
 
 func TestMuteTool(t *testing.T) {
