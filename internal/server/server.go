@@ -72,6 +72,7 @@ func New(opts Options) *Server {
 	shell := shellserver.New(shellserver.Options{
 		Log:              log,
 		EstablishTimeout: shellrelay.DefaultEstablishTimeout,
+		IdleTimeout:      shellrelay.DefaultIdleTimeout,
 		OnClose:          onShellClose,
 		OrgResolver:      opts.OrgResolver,
 	})
