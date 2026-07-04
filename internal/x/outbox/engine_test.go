@@ -10,53 +10,24 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 	"gotest.tools/v3/assert"
+
+	"github.com/icholy/xagent/internal/x/testx"
 )
 
 type msg struct {
 	N int
 }
 
-// recorder collects the payloads passed to Deliver in call order.
-type recorder struct {
-	mu  sync.Mutex
-	got []int
-}
-
-func (r *recorder) add(n int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.got = append(r.got, n)
-}
-
-func (r *recorder) snapshot() []int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]int(nil), r.got...)
-}
-
-// waitFor polls cond until it returns true or the deadline passes.
-func waitFor(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(time.Millisecond)
-	}
-	t.Fatal("condition not met before deadline")
-}
-
 func TestOutbox_FIFO(t *testing.T) {
 	// Arrange
 	store, err := Open(t.TempDir())
 	assert.NilError(t, err)
-	var rec recorder
+	var got testx.SafeSlice[int]
 	ob := New(Options[msg]{
 		Store:   store,
 		Backoff: backoff.NewConstantBackOff(0),
 		Deliver: func(ctx context.Context, m msg) (bool, error) {
-			rec.add(m.N)
+			got.Append(m.N)
 			return false, nil
 		},
 	})
@@ -71,9 +42,11 @@ func TestOutbox_FIFO(t *testing.T) {
 	assert.NilError(t, ob.Enqueue(msg{N: 3}))
 
 	// Assert: delivered in enqueue order, then the store fully drains.
-	waitFor(t, func() bool { return len(rec.snapshot()) == 3 })
-	assert.DeepEqual(t, rec.snapshot(), []int{1, 2, 3})
-	waitFor(t, func() bool { n, _ := ob.Len(); return n == 0 })
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer waitCancel()
+	testx.WaitFor(t, waitCtx, func() bool { return got.Len() == 3 })
+	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
+	testx.WaitFor(t, waitCtx, func() bool { n, _ := ob.Len(); return n == 0 })
 }
 
 func TestOutbox_TransientRetry(t *testing.T) {
@@ -81,21 +54,21 @@ func TestOutbox_TransientRetry(t *testing.T) {
 	// messages must stay blocked behind it (head-of-line blocking).
 	store, err := Open(t.TempDir())
 	assert.NilError(t, err)
-	var rec recorder
+	var got testx.SafeSlice[int]
 	var attempts int
 	var mu sync.Mutex
 	ob := New(Options[msg]{
 		Store:   store,
 		Backoff: backoff.NewConstantBackOff(time.Millisecond),
 		Deliver: func(ctx context.Context, m msg) (bool, error) {
-			rec.add(m.N)
+			got.Append(m.N)
 			if m.N == 1 {
 				mu.Lock()
 				attempts++
 				n := attempts
 				mu.Unlock()
 				if n < 4 {
-					return false, assertError("transient")
+					return false, errFake("transient")
 				}
 			}
 			return false, nil
@@ -112,8 +85,10 @@ func TestOutbox_TransientRetry(t *testing.T) {
 
 	// Assert: head retried until success, everything delivered in order, and 2
 	// was never attempted before 1 succeeded.
-	waitFor(t, func() bool { n, _ := ob.Len(); return n == 0 })
-	assert.DeepEqual(t, rec.snapshot(), []int{1, 1, 1, 1, 2})
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer waitCancel()
+	testx.WaitFor(t, waitCtx, func() bool { n, _ := ob.Len(); return n == 0 })
+	assert.DeepEqual(t, got.Slice(), []int{1, 1, 1, 1, 2})
 }
 
 func TestOutbox_PermanentDeadLetter(t *testing.T) {
@@ -122,14 +97,14 @@ func TestOutbox_PermanentDeadLetter(t *testing.T) {
 	dir := t.TempDir()
 	store, err := Open(dir)
 	assert.NilError(t, err)
-	var rec recorder
+	var got testx.SafeSlice[int]
 	ob := New(Options[msg]{
 		Store:   store,
 		Backoff: backoff.NewConstantBackOff(0),
 		Deliver: func(ctx context.Context, m msg) (bool, error) {
-			rec.add(m.N)
+			got.Append(m.N)
 			if m.N == 2 {
-				return true, assertError("permanent")
+				return true, errFake("permanent")
 			}
 			return false, nil
 		},
@@ -146,8 +121,10 @@ func TestOutbox_PermanentDeadLetter(t *testing.T) {
 
 	// Assert: 2 is attempted once, then dead-lettered; 1 and 3 delivered; the
 	// live queue drains and the dead-letter file survives.
-	waitFor(t, func() bool { n, _ := ob.Len(); return n == 0 })
-	assert.DeepEqual(t, rec.snapshot(), []int{1, 2, 3})
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer waitCancel()
+	testx.WaitFor(t, waitCtx, func() bool { n, _ := ob.Len(); return n == 0 })
+	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
 
 	dead, err := os.ReadDir(filepath.Join(dir, "dead"))
 	assert.NilError(t, err)
@@ -185,12 +162,12 @@ func TestOutbox_StartupRecovery(t *testing.T) {
 
 	store, err := Open(dir)
 	assert.NilError(t, err)
-	var rec recorder
+	var got testx.SafeSlice[int]
 	ob := New(Options[msg]{
 		Store:   store,
 		Backoff: backoff.NewConstantBackOff(0),
 		Deliver: func(ctx context.Context, m msg) (bool, error) {
-			rec.add(m.N)
+			got.Append(m.N)
 			return false, nil
 		},
 	})
@@ -201,12 +178,14 @@ func TestOutbox_StartupRecovery(t *testing.T) {
 	go ob.Run(ctx)
 
 	// Assert
-	waitFor(t, func() bool { return len(rec.snapshot()) == 3 })
-	assert.DeepEqual(t, rec.snapshot(), []int{1, 2, 3})
-	waitFor(t, func() bool { n, _ := ob.Len(); return n == 0 })
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer waitCancel()
+	testx.WaitFor(t, waitCtx, func() bool { return got.Len() == 3 })
+	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
+	testx.WaitFor(t, waitCtx, func() bool { n, _ := ob.Len(); return n == 0 })
 }
 
-// assertError is a trivial error for scripted Deliver failures.
-type assertError string
+// errFake is a trivial error for scripted Deliver failures.
+type errFake string
 
-func (e assertError) Error() string { return string(e) }
+func (e errFake) Error() string { return string(e) }

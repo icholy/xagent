@@ -1,6 +1,7 @@
 package outbox
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -42,21 +43,12 @@ type Outbox[T any] struct {
 
 // New constructs an Outbox from opts.
 func New[T any](opts Options[T]) *Outbox[T] {
-	bo := opts.Backoff
-	if bo == nil {
-		bo = backoff.NewExponentialBackOff()
-	}
-	bo.Reset()
-	log := opts.Log
-	if log == nil {
-		log = slog.Default()
-	}
 	return &Outbox[T]{
 		store:   opts.Store,
 		notify:  wakeup.New(),
 		deliver: opts.Deliver,
-		backoff: bo,
-		log:     log,
+		backoff: cmp.Or[backoff.BackOff](opts.Backoff, backoff.NewExponentialBackOff()),
+		log:     cmp.Or(opts.Log, slog.Default()),
 	}
 }
 
