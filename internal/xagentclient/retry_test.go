@@ -35,10 +35,10 @@ func TestRetryInterceptor_RetriesUntilSuccess(t *testing.T) {
 	t.Parallel()
 	// Arrange: fail with Unavailable twice, then succeed.
 	var calls atomic.Int64
-	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{
+	interceptor := xagentclient.RetryInterceptor{
 		MaxRetries: 3,
 		NewBackOff: fastBackOff,
-	})
+	}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		if calls.Add(1) < 3 {
 			return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
@@ -59,10 +59,10 @@ func TestRetryInterceptor_ExhaustsRetries(t *testing.T) {
 	t.Parallel()
 	// Arrange: always fail with a retryable error.
 	var calls atomic.Int64
-	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{
+	interceptor := xagentclient.RetryInterceptor{
 		MaxRetries: 2,
 		NewBackOff: fastBackOff,
-	})
+	}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		calls.Add(1)
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
@@ -80,10 +80,10 @@ func TestRetryInterceptor_DoesNotRetryPermanentError(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	var calls atomic.Int64
-	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{
+	interceptor := xagentclient.RetryInterceptor{
 		MaxRetries: 5,
 		NewBackOff: fastBackOff,
-	})
+	}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		calls.Add(1)
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("nope"))
@@ -104,10 +104,10 @@ func TestRetryInterceptor_StopsOnCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var calls atomic.Int64
-	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{
+	interceptor := xagentclient.RetryInterceptor{
 		MaxRetries: 5,
 		NewBackOff: func() backoff.BackOff { return backoff.NewConstantBackOff(time.Hour) },
-	})
+	}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		calls.Add(1)
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
@@ -127,7 +127,7 @@ func TestRetryInterceptor_NegativeMaxRetriesDisables(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	var calls atomic.Int64
-	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{MaxRetries: -1})
+	interceptor := xagentclient.RetryInterceptor{MaxRetries: -1}
 	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
 		calls.Add(1)
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))

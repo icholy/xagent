@@ -9,7 +9,7 @@ import (
 	"github.com/cenkalti/backoff/v5"
 )
 
-// Retry defaults used when a RetryOptions field is left zero.
+// Retry defaults applied by WrapUnary for zero-valued fields.
 const (
 	// DefaultMaxRetries is the number of retry attempts after the initial call.
 	DefaultMaxRetries = 4
@@ -19,7 +19,7 @@ const (
 	DefaultMaxBackoff = 5 * time.Second
 )
 
-// DefaultBackOff returns the backoff schedule used when RetryOptions.NewBackOff
+// DefaultBackOff returns the backoff schedule used when RetryInterceptor.NewBackOff
 // is nil: exponential growth (with jitter) from DefaultInitialBackoff, capped
 // at DefaultMaxBackoff.
 func DefaultBackOff() backoff.BackOff {
@@ -29,8 +29,18 @@ func DefaultBackOff() backoff.BackOff {
 	return bo
 }
 
-// RetryOptions configures RetryInterceptor.
-type RetryOptions struct {
+// RetryInterceptor is a connect.Interceptor that retries failed unary requests,
+// delegating the backoff schedule to cenkalti/backoff. Only transient errors
+// (connect.CodeUnavailable, which Connect reports for connection failures and
+// unreachable servers) are retried, so a retried request is one that most
+// likely never reached the server. Streaming calls are passed through
+// unchanged.
+//
+// Connect has no built-in retry mechanism (retries are left to interceptors),
+// so the interceptor plumbing and the retryable-code policy are ours; only the
+// backoff schedule comes from the library. The zero value is usable and
+// applies the defaults.
+type RetryInterceptor struct {
 	// MaxRetries is the number of retry attempts after the initial call.
 	// Defaults to DefaultMaxRetries when zero. Use a negative value to
 	// disable retries.
@@ -42,40 +52,18 @@ type RetryOptions struct {
 	NewBackOff func() backoff.BackOff
 }
 
-// RetryInterceptor retries failed unary requests, delegating the backoff
-// schedule to cenkalti/backoff. Only transient errors (connect.CodeUnavailable,
-// which Connect reports for connection failures and unreachable servers) are
-// retried, so a retried request is one that most likely never reached the
-// server. Streaming calls are passed through unchanged.
-//
-// Connect has no built-in retry mechanism (retries are left to interceptors),
-// so the interceptor plumbing and the retryable-code policy are ours; only the
-// backoff schedule comes from the library.
-type RetryInterceptor struct {
-	maxRetries int
-	newBackOff func() backoff.BackOff
-}
-
-// NewRetryInterceptor builds a RetryInterceptor from opts, applying defaults
-// for any zero-valued field.
-func NewRetryInterceptor(opts RetryOptions) *RetryInterceptor {
-	newBackOff := opts.NewBackOff
+// WrapUnary retries the call while it fails with a retryable error, backing off
+// according to the configured schedule between attempts.
+func (i RetryInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	maxRetries := cmp.Or(i.MaxRetries, DefaultMaxRetries)
+	newBackOff := i.NewBackOff
 	if newBackOff == nil {
 		newBackOff = DefaultBackOff
 	}
-	return &RetryInterceptor{
-		maxRetries: cmp.Or(opts.MaxRetries, DefaultMaxRetries),
-		newBackOff: newBackOff,
-	}
-}
-
-// WrapUnary retries the call while it fails with a retryable error, backing off
-// according to the configured schedule between attempts.
-func (i *RetryInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		// maxTries counts the initial attempt plus retries; clamp to at least
 		// one so a negative MaxRetries disables retries without underflowing.
-		maxTries := uint(max(i.maxRetries+1, 1))
+		maxTries := uint(max(maxRetries+1, 1))
 		return backoff.Retry(ctx, func() (connect.AnyResponse, error) {
 			res, err := next(ctx, req)
 			if err != nil && !isRetryable(err) {
@@ -84,7 +72,7 @@ func (i *RetryInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			}
 			return res, err
 		},
-			backoff.WithBackOff(i.newBackOff()),
+			backoff.WithBackOff(newBackOff()),
 			backoff.WithMaxTries(maxTries),
 			// Bound retries by attempt count only, not wall-clock time.
 			backoff.WithMaxElapsedTime(0),
@@ -94,13 +82,13 @@ func (i *RetryInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 
 // WrapStreamingClient passes streaming calls through unchanged; they are not
 // retried because their request bodies cannot be safely replayed.
-func (i *RetryInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+func (i RetryInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
 	return next
 }
 
 // WrapStreamingHandler is unused on the client but required to satisfy
 // connect.Interceptor.
-func (i *RetryInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+func (i RetryInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return next
 }
 
