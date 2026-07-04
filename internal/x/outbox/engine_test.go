@@ -2,6 +2,7 @@ package outbox
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -62,7 +63,7 @@ func TestOutbox_TransientRetry(t *testing.T) {
 				a := attempts
 				mu.Unlock()
 				if a < 4 {
-					return false, errFake("transient")
+					return false, errors.New("transient")
 				}
 			}
 			return false, nil
@@ -96,7 +97,7 @@ func TestOutbox_PermanentDeadLetter(t *testing.T) {
 		Deliver: func(ctx context.Context, n int) (bool, error) {
 			got.Append(n)
 			if n == 2 {
-				return true, errFake("permanent")
+				return true, errors.New("permanent")
 			}
 			return false, nil
 		},
@@ -171,8 +172,3 @@ func TestOutbox_StartupRecovery(t *testing.T) {
 	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { n, _ := ob.Len(); return n == 0 })
 	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
 }
-
-// errFake is a trivial error for scripted Deliver failures.
-type errFake string
-
-func (e errFake) Error() string { return string(e) }
