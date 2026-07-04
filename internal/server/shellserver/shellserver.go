@@ -99,20 +99,15 @@ func (r *Registry) registerMetrics() {
 		metric.WithDescription("Number of currently active shell rendezvous sessions."),
 		metric.WithUnit("{session}"),
 		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
-			o.Observe(r.count())
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			o.Observe(int64(len(r.sessions)))
 			return nil
 		}),
 	)
 	if err != nil {
 		r.log.Warn("failed to register shell session metric", "error", err)
 	}
-}
-
-// count returns the number of currently registered sessions.
-func (r *Registry) count() int64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return int64(len(r.sessions))
 }
 
 // Seed registers a new rendezvous session owned by orgID and served by taskID's
