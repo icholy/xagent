@@ -113,7 +113,7 @@ Four decisions frame the design.
    — but it is a constraint on *who can act on* a handle, not a reason the mapping
    must be non-durable.
 
-2. **A dedicated `task_sandboxes` table, not columns on `tasks`.** The mapping is
+2. **A dedicated `sandboxes` table, not columns on `tasks`.** The mapping is
    1:1 with a task, which argues for columns on the `tasks` row. But a dedicated
    table is chosen because: the handle exists only while a sandbox does (most
    terminal/archived tasks have none, so a nullable side table is more honest than
@@ -124,8 +124,8 @@ Four decisions frame the design.
    different cadence (sandbox create/teardown).
 
    ```sql
-   -- internal/store/sql/migrations/NNNN_task_sandboxes.sql
-   CREATE TABLE public.task_sandboxes (
+   -- internal/store/sql/migrations/NNNN_sandboxes.sql
+   CREATE TABLE public.sandboxes (
        task_id     bigint      NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
        org_id      bigint      NOT NULL,
        runner      text        NOT NULL,   -- runner that produced the handle
@@ -135,7 +135,7 @@ Four decisions frame the design.
        updated_at  timestamp   NOT NULL DEFAULT CURRENT_TIMESTAMP,
        PRIMARY KEY (task_id)
    );
-   CREATE INDEX idx_task_sandboxes_runner ON public.task_sandboxes (runner, org_id);
+   CREATE INDEX idx_sandboxes_runner ON public.sandboxes (runner, org_id);
    ```
 
    `ON DELETE CASCADE` means deleting a task drops its handle for free. `org_id` is
@@ -169,7 +169,7 @@ Four decisions frame the design.
    stale writer cannot clobber a newer handle.
 
 4. **The runner stays sole writer; reads ride the existing poll.** No backend and
-   no other server path writes `task_sandboxes`. The runner writes it at the same
+   no other server path writes `sandboxes`. The runner writes it at the same
    two moments it writes the local store today (after `Launch`, after `Destroy`),
    and reads it at the same moments (`Start`, `Load`, `List`). Reads for the hot
    path (`Start`) piggyback on `ListRunnerTasks`, which already returns the tasks
@@ -232,7 +232,7 @@ message Task {
 }
 ```
 
-`ListRunnerTasks` (the runner's poll) left-joins `task_sandboxes` and fills
+`ListRunnerTasks` (the runner's poll) left-joins `sandboxes` and fills
 `Task.sandbox` when present. Because the runner already receives the task on every
 poll, the read path for `Start` is free; the standalone `ListRunnerSandboxes`
 exists only for the enumerate-everything paths (`Load` at boot, `Prune`).
@@ -300,7 +300,7 @@ transient outage does not lose a handle (see Failure modes).
 The transition is staged so a mixed fleet (old + new runners) is always correct;
 the server column is additive and nullable, and old runners simply ignore it.
 
-1. **Schema + RPCs land first, dormant.** `task_sandboxes` and the three RPCs ship;
+1. **Schema + RPCs land first, dormant.** `sandboxes` and the three RPCs ship;
    nothing writes the table yet. Old runners are unaffected.
 2. **Dual-write, local-authoritative.** The runner writes **both** stores on every
    `Write`/`Remove`; reads still come from the local store. This backfills the
@@ -365,8 +365,8 @@ internal/runner/taskstate/
 internal/store/
 ├── task.go             + Upsert/Delete/Get/ListTaskSandboxesForRunner
 └── sql/
-    ├── migrations/NNNN_task_sandboxes.sql
-    └── queries/task_sandbox.sql
+    ├── migrations/NNNN_sandboxes.sql
+    └── queries/sandbox.sql
 
 internal/server/apiserver/runner.go   + SetTaskSandbox/ClearTaskSandbox/ListRunnerSandboxes
 proto/xagent/v1/xagent.proto          + TaskSandbox, 3 RPCs, Task.sandbox
@@ -401,7 +401,7 @@ unauthenticated on a shared host — but centralizing it makes the missing runne
 identity more visible. Treated as an open question rather than a blocker.
 
 **Chose a side table over columns on `tasks`.** A 1:1 mapping tempts three columns
-on the task row. The dedicated `task_sandboxes` table costs a join on the runner
+on the task row. The dedicated `sandboxes` table costs a join on the runner
 poll but keeps the hot task row small, models "usually absent" honestly, and gives
 a clean `runner` index for reconciliation. The join is cheap (primary-key lookup)
 and only on the runner's own poll.
