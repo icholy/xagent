@@ -36,12 +36,20 @@ func TestEventQueue_DrainSuccess(t *testing.T) {
 	assert.Equal(t, q.Len(), 0)
 	calls := mock.SubmitRunnerEventsCalls()
 	assert.Assert(t, cmp.Len(calls, 2))
-	assert.DeepEqual(t, calls[0].SubmitRunnerEventsRequest, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{{TaskId: 1, Event: "stopped"}},
-	}, protocmp.Transform())
-	assert.DeepEqual(t, calls[1].SubmitRunnerEventsRequest, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{{TaskId: 2, Event: "failed", Version: 5}},
-	}, protocmp.Transform())
+	assert.DeepEqual(t,
+		calls[0].SubmitRunnerEventsRequest,
+		&xagentv1.SubmitRunnerEventsRequest{
+			Events: []*xagentv1.RunnerEvent{{TaskId: 1, Event: "stopped"}},
+		},
+		protocmp.Transform(),
+	)
+	assert.DeepEqual(t,
+		calls[1].SubmitRunnerEventsRequest,
+		&xagentv1.SubmitRunnerEventsRequest{
+			Events: []*xagentv1.RunnerEvent{{TaskId: 2, Event: "failed", Version: 5}},
+		},
+		protocmp.Transform(),
+	)
 }
 
 func TestEventQueue_DrainBlocksOnFailure(t *testing.T) {
@@ -107,9 +115,13 @@ func TestEventQueue_RunDrainsImmediately(t *testing.T) {
 		assert.Equal(t, q.Len(), 0)
 		calls := mock.SubmitRunnerEventsCalls()
 		assert.Assert(t, cmp.Len(calls, 1))
-		assert.DeepEqual(t, calls[0].SubmitRunnerEventsRequest, &xagentv1.SubmitRunnerEventsRequest{
-			Events: []*xagentv1.RunnerEvent{{TaskId: 1, Event: "started"}},
-		}, protocmp.Transform())
+		assert.DeepEqual(t,
+			calls[0].SubmitRunnerEventsRequest,
+			&xagentv1.SubmitRunnerEventsRequest{
+				Events: []*xagentv1.RunnerEvent{{TaskId: 1, Event: "started"}},
+			},
+			protocmp.Transform(),
+		)
 	})
 }
 
