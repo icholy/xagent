@@ -94,8 +94,10 @@ func Attach(ctx context.Context, opts AttachOptions) (int, error) {
 	if err != nil {
 		return code, fmt.Errorf("shell session ended: %w", err)
 	}
-	conn.Close(websocket.StatusNormalClosure, "shell exited")
-	return code, nil
+	// CloseNow, not a graceful Close: the relay only ever tears a leg down with
+	// CloseNow, so a graceful close here blocks for a close-frame reply that never
+	// comes and burns the handshake timeout — the shell-exit hang.
+	return code, conn.CloseNow()
 }
 
 // OperateOptions configures Operate.
