@@ -1,6 +1,6 @@
 ---
 name: xagent-implement
-description: Execute an already-agreed plan by delivering it as a stack of "layer cake" PRs — one xagent task per PR, strictly one at a time. Use when the design is settled (usually an accepted proposal) and the job is to build it. You delegate each layer to a task, review the PR it opens, and the human merges. A merge is the go signal to start the next layer. Mute all channel notifications and unmute only the tasks you create. Track progress in a GitHub issue with a checkbox per layer so the work can be resumed after context loss.
+description: Execute an already-agreed plan by delivering it as a stack of "layer cake" PRs — one xagent task per PR, strictly one at a time. Use when the design is settled (usually an accepted proposal) and the job is to build it. You delegate each layer to a task, review the PR it opens, and the human merges. A merge is the go signal to start the next layer. Feedback on a PR — yours or the user's — is relayed back to the task (which wakes on the PR event) rather than fixed by hand. Mute all channel notifications and unmute only the tasks you create. Track progress in a GitHub issue with a checkbox per layer so the work can be resumed after context loss.
 ---
 
 # xagent Implement
@@ -35,10 +35,13 @@ production code yourself — the agents do.
    user explicitly asks.
 6. **Review every PR against the plan.** Read it end to end. Confirm the layer is thin,
    correct, and stays inside its slice — it must not reach into a later layer's scope.
-7. **Talk to the human before giving feedback.** Surface issues you find to the user first
-   and align. Only then request changes on the PR (`mcp__meta__Github__add_issue_comment`)
-   tagging the author (e.g. `@icholy-bot`). Iterate until it's right — and still don't start
-   the next layer until this one merges.
+7. **Relay feedback to the task; don't implement it yourself.** When a layer's PR needs
+   changes — whether you caught the issue in review or the user handed you the feedback — the
+   fix is the task's to make, not yours to edit into the PR branch. Surface what you found to
+   the user and align first (they may have context or want to redirect); only then post the
+   feedback on the PR, tagging the author (e.g. `@icholy-bot`). The event system wakes the
+   task to address it — see [Relaying feedback to the task](#relaying-feedback-to-the-task).
+   Iterate until it's right, and still don't start the next layer until this one merges.
 
 ## Before you start
 
@@ -63,8 +66,10 @@ production code yourself — the agents do.
 3. **Review the PR.** Read it against the slice's intent and the proposal. Check it's thin,
    correct, self-contained, and doesn't pull in later layers.
 4. **Discuss with the human.** Bring what you found to the user before posting anything.
-5. **Request changes / iterate.** Once aligned, comment on the PR tagging the author. Loop
-   until it's right. Do **not** advance.
+5. **Relay changes / iterate.** Once aligned, post the feedback on the PR tagging the author;
+   the event system wakes the task to fix it (see
+   [Relaying feedback to the task](#relaying-feedback-to-the-task)). Re-review the updated PR
+   and loop until it's right. Don't edit the PR yourself, and do **not** advance.
 6. **Gate on merge, then update the issue.** The human merges the PR — that merge is the go
    signal. Verify it's actually merged, check the layer's box in the tracking issue and record
    its PR link, reset `## Status` to the next layer, then return to step 1.
@@ -74,6 +79,30 @@ production code yourself — the agents do.
 Continue until the final slice is merged. Then check the last box, set the issue's `## Status`
 to `Done.`, close it, and report the plan complete. If the user wants normal notifications back
 afterward, `channel_unmute(all=true)`.
+
+## Relaying feedback to the task
+
+Feedback on a layer's PR is relayed **back to the task that opened it** — you do not edit the
+PR branch yourself. This holds whether you caught the issue in review or the user handed you
+the change: the task owns its PR, so the task makes the fix. Relaying is the default; editing
+the PR yourself is a last resort (the user explicitly asks, or it's a trivial mechanical
+fixup a round trip clearly isn't worth) — and even then, prefer relaying.
+
+**How it reaches the task.** The event system does the routing. When the agent opens the PR
+it subscribes to the PR link (`create_link(subscribe=true)`); commenting on or reviewing that
+PR emits a GitHub event the poller matches to that link and **wakes the task** — even though
+its sandbox has already exited — so it can push a fix. This is the same routing behind the
+`Task N woken by event …` notifications. The task is already unmuted (you unmuted it at
+creation), so its wake and completion notifications land in your channel for free.
+
+The loop:
+
+1. **Align with the user first** (core rule 7) — don't post until you've agreed on the change.
+2. **Post it on the PR**, tagging the author (`@icholy-bot`), as a review comment or
+   `mcp__meta__Github__add_issue_comment`. Be specific and actionable — name the files and the
+   exact signature/behavior you want, and point at symbols instead of pasting code.
+3. **Wait for the wake**, then **re-review** the updated PR. Iterate until it's right; don't
+   advance to the next layer until this one merges.
 
 ## Tracking issue
 
