@@ -7,7 +7,7 @@ import { TaskShell } from '@/components/task-shell'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Loader2, TerminalSquare } from 'lucide-react'
 
-export const Route = createFileRoute('/tasks/$id/shell')({
+export const Route = createFileRoute('/tasks/$id_/shell')({
   staticData: { orgSwitchRedirect: '/tasks' },
   component: TaskShellPage,
 })
@@ -38,7 +38,7 @@ function TaskShellPage() {
     <div className="flex h-screen flex-col">
       <div className="flex items-center gap-3 border-b px-4 py-2">
         <Button asChild variant="ghost" size="sm">
-          <Link to="/tasks/$id" params={{ id }}>
+          <Link to="/tasks/$id" params={{ id }} search={{ org: orgId }}>
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back to task
           </Link>

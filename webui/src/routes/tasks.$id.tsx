@@ -20,6 +20,7 @@ import {
   isArchivedTask,
 } from '@/lib/task'
 import { eventsToTimeline } from '@/lib/timeline'
+import { useOrgId } from '@/hooks/use-org-id'
 import { ArchivedBadge } from '@/components/archived-badge'
 import { ArchiveButton } from '@/components/archive-button'
 import { AutoArchiveControl } from '@/components/auto-archive-control'
@@ -40,6 +41,7 @@ export const Route = createFileRoute('/tasks/$id')({
 function TaskDetail() {
   const { id } = Route.useParams()
   const taskId = BigInt(id)
+  const orgId = useOrgId()
   const [instruction, setInstruction] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -177,7 +179,7 @@ function TaskDetail() {
           )}
           {canOpenShell(task) ? (
             <Button asChild variant="outline" size="sm">
-              <Link to="/tasks/$id/shell" params={{ id }}>
+              <Link to="/tasks/$id/shell" params={{ id }} search={{ org: orgId }}>
                 <TerminalSquare className="mr-2 h-4 w-4" />
                 Open shell
               </Link>
