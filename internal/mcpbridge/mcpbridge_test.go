@@ -2,47 +2,16 @@ package mcpbridge
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/cmpx"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
+	"github.com/icholy/xagent/internal/x/mcptest"
 	"github.com/icholy/xagent/internal/x/testx"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
-
-// mutedIDsFromResult extracts the muted list a tool handler returns.
-func mutedIDsFromResult(t *testing.T, res *mcp.CallToolResult) []int64 {
-	t.Helper()
-	assert.Assert(t, !res.IsError)
-	assert.Equal(t, len(res.Content), 1)
-	text, ok := res.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok, "expected *mcp.TextContent, got %T", res.Content[0])
-	var out struct {
-		Muted []int64 `json:"muted"`
-	}
-	assert.NilError(t, json.Unmarshal([]byte(text.Text), &out))
-	return out.Muted
-}
-
-// muteStateFromResult extracts the full mute state a tool handler returns.
-func muteStateFromResult(t *testing.T, res *mcp.CallToolResult) (all bool, muted, unmuted []int64) {
-	t.Helper()
-	assert.Assert(t, !res.IsError)
-	assert.Equal(t, len(res.Content), 1)
-	text, ok := res.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok, "expected *mcp.TextContent, got %T", res.Content[0])
-	var out struct {
-		All     bool    `json:"all"`
-		Muted   []int64 `json:"muted"`
-		Unmuted []int64 `json:"unmuted"`
-	}
-	assert.NilError(t, json.Unmarshal([]byte(text.Text), &out))
-	return out.All, out.Muted, out.Unmuted
-}
 
 // TestForward_DefaultForwardsEverything is the byte-for-byte default: an
 // empty mute set forwards every channel-worthy notification unchanged.
@@ -260,10 +229,11 @@ func TestMuteTool_All(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	all, _, unmuted := muteStateFromResult(t, res)
-	assert.Assert(t, all)
+	var got muteState
+	mcptest.UnmarshalCallToolResult(t, res, &got)
+	assert.Assert(t, got.All)
 	// mute-all subsumes and clears the exception set: nothing is delivered.
-	assert.Equal(t, len(unmuted), 0)
+	assert.Equal(t, len(got.Unmuted), 0)
 }
 
 // TestForward_MuteAllThenUnmuteOne is the maintainer-requested workflow:
@@ -316,9 +286,10 @@ func TestUnmuteTool_AfterMuteAll(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	all, _, unmuted := muteStateFromResult(t, res)
-	assert.Assert(t, all)
-	assert.DeepEqual(t, unmuted, []int64{7, 123})
+	var got muteState
+	mcptest.UnmarshalCallToolResult(t, res, &got)
+	assert.Assert(t, got.All)
+	assert.DeepEqual(t, got.Unmuted, []int64{7, 123})
 }
 
 // TestMuteTool_RemuteUnderMuteAll confirms muting a task that was unmuted
@@ -338,9 +309,10 @@ func TestMuteTool_RemuteUnderMuteAll(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Assert: the exception is gone, so 123 is muted again.
-	all, _, unmuted := muteStateFromResult(t, res)
-	assert.Assert(t, all)
-	assert.Equal(t, len(unmuted), 0)
+	var got muteState
+	mcptest.UnmarshalCallToolResult(t, res, &got)
+	assert.Assert(t, got.All)
+	assert.Equal(t, len(got.Unmuted), 0)
 	ch.Forward(context.Background(), model.Notification{
 		Type:           "change",
 		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 123}},
@@ -359,7 +331,9 @@ func TestMuteTool(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	assert.DeepEqual(t, mutedIDsFromResult(t, res), []int64{3, 9})
+	var got muteState
+	mcptest.UnmarshalCallToolResult(t, res, &got)
+	assert.DeepEqual(t, got.Muted, []int64{3, 9})
 }
 
 func TestUnmuteTool(t *testing.T) {
@@ -375,7 +349,9 @@ func TestUnmuteTool(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	assert.DeepEqual(t, mutedIDsFromResult(t, res), []int64{1, 3})
+	var got muteState
+	mcptest.UnmarshalCallToolResult(t, res, &got)
+	assert.DeepEqual(t, got.Muted, []int64{1, 3})
 }
 
 func TestUnmuteTool_All(t *testing.T) {
@@ -390,7 +366,9 @@ func TestUnmuteTool_All(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	assert.Equal(t, len(mutedIDsFromResult(t, res)), 0)
+	var got muteState
+	mcptest.UnmarshalCallToolResult(t, res, &got)
+	assert.Equal(t, len(got.Muted), 0)
 }
 
 func TestMutedTool(t *testing.T) {
@@ -405,5 +383,7 @@ func TestMutedTool(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	assert.DeepEqual(t, mutedIDsFromResult(t, res), []int64{1, 5})
+	var got muteState
+	mcptest.UnmarshalCallToolResult(t, res, &got)
+	assert.DeepEqual(t, got.Muted, []int64{1, 5})
 }

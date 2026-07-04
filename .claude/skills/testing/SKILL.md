@@ -134,17 +134,30 @@ assert.DeepEqual(t,
 )
 ```
 
-When a recorded argument is a **named** struct and you only care about a subset of its fields, compare against a literal with `internal/x/cmpx`. `cmpx.OnlyFields` is the inverse of `cmpopts.IgnoreFields` -- it ignores everything *except* the named fields, so the selection documents what the test actually checks:
+When a recorded argument is a **named** struct and you care about *several* of its fields, compare against a literal with `internal/x/cmpx`. `cmpx.OnlyFields` is the inverse of `cmpopts.IgnoreFields` -- it ignores everything *except* the named fields, so the selection documents what the test actually checks:
 
 ```go
 assert.DeepEqual(t,
     testx.At(t, calls, 0).P,
-    mcpchannel.Params{Content: "Task 7 completed."},
-    cmpx.OnlyFields("Content"),
+    mcpchannel.Params{Content: "Task 7 completed.", Priority: 2},
+    cmpx.OnlyFields("Content", "Priority"),
 )
 ```
 
-Reach for `OnlyFields` when you keep a few of many fields; when you ignore only one or two, `cmpopts.IgnoreFields` is shorter. It does not apply to moq's anonymous per-call arg structs (you cannot write a clean literal for an unnamed type) -- assert those fields individually.
+When the test cares about only a **single** field, do NOT wrap it in the `DeepEqual` + `OnlyFields` machinery -- index into that field and assert on it directly. This is shorter and reads better:
+
+```go
+// Good: one field, asserted directly
+assert.DeepEqual(t, got.Muted, []int64{3, 9})
+assert.Equal(t, testx.At(t, calls, 0).P.Content, "Task 7 completed.")
+
+// Bad: whole-struct compare with a one-field selector
+assert.DeepEqual(t, got, muteState{Muted: []int64{3, 9}}, cmpx.OnlyFields("Muted"))
+```
+
+So: reach for `OnlyFields` when you keep a few of many fields; when you ignore only one or two, `cmpopts.IgnoreFields` is shorter; and when you keep exactly one, assert on the field directly. `OnlyFields` does not apply to moq's anonymous per-call arg structs (you cannot write a clean literal for an unnamed type) -- assert those fields individually.
+
+The same rule covers decoding a tool result into a named struct (e.g. via `mcptest.UnmarshalCallToolResult`): assert on the decoded field you care about (`got.Muted`) rather than rebuilding the whole struct to compare with `OnlyFields`.
 
 Put each `assert.DeepEqual` argument on its own line with a trailing comma, as above -- it stays readable as the comparison options grow and is gofmt-stable.
 

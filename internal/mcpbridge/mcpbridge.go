@@ -154,16 +154,23 @@ func (c *Channel) mutedTool(_ context.Context, _ *mcp.CallToolRequest, _ mutedIn
 	return c.mutedResult(), nil, nil
 }
 
+// muteState is the wire representation of the current mute state a tool
+// handler returns. Under mute-all the exception set is reported in Unmuted
+// (still-delivering tasks); otherwise it is reported in Muted. The omitempty
+// tags mean only the field relevant to the active mode is emitted.
+type muteState struct {
+	All     bool    `json:"all"`
+	Muted   []int64 `json:"muted,omitempty"`
+	Unmuted []int64 `json:"unmuted,omitempty"`
+	Note    string  `json:"note"`
+}
+
 // mutedResult renders the current mute state for a tool response. Under
 // mute-all the exception set is reported as the unmuted (still-delivering)
 // tasks; otherwise it is reported as the muted tasks.
 func (c *Channel) mutedResult() *mcp.CallToolResult {
 	if c.filter.All() {
-		return jsonResult(struct {
-			All     bool    `json:"all"`
-			Unmuted []int64 `json:"unmuted"`
-			Note    string  `json:"note"`
-		}{
+		return jsonResult(muteState{
 			All:     true,
 			Unmuted: c.filter.Exceptions(),
 			Note: "Every task is muted except those in unmuted. Keep more tasks " +
@@ -171,11 +178,7 @@ func (c *Channel) mutedResult() *mcp.CallToolResult {
 				"to resume everything. Muting is per bridge session and resets on restart.",
 		})
 	}
-	return jsonResult(struct {
-		All   bool    `json:"all"`
-		Muted []int64 `json:"muted"`
-		Note  string  `json:"note"`
-	}{
+	return jsonResult(muteState{
 		All:   false,
 		Muted: c.filter.Exceptions(),
 		Note:  "Channel notifications for all tasks except these are delivered. Muting is per bridge session and resets on restart.",
