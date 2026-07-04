@@ -9,6 +9,12 @@
 // cares about via the channel_mute / channel_unmute / channel_muted MCP
 // tools; muted tasks stay muted until unmuted or until the bridge process
 // restarts (the set is in-memory only).
+//
+// channel_mute(all=true) flips the gate to mute every task. In that mode
+// the per-task set inverts to an allowlist of exceptions: unmuting a
+// specific task while all-muted keeps that one task delivering while the
+// rest stay muted. channel_unmute(all=true) resets back to the
+// subscribe-all default.
 package mcpbridge
 
 //go:generate go tool moq -pkg mcpbridge -out channel_sender_moq_test.go . ChannelSender
@@ -18,8 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"slices"
-	"sync"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
@@ -33,56 +37,17 @@ type ChannelSender interface {
 	SendChannel(ctx context.Context, p mcpchannel.Params) error
 }
 
-// Channel owns the per-process mute set and the mute-aware forwarding
-// gate. One Channel is created per `xagent mcp --channel` process.
+// Channel owns the mute-aware forwarding gate. The mute state itself lives
+// in filter. One Channel is created per `xagent mcp --channel` process.
 type Channel struct {
 	sender ChannelSender
-
-	mu    sync.Mutex
-	muted map[int64]struct{} // muted task ids; empty == forward everything
+	filter *TaskFilter
 }
 
 // NewChannel returns a Channel that forwards through sender with an empty
 // mute set (subscribe-all by default).
 func NewChannel(sender ChannelSender) *Channel {
-	return &Channel{sender: sender, muted: map[int64]struct{}{}}
-}
-
-func (c *Channel) mute(id int64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.muted[id] = struct{}{}
-}
-
-func (c *Channel) unmute(id int64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.muted, id)
-}
-
-func (c *Channel) clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	clear(c.muted)
-}
-
-func (c *Channel) isMuted(id int64) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	_, ok := c.muted[id]
-	return ok
-}
-
-// mutedIDs returns the currently-muted task ids, sorted ascending.
-func (c *Channel) mutedIDs() []int64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ids := make([]int64, 0, len(c.muted))
-	for id := range c.muted {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
-	return ids
+	return &Channel{sender: sender, filter: NewTaskFilter()}
 }
 
 // primaryTaskID returns the id of the first task resource in the
@@ -103,12 +68,12 @@ func primaryTaskID(n model.Notification) (int64, bool) {
 // With an empty mute set this is identical to the bridge's original inline
 // handler: the same ChannelMessage gate and the same SendChannel call. A
 // notification naming a muted task is dropped; a notification with no task
-// resource is always forwarded (a blocklist can only drop ids it holds).
+// resource is always forwarded (the mute set only ever holds task ids).
 func (c *Channel) Forward(ctx context.Context, n model.Notification) {
 	if n.ChannelMessage == "" {
 		return // summary gate: not channel-worthy
 	}
-	if id, ok := primaryTaskID(n); ok && c.isMuted(id) {
+	if id, ok := primaryTaskID(n); ok && c.filter.Muted(id) {
 		return // this task has been muted by the agent
 	}
 	if err := c.sender.SendChannel(ctx, mcpchannel.Params{Content: n.ChannelMessage}); err != nil {
@@ -124,10 +89,13 @@ func (c *Channel) AddTools(server *mcp.Server) {
 		Name: "channel_mute",
 		Description: "Stop receiving xagent channel notifications (queued, woken, " +
 			"completed, failed, cancelled, archived) for the given tasks. You are " +
-			"subscribed to every task by default; call this to mute tasks you no " +
-			"longer care about. Re-enable with channel_unmute. Muting is per bridge " +
-			"session and resets when the session restarts. Distinct from " +
-			"create_link(subscribe=true), which routes external events INTO a task.",
+			"subscribed to every task by default; pass task_ids to mute tasks you no " +
+			"longer care about, or all=true to mute every task at once. After " +
+			"all=true you can channel_unmute specific task_ids to keep just those " +
+			"delivering while the rest stay muted. Re-enable with channel_unmute. " +
+			"Muting is per bridge session and resets when the session restarts. " +
+			"Distinct from create_link(subscribe=true), which routes external " +
+			"events INTO a task.",
 	}, c.muteTool)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -135,39 +103,47 @@ func (c *Channel) AddTools(server *mcp.Server) {
 		Description: "Resume receiving xagent channel notifications for tasks " +
 			"previously muted with channel_mute. Pass task_ids to unmute specific " +
 			"tasks, or all=true to clear the whole mute set and go back to the " +
-			"subscribe-all default.",
+			"subscribe-all default. After channel_mute(all=true), unmuting specific " +
+			"task_ids keeps those tasks delivering while every other task stays " +
+			"muted.",
 	}, c.unmuteTool)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "channel_muted",
-		Description: "List the task ids currently muted for this session. All " +
-			"tasks not listed are delivered.",
+		Description: "Report the current mute state for this session. When " +
+			"all=false, the muted list holds the muted task ids and all other tasks " +
+			"are delivered. When all=true, every task is muted except the ids in the " +
+			"unmuted list.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, c.mutedTool)
 }
 
 type muteInput struct {
-	TaskIDs []int64 `json:"task_ids" jsonschema:"Task IDs to mute"`
+	TaskIDs []int64 `json:"task_ids,omitempty" jsonschema:"Task IDs to mute"`
+	All     bool    `json:"all,omitempty" jsonschema:"Mute every task; channel_unmute specific task_ids afterwards to keep just those delivering"`
 }
 
 func (c *Channel) muteTool(_ context.Context, _ *mcp.CallToolRequest, in muteInput) (*mcp.CallToolResult, any, error) {
+	if in.All {
+		c.filter.MuteAll()
+	}
 	for _, id := range in.TaskIDs {
-		c.mute(id)
+		c.filter.Mute(id)
 	}
 	return c.mutedResult(), nil, nil
 }
 
 type unmuteInput struct {
-	TaskIDs []int64 `json:"task_ids,omitempty" jsonschema:"Task IDs to unmute"`
+	TaskIDs []int64 `json:"task_ids,omitempty" jsonschema:"Task IDs to unmute (kept delivering even under mute-all)"`
 	All     bool    `json:"all,omitempty" jsonschema:"Unmute every task, clearing the whole mute set"`
 }
 
 func (c *Channel) unmuteTool(_ context.Context, _ *mcp.CallToolRequest, in unmuteInput) (*mcp.CallToolResult, any, error) {
 	if in.All {
-		c.clear()
+		c.filter.Clear()
 	}
 	for _, id := range in.TaskIDs {
-		c.unmute(id)
+		c.filter.Unmute(id)
 	}
 	return c.mutedResult(), nil, nil
 }
@@ -178,13 +154,30 @@ func (c *Channel) mutedTool(_ context.Context, _ *mcp.CallToolRequest, _ mutedIn
 	return c.mutedResult(), nil, nil
 }
 
-// mutedResult renders the current mute set for a tool response.
+// mutedResult renders the current mute state for a tool response. Under
+// mute-all the exception set is reported as the unmuted (still-delivering)
+// tasks; otherwise it is reported as the muted tasks.
 func (c *Channel) mutedResult() *mcp.CallToolResult {
+	if c.filter.All() {
+		return jsonResult(struct {
+			All     bool    `json:"all"`
+			Unmuted []int64 `json:"unmuted"`
+			Note    string  `json:"note"`
+		}{
+			All:     true,
+			Unmuted: c.filter.Exceptions(),
+			Note: "Every task is muted except those in unmuted. Keep more tasks " +
+				"delivering with channel_unmute(task_ids=...), or channel_unmute(all=true) " +
+				"to resume everything. Muting is per bridge session and resets on restart.",
+		})
+	}
 	return jsonResult(struct {
+		All   bool    `json:"all"`
 		Muted []int64 `json:"muted"`
 		Note  string  `json:"note"`
 	}{
-		Muted: c.mutedIDs(),
+		All:   false,
+		Muted: c.filter.Exceptions(),
 		Note:  "Channel notifications for all tasks except these are delivered. Muting is per bridge session and resets on restart.",
 	})
 }
