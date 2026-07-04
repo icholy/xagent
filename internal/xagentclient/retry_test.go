@@ -14,17 +14,6 @@ import (
 	"github.com/icholy/xagent/internal/xagentclient"
 )
 
-// stubUnary adapts a func to a connect.UnaryFunc for exercising the interceptor.
-func stubUnary(fn func() (connect.AnyResponse, error)) connect.UnaryFunc {
-	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		return fn()
-	}
-}
-
-func newReq() connect.AnyRequest {
-	return connect.NewRequest(&xagentv1.GetTaskRequest{Id: 1})
-}
-
 func TestRetryInterceptor_RetriesUntilSuccess(t *testing.T) {
 	t.Parallel()
 	// Arrange: fail with Unavailable twice, then succeed.
@@ -34,15 +23,15 @@ func TestRetryInterceptor_RetriesUntilSuccess(t *testing.T) {
 		InitialBackoff: time.Millisecond,
 		MaxBackoff:     time.Millisecond,
 	}
-	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+	wrapped := interceptor.WrapUnary(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		if calls.Add(1) < 3 {
 			return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
 		}
 		return connect.NewResponse(&xagentv1.GetTaskResponse{}), nil
-	}))
+	})
 
 	// Act
-	res, err := wrapped(context.Background(), newReq())
+	res, err := wrapped(context.Background(), connect.NewRequest(&xagentv1.GetTaskRequest{Id: 1}))
 
 	// Assert
 	assert.NilError(t, err)
@@ -59,13 +48,13 @@ func TestRetryInterceptor_ExhaustsRetries(t *testing.T) {
 		InitialBackoff: time.Millisecond,
 		MaxBackoff:     time.Millisecond,
 	}
-	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+	wrapped := interceptor.WrapUnary(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		calls.Add(1)
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
-	}))
+	})
 
 	// Act
-	_, err := wrapped(context.Background(), newReq())
+	_, err := wrapped(context.Background(), connect.NewRequest(&xagentv1.GetTaskRequest{Id: 1}))
 
 	// Assert: initial call plus two retries.
 	assert.Equal(t, connect.CodeOf(err), connect.CodeUnavailable)
@@ -81,13 +70,13 @@ func TestRetryInterceptor_DoesNotRetryPermanentError(t *testing.T) {
 		InitialBackoff: time.Millisecond,
 		MaxBackoff:     time.Millisecond,
 	}
-	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+	wrapped := interceptor.WrapUnary(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		calls.Add(1)
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("nope"))
-	}))
+	})
 
 	// Act
-	_, err := wrapped(context.Background(), newReq())
+	_, err := wrapped(context.Background(), connect.NewRequest(&xagentv1.GetTaskRequest{Id: 1}))
 
 	// Assert
 	assert.Equal(t, connect.CodeOf(err), connect.CodeNotFound)
@@ -105,13 +94,13 @@ func TestRetryInterceptor_StopsOnCancelledContext(t *testing.T) {
 		MaxRetries:     5,
 		InitialBackoff: time.Hour,
 	}
-	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+	wrapped := interceptor.WrapUnary(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		calls.Add(1)
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
-	}))
+	})
 
 	// Act
-	_, err := wrapped(ctx, newReq())
+	_, err := wrapped(ctx, connect.NewRequest(&xagentv1.GetTaskRequest{Id: 1}))
 
 	// Assert: it does not wait out the hour-long backoff, and only the initial
 	// call happened before the cancelled context aborted the retry sleep. The
@@ -125,13 +114,13 @@ func TestRetryInterceptor_NegativeMaxRetriesDisables(t *testing.T) {
 	// Arrange
 	var calls atomic.Int64
 	interceptor := xagentclient.RetryInterceptor{MaxRetries: -1}
-	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+	wrapped := interceptor.WrapUnary(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		calls.Add(1)
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
-	}))
+	})
 
 	// Act
-	_, err := wrapped(context.Background(), newReq())
+	_, err := wrapped(context.Background(), connect.NewRequest(&xagentv1.GetTaskRequest{Id: 1}))
 
 	// Assert
 	assert.Equal(t, connect.CodeOf(err), connect.CodeUnavailable)
