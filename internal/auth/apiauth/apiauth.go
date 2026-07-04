@@ -356,10 +356,10 @@ func (a *Auth) HandleToken() http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"token":      token,
 			"org_id":     user.OrgID,
-			"expires_at": claims.ExpiresAt.Time.Unix(),
+			"expires_at": claims.ExpiresAt.Unix(),
 		})
 	}
 }

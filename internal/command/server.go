@@ -143,7 +143,11 @@ var ServerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
 		}
-		defer otel.Shutdown(ctx)
+		defer func() {
+			if err := otel.Shutdown(ctx); err != nil {
+				slog.Warn("failed to shut down OpenTelemetry", "err", err)
+			}
+		}()
 
 		db, err := store.Open(dbPath, true)
 		if err != nil {

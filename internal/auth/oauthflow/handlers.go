@@ -21,7 +21,7 @@ func (a *Auth) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"issuer":                           a.baseURL.String(),
 		"authorization_endpoint":           a.baseURL.JoinPath("/ui/oauth/authorize").String(),
 		"token_endpoint":                   a.baseURL.JoinPath("/oauth/token").String(),
@@ -40,7 +40,7 @@ func (a *Auth) HandleResourceMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"resource":              a.baseURL.String(),
 		"authorization_servers": []string{a.baseURL.String()},
 	})
@@ -63,7 +63,7 @@ func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"client_id":     uuid.New().String(),
 		"client_name":   req.ClientName,
 		"redirect_uris": req.RedirectURIs,
@@ -146,7 +146,7 @@ func (a *Auth) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	redirectURL.RawQuery = q.Encode()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"redirect_uri": redirectURL.String(),
 	})
 }
@@ -269,7 +269,7 @@ func (a *Auth) issueTokens(w http.ResponseWriter, subject, email, name string, o
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"access_token":  accessToken,
 		"token_type":    "Bearer",
 		"expires_in":    int(apiauth.AppTokenTTL.Seconds()),

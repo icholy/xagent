@@ -7,7 +7,6 @@ import (
 
 	"github.com/distribution/reference"
 	"github.com/docker/cli/cli/config"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
@@ -29,14 +28,14 @@ type ImageEnsureOptions struct {
 
 // ImageEnsure ensures the image is available locally, pulling it if necessary.
 // It returns the image inspect result.
-func ImageEnsure(ctx context.Context, docker *client.Client, opts ImageEnsureOptions) (types.ImageInspect, error) {
-	info, _, err := docker.ImageInspectWithRaw(ctx, opts.Ref)
+func ImageEnsure(ctx context.Context, docker *client.Client, opts ImageEnsureOptions) (image.InspectResponse, error) {
+	info, err := docker.ImageInspect(ctx, opts.Ref)
 	if err == nil {
 		return info, nil
 	}
 	reader, err := docker.ImagePull(ctx, opts.Ref, opts.PullOptions)
 	if err != nil {
-		return types.ImageInspect{}, fmt.Errorf("failed to pull image: %w", err)
+		return image.InspectResponse{}, fmt.Errorf("failed to pull image: %w", err)
 	}
 	defer reader.Close()
 	dec := json.NewDecoder(reader)
@@ -49,9 +48,9 @@ func ImageEnsure(ctx context.Context, docker *client.Client, opts ImageEnsureOpt
 			opts.PullProgress(msg)
 		}
 	}
-	info, _, err = docker.ImageInspectWithRaw(ctx, opts.Ref)
+	info, err = docker.ImageInspect(ctx, opts.Ref)
 	if err != nil {
-		return types.ImageInspect{}, fmt.Errorf("failed to inspect image after pull: %w", err)
+		return image.InspectResponse{}, fmt.Errorf("failed to inspect image after pull: %w", err)
 	}
 	return info, nil
 }
