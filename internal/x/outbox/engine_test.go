@@ -37,10 +37,10 @@ func TestOutbox_FIFO(t *testing.T) {
 	assert.NilError(t, ob.Enqueue(2))
 	assert.NilError(t, ob.Enqueue(3))
 
-	// Assert: delivered in enqueue order, then the store fully drains.
-	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { return got.Len() == 3 })
-	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
+	// Assert: once the store drains, every message has been delivered (Drop
+	// runs after Deliver returns) — in enqueue order.
 	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { n, _ := ob.Len(); return n == 0 })
+	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
 }
 
 func TestOutbox_TransientRetry(t *testing.T) {
@@ -167,10 +167,9 @@ func TestOutbox_StartupRecovery(t *testing.T) {
 	defer cancel()
 	go ob.Run(ctx)
 
-	// Assert
-	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { return got.Len() == 3 })
-	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
+	// Assert: everything persisted before construction is redelivered in order.
 	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { n, _ := ob.Len(); return n == 0 })
+	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
 }
 
 // errFake is a trivial error for scripted Deliver failures.
