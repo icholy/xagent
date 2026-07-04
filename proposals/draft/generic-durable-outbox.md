@@ -76,8 +76,11 @@ type Store interface {
 	// Append durably persists payload under a new, strictly increasing Seq and
 	// returns the assigned Seq. It must not return until the record is durable.
 	Append(payload json.RawMessage) (uint64, error)
-	// List returns all undelivered records in ascending Seq order.
-	List() ([]Record, error)
+	// List returns an iterator over all undelivered records in ascending Seq
+	// order. The iterator is a point-in-time snapshot: calling Remove or
+	// DeadLetter on records during iteration — including the record currently
+	// being yielded — is safe and does not affect the walk.
+	List() (iter.Seq[Record], error)
 	// Remove deletes the record with the given Seq. It is idempotent.
 	Remove(seq uint64) error
 	// DeadLetter atomically moves the record with the given Seq out of the live
@@ -132,8 +135,9 @@ func (o *Outbox[T]) Len() (int, error)
 ```
 
 `Run` is the durable analogue of today's `Run`/`Drain` pair (`eventqueue.go:66-120`): on
-wakeup it `List`s the store, delivers each record in `Seq` order via `Deliver`, and
-`Remove`s it on success. `Deliver` reports whether a failure is permanent as its first
+wakeup it ranges over the `List` iterator (`for rec := range store.List() { ... }`),
+delivers each record in `Seq` order via `Deliver`, and `Remove`s it on success — removing
+the record mid-iteration is safe because `List` yields a point-in-time snapshot. `Deliver` reports whether a failure is permanent as its first
 return value, so the code that already holds the error classifies it inline — no separate
 predicate. A transient error (`permanent == false`) sleeps for `Backoff.NextBackOff()` (a
 `backoff.BackOff` from the already-vendored `github.com/cenkalti/backoff/v5`, replacing the

@@ -10,7 +10,10 @@
 // It is a dependency-free leaf: stdlib only.
 package outbox
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"iter"
+)
 
 // Record is one persisted, undelivered message. Seq is a per-outbox monotonic
 // sequence number that defines delivery (FIFO) order. Payload is the opaque,
@@ -26,8 +29,11 @@ type Store interface {
 	// Append durably persists payload under a new, strictly increasing Seq and
 	// returns the assigned Seq. It must not return until the record is durable.
 	Append(payload json.RawMessage) (uint64, error)
-	// List returns all undelivered records in ascending Seq order.
-	List() ([]Record, error)
+	// List returns an iterator over all undelivered records in ascending Seq
+	// order. The iterator is a point-in-time snapshot: calling Remove or
+	// DeadLetter on records during iteration — including the record currently
+	// being yielded — is safe and does not affect the walk.
+	List() (iter.Seq[Record], error)
 	// Remove deletes the record with the given Seq. It is idempotent.
 	Remove(seq uint64) error
 	// DeadLetter atomically moves the record with the given Seq out of the live

@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"iter"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -83,11 +85,16 @@ func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
 	return seq, nil
 }
 
-// List returns all undelivered records in ascending Seq order. Only real
-// <seq>.json records are considered; leftover temp files and any other files
-// that don't parse as <uint64>.json are ignored, so an interrupted write can
-// never corrupt a listing.
-func (s *FileStore) List() ([]Record, error) {
+// List returns an iterator over all undelivered records in ascending Seq order.
+// Only real <seq>.json records are considered; leftover temp files and any other
+// files that don't parse as <uint64>.json are ignored, so an interrupted write
+// can never corrupt a listing.
+//
+// The snapshot is fully materialized under the lock and the lock is released
+// before the caller iterates, so Remove or DeadLetter may be called on records
+// during iteration — including the record currently being yielded — without
+// deadlocking or affecting the walk.
+func (s *FileStore) List() (iter.Seq[Record], error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -120,7 +127,7 @@ func (s *FileStore) List() ([]Record, error) {
 	sort.Slice(records, func(i, j int) bool {
 		return records[i].Seq < records[j].Seq
 	})
-	return records, nil
+	return slices.Values(records), nil
 }
 
 // Remove deletes the record with the given Seq. It is idempotent: removing an
