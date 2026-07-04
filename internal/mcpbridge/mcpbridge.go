@@ -39,6 +39,7 @@ type Channel struct {
 	sender ChannelSender
 
 	mu    sync.Mutex
+	all   bool               // when true every task is muted (mute-all)
 	muted map[int64]struct{} // muted task ids; empty == forward everything
 }
 
@@ -54,6 +55,15 @@ func (c *Channel) mute(id int64) {
 	c.muted[id] = struct{}{}
 }
 
+// muteEverything mutes every task. The per-task set is cleared because it
+// is fully subsumed by the mute-all flag; unmute-all (clear) resets both.
+func (c *Channel) muteEverything() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.all = true
+	clear(c.muted)
+}
+
 func (c *Channel) unmute(id int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -63,14 +73,25 @@ func (c *Channel) unmute(id int64) {
 func (c *Channel) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.all = false
 	clear(c.muted)
 }
 
 func (c *Channel) isMuted(id int64) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.all {
+		return true
+	}
 	_, ok := c.muted[id]
 	return ok
+}
+
+// mutedAll reports whether every task is currently muted.
+func (c *Channel) mutedAll() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.all
 }
 
 // mutedIDs returns the currently-muted task ids, sorted ascending.
@@ -124,10 +145,11 @@ func (c *Channel) AddTools(server *mcp.Server) {
 		Name: "channel_mute",
 		Description: "Stop receiving xagent channel notifications (queued, woken, " +
 			"completed, failed, cancelled, archived) for the given tasks. You are " +
-			"subscribed to every task by default; call this to mute tasks you no " +
-			"longer care about. Re-enable with channel_unmute. Muting is per bridge " +
-			"session and resets when the session restarts. Distinct from " +
-			"create_link(subscribe=true), which routes external events INTO a task.",
+			"subscribed to every task by default; pass task_ids to mute tasks you no " +
+			"longer care about, or all=true to mute every task at once. Re-enable " +
+			"with channel_unmute. Muting is per bridge session and resets when the " +
+			"session restarts. Distinct from create_link(subscribe=true), which " +
+			"routes external events INTO a task.",
 	}, c.muteTool)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -141,16 +163,21 @@ func (c *Channel) AddTools(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "channel_muted",
 		Description: "List the task ids currently muted for this session. All " +
-			"tasks not listed are delivered.",
+			"tasks not listed are delivered. When all=true in the response, every " +
+			"task is muted and nothing is delivered.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, c.mutedTool)
 }
 
 type muteInput struct {
-	TaskIDs []int64 `json:"task_ids" jsonschema:"Task IDs to mute"`
+	TaskIDs []int64 `json:"task_ids,omitempty" jsonschema:"Task IDs to mute"`
+	All     bool    `json:"all,omitempty" jsonschema:"Mute every task, dropping all channel notifications"`
 }
 
 func (c *Channel) muteTool(_ context.Context, _ *mcp.CallToolRequest, in muteInput) (*mcp.CallToolResult, any, error) {
+	if in.All {
+		c.muteEverything()
+	}
 	for _, id := range in.TaskIDs {
 		c.mute(id)
 	}
@@ -180,12 +207,18 @@ func (c *Channel) mutedTool(_ context.Context, _ *mcp.CallToolRequest, _ mutedIn
 
 // mutedResult renders the current mute set for a tool response.
 func (c *Channel) mutedResult() *mcp.CallToolResult {
+	note := "Channel notifications for all tasks except these are delivered. Muting is per bridge session and resets on restart."
+	if c.mutedAll() {
+		note = "Every task is muted; no channel notifications are delivered. Unmute with channel_unmute(all=true). Muting is per bridge session and resets on restart."
+	}
 	return jsonResult(struct {
+		All   bool    `json:"all"`
 		Muted []int64 `json:"muted"`
 		Note  string  `json:"note"`
 	}{
+		All:   c.mutedAll(),
 		Muted: c.mutedIDs(),
-		Note:  "Channel notifications for all tasks except these are delivered. Muting is per bridge session and resets on restart.",
+		Note:  note,
 	})
 }
 

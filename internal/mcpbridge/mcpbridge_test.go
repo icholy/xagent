@@ -25,6 +25,20 @@ func mutedIDsFromResult(t *testing.T, res *mcp.CallToolResult) []int64 {
 	return out.Muted
 }
 
+// mutedAllFromResult extracts the all flag a tool handler returns.
+func mutedAllFromResult(t *testing.T, res *mcp.CallToolResult) bool {
+	t.Helper()
+	assert.Assert(t, !res.IsError)
+	assert.Equal(t, len(res.Content), 1)
+	text, ok := res.Content[0].(*mcp.TextContent)
+	assert.Assert(t, ok, "expected *mcp.TextContent, got %T", res.Content[0])
+	var out struct {
+		All bool `json:"all"`
+	}
+	assert.NilError(t, json.Unmarshal([]byte(text.Text), &out))
+	return out.All
+}
+
 // TestForward_DefaultForwardsEverything is the byte-for-byte default: an
 // empty mute set forwards every channel-worthy notification unchanged.
 func TestForward_DefaultForwardsEverything(t *testing.T) {
@@ -136,6 +150,96 @@ func TestForward_Unmute(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+}
+
+// TestForward_MuteAllDropsEveryTask confirms mute-all suppresses
+// task-scoped notifications for tasks that were never individually muted.
+func TestForward_MuteAllDropsEveryTask(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	sender := &ChannelSenderMock{
+		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
+	}
+	ch := NewChannel(sender)
+	_, _, err := ch.muteTool(context.Background(), nil, muteInput{All: true})
+	assert.NilError(t, err)
+
+	// Act
+	ch.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
+		ChannelMessage: "Task 42 completed.",
+	})
+	ch.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 7}},
+		ChannelMessage: "Task 7 completed.",
+	})
+
+	// Assert
+	assert.Equal(t, len(sender.SendChannelCalls()), 0)
+}
+
+// TestForward_MuteAllStillForwardsNonTaskScoped confirms mute-all only
+// gates task-scoped notifications; a message with no task resource is not a
+// channel and is still delivered.
+func TestForward_MuteAllStillForwardsNonTaskScoped(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	sender := &ChannelSenderMock{
+		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
+	}
+	ch := NewChannel(sender)
+	_, _, err := ch.muteTool(context.Background(), nil, muteInput{All: true})
+	assert.NilError(t, err)
+
+	// Act
+	ch.Forward(context.Background(), model.Notification{ChannelMessage: "System notice."})
+
+	// Assert
+	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+	assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "System notice.")
+}
+
+// TestForward_MuteAllThenUnmuteAll confirms unmute-all lifts a mute-all and
+// restores the subscribe-all default.
+func TestForward_MuteAllThenUnmuteAll(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	sender := &ChannelSenderMock{
+		SendChannelFunc: func(context.Context, mcpchannel.Params) error { return nil },
+	}
+	ch := NewChannel(sender)
+	_, _, err := ch.muteTool(context.Background(), nil, muteInput{All: true})
+	assert.NilError(t, err)
+	_, _, err = ch.unmuteTool(context.Background(), nil, unmuteInput{All: true})
+	assert.NilError(t, err)
+
+	// Act
+	ch.Forward(context.Background(), model.Notification{
+		Type:           "change",
+		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 42}},
+		ChannelMessage: "Task 42 completed.",
+	})
+
+	// Assert
+	assert.Equal(t, len(sender.SendChannelCalls()), 1)
+}
+
+func TestMuteTool_All(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	ch := NewChannel(&ChannelSenderMock{})
+	ch.mute(7)
+
+	// Act
+	res, _, err := ch.muteTool(context.Background(), nil, muteInput{All: true})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Assert(t, mutedAllFromResult(t, res))
+	// mute-all subsumes and clears the per-task set.
+	assert.Equal(t, len(mutedIDsFromResult(t, res)), 0)
 }
 
 func TestMuteTool(t *testing.T) {
