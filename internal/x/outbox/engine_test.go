@@ -38,11 +38,9 @@ func TestOutbox_FIFO(t *testing.T) {
 	assert.NilError(t, ob.Enqueue(3))
 
 	// Assert: delivered in enqueue order, then the store fully drains.
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer waitCancel()
-	testx.WaitFor(t, waitCtx, func() bool { return got.Len() == 3 })
+	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { return got.Len() == 3 })
 	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
-	testx.WaitFor(t, waitCtx, func() bool { n, _ := ob.Len(); return n == 0 })
+	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { n, _ := ob.Len(); return n == 0 })
 }
 
 func TestOutbox_TransientRetry(t *testing.T) {
@@ -81,9 +79,7 @@ func TestOutbox_TransientRetry(t *testing.T) {
 
 	// Assert: head retried until success, everything delivered in order, and 2
 	// was never attempted before 1 succeeded.
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer waitCancel()
-	testx.WaitFor(t, waitCtx, func() bool { n, _ := ob.Len(); return n == 0 })
+	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { n, _ := ob.Len(); return n == 0 })
 	assert.DeepEqual(t, got.Slice(), []int{1, 1, 1, 1, 2})
 }
 
@@ -117,9 +113,7 @@ func TestOutbox_PermanentDeadLetter(t *testing.T) {
 
 	// Assert: 2 is attempted once, then dead-lettered; 1 and 3 delivered; the
 	// live queue drains and the dead-letter file survives.
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer waitCancel()
-	testx.WaitFor(t, waitCtx, func() bool { n, _ := ob.Len(); return n == 0 })
+	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { n, _ := ob.Len(); return n == 0 })
 	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
 
 	dead, err := os.ReadDir(filepath.Join(dir, "dead"))
@@ -174,11 +168,9 @@ func TestOutbox_StartupRecovery(t *testing.T) {
 	go ob.Run(ctx)
 
 	// Assert
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer waitCancel()
-	testx.WaitFor(t, waitCtx, func() bool { return got.Len() == 3 })
+	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { return got.Len() == 3 })
 	assert.DeepEqual(t, got.Slice(), []int{1, 2, 3})
-	testx.WaitFor(t, waitCtx, func() bool { n, _ := ob.Len(); return n == 0 })
+	testx.WaitForWithTimeout(t, ctx, 2*time.Second, func() bool { n, _ := ob.Len(); return n == 0 })
 }
 
 // errFake is a trivial error for scripted Deliver failures.

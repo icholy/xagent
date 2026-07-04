@@ -68,3 +68,13 @@ func WaitFor(t testing.TB, ctx context.Context, cond func() bool) {
 		}
 	}
 }
+
+// WaitForWithTimeout is WaitFor bounded by timeout: it derives a child context
+// from ctx with the given timeout and polls cond until it holds, failing the
+// test if the timeout (or ctx) expires first.
+func WaitForWithTimeout(t testing.TB, ctx context.Context, timeout time.Duration, cond func() bool) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	WaitFor(t, ctx, cond)
+}

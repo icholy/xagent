@@ -156,3 +156,25 @@ func runFatal(fn func(t testing.TB)) bool {
 	<-done
 	return ft.failed
 }
+
+func TestWaitForWithTimeout(t *testing.T) {
+	// Arrange: a condition that flips true after a few polls.
+	n := 0
+
+	// Act + Assert: returns once cond holds, well within the timeout.
+	WaitForWithTimeout(t, context.Background(), time.Second, func() bool {
+		n++
+		return n >= 3
+	})
+	assert.Assert(t, n >= 3)
+}
+
+func TestWaitForWithTimeout_Timeout(t *testing.T) {
+	// Act: a condition that never holds must fail the test via Fatal.
+	failed := runFatal(func(t testing.TB) {
+		WaitForWithTimeout(t, context.Background(), time.Millisecond, func() bool { return false })
+	})
+
+	// Assert
+	assert.Assert(t, failed)
+}
