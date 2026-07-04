@@ -110,35 +110,45 @@ See `internal/xagentclient/client_moq.go` (`ClientMock`) for a checked-in `*_moq
 
 ## Asserting on Mock Calls
 
-Assert on a mock's `...Calls()` log instead of hand-rolling `len(...)` and `[0]` indexing. Use `cmp.Len` from `gotest.tools/v3/assert/cmp` for the count, and the bounds-safe `testx.At` from `internal/x/testx` to index into the log:
+Assert on a mock's `...Calls()` log instead of hand-rolling `len(...)` count checks. Use `cmp.Len` from `gotest.tools/v3/assert/cmp` for the count:
 
 ```go
 assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 0))  // len == 0
 assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 1))  // len == n
-call := testx.At(t, sender.SendChannelCalls(), 0)        // nth recorded call (fails if absent)
 ```
 
-`testx.At` returns the recorded-args struct, so chain field access or a `DeepEqual` off it:
+Store the log in a local, assert its length, then index into it directly. Once `cmp.Len` (or any `len(...)` check) has fixed the count, plain `calls[i]` provably can't be out of bounds -- so chain field access or a `DeepEqual` off it:
 
 ```go
-// Bad: re-invokes the accessor and hand-rolls the bounds check
+// Bad: re-invokes the accessor and hand-rolls the count
 assert.Equal(t, len(sender.SendChannelCalls()), 1)
 assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 7 completed.")
 
-// Good: store the log once, assert count, then index safely
+// Good: store the log once, assert count, then index directly
 calls := sender.SendChannelCalls()
 assert.Assert(t, cmp.Len(calls, 1))
 assert.DeepEqual(t,
-    testx.At(t, calls, 0).P,
+    calls[0].P,
     mcpchannel.Params{Content: "Task 7 completed."},
 )
 ```
+
+### When to use `testx.At`
+
+Reach for `testx.At` from `internal/x/testx` **only** when you index into a call log *without* first asserting its length -- it fails the test gracefully (via `t.Fatal`) instead of panicking on an out-of-bounds access:
+
+```go
+// No cmp.Len guard, so index safely: testx.At fails the test if the call is absent.
+call := testx.At(t, sender.SendChannelCalls(), 0)
+```
+
+Do NOT use `testx.At` after you've already asserted the length with `cmp.Len` (or any `len(...)` check) on the same slice. The bound is already guaranteed, so plain `calls[i]` is clearer and pairing the two is redundant noise.
 
 When a recorded argument is a **named** struct and you care about *several* of its fields, compare against a literal with `internal/x/cmpx`. `cmpx.OnlyFields` is the inverse of `cmpopts.IgnoreFields` -- it ignores everything *except* the named fields, so the selection documents what the test actually checks:
 
 ```go
 assert.DeepEqual(t,
-    testx.At(t, calls, 0).P,
+    calls[0].P,
     mcpchannel.Params{Content: "Task 7 completed.", Priority: 2},
     cmpx.OnlyFields("Content", "Priority"),
 )
@@ -149,7 +159,7 @@ When the test cares about only a **single** field, do NOT wrap it in the `DeepEq
 ```go
 // Good: one field, asserted directly
 assert.DeepEqual(t, got.Muted, []int64{3, 9})
-assert.Equal(t, testx.At(t, calls, 0).P.Content, "Task 7 completed.")
+assert.Equal(t, calls[0].P.Content, "Task 7 completed.")
 
 // Bad: whole-struct compare with a one-field selector
 assert.DeepEqual(t, got, muteState{Muted: []int64{3, 9}}, cmpx.OnlyFields("Muted"))

@@ -11,6 +11,7 @@ import (
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func TestCreateTask_Publishes(t *testing.T) {
@@ -30,7 +31,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
@@ -66,7 +67,7 @@ func TestUpdateTask_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
@@ -100,7 +101,7 @@ func TestCancelTask_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
@@ -139,7 +140,7 @@ func TestArchiveTask_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
@@ -179,7 +180,7 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
@@ -213,7 +214,7 @@ func TestCreateLink_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
@@ -257,7 +258,7 @@ func TestUpdateTask_ChannelMessage_QueuedOnStart(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	msg := calls[0].N.ChannelMessage
 	assert.Assert(t, strings.Contains(msg, "queued"), "expected queued in message, got %q", msg)
 }
@@ -293,7 +294,7 @@ func TestUpdateTask_NoChannelMessage_NameOnly(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.Equal(t, calls[0].N.ChannelMessage, "")
 }
 
@@ -326,7 +327,7 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	assert.NilError(t, err)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].N, model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
@@ -363,7 +364,7 @@ func TestSubmitRunnerEvents_NotApplied_DoesNotPublish(t *testing.T) {
 		},
 	})
 	assert.NilError(t, err)
-	assert.Equal(t, len(pub.PublishCalls()), 0)
+	assert.Assert(t, cmp.Len(pub.PublishCalls(), 0))
 }
 
 func TestServerPublish_IgnoreSuppressesDelivery(t *testing.T) {
@@ -375,8 +376,8 @@ func TestServerPublish_IgnoreSuppressesDelivery(t *testing.T) {
 	srv := New(Options{Publisher: pub})
 
 	srv.publish(model.Notification{Type: "change", OrgID: 1, Ignore: true})
-	assert.Equal(t, len(pub.PublishCalls()), 0)
+	assert.Assert(t, cmp.Len(pub.PublishCalls(), 0))
 
 	srv.publish(model.Notification{Type: "change", OrgID: 1})
-	assert.Equal(t, len(pub.PublishCalls()), 1)
+	assert.Assert(t, cmp.Len(pub.PublishCalls(), 1))
 }

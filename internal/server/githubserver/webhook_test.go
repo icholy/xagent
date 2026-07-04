@@ -13,6 +13,7 @@ import (
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func TestToGithubInputEvent(t *testing.T) {
@@ -796,7 +797,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, rec.Body.String(), "processed")
 
 	calls := router.RouteCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
 		Source:      "github",
 		Type:        "issue_comment",
@@ -845,7 +846,7 @@ func TestHandleGitHubWebhookInstallationCreated(t *testing.T) {
 
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "ignored")
-	assert.Equal(t, len(store.ClearGitHubInstallationCalls()), 0)
+	assert.Assert(t, cmp.Len(store.ClearGitHubInstallationCalls(), 0))
 }
 
 func TestHandleGitHubWebhookInstallationDeleted(t *testing.T) {
@@ -869,7 +870,7 @@ func TestHandleGitHubWebhookInstallationDeleted(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "cleared")
 	clears := store.ClearGitHubInstallationCalls()
-	assert.Equal(t, len(clears), 1)
+	assert.Assert(t, cmp.Len(clears, 1))
 	assert.Equal(t, clears[0].InstallationID, int64(42))
 }
 
@@ -889,7 +890,7 @@ func TestHandleGitHubWebhookInstallationOtherAction(t *testing.T) {
 
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "ignored")
-	assert.Equal(t, len(store.ClearGitHubInstallationCalls()), 0)
+	assert.Assert(t, cmp.Len(store.ClearGitHubInstallationCalls(), 0))
 }
 
 func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {

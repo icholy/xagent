@@ -13,6 +13,7 @@ import (
 
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 // taskInstructions reads a task's instruction events from the stream — the
@@ -278,7 +279,7 @@ func TestRouter_AttachSetsWakeMessage(t *testing.T) {
 	assert.Equal(t, n, 1)
 
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	msg := calls[0].N.ChannelMessage
 	assert.Assert(t, msg != "", "expected non-empty ChannelMessage, got empty")
 	assert.Assert(t, strings.Contains(msg, "Task "), "expected task id in message: %q", msg)
@@ -322,7 +323,7 @@ func TestRouter_AttachToRunningTaskStaysSilent(t *testing.T) {
 	// invalidates, but ChannelMessage is empty — PR #725's gate keeps the
 	// agent channel silent on a no-transition attach.
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	assert.Equal(t, calls[0].N.ChannelMessage, "")
 	assert.Equal(t, len(calls[0].N.Resources), 3)
 }
@@ -375,7 +376,7 @@ func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
 	// A channel notification is published unconditionally so the event isn't
 	// silently swallowed, even though the task wasn't restarted.
 	calls := pub.PublishCalls()
-	assert.Equal(t, len(calls), 1)
+	assert.Assert(t, cmp.Len(calls, 1))
 	msg := calls[0].N.ChannelMessage
 	assert.Assert(t, msg != "", "expected non-empty ChannelMessage, got empty")
 	assert.Assert(t, strings.Contains(msg, "PR comment from alice"), "expected description in message: %q", msg)
@@ -1398,8 +1399,8 @@ func TestRouterPublish_IgnoreSuppressesDelivery(t *testing.T) {
 	r := &Router{Log: slog.Default(), Publisher: pub}
 
 	r.publish(t.Context(), model.Notification{Type: "change", OrgID: 1, Ignore: true})
-	assert.Equal(t, len(pub.PublishCalls()), 0)
+	assert.Assert(t, cmp.Len(pub.PublishCalls(), 0))
 
 	r.publish(t.Context(), model.Notification{Type: "change", OrgID: 1})
-	assert.Equal(t, len(pub.PublishCalls()), 1)
+	assert.Assert(t, cmp.Len(pub.PublishCalls(), 1))
 }
