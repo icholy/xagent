@@ -97,7 +97,7 @@ srv := New(Options{OrgResolver: mockedOrgResolver})
 // ... exercise srv ...
 
 // assert the method was called exactly once (see "Asserting on Mock Calls")
-moqassert.CalledTimes(t, mockedOrgResolver.ResolveOrgCalls(), 1)
+assert.Assert(t, cmp.Len(mockedOrgResolver.ResolveOrgCalls(), 1))
 
 // Bad: hand-written fake implementing the interface
 type fakeOrgResolver struct{}
@@ -110,16 +110,15 @@ See `internal/xagentclient/client_moq.go` (`ClientMock`) for a checked-in `*_moq
 
 ## Asserting on Mock Calls
 
-Assert on a mock's `...Calls()` log with `internal/x/moqassert` instead of hand-rolling `len(...)` and `[0]` indexing. The helpers are bounds-safe and read as intent:
+Assert on a mock's `...Calls()` log instead of hand-rolling `len(...)` and `[0]` indexing. Use `cmp.Len` from `gotest.tools/v3/assert/cmp` for the count, and the bounds-safe `testx.At` from `internal/x/testx` to index into the log:
 
 ```go
-moqassert.NotCalled(t, sender.SendChannelCalls())        // len == 0
-moqassert.Called(t, sender.SendChannelCalls())           // len >= 1
-moqassert.CalledTimes(t, sender.SendChannelCalls(), 1)   // len == n
-call := moqassert.CallN(t, sender.SendChannelCalls(), 0) // nth recorded call (fails if absent)
+assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 0))  // len == 0
+assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 1))  // len == n
+call := testx.At(t, sender.SendChannelCalls(), 0)        // nth recorded call (fails if absent)
 ```
 
-`CallN` returns the recorded-args struct, so chain field access or a `DeepEqual` off it:
+`testx.At` returns the recorded-args struct, so chain field access or a `DeepEqual` off it:
 
 ```go
 // Bad: re-invokes the accessor and hand-rolls the bounds check
@@ -128,9 +127,9 @@ assert.Equal(t, sender.SendChannelCalls()[0].P.Content, "Task 7 completed.")
 
 // Good: store the log once, assert count, then index safely
 calls := sender.SendChannelCalls()
-moqassert.CalledTimes(t, calls, 1)
+assert.Assert(t, cmp.Len(calls, 1))
 assert.DeepEqual(t,
-    moqassert.CallN(t, calls, 0).P,
+    testx.At(t, calls, 0).P,
     mcpchannel.Params{Content: "Task 7 completed."},
 )
 ```
@@ -139,7 +138,7 @@ When a recorded argument is a **named** struct and you only care about a subset 
 
 ```go
 assert.DeepEqual(t,
-    moqassert.CallN(t, calls, 0).P,
+    testx.At(t, calls, 0).P,
     mcpchannel.Params{Content: "Task 7 completed."},
     cmpx.OnlyFields("Content"),
 )
