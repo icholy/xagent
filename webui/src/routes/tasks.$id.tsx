@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
@@ -16,15 +16,20 @@ import {
   canUnarchiveTask,
   canCancelTask,
   canRestartTask,
+  canOpenShell,
   isArchivedTask,
 } from '@/lib/task'
 import { eventsToTimeline } from '@/lib/timeline'
+import { useOrgId } from '@/hooks/use-org-id'
+import { useShellState } from '@/hooks/use-shell-state'
+import { isShellActive } from '@/lib/shell-sessions'
 import { ArchivedBadge } from '@/components/archived-badge'
 import { ArchiveButton } from '@/components/archive-button'
 import { AutoArchiveControl } from '@/components/auto-archive-control'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { TaskTimeline } from '@/components/task-timeline'
@@ -38,6 +43,10 @@ export const Route = createFileRoute('/tasks/$id')({
 function TaskDetail() {
   const { id } = Route.useParams()
   const taskId = BigInt(id)
+  const orgId = useOrgId()
+  // A shell session opened in this tab keeps the task in "running"; track it so
+  // the Shell button stays reachable (and marked active) despite that status.
+  const shellActive = isShellActive(useShellState(String(taskId)).phase)
   const [instruction, setInstruction] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -166,6 +175,43 @@ function TaskDetail() {
               {cancelMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Cancel
             </Button>
+          )}
+          {canOpenShell(task) || shellActive ? (
+            // Enabled for a finished task, or whenever this tab holds a live shell
+            // session — the session itself keeps the task "running", but the user
+            // must still be able to return to it.
+            <Button asChild variant="outline" size="sm">
+              <Link
+                to="/tasks/$id/shell"
+                params={{ id }}
+                search={{ org: orgId }}
+                title={shellActive ? 'Shell session active' : undefined}
+              >
+                {shellActive && (
+                  <span
+                    className="h-2 w-2 rounded-full bg-green-500"
+                    aria-label="Shell session active"
+                  />
+                )}
+                Shell
+              </Link>
+            </Button>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* A disabled button swallows pointer events, so wrap it so the
+                    tooltip still fires on hover. */}
+                <span className="inline-block">
+                  <Button variant="outline" size="sm" disabled>
+                    Shell
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                The shell attaches to a finished task&apos;s filesystem. Available once the task
+                completes, fails, or is cancelled.
+              </TooltipContent>
+            </Tooltip>
           )}
           {canRestartTask(task) && (
             <Button variant="outline" size="sm" onClick={handleRestart} disabled={isMutating}>

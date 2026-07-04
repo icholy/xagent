@@ -1,10 +1,12 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import type { AuthTransport } from './transport'
 import type { NotificationSSE } from './notification-sse'
+import type { ShellSessions } from './shell-sessions'
 
 export interface Services {
   auth: AuthTransport
   notifications: NotificationSSE
+  shell: ShellSessions
 }
 
 const ServicesContext = createContext<Services | null>(null)
@@ -33,4 +35,12 @@ export function useNotificationSSE(): NotificationSSE {
     throw new Error('useNotificationSSE must be used within ServicesProvider')
   }
   return s.notifications
+}
+
+export function useShellSessions(): ShellSessions {
+  const s = useContext(ServicesContext)
+  if (!s) {
+    throw new Error('useShellSessions must be used within ServicesProvider')
+  }
+  return s.shell
 }

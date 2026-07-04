@@ -51,6 +51,9 @@ type Options struct {
 	Publisher     pubsub.Publisher
 	Notify        *notifyserver.Server
 	AppKey        ed25519.PrivateKey
+	// OrgResolver authorizes cookie-authenticated (browser) operators on the
+	// shell attach leg, the same way it does for the SSE stream.
+	OrgResolver shellserver.OrgResolver
 }
 
 func New(opts Options) *Server {
@@ -70,6 +73,7 @@ func New(opts Options) *Server {
 		Log:              log,
 		EstablishTimeout: shellrelay.DefaultEstablishTimeout,
 		OnClose:          onShellClose,
+		OrgResolver:      opts.OrgResolver,
 	})
 	apiOpts := apiserver.Options{
 		Log:       log,
@@ -145,11 +149,15 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/oauth/token", s.oauth.HandleToken)
 	}
 	// Shell rendezvous relay (step 2 of the driver reverse shell, #1113).
-	// Both legs ride the same Bearer auth as the other authenticated endpoints:
-	// the driver leg with its task token, the operator (attach) leg with a Bearer
-	// token whose org claim must match the session's owning org.
+	// The driver leg rides Bearer auth with its task token. The operator (attach)
+	// leg serves two clients: the CLI with a Bearer token whose org claim must
+	// match the session's owning org, and the browser with a same-origin
+	// WebSocket that carries only the cookie session (no Authorization header).
+	// So the attach route mirrors the /events SSE wiring — CheckAuth() populates
+	// the caller but does not redirect, so an unauthenticated WebSocket gets a
+	// clean pre-upgrade 401 rather than a 302 to the login page.
 	mux.Handle(shell.DriverRoute, alice.New(s.auth.RequireAuth()).Then(s.shell.DriverHandler()))
-	mux.Handle(shell.AttachRoute, alice.New(s.auth.RequireAuth()).Then(s.shell.AttachHandler()))
+	mux.Handle(shell.AttachRoute, alice.New(s.auth.CheckAuth()).Then(s.shell.AttachHandler()))
 	// MCP endpoint (protected by auth middleware)
 	mux.Handle("/mcp", alice.New(s.auth.RequireAuth()).Then(mcpserver.Handler(s.api)))
 	// React UI (SPA with client-side routing, protected by cookie auth)

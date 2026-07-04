@@ -239,6 +239,7 @@ var ServerCommand = &cli.Command{
 			Publisher:     ps,
 			Notify:        notify,
 			AppKey:        appKey,
+			OrgResolver:   resolver,
 		}
 		if cmd.IsSet("github-client-id") {
 			gh, err := githubserver.New(githubserver.Options{

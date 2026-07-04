@@ -1,5 +1,5 @@
 import { timestampDate } from '@bufbuild/protobuf/wkt'
-import type { Task } from '@/gen/xagent/v1/xagent_pb'
+import { TaskStatus, type Task } from '@/gen/xagent/v1/xagent_pb'
 import { durationToMillis } from '@/lib/duration'
 
 type TaskLike = Pick<Task, 'status' | 'actions' | 'archived'>
@@ -23,6 +23,21 @@ export function canRestartTask(task: TaskLike): boolean {
 
 export function isArchivedTask(task: TaskLike): boolean {
   return task.archived
+}
+
+// canOpenShell reports whether an in-browser debug shell can be opened for the
+// task. OpenShell relaunches the sandbox against the task's preserved disk, so it
+// is only valid for a finished (terminal) task — mirroring the server's
+// FailedPrecondition guard, which requires a terminal status.
+export function canOpenShell(task: TaskLike): boolean {
+  switch (task.status) {
+    case TaskStatus.COMPLETED:
+    case TaskStatus.FAILED:
+    case TaskStatus.CANCELLED:
+      return true
+    default:
+      return false
+  }
 }
 
 // autoArchiveDeadline returns the time at which the task is scheduled to be
