@@ -67,7 +67,7 @@ func (h *Handler) cookiePath() string {
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := generateRandomState()
 	if err != nil {
-		h.log.Error("failed to generate state", "error", err)
+		h.log.Error("failed to generate state", "err", err)
 		http.Error(w, "failed to generate state", http.StatusInternalServerError)
 		return
 	}
@@ -102,7 +102,7 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	token, err := h.oauth.Exchange(r.Context(), code)
 	if err != nil {
-		h.log.Error("failed to exchange code", "error", err)
+		h.log.Error("failed to exchange code", "err", err)
 		http.Error(w, "failed to exchange code", http.StatusInternalServerError)
 		return
 	}

@@ -88,7 +88,7 @@ func (c *NotificationClient) Run(ctx context.Context) error {
 			return ctx.Err()
 		}
 		if err != nil {
-			c.log.Warn("SSE connection lost, reconnecting", "error", err)
+			c.log.Warn("SSE connection lost, reconnecting", "err", err)
 		}
 		if !common.SleepContext(ctx, c.reconnect) {
 			return ctx.Err()
@@ -132,7 +132,7 @@ func (c *NotificationClient) connect(ctx context.Context) error {
 		}
 		var n model.Notification
 		if err := json.Unmarshal(ev.Data, &n); err != nil {
-			c.log.Warn("failed to decode notification", "error", err)
+			c.log.Warn("failed to decode notification", "err", err)
 			continue
 		}
 		// Drop notifications that originated from this client so callers

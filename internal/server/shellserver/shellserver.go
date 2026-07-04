@@ -106,7 +106,7 @@ func (r *Registry) registerMetrics() {
 		}),
 	)
 	if err != nil {
-		r.log.Warn("failed to register shell session metric", "error", err)
+		r.log.Warn("failed to register shell session metric", "err", err)
 	}
 }
 
@@ -210,7 +210,7 @@ func (r *Registry) DriverHandler() http.Handler {
 		}
 		conn, err := websocket.Accept(w, req, nil)
 		if err != nil {
-			r.log.Debug("driver leg accept failed", "session", id, "error", err)
+			r.log.Debug("driver leg accept failed", "session", id, "err", err)
 			return
 		}
 		_ = e.session.Join(req.Context(), conn)
@@ -249,7 +249,7 @@ func (r *Registry) AttachHandler() http.Handler {
 			Subprotocols: []string{shellwire.Subprotocol},
 		})
 		if err != nil {
-			r.log.Debug("attach leg accept failed", "session", id, "error", err)
+			r.log.Debug("attach leg accept failed", "session", id, "err", err)
 			return
 		}
 		// Accept negotiates the subprotocol; an empty result means the client did

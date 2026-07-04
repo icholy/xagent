@@ -88,7 +88,7 @@ func (s *Server) publish(n model.Notification) {
 		return
 	}
 	if err := s.publisher.Publish(context.Background(), n); err != nil {
-		s.log.Warn("failed to publish notification", "error", err, "type", n.Type, "resources", n.Resources)
+		s.log.Warn("failed to publish notification", "err", err, "type", n.Type, "resources", n.Resources)
 	}
 }
 

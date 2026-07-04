@@ -155,7 +155,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err != nil {
 					// The stop command survives, so the kill is retried on
 					// the next poll.
-					r.log.Error("failed to stop task", "task", task.ID, "error", err)
+					r.log.Error("failed to stop task", "task", task.ID, "err", err)
 					return nil
 				}
 				if signalled {
@@ -181,7 +181,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				// pending, so the command survives until the new run's
 				// "started" consumes it.
 				if _, err := r.Kill(ctx, task); err != nil {
-					r.log.Error("failed to kill task for restart", "task", task.ID, "error", err)
+					r.log.Error("failed to kill task for restart", "task", task.ID, "err", err)
 				}
 				// Atomically acquire a semaphore slot before starting
 				if !r.sem.TryAcquire(1) {
@@ -190,7 +190,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				}
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
-					r.log.Error("failed to start task", "task", task.ID, "error", err)
+					r.log.Error("failed to start task", "task", task.ID, "err", err)
 					r.queue.Enqueue(model.RunnerEvent{
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
@@ -211,7 +211,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				// Check if the sandbox is already running
 				running, err := r.Running(ctx, task.ID)
 				if err != nil {
-					r.log.Error("failed to check if task is running", "task", task.ID, "error", err)
+					r.log.Error("failed to check if task is running", "task", task.ID, "err", err)
 					return nil
 				}
 				if running {
@@ -228,7 +228,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 				}
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
-					r.log.Error("failed to start task", "task", task.ID, "error", err)
+					r.log.Error("failed to start task", "task", task.ID, "err", err)
 					r.queue.Enqueue(model.RunnerEvent{
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
@@ -262,7 +262,7 @@ func (r *Runner) Load(ctx context.Context) error {
 		h := backend.Handle{Type: rec.Type, ID: rec.ID, Data: rec.Data}
 		st, err := r.backend.Probe(ctx, h)
 		if err != nil {
-			r.log.Error("load: probe", "task", rec.TaskID, "error", err)
+			r.log.Error("load: probe", "task", rec.TaskID, "err", err)
 			continue
 		}
 		switch st {
@@ -274,7 +274,7 @@ func (r *Runner) Load(ctx context.Context) error {
 		case backend.StateGone: // removed / TERMINATED: the bound sandbox vanished
 			r.failIfTaskRunning(ctx, rec.TaskID)
 			if err := r.store.Remove(rec.TaskID); err != nil {
-				r.log.Error("load: remove dangling record", "task", rec.TaskID, "error", err)
+				r.log.Error("load: remove dangling record", "task", rec.TaskID, "err", err)
 			}
 		}
 	}
@@ -289,7 +289,7 @@ func (r *Runner) Load(ctx context.Context) error {
 func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
 	task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	if err != nil {
-		r.log.Error("failed to get task", "task", taskID, "error", err)
+		r.log.Error("failed to get task", "task", taskID, "err", err)
 		return
 	}
 	if task.Task.Status != xagentv1.TaskStatus_RUNNING {
@@ -506,7 +506,7 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 // then a legitimate first-start-fresh.
 func (r *Runner) gone(taskID int64) error {
 	if err := r.store.Remove(taskID); err != nil {
-		r.log.Error("failed to remove dangling record", "task", taskID, "error", err)
+		r.log.Error("failed to remove dangling record", "task", taskID, "err", err)
 	}
 	return backend.ErrGone
 }
@@ -554,13 +554,13 @@ func (r *Runner) Prune(ctx context.Context) error {
 		// Fetch task
 		resp, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: sb.TaskID})
 		if err != nil && connect.CodeOf(err) != connect.CodeNotFound {
-			r.log.Error("failed to get task", "task", sb.TaskID, "error", err)
+			r.log.Error("failed to get task", "task", sb.TaskID, "err", err)
 			continue
 		}
 		// Remove sandbox if task is archived or deleted
 		if connect.CodeOf(err) == connect.CodeNotFound || resp.Task.Archived {
 			if err := r.Remove(ctx, sb.TaskID); err != nil {
-				r.log.Error("failed to remove sandbox", "task", sb.TaskID, "error", err)
+				r.log.Error("failed to remove sandbox", "task", sb.TaskID, "err", err)
 			} else {
 				r.log.Info("sandbox removed", "task", sb.TaskID)
 			}

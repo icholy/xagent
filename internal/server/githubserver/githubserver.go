@@ -141,13 +141,13 @@ func (s *Server) OAuthLink() *oauthlink.Handler {
 			}
 			ghClient, err := github.NewClient(github.WithAuthToken(token.AccessToken))
 			if err != nil {
-				s.log.Error("failed to create GitHub client", "error", err)
+				s.log.Error("failed to create GitHub client", "err", err)
 				http.Error(w, "failed to create GitHub client", http.StatusInternalServerError)
 				return
 			}
 			ghUser, _, err := ghClient.Users.Get(r.Context(), "")
 			if err != nil {
-				s.log.Error("failed to fetch GitHub user", "error", err)
+				s.log.Error("failed to fetch GitHub user", "err", err)
 				http.Error(w, "failed to fetch GitHub user", http.StatusInternalServerError)
 				return
 			}
@@ -174,7 +174,7 @@ func (s *Server) WebhookHandler() http.Handler {
 					ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 					defer cancel()
 					if err := s.react(ctx, o); err != nil {
-						s.log.Warn("github reaction failed", "org_id", o.OrgID, "url", o.Input.URL, "error", err)
+						s.log.Warn("github reaction failed", "org_id", o.OrgID, "url", o.Input.URL, "err", err)
 					}
 				}()
 			},

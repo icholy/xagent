@@ -343,7 +343,7 @@ func (b *Backend) Signal(ctx context.Context, h backend.Handle) (bool, error) {
 	if err != nil {
 		// The VM could not be reached (suspended / network): the driver is not
 		// running, so nothing was signalled.
-		b.log.Warn("signal: stop request failed", "microvm", h.ID, "error", err)
+		b.log.Warn("signal: stop request failed", "microvm", h.ID, "err", err)
 		return false, nil
 	}
 	defer resp.Body.Close()
@@ -365,7 +365,7 @@ func (b *Backend) Destroy(ctx context.Context, h backend.Handle) error {
 	}
 	if hd, ok := decodeData(h.Data); ok {
 		if err := b.stager.Remove(ctx, hd.StageBucket, hd.StageKey); err != nil {
-			b.log.Warn("remove staged bundle", "microvm", h.ID, "error", err)
+			b.log.Warn("remove staged bundle", "microvm", h.ID, "err", err)
 		}
 	}
 	return nil
@@ -422,7 +422,7 @@ func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode,
 			if awsmicrovm.IsNotFound(err) {
 				return backend.ExitLost, nil
 			}
-			b.log.Warn("wait: mint token", "microvm", id, "error", err)
+			b.log.Warn("wait: mint token", "microvm", id, "err", err)
 			if code, done := b.arbitrate(ctx, id, &endpoint); done {
 				return code, nil
 			}
@@ -437,7 +437,7 @@ func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode,
 			// Clean completion: suspend (preserve state, stop compute) and return
 			// the true exit code.
 			if _, err := b.cloud.SuspendMicrovm(ctx, &awsmicrovm.SuspendMicrovmInput{MicrovmID: id}); err != nil {
-				b.log.Warn("wait: suspend after driver exit", "microvm", id, "error", err)
+				b.log.Warn("wait: suspend after driver exit", "microvm", id, "err", err)
 			}
 			return backend.ExitCode(code), nil
 		}
@@ -458,7 +458,7 @@ func (b *Backend) Wait(ctx context.Context, h backend.Handle) (backend.ExitCode,
 func (b *Backend) readStream(ctx context.Context, id, endpoint, token string) (bool, int) {
 	req, err := awsmicrovm.NewProxyRequest(ctx, endpoint, token, http.MethodGet, lifecyclePath, nil)
 	if err != nil {
-		b.log.Warn("wait: build proxy request", "microvm", id, "error", err)
+		b.log.Warn("wait: build proxy request", "microvm", id, "err", err)
 		return false, 0
 	}
 	req.Header.Set("Accept", "text/event-stream")
@@ -483,7 +483,7 @@ func (b *Backend) readStream(ctx context.Context, id, endpoint, token string) (b
 		if ev.Event == EventDriverExited {
 			var de DriverExited
 			if err := json.Unmarshal(ev.Data, &de); err != nil {
-				b.log.Warn("wait: decode driver-exited", "microvm", id, "error", err)
+				b.log.Warn("wait: decode driver-exited", "microvm", id, "err", err)
 				return true, -1
 			}
 			return true, de.Code
@@ -503,7 +503,7 @@ func (b *Backend) arbitrate(ctx context.Context, id string, endpoint *string) (b
 		return backend.ExitLost, true
 	}
 	if err != nil {
-		b.log.Warn("wait: arbitrate get microvm", "microvm", id, "error", err)
+		b.log.Warn("wait: arbitrate get microvm", "microvm", id, "err", err)
 		return 0, false
 	}
 	switch out.Microvm.State {

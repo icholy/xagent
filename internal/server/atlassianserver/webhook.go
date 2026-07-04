@@ -36,7 +36,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Look up the org's webhook secret
 	secret, err := h.Store.GetOrgAtlassianWebhookSecret(r.Context(), nil, orgID)
 	if err != nil {
-		slog.Error("failed to get Atlassian webhook secret", "org_id", orgID, "error", err)
+		slog.Error("failed to get Atlassian webhook secret", "org_id", orgID, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -48,14 +48,14 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		slog.Error("failed to read webhook body", "error", err)
+		slog.Error("failed to read webhook body", "err", err)
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
 
 	// Verify HMAC-SHA256 signature
 	if err := atlassian.VerifyWebhook(body, r.Header.Get("X-Hub-Signature"), secret); err != nil {
-		slog.Error("failed to verify Atlassian webhook signature", "error", err)
+		slog.Error("failed to verify Atlassian webhook signature", "err", err)
 		http.Error(w, "invalid signature", http.StatusForbidden)
 		return
 	}
@@ -64,7 +64,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// ignored.
 	input, err := toInputEvent(body)
 	if err != nil {
-		slog.Error("failed to parse Atlassian webhook payload", "error", err)
+		slog.Error("failed to parse Atlassian webhook payload", "err", err)
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
@@ -85,7 +85,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "no linked account")
 			return
 		}
-		slog.Error("failed to look up Atlassian account", "error", err)
+		slog.Error("failed to look up Atlassian account", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -94,7 +94,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	input.UserID = user.ID
 	routed, err := h.Router.Route(r.Context(), *input)
 	if err != nil {
-		slog.Error("failed to route event", "error", err)
+		slog.Error("failed to route event", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

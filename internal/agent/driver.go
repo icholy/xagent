@@ -66,7 +66,7 @@ func (d *Driver) Run(ctx context.Context) error {
 	}
 	event := model.RunnerEventStopped
 	if err != nil {
-		d.Log.Error("task failed", "error", err)
+		d.Log.Error("task failed", "err", err)
 		event = model.RunnerEventFailed
 	}
 	// The terminal ack decides the exit code: acked means the outcome is

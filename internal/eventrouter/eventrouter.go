@@ -130,7 +130,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 				}
 				seen[link.TaskID] = true
 				if err := r.attach(ctx, link.TaskID, input, orgID, rule.Wakeup); err != nil {
-					r.Log.Error("failed to attach event to task", "task_id", link.TaskID, "error", err)
+					r.Log.Error("failed to attach event to task", "task_id", link.TaskID, "err", err)
 					continue
 				}
 				outcome.TaskIDs = append(outcome.TaskIDs, link.TaskID)
@@ -139,7 +139,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		} else if rule.Create != nil {
 			taskID, err := r.create(ctx, input, orgID, rule)
 			if err != nil {
-				r.Log.Error("failed to create task from rule", "org_id", orgID, "error", err)
+				r.Log.Error("failed to create task from rule", "org_id", orgID, "err", err)
 				continue
 			}
 			outcome.TaskIDs = []int64{taskID}
@@ -164,7 +164,7 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 		return
 	}
 	if err := r.Publisher.Publish(ctx, n); err != nil {
-		r.Log.Warn("failed to publish notification", "error", err)
+		r.Log.Warn("failed to publish notification", "err", err)
 	}
 }
 
