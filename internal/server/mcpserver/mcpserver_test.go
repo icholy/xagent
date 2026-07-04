@@ -2,11 +2,11 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/x/mcptest"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gotest.tools/v3/assert"
@@ -75,12 +75,9 @@ func TestArchiveTask(t *testing.T) {
 		},
 	})
 	assert.NilError(t, err)
-	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
 
-	text, ok := result.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok)
 	var got map[string]any
-	assert.NilError(t, json.Unmarshal([]byte(text.Text), &got))
+	mcptest.UnmarshalCallToolResult(t, result, &got)
 	assert.DeepEqual(t, got, map[string]any{
 		"id":        float64(42),
 		"name":      "test",
@@ -119,12 +116,9 @@ func TestCreateTask_UsesServerURL(t *testing.T) {
 		},
 	})
 	assert.NilError(t, err)
-	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
 
-	text, ok := result.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok)
 	var got map[string]any
-	assert.NilError(t, json.Unmarshal([]byte(text.Text), &got))
+	mcptest.UnmarshalCallToolResult(t, result, &got)
 	assert.DeepEqual(t, got, map[string]any{
 		"id":        float64(42),
 		"name":      "test",
@@ -242,12 +236,9 @@ func TestListTasks_UsesTaskURLFromResponse(t *testing.T) {
 		Arguments: map[string]any{},
 	})
 	assert.NilError(t, err)
-	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
 
-	text, ok := result.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok)
 	var got []map[string]any
-	assert.NilError(t, json.Unmarshal([]byte(text.Text), &got))
+	mcptest.UnmarshalCallToolResult(t, result, &got)
 	assert.DeepEqual(t, got, []map[string]any{
 		{
 			"id":        float64(1),

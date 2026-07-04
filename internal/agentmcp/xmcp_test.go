@@ -2,7 +2,6 @@ package agentmcp
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -11,10 +10,12 @@ import (
 	"github.com/icholy/xagent/internal/auth/agentauth"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/x/mcptest"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func setupTestSession(t *testing.T, srv *Server) *mcp.ClientSession {
@@ -43,6 +44,7 @@ func setupTestSession(t *testing.T, srv *Server) *mcp.ClientSession {
 }
 
 func TestGetMyTask(t *testing.T) {
+	// Arrange
 	client := &xagentclient.ClientMock{
 		GetTaskDetailsFunc: func(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
 			assert.Equal(t, req.Id, int64(123))
@@ -72,14 +74,17 @@ func TestGetMyTask(t *testing.T) {
 	}, nil)
 	session := setupTestSession(t, srv)
 
-	// Call the tool through the MCP framework
+	// Act
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "get_my_task",
 		Arguments: map[string]any{},
 	})
 	assert.NilError(t, err)
 
-	assertTextResult(t, result, map[string]any{
+	// Assert
+	var got map[string]any
+	mcptest.UnmarshalCallToolResult(t, result, &got)
+	assert.DeepEqual(t, got, map[string]any{
 		"id":        float64(123),
 		"name":      "test task",
 		"status":    "UNSPECIFIED",
@@ -98,6 +103,7 @@ func TestGetMyTask(t *testing.T) {
 }
 
 func TestGetGitHubToken(t *testing.T) {
+	// Arrange
 	expiresAt := time.Date(2026, 5, 23, 1, 0, 0, 0, time.UTC)
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
@@ -107,72 +113,66 @@ func TestGetGitHubToken(t *testing.T) {
 			}, nil
 		},
 	}
-
 	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.CapabilityGitHubToken})
 	session := setupTestSession(t, srv)
 
+	// Act
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "get_github_token",
 		Arguments: map[string]any{},
 	})
 	assert.NilError(t, err)
 
-	assertTextResult(t, result, map[string]any{
+	// Assert
+	var got map[string]any
+	mcptest.UnmarshalCallToolResult(t, result, &got)
+	assert.DeepEqual(t, got, map[string]any{
 		"token":     "ghs_test_token",
 		"expiresAt": "2026-05-23T01:00:00Z",
 	})
-
-	assert.Equal(t, len(client.CreateGitHubTokenCalls()), 1)
+	assert.Assert(t, cmp.Len(client.CreateGitHubTokenCalls(), 1))
 }
 
 func TestGetGitHubToken_Error(t *testing.T) {
+	// Arrange
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
 			return nil, errors.New("no installation linked")
 		},
 	}
-
 	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, []string{agentauth.CapabilityGitHubToken})
 	session := setupTestSession(t, srv)
 
+	// Act
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "get_github_token",
 		Arguments: map[string]any{},
 	})
 	assert.NilError(t, err)
-	assert.Assert(t, result.IsError, "expected error result")
 
-	text, ok := result.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok, "expected TextContent")
-	assert.Assert(t, strings.Contains(text.Text, "no installation linked"), "expected error message, got: %s", text.Text)
+	// Assert
+	assert.Assert(t, result.IsError, "expected error result")
+	text := mcptest.CallToolResultText(t, result)
+	assert.Assert(t, strings.Contains(text, "no installation linked"), "expected error message, got: %s", text)
 }
 
 func TestGetGitHubToken_NotRegisteredWithoutCapability(t *testing.T) {
+	// Arrange
 	client := &xagentclient.ClientMock{
 		CreateGitHubTokenFunc: func(ctx context.Context, req *xagentv1.CreateGitHubTokenRequest) (*xagentv1.CreateGitHubTokenResponse, error) {
 			t.Fatal("tool must not be callable when the capability is absent")
 			return nil, nil
 		},
 	}
-
 	srv := NewServer(client, &model.Task{ID: 123, Runner: "test-runner", Workspace: "test-workspace"}, nil)
 	session := setupTestSession(t, srv)
 
+	// Act
 	tools, err := session.ListTools(t.Context(), nil)
 	assert.NilError(t, err)
+
+	// Assert
 	for _, tool := range tools.Tools {
 		assert.Assert(t, tool.Name != "get_github_token", "get_github_token should not be registered without the capability")
 	}
-}
-
-func assertTextResult(t *testing.T, result *mcp.CallToolResult, want map[string]any) {
-	t.Helper()
-	assert.Assert(t, result != nil, "CallTool returned nil result")
-	assert.Assert(t, !result.IsError, "result is error: %v", result.Content)
-	assert.Equal(t, len(result.Content), 1, "expected 1 content block, got %d", len(result.Content))
-	text, ok := result.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok, "expected TextContent, got %T", result.Content[0])
-	var got map[string]any
-	assert.NilError(t, json.Unmarshal([]byte(text.Text), &got))
-	assert.DeepEqual(t, got, want)
 }

@@ -11,10 +11,12 @@ import (
 	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/x/mcptest"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 // startAuthedUpstream stands up an MCP server behind an Authorization
@@ -67,15 +69,13 @@ func TestServer_SwapInjectsBearerToken(t *testing.T) {
 	expiresAt, err := s.swap(t.Context())
 	assert.NilError(t, err)
 	assert.Assert(t, !expiresAt.IsZero(), "expiresAt should be set from the token response")
-	assert.Equal(t, len(client.CreateGitHubTokenCalls()), 1)
+	assert.Assert(t, cmp.Len(client.CreateGitHubTokenCalls(), 1))
 
 	sess, err := s.upstream.Session()
 	assert.NilError(t, err)
 	res, err := sess.CallTool(t.Context(), &mcp.CallToolParams{Name: "ping"})
 	assert.NilError(t, err)
-	text, ok := res.Content[0].(*mcp.TextContent)
-	assert.Assert(t, ok)
-	assert.Equal(t, text.Text, "pong")
+	assert.Equal(t, mcptest.CallToolResultText(t, res), "pong")
 	assert.Equal(t, *seen.Load(), "ghs_test_token")
 }
 
