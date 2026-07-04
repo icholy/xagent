@@ -7,6 +7,7 @@ import { createConnectTransport } from '@connectrpc/connect-web'
 import { routeTree } from './routeTree.gen'
 import { AuthTransport } from './lib/transport'
 import { NotificationSSE } from './lib/notification-sse'
+import { ShellSessions } from './lib/shell-sessions'
 import { ServicesProvider } from './lib/services'
 import { createParseSearch, createStringifySearch } from './lib/search-serialization'
 import './index.css'
@@ -15,6 +16,7 @@ const clientId = crypto.randomUUID()
 const auth = new AuthTransport(clientId)
 const transport = createConnectTransport({ baseUrl: '/', fetch: auth.fetch })
 const notifications = new NotificationSSE(clientId)
+const shell = ShellSessions.fromTransport(transport)
 
 notifications.setOrgId(auth.getOrgId())
 auth.onOrgChange((orgId) => notifications.setOrgId(orgId))
@@ -61,7 +63,7 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
     <StrictMode>
-      <ServicesProvider services={{ auth, notifications }}>
+      <ServicesProvider services={{ auth, notifications, shell }}>
         <TransportProvider transport={transport}>
           <QueryClientProvider client={queryClient}>
             <RouterProvider router={router} />

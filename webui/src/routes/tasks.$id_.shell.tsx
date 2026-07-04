@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useMutation } from '@connectrpc/connect-query'
-import { openShell } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { useState } from 'react'
 import { useOrgId } from '@/hooks/use-org-id'
+import { useShellSessions } from '@/lib/services'
+import { useShellState } from '@/hooks/use-shell-state'
 import { TaskShell } from '@/components/task-shell'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Loader2, TerminalSquare } from 'lucide-react'
@@ -16,21 +15,14 @@ function TaskShellPage() {
   const { id } = Route.useParams()
   const taskId = BigInt(id)
   const orgId = useOrgId()
-  const [session, setSession] = useState<string | null>(null)
+  const shell = useShellSessions()
+  const key = String(taskId)
 
-  // OpenShell relaunches the finished task's sandbox as a reverse shell and
-  // returns the rendezvous id. Reconnecting mints a fresh session (the relay has
-  // no scrollback replay), so the same mutation drives both the initial open and
-  // every reconnect. The session id is set from the mutation's onSuccess callback.
-  //
-  // Opening is deliberately behind an explicit click rather than an on-mount
-  // effect: navigating to this page must not relaunch the sandbox on its own, and
-  // dropping the effect also avoids React StrictMode's dev double-invocation
-  // firing OpenShell twice.
-  const open = useMutation(openShell, {
-    onSuccess: (resp) => setSession(resp.sessionId),
-  })
-  const openSession = () => open.mutate({ taskId })
+  // The session + attach socket live in the ShellSessions singleton; the page
+  // just reads phase and drives open(). Opening is behind an explicit click (no
+  // auto-connect on mount), so navigating here never relaunches the sandbox.
+  const { phase, error, started } = useShellState(key)
+  const openSession = () => shell.open(key, orgId)
 
   return (
     <div className="flex h-screen flex-col">
@@ -48,40 +40,31 @@ function TaskShellPage() {
       </div>
 
       <div className="min-h-0 flex-1">
-        {session ? (
-          <TaskShell
-            session={session}
-            orgId={orgId}
-            onReconnect={openSession}
-            reconnecting={open.isPending}
-          />
+        {started ? (
+          // A session has been minted; the terminal owns every state from here
+          // (starting/connected/exited/error) and its own reconnect.
+          <TaskShell taskId={taskId} orgId={orgId} />
+        ) : phase === 'opening' ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Opening shell…</p>
+          </div>
+        ) : phase === 'error' ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3">
+            <p className="text-sm text-destructive">Failed to open shell: {error}</p>
+            <Button size="sm" variant="outline" onClick={openSession}>
+              Try again
+            </Button>
+          </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3">
-            {open.isPending ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Opening shell…</p>
-              </>
-            ) : open.error ? (
-              <>
-                <p className="text-sm text-destructive">
-                  Failed to open shell: {open.error.message}
-                </p>
-                <Button size="sm" variant="outline" onClick={openSession}>
-                  Try again
-                </Button>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  Attach an interactive shell to this task&apos;s sandbox.
-                </p>
-                <Button size="sm" onClick={openSession}>
-                  <TerminalSquare className="mr-2 h-4 w-4" />
-                  Open shell
-                </Button>
-              </>
-            )}
+            <p className="text-sm text-muted-foreground">
+              Attach an interactive shell to this task&apos;s sandbox.
+            </p>
+            <Button size="sm" onClick={openSession}>
+              <TerminalSquare className="mr-2 h-4 w-4" />
+              Open shell
+            </Button>
           </div>
         )}
       </div>
