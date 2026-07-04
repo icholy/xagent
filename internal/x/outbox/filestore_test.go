@@ -2,7 +2,6 @@ package outbox
 
 import (
 	"encoding/json"
-	"iter"
 	"os"
 	"path/filepath"
 	"sync"
@@ -10,18 +9,6 @@ import (
 
 	"gotest.tools/v3/assert"
 )
-
-// collect drains a List iterator into a slice, failing the test on any
-// per-record error.
-func collect(t *testing.T, seq iter.Seq2[Record, error]) []Record {
-	t.Helper()
-	var records []Record
-	for rec, err := range seq {
-		assert.NilError(t, err)
-		records = append(records, rec)
-	}
-	return records
-}
 
 func TestAppendList(t *testing.T) {
 	// Arrange
@@ -41,9 +28,8 @@ func TestAppendList(t *testing.T) {
 	assert.Equal(t, seq2, uint64(2))
 	assert.Equal(t, seq3, uint64(3))
 
-	list, err := s.List()
+	records, err := s.List()
 	assert.NilError(t, err)
-	records := collect(t, list)
 	assert.Equal(t, len(records), 3)
 	assert.Equal(t, records[0].Seq, uint64(1))
 	assert.Equal(t, string(records[0].Payload), `{"n":1}`)
@@ -55,9 +41,9 @@ func TestList_Empty(t *testing.T) {
 	s, err := Open(t.TempDir())
 	assert.NilError(t, err)
 
-	list, err := s.List()
+	records, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(collect(t, list)), 0)
+	assert.Equal(t, len(records), 0)
 }
 
 func TestRemove(t *testing.T) {
@@ -68,9 +54,9 @@ func TestRemove(t *testing.T) {
 
 	assert.NilError(t, s.Remove(seq))
 
-	list, err := s.List()
+	records, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(collect(t, list)), 0)
+	assert.Equal(t, len(records), 0)
 }
 
 func TestRemove_Idempotent(t *testing.T) {
@@ -99,9 +85,8 @@ func TestDeadLetter(t *testing.T) {
 	assert.NilError(t, s.DeadLetter(seq1))
 
 	// Assert: the dead-lettered record leaves the live set...
-	list, err := s.List()
+	records, err := s.List()
 	assert.NilError(t, err)
-	records := collect(t, list)
 	assert.Equal(t, len(records), 1)
 	assert.Equal(t, records[0].Seq, seq2)
 
@@ -154,6 +139,46 @@ func TestSeqMonotonicAcrossDeadLetterAndRestart(t *testing.T) {
 	assert.Equal(t, seq3, seq2+1)
 }
 
+func TestOpen_LoadsRecords(t *testing.T) {
+	// Arrange: persist a few records, then discard the in-memory store.
+	dir := t.TempDir()
+	s, err := Open(dir)
+	assert.NilError(t, err)
+	_, err = s.Append(json.RawMessage(`{"n":1}`))
+	assert.NilError(t, err)
+	_, err = s.Append(json.RawMessage(`{"n":2}`))
+	assert.NilError(t, err)
+
+	// Act: re-Open the same directory (simulating a restart).
+	s2, err := Open(dir)
+	assert.NilError(t, err)
+
+	// Assert: the records come back from disk with their correct payloads.
+	records, err := s2.List()
+	assert.NilError(t, err)
+	assert.Equal(t, len(records), 2)
+	assert.Equal(t, records[0].Seq, uint64(1))
+	assert.Equal(t, string(records[0].Payload), `{"n":1}`)
+	assert.Equal(t, records[1].Seq, uint64(2))
+	assert.Equal(t, string(records[1].Payload), `{"n":2}`)
+}
+
+func TestOpen_CorruptRecordFails(t *testing.T) {
+	// Arrange: a live record file holding undecodable JSON.
+	dir := t.TempDir()
+	s, err := Open(dir)
+	assert.NilError(t, err)
+	seq, err := s.Append(json.RawMessage(`{"n":1}`))
+	assert.NilError(t, err)
+	assert.NilError(t, os.WriteFile(s.livePath(seq), []byte("{not json"), 0o644))
+
+	// Act: re-Open must surface the corrupt durable state loudly.
+	_, err = Open(dir)
+
+	// Assert
+	assert.ErrorContains(t, err, "unmarshal record")
+}
+
 func TestList_IgnoresGarbage(t *testing.T) {
 	// Arrange
 	dir := t.TempDir()
@@ -164,17 +189,18 @@ func TestList_IgnoresGarbage(t *testing.T) {
 	_, err = s.Append(json.RawMessage(`{"n":2}`))
 	assert.NilError(t, err)
 
-	// Drop stray files that must be ignored by List.
+	// Drop stray files that must be ignored on load.
 	assert.NilError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignore me"), 0o644))
 	assert.NilError(t, os.WriteFile(filepath.Join(dir, ".tmp-leftover"), []byte("garbage"), 0o644))
 	assert.NilError(t, os.WriteFile(filepath.Join(dir, "not-a-number.json"), []byte("{}"), 0o644))
 
-	// Act
-	list, err := s.List()
+	// Act: re-Open so the garbage files go through the load path, then List.
+	s2, err := Open(dir)
+	assert.NilError(t, err)
+	records, err := s2.List()
 
 	// Assert
 	assert.NilError(t, err)
-	records := collect(t, list)
 	assert.Equal(t, len(records), 2)
 	assert.Equal(t, records[0].Seq, uint64(1))
 	assert.Equal(t, records[1].Seq, uint64(2))
@@ -204,9 +230,9 @@ func TestAppend_Concurrent(t *testing.T) {
 		assert.Assert(t, !seen[seq], "duplicate Seq %d", seq)
 		seen[seq] = true
 	}
-	list, err := s.List()
+	records, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(collect(t, list)), n)
+	assert.Equal(t, len(records), n)
 }
 
 func TestList_RemoveDuringIteration(t *testing.T) {
@@ -220,13 +246,12 @@ func TestList_RemoveDuringIteration(t *testing.T) {
 	_, err = s.Append(json.RawMessage(`{"n":3}`))
 	assert.NilError(t, err)
 
-	// Act: Remove each record while walking the snapshot iterator (the pattern
-	// the outbox engine's Run loop will use). This must not deadlock on s.mu.
-	list, err := s.List()
+	// Act: Remove each record while ranging the returned copy (the pattern the
+	// outbox engine's Run loop will use).
+	records, err := s.List()
 	assert.NilError(t, err)
 	var visited []uint64
-	for rec, err := range list {
-		assert.NilError(t, err)
+	for _, rec := range records {
 		visited = append(visited, rec.Seq)
 		assert.NilError(t, s.Remove(rec.Seq))
 	}
@@ -235,7 +260,7 @@ func TestList_RemoveDuringIteration(t *testing.T) {
 	assert.DeepEqual(t, visited, []uint64{1, 2, 3})
 	remaining, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(collect(t, remaining)), 0)
+	assert.Equal(t, len(remaining), 0)
 }
 
 func TestList_DeadLetterDuringIteration(t *testing.T) {
@@ -247,12 +272,11 @@ func TestList_DeadLetterDuringIteration(t *testing.T) {
 	_, err = s.Append(json.RawMessage(`{"n":2}`))
 	assert.NilError(t, err)
 
-	// Act: DeadLetter each record while iterating the snapshot.
-	list, err := s.List()
+	// Act: DeadLetter each record while ranging the returned copy.
+	records, err := s.List()
 	assert.NilError(t, err)
 	var visited []uint64
-	for rec, err := range list {
-		assert.NilError(t, err)
+	for _, rec := range records {
 		visited = append(visited, rec.Seq)
 		assert.NilError(t, s.DeadLetter(rec.Seq))
 	}
@@ -261,65 +285,5 @@ func TestList_DeadLetterDuringIteration(t *testing.T) {
 	assert.DeepEqual(t, visited, []uint64{1, 2})
 	remaining, err := s.List()
 	assert.NilError(t, err)
-	assert.Equal(t, len(collect(t, remaining)), 0)
-}
-
-func TestList_SkipsRecordRemovedAfterSnapshot(t *testing.T) {
-	// Arrange
-	s, err := Open(t.TempDir())
-	assert.NilError(t, err)
-	_, err = s.Append(json.RawMessage(`{"n":1}`))
-	assert.NilError(t, err)
-	seq2, err := s.Append(json.RawMessage(`{"n":2}`))
-	assert.NilError(t, err)
-	_, err = s.Append(json.RawMessage(`{"n":3}`))
-	assert.NilError(t, err)
-
-	// Act: take the snapshot, then remove a record that hasn't been reached yet.
-	list, err := s.List()
-	assert.NilError(t, err)
-	assert.NilError(t, s.Remove(seq2))
-
-	// Assert: the lazily-read record is gone by the time the walk reaches it, so
-	// it is skipped rather than yielded or erroring.
-	var visited []uint64
-	for rec, err := range list {
-		assert.NilError(t, err)
-		visited = append(visited, rec.Seq)
-	}
-	assert.DeepEqual(t, visited, []uint64{1, 3})
-}
-
-func TestList_SurfacesDecodeError(t *testing.T) {
-	// Arrange
-	dir := t.TempDir()
-	s, err := Open(dir)
-	assert.NilError(t, err)
-	_, err = s.Append(json.RawMessage(`{"n":1}`))
-	assert.NilError(t, err)
-	seq2, err := s.Append(json.RawMessage(`{"n":2}`))
-	assert.NilError(t, err)
-	_, err = s.Append(json.RawMessage(`{"n":3}`))
-	assert.NilError(t, err)
-
-	// Corrupt the middle record's file with undecodable JSON.
-	assert.NilError(t, os.WriteFile(s.livePath(seq2), []byte("{not json"), 0o644))
-
-	// Act
-	list, err := s.List()
-	assert.NilError(t, err)
-
-	// Assert: the bad record surfaces as a non-nil error through the iterator
-	// without aborting the walk — the surrounding records are still visited.
-	var visited []uint64
-	var gotErr error
-	for rec, err := range list {
-		if err != nil {
-			gotErr = err
-			continue
-		}
-		visited = append(visited, rec.Seq)
-	}
-	assert.ErrorContains(t, gotErr, "unmarshal record")
-	assert.DeepEqual(t, visited, []uint64{1, 3})
+	assert.Equal(t, len(remaining), 0)
 }

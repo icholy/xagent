@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"iter"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,34 +19,71 @@ const seqDigits = 20
 // FileStore is a crash-safe, concurrency-safe Store backed by one atomic JSON
 // file per record. Live records live at <dir>/<seq>.json and dead-lettered ones
 // at <dir>/dead/<seq>.json, where <seq> is a 20-digit zero-padded uint64.
+//
+// The set of live records is loaded into an in-memory index at Open and kept in
+// sync by every mutation, so List and Append never read the live directory
+// again — disk is read only at startup. Writes stay per-record atomic
+// (temp-file + fsync + rename) for durability.
 type FileStore struct {
 	mu      sync.Mutex
 	dir     string
 	deadDir string
-	next    uint64 // next Seq to assign; guarded by mu
+	next    uint64            // next Seq to assign; guarded by mu
+	records map[uint64]Record // live records, keyed by Seq; guarded by mu
 }
 
 // Open returns a FileStore backed by dir, creating dir and its dead-letter
-// subdirectory if they do not exist. The Seq counter is seeded from the maximum
-// existing filename across both the live and dead directories, so sequence
-// numbers never repeat even after dead-lettering or a restart.
+// subdirectory if they do not exist. It reads every live record into memory;
+// a live record file that cannot be read or decoded fails Open, so corrupt
+// durable state surfaces loudly rather than silently dropping a message. The
+// Seq counter is seeded from the maximum filename across both the live and dead
+// directories, so sequence numbers never repeat even after dead-lettering or a
+// restart.
 func Open(dir string) (*FileStore, error) {
 	deadDir := filepath.Join(dir, "dead")
 	if err := os.MkdirAll(deadDir, 0o755); err != nil {
 		return nil, fmt.Errorf("outbox: create dir: %w", err)
 	}
-	s := &FileStore{dir: dir, deadDir: deadDir}
+	s := &FileStore{
+		dir:     dir,
+		deadDir: deadDir,
+		records: make(map[uint64]Record),
+	}
 
-	max, err := maxSeq(dir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("outbox: read dir: %w", err)
+	}
+	var liveMax uint64
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		seq, ok := parseRecordName(entry.Name())
+		if !ok {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("outbox: read record %d: %w", seq, err)
+		}
+		var rec Record
+		if err := json.Unmarshal(data, &rec); err != nil {
+			return nil, fmt.Errorf("outbox: unmarshal record %d: %w", seq, err)
+		}
+		s.records[seq] = rec
+		if seq > liveMax {
+			liveMax = seq
+		}
+	}
+
+	deadMax, err := maxSeq(deadDir)
 	if err != nil {
 		return nil, err
 	}
-	maxDead, err := maxSeq(deadDir)
-	if err != nil {
-		return nil, err
-	}
-	if maxDead > max {
-		max = maxDead
+	max := liveMax
+	if deadMax > max {
+		max = deadMax
 	}
 	s.next = max + 1
 	return s, nil
@@ -66,7 +102,8 @@ func (s *FileStore) deadPath(seq uint64) string {
 // Append durably persists payload under a new, strictly increasing Seq and
 // returns the assigned Seq. The write is crash-safe: the record is marshalled to
 // a temp file in the same directory, fsync'd, and renamed over the target, so a
-// concurrent List never observes a half-written file.
+// concurrent List never observes a half-written file. The record is then added
+// to the in-memory index.
 func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -80,80 +117,35 @@ func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
 	if err := writeFileAtomic(s.dir, s.livePath(seq), data); err != nil {
 		return 0, err
 	}
+	s.records[seq] = rec
 	s.next = seq + 1
 	return seq, nil
 }
 
-// List returns an iterator over all undelivered records in ascending Seq order.
-// Only real <seq>.json records are considered; leftover temp files and any other
-// files that don't parse as <uint64>.json are ignored, so an interrupted write
-// can never corrupt a listing.
-//
-// The set of Seqs is snapshotted under the lock — cheap (8 bytes/record), no
-// payloads read — and the lock is released before the caller iterates. Each
-// record's payload is then read lazily as it is yielded, so only one payload is
-// materialized at a time. Because nothing holds s.mu across the iterator's
-// yields, Remove or DeadLetter may be called on records during iteration —
-// including the record currently being yielded — without deadlocking. A record
-// removed or dead-lettered after the snapshot but before it is reached is
-// skipped; a genuine read/decode error is surfaced through the iterator's error
-// half without aborting the rest of the walk.
-func (s *FileStore) List() (iter.Seq2[Record, error], error) {
-	seqs, err := s.snapshot()
-	if err != nil {
-		return nil, err
-	}
-	return func(yield func(Record, error) bool) {
-		for _, seq := range seqs {
-			data, err := os.ReadFile(s.livePath(seq))
-			if errors.Is(err, os.ErrNotExist) {
-				// Removed or dead-lettered since the snapshot; skip it.
-				continue
-			}
-			if err != nil {
-				if !yield(Record{}, fmt.Errorf("outbox: read record %d: %w", seq, err)) {
-					return
-				}
-				continue
-			}
-			var rec Record
-			if err := json.Unmarshal(data, &rec); err != nil {
-				if !yield(Record{}, fmt.Errorf("outbox: unmarshal record %d: %w", seq, err)) {
-					return
-				}
-				continue
-			}
-			if !yield(rec, nil) {
-				return
-			}
-		}
-	}, nil
-}
-
-// snapshot returns the sorted Seqs of the live records at the moment of the call.
-// It reads no payloads, so it is cheap even for a backed-up outbox.
-func (s *FileStore) snapshot() ([]uint64, error) {
+// List returns a snapshot copy of all undelivered records in ascending Seq
+// order. It reads only the in-memory index, so the caller may Remove or
+// DeadLetter records while ranging the result — it holds its own copy. The
+// returned error is always nil; it exists to satisfy the Store interface, whose
+// other implementations may fail.
+func (s *FileStore) List() ([]Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	entries, err := os.ReadDir(s.dir)
-	if err != nil {
-		return nil, fmt.Errorf("outbox: read dir: %w", err)
+	records := make([]Record, 0, len(s.records))
+	for _, rec := range s.records {
+		records = append(records, rec)
 	}
-
-	var seqs []uint64
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+	slices.SortFunc(records, func(a, b Record) int {
+		switch {
+		case a.Seq < b.Seq:
+			return -1
+		case a.Seq > b.Seq:
+			return 1
+		default:
+			return 0
 		}
-		seq, ok := parseRecordName(entry.Name())
-		if !ok {
-			continue
-		}
-		seqs = append(seqs, seq)
-	}
-	slices.Sort(seqs)
-	return seqs, nil
+	})
+	return records, nil
 }
 
 // Remove deletes the record with the given Seq. It is idempotent: removing an
@@ -164,17 +156,19 @@ func (s *FileStore) Remove(seq uint64) error {
 	if err := os.Remove(s.livePath(seq)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("outbox: remove record %d: %w", seq, err)
 	}
+	delete(s.records, seq)
 	return nil
 }
 
 // DeadLetter atomically moves the record with the given Seq out of the live set
-// into the dead-letter area.
+// into the dead-letter area and drops it from the in-memory index.
 func (s *FileStore) DeadLetter(seq uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := os.Rename(s.livePath(seq), s.deadPath(seq)); err != nil {
 		return fmt.Errorf("outbox: dead-letter record %d: %w", seq, err)
 	}
+	delete(s.records, seq)
 	return nil
 }
 

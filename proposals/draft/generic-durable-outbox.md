@@ -76,15 +76,10 @@ type Store interface {
 	// Append durably persists payload under a new, strictly increasing Seq and
 	// returns the assigned Seq. It must not return until the record is durable.
 	Append(payload json.RawMessage) (uint64, error)
-	// List returns an iterator over all undelivered records in ascending Seq
-	// order. The set of Seqs is a point-in-time snapshot taken when List is
-	// called; each record's payload is read lazily as it is yielded, so only one
-	// payload is materialized at a time. Calling Remove or DeadLetter on records
-	// during iteration — including the record currently being yielded — is safe:
-	// a record removed or dead-lettered before it is reached is simply skipped.
-	// The outer error reports a failure to take the initial snapshot; per-record
-	// read/decode errors surface through the iterator's error half.
-	List() (iter.Seq2[Record, error], error)
+	// List returns a snapshot copy of all undelivered records in ascending Seq
+	// order. The caller may Remove or DeadLetter records while ranging the result
+	// because it holds its own copy.
+	List() ([]Record, error)
 	// Remove deletes the record with the given Seq. It is idempotent.
 	Remove(seq uint64) error
 	// DeadLetter atomically moves the record with the given Seq out of the live
@@ -96,18 +91,26 @@ type Store interface {
 #### Filesystem implementation (`outbox.FileStore`)
 
 Directly reuses the proven `taskstate` pattern (`taskstate.go:52-95`): one atomic file per
-record.
+record, backed by an in-memory index of the live records that is loaded once at `Open`.
+Disk is read only at startup; every write stays per-record atomic for durability.
 
 - Layout: `<dir>/<seq>.json` for live records, `<dir>/dead/<seq>.json` for dead-lettered
   ones, where `<seq>` is a 20-digit zero-padded `uint64` so lexical filename order equals
   numeric `Seq` order.
-- `Append`: pick the next `Seq` (in-memory counter seeded at `Open` from the max existing
-  filename across both the live and dead directories, so sequence numbers never repeat even
-  after dead-lettering), marshal, then write via temp-file + `fsync` + atomic `rename`
-  (identical to `taskstate.Store.Write`).
-- `List`: `os.ReadDir`, ignore temp files and non-`<uint64>.json` names (as
-  `taskstate.parseRecordName` does at `taskstate.go:165-177`), decode, sort by `Seq`.
-- `DeadLetter`: `rename` `<dir>/<seq>.json` → `<dir>/dead/<seq>.json`.
+- `Open`: read + unmarshal every `<uint64>.json` in the live directory into an in-memory
+  `map[uint64]Record` (ignoring temp files and non-`<uint64>.json` names as
+  `taskstate.parseRecordName` does at `taskstate.go:165-177`); a live record file that
+  can't be read or decoded fails `Open` so corrupt durable state surfaces loudly. Seed the
+  in-memory `Seq` counter from the max filename across both the live and dead directories
+  (the dead dir is scanned for filenames only), so sequence numbers never repeat even after
+  dead-lettering.
+- `Append`: assign the next `Seq`, marshal, write via temp-file + `fsync` + atomic `rename`
+  (identical to `taskstate.Store.Write`), then insert into the in-memory index.
+- `List`: copy the in-memory index values into a slice, sort by `Seq`, return — no disk
+  access, so the caller may `Remove`/`DeadLetter` while ranging the returned copy.
+- `Remove`: idempotent `os.Remove` of `<dir>/<seq>.json`, then drop from the index.
+- `DeadLetter`: `rename` `<dir>/<seq>.json` → `<dir>/dead/<seq>.json`, then drop from the
+  index (it has left the live set).
 
 No new dependency: the filesystem store is stdlib-only, exactly like `taskstate`.
 
@@ -139,10 +142,9 @@ func (o *Outbox[T]) Len() (int, error)
 ```
 
 `Run` is the durable analogue of today's `Run`/`Drain` pair (`eventqueue.go:66-120`): on
-wakeup it ranges over the `List` iterator (`for rec, err := range store.List() { if err !=
-nil { ... }; ... Remove(rec.Seq) }`), delivers each record in `Seq` order via `Deliver`, and
-`Remove`s it on success — removing the record mid-iteration is safe because `List`
-snapshots the `Seq` set up front and reads each payload lazily. `Deliver` reports whether a failure is permanent as its first
+wakeup it `List`s the store and ranges the returned snapshot (`for _, rec := range records {
+... Remove(rec.Seq) }`), delivers each record in `Seq` order via `Deliver`, and `Remove`s it
+on success — removing the record mid-loop is safe because `List` returns a copy. `Deliver` reports whether a failure is permanent as its first
 return value, so the code that already holds the error classifies it inline — no separate
 predicate. A transient error (`permanent == false`) sleeps for `Backoff.NextBackOff()` (a
 `backoff.BackOff` from the already-vendored `github.com/cenkalti/backoff/v5`, replacing the
