@@ -15,11 +15,16 @@ dbmate = "2.33.0"
 [tasks.build]
 description = "Build xagent binaries for all architectures"
 depends = ["build:webui"]
+# Stamp the version from `git describe` so local builds report the latest
+# release tag. Without this, debug.ReadBuildInfo() falls back to a Go module
+# pseudo-version off the last v1 tag (the module path has no /v2 suffix), which
+# hides all v2.x tags.
+env.LDFLAGS = "-X github.com/icholy/xagent/internal/version.Version={{ exec(command='git describe --tags --always --dirty') }}"
 run = [
-	"CGO_ENABLED=0 go build -o xagent ./cmd/xagent",
+	'CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o xagent ./cmd/xagent',
 	"mkdir -p prebuilt",
-	"CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 ./cmd/xagent",
-	"CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o prebuilt/xagent-linux-arm64 ./cmd/xagent",
+	'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o prebuilt/xagent-linux-amd64 ./cmd/xagent',
+	'CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o prebuilt/xagent-linux-arm64 ./cmd/xagent',
 ]
 
 [tasks."build:webui"]
@@ -40,8 +45,9 @@ run = "cd webui && pnpm install --frozen-lockfile && pnpm exec vite build"
 [tasks.dev]
 description = "Start a local server + runner in Docker"
 depends = ["build:webui"]
+env.LDFLAGS = "-X github.com/icholy/xagent/internal/version.Version={{ exec(command='git describe --tags --always --dirty') }}"
 run = [
-	"CGO_ENABLED=0 GOOS=linux go build -o xagent ./cmd/xagent",
+	'CGO_ENABLED=0 GOOS=linux go build -ldflags "$LDFLAGS" -o xagent ./cmd/xagent',
 	"docker compose -f docker-compose.dev.yml up --build",
 ]
 
@@ -52,9 +58,10 @@ run = "cd webui && pnpm install --frozen-lockfile && pnpm dev"
 
 [tasks.install]
 description = "Build and install xagent bin"
+env.LDFLAGS = "-X github.com/icholy/xagent/internal/version.Version={{ exec(command='git describe --tags --always --dirty') }}"
 run = [
 	"cd webui && pnpm install --frozen-lockfile && pnpm exec vite build",
-	"CGO_ENABLED=0 go build -o $(go env GOPATH)/bin/xagent ./cmd/xagent",
+	'CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o $(go env GOPATH)/bin/xagent ./cmd/xagent',
 ]
 
 [tasks.generate]
