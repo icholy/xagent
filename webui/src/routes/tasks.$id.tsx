@@ -31,7 +31,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { TaskTimeline } from '@/components/task-timeline'
-import { Send, Loader2, TerminalSquare } from 'lucide-react'
+import { Send, Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -171,16 +171,9 @@ function TaskDetail() {
               Cancel
             </Button>
           )}
-          {canRestartTask(task) && (
-            <Button variant="outline" size="sm" onClick={handleRestart} disabled={isMutating}>
-              {restartMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Restart
-            </Button>
-          )}
           {canOpenShell(task) ? (
             <Button asChild variant="outline" size="sm">
               <Link to="/tasks/$id/shell" params={{ id }} search={{ org: orgId }}>
-                <TerminalSquare className="mr-2 h-4 w-4" />
                 Shell
               </Link>
             </Button>
@@ -191,7 +184,6 @@ function TaskDetail() {
                     tooltip still fires on hover. */}
                 <span className="inline-block">
                   <Button variant="outline" size="sm" disabled>
-                    <TerminalSquare className="mr-2 h-4 w-4" />
                     Shell
                   </Button>
                 </span>
@@ -201,6 +193,12 @@ function TaskDetail() {
                 completes, fails, or is cancelled.
               </TooltipContent>
             </Tooltip>
+          )}
+          {canRestartTask(task) && (
+            <Button variant="outline" size="sm" onClick={handleRestart} disabled={isMutating}>
+              {restartMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Restart
+            </Button>
           )}
           {canArchiveTask(task) && (
             <ArchiveButton
