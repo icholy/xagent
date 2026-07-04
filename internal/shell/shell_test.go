@@ -330,6 +330,44 @@ func TestSessionTornDownWhenOperatorDisconnects(t *testing.T) {
 	}
 }
 
+func TestServe_ContextCancelTearsDownBlockedShell(t *testing.T) {
+	t.Parallel()
+	// Regression for the driver ignoring SIGTERM during a live shell session. The
+	// driver cancels Serve's context on SIGTERM; if teardown relied on the shell
+	// noticing the PTY closing, a shell blocked in a foreground child would never
+	// exit and Serve (and the driver) would hang. Serve must kill the shell and
+	// return promptly when its context is canceled.
+	reg := shellserver.New(shellserver.Options{EstablishTimeout: time.Minute})
+	srv := newRelayServer(t, reg)
+	assert.NilError(t, reg.Seed("s4", testOrg, testTask))
+
+	serveCtx, cancelServe := context.WithCancel(t.Context())
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- shell.Serve(serveCtx, shell.ServeOptions{ServerURL: srv.URL, Token: "driver-token", Session: "s4", Log: slog.Default()})
+	}()
+
+	op := runOperator(t, dialAttach(t, srv, "s4"))
+
+	// Run a foreground child that blocks forever, so closing the PTY alone would
+	// not make the shell exit — only killing the process group does.
+	op.send(t, "echo up; sleep 100\n")
+	op.waitFor(t, "up")
+
+	// Act: the driver received SIGTERM — Serve's context is canceled.
+	cancelServe()
+
+	// Assert: Serve returns promptly rather than blocking on cmd.Wait, and the
+	// relay session is torn down.
+	select {
+	case err := <-serveErr:
+		assert.NilError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Serve did not return after its context was canceled")
+	}
+	waitForCond(t, 5*time.Second, func() bool { return !reg.Has("s4") })
+}
+
 func TestDriverURL(t *testing.T) {
 	t.Parallel()
 	url, err := shell.DriverURL("https://example.com", "abc")
