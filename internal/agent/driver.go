@@ -70,7 +70,8 @@ func (d *Driver) Run(ctx context.Context) error {
 		// The error already distinguishes setup failures from agent failures
 		// (different wrapped errors), so it carries that context into the
 		// timeline as the failure reason.
-		event.Event, event.Reason = model.RunnerEventFailed, err.Error()
+		event.Event = model.RunnerEventFailed
+		event.Reason = err.Error()
 	}
 	// The terminal ack decides the exit code: acked means the outcome is
 	// durably recorded and the driver exits 0 even on agent failure; a lost
