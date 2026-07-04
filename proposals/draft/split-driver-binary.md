@@ -189,6 +189,65 @@ does today for server/runner hosts.
 The server-side `download` command and any image build that previously relied on
 the full binary being present as the driver switch to the driver asset.
 
+### Shrinking the driver further
+
+The split gets the driver to ~23 MB by removing packages that never run in a
+sandbox. The remaining size can be cut further with build and packaging changes,
+measured here on the ~23 MB agent-only driver (`CGO_ENABLED=0 GOOS=linux
+GOARCH=amd64`):
+
+| Build | Size | Note |
+|---|---|---|
+| `go build` (baseline) | ~23.0 MB | includes DWARF debug info + symbol table |
+| `-ldflags="-s -w"` | **~15.8 MB** | strip debug info + symbol table (−31%) |
+| `-trimpath -ldflags="-s -w"` | ~15.8 MB | `-trimpath` is reproducibility, not size |
+
+**Strip the release driver.** Building the shipped `xagent-driver` assets with
+`-ldflags="-s -w"` is a free ~31% cut with no runtime cost — the driver never
+needs its own symbol table or DWARF (panics still print, just without
+file:line). This should be the default for the release build (kept off the
+host `xagent` binary, where stack traces are useful for operators). The version
+ldflag composes: `-ldflags="-s -w -X …/internal/version.Version=<tag>"`.
+
+**Where the remaining ~15.8 MB goes** (ELF sections of the stripped binary):
+
+- `.text` ~6.3 MB — code
+- `.gopclntab` ~6.6 MB — the runtime's PC→line table (used for GC stack maps and
+  tracebacks); **not safely strippable**, the runtime requires it
+- `.rodata` ~2.4 MB — read-only data (type info, string tables, TLS/crypto
+  constants)
+
+This is a floor, not fat. The linked dependencies are all load-bearing for the
+driver's actual job — talk Connect-RPC to the server and speak MCP: the
+Connect client, Go's TLS stack (which now always links the FIPS 140 module),
+`google.golang.org/protobuf`, and `github.com/modelcontextprotocol/go-sdk`.
+Notably the agent backends (`claude`, `codex`, `cursor`, `copilot`) are thin
+CLI wrappers — they exec the vendor CLIs and parse their JSON — so there are **no
+embedded per-agent SDKs to build-tag away**. There is no large removable
+dependency left after the split; the returns past stripping are small.
+
+**Compression, if "move around" cost still matters.** The issue's concern is
+moving the binary around (release assets, copying into each sandbox). Two
+options trade CPU for bytes:
+
+- **Compressed release/download + prebuilt cache.** Ship the driver assets
+  gzip/zstd-compressed and have `xagent download` / `prebuilt` decompress on
+  fetch. A stripped Go binary compresses to roughly 35–45% (≈6–7 MB), so this
+  cuts download and host-side storage substantially. It does **not** shrink the
+  bytes written into the container (they are decompressed first), and adds no
+  per-launch runtime cost — the decompress happens once at fetch time.
+- **UPX self-extracting binary.** `upx --best`/`--lzma` on the stripped driver
+  typically yields ≈35–50% of the input on disk, and this *does* shrink the
+  in-container file since UPX decompresses in memory at exec. The cost is added
+  process-startup latency and memory, plus UPX's cross-platform fragility. (UPX
+  was not installable in the measurement sandbox, so these ratios are cited from
+  its typical behavior, not measured here — validate before adopting.)
+
+Recommendation: always strip the release driver (free), keep `-trimpath` for
+reproducible builds, and treat compression as an optional follow-up — prefer
+compressed-download over UPX unless the *in-container* on-disk size is the
+binding constraint.
+
 ## Trade-offs
 
 - **Two binaries instead of one.** The build and release pipeline grows two more
@@ -218,10 +277,11 @@ the full binary being present as the driver switch to the driver asset.
   includes the web UI and full server. Producing a trimmed variant is
   effectively building a second binary anyway — so build the right one.
 
-- **UPX / compression of the current binary.** Shrinks bytes-at-rest but keeps
-  the entire server surface inside every sandbox, adds a decompression step, and
-  is fragile across platforms. Splitting addresses the footprint and the
-  security surface together.
+- **UPX / compression instead of splitting.** Compressing the *current* full
+  binary shrinks bytes-at-rest but keeps the entire server surface inside every
+  sandbox and addresses neither the security footprint nor the linked code size.
+  Splitting is the primary fix; compression is a complementary follow-up applied
+  to the already-slim driver (see "Shrinking the driver further").
 
 - **A single in-container binary that keeps `microvm-shim`** (and therefore the
   AWS SDK). Simpler artifact set, but pays ~16 MB of AWS SDK on the common
