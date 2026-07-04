@@ -1,0 +1,137 @@
+package xagentclient_test
+
+import (
+	"context"
+	"errors"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"connectrpc.com/connect"
+	"gotest.tools/v3/assert"
+
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/xagentclient"
+)
+
+// stubUnary adapts a func to a connect.UnaryFunc for exercising the interceptor.
+func stubUnary(fn func() (connect.AnyResponse, error)) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		return fn()
+	}
+}
+
+func newReq() connect.AnyRequest {
+	return connect.NewRequest(&xagentv1.GetTaskRequest{Id: 1})
+}
+
+func TestRetryInterceptor_RetriesUntilSuccess(t *testing.T) {
+	t.Parallel()
+	// Arrange: fail with Unavailable twice, then succeed.
+	var calls atomic.Int64
+	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{
+		MaxRetries:     3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+	})
+	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+		if calls.Add(1) < 3 {
+			return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
+		}
+		return connect.NewResponse(&xagentv1.GetTaskResponse{}), nil
+	}))
+
+	// Act
+	res, err := wrapped(context.Background(), newReq())
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Assert(t, res != nil)
+	assert.Equal(t, calls.Load(), int64(3))
+}
+
+func TestRetryInterceptor_ExhaustsRetries(t *testing.T) {
+	t.Parallel()
+	// Arrange: always fail with a retryable error.
+	var calls atomic.Int64
+	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{
+		MaxRetries:     2,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+	})
+	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+		calls.Add(1)
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
+	}))
+
+	// Act
+	_, err := wrapped(context.Background(), newReq())
+
+	// Assert: initial call plus two retries.
+	assert.Equal(t, connect.CodeOf(err), connect.CodeUnavailable)
+	assert.Equal(t, calls.Load(), int64(3))
+}
+
+func TestRetryInterceptor_DoesNotRetryPermanentError(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	var calls atomic.Int64
+	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{
+		MaxRetries:     5,
+		InitialBackoff: time.Millisecond,
+	})
+	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+		calls.Add(1)
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("nope"))
+	}))
+
+	// Act
+	_, err := wrapped(context.Background(), newReq())
+
+	// Assert
+	assert.Equal(t, connect.CodeOf(err), connect.CodeNotFound)
+	assert.Equal(t, calls.Load(), int64(1))
+}
+
+func TestRetryInterceptor_StopsOnCancelledContext(t *testing.T) {
+	t.Parallel()
+	// Arrange: cancel the context, then fail with a retryable error so the
+	// interceptor tries to sleep before retrying.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var calls atomic.Int64
+	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{
+		MaxRetries:     5,
+		InitialBackoff: time.Hour,
+	})
+	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+		calls.Add(1)
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
+	}))
+
+	// Act
+	_, err := wrapped(ctx, newReq())
+
+	// Assert: it does not wait out the hour-long backoff, and only the initial
+	// call happened before the cancelled context aborted the retry sleep.
+	assert.Equal(t, connect.CodeOf(err), connect.CodeUnavailable)
+	assert.Equal(t, calls.Load(), int64(1))
+}
+
+func TestRetryInterceptor_NegativeMaxRetriesDisables(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	var calls atomic.Int64
+	interceptor := xagentclient.NewRetryInterceptor(xagentclient.RetryOptions{MaxRetries: -1})
+	wrapped := interceptor.WrapUnary(stubUnary(func() (connect.AnyResponse, error) {
+		calls.Add(1)
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("boom"))
+	}))
+
+	// Act
+	_, err := wrapped(context.Background(), newReq())
+
+	// Assert
+	assert.Equal(t, connect.CodeOf(err), connect.CodeUnavailable)
+	assert.Equal(t, calls.Load(), int64(1))
+}

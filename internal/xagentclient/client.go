@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"connectrpc.com/connect"
+
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 )
 
@@ -33,6 +35,10 @@ type Options struct {
 	// Pair with NotificationClientOptions.ClientID to suppress
 	// self-notifications.
 	ClientID string
+	// Retry configures the retry-with-backoff behaviour for unary calls.
+	// Zero-valued fields fall back to their defaults; set MaxRetries to a
+	// negative value to disable retries entirely.
+	Retry RetryOptions
 }
 
 // New returns a Connect client.
@@ -46,5 +52,7 @@ func New(opts Options) Client {
 		}
 	}
 	httpClient := &http.Client{Transport: transport, Timeout: cmp.Or(opts.Timeout, DefaultTimeout)}
-	return xagentv1connect.NewXAgentServiceClient(httpClient, opts.BaseURL)
+	return xagentv1connect.NewXAgentServiceClient(httpClient, opts.BaseURL,
+		connect.WithInterceptors(NewRetryInterceptor(opts.Retry)),
+	)
 }
