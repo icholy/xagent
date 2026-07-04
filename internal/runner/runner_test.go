@@ -88,12 +88,14 @@ func TestRunnerStart(t *testing.T) {
 	client := xagentclient.New(xagentclient.Options{BaseURL: ts.URL})
 	be, err := dockerbackend.New(dockerbackend.Options{RunnerID: "test-runner"})
 	assert.NilError(t, err)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: client, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	r, err := New(Options{
 		Client:    client,
 		Backend:   be,
 		Store:     testStore(t),
 		ServerURL: ts.URL,
-		Queue:     testQueue(t, client),
+		Queue:     queue,
 		Workspaces: &workspace.Config{
 			Workspaces: map[string]workspace.Workspace{
 				"test": {
@@ -158,39 +160,6 @@ func TestRunnerStart(t *testing.T) {
 	assert.DeepEqual(t, events, []string{"started", "stopped"})
 }
 
-// testQueue builds a durable outbox backed by a fresh temp dir whose Deliver
-// submits through client, mirroring the runner's production wiring.
-func testQueue(t *testing.T, client xagentclient.Client) *outbox.Outbox[model.RunnerEvent] {
-	t.Helper()
-	return queueOver(t, t.TempDir(), client)
-}
-
-// queueOver builds a durable outbox backed by dir using the same shared factory
-// as the production wiring (see internal/command/runner.go), with delivery routed
-// through client. Reusing the same dir across two calls simulates a runner
-// restart. The zero-interval backoff keeps transient-failure retries tight in tests.
-func queueOver(t *testing.T, dir string, client xagentclient.Client) *outbox.Outbox[model.RunnerEvent] {
-	t.Helper()
-	store, err := outbox.Open(dir)
-	assert.NilError(t, err)
-	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{
-		Store:   store,
-		Client:  client,
-		Backoff: backoff.NewConstantBackOff(0),
-		Log:     slog.Default(),
-	})
-	assert.NilError(t, err)
-	return queue
-}
-
-// assertEmpty asserts the outbox has drained to zero live records.
-func assertEmpty(t *testing.T, queue *outbox.Outbox[model.RunnerEvent]) {
-	t.Helper()
-	n, err := queue.Len()
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
-}
-
 // submitted drives the outbox until it drains the persisted events, then returns
 // the events it delivered through the mock client. The outbox's first Run pass
 // delivers everything already persisted, so this exercises the same durable path
@@ -228,7 +197,8 @@ func TestRunnerEventsSurviveRestart(t *testing.T) {
 
 	// A runner persists two lifecycle events, then "crashes" before delivering
 	// them: this outbox is never Run, so nothing reaches the server.
-	crashed := queueOver(t, dir, &xagentclient.ClientMock{})
+	crashed, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: dir, Client: &xagentclient.ClientMock{}, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	assert.NilError(t, crashed.Enqueue(model.RunnerEvent{TaskID: 1, Event: model.RunnerEventStarted}))
 	assert.NilError(t, crashed.Enqueue(model.RunnerEvent{TaskID: 2, Event: model.RunnerEventFailed, Version: 5, Reason: "boom"}))
 
@@ -238,7 +208,8 @@ func TestRunnerEventsSurviveRestart(t *testing.T) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
 		},
 	}
-	restarted := queueOver(t, dir, mock)
+	restarted, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: dir, Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 
 	// The events survived the restart and are redelivered in FIFO order, with
 	// their TaskId/Version/Reason intact.
@@ -261,7 +232,9 @@ func TestRunnerStart_Idempotent(t *testing.T) {
 		},
 	}
 	mock := &xagentclient.ClientMock{}
-	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: testQueue(t, mock)})
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
@@ -300,7 +273,9 @@ func TestRunnerStart_AdoptReuse(t *testing.T) {
 			return &xagentv1.CreateTaskTokenResponse{Token: "t"}, nil
 		},
 	}
-	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: testQueue(t, mock), Workspaces: testWorkspaces()})
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue, Workspaces: testWorkspaces()})
 	assert.NilError(t, err)
 
 	// Act
@@ -329,7 +304,9 @@ func TestRunnerList(t *testing.T) {
 		},
 	}
 	mock := &xagentclient.ClientMock{}
-	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: testQueue(t, mock)})
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
@@ -368,7 +345,8 @@ func TestRunnerPoll_StopWithoutSandbox(t *testing.T) {
 			return false, nil
 		},
 	}
-	queue := testQueue(t, mock)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
@@ -411,7 +389,8 @@ func TestRunnerPoll_StopSignalled(t *testing.T) {
 		},
 	}
 	store := testStore(t, taskstate.Record{TaskID: 7, Type: "docker", ID: "c7"})
-	queue := testQueue(t, mock)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
@@ -421,7 +400,9 @@ func TestRunnerPoll_StopSignalled(t *testing.T) {
 
 	// Assert - the driver was signalled and owns the terminal report.
 	assert.Assert(t, cmp.Len(be.SignalCalls(), 1))
-	assertEmpty(t, queue)
+	n, err := queue.Len()
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
 }
 
 func TestRunnerSupervise_ReportLost(t *testing.T) {
@@ -439,7 +420,8 @@ func TestRunnerSupervise_ReportLost(t *testing.T) {
 			return backend.ExitLost, nil
 		},
 	}
-	queue := testQueue(t, mock)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 	assert.Assert(t, r.sem.TryAcquire(1)) // the slot supervise will release
@@ -468,7 +450,8 @@ func TestRunnerSupervise_CleanExit(t *testing.T) {
 			return 0, nil
 		},
 	}
-	queue := testQueue(t, mock)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 	assert.Assert(t, r.sem.TryAcquire(1))
@@ -477,7 +460,9 @@ func TestRunnerSupervise_CleanExit(t *testing.T) {
 	r.supervise(t.Context(), 3, backend.Handle{ID: "c3"})
 
 	// Assert - no event, slot released.
-	assertEmpty(t, queue)
+	n, err := queue.Len()
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
 	assert.Assert(t, r.sem.TryAcquire(1))
 }
 
@@ -491,7 +476,8 @@ func TestRunnerSupervise_Shutdown(t *testing.T) {
 			return 0, context.Canceled
 		},
 	}
-	queue := testQueue(t, mock)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 	assert.Assert(t, r.sem.TryAcquire(1))
@@ -500,7 +486,9 @@ func TestRunnerSupervise_Shutdown(t *testing.T) {
 	r.supervise(t.Context(), 4, backend.Handle{ID: "c4"})
 
 	// Assert - no event, and the slot is still held (not released on shutdown).
-	assertEmpty(t, queue)
+	n, err := queue.Len()
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
 	assert.Assert(t, !r.sem.TryAcquire(1))
 }
 
@@ -542,7 +530,8 @@ func TestRunnerLoad(t *testing.T) {
 		taskstate.Record{TaskID: 2, Type: "docker", ID: "c2"},
 		taskstate.Record{TaskID: 3, Type: "docker", ID: "c3"},
 	)
-	queue := testQueue(t, mock)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 5, Queue: queue})
@@ -614,7 +603,8 @@ func TestRunnerPrune(t *testing.T) {
 		taskstate.Record{TaskID: 3, Type: "docker", ID: "c3"},
 		taskstate.Record{TaskID: 4, Type: "docker", ID: "c4"},
 	)
-	queue := testQueue(t, mock)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
 	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
@@ -664,7 +654,9 @@ func TestRunnerStart_Gone(t *testing.T) {
 			return &xagentv1.CreateTaskTokenResponse{Token: "t"}, nil
 		},
 	}
-	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: testQueue(t, mock), Workspaces: testWorkspaces()})
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue, Workspaces: testWorkspaces()})
 	assert.NilError(t, err)
 
 	// Act
@@ -690,7 +682,9 @@ func TestRunnerStart_GoneViaProbe(t *testing.T) {
 		},
 	}
 	mock := &xagentclient.ClientMock{}
-	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: testQueue(t, mock)})
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{StoreDir: t.TempDir(), Client: mock, Backoff: backoff.NewConstantBackOff(0), Log: slog.Default()})
+	assert.NilError(t, err)
+	r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
 	assert.NilError(t, err)
 
 	// Act
