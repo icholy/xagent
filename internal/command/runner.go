@@ -9,13 +9,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"connectrpc.com/connect"
-
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/cenkalti/backoff/v5"
 	"github.com/icholy/xagent/internal/configfile"
 	"github.com/icholy/xagent/internal/model"
-	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/runner"
 	"github.com/icholy/xagent/internal/runner/backend"
 	dockerbackend "github.com/icholy/xagent/internal/runner/backend/docker"
@@ -155,17 +152,9 @@ var RunnerCommand = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to open outbox store: %w", err)
 		}
-		queue := outbox.New(outbox.Options[model.RunnerEvent]{
-			Store: outboxStore,
-			// Deliver converts a model.RunnerEvent to the proto SubmitRunnerEvents
-			// request and sends it. isPermanentError classifies the failure so the
-			// outbox dead-letters unrecoverable events instead of retrying forever.
-			Deliver: func(ctx context.Context, ev model.RunnerEvent) (permanent bool, err error) {
-				_, err = client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-					Events: []*xagentv1.RunnerEvent{ev.Proto()},
-				})
-				return isPermanentError(err), err
-			},
+		queue := runner.NewRunnerEventOutbox(runner.RunnerEventOutboxOptions{
+			Store:  outboxStore,
+			Client: client,
 			// Reproduce the old EventQueue's fixed retry interval (the poll
 			// interval) with a constant backoff, for a drop-in match.
 			Backoff: backoff.NewConstantBackOff(pollInterval),
@@ -284,16 +273,4 @@ var RunnerCommand = &cli.Command{
 			}
 		}
 	},
-}
-
-// isPermanentError returns true if the error indicates a condition that
-// will never succeed on retry (e.g. task not found, invalid argument). The
-// outbox dead-letters permanent failures instead of retrying them.
-func isPermanentError(err error) bool {
-	switch connect.CodeOf(err) {
-	case connect.CodeNotFound, connect.CodeInvalidArgument, connect.CodePermissionDenied:
-		return true
-	default:
-		return false
-	}
 }

@@ -165,25 +165,17 @@ func testQueue(t *testing.T, client xagentclient.Client) *outbox.Outbox[model.Ru
 	return queueOver(t, t.TempDir(), client)
 }
 
-// queueOver builds a durable outbox backed by dir whose Deliver submits through
-// client, mirroring the runner's production wiring (see internal/command/runner.go).
-// Reusing the same dir across two calls simulates a runner restart. The
-// zero-interval backoff keeps transient-failure retries tight in tests.
+// queueOver builds a durable outbox backed by dir using the same shared factory
+// as the production wiring (see internal/command/runner.go), with delivery routed
+// through client. Reusing the same dir across two calls simulates a runner
+// restart. The zero-interval backoff keeps transient-failure retries tight in tests.
 func queueOver(t *testing.T, dir string, client xagentclient.Client) *outbox.Outbox[model.RunnerEvent] {
 	t.Helper()
 	store, err := outbox.Open(dir)
 	assert.NilError(t, err)
-	return outbox.New(outbox.Options[model.RunnerEvent]{
-		Store: store,
-		Deliver: func(ctx context.Context, ev model.RunnerEvent) (bool, error) {
-			_, err := client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-				Events: []*xagentv1.RunnerEvent{ev.Proto()},
-			})
-			permanent := connect.CodeOf(err) == connect.CodeNotFound ||
-				connect.CodeOf(err) == connect.CodeInvalidArgument ||
-				connect.CodeOf(err) == connect.CodePermissionDenied
-			return permanent, err
-		},
+	return NewRunnerEventOutbox(RunnerEventOutboxOptions{
+		Store:   store,
+		Client:  client,
 		Backoff: backoff.NewConstantBackOff(0),
 		Log:     slog.Default(),
 	})
