@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.7.0](https://github.com/icholy/xagent/compare/v2.6.0...v2.7.0) (2026-07-04)
+
+
+### Features
+
+* **cmpx:** add OnlyFields inverse of cmpopts.IgnoreFields ([#1178](https://github.com/icholy/xagent/issues/1178)) ([e69a5e1](https://github.com/icholy/xagent/commit/e69a5e18bd00660590d1332eb2b4176e78ebc50f))
+* **dev:** add dummy-error workspace to dev runner ([#1183](https://github.com/icholy/xagent/issues/1183)) ([c463e4e](https://github.com/icholy/xagent/commit/c463e4e1e7be9ea170d28cfb85ac211484f568c7))
+* **events:** carry failure reason on sandbox lifecycle events ([#1172](https://github.com/icholy/xagent/issues/1172)) ([56a033c](https://github.com/icholy/xagent/commit/56a033cee14d4bfee50f832d048e695de2ae9d13))
+* in-browser task shell on the task detail page ([#1154](https://github.com/icholy/xagent/issues/1154)) ([fd8349e](https://github.com/icholy/xagent/commit/fd8349e6857a86a495633c47700d02adc00a08b0))
+* **mcpbridge:** add "all" option to channel_mute ([#1175](https://github.com/icholy/xagent/issues/1175)) ([705eec7](https://github.com/icholy/xagent/commit/705eec79f5f4bbd7eead643812a6a91eb0376253))
+* **mcpbridge:** channel_mute / channel_unmute / channel_muted tools ([#1162](https://github.com/icholy/xagent/issues/1162)) ([bda33bb](https://github.com/icholy/xagent/commit/bda33bba23ae3678b2d7579c0ca94b80d6849af4))
+* **moqassert:** add package for asserting on moq call logs ([#1177](https://github.com/icholy/xagent/issues/1177)) ([c3faa71](https://github.com/icholy/xagent/commit/c3faa7120d47deecef5187386e64dcec31a58ac1))
+* **outbox:** add durable outbox store interface and filesystem implementation ([#1188](https://github.com/icholy/xagent/issues/1188)) ([674214b](https://github.com/icholy/xagent/commit/674214b8ad152fa3dd5e5b5c37ebf35c3f3a3fc4))
+* **outbox:** add generic outbox delivery engine ([#1200](https://github.com/icholy/xagent/issues/1200)) ([f63399d](https://github.com/icholy/xagent/commit/f63399d2fa915a68104036e356d12f7e85e5377c))
+* **shellserver:** add active shell sessions metric ([#1168](https://github.com/icholy/xagent/issues/1168)) ([02c86b9](https://github.com/icholy/xagent/commit/02c86b934c3cbd2c14a44cb429f4f5201ea09f16))
+* **shellserver:** add idle timeout to debug shell relay ([#1191](https://github.com/icholy/xagent/issues/1191)) ([d1227b0](https://github.com/icholy/xagent/commit/d1227b0554f1bba72050b0c9cb53747c5f8d3750))
+* **webui:** add read-only Links tab to task detail page ([#1195](https://github.com/icholy/xagent/issues/1195)) ([89f2530](https://github.com/icholy/xagent/commit/89f253069adb55c095e34bf1ecbe5d0d99e586b0))
+* **webui:** make task shell an in-page tab ([#1184](https://github.com/icholy/xagent/issues/1184)) ([3fb99a3](https://github.com/icholy/xagent/commit/3fb99a39a7ba6726ead4c7d6a92f658dcc90e4ce))
+* **xagentclient:** add retry with backoff to gRPC client ([#1201](https://github.com/icholy/xagent/issues/1201)) ([4312bbe](https://github.com/icholy/xagent/commit/4312bbeb270bcb34e9b48931124b41b9e60c7315))
+
+
+### Bug Fixes
+
+* close the operator shell leg with CloseNow to avoid an exit hang ([#1149](https://github.com/icholy/xagent/issues/1149)) ([212760a](https://github.com/icholy/xagent/commit/212760a4b3982e1ebcc8b7535e50e7dd2b2fa883)), closes [#1144](https://github.com/icholy/xagent/issues/1144)
+* **server:** return 404 on wrong-org shell attach ([#1190](https://github.com/icholy/xagent/issues/1190)) ([4c4c377](https://github.com/icholy/xagent/commit/4c4c377b1dcd10c1754bcfea8ed4e19fcbbd8bd7))
+* **shell:** reap sandbox when operator disconnects from reverse shell ([#1182](https://github.com/icholy/xagent/issues/1182)) ([9928f09](https://github.com/icholy/xagent/commit/9928f091cf1773b5f2909a9aa8abf29b46c7cf53))
+* **shell:** tear down reverse shell on driver SIGTERM ([#1164](https://github.com/icholy/xagent/issues/1164)) ([b893f85](https://github.com/icholy/xagent/commit/b893f85218b9fc44208bee0f8505ebae0812abb1))
+
+
+### Miscellaneous
+
+* add dummy runner to local dev stack ([#1155](https://github.com/icholy/xagent/issues/1155)) ([d60d5bc](https://github.com/icholy/xagent/commit/d60d5bcbff600ea82ad904bdb148b6e5a078f03c))
+* add Implementation Plan section to proposal skill ([#1176](https://github.com/icholy/xagent/issues/1176)) ([3099f66](https://github.com/icholy/xagent/commit/3099f661f72b99e6d4b52cd6a20eaca06ff1e5d9))
+* add internal/x/mcpx for shared MCP result helpers ([#1192](https://github.com/icholy/xagent/issues/1192)) ([f5bf7cf](https://github.com/icholy/xagent/commit/f5bf7cf80d5d9f8bd5ff7ecf91c8d875e3bea133))
+* add mcptest package and use it in mcpbridge tests ([#1189](https://github.com/icholy/xagent/issues/1189)) ([6a6725c](https://github.com/icholy/xagent/commit/6a6725c517963a4487c30bcad8df3481f1f71cc0))
+* add moq and no-helper rules to testing skill ([#1163](https://github.com/icholy/xagent/issues/1163)) ([d8c14a3](https://github.com/icholy/xagent/commit/d8c14a333f0024cddb4d498d309d64eb1e5c2107))
+* add xagent-implement skill ([#1186](https://github.com/icholy/xagent/issues/1186)) ([1bffff8](https://github.com/icholy/xagent/commit/1bffff8b072ef225614e8beaff67820466e076cc))
+* collapse field-by-field named-struct asserts to whole-value DeepEqual ([#1203](https://github.com/icholy/xagent/issues/1203)) ([125d277](https://github.com/icholy/xagent/commit/125d27742a0512c58fc74233bd20bad04b3d74d7))
+* enable standard golangci-lint linters and fix findings ([#1173](https://github.com/icholy/xagent/issues/1173)) ([99ada0b](https://github.com/icholy/xagent/commit/99ada0b9d7faf3607a40878d308ff8313c581210))
+* enforce slog "err" key with sloglint ([#1171](https://github.com/icholy/xagent/issues/1171)) ([bffa878](https://github.com/icholy/xagent/commit/bffa8780a1ad322d9db73328696f7d3a2983b924))
+* experiment — whole-value DeepEqual call-log assertions ([#1198](https://github.com/icholy/xagent/issues/1198)) ([01e1225](https://github.com/icholy/xagent/commit/01e1225d424464727e216378456bcdf076b86909))
+* **mcp:** adopt mcptest helpers and testing conventions ([#1194](https://github.com/icholy/xagent/issues/1194)) ([2abc045](https://github.com/icholy/xagent/commit/2abc0456088ed75c2169d55f04e38238dec1e18b))
+* **mcpbridge:** use moqassert and cmpx for channel-sender assertions ([#1181](https://github.com/icholy/xagent/issues/1181)) ([7c049b3](https://github.com/icholy/xagent/commit/7c049b365b8bbd7d58d437ee4905da9012abc95a))
+* migrate moq call-count assertions to cmp.Len ([#1197](https://github.com/icholy/xagent/issues/1197)) ([2b9947e](https://github.com/icholy/xagent/commit/2b9947e581e278c26746a62064186667ceea326e))
+* relay PR feedback to the task in xagent-implement skill ([#1193](https://github.com/icholy/xagent/issues/1193)) ([99dc956](https://github.com/icholy/xagent/commit/99dc956bb13210ec71d43067d4ecdb5a44f1b3ac))
+* return provisioned user from Provision ([#1169](https://github.com/icholy/xagent/issues/1169)) ([163e3e1](https://github.com/icholy/xagent/commit/163e3e1b55b09293691b3794d9e4035fb3f2fa64))
+* **shell:** tear down reverse shell via Cmd.Cancel/WaitDelay ([#1167](https://github.com/icholy/xagent/issues/1167)) ([b33e9df](https://github.com/icholy/xagent/commit/b33e9df6923bf0b0185a09fd347b95136e29eaad))
+* **testx:** replace moqassert with generic testx.At helper ([#1185](https://github.com/icholy/xagent/issues/1185)) ([8bf2a61](https://github.com/icholy/xagent/commit/8bf2a61cd00feaeacd304791317574641016ceaf))
+
 ## [2.6.0](https://github.com/icholy/xagent/compare/v2.5.1...v2.6.0) (2026-07-03)
 
 
