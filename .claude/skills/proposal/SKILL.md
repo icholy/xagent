@@ -36,6 +36,34 @@ The concrete design. Include:
 
 Be specific. Use actual type names, table names, and code patterns from the codebase.
 
+## Implementation Plan
+
+Break the work into an ordered stack of small PRs — a "layer cake" — where each PR is a
+thin slice that builds on the ones beneath it. Favor many small PRs over a few large ones:
+these PRs are for humans to review, so keep each one tightly scoped and small enough to review
+comfortably.
+
+Prefer slices that are independently reviewable and, where possible, independently
+mergeable/shippable, rather than one big-bang PR. Order layers so each foundational layer is
+safe to merge even before later layers land — typically schema/migration, then backend, then
+wire-up, then UI.
+
+List the slices in order. For each slice, state:
+- **Delivers**: what the slice adds.
+- **Depends on**: which layer beneath it it builds on (or "nothing" for the foundation).
+- **Verifiable by**: how the slice can be verified on its own.
+
+For example:
+
+1. **Schema migration** — Delivers: the `foo` table and migration. Depends on: nothing.
+   Verifiable by: migration runs cleanly up and down.
+2. **Backend store + RPC** — Delivers: store methods and the `CreateFoo` RPC. Depends on: (1).
+   Verifiable by: unit tests against the store and handler.
+3. **CLI wire-up** — Delivers: `xagent foo` subcommand calling the RPC. Depends on: (2).
+   Verifiable by: running the command end to end.
+4. **Web UI** — Delivers: the Foo list view. Depends on: (2). Verifiable by: rendering the
+   view against a task with foos.
+
 ## Trade-offs
 
 What alternatives were considered and why this approach was chosen.
