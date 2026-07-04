@@ -1,14 +1,11 @@
 package command
 
 import (
-	"cmp"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -181,11 +178,23 @@ var ServerCommand = &cli.Command{
 				Email: "dev@localhost",
 				Name:  "Developer",
 			}
-			if err := resolver.Provision(ctx, devUser); err != nil {
+			orgID, err := resolver.Provision(ctx, devUser)
+			if err != nil {
 				return fmt.Errorf("failed to provision dev user: %w", err)
 			}
-			if err := provisionDevKey(ctx, st, devUser.ID); err != nil {
-				return fmt.Errorf("failed to provision dev API key: %w", err)
+			// Provision a fixed dev API key so a local runner can authenticate
+			// against the --no-auth server (the dev-user bypass only applies to
+			// requests with no auth header, but the runner always sends a key).
+			// keys.token_hash is UNIQUE, so on every restart after the first this
+			// is a duplicate-key no-op — that is the idempotency mechanism.
+			if err := st.CreateKey(ctx, nil, &model.Key{
+				ID:        uuid.NewString(),
+				Name:      "dev-runner",
+				TokenHash: apiauth.HashKey("xat_dev"),
+				OrgID:     orgID,
+				Scopes:    authscope.Admin(),
+			}); err != nil {
+				slog.Error("failed to provision dev API key", "err", err)
 			}
 		}
 		auth, err := apiauth.New(ctx, apiauth.Config{
@@ -302,42 +311,4 @@ var ServerCommand = &cli.Command{
 		slog.Info("server stopped")
 		return nil
 	},
-}
-
-// devAPIKey is the fixed, admin-scoped API key the server injects when running
-// with --no-auth, so a local runner (docker-compose.dev.yml) can authenticate
-// without a manual key-seed step. Overridable via XAGENT_DEV_API_KEY.
-const devAPIKey = "xat_dev"
-
-// provisionDevKey ensures the fixed dev API key exists in the store, owned by
-// the dev user's default org with admin scopes. It mirrors the dev-user
-// provisioning and MUST only be called under --no-auth: it is the counterpart
-// to the dev-user bypass, which only applies to requests with no auth header —
-// the runner always sends a key, so a real key row must exist for it. It is
-// idempotent (the server restarts) and runs before the HTTP listener starts,
-// so the key exists before the server ever reports healthy.
-func provisionDevKey(ctx context.Context, st *store.Store, devUserID string) error {
-	raw := cmp.Or(os.Getenv("XAGENT_DEV_API_KEY"), devAPIKey)
-	hash := apiauth.HashKey(raw)
-	if _, err := st.GetKeyByHash(ctx, nil, hash); err == nil {
-		return nil // already provisioned on a previous start
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	user, err := st.GetUser(ctx, nil, devUserID)
-	if err != nil {
-		return err
-	}
-	key := &model.Key{
-		ID:        uuid.NewString(),
-		Name:      "dev-runner",
-		TokenHash: hash,
-		OrgID:     user.DefaultOrgID,
-		Scopes:    authscope.Admin(),
-	}
-	if err := st.CreateKey(ctx, nil, key); err != nil {
-		return err
-	}
-	slog.Warn("provisioned dev API key", "name", key.Name, "org_id", key.OrgID)
-	return nil
 }

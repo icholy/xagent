@@ -49,8 +49,9 @@ func NewStoreUserResolver(s *store.Store) *StoreUserResolver {
 	return &StoreUserResolver{store: s}
 }
 
-func (r *StoreUserResolver) Provision(ctx context.Context, user *apiauth.UserInfo) error {
-	return r.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+func (r *StoreUserResolver) Provision(ctx context.Context, user *apiauth.UserInfo) (int64, error) {
+	var orgID int64
+	err := r.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		u := &model.User{
 			ID:    user.ID,
 			Email: user.Email,
@@ -59,8 +60,9 @@ func (r *StoreUserResolver) Provision(ctx context.Context, user *apiauth.UserInf
 		if err := r.store.UpsertUser(ctx, tx, u); err != nil {
 			return err
 		}
+		orgID = u.DefaultOrgID
 		// If the user has no default org, create one
-		if u.DefaultOrgID == 0 {
+		if orgID == 0 {
 			org := &model.Org{
 				Name:  user.Name + "'s Org",
 				Owner: user.ID,
@@ -78,9 +80,11 @@ func (r *StoreUserResolver) Provision(ctx context.Context, user *apiauth.UserInf
 			if err := r.store.UpdateDefaultOrgID(ctx, tx, user.ID, org.ID); err != nil {
 				return err
 			}
+			orgID = org.ID
 		}
 		return tx.Commit()
 	})
+	return orgID, err
 }
 
 func (r *StoreUserResolver) ResolveOrg(ctx context.Context, userID string, orgID int64) (int64, error) {

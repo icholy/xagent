@@ -87,8 +87,10 @@ type KeyValidator interface {
 // UserResolver provisions users on login and resolves orgs for token issuance.
 type UserResolver interface {
 	// Provision creates the user and their default org on first login.
-	// Called from the OIDC callback via WithOnAuthenticated.
-	Provision(ctx context.Context, user *UserInfo) error
+	// Called from the OIDC callback via WithOnAuthenticated. It returns the
+	// user's resolved default org id (the pre-existing one, or the one just
+	// created).
+	Provision(ctx context.Context, user *UserInfo) (int64, error)
 	// ResolveOrg resolves the org for token issuance.
 	// orgID is the requested org from the query param, or 0 to use the user's default.
 	// Returns the resolved org ID or an error if the user is not a member.
@@ -181,11 +183,12 @@ func New(ctx context.Context, cfg Config) (*Auth, error) {
 		authentication.WithCookieSession[*openid.DefaultContext](),
 		// provision user and default org on first login
 		authentication.WithOnAuthenticated(func(ctx context.Context, authCtx *openid.DefaultContext) error {
-			return cfg.UserResolver.Provision(ctx, &UserInfo{
+			_, err := cfg.UserResolver.Provision(ctx, &UserInfo{
 				ID:    authCtx.UserInfo.Subject,
 				Email: authCtx.UserInfo.Email,
 				Name:  authCtx.UserInfo.Name,
 			})
+			return err
 		}),
 	)
 	if err != nil {
