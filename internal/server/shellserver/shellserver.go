@@ -14,6 +14,7 @@
 package shellserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -26,7 +27,12 @@ import (
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/shell/shellrelay"
 	"github.com/icholy/xagent/internal/shell/shellwire"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 )
+
+// meterName is the OpenTelemetry instrumentation scope for shellserver metrics.
+const meterName = "github.com/icholy/xagent/internal/server/shellserver"
 
 // Registry tracks rendezvous sessions by id for a single server instance.
 type Registry struct {
@@ -74,12 +80,41 @@ func New(opts Options) *Registry {
 	if establishTimeout <= 0 {
 		establishTimeout = shellrelay.DefaultEstablishTimeout
 	}
-	return &Registry{
+	r := &Registry{
 		log:              log,
 		establishTimeout: establishTimeout,
 		onClose:          opts.OnClose,
 		sessions:         make(map[string]*entry),
 	}
+	r.registerMetrics(otel.Meter(meterName))
+	return r
+}
+
+// registerMetrics registers an observable gauge reporting the number of
+// currently active shell rendezvous sessions. The callback reads the live
+// registry size, so it stays correct across seed and eviction without
+// increment/decrement bookkeeping. Registration failures are logged rather
+// than fatal — metrics are best-effort and must not block serving shells.
+func (r *Registry) registerMetrics(meter metric.Meter) {
+	_, err := meter.Int64ObservableGauge(
+		"xagent.shell.active_sessions",
+		metric.WithDescription("Number of currently active shell rendezvous sessions."),
+		metric.WithUnit("{session}"),
+		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
+			o.Observe(r.count())
+			return nil
+		}),
+	)
+	if err != nil {
+		r.log.Warn("failed to register shell session metric", "error", err)
+	}
+}
+
+// count returns the number of currently registered sessions.
+func (r *Registry) count() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return int64(len(r.sessions))
 }
 
 // Seed registers a new rendezvous session owned by orgID and served by taskID's

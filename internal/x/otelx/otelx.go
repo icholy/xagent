@@ -2,54 +2,76 @@ package otelx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Provider manages the OpenTelemetry trace provider.
+// Provider manages the OpenTelemetry trace and metric providers.
 type Provider struct {
 	tp *sdktrace.TracerProvider
+	mp *sdkmetric.MeterProvider
 }
 
-// Shutdown gracefully shuts down the trace provider.
+// Shutdown gracefully shuts down the trace and metric providers.
 func (p *Provider) Shutdown(ctx context.Context) error {
-	if p.tp == nil {
-		return nil
-	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	return p.tp.Shutdown(ctx)
+	var errs []error
+	if p.tp != nil {
+		if err := p.tp.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if p.mp != nil {
+		if err := p.mp.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
-// Setup initializes OpenTelemetry.
-// The OTLP exporter is configured via standard OTel environment variables
+// Setup initializes OpenTelemetry tracing and metrics.
+// The OTLP exporters are configured via standard OTel environment variables
 // (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_INSECURE, etc.).
 // If OTEL_EXPORTER_OTLP_ENDPOINT is not set, Setup is a no-op.
 func Setup(ctx context.Context) (*Provider, error) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
 		return &Provider{}, nil
 	}
-	exporter, err := otlptracehttp.New(ctx)
+	traceExporter, err := otlptracehttp.New(ctx)
 	if err != nil {
 		return nil, err
 	}
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithBatcher(traceExporter),
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-	return &Provider{tp: tp}, nil
+
+	metricExporter, err := otlpmetrichttp.New(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mp := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter)),
+	)
+	otel.SetMeterProvider(mp)
+
+	return &Provider{tp: tp, mp: mp}, nil
 }
 
 // TraceResponseHeader is middleware that writes the OTel trace ID to a Traceresponse header.
