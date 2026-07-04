@@ -194,7 +194,7 @@ var ServerCommand = &cli.Command{
 				OrgID:     orgID,
 				Scopes:    authscope.Admin(),
 			}); err != nil {
-				slog.Error("failed to provision dev API key", "err", err)
+				slog.Warn("failed to provision dev API key", "err", err)
 			}
 		}
 		auth, err := apiauth.New(ctx, apiauth.Config{
