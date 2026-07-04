@@ -2,6 +2,7 @@ package outbox
 
 import (
 	"cmp"
+	"container/list"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,16 +24,17 @@ const seqDigits = 20
 // file per record. Live records live at <dir>/<seq>.json and dead-lettered ones
 // at <dir>/dead/<seq>.json, where <seq> is a 20-digit zero-padded uint64.
 //
-// The set of live records is loaded into an in-memory index at Open and kept in
-// sync by every mutation, so List and Append never read the live directory
-// again — disk is read only at startup. Writes stay per-record atomic
-// (temp-file + fsync + rename) for durability.
+// The live records are held in an in-memory FIFO (a container/list, mirroring
+// the EventQueue this replaces) loaded once at Open and kept in sync by every
+// mutation, so only the head's file is ever touched after startup — disk is
+// read only at Open. Writes stay per-record atomic (temp-file + fsync + rename)
+// for durability.
 type FileStore struct {
 	mu      sync.Mutex
 	dir     string
 	deadDir string
-	next    uint64   // next Seq to assign; guarded by mu
-	records []Record // live records in ascending Seq order; guarded by mu
+	next    uint64     // next Seq to assign; guarded by mu
+	live    *list.List // live Records in FIFO (ascending Seq) order; guarded by mu
 }
 
 // Open returns a FileStore backed by dir, creating dir and its dead-letter
@@ -47,12 +49,16 @@ func Open(dir string) (*FileStore, error) {
 	if err := os.MkdirAll(deadDir, 0o755); err != nil {
 		return nil, fmt.Errorf("outbox: create dir: %w", err)
 	}
-	s := &FileStore{dir: dir, deadDir: deadDir}
+	s := &FileStore{dir: dir, deadDir: deadDir, live: list.New()}
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("outbox: read dir: %w", err)
 	}
+	// Load every live record. os.ReadDir returns entries in filename order,
+	// which for zero-padded Seqs is ascending Seq order; sort defensively so the
+	// FIFO invariant never relies on that.
+	var records []Record
 	var liveMax uint64
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -70,13 +76,13 @@ func Open(dir string) (*FileStore, error) {
 		if err := json.Unmarshal(data, &rec); err != nil {
 			return nil, fmt.Errorf("outbox: unmarshal record %d: %w", seq, err)
 		}
-		s.records = append(s.records, rec)
+		records = append(records, rec)
 		liveMax = max(liveMax, seq)
 	}
-	// os.ReadDir returns entries in filename order, which for zero-padded Seqs is
-	// ascending Seq order; sort defensively so the index invariant never relies
-	// on that.
-	slices.SortFunc(s.records, func(a, b Record) int { return cmp.Compare(a.Seq, b.Seq) })
+	slices.SortFunc(records, func(a, b Record) int { return cmp.Compare(a.Seq, b.Seq) })
+	for _, rec := range records {
+		s.live.PushBack(rec)
+	}
 
 	deadMax, err := maxSeq(deadDir)
 	if err != nil {
@@ -96,12 +102,12 @@ func (s *FileStore) deadPath(seq uint64) string {
 	return filepath.Join(s.deadDir, formatSeq(seq)+".json")
 }
 
-// Append durably persists payload under a new, strictly increasing Seq and
-// returns the assigned Seq. The write is crash-safe: the record is marshalled to
-// a temp file in the same directory, fsync'd, and renamed over the target, so a
-// concurrent List never observes a half-written file. The record is then added
-// to the in-memory index.
-func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
+// Push durably appends payload to the tail under a new, strictly increasing
+// Seq. The write is crash-safe: the record is marshalled and written to a temp
+// file in the same directory, fsync'd, and renamed over the target, so a crash
+// never leaves a half-written record. The record is then appended to the
+// in-memory FIFO.
+func (s *FileStore) Push(payload json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -109,61 +115,69 @@ func (s *FileStore) Append(payload json.RawMessage) (uint64, error) {
 	rec := Record{Seq: seq, Payload: payload}
 	data, err := json.Marshal(rec)
 	if err != nil {
-		return 0, fmt.Errorf("outbox: marshal record: %w", err)
+		return fmt.Errorf("outbox: marshal record: %w", err)
 	}
 	if err := atomicio.WriteFile(s.livePath(seq), data); err != nil {
-		return 0, err
+		return err
 	}
-	// Seq is strictly increasing, so appending keeps records in ascending order.
-	s.records = append(s.records, rec)
+	s.live.PushBack(rec)
 	s.next = seq + 1
-	return seq, nil
-}
-
-// List returns a snapshot copy of all undelivered records in ascending Seq
-// order. It reads only the in-memory index, so the caller may Remove or
-// DeadLetter records while ranging the result — it holds its own copy. The
-// returned error is always nil; it exists to satisfy the Store interface, whose
-// other implementations may fail.
-func (s *FileStore) List() ([]Record, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return slices.Clone(s.records), nil
-}
-
-// Remove deletes the record with the given Seq. It is idempotent: removing an
-// absent record is not an error.
-func (s *FileStore) Remove(seq uint64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := os.Remove(s.livePath(seq)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("outbox: remove record %d: %w", seq, err)
-	}
-	s.drop(seq)
 	return nil
 }
 
-// DeadLetter atomically moves the record with the given Seq out of the live set
-// into the dead-letter area and drops it from the in-memory index.
-func (s *FileStore) DeadLetter(seq uint64) error {
+// Peek returns the head record without removing it. ok is false when the queue
+// is empty. It reads only the in-memory FIFO. The returned error is always nil;
+// it exists to satisfy the Store interface, whose other implementations may
+// fail.
+func (s *FileStore) Peek() (Record, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := os.Rename(s.livePath(seq), s.deadPath(seq)); err != nil {
-		return fmt.Errorf("outbox: dead-letter record %d: %w", seq, err)
+	front := s.live.Front()
+	if front == nil {
+		return Record{}, false, nil
 	}
-	s.drop(seq)
+	return front.Value.(Record), true, nil
+}
+
+// Pop durably removes the head record. The delete is idempotent: a missing file
+// (e.g. removed by a prior interrupted Pop) is not an error.
+func (s *FileStore) Pop() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	front := s.live.Front()
+	if front == nil {
+		return nil
+	}
+	rec := front.Value.(Record)
+	if err := os.Remove(s.livePath(rec.Seq)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("outbox: remove record %d: %w", rec.Seq, err)
+	}
+	s.live.Remove(front)
 	return nil
 }
 
-// drop removes the record with the given Seq from the in-memory index, if
-// present. The caller must hold s.mu. records stays sorted, so it binary
-// searches.
-func (s *FileStore) drop(seq uint64) {
-	if i, ok := slices.BinarySearchFunc(s.records, seq, func(r Record, target uint64) int {
-		return cmp.Compare(r.Seq, target)
-	}); ok {
-		s.records = slices.Delete(s.records, i, i+1)
+// DeadLetter atomically moves the head record out of the live queue into the
+// dead-letter area and drops it from the in-memory FIFO.
+func (s *FileStore) DeadLetter() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	front := s.live.Front()
+	if front == nil {
+		return nil
 	}
+	rec := front.Value.(Record)
+	if err := os.Rename(s.livePath(rec.Seq), s.deadPath(rec.Seq)); err != nil {
+		return fmt.Errorf("outbox: dead-letter record %d: %w", rec.Seq, err)
+	}
+	s.live.Remove(front)
+	return nil
+}
+
+// Len reports the number of live records.
+func (s *FileStore) Len() (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.live.Len(), nil
 }
 
 // maxSeq returns the largest Seq among the <seq>.json record files in dir, or 0

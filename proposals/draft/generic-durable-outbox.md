@@ -63,57 +63,69 @@ establishes that duplicate runner events are safe by design.
 package outbox
 
 // Record is one persisted, undelivered message. Seq is a per-outbox monotonic
-// sequence number that defines delivery (FIFO) order. Payload is the opaque,
-// JSON-encoded T; the store never decodes it.
+// sequence number that defines delivery (FIFO) order; it is an implementation
+// detail of the store's on-disk ordering and logging — callers never address a
+// record by it. Payload is the opaque, JSON-encoded T; the store never decodes
+// it.
 type Record struct {
 	Seq     uint64          `json:"seq"`
 	Payload json.RawMessage `json:"payload"`
 }
 
-// Store is the durable, crash-safe backing store for an outbox. Implementations
-// must be safe for concurrent use.
+// Store is the durable, crash-safe backing store for an outbox: a strict FIFO
+// queue. It is single-consumer — the head is stable between a Peek and the Pop
+// or DeadLetter that follows it — but Push may run concurrently with the
+// consumer. Implementations must be safe for concurrent use.
 type Store interface {
-	// Append durably persists payload under a new, strictly increasing Seq and
-	// returns the assigned Seq. It must not return until the record is durable.
-	Append(payload json.RawMessage) (uint64, error)
-	// List returns a snapshot copy of all undelivered records in ascending Seq
-	// order. The caller may Remove or DeadLetter records while ranging the result
-	// because it holds its own copy.
-	List() ([]Record, error)
-	// Remove deletes the record with the given Seq. It is idempotent.
-	Remove(seq uint64) error
-	// DeadLetter atomically moves the record with the given Seq out of the live
-	// set into the dead-letter area.
-	DeadLetter(seq uint64) error
+	// Push durably appends payload to the tail. It must not return until the
+	// record is durable.
+	Push(payload json.RawMessage) error
+	// Peek returns the head record without removing it. ok is false when the
+	// queue is empty.
+	Peek() (rec Record, ok bool, err error)
+	// Pop durably removes the head record. Call it after the head has been
+	// delivered.
+	Pop() error
+	// DeadLetter moves the head record out of the live queue into the
+	// dead-letter area.
+	DeadLetter() error
+	// Len reports the number of live records.
+	Len() (int, error)
 }
 ```
+
+Keeping `Peek` and `Pop` separate preserves at-least-once: a combined
+return-and-remove would drop a message on a crash between the remove and a
+successful delivery.
 
 #### Filesystem implementation (`outbox.FileStore`)
 
 Directly reuses the proven `taskstate` pattern (`taskstate.go:52-95`): one atomic file per
-record, backed by an in-memory index of the live records that is loaded once at `Open`.
-Disk is read only at startup; every write stays per-record atomic for durability.
+record, backed by an in-memory FIFO of the live records (a `container/list`, mirroring the
+`EventQueue` this replaces) that is loaded once at `Open`. Disk is read only at startup;
+after that only the head's file is ever touched, and every write stays per-record atomic for
+durability.
 
 - Layout: `<dir>/<seq>.json` for live records, `<dir>/dead/<seq>.json` for dead-lettered
   ones, where `<seq>` is a 20-digit zero-padded `uint64` so lexical filename order equals
   numeric `Seq` order.
-- `Open`: read + unmarshal every `<uint64>.json` in the live directory into an in-memory
-  `[]Record` kept in ascending `Seq` order (ignoring temp files and non-`<uint64>.json`
-  names as `taskstate.parseRecordName` does at `taskstate.go:165-177`); a live record file
-  that can't be read or decoded fails `Open` so corrupt durable state surfaces loudly. Seed
-  the in-memory `Seq` counter from the max filename across both the live and dead
-  directories (the dead dir is scanned for filenames only), so sequence numbers never repeat
-  even after dead-lettering.
-- `Append`: assign the next `Seq`, marshal, write via temp-file + `fsync` + atomic `rename`
+- `Open`: read + unmarshal every `<uint64>.json` in the live directory into the in-memory
+  FIFO in ascending `Seq` order (ignoring temp files and non-`<uint64>.json` names as
+  `taskstate.parseRecordName` does at `taskstate.go:165-177`); a live record file that can't
+  be read or decoded fails `Open` so corrupt durable state surfaces loudly. Seed the
+  in-memory `Seq` counter from the max filename across both the live and dead directories
+  (the dead dir is scanned for filenames only), so sequence numbers never repeat even after
+  dead-lettering.
+- `Push`: assign the next `Seq`, marshal, write via temp-file + `fsync` + atomic `rename`
   (the write is factored into a small stdlib-only `internal/x/atomicio` package, the same
-  pattern as `taskstate.Store.Write`), then append to the in-memory index — a strictly
-  increasing `Seq` keeps it sorted.
-- `List`: `slices.Clone` the in-memory index and return — no disk access, so the caller may
-  `Remove`/`DeadLetter` while ranging the returned copy.
-- `Remove`: idempotent `os.Remove` of `<dir>/<seq>.json`, then drop from the index (binary
-  search, since it stays sorted).
-- `DeadLetter`: `rename` `<dir>/<seq>.json` → `<dir>/dead/<seq>.json`, then drop from the
-  index (it has left the live set).
+  pattern as `taskstate.Store.Write`), then append the record to the tail.
+- `Peek`: return the head record from the in-memory FIFO (no disk access), or `ok == false`
+  when empty.
+- `Pop`: idempotent `os.Remove` of the head's `<dir>/<seq>.json`, then drop it from the
+  front.
+- `DeadLetter`: `rename` the head's `<dir>/<seq>.json` → `<dir>/dead/<seq>.json`, then drop
+  it from the front (it has left the live set).
+- `Len`: the number of live records.
 
 No new dependency: the filesystem store is stdlib-only, exactly like `taskstate`.
 
@@ -145,18 +157,37 @@ func (o *Outbox[T]) Len() (int, error)
 ```
 
 `Run` is the durable analogue of today's `Run`/`Drain` pair (`eventqueue.go:66-120`): on
-wakeup it `List`s the store and ranges the returned snapshot (`for _, rec := range records {
-... Remove(rec.Seq) }`), delivers each record in `Seq` order via `Deliver`, and `Remove`s it
-on success — removing the record mid-loop is safe because `List` returns a copy. `Deliver` reports whether a failure is permanent as its first
-return value, so the code that already holds the error classifies it inline — no separate
-predicate. A transient error (`permanent == false`) sleeps for `Backoff.NextBackOff()` (a
-`backoff.BackOff` from the already-vendored `github.com/cenkalti/backoff/v5`, replacing the
-current fixed `retryInterval`) and retries from the same record; a permanent error
-(`permanent == true`) triggers `DeadLetter` and continues. `Run` calls `Backoff.Reset()`
-whenever the store fully drains, so each new failure streak starts from the initial interval.
-On startup, `Run`'s first pass
-naturally redelivers everything `List` returns — this is the durability payoff, and it
-requires no separate recovery path.
+wakeup it drains the store from the head — `Peek` → `Deliver` → `Pop` on success — looping
+until `Peek` reports the queue empty. `Deliver` reports whether a failure is permanent as its
+first return value, so the code that already holds the error classifies it inline — no
+separate predicate. A transient error (`permanent == false`) sleeps for `Backoff.NextBackOff()`
+(a `backoff.BackOff` from the already-vendored `github.com/cenkalti/backoff/v5`, replacing the
+current fixed `retryInterval`) and retries from the same head; a permanent error
+(`permanent == true`) triggers `DeadLetter` and advances to the next head. `Run` calls
+`Backoff.Reset()` whenever the store fully drains, so each new failure streak starts from the
+initial interval. Because `Pop` runs only *after* `Deliver` returns success, a crash between
+delivery and `Pop` simply redelivers the head on restart — the at-least-once payoff. On
+startup, `Run`'s first pass naturally redelivers everything already persisted, so it requires
+no separate recovery path.
+
+In sketch, the loop is a faithful durable copy of `EventQueue.Drain`:
+
+```go
+for {
+	rec, ok, err := store.Peek()
+	if err != nil { /* log; back off */ }
+	if !ok { break } // drained
+	permanent, err := deliver(ctx, decode(rec.Payload))
+	switch {
+	case err == nil:
+		store.Pop()
+	case permanent:
+		store.DeadLetter()
+	default:
+		// transient: sleep Backoff.NextBackOff(), retry from the same head
+	}
+}
+```
 
 `Backoff` defaults to a capped exponential policy when nil; passing
 `backoff.NewConstantBackOff(interval)` reproduces the current fixed-interval behaviour for a
@@ -218,9 +249,10 @@ merge before the ones above it land.
 1. **Outbox store interface + filesystem implementation** — Delivers: the `outbox` package
    with the `Store` interface, `Record`, and `FileStore` (atomic per-record files, seq
    ordering, dead-letter dir), ported from the `taskstate` pattern. No engine yet.
-   Depends on: nothing. Verifiable by: unit tests over a temp dir — append/list ordering,
-   idempotent remove, dead-letter move, seq monotonicity across restart (re-`Open` the dir),
-   and ignoring of temp/garbage files.
+   Depends on: nothing. Verifiable by: unit tests over a temp dir — FIFO push/peek/pop
+   ordering, durable pop (gone after re-`Open`), dead-letter move, seq monotonicity across
+   restart (re-`Open` the dir), `Open` failing on a corrupt record, and ignoring of
+   temp/garbage files.
 
 2. **Outbox engine** — Delivers: `Outbox[T]`, `Options[T]`, `Enqueue`/`Run`/`Len`, backoff
    on transient errors, dead-letter on permanent errors. Depends on: (1). Verifiable by:
