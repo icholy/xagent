@@ -13,7 +13,7 @@ import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState, useRef, useLayoutEffect } from 'react'
 import type { TaskTab } from '@/lib/task'
 import { toTaskTab } from '@/lib/task'
-import { canCancelTask, canRestartTask, canOpenShell, isArchivedTask } from '@/lib/task'
+import { canRestartTask, canOpenShell, isArchivedTask } from '@/lib/task'
 import { eventsToTimeline } from '@/lib/timeline'
 import { useOrgId } from '@/hooks/use-org-id'
 import { useShellState } from '@/hooks/use-shell-state'
@@ -178,12 +178,6 @@ function TaskDetail() {
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          {canCancelTask(task) && (
-            <Button variant="destructive" size="sm" onClick={handleCancel} disabled={isMutating}>
-              {cancelMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Cancel
-            </Button>
-          )}
           {canRestartTask(task) && (
             <Button variant="outline" size="sm" onClick={handleRestart} disabled={isMutating}>
               {restartMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -196,6 +190,8 @@ function TaskDetail() {
               autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })
             }
             autoArchivePending={autoArchiveMutation.isPending}
+            onCancel={handleCancel}
+            cancelPending={cancelMutation.isPending}
             onArchive={handleArchive}
             archivePending={archiveMutation.isPending}
             onUnarchive={handleUnarchive}
