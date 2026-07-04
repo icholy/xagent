@@ -1,0 +1,15 @@
+workspaces:
+  dummy:
+    description: Dummy workspace for exercising the local dev stack
+    container:
+      image: alpine:3.21
+      # Join the dev compose network so the task container can reach the
+      # server by its service name (see docker-compose.dev.yml).
+      networks:
+        - xagent-dev
+    agent:
+      type: dummy
+      dummy:
+        commands:
+          - echo "hello from the dummy agent"
+        sleep: 2

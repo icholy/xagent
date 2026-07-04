@@ -37,10 +37,16 @@ outputs = ["internal/server/webui/index.html"]
 run = "cd webui && pnpm install --frozen-lockfile && pnpm exec vite build"
 
 [tasks.dev]
-description = "Start a local server in Docker"
+description = "Start a local server + runner in Docker"
 depends = ["build:webui"]
 run = [
 	"CGO_ENABLED=0 GOOS=linux go build -o xagent ./cmd/xagent",
+	# Bring up postgres + server first and wait for the server to be healthy,
+	# which means it has provisioned the dev user/org the key seed depends on.
+	"docker compose -f docker-compose.dev.yml up --build -d --wait server",
+	# Seed a known API key so the runner can authenticate (see dev/seed-dev-key.sql).
+	"docker compose -f docker-compose.dev.yml exec -T postgres psql -U xagent -p 5433 -d xagent -f - < dev/seed-dev-key.sql",
+	# Bring up the runner and attach to the full stack (Ctrl-C stops everything).
 	"docker compose -f docker-compose.dev.yml up --build",
 ]
 
