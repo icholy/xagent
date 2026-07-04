@@ -41,8 +41,6 @@ description = "Start a local server + runner in Docker"
 depends = ["build:webui"]
 run = [
 	"CGO_ENABLED=0 GOOS=linux go build -o xagent ./cmd/xagent",
-	# The --no-auth server injects the fixed dev API key on startup (before it
-	# reports healthy), so the runner authenticates with no external seed step.
 	"docker compose -f docker-compose.dev.yml up --build",
 ]
 
