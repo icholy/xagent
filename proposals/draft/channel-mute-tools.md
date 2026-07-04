@@ -1,4 +1,4 @@
-# `channel_subscribe` / `channel_unsubscribe`: per-task mute for the channel bridge
+# `channel_mute` / `channel_unmute` / `channel_muted`: per-task mute for the channel bridge
 
 Issue: https://github.com/icholy/xagent/issues/1156
 
@@ -84,9 +84,9 @@ it.
 - **Subscribe-all by default.** An empty mute set means every channel-worthy
   notification is forwarded, unchanged. Nothing an agent doesn't touch behaves
   differently.
-- **Opt-out per task.** `channel_unsubscribe(task_ids)` adds ids to the mute
-  set; matching notifications are dropped. `channel_subscribe(task_ids)` removes
-  them, restoring delivery.
+- **Opt-out per task.** `channel_mute(task_ids)` adds ids to the mute set;
+  matching notifications are dropped. `channel_unmute(task_ids)` removes them,
+  restoring delivery.
 - **Never an allowlist.** There is no "mute everything" mode. Muting is always
   an explicit, finite set of ids; a task not in the set is always delivered.
 
@@ -222,31 +222,30 @@ not by `mcpserver.AddTools`.
 
 | Tool | Input | Behaviour |
 | --- | --- | --- |
-| `channel_unsubscribe` | `task_ids []int64` | Add each id to the mute set. Idempotent. No further channel notifications for those tasks. Returns the updated muted set. |
-| `channel_subscribe` | `task_ids []int64`, `all bool` (optional) | Remove each id from the mute set (restoring delivery). `all: true` clears the whole set, resetting to the subscribe-all default. Idempotent. Returns the updated muted set. |
-| `channel_list_subscriptions` | — | Return the sorted mute set and a note that all other tasks are delivered. Pure introspection. |
+| `channel_mute` | `task_ids []int64` | Add each id to the mute set. Idempotent. No further channel notifications for those tasks. Returns the updated muted set. |
+| `channel_unmute` | `task_ids []int64`, `all bool` (optional) | Remove each id from the mute set (restoring delivery). `all: true` clears the whole set, resetting to the subscribe-all default. Idempotent. Returns the updated muted set. |
+| `channel_muted` | — | Return the sorted mute set and a note that all other tasks are delivered. Pure introspection. |
 
 A list (`task_ids`) rather than a single id lets the agent mute or un-mute a
 batch in one call (e.g. silencing the dozen tasks it just finished
 supervising); a one-element list covers the single-id case. Both mutations
 return the resulting muted set so the model always sees current state without a
-follow-up `channel_list_subscriptions`.
+follow-up `channel_muted`.
 
 Sketch (`Channel.AddTools` in `internal/mcpbridge`):
 
 ```go
-// AddTools registers channel_subscribe / channel_unsubscribe /
-// channel_list_subscriptions on server. Called by the bridge only when
-// --channel is enabled.
+// AddTools registers channel_mute / channel_unmute / channel_muted on
+// server. Called by the bridge only when --channel is enabled.
 func (c *Channel) AddTools(server *mcp.Server) {
     mcp.AddTool(server, &mcp.Tool{
-        Name: "channel_unsubscribe",
+        Name: "channel_mute",
         Description: "Stop receiving xagent channel notifications (queued, " +
             "woken, completed, failed, cancelled, archived) for the given " +
             "tasks. You are subscribed to every task by default; call this to " +
             "mute tasks you no longer care about. Re-enable with " +
-            "channel_subscribe. Distinct from create_link(subscribe=true), " +
-            "which routes external events INTO a task.",
+            "channel_unmute. Distinct from create_link(subscribe=true), which " +
+            "routes external events INTO a task.",
     }, func(ctx context.Context, req *mcp.CallToolRequest, in struct {
         TaskIDs []int64 `json:"task_ids" jsonschema:"Task IDs to mute"`
     }) (*mcp.CallToolResult, any, error) {
@@ -255,16 +254,15 @@ func (c *Channel) AddTools(server *mcp.Server) {
         }
         return jsonResult(map[string]any{"muted": c.mutedIDs()}), nil, nil
     })
-    // channel_subscribe (with optional all) and channel_list_subscriptions
-    // follow the same shape.
+    // channel_unmute (with optional all) and channel_muted follow the same shape.
 }
 ```
 
-`channel_unsubscribe` is a pure local set insertion — it deliberately does
-**not** round-trip to the server to validate the task exists. Muting a
-non-existent or not-yet-created id is harmless (no notification will ever match
-it), and keeping the tool offline avoids both an RPC per call and a failure mode
-where a transient server error blocks the agent from silencing itself.
+`channel_mute` is a pure local set insertion — it deliberately does **not**
+round-trip to the server to validate the task exists. Muting a non-existent or
+not-yet-created id is harmless (no notification will ever match it), and keeping
+the tool offline avoids both an RPC per call and a failure mode where a
+transient server error blocks the agent from silencing itself.
 
 ### `command/mcp.go` stays thin
 
@@ -280,7 +278,7 @@ mcpserver.AddTools(server, client, toolOpts...) // user-facing proxy tools (unch
 var ch *mcpbridge.Channel
 if cmd.Bool("channel") {
     ch = mcpbridge.NewChannel(transport) // *mcpchannel.Transport satisfies ChannelSender
-    ch.AddTools(server)                  // channel_subscribe / _unsubscribe / _list_subscriptions
+    ch.AddTools(server)                  // channel_mute / channel_unmute / channel_muted
 }
 
 session, err := server.Connect(ctx, transport, nil)
@@ -333,7 +331,7 @@ live CLI.
   observing agent*; the wake itself is unaffected. The task's own driver still
   receives the event through the event system (`get_my_task`), and the change is
   still visible in the web UI and via `get_task`. If the agent wants to hear
-  about wakes again, it calls `channel_subscribe`.
+  about wakes again, it calls `channel_unmute`.
 - **Unknown / invalid / not-yet-created task ids.** A local set insert with no
   server validation. A typo or a never-existing id simply never matches a
   notification and is inert; it costs one map entry until the session ends.
@@ -342,8 +340,8 @@ live CLI.
   future message be emitted with no task resource, `primaryTaskID` returns
   `false` and the message is **always forwarded** — a blocklist can only drop
   ids it holds, and forwarding is the safe, behaviour-preserving default.
-- **Re-subscribing an already-subscribed task, or muting an already-muted one.**
-  Both are idempotent set operations (`delete` / insert). The returned muted set
+- **Re-muting an already-muted task, or un-muting one that isn't muted.** Both
+  are idempotent set operations (insert / `delete`). The returned muted set
   reflects the final state.
 
 ## Trade-offs
@@ -351,8 +349,8 @@ live CLI.
 ### Client-side (bridge) filtering vs. server-side subscription state
 
 We filter in the bridge. The alternative is to push the mute set to the server
-(an `Unsubscribe`/`Subscribe` RPC plus per-client mute state and a server-side
-filter on the SSE fan-out).
+(a `Mute`/`Unmute` RPC plus per-client mute state and a server-side filter on
+the SSE fan-out).
 
 - **Client-side (chosen):** zero server changes, no proto / migration, no new
   failure modes, and it sits next to the two filters already implemented
@@ -397,14 +395,14 @@ A list lets the agent mute/un-mute a batch atomically and reads naturally for
 but forces N calls for N tasks. The one-element list is the single-id case, so
 nothing is lost.
 
-### `channel_subscribe(all=true)` vs. no reset
+### `channel_unmute(all=true)` vs. no reset
 
 Clearing the whole mute set is a common, safe operation ("I want to hear
 everything again"), and expressing it as `all: true` avoids making the agent
 first list then un-mute each id. It stays a blocklist operation — it empties the
 blocklist, it does not create an allowlist. There is deliberately **no**
-`channel_unsubscribe(all=true)`: "mute everything" is an allowlist in disguise
-(block all current *and future* tasks), which this design explicitly rejects.
+`channel_mute(all=true)`: "mute everything" is an allowlist in disguise (block
+all current *and future* tasks), which this design explicitly rejects.
 
 ## Open Questions
 
@@ -428,16 +426,15 @@ blocklist, it does not create an allowlist. There is deliberately **no**
    with **one** id set whose meaning flips — mute set when the default is `all`,
    watch set when the default is `none`. That is out of scope here; this
    proposal only implements the `all` default. Naming would need reconciling
-   (`channel_subscribe`/`channel_unsubscribe` vs. `watch_task`/`unwatch_task`).
+   (`channel_mute`/`channel_unmute` vs. `watch_task`/`unwatch_task`).
 
 4. **Surfacing the model to the agent.** Unlike #793, no discovery is strictly
    required — the default is the status quo, so an agent that never learns about
    the tools simply keeps its current behaviour. Still, the `xagent mcp` server
    `Instructions` (and/or the orchestrator skill) should mention that
-   `channel_unsubscribe(task_ids)` exists for silencing finished tasks, so
-   agents actually use it. Where to put that is an implementation detail.
+   `channel_mute(task_ids)` exists for silencing finished tasks, so agents
+   actually use it. Where to put that is an implementation detail.
 
-5. **Validate-on-unsubscribe.** Should `channel_unsubscribe` round-trip to
-   confirm the ids exist / belong to the org? Recommendation: no — muting a bad
-   id is inert, and an RPC per call adds a failure mode for a local, best-effort
-   operation.
+5. **Validate-on-mute.** Should `channel_mute` round-trip to confirm the ids
+   exist / belong to the org? Recommendation: no — muting a bad id is inert, and
+   an RPC per call adds a failure mode for a local, best-effort operation.
