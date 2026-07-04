@@ -23,6 +23,7 @@ import (
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/x/outbox"
+	"github.com/icholy/xagent/internal/x/testx"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
@@ -604,12 +605,8 @@ func TestRunnerLoad(t *testing.T) {
 	// Assert - the exited husk and gone sandbox (both still-running tasks) each
 	// emit "failed"; the gone record is dropped, the others kept.
 	events := submitted(t, mock, queue)
-	var failed []int64
-	for _, e := range events {
-		assert.Equal(t, e.Event, "failed")
-		failed = append(failed, e.TaskId)
-	}
-	assert.DeepEqual(t, failed, []int64{2, 3})
+	assert.DeepEqual(t, testx.ExtractField(events, "Event"), []string{"failed", "failed"})
+	assert.DeepEqual(t, testx.ExtractField(events, "TaskId"), []int64{2, 3})
 
 	_, ok, err := store.Read(3)
 	assert.NilError(t, err)
