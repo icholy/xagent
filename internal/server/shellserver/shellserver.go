@@ -31,9 +31,6 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-// meterName is the OpenTelemetry instrumentation scope for shellserver metrics.
-const meterName = "github.com/icholy/xagent/internal/server/shellserver"
-
 // Registry tracks rendezvous sessions by id for a single server instance.
 type Registry struct {
 	log              *slog.Logger
@@ -86,7 +83,7 @@ func New(opts Options) *Registry {
 		onClose:          opts.OnClose,
 		sessions:         make(map[string]*entry),
 	}
-	r.registerMetrics(otel.Meter(meterName))
+	r.registerMetrics()
 	return r
 }
 
@@ -95,7 +92,8 @@ func New(opts Options) *Registry {
 // registry size, so it stays correct across seed and eviction without
 // increment/decrement bookkeeping. Registration failures are logged rather
 // than fatal — metrics are best-effort and must not block serving shells.
-func (r *Registry) registerMetrics(meter metric.Meter) {
+func (r *Registry) registerMetrics() {
+	meter := otel.Meter("github.com/icholy/xagent/internal/server/shellserver")
 	_, err := meter.Int64ObservableGauge(
 		"xagent.shell.active_sessions",
 		metric.WithDescription("Number of currently active shell rendezvous sessions."),
