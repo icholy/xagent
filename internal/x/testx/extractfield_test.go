@@ -1,6 +1,7 @@
 package testx_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -56,7 +57,7 @@ func TestExtractField_PanicNotSlice(t *testing.T) {
 	defer func() {
 		r := recover()
 		assert.Assert(t, r != nil, "expected panic")
-		assert.Assert(t, acmp.Contains(panicString(r), "must be a slice or array"))
+		assert.Assert(t, acmp.Contains(fmt.Sprint(r), "must be a slice or array"))
 	}()
 	testx.ExtractField(42, "ID")
 }
@@ -65,22 +66,10 @@ func TestExtractField_PanicUnknownField(t *testing.T) {
 	defer func() {
 		r := recover()
 		assert.Assert(t, r != nil, "expected panic")
-		msg := panicString(r)
+		msg := fmt.Sprint(r)
 		assert.Assert(t, acmp.Contains(msg, `no field "Missing"`))
 		// Available field names are listed to make the failure actionable.
 		assert.Assert(t, acmp.Contains(msg, "ID"))
 	}()
 	testx.ExtractField([]struct{ ID int64 }{{ID: 1}}, "Missing")
-}
-
-// panicString renders a recovered panic value as a string for substring checks.
-func panicString(v any) string {
-	switch x := v.(type) {
-	case string:
-		return x
-	case error:
-		return x.Error()
-	default:
-		return ""
-	}
 }
