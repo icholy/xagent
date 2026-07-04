@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http/httptest"
@@ -772,6 +773,114 @@ func TestRunnerStart_GoneViaProbe(t *testing.T) {
 	_, ok, err := store.Read(9)
 	assert.NilError(t, err)
 	assert.Equal(t, ok, false)
+}
+
+// failingOutboxStore is an outbox.Store whose durable Append always fails,
+// simulating an unrecoverable local write failure (disk full / broken FS). The
+// die path is reached through Enqueue → Append alone, so Peek/Drop/Len are inert
+// — the consumer side is never driven in these tests.
+type failingOutboxStore struct{ err error }
+
+func (s failingOutboxStore) Append(json.RawMessage) error       { return s.err }
+func (s failingOutboxStore) Peek() (outbox.Record, bool, error) { return outbox.Record{}, false, nil }
+func (s failingOutboxStore) Drop(bool) error                    { return nil }
+func (s failingOutboxStore) Len() (int, error)                  { return 0, nil }
+
+// TestRunnerDie_StopWithoutSandbox is the sharpest unrecoverable case from #1209:
+// a stop command with no running sandbox has no reconciliation path on restart
+// (Load has nothing to probe and cannot re-derive "stopped"), so a dropped persist
+// would leave the task stuck in cancelling forever. When the durable outbox write
+// fails there, the runner must crash — die cancels the root ctx with a
+// FatalStoreError cause — instead of logging and continuing.
+func TestRunnerDie_StopWithoutSandbox(t *testing.T) {
+	t.Parallel()
+	task := &model.Task{
+		ID:        7,
+		Runner:    "test-runner",
+		Workspace: "test",
+		Status:    model.TaskStatusCancelling,
+		Command:   model.TaskCommandStop,
+		Version:   3,
+	}
+	mock := &xagentclient.ClientMock{
+		ListRunnerTasksFunc: func(_ context.Context, _ *xagentv1.ListRunnerTasksRequest) (*xagentv1.ListRunnerTasksResponse, error) {
+			return &xagentv1.ListRunnerTasksResponse{Tasks: []*xagentv1.Task{task.Proto("")}}, nil
+		},
+	}
+	be := &backend.BackendMock{
+		SignalFunc: func(_ context.Context, _ backend.Handle) (bool, error) {
+			return false, nil // no running sandbox to signal → runner emits "stopped"
+		},
+	}
+	// Back the outbox with a store whose durable Append fails.
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{
+		Store:   failingOutboxStore{err: errors.New("no space left on device")},
+		Client:  mock,
+		Backoff: backoff.NewConstantBackOff(0),
+		Log:     slog.Default(),
+	})
+	assert.NilError(t, err)
+
+	ctx, cancelCause := context.WithCancelCause(t.Context())
+	defer cancelCause(nil)
+	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue, Fatal: cancelCause})
+	assert.NilError(t, err)
+
+	// Act - the "stopped" enqueue fails durably, so die fires.
+	assert.NilError(t, r.Poll(ctx))
+
+	// Assert - the root ctx is cancelled with a FatalStoreError cause, which the
+	// command layer maps to a non-zero exit.
+	var fatal FatalStoreError
+	assert.Assert(t, errors.As(context.Cause(ctx), &fatal))
+}
+
+// TestRunnerGracefulShutdown_NoFatalCause is the complement: on the happy path the
+// durable write succeeds, die never fires, and a plain ctx cancel (the signal
+// shutdown) leaves no FatalStoreError cause — so the command layer's exit mapping
+// returns nil (exit 0) rather than crashing.
+func TestRunnerGracefulShutdown_NoFatalCause(t *testing.T) {
+	t.Parallel()
+	task := &model.Task{
+		ID:        7,
+		Runner:    "test-runner",
+		Workspace: "test",
+		Status:    model.TaskStatusCancelling,
+		Command:   model.TaskCommandStop,
+		Version:   3,
+	}
+	mock := &xagentclient.ClientMock{
+		ListRunnerTasksFunc: func(_ context.Context, _ *xagentv1.ListRunnerTasksRequest) (*xagentv1.ListRunnerTasksResponse, error) {
+			return &xagentv1.ListRunnerTasksResponse{Tasks: []*xagentv1.Task{task.Proto("")}}, nil
+		},
+		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+			return &xagentv1.SubmitRunnerEventsResponse{}, nil
+		},
+	}
+	be := &backend.BackendMock{
+		SignalFunc: func(_ context.Context, _ backend.Handle) (bool, error) {
+			return false, nil
+		},
+	}
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{
+		StoreDir: t.TempDir(),
+		Client:   mock,
+		Backoff:  backoff.NewConstantBackOff(0),
+		Log:      slog.Default(),
+	})
+	assert.NilError(t, err)
+
+	ctx, cancelCause := context.WithCancelCause(context.Background())
+	r, err := New(Options{Client: mock, Backend: be, Store: testStore(t), RunnerID: "test-runner", Concurrency: 1, Queue: queue, Fatal: cancelCause})
+	assert.NilError(t, err)
+
+	// The durable enqueue succeeds, so die never fires.
+	assert.NilError(t, r.Poll(ctx))
+
+	// A graceful signal shutdown cancels ctx with no FatalStoreError cause.
+	cancelCause(nil)
+	var fatal FatalStoreError
+	assert.Assert(t, !errors.As(context.Cause(ctx), &fatal))
 }
 
 // testWorkspaces returns a minimal workspace config with a "test" workspace.

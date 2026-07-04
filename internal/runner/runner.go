@@ -37,6 +37,7 @@ type Runner struct {
 	log         *slog.Logger
 	queue       *outbox.Outbox[model.RunnerEvent]
 	wake        wakeup.Chan
+	fatal       context.CancelCauseFunc
 }
 
 type Options struct {
@@ -58,6 +59,12 @@ type Options struct {
 	// Queue is the durable outbox that delivers runner lifecycle events to the
 	// server, buffering them across transient outages and restarts.
 	Queue *outbox.Outbox[model.RunnerEvent]
+	// Fatal terminates the runner by cancelling its root context with the given
+	// cause. It is invoked by die when a durable local-store write fails; the
+	// command layer wraps ctx with context.WithCancelCause and passes the
+	// CancelCauseFunc here. When nil, die is a no-op (durable-write failures fall
+	// back to the pre-existing log-and-continue behaviour).
+	Fatal context.CancelCauseFunc
 }
 
 var reRunnerID = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
@@ -101,7 +108,33 @@ func New(opts Options) (*Runner, error) {
 		log:         log,
 		queue:       opts.Queue,
 		wake:        wakeup.New(),
+		fatal:       opts.Fatal,
 	}, nil
+}
+
+// FatalStoreError wraps a durable local-store write failure that terminates the
+// runner. It is the cause set on the runner's root context by die; the command
+// layer matches it with errors.As to distinguish a broken-disk crash (non-zero
+// exit → supervisor restarts + alerts) from a graceful signal shutdown (exit 0),
+// without depending on whatever cause signal.NotifyContext sets.
+type FatalStoreError struct{ err error }
+
+func (e FatalStoreError) Error() string { return "durable store write failed: " + e.err.Error() }
+func (e FatalStoreError) Unwrap() error { return e.err }
+
+// die terminates the runner by cancelling its root context with a
+// FatalStoreError cause. It is the response to a durable local-store write
+// failure (outbox Enqueue or taskstate Write): those failures are non-transient
+// (ENOSPC/EIO/EROFS) and silently dropping a lifecycle event defeats the whole
+// point of the durable store, so the runner fails loud and lets its supervisor
+// restart and alert. Riding ctx cancellation instead of os.Exit preserves the
+// detach-don't-kill teardown — in-flight sandboxes stay alive and are re-adopted
+// by Load on the next boot. First cause wins (WithCancelCause is idempotent), so
+// the first failure is the one reported.
+func (r *Runner) die(err error) {
+	if r.fatal != nil {
+		r.fatal(FatalStoreError{err})
+	}
 }
 
 // WakeC returns a channel that receives one value per coalesced burst of
@@ -170,12 +203,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 				// No running sandbox to signal: there is no driver to
 				// complete the cancel, so emit "stopped" to land the task in
 				// cancelled instead of sticking in cancelling.
-				if err := r.queue.Enqueue(model.RunnerEvent{
+				ev := model.RunnerEvent{
 					TaskID:  task.ID,
 					Event:   model.RunnerEventStopped,
 					Version: task.Version,
-				}); err != nil {
-					r.log.Error("failed to enqueue event", "task", task.ID, "event", model.RunnerEventStopped, "err", err)
+				}
+				if err := r.queue.Enqueue(ev); err != nil {
+					r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
+					return nil
 				}
 				return nil
 			})
@@ -196,13 +231,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "err", err)
-					if err := r.queue.Enqueue(model.RunnerEvent{
+					ev := model.RunnerEvent{
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
 						Version: task.Version,
 						Reason:  err.Error(),
-					}); err != nil {
-						r.log.Error("failed to enqueue event", "task", task.ID, "event", model.RunnerEventFailed, "err", err)
+					}
+					if err := r.queue.Enqueue(ev); err != nil {
+						r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
 					}
 					return nil
 				}
@@ -237,13 +273,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "err", err)
-					if err := r.queue.Enqueue(model.RunnerEvent{
+					ev := model.RunnerEvent{
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
 						Version: task.Version,
 						Reason:  err.Error(),
-					}); err != nil {
-						r.log.Error("failed to enqueue event", "task", task.ID, "event", model.RunnerEventFailed, "err", err)
+					}
+					if err := r.queue.Enqueue(ev); err != nil {
+						r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
 					}
 					return nil
 				}
@@ -308,12 +345,14 @@ func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
 	}
 	r.log.Error("load: sandbox exited without reporting", "task", taskID)
 	// Use version 0 to bypass version check (spontaneous events)
-	if err := r.queue.Enqueue(model.RunnerEvent{
+	ev := model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
 		Reason: "sandbox exited",
-	}); err != nil {
-		r.log.Error("failed to enqueue event", "task", taskID, "event", model.RunnerEventFailed, "err", err)
+	}
+	if err := r.queue.Enqueue(ev); err != nil {
+		r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
+		return
 	}
 }
 
@@ -504,6 +543,11 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 		ID:     h.ID,
 		Data:   h.Data,
 	}); err != nil {
+		// The taskstate store is the runner's other durable local store; a write
+		// failure here is the same non-transient disk failure as an outbox
+		// Enqueue failure, so crash rather than lose the handle. The returned
+		// error still unwinds the caller (releasing the sem slot) as ctx tears down.
+		r.die(fmt.Errorf("record handle for task %d: %w", task.ID, err))
 		return fmt.Errorf("failed to record task handle: %w", err)
 	}
 	// Observe the exit on the runner's root context: Wait is level-triggered and
@@ -545,12 +589,14 @@ func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) 
 	}
 	r.log.Error("sandbox exited without reporting", "task", taskID, "exitCode", int(code))
 	// Use version 0 to bypass version check (spontaneous events)
-	if err := r.queue.Enqueue(model.RunnerEvent{
+	ev := model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
 		Reason: fmt.Sprintf("sandbox exited with status code %d", code),
-	}); err != nil {
-		r.log.Error("failed to enqueue event", "task", taskID, "event", model.RunnerEventFailed, "err", err)
+	}
+	if err := r.queue.Enqueue(ev); err != nil {
+		r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
+		return
 	}
 }
 
