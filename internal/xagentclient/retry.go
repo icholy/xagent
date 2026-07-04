@@ -3,10 +3,10 @@ package xagentclient
 import (
 	"cmp"
 	"context"
-	"math/rand/v2"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/cenkalti/backoff/v5"
 )
 
 // Retry defaults used when a RetryOptions field is left zero.
@@ -34,10 +34,15 @@ type RetryOptions struct {
 }
 
 // RetryInterceptor retries failed unary requests with exponential backoff and
-// jitter. Only transient errors (connect.CodeUnavailable, which Connect
-// reports for connection failures and unreachable servers) are retried, so a
-// retried request is one that most likely never reached the server. Streaming
-// calls are passed through unchanged.
+// jitter, delegating the backoff schedule to cenkalti/backoff. Only transient
+// errors (connect.CodeUnavailable, which Connect reports for connection
+// failures and unreachable servers) are retried, so a retried request is one
+// that most likely never reached the server. Streaming calls are passed
+// through unchanged.
+//
+// Connect has no built-in retry mechanism (retries are left to interceptors),
+// so the interceptor plumbing and the retryable-code policy are ours; only the
+// backoff schedule comes from the library.
 type RetryInterceptor struct {
 	maxRetries     int
 	initialBackoff time.Duration
@@ -54,21 +59,29 @@ func NewRetryInterceptor(opts RetryOptions) *RetryInterceptor {
 	}
 }
 
-// WrapUnary retries the call while it fails with a retryable error, sleeping
-// with exponential backoff between attempts.
+// WrapUnary retries the call while it fails with a retryable error, backing off
+// exponentially with jitter between attempts.
 func (i *RetryInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		backoff := i.initialBackoff
-		for attempt := 0; ; attempt++ {
+		bo := backoff.NewExponentialBackOff()
+		bo.InitialInterval = i.initialBackoff
+		bo.MaxInterval = i.maxBackoff
+		// maxTries counts the initial attempt plus retries; clamp to at least
+		// one so a negative MaxRetries disables retries without underflowing.
+		maxTries := uint(max(i.maxRetries+1, 1))
+		return backoff.Retry(ctx, func() (connect.AnyResponse, error) {
 			res, err := next(ctx, req)
-			if err == nil || attempt >= i.maxRetries || !isRetryable(err) {
-				return res, err
+			if err != nil && !isRetryable(err) {
+				// Permanent stops the retry loop and unwraps to the original error.
+				return nil, backoff.Permanent(err)
 			}
-			if !sleepWithJitter(ctx, backoff) {
-				return res, err
-			}
-			backoff = min(backoff*2, i.maxBackoff)
-		}
+			return res, err
+		},
+			backoff.WithBackOff(bo),
+			backoff.WithMaxTries(maxTries),
+			// Bound retries by attempt count only, not wall-clock time.
+			backoff.WithMaxElapsedTime(0),
+		)
 	}
 }
 
@@ -89,18 +102,4 @@ func (i *RetryInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFun
 // CodeUnavailable, which is the code we retry.
 func isRetryable(err error) bool {
 	return connect.CodeOf(err) == connect.CodeUnavailable
-}
-
-// sleepWithJitter waits for a randomized duration in [d/2, d) and reports
-// whether it completed. It returns false if ctx is cancelled first.
-func sleepWithJitter(ctx context.Context, d time.Duration) bool {
-	jittered := d/2 + time.Duration(rand.Int64N(int64(d/2)+1))
-	t := time.NewTimer(jittered)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
-	}
 }

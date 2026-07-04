@@ -113,8 +113,9 @@ func TestRetryInterceptor_StopsOnCancelledContext(t *testing.T) {
 	_, err := wrapped(ctx, newReq())
 
 	// Assert: it does not wait out the hour-long backoff, and only the initial
-	// call happened before the cancelled context aborted the retry sleep.
-	assert.Equal(t, connect.CodeOf(err), connect.CodeUnavailable)
+	// call happened before the cancelled context aborted the retry sleep. The
+	// backoff loop surfaces the context cause rather than the last RPC error.
+	assert.ErrorIs(t, err, context.Canceled)
 	assert.Equal(t, calls.Load(), int64(1))
 }
 
