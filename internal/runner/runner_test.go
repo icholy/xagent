@@ -22,6 +22,7 @@ import (
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/xagentclient"
+	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -299,9 +300,11 @@ func TestRunnerPoll_StopWithoutSandbox(t *testing.T) {
 	assert.Assert(t, cmp.Len(be.SignalCalls(), 0))
 	events := submitted(t, mock, queue)
 	assert.Equal(t, len(events), 1)
-	assert.Equal(t, events[0].Event, "stopped")
-	assert.Equal(t, events[0].TaskId, int64(7))
-	assert.Equal(t, events[0].Version, int64(3))
+	assert.DeepEqual(t,
+		events[0],
+		&xagentv1.RunnerEvent{Event: "stopped", TaskId: 7, Version: 3},
+		protocmp.Transform(),
+	)
 }
 
 func TestRunnerPoll_StopSignalled(t *testing.T) {
@@ -366,9 +369,11 @@ func TestRunnerSupervise_ReportLost(t *testing.T) {
 	// Assert - a failed event is emitted and the concurrency slot is released.
 	events := submitted(t, mock, queue)
 	assert.Equal(t, len(events), 1)
-	assert.Equal(t, events[0].Event, "failed")
-	assert.Equal(t, events[0].TaskId, int64(2))
-	assert.Equal(t, events[0].Version, int64(0))
+	assert.DeepEqual(t,
+		events[0],
+		&xagentv1.RunnerEvent{Event: "failed", TaskId: 2, Reason: "sandbox exited with status code -1"},
+		protocmp.Transform(),
+	)
 	assert.Assert(t, r.sem.TryAcquire(1)) // the slot was released
 }
 
