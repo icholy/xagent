@@ -385,6 +385,31 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 	}
 }
 
+func TestRunnerEvent_LifecycleEvent_FailedReason(t *testing.T) {
+	t.Parallel()
+	task := &Task{ID: 1, Status: TaskStatusFailed}
+
+	tests := []struct {
+		name   string
+		reason string
+		want   string
+	}{
+		{"empty falls back to constant", "", "container failed"},
+		{"reason passed through as-is", "setup command 0 failed: exit status 1", "setup command 0 failed: exit status 1"},
+		{"multiline reason preserved", "wrapper failed:\ncause here\nmore", "wrapper failed:\ncause here\nmore"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := RunnerEvent{Event: RunnerEventFailed, Reason: tt.reason}
+			ev, ok := e.LifecycleEvent(task, TaskStatusRunning)
+			assert.Assert(t, ok)
+			lp, ok := ev.Payload.(*LifecyclePayload)
+			assert.Assert(t, ok)
+			assert.Equal(t, lp.Message, tt.want)
+		})
+	}
+}
+
 func TestTask_IsDone(t *testing.T) {
 	tests := []struct {
 		status TaskStatus

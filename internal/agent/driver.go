@@ -55,7 +55,7 @@ func (d *Driver) Run(ctx context.Context) error {
 
 	// Report started: replaces the startup ping — an acked submit proves the
 	// connection, token, server, and DB are all healthy.
-	if err := d.submit(eventCtx, model.RunnerEventStarted); err != nil {
+	if err := d.submit(eventCtx, model.RunnerEvent{TaskID: d.TaskID, Event: model.RunnerEventStarted}); err != nil {
 		return err
 	}
 
@@ -64,10 +64,14 @@ func (d *Driver) Run(ctx context.Context) error {
 		d.Log.Info("agent stopped gracefully")
 		err = nil
 	}
-	event := model.RunnerEventStopped
+	event := model.RunnerEvent{TaskID: d.TaskID, Event: model.RunnerEventStopped}
 	if err != nil {
 		d.Log.Error("task failed", "err", err)
-		event = model.RunnerEventFailed
+		// The error already distinguishes setup failures from agent failures
+		// (different wrapped errors), so it carries that context into the
+		// timeline as the failure reason.
+		event.Event = model.RunnerEventFailed
+		event.Reason = err.Error()
 	}
 	// The terminal ack decides the exit code: acked means the outcome is
 	// durably recorded and the driver exits 0 even on agent failure; a lost
@@ -81,14 +85,13 @@ func (d *Driver) Run(ctx context.Context) error {
 // submit reports a runner event for the driver's task and waits for the ack.
 // The SubmitRunnerEvents handler commits the transaction before returning,
 // so a nil error means the state transition is durable.
-func (d *Driver) submit(ctx context.Context, event model.RunnerEventType) error {
+func (d *Driver) submit(ctx context.Context, event model.RunnerEvent) error {
 	// Version 0 bypasses the version check (spontaneous events).
-	re := model.RunnerEvent{TaskID: d.TaskID, Event: event}
 	_, err := d.Client.SubmitRunnerEvents(ctx, &xagentv1.SubmitRunnerEventsRequest{
-		Events: []*xagentv1.RunnerEvent{re.Proto()},
+		Events: []*xagentv1.RunnerEvent{event.Proto()},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to submit %s event: %w", event, err)
+		return fmt.Errorf("failed to submit %s event: %w", event.Event, err)
 	}
 	return nil
 }

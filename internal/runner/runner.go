@@ -195,6 +195,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
 						Version: task.Version,
+						Reason:  err.Error(),
 					})
 					return nil
 				}
@@ -233,6 +234,7 @@ func (r *Runner) Poll(ctx context.Context) error {
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
 						Version: task.Version,
+						Reason:  err.Error(),
 					})
 					return nil
 				}
@@ -300,6 +302,7 @@ func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
 	r.queue.Enqueue(model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
+		Reason: "sandbox exited",
 	})
 }
 
@@ -534,6 +537,7 @@ func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) 
 	r.queue.Enqueue(model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
+		Reason: fmt.Sprintf("sandbox exited with status code %d", code),
 	})
 }
 

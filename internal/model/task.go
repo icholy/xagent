@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/authscope"
@@ -157,6 +158,9 @@ type RunnerEvent struct {
 	Event     RunnerEventType
 	Version   int64
 	Reconcile bool
+	// Reason is an optional human-readable detail (e.g. the failure reason).
+	// It is currently populated only for "failed" events and is empty otherwise.
+	Reason string
 }
 
 // Proto converts a RunnerEvent to its protobuf representation.
@@ -166,6 +170,7 @@ func (r *RunnerEvent) Proto() *xagentv1.RunnerEvent {
 		Event:     string(r.Event),
 		Version:   r.Version,
 		Reconcile: r.Reconcile,
+		Reason:    r.Reason,
 	}
 }
 
@@ -176,6 +181,7 @@ func RunnerEventFromProto(pb *xagentv1.RunnerEvent) RunnerEvent {
 		Event:     RunnerEventType(pb.Event),
 		Version:   pb.Version,
 		Reconcile: pb.Reconcile,
+		Reason:    pb.Reason,
 	}
 }
 
@@ -299,7 +305,9 @@ func (e RunnerEvent) LifecycleEvent(task *Task, from TaskStatus) (*Event, bool) 
 	case RunnerEventStopped:
 		return lifecycle(LifecycleKindSandboxExited, ""), true
 	case RunnerEventFailed:
-		return lifecycle(LifecycleKindSandboxFailed, "container failed"), true
+		// The reason is passed through as-is; fall back to the legacy constant
+		// only when a producer left it empty (old runners/drivers).
+		return lifecycle(LifecycleKindSandboxFailed, cmp.Or(e.Reason, "container failed")), true
 	default:
 		return nil, false
 	}
