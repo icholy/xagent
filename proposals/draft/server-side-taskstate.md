@@ -287,13 +287,69 @@ type Store interface {
   `runner.go` exactly as it is — nothing in the orchestration logic
   (`Start`/`Load`/`List`/`Remove`/`Prune`) changes shape; only where the bytes land
   changes.
-- `internal/command/runner.go` selects the implementation. `--state-dir` remains,
-  but for a server-backed runner it is either unused or a local **cache** (below).
+- `internal/command/runner.go` (`taskstate.Open(cmd.String("state-dir"))` today)
+  selects the implementation. `--state-dir` is **not retired**: it is repurposed from
+  the authoritative taskstate to the durable outbox below (and, optionally, a
+  best-effort read cache).
 
-Because `Write`/`Remove`/`List` become network calls, they inherit the runner's
-existing resilience: the retrying `EventQueue` already used for `SubmitRunnerEvents`
-buffers a `SetTaskSandbox`/`ClearTaskSandbox` that races a server blip, so a
-transient outage does not lose a handle (see Failure modes).
+Because `Write`/`Remove` become network calls, they must survive not just a server
+blip but — per review — a *runner restart* mid-outage. The current in-memory
+`EventQueue` cannot: a restart drops whatever it was retrying. The next subsection
+generalizes it into a durable, on-disk outbox shared by both the runner-event path
+and the sandbox-state path.
+
+### Durable outbox
+
+Today `internal/runner/eventqueue.go` buffers failed `SubmitRunnerEvents` calls in an
+**in-memory** `container/list` (`EventQueue`): `Enqueue` appends, a `Run` goroutine
+`Drain`s them FIFO, permanent errors are dropped (`isPermanentError` →
+`NotFound`/`InvalidArgument`/`PermissionDenied`), and everything is lost on a runner
+restart. Routing handle persistence through that same queue raises the stakes — a
+`SetTaskSandbox` dropped by a restart would silently un-track a live sandbox — so the
+queue is upgraded to a **durable, on-disk outbox**, one mechanism for *both* runner
+events and sandbox-state writes.
+
+**Shape.** The queue element generalizes from `model.RunnerEvent` to a typed op:
+
+```go
+type Op struct {
+    Seq     int64             // monotonic; preserves FIFO across restarts
+    Kind    OpKind            // OpSubmitEvent | OpSetSandbox | OpClearSandbox
+    Event   *model.RunnerEvent // OpSubmitEvent
+    Sandbox *taskstate.Record  // OpSetSandbox
+    TaskID  int64              // OpClearSandbox
+}
+```
+
+`Enqueue` persists the op **before** returning, using the same atomic
+`marshal → temp → fsync → rename` discipline `taskstate` already uses (one file per
+`Seq` under `<state-dir>/outbox/`). `Drain` sends the head op through the matching
+RPC (`SubmitRunnerEvents` / `SetTaskSandbox` / `ClearTaskSandbox`) and removes the
+on-disk record only on success. On boot the runner enumerates `outbox/`, sorts by
+`Seq`, and drains — so retries survive a restart. The existing
+`Run`/`Drain`/`retryInterval`/permanent-drop loop is unchanged in spirit; only the
+backing store and the element type change.
+
+**Why at-least-once replay is safe.** Every op is idempotent server-side:
+
+- `SetTaskSandbox` is an upsert keyed by `task_id`; re-applying is a no-op.
+- `ClearTaskSandbox` is a delete; re-applying is a no-op.
+- A *stale* replayed `SetTaskSandbox` (the task advanced past the recorded `version`
+  after a restart) is rejected by the optimistic guard as `FailedPrecondition`, which
+  the outbox classifies as **permanent** and drops rather than retrying forever.
+- `SubmitRunnerEvents` idempotency is unchanged from today.
+
+**Ordering.** A single FIFO preserves the one constraint that matters: for a given
+task, its `SetTaskSandbox` is enqueued before its `ClearTaskSandbox`, so they apply
+in that order even across a restart. Head-of-line blocking is retained from the
+current `EventQueue`; if a stuck event blocking a state write proves too coarse once
+the two share a lane, per-task lanes are a follow-up (Open Question 6).
+
+Note the deliberate inversion: this proposal moves the *authoritative* taskstate
+**off** local disk, yet keeps local disk for a *durable outbox* of not-yet-committed
+server writes. The two do not conflict — the server is the source of truth; the
+outbox is only a write-ahead buffer that empties as soon as the server is reachable.
+`--state-dir` shifts role from "the answer" to "the retry log".
 
 ### Rollout
 
@@ -308,10 +364,10 @@ cutover:
    constructs the `serverstore` implementation instead of the file store. A one-time
    boot reconcile (`for rec in localStore.List(): SetTaskSandbox(rec)`) seeds any
    handles the local disk still holds so no currently-running sandbox is orphaned by
-   the switch; after that the local files are unused.
-3. **Keep or drop the local store.** The file implementation stays in the tree as an
-   optional write-through cache (Open Question 2) or is removed outright — nothing
-   else depends on it, and either choice is safe.
+   the switch. `--state-dir` is repurposed to the durable outbox rather than dropped.
+3. **Keep or drop the local read cache.** The file implementation stays in the tree
+   as an optional best-effort read cache (Open Question 2) or is removed outright —
+   nothing depends on it for correctness, and either choice is safe.
 
 Because the server is the sole store from step 2 on, a runner rescheduled onto a
 fresh volume rehydrates entirely from the server — the durability win. If a broader
@@ -322,21 +378,25 @@ explicitly not built now.
 ### Failure modes
 
 - **Server unreachable during sandbox create.** `backend.Launch` succeeded but
-  `SetTaskSandbox` cannot reach the server. The handle write is enqueued on the
-  retrying `EventQueue` (as `SubmitRunnerEvents` already is) and retried; during
-  the gap the runner holds the handle in memory / the local cache, so its own
-  supervise goroutine is unaffected. If the runner *also* crashes in that window,
-  the sandbox is orphaned exactly as today — but Docker self-heals on the next
-  `Start` via the deterministic `xagent-{taskID}` name, and `lambda-microvm` leans
-  on `max_duration` as the reaper (the same backstop
+  `SetTaskSandbox` cannot reach the server. The write is enqueued on the **durable
+  outbox** and retried; during the gap the runner holds the handle in memory / the
+  read cache, so its own supervise goroutine is unaffected. Because the outbox is on
+  disk, a runner that *also* restarts in that window replays the pending
+  `SetTaskSandbox` on boot instead of losing it — a strict improvement over the
+  in-memory `EventQueue`, and over today's local store where a crash between `Launch`
+  and the state write leaves the same gap. The residual orphan window (crash after
+  `Launch` but before the outbox `fsync` returns) is bounded exactly as today: Docker
+  self-heals on the next `Start` via the deterministic `xagent-{taskID}` name, and
+  `lambda-microvm` leans on `max_duration` as the reaper (the same backstop
   `lambda-microvm-backend.md`/`shared-runner-taskstate.md` already document). Moving
   the store to the server does **not** widen this window; it narrows the *recovery*
   gap, because a replacement runner can now see every handle that *did* commit.
 - **Server unreachable during teardown.** `backend.Destroy` ran but
-  `ClearTaskSandbox` did not — the server holds a stale handle. Self-healed on the
-  next reconcile: `Load`/`Prune` fetch via `ListRunnerSandboxes`, `Probe` the
-  handle, get `StateGone`, and clear it — identical to how `Load` drops a dangling
-  local record today (`runner.go:276`), just against server state.
+  `ClearTaskSandbox` did not — the server holds a stale handle. The clear also sits on
+  the durable outbox, so it is retried (and survives a restart); and it self-heals on
+  the next reconcile regardless: `Load`/`Prune` fetch via `ListRunnerSandboxes`,
+  `Probe` the handle, get `StateGone`, and clear it — identical to how `Load` drops a
+  dangling local record today (`runner.go:276`), just against server state.
 - **Stale/orphaned handle from a runner that never returns.** The server holds a
   Docker handle for a dead host. Because the id is host-local, no replacement runner
   can act on it — but the record is harmless (it is cleared when the task is
@@ -354,8 +414,11 @@ explicitly not built now.
 ```
 internal/runner/taskstate/
 ├── taskstate.go        Record{...}; Store interface (unchanged method set)
-├── filestore.go        existing atomic-JSON impl (renamed; kept as cache/fallback)
+├── filestore.go        existing atomic-JSON impl (renamed; kept as read cache/fallback)
 └── serverstore.go      new: Store backed by Set/Clear/ListRunnerSandboxes RPCs
+
+internal/runner/eventqueue.go         EventQueue → durable on-disk outbox:
+                                      Op{event|set-sandbox|clear-sandbox}, disk-backed, replayed on boot
 
 internal/store/
 ├── task.go             + Upsert/Delete/Get/ListTaskSandboxesForRunner
@@ -377,17 +440,21 @@ boundary. Only the `Store` implementation behind that boundary moves.
 network calls instead of `fsync`+`rename`. This is acceptable: sandbox
 create/teardown is already dominated by container/VM operations (seconds), a
 handle write is tiny, and the hot read path (`Start`) piggybacks on a poll the
-runner already makes — no added round trip. The `EventQueue` already absorbs
-transient server failures for the comparable `SubmitRunnerEvents` path.
+runner already makes — no added round trip. The **durable outbox** (generalized from
+the existing `EventQueue`) absorbs transient server failures for both the
+`SubmitRunnerEvents` and the new sandbox-state writes, and now survives a runner
+restart.
 
 **Reintroduces a dependency the local store removed.** `shared-runner-taskstate.md`
 valued a runner that can track its sandboxes with the server unreachable. Server-backed
-taskstate couples handle persistence to server availability. Mitigated by keeping a
-local write-through **cache** (Open Question 2) so an already-launched sandbox is
-still supervised during a server blip; the cache is best-effort and the server is
-authoritative. The net is a deliberate trade: slightly more coupling to the server
-(which the runner already cannot function without for polling and tokens) in
-exchange for durability and failover.
+taskstate couples handle persistence to server availability. Mitigated on two fronts:
+the **durable outbox** means a `Write`/`Remove` issued during an outage is never lost
+(it is `fsync`ed to disk and replayed until it commits, even across a restart), and an
+optional local **read cache** (Open Question 2) keeps an already-launched sandbox
+supervised during a server blip. The server stays authoritative. The net is a
+deliberate trade: slightly more coupling to the server (which the runner already
+cannot function without for polling and tokens) in exchange for durability and
+failover.
 
 **The server stores something it cannot validate.** As covered under auth, the
 server persists a runner-supplied opaque handle without a runner principal to
@@ -412,12 +479,13 @@ and only on the runner's own poll.
    runner identity as a separate, broader piece of work — it affects
    `ListRunnerTasks`, `RegisterWorkspaces`, and `SubmitRunnerEvents` too, not just
    this table.
-2. **Keep a local cache, or go server-only?** The rollout leaves this open. A
-   thin local write-through cache lets a same-host Docker restart re-attach without
-   a server round trip and survives a brief server outage; server-only is simpler
-   and is the only correct choice for a runner that expects to be rescheduled onto
-   fresh disk. Recommendation: server-authoritative with an **optional** local
-   cache, defaulting to on for the Docker backend and off (or tmpfs) for cloud
+2. **Keep a local read cache, or go server-only?** The rollout leaves this open
+   (write durability is already covered by the durable outbox; this is only about
+   *reads*). A thin local read cache lets a same-host Docker restart re-attach and
+   resolve reuse without a server round trip during a brief outage; server-only is
+   simpler and is the only correct choice for a runner that expects to be rescheduled
+   onto fresh disk. Recommendation: server-authoritative with an **optional** local
+   read cache, defaulting to on for the Docker backend and off (or tmpfs) for cloud
    backends.
 3. **Server-side orphan GC for host-local handles.** A dead Docker runner leaves a
    handle no one can act on. Is archive-time / delete-time cleanup (`ON DELETE
@@ -436,3 +504,12 @@ and only on the runner's own poll.
    follow-up that merely *consumes* the durable handle this proposal provides?
    Recommendation: this proposal delivers the durable mapping; the reassignment
    policy is a follow-up.
+6. **Outbox ordering granularity and on-disk format.** The durable outbox keeps the
+   current single-FIFO / head-of-line-blocking semantics, so a stuck runner event can
+   delay a sandbox-state write behind it. Is that acceptable, or should the outbox use
+   per-task lanes (independent ordering per task, blocking only within a task)? And is
+   the on-disk representation best as one file per `Seq` (mirroring `taskstate`'s
+   atomic-file discipline) or an append-only segment with periodic compaction?
+   Recommendation: ship the single FIFO with one-file-per-op first (smallest change to
+   the existing `EventQueue`), and revisit lanes only if head-of-line blocking is
+   observed to matter once events and state writes share the queue.
