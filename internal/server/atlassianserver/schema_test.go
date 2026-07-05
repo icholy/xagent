@@ -9,7 +9,7 @@ import (
 
 func TestSchemaRegistration(t *testing.T) {
 	reg := eventrouter2.NewSchemaRegistry()
-	registerSchemas(reg)
+	RegisterSchemas(reg)
 
 	def, ok := reg.EventTypeFor("atlassian", EventTypeCommentCreated)
 	assert.Assert(t, ok, "EventTypeFor(atlassian, %q) = _, false; want hit", EventTypeCommentCreated)

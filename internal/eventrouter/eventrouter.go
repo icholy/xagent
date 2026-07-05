@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store"
@@ -80,6 +81,13 @@ type Router struct {
 	Store     *store.Store
 	Publisher pubsub.Publisher
 
+	// Registry supplies the eventrouter2 schemas that translate-on-read matching
+	// fans out over. When nil, Route falls back to eventrouter2.DefaultSchemaRegistry
+	// — the process-wide registry the producer packages populate from init — so
+	// production construction sites need not set it. Tests inject an isolated
+	// registry to control which schemas are present.
+	Registry *eventrouter2.SchemaRegistry
+
 	// OnRouteOutcome, if set, is called synchronously once per matched org
 	// after routing handles that org, with the request context. The Router
 	// imposes no concurrency or lifetime policy — the callback owns that (e.g.
@@ -108,6 +116,11 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, err
 	}
 
+	// Translate-on-read: rules stay in the legacy stored shape, but matching runs
+	// through the attribute-based eventrouter2 matcher. Convert the event once;
+	// matchesV2 resolves the schema registry per call.
+	v2Input := input.toV2()
+
 	// First matching rule per org; orgs with no match are dropped.
 	matched := map[int64]*model.RoutingRule{}
 	for orgID, rules := range rulesByOrg {
@@ -115,7 +128,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 			rules = defaultRules
 		}
 		for i := range rules {
-			if input.MatchRule(rules[i]) {
+			if r.matchesV2(rules[i], v2Input) {
 				matched[orgID] = &rules[i]
 				break
 			}

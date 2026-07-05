@@ -15,16 +15,17 @@ func wakeOnXagentPrefix(typ string) eventrouter2.RoutingRule {
 
 // init registers githubserver's schemas on the process-wide default registry.
 func init() {
-	registerSchemas(eventrouter2.DefaultSchemaRegistry)
+	RegisterSchemas(eventrouter2.DefaultSchemaRegistry)
 }
 
-// registerSchemas records the eventrouter2 schema for every event type
+// RegisterSchemas records the eventrouter2 schema for every event type
 // githubserver emits (see toInputEvent) on reg. Each schema declares the
 // complete valid attr set for its type — the derived body/url plus its emitted
 // dimensions — and the default rules the producer ships. Only the three
 // comment/review types carry the "xagent:" body-prefix wakeup default; the rest
-// ship no default rules.
-func registerSchemas(reg *eventrouter2.SchemaRegistry) {
+// ship no default rules. It is exported so tests (e.g. eventrouter's Route
+// tests) can populate an isolated registry with the real producer schemas.
+func RegisterSchemas(reg *eventrouter2.SchemaRegistry) {
 	reg.MustRegister(eventrouter2.EventTypeDef{
 		Source:       "github",
 		Type:         EventTypeIssueComment,
