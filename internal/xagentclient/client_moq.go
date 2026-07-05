@@ -64,6 +64,9 @@ var _ Client = &ClientMock{}
 //			GetEventFunc: func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error) {
 //				panic("mock out the GetEvent method")
 //			},
+//			GetEventTypesFunc: func(contextMoqParam context.Context, getEventTypesRequest *xagentv1.GetEventTypesRequest) (*xagentv1.GetEventTypesResponse, error) {
+//				panic("mock out the GetEventTypes method")
+//			},
 //			GetOrgSettingsFunc: func(contextMoqParam context.Context, getOrgSettingsRequest *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error) {
 //				panic("mock out the GetOrgSettings method")
 //			},
@@ -196,6 +199,9 @@ type ClientMock struct {
 
 	// GetEventFunc mocks the GetEvent method.
 	GetEventFunc func(contextMoqParam context.Context, getEventRequest *xagentv1.GetEventRequest) (*xagentv1.GetEventResponse, error)
+
+	// GetEventTypesFunc mocks the GetEventTypes method.
+	GetEventTypesFunc func(contextMoqParam context.Context, getEventTypesRequest *xagentv1.GetEventTypesRequest) (*xagentv1.GetEventTypesResponse, error)
 
 	// GetOrgSettingsFunc mocks the GetOrgSettings method.
 	GetOrgSettingsFunc func(contextMoqParam context.Context, getOrgSettingsRequest *xagentv1.GetOrgSettingsRequest) (*xagentv1.GetOrgSettingsResponse, error)
@@ -384,6 +390,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// GetEventRequest is the getEventRequest argument value.
 			GetEventRequest *xagentv1.GetEventRequest
+		}
+		// GetEventTypes holds details about calls to the GetEventTypes method.
+		GetEventTypes []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetEventTypesRequest is the getEventTypesRequest argument value.
+			GetEventTypesRequest *xagentv1.GetEventTypesRequest
 		}
 		// GetOrgSettings holds details about calls to the GetOrgSettings method.
 		GetOrgSettings []struct {
@@ -590,6 +603,7 @@ type ClientMock struct {
 	lockDeleteOrg                      sync.RWMutex
 	lockGenerateAtlassianWebhookSecret sync.RWMutex
 	lockGetEvent                       sync.RWMutex
+	lockGetEventTypes                  sync.RWMutex
 	lockGetOrgSettings                 sync.RWMutex
 	lockGetProfile                     sync.RWMutex
 	lockGetRoutingRules                sync.RWMutex
@@ -1156,6 +1170,42 @@ func (mock *ClientMock) GetEventCalls() []struct {
 	mock.lockGetEvent.RLock()
 	calls = mock.calls.GetEvent
 	mock.lockGetEvent.RUnlock()
+	return calls
+}
+
+// GetEventTypes calls GetEventTypesFunc.
+func (mock *ClientMock) GetEventTypes(contextMoqParam context.Context, getEventTypesRequest *xagentv1.GetEventTypesRequest) (*xagentv1.GetEventTypesResponse, error) {
+	if mock.GetEventTypesFunc == nil {
+		panic("ClientMock.GetEventTypesFunc: method is nil but Client.GetEventTypes was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam      context.Context
+		GetEventTypesRequest *xagentv1.GetEventTypesRequest
+	}{
+		ContextMoqParam:      contextMoqParam,
+		GetEventTypesRequest: getEventTypesRequest,
+	}
+	mock.lockGetEventTypes.Lock()
+	mock.calls.GetEventTypes = append(mock.calls.GetEventTypes, callInfo)
+	mock.lockGetEventTypes.Unlock()
+	return mock.GetEventTypesFunc(contextMoqParam, getEventTypesRequest)
+}
+
+// GetEventTypesCalls gets all the calls that were made to GetEventTypes.
+// Check the length with:
+//
+//	len(mockedClient.GetEventTypesCalls())
+func (mock *ClientMock) GetEventTypesCalls() []struct {
+	ContextMoqParam      context.Context
+	GetEventTypesRequest *xagentv1.GetEventTypesRequest
+} {
+	var calls []struct {
+		ContextMoqParam      context.Context
+		GetEventTypesRequest *xagentv1.GetEventTypesRequest
+	}
+	mock.lockGetEventTypes.RLock()
+	calls = mock.calls.GetEventTypes
+	mock.lockGetEventTypes.RUnlock()
 	return calls
 }
 

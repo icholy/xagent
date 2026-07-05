@@ -49,6 +49,7 @@ service XAgentService {
   rpc GenerateAtlassianWebhookSecret(GenerateAtlassianWebhookSecretRequest) returns (GenerateAtlassianWebhookSecretResponse);
   rpc GetRoutingRules(GetRoutingRulesRequest) returns (GetRoutingRulesResponse);
   rpc SetRoutingRules(SetRoutingRulesRequest) returns (SetRoutingRulesResponse);
+  rpc GetEventTypes(GetEventTypesRequest) returns (GetEventTypesResponse);
   rpc CreateGitHubToken(CreateGitHubTokenRequest) returns (CreateGitHubTokenResponse);
 }
 
@@ -625,6 +626,23 @@ message SetRoutingRulesRequest {
 
 message SetRoutingRulesResponse {
   repeated RoutingRule rules = 1;
+}
+
+// EventTypeDef describes a registered (source, type) event kind and the complete
+// set of attribute dimensions a routing rule may condition on for that kind. It
+// mirrors the eventrouter2 registry entry, exposing only the client-relevant
+// fields (the shipped default rules are intentionally omitted).
+message EventTypeDef {
+  string source = 1;
+  string type = 2;
+  string label = 3;
+  repeated string attrs = 4;
+}
+
+message GetEventTypesRequest {}
+
+message GetEventTypesResponse {
+  repeated EventTypeDef event_types = 1;
 }
 
 message CreateGitHubTokenRequest {}
