@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/google/go-github/v88/github"
@@ -136,6 +137,45 @@ const (
 	EventTypeLabelAdded               = "label_added"
 )
 
+// mentionRe locates a GitHub @mention: an "@" preceded by start-of-string,
+// whitespace, or "(", capturing the login. It generalizes the word-boundary
+// pattern eventrouter's matchMention uses to test a single login
+// (`(?:^|[\s(])@name(?:$|[\s,.)!?])`) into one that extracts every login. The
+// trailing boundary is verified separately (see mentionAttrs) rather than
+// matched here so a consumed trailing space can't hide an adjacent mention
+// like "@alice @bob".
+var mentionRe = regexp.MustCompile(`(?i)(?:^|[\s(])@([A-Za-z0-9-]+)`)
+
+// isMentionBoundary reports whether b is one of the characters matchMention
+// accepts immediately after a login (the `(?:$|[\s,.)!?])` set, with \s
+// expanded), so "@alice/team" is not treated as a mention of "alice".
+func isMentionBoundary(b byte) bool {
+	switch b {
+	case ' ', '\t', '\n', '\r', '\f', ',', '.', ')', '!', '?':
+		return true
+	default:
+		return false
+	}
+}
+
+// mentionAttrs builds the inert "mention" attribute for comment/review events
+// by extracting every @mention in the body, or nil when there are none. The
+// values are the logins verbatim, matching how matchMention would test each.
+func mentionAttrs(body string) eventrouter.Attrs {
+	var logins []string
+	for _, loc := range mentionRe.FindAllStringSubmatchIndex(body, -1) {
+		end := loc[3] // end index of the captured login
+		if end < len(body) && !isMentionBoundary(body[end]) {
+			continue
+		}
+		logins = append(logins, body[loc[2]:end])
+	}
+	if len(logins) == 0 {
+		return nil
+	}
+	return eventrouter.Attrs{"mention": logins}
+}
+
 func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
@@ -161,7 +201,8 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Data:        body,
 			// The expressive trigger URL is the comment itself; the router
 			// derives the parent routing key from it via model.RoutingKey.
-			URL: *event.Comment.HTMLURL,
+			URL:   *event.Comment.HTMLURL,
+			Attrs: mentionAttrs(body),
 			Meta: GitHubMeta{
 				AuthorID:    *event.Comment.User.ID,
 				AuthorLogin: login,
@@ -188,7 +229,8 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Data:        body,
 			// The expressive trigger URL is the review comment itself; the
 			// router derives the parent PR routing key via model.RoutingKey.
-			URL: *event.Comment.HTMLURL,
+			URL:   *event.Comment.HTMLURL,
+			Attrs: mentionAttrs(body),
 			Meta: GitHubMeta{
 				AuthorID:    *event.Comment.User.ID,
 				AuthorLogin: login,
@@ -213,7 +255,8 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			Data:        body,
 			// The expressive trigger URL is the review itself; the router
 			// derives the parent PR routing key via model.RoutingKey.
-			URL: *event.Review.HTMLURL,
+			URL:   *event.Review.HTMLURL,
+			Attrs: mentionAttrs(body),
 			Meta: GitHubMeta{
 				AuthorID:    *event.Review.User.ID,
 				AuthorLogin: login,
@@ -238,6 +281,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Description: fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
 				URL:         *event.Issue.HTMLURL,
 				Assignee:    assigneeLogin,
+				Attrs:       eventrouter.Attrs{"assignee": {assigneeLogin}},
 				Meta: GitHubMeta{
 					AuthorID:    *event.Sender.ID,
 					AuthorLogin: senderLogin,
@@ -260,6 +304,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Type:        EventTypeLabelAdded,
 				Description: fmt.Sprintf("%s labeled issue #%d %q", senderLogin, number, label),
 				Values:      []string{label},
+				Attrs:       eventrouter.Attrs{"label": {label}},
 				URL:         *event.Issue.HTMLURL,
 				Meta: GitHubMeta{
 					AuthorID:    *event.Sender.ID,
@@ -307,6 +352,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Description: fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
 				URL:         *event.PullRequest.HTMLURL,
 				Assignee:    assigneeLogin,
+				Attrs:       eventrouter.Attrs{"assignee": {assigneeLogin}},
 				Meta: GitHubMeta{
 					AuthorID:    *event.Sender.ID,
 					AuthorLogin: senderLogin,
@@ -329,6 +375,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Type:        EventTypeLabelAdded,
 				Description: fmt.Sprintf("%s labeled PR #%d %q", senderLogin, number, label),
 				Values:      []string{label},
+				Attrs:       eventrouter.Attrs{"label": {label}},
 				URL:         *event.PullRequest.HTMLURL,
 				Meta: GitHubMeta{
 					AuthorID:    *event.Sender.ID,
@@ -357,6 +404,8 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Type:        EventTypePullRequestClosed,
 				Description: fmt.Sprintf("%s %s PR #%d", senderLogin, verb, number),
 				Data:        data,
+				// state mirrors the "merged"/"closed" string already in Data.
+				Attrs: eventrouter.Attrs{"state": {data}},
 				// model.RoutingKey reduces this PR URL to the canonical /pull/N,
 				// matching the link the agent created when it opened the PR.
 				URL: *event.PullRequest.HTMLURL,

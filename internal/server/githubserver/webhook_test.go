@@ -123,6 +123,63 @@ func TestToGithubInputEvent(t *testing.T) {
 			},
 		},
 		{
+			name: "IssueComment_SingleMention",
+			event: &github.IssueCommentEvent{
+				Action: github.Ptr("created"),
+				Comment: &github.IssueComment{
+					Body:    github.Ptr("hey @icholy-bot please take a look"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1#issuecomment-610"),
+					User: &github.User{
+						ID:    github.Ptr[int64](123),
+						Login: github.Ptr("testuser"),
+					},
+				},
+				Issue: &github.Issue{
+					Number:  github.Ptr(1),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "issue_comment",
+				Description: "testuser commented on issue #1",
+				Data:        "hey @icholy-bot please take a look",
+				URL:         "https://github.com/owner/repo/issues/1#issuecomment-610",
+				Attrs:       eventrouter.Attrs{"mention": {"icholy-bot"}},
+				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
+			},
+		},
+		{
+			name: "IssueComment_MultipleMentions",
+			event: &github.IssueCommentEvent{
+				Action: github.Ptr("created"),
+				Comment: &github.IssueComment{
+					// Adjacent mentions and a punctuation-terminated one exercise the
+					// non-consuming boundary check. "@alice/team" is a team ref, not a
+					// login mention, so it is excluded.
+					Body:    github.Ptr("(@alice) @bob, cc @carol! see @alice/team"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1#issuecomment-611"),
+					User: &github.User{
+						ID:    github.Ptr[int64](123),
+						Login: github.Ptr("testuser"),
+					},
+				},
+				Issue: &github.Issue{
+					Number:  github.Ptr(1),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "issue_comment",
+				Description: "testuser commented on issue #1",
+				Data:        "(@alice) @bob, cc @carol! see @alice/team",
+				URL:         "https://github.com/owner/repo/issues/1#issuecomment-611",
+				Attrs:       eventrouter.Attrs{"mention": {"alice", "bob", "carol"}},
+				Meta:        GitHubMeta{AuthorID: 123, AuthorLogin: "testuser"},
+			},
+		},
+		{
 			name:     "IssueComment_NilFields",
 			event:    &github.IssueCommentEvent{Comment: nil},
 			expected: nil,
@@ -423,6 +480,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "octocat assigned issue #7 to @icholy-bot",
 				URL:         "https://github.com/owner/repo/issues/7",
 				Assignee:    "icholy-bot",
+				Attrs:       eventrouter.Attrs{"assignee": {"icholy-bot"}},
 				Meta: GitHubMeta{
 					AuthorID:    999,
 					AuthorLogin: "octocat",
@@ -487,6 +545,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Description: "alice assigned PR #12 to @icholy-bot",
 				URL:         "https://github.com/owner/repo/pull/12",
 				Assignee:    "icholy-bot",
+				Attrs:       eventrouter.Attrs{"assignee": {"icholy-bot"}},
 				Meta: GitHubMeta{
 					AuthorID:    42,
 					AuthorLogin: "alice",
@@ -546,6 +605,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "label_added",
 				Description: `octocat labeled issue #7 "xagent"`,
 				Values:      []string{"xagent"},
+				Attrs:       eventrouter.Attrs{"label": {"xagent"}},
 				URL:         "https://github.com/owner/repo/issues/7",
 				Meta: GitHubMeta{
 					AuthorID:    999,
@@ -593,6 +653,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "label_added",
 				Description: `alice labeled PR #12 "needs-review"`,
 				Values:      []string{"needs-review"},
+				Attrs:       eventrouter.Attrs{"label": {"needs-review"}},
 				URL:         "https://github.com/owner/repo/pull/12",
 				Meta: GitHubMeta{
 					AuthorID:    42,
@@ -637,6 +698,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_closed",
 				Description: "alice merged PR #12",
 				Data:        "merged",
+				Attrs:       eventrouter.Attrs{"state": {"merged"}},
 				URL:         "https://github.com/owner/repo/pull/12",
 				Meta: GitHubMeta{
 					AuthorID:    42,
@@ -669,6 +731,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_closed",
 				Description: "alice closed PR #12",
 				Data:        "closed",
+				Attrs:       eventrouter.Attrs{"state": {"closed"}},
 				URL:         "https://github.com/owner/repo/pull/12",
 				Meta: GitHubMeta{
 					AuthorID:    42,

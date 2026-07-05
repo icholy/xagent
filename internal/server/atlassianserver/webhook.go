@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -118,6 +119,26 @@ const (
 	EventTypeLabelAdded     = "label_added"
 )
 
+// mentionRe locates a Jira mention, capturing the account ID from the
+// `[~accountid:…]` syntax that eventrouter's matchMention/matchAssignee test
+// with strings.Contains today.
+var mentionRe = regexp.MustCompile(`\[~accountid:([^\]]+)\]`)
+
+// mentionAttrs builds the inert "mention" attribute for comment events by
+// extracting every mentioned account ID from the body, or nil when there are
+// none. The values are the account IDs verbatim, matching how matchMention
+// would test each.
+func mentionAttrs(body string) eventrouter.Attrs {
+	var ids []string
+	for _, m := range mentionRe.FindAllStringSubmatch(body, -1) {
+		ids = append(ids, m[1])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return eventrouter.Attrs{"mention": ids}
+}
+
 // toInputEvent extracts a single routable event from a Jira webhook payload. It
 // returns nil for events that should be ignored.
 func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
@@ -155,6 +176,7 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 			Description: description,
 			Data:        commentBody,
 			URL:         url,
+			Attrs:       mentionAttrs(commentBody),
 			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
 		}, nil
 
@@ -182,6 +204,7 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 			Type:        EventTypeLabelAdded,
 			Description: fmt.Sprintf("%s added label(s) %s to %s", displayName, strings.Join(quote(added), ", "), payload.Issue.Key),
 			Values:      added,
+			Attrs:       eventrouter.Attrs{"label": added},
 			URL:         url,
 			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
 		}, nil
