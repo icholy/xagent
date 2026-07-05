@@ -7,16 +7,13 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// testRegistry returns an isolated registry populated with clearly-synthetic
-// schemas under the fake "test" source. Each test builds its own registry via
-// this helper rather than mutating a package global, so the package's tests stay
-// self-contained — they exercise the registry through these fixtures rather than
-// importing the producer packages that register the real github/atlassian
-// schemas. Only test/comment ships a default rule, mirroring the comment/review
-// types in production.
-func testRegistry() *SchemaRegistry {
-	reg := NewSchemaRegistry()
-	reg.MustRegister(EventTypeDef{
+// Clearly-synthetic schema fixtures under the fake "test" source. The package's
+// tests register only the ones each case needs on an isolated registry, so they
+// stay self-contained rather than importing the producer packages that register
+// the real github/atlassian schemas. Only test/comment ships a default rule,
+// mirroring the comment/review types in production.
+var (
+	testComment = EventTypeDef{
 		Source: "test",
 		Type:   "comment",
 		Label:  "Test: Comment",
@@ -27,24 +24,27 @@ func testRegistry() *SchemaRegistry {
 			Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 			Wakeup:     true,
 		}},
-	})
-	reg.MustRegister(EventTypeDef{
+	}
+	testLabel = EventTypeDef{
 		Source: "test",
 		Type:   "label",
 		Label:  "Test: Label",
 		Attrs:  []string{"body", "url", "label"},
-	})
-	reg.MustRegister(EventTypeDef{
+	}
+	testOpened = EventTypeDef{
 		Source: "test",
 		Type:   "opened",
 		Label:  "Test: Opened",
 		Attrs:  []string{"body", "url"},
-	})
-	return reg
-}
+	}
+)
 
 func TestSchemaRegistryValidate(t *testing.T) {
-	reg := testRegistry()
+	reg := NewSchemaRegistry()
+	reg.MustRegister(testComment)
+	reg.MustRegister(testLabel)
+	reg.MustRegister(testOpened)
+
 	tests := []struct {
 		name    string
 		rule    RoutingRule
@@ -150,7 +150,8 @@ func TestSchemaRegistryValidate(t *testing.T) {
 }
 
 func TestSchemaRegistryEventTypeFor(t *testing.T) {
-	reg := testRegistry()
+	reg := NewSchemaRegistry()
+	reg.MustRegister(testComment)
 
 	def, ok := reg.EventTypeFor("test", "comment")
 	assert.Assert(t, ok, "EventTypeFor(test, comment) = _, false; want hit")
@@ -161,7 +162,11 @@ func TestSchemaRegistryEventTypeFor(t *testing.T) {
 }
 
 func TestSchemaRegistryEventTypes(t *testing.T) {
-	reg := testRegistry()
+	reg := NewSchemaRegistry()
+	reg.MustRegister(testComment)
+	reg.MustRegister(testLabel)
+	reg.MustRegister(testOpened)
+
 	defs := reg.EventTypes()
 	assert.Equal(t, len(defs), 3)
 	assert.Equal(t, defs[0].Type, "comment")
@@ -170,9 +175,12 @@ func TestSchemaRegistryEventTypes(t *testing.T) {
 }
 
 func TestSchemaRegistryDefaultRules(t *testing.T) {
-	reg := testRegistry()
-	// Only test/comment ships a default rule; the accumulated set carries it in
-	// registration order.
+	reg := NewSchemaRegistry()
+	// test/comment ships a default rule; test/opened does not, so only the
+	// comment rule is accumulated.
+	reg.MustRegister(testComment)
+	reg.MustRegister(testOpened)
+
 	assert.DeepEqual(t, reg.DefaultRules(), []RoutingRule{{
 		Source:     "test",
 		Type:       "comment",
@@ -182,9 +190,9 @@ func TestSchemaRegistryDefaultRules(t *testing.T) {
 }
 
 func TestSchemaRegistryMustRegisterDuplicatePanics(t *testing.T) {
-	reg := testRegistry()
-	// test/comment is already registered; re-registering the same (source, type)
-	// must panic.
+	reg := NewSchemaRegistry()
+	reg.MustRegister(testComment)
+	// Re-registering the same (source, type) must panic.
 	assert.Assert(t, cmp.Panics(func() {
 		reg.MustRegister(EventTypeDef{Source: "test", Type: "comment", Attrs: []string{"body"}})
 	}))
