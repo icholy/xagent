@@ -20,9 +20,12 @@ type EventTypeDef struct {
 	DefaultRules []RoutingRule
 }
 
-// The registry state, populated by MustRegisterSchema from producer package
-// init functions rather than a central table.
-var (
+// SchemaRegistry holds the set of registered event-type schemas and the routing
+// state derived from them (the source:type index and the accumulated default
+// rules). It is populated by MustRegister rather than a central table. The zero
+// value (&SchemaRegistry{}) is ready to use; the index map is created lazily on
+// first registration.
+type SchemaRegistry struct {
 	// eventTypes holds every registered schema in registration order. It is the
 	// machine-readable contract that the router, rule validation, and (later) the
 	// UI derive from, replacing hand-synced copies of the (source, type) pairs
@@ -30,39 +33,47 @@ var (
 	eventTypes []EventTypeDef
 
 	// eventTypeByKey indexes eventTypes by "source:type" for O(1) lookup.
-	eventTypeByKey = map[string]EventTypeDef{}
+	eventTypeByKey map[string]EventTypeDef
 
 	// defaultRules accumulates every registered schema's DefaultRules in
 	// registration order, so DefaultRules is a plain lookup rather than a
 	// per-call flatten.
 	defaultRules []RoutingRule
-)
+}
 
-// MustRegisterSchema records def as the schema for its (Source, Type) event
-// kind, making it available to EventTypeFor, EventTypes, and
-// DefaultRules. It panics if a def with the same (Source, Type) is already
-// registered. Intended to be called from a producer package's init.
-func MustRegisterSchema(def EventTypeDef) {
+// NewSchemaRegistry returns an empty registry ready for registration. It is
+// equivalent to &SchemaRegistry{}; use whichever reads cleaner at the call site.
+func NewSchemaRegistry() *SchemaRegistry {
+	return &SchemaRegistry{}
+}
+
+// MustRegister records def as the schema for its (Source, Type) event kind,
+// making it available to EventTypeFor, EventTypes, and DefaultRules. It panics
+// if a def with the same (Source, Type) is already registered.
+func (r *SchemaRegistry) MustRegister(def EventTypeDef) {
 	key := def.Source + ":" + def.Type
-	if _, dup := eventTypeByKey[key]; dup {
+	if _, dup := r.eventTypeByKey[key]; dup {
 		panic(fmt.Sprintf("eventrouter2: duplicate schema registration for source=%q type=%q", def.Source, def.Type))
 	}
-	eventTypes = append(eventTypes, def)
-	eventTypeByKey[key] = def
-	defaultRules = append(defaultRules, def.DefaultRules...)
+	if r.eventTypeByKey == nil {
+		r.eventTypeByKey = map[string]EventTypeDef{}
+	}
+	r.eventTypes = append(r.eventTypes, def)
+	r.eventTypeByKey[key] = def
+	r.defaultRules = append(r.defaultRules, def.DefaultRules...)
 }
 
 // EventTypeFor returns the registry entry for a (source, type) pair, and false
 // if none is registered.
-func EventTypeFor(source, typ string) (EventTypeDef, bool) {
-	def, ok := eventTypeByKey[source+":"+typ]
+func (r *SchemaRegistry) EventTypeFor(source, typ string) (EventTypeDef, bool) {
+	def, ok := r.eventTypeByKey[source+":"+typ]
 	return def, ok
 }
 
 // EventTypes returns every registered schema in registration order. It backs
-// iteration over the registry and the future GetEventTypes RPC.
-func EventTypes() []EventTypeDef {
-	return slices.Clone(eventTypes)
+// iteration over the registry and the GetEventTypes RPC.
+func (r *SchemaRegistry) EventTypes() []EventTypeDef {
+	return slices.Clone(r.eventTypes)
 }
 
 // DefaultRules returns every registered schema's DefaultRules in registration
@@ -71,8 +82,8 @@ func EventTypes() []EventTypeDef {
 // a validation special-case, the default set is an ordinary list of
 // fully-defined rules contributed by the producers. These are not wired into the
 // router here; that is a later layer.
-func DefaultRules() []RoutingRule {
-	return slices.Clone(defaultRules)
+func (r *SchemaRegistry) DefaultRules() []RoutingRule {
+	return slices.Clone(r.defaultRules)
 }
 
 // Validate checks the rule against the event-type registry, returning a wrapped
@@ -82,26 +93,50 @@ func DefaultRules() []RoutingRule {
 // under multiple sources — an empty Source is rejected too. Each condition's op
 // must be equals/prefix/contains, and its attr must be one of the selected event
 // type's valid attrs (its Attrs set, which includes the derived body/url).
-func (r RoutingRule) Validate() error {
-	if r.Type == "" {
+func (r *SchemaRegistry) Validate(rule RoutingRule) error {
+	if rule.Type == "" {
 		return fmt.Errorf("rule must select an event type: empty type")
 	}
-	if r.Source == "" {
-		return fmt.Errorf("rule must select an event source: empty source for type %q", r.Type)
+	if rule.Source == "" {
+		return fmt.Errorf("rule must select an event source: empty source for type %q", rule.Type)
 	}
-	def, ok := EventTypeFor(r.Source, r.Type)
+	def, ok := r.EventTypeFor(rule.Source, rule.Type)
 	if !ok {
-		return fmt.Errorf("unknown event type: source=%q type=%q", r.Source, r.Type)
+		return fmt.Errorf("unknown event type: source=%q type=%q", rule.Source, rule.Type)
 	}
-	for _, cond := range r.Conditions {
+	for _, cond := range rule.Conditions {
 		switch cond.Op {
 		case "equals", "prefix", "contains":
 		default:
 			return fmt.Errorf("unknown op %q on attr %q", cond.Op, cond.Attr)
 		}
 		if !slices.Contains(def.Attrs, cond.Attr) {
-			return fmt.Errorf("attr %q not valid for event type %q/%q", cond.Attr, r.Source, r.Type)
+			return fmt.Errorf("attr %q not valid for event type %q/%q", cond.Attr, rule.Source, rule.Type)
 		}
 	}
 	return nil
+}
+
+// DefaultSchemaRegistry is the process-wide registry the producer packages
+// populate from their init functions. The apiserver GetEventTypes handler and
+// the producer packages' own tests read from it.
+var DefaultSchemaRegistry = &SchemaRegistry{}
+
+// MustRegisterSchema records def on DefaultSchemaRegistry. It is the thin
+// package-level entry point the producer packages (githubserver,
+// atlassianserver) call from their init functions.
+func MustRegisterSchema(def EventTypeDef) {
+	DefaultSchemaRegistry.MustRegister(def)
+}
+
+// EventTypeFor returns the DefaultSchemaRegistry entry for a (source, type)
+// pair, and false if none is registered.
+func EventTypeFor(source, typ string) (EventTypeDef, bool) {
+	return DefaultSchemaRegistry.EventTypeFor(source, typ)
+}
+
+// EventTypes returns every schema registered on DefaultSchemaRegistry in
+// registration order.
+func EventTypes() []EventTypeDef {
+	return DefaultSchemaRegistry.EventTypes()
 }

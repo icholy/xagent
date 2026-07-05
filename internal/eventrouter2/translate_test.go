@@ -10,7 +10,8 @@ import (
 func TestTranslateRuleConcreteType(t *testing.T) {
 	// A concrete, registered (Source, Type) rule with an applicable condition
 	// yields exactly one v2 rule.
-	rules := TranslateRule(model.RoutingRule{
+	reg := testRegistry()
+	rules := reg.TranslateRule(model.RoutingRule{
 		Source:  "test",
 		Type:    "comment",
 		Mention: "alice",
@@ -25,7 +26,8 @@ func TestTranslateRuleConcreteType(t *testing.T) {
 func TestTranslateRuleTypelessMention(t *testing.T) {
 	// A type-less mention rule expands only to the type that emits "mention"
 	// (test/comment); test/label and test/opened do not emit it.
-	rules := TranslateRule(model.RoutingRule{Mention: "alice"})
+	reg := testRegistry()
+	rules := reg.TranslateRule(model.RoutingRule{Mention: "alice"})
 	assert.DeepEqual(t, rules, []RoutingRule{{
 		Source:     "test",
 		Type:       "comment",
@@ -36,7 +38,8 @@ func TestTranslateRuleTypelessMention(t *testing.T) {
 func TestTranslateRuleTypelessBodyPrefix(t *testing.T) {
 	// A type-less body-prefix rule expands to every fixture, since "body" is
 	// universal.
-	rules := TranslateRule(model.RoutingRule{Prefix: "xagent:"})
+	reg := testRegistry()
+	rules := reg.TranslateRule(model.RoutingRule{Prefix: "xagent:"})
 	cond := []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}
 	assert.DeepEqual(t, rules, []RoutingRule{
 		{Source: "test", Type: "comment", Conditions: cond},
@@ -48,7 +51,8 @@ func TestTranslateRuleTypelessBodyPrefix(t *testing.T) {
 func TestTranslateRuleSourceOnly(t *testing.T) {
 	// A source-only rule (no type, no conditions) expands to every type under
 	// that source.
-	rules := TranslateRule(model.RoutingRule{Source: "test"})
+	reg := testRegistry()
+	rules := reg.TranslateRule(model.RoutingRule{Source: "test"})
 	assert.DeepEqual(t, rules, []RoutingRule{
 		{Source: "test", Type: "comment"},
 		{Source: "test", Type: "label"},
@@ -59,7 +63,8 @@ func TestTranslateRuleSourceOnly(t *testing.T) {
 func TestTranslateRuleConditionAttrNotEmitted(t *testing.T) {
 	// An assignee rule on a comment type produces zero results: no fixture
 	// emits "assignee", matching v1 where such a rule silently never matched.
-	rules := TranslateRule(model.RoutingRule{
+	reg := testRegistry()
+	rules := reg.TranslateRule(model.RoutingRule{
 		Source:   "test",
 		Type:     "comment",
 		Assignee: "bob",
@@ -71,7 +76,8 @@ func TestTranslateRuleMultipleFields(t *testing.T) {
 	// Multiple legacy fields become multiple conditions on the surviving type.
 	// body + mention are both emitted by test/comment; label and other types
 	// drop out.
-	rules := TranslateRule(model.RoutingRule{
+	reg := testRegistry()
+	rules := reg.TranslateRule(model.RoutingRule{
 		Prefix:  "xagent:",
 		Mention: "alice",
 	})
@@ -87,8 +93,9 @@ func TestTranslateRuleMultipleFields(t *testing.T) {
 
 func TestTranslateRuleCarriesActions(t *testing.T) {
 	// Wakeup and the Create pointer are carried through to every emitted rule.
+	reg := testRegistry()
 	create := &model.CreateTaskAction{Workspace: "ws", Runner: "rn", Prompt: "go"}
-	rules := TranslateRule(model.RoutingRule{
+	rules := reg.TranslateRule(model.RoutingRule{
 		Source: "test",
 		Type:   "comment",
 		Wakeup: true,
@@ -101,6 +108,7 @@ func TestTranslateRuleCarriesActions(t *testing.T) {
 
 func TestTranslateRuleAllValid(t *testing.T) {
 	// Every rule TranslateRule produces is a valid v2 rule.
+	reg := testRegistry()
 	legacy := []model.RoutingRule{
 		{Source: "test", Type: "comment", Mention: "alice"},
 		{Mention: "alice"},
@@ -110,8 +118,8 @@ func TestTranslateRuleAllValid(t *testing.T) {
 		{URLPrefix: "https://github.com/icholy/xagent"},
 	}
 	for _, rule := range legacy {
-		for _, v2 := range TranslateRule(rule) {
-			assert.NilError(t, v2.Validate())
+		for _, v2 := range reg.TranslateRule(rule) {
+			assert.NilError(t, reg.Validate(v2))
 		}
 	}
 }
