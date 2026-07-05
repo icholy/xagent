@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
@@ -34,14 +35,14 @@ func (s *Store) GetOrg(ctx context.Context, tx *sql.Tx, id int64) (*model.Org, e
 		return nil, err
 	}
 	return &model.Org{
-		ID:                      row.ID,
-		Name:                    row.Name,
-		Owner:                   row.Owner,
-		Archived:                row.Archived,
-		CreatedAt:               row.CreatedAt,
-		UpdatedAt:               row.UpdatedAt,
-		GitHubInstallationID:    row.GithubInstallationID.Int64,
-		AtlassianWebhookSecret:  row.AtlassianWebhookSecret,
+		ID:                     row.ID,
+		Name:                   row.Name,
+		Owner:                  row.Owner,
+		Archived:               row.Archived,
+		CreatedAt:              row.CreatedAt,
+		UpdatedAt:              row.UpdatedAt,
+		GitHubInstallationID:   row.GithubInstallationID.Int64,
+		AtlassianWebhookSecret: row.AtlassianWebhookSecret,
 	}, nil
 }
 
@@ -188,16 +189,68 @@ func toModelOrgMember(row sqlc.OrgMember) *model.OrgMember {
 	}
 }
 
+// decodeRoutingRules decodes stored routing_rules JSONB into conditions-native
+// model.RoutingRule values. Storage is mixed: rows written before the conditions
+// cutover carry the legacy flat matcher fields, while new writes are
+// conditions-shaped. Each stored rule is inspected independently — a rule
+// carrying any legacy matcher field is decoded as a model.LegacyRoutingRule and
+// translated (registry fan-out) into one conditions rule per applicable event
+// type; otherwise it is decoded directly as a conditions-native
+// model.RoutingRule (a bare source/type/wakeup/create rule is already
+// interpretable as conditions). The result is always conditions-native.
+func (s *Store) decodeRoutingRules(data []byte) ([]model.RoutingRule, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	var raws []json.RawMessage
+	if err := json.Unmarshal(data, &raws); err != nil {
+		return nil, err
+	}
+	reg := s.registry()
+	var rules []model.RoutingRule
+	for _, raw := range raws {
+		var legacy model.LegacyRoutingRule
+		if err := json.Unmarshal(raw, &legacy); err != nil {
+			return nil, err
+		}
+		if legacy.HasMatcher() {
+			for _, v2 := range reg.TranslateRule(legacy) {
+				rules = append(rules, routingRuleFromV2(v2))
+			}
+			continue
+		}
+		var rule model.RoutingRule
+		if err := json.Unmarshal(raw, &rule); err != nil {
+			return nil, err
+		}
+		rules = append(rules, rule)
+	}
+	return rules, nil
+}
+
+// routingRuleFromV2 converts an eventrouter2.RoutingRule (the matcher shape
+// TranslateRule emits) into the conditions-native model.RoutingRule the store
+// returns.
+func routingRuleFromV2(v eventrouter2.RoutingRule) model.RoutingRule {
+	var conds []model.Condition
+	for _, c := range v.Conditions {
+		conds = append(conds, model.Condition{Attr: c.Attr, Op: c.Op, Value: c.Value})
+	}
+	return model.RoutingRule{
+		Source:     v.Source,
+		Type:       v.Type,
+		Conditions: conds,
+		Wakeup:     v.Wakeup,
+		Create:     v.Create,
+	}
+}
+
 func (s *Store) GetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64) ([]model.RoutingRule, error) {
 	data, err := s.q(tx).GetOrgRoutingRules(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
-	var rules []model.RoutingRule
-	if err := json.Unmarshal(data, &rules); err != nil {
-		return nil, err
-	}
-	return rules, nil
+	return s.decodeRoutingRules(data)
 }
 
 func (s *Store) SetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64, rules []model.RoutingRule) error {
@@ -218,8 +271,8 @@ func (s *Store) GetRoutingRulesByOrgs(ctx context.Context, tx *sql.Tx, orgIDs []
 	}
 	result := make(map[int64][]model.RoutingRule, len(rows))
 	for _, row := range rows {
-		var rules []model.RoutingRule
-		if err := json.Unmarshal(row.RoutingRules, &rules); err != nil {
+		rules, err := s.decodeRoutingRules(row.RoutingRules)
+		if err != nil {
 			return nil, fmt.Errorf("org %d: %w", row.ID, err)
 		}
 		result[row.ID] = rules
@@ -237,11 +290,9 @@ func (s *Store) ListRoutingRulesForUser(ctx context.Context, tx *sql.Tx, userID 
 	}
 	result := make(map[int64][]model.RoutingRule, len(rows))
 	for _, row := range rows {
-		var rules []model.RoutingRule
-		if len(row.RoutingRules) > 0 {
-			if err := json.Unmarshal(row.RoutingRules, &rules); err != nil {
-				return nil, fmt.Errorf("org %d: %w", row.ID, err)
-			}
+		rules, err := s.decodeRoutingRules(row.RoutingRules)
+		if err != nil {
+			return nil, fmt.Errorf("org %d: %w", row.ID, err)
 		}
 		result[row.ID] = rules
 	}

@@ -1,6 +1,7 @@
 package eventrouter
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"fmt"
@@ -96,10 +97,29 @@ type Router struct {
 	OnRouteOutcome func(ctx context.Context, outcome RouteOutcome)
 }
 
-// defaultRules is the fallback when an org has no custom routing rules
-// configured. Wakeup is explicit since the bool zero value does not wake.
-var defaultRules = []model.RoutingRule{
-	{Prefix: "xagent:", Wakeup: true},
+// defaultRules is the fallback for an org with no custom routing rules: the
+// per-type "xagent:" body-prefix wakeup rules the producers ship, mirroring
+// reg.DefaultRules(). It resolves against the given registry so isolated test
+// registries and the process-wide default both yield their own producers'
+// defaults. The matcher no longer fans out, so these are already expanded to one
+// conditions rule per applicable event type.
+func defaultRules(reg *eventrouter2.SchemaRegistry) []model.RoutingRule {
+	v2 := reg.DefaultRules()
+	rules := make([]model.RoutingRule, 0, len(v2))
+	for _, r := range v2 {
+		var conds []model.Condition
+		for _, c := range r.Conditions {
+			conds = append(conds, model.Condition{Attr: c.Attr, Op: c.Op, Value: c.Value})
+		}
+		rules = append(rules, model.RoutingRule{
+			Source:     r.Source,
+			Type:       r.Type,
+			Conditions: conds,
+			Wakeup:     r.Wakeup,
+			Create:     r.Create,
+		})
+	}
+	return rules
 }
 
 // Route evaluates routing rules for every org the user belongs to. For each
@@ -116,16 +136,18 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, err
 	}
 
-	// Translate-on-read: rules stay in the legacy stored shape, but matching runs
-	// through the attribute-based eventrouter2 matcher. Convert the event once;
-	// matchesV2 resolves the schema registry per call.
+	// The store returns conditions-native rules (legacy rows translated on read),
+	// so matching runs directly through the attribute-based eventrouter2 matcher.
+	// Convert the event once. Resolve the registry once for the default-rule
+	// fallback (nil-defaulting to the process-wide registry).
 	v2Input := input.toV2()
+	reg := cmp.Or(r.Registry, eventrouter2.DefaultSchemaRegistry)
 
 	// First matching rule per org; orgs with no match are dropped.
 	matched := map[int64]*model.RoutingRule{}
 	for orgID, rules := range rulesByOrg {
 		if len(rules) == 0 {
-			rules = defaultRules
+			rules = defaultRules(reg)
 		}
 		for i := range rules {
 			if r.matchesV2(rules[i], v2Input) {

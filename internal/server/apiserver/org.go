@@ -10,9 +10,27 @@ import (
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/authscope"
+	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
+
+// routingRuleToV2 converts a conditions-native model.RoutingRule into the
+// eventrouter2.RoutingRule shape the schema registry validates. It is a 1:1
+// field copy.
+func routingRuleToV2(rule model.RoutingRule) eventrouter2.RoutingRule {
+	var conds []eventrouter2.Condition
+	for _, c := range rule.Conditions {
+		conds = append(conds, eventrouter2.Condition{Attr: c.Attr, Op: c.Op, Value: c.Value})
+	}
+	return eventrouter2.RoutingRule{
+		Source:     rule.Source,
+		Type:       rule.Type,
+		Conditions: conds,
+		Wakeup:     rule.Wakeup,
+		Create:     rule.Create,
+	}
+}
 
 func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {
 	caller := apiauth.MustCaller(ctx)
@@ -264,7 +282,11 @@ func (s *Server) SetRoutingRules(ctx context.Context, req *xagentv1.SetRoutingRu
 	}
 	rules := make([]model.RoutingRule, len(req.Rules))
 	for i, r := range req.Rules {
-		rules[i] = model.RoutingRuleFromProto(r)
+		rule := model.RoutingRuleFromProto(r)
+		if err := eventrouter2.DefaultSchemaRegistry.Validate(routingRuleToV2(rule)); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		rules[i] = rule
 	}
 	if err := s.store.SetOrgRoutingRules(ctx, nil, caller.OrgID, rules); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

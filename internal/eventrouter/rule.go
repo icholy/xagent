@@ -1,8 +1,6 @@
 package eventrouter
 
 import (
-	"cmp"
-
 	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/model"
 )
@@ -25,19 +23,29 @@ func (e InputEvent) toV2() eventrouter2.InputEvent {
 	}
 }
 
-// matchesV2 reports whether the legacy rule matches the event via the
-// attribute-based matcher, using the router's schema registry (nil-defaulting to
-// eventrouter2.DefaultSchemaRegistry so production sites need not set it).
-// reg.TranslateRule expands the flat legacy rule into one new-shape rule per
-// applicable registered event type; the legacy rule matches iff any of them
-// matches. An empty translation (a rule whose conditions no registered type
-// emits) never matches, mirroring the legacy behavior.
-func (r *Router) matchesV2(rule model.RoutingRule, event eventrouter2.InputEvent) bool {
-	reg := cmp.Or(r.Registry, eventrouter2.DefaultSchemaRegistry)
-	for _, v2 := range reg.TranslateRule(rule) {
-		if v2.Match(event) {
-			return true
-		}
+// ruleToV2 converts a conditions-native model.RoutingRule into the
+// eventrouter2.RoutingRule matcher shape. It is a 1:1 field copy: the store has
+// already translated any legacy stored rows into conditions on read, so the
+// matcher no longer fans out per event type — a stored rule maps to exactly one
+// matcher rule.
+func ruleToV2(rule model.RoutingRule) eventrouter2.RoutingRule {
+	var conds []eventrouter2.Condition
+	for _, c := range rule.Conditions {
+		conds = append(conds, eventrouter2.Condition{Attr: c.Attr, Op: c.Op, Value: c.Value})
 	}
-	return false
+	return eventrouter2.RoutingRule{
+		Source:     rule.Source,
+		Type:       rule.Type,
+		Conditions: conds,
+		Wakeup:     rule.Wakeup,
+		Create:     rule.Create,
+	}
+}
+
+// matchesV2 reports whether the conditions-native rule matches the event via the
+// attribute-based matcher. The store returns conditions-native rules (legacy
+// rows are translated on read), so this is a direct 1:1 conversion plus Match —
+// no match-time fan-out.
+func (r *Router) matchesV2(rule model.RoutingRule, event eventrouter2.InputEvent) bool {
+	return ruleToV2(rule).Match(event)
 }

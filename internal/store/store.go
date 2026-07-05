@@ -1,11 +1,13 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"embed"
 
 	"github.com/XSAM/otelsql"
+	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/store/sqlc"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
@@ -17,6 +19,21 @@ var migrations embed.FS
 // Store provides access to all database operations.
 type Store struct {
 	db *sql.DB
+
+	// Registry supplies the eventrouter2 schemas used to translate pre-conditions
+	// (legacy) stored routing rules into conditions-native rules on read. When
+	// nil, routing-rule reads fall back to eventrouter2.DefaultSchemaRegistry —
+	// the process-wide registry the producer packages populate from init — so
+	// production construction sites need not set it. Tests inject an isolated
+	// registry to control which schemas the legacy fan-out sees.
+	Registry *eventrouter2.SchemaRegistry
+}
+
+// registry resolves the schema registry used for translate-on-read, defaulting
+// to the process-wide DefaultSchemaRegistry when unset. It mirrors how the
+// eventrouter Router resolves its registry.
+func (s *Store) registry() *eventrouter2.SchemaRegistry {
+	return cmp.Or(s.Registry, eventrouter2.DefaultSchemaRegistry)
 }
 
 // New creates a new Store with the given database connection.

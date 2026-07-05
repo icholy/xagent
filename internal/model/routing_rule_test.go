@@ -9,13 +9,13 @@ import (
 
 func TestRoutingRuleProtoRoundTrip(t *testing.T) {
 	rule := RoutingRule{
-		Source:    "atlassian",
-		Type:      "label_added",
-		Prefix:    "xagent:",
-		Mention:   "abc123",
-		Assignee:  "icholy-bot",
-		URLPrefix: "https://example.atlassian.net/browse/PROJ-",
-		Value:     "xagent",
+		Source: "atlassian",
+		Type:   "label_added",
+		Conditions: []Condition{
+			{Attr: "body", Op: "prefix", Value: "xagent:"},
+			{Attr: "mention", Op: "equals", Value: "abc123"},
+			{Attr: "label", Op: "equals", Value: "xagent"},
+		},
 		Create: &CreateTaskAction{
 			Workspace:   "default",
 			Runner:      "runner-1",
@@ -34,8 +34,12 @@ func TestRoutingRuleProtoRoundTripWakeupDisabled(t *testing.T) {
 	assert.DeepEqual(t, got, rule)
 }
 
-func TestRoutingRuleProtoRoundTripValueOnly(t *testing.T) {
-	rule := RoutingRule{Value: "urgent"}
+func TestRoutingRuleProtoRoundTripConditionsOnly(t *testing.T) {
+	rule := RoutingRule{
+		Source:     "atlassian",
+		Type:       "label_added",
+		Conditions: []Condition{{Attr: "label", Op: "equals", Value: "urgent"}},
+	}
 	got := RoutingRuleFromProto(rule.Proto())
 	assert.DeepEqual(t, got, rule)
 }
