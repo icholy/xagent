@@ -775,17 +775,6 @@ func TestRunnerStart_GoneViaProbe(t *testing.T) {
 	assert.Equal(t, ok, false)
 }
 
-// failingOutboxStore is an outbox.Store whose durable Append always fails,
-// simulating an unrecoverable local write failure (disk full / broken FS). The
-// die path is reached through Enqueue → Append alone, so Peek/Drop/Len are inert
-// — the consumer side is never driven in these tests.
-type failingOutboxStore struct{ err error }
-
-func (s failingOutboxStore) Append(json.RawMessage) error       { return s.err }
-func (s failingOutboxStore) Peek() (outbox.Record, bool, error) { return outbox.Record{}, false, nil }
-func (s failingOutboxStore) Drop(bool) error                    { return nil }
-func (s failingOutboxStore) Len() (int, error)                  { return 0, nil }
-
 // TestRunnerDie_StopWithoutSandbox is the sharpest unrecoverable case from #1209:
 // a stop command with no running sandbox has no reconciliation path on restart
 // (Load has nothing to probe and cannot re-derive "stopped"), so a dropped persist
@@ -812,9 +801,14 @@ func TestRunnerDie_StopWithoutSandbox(t *testing.T) {
 			return false, nil // no running sandbox to signal → runner emits "stopped"
 		},
 	}
-	// Back the outbox with a store whose durable Append fails.
+	// Back the outbox with a store whose durable Append fails. The die path is
+	// reached through Enqueue → Append alone, so Peek/Drop/Len are never called
+	// (an unstubbed moq method would panic if they were).
+	store := &outbox.StoreMock{
+		AppendFunc: func(json.RawMessage) error { return errors.New("no space left on device") },
+	}
 	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{
-		Store:   failingOutboxStore{err: errors.New("no space left on device")},
+		Store:   store,
 		Client:  mock,
 		Backoff: backoff.NewConstantBackOff(0),
 		Log:     slog.Default(),
