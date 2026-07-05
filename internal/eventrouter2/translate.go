@@ -19,28 +19,28 @@ import (
 // attr the rule's conditions reference. A rule whose condition attr no matching
 // type emits produces zero rules, mirroring v1 where such a rule silently never
 // matched.
-func (r *SchemaRegistry) TranslateRule(rule model.LegacyRoutingRule) []RoutingRule {
+func (r *SchemaRegistry) TranslateRule(rule model.LegacyRoutingRule) []model.RoutingRule {
 	// Build the condition list from the legacy matcher fields, skipping empty
 	// ones: an empty legacy field contributed no matcher clause in v1, so it
 	// contributes no condition here.
-	var conditions []Condition
+	var conditions []model.Condition
 	if rule.Prefix != "" {
-		conditions = append(conditions, Condition{Attr: "body", Op: "prefix", Value: rule.Prefix})
+		conditions = append(conditions, model.Condition{Attr: "body", Op: "prefix", Value: rule.Prefix})
 	}
 	if rule.Mention != "" {
-		conditions = append(conditions, Condition{Attr: "mention", Op: "equals", Value: rule.Mention})
+		conditions = append(conditions, model.Condition{Attr: "mention", Op: "equals", Value: rule.Mention})
 	}
 	if rule.Assignee != "" {
-		conditions = append(conditions, Condition{Attr: "assignee", Op: "equals", Value: rule.Assignee})
+		conditions = append(conditions, model.Condition{Attr: "assignee", Op: "equals", Value: rule.Assignee})
 	}
 	if rule.URLPrefix != "" {
-		conditions = append(conditions, Condition{Attr: "url", Op: "prefix", Value: rule.URLPrefix})
+		conditions = append(conditions, model.Condition{Attr: "url", Op: "prefix", Value: rule.URLPrefix})
 	}
 	if rule.Value != "" {
-		conditions = append(conditions, Condition{Attr: "label", Op: "equals", Value: rule.Value})
+		conditions = append(conditions, model.Condition{Attr: "label", Op: "equals", Value: rule.Value})
 	}
 
-	var out []RoutingRule
+	var out []model.RoutingRule
 	for _, def := range r.EventTypes() {
 		if rule.Source != "" && rule.Source != def.Source {
 			continue
@@ -51,7 +51,7 @@ func (r *SchemaRegistry) TranslateRule(rule model.LegacyRoutingRule) []RoutingRu
 		if !emitsAll(def, conditions) {
 			continue
 		}
-		out = append(out, RoutingRule{
+		out = append(out, model.RoutingRule{
 			Source:     def.Source,
 			Type:       def.Type,
 			Conditions: conditions,
@@ -63,7 +63,7 @@ func (r *SchemaRegistry) TranslateRule(rule model.LegacyRoutingRule) []RoutingRu
 }
 
 // emitsAll reports whether def emits every attr referenced by the conditions.
-func emitsAll(def EventTypeDef, conditions []Condition) bool {
+func emitsAll(def EventTypeDef, conditions []model.Condition) bool {
 	for _, cond := range conditions {
 		if !slices.Contains(def.Attrs, cond.Attr) {
 			return false

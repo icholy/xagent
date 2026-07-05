@@ -82,11 +82,11 @@ type Router struct {
 	Store     *store.Store
 	Publisher pubsub.Publisher
 
-	// Registry supplies the eventrouter2 schemas that translate-on-read matching
-	// fans out over. When nil, Route falls back to eventrouter2.DefaultSchemaRegistry
-	// — the process-wide registry the producer packages populate from init — so
-	// production construction sites need not set it. Tests inject an isolated
-	// registry to control which schemas are present.
+	// Registry supplies the eventrouter2 schemas backing the ruleless-org default
+	// rules (reg.DefaultRules()). When nil, Route falls back to
+	// eventrouter2.DefaultSchemaRegistry — the process-wide registry the producer
+	// packages populate from init — so production construction sites need not set
+	// it. Tests inject an isolated registry to control which schemas are present.
 	Registry *eventrouter2.SchemaRegistry
 
 	// OnRouteOutcome, if set, is called synchronously once per matched org
@@ -95,31 +95,6 @@ type Router struct {
 	// spawning its own goroutine). Optional — nil disables it (e.g. the
 	// Atlassian router leaves it unset).
 	OnRouteOutcome func(ctx context.Context, outcome RouteOutcome)
-}
-
-// defaultRules is the fallback for an org with no custom routing rules: the
-// per-type "xagent:" body-prefix wakeup rules the producers ship, mirroring
-// reg.DefaultRules(). It resolves against the given registry so isolated test
-// registries and the process-wide default both yield their own producers'
-// defaults. The matcher no longer fans out, so these are already expanded to one
-// conditions rule per applicable event type.
-func defaultRules(reg *eventrouter2.SchemaRegistry) []model.RoutingRule {
-	v2 := reg.DefaultRules()
-	rules := make([]model.RoutingRule, 0, len(v2))
-	for _, r := range v2 {
-		var conds []model.Condition
-		for _, c := range r.Conditions {
-			conds = append(conds, model.Condition{Attr: c.Attr, Op: c.Op, Value: c.Value})
-		}
-		rules = append(rules, model.RoutingRule{
-			Source:     r.Source,
-			Type:       r.Type,
-			Conditions: conds,
-			Wakeup:     r.Wakeup,
-			Create:     r.Create,
-		})
-	}
-	return rules
 }
 
 // Route evaluates routing rules for every org the user belongs to. For each
@@ -147,10 +122,12 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	matched := map[int64]*model.RoutingRule{}
 	for orgID, rules := range rulesByOrg {
 		if len(rules) == 0 {
-			rules = defaultRules(reg)
+			// Ruleless orgs fall back to the producers' per-type "xagent:"
+			// body-prefix wakeup defaults, already conditions-native.
+			rules = reg.DefaultRules()
 		}
 		for i := range rules {
-			if r.matchesV2(rules[i], v2Input) {
+			if eventrouter2.Match(rules[i], v2Input) {
 				matched[orgID] = &rules[i]
 				break
 			}

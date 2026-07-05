@@ -3,6 +3,8 @@ package eventrouter2
 import (
 	"fmt"
 	"slices"
+
+	"github.com/icholy/xagent/internal/model"
 )
 
 // EventTypeDef declares a (Source, Type) event kind and the complete set of
@@ -17,7 +19,7 @@ type EventTypeDef struct {
 	Type         string
 	Label        string   // human label, e.g. "GitHub: Issue/PR Comment"
 	Attrs        []string // complete valid attr set, including derived body/url
-	DefaultRules []RoutingRule
+	DefaultRules []model.RoutingRule
 }
 
 // SchemaRegistry holds the set of registered event-type schemas and the routing
@@ -37,7 +39,7 @@ type SchemaRegistry struct {
 	// defaultRules accumulates every registered schema's DefaultRules in
 	// registration order, so DefaultRules is a plain lookup rather than a
 	// per-call flatten.
-	defaultRules []RoutingRule
+	defaultRules []model.RoutingRule
 }
 
 // NewSchemaRegistry returns an empty registry ready for registration, with its
@@ -80,7 +82,7 @@ func (r *SchemaRegistry) EventTypes() []EventTypeDef {
 // a validation special-case, the default set is an ordinary list of
 // fully-defined rules contributed by the producers. These are not wired into the
 // router here; that is a later layer.
-func (r *SchemaRegistry) DefaultRules() []RoutingRule {
+func (r *SchemaRegistry) DefaultRules() []model.RoutingRule {
 	return slices.Clone(r.defaultRules)
 }
 
@@ -91,7 +93,7 @@ func (r *SchemaRegistry) DefaultRules() []RoutingRule {
 // under multiple sources — an empty Source is rejected too. Each condition's op
 // must be equals/prefix/contains, and its attr must be one of the selected event
 // type's valid attrs (its Attrs set, which includes the derived body/url).
-func (r *SchemaRegistry) Validate(rule RoutingRule) error {
+func (r *SchemaRegistry) Validate(rule model.RoutingRule) error {
 	if rule.Type == "" {
 		return fmt.Errorf("rule must select an event type: empty type")
 	}

@@ -3,6 +3,7 @@ package eventrouter2
 import (
 	"testing"
 
+	"github.com/icholy/xagent/internal/model"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -18,10 +19,10 @@ var (
 		Type:   "comment",
 		Label:  "Test: Comment",
 		Attrs:  []string{"body", "url", "mention"},
-		DefaultRules: []RoutingRule{{
+		DefaultRules: []model.RoutingRule{{
 			Source:     "test",
 			Type:       "comment",
-			Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 			Wakeup:     true,
 		}},
 	}
@@ -47,55 +48,55 @@ func TestSchemaRegistryValidate(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		rule    RoutingRule
+		rule    model.RoutingRule
 		wantErr bool
 	}{
 		{
 			name: "default body-prefix rule",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Source:     "test",
 				Type:       "comment",
-				Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+				Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 				Wakeup:     true,
 			},
 		},
 		{
 			name: "mention equals on comment",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Source:     "test",
 				Type:       "comment",
-				Conditions: []Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
+				Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
 			},
 		},
 		{
 			name: "label equals on label",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Source:     "test",
 				Type:       "label",
-				Conditions: []Condition{{Attr: "label", Op: "equals", Value: "bug"}},
+				Conditions: []model.Condition{{Attr: "label", Op: "equals", Value: "bug"}},
 			},
 		},
 		{
 			name: "empty type is rejected",
-			rule: RoutingRule{
-				Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+			rule: model.RoutingRule{
+				Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty source is rejected",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Type:       "comment",
-				Conditions: []Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
+				Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
 			},
 			wantErr: true,
 		},
 		{
 			name: "url and body valid on any type",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Source: "test",
 				Type:   "opened",
-				Conditions: []Condition{
+				Conditions: []model.Condition{
 					{Attr: "url", Op: "contains", Value: "icholy/xagent"},
 					{Attr: "body", Op: "contains", Value: "hi"},
 				},
@@ -103,34 +104,34 @@ func TestSchemaRegistryValidate(t *testing.T) {
 		},
 		{
 			name: "unknown op",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Source:     "test",
 				Type:       "comment",
-				Conditions: []Condition{{Attr: "body", Op: "regex", Value: "x"}},
+				Conditions: []model.Condition{{Attr: "body", Op: "regex", Value: "x"}},
 			},
 			wantErr: true,
 		},
 		{
 			name: "unknown attr",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Source:     "test",
 				Type:       "comment",
-				Conditions: []Condition{{Attr: "reviewer", Op: "equals", Value: "alice"}},
+				Conditions: []model.Condition{{Attr: "reviewer", Op: "equals", Value: "alice"}},
 			},
 			wantErr: true,
 		},
 		{
 			name: "attr not emitted by selected type",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Source:     "test",
 				Type:       "comment",
-				Conditions: []Condition{{Attr: "label", Op: "equals", Value: "bug"}},
+				Conditions: []model.Condition{{Attr: "label", Op: "equals", Value: "bug"}},
 			},
 			wantErr: true,
 		},
 		{
 			name: "unknown event type",
-			rule: RoutingRule{
+			rule: model.RoutingRule{
 				Source: "test",
 				Type:   "star_added",
 			},
@@ -181,10 +182,10 @@ func TestSchemaRegistryDefaultRules(t *testing.T) {
 	reg.MustRegister(testComment)
 	reg.MustRegister(testOpened)
 
-	assert.DeepEqual(t, reg.DefaultRules(), []RoutingRule{{
+	assert.DeepEqual(t, reg.DefaultRules(), []model.RoutingRule{{
 		Source:     "test",
 		Type:       "comment",
-		Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+		Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 		Wakeup:     true,
 	}})
 }

@@ -18,10 +18,10 @@ func TestTranslateRuleConcreteType(t *testing.T) {
 		Type:    "comment",
 		Mention: "alice",
 	})
-	assert.DeepEqual(t, rules, []RoutingRule{{
+	assert.DeepEqual(t, rules, []model.RoutingRule{{
 		Source:     "test",
 		Type:       "comment",
-		Conditions: []Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
+		Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
 	}})
 }
 
@@ -34,10 +34,10 @@ func TestTranslateRuleTypelessMention(t *testing.T) {
 	reg.MustRegister(testOpened)
 
 	rules := reg.TranslateRule(model.LegacyRoutingRule{Mention: "alice"})
-	assert.DeepEqual(t, rules, []RoutingRule{{
+	assert.DeepEqual(t, rules, []model.RoutingRule{{
 		Source:     "test",
 		Type:       "comment",
-		Conditions: []Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
+		Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
 	}})
 }
 
@@ -50,8 +50,8 @@ func TestTranslateRuleTypelessBodyPrefix(t *testing.T) {
 	reg.MustRegister(testOpened)
 
 	rules := reg.TranslateRule(model.LegacyRoutingRule{Prefix: "xagent:"})
-	cond := []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}
-	assert.DeepEqual(t, rules, []RoutingRule{
+	cond := []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}
+	assert.DeepEqual(t, rules, []model.RoutingRule{
 		{Source: "test", Type: "comment", Conditions: cond},
 		{Source: "test", Type: "label", Conditions: cond},
 		{Source: "test", Type: "opened", Conditions: cond},
@@ -67,7 +67,7 @@ func TestTranslateRuleSourceOnly(t *testing.T) {
 	reg.MustRegister(testOpened)
 
 	rules := reg.TranslateRule(model.LegacyRoutingRule{Source: "test"})
-	assert.DeepEqual(t, rules, []RoutingRule{
+	assert.DeepEqual(t, rules, []model.RoutingRule{
 		{Source: "test", Type: "comment"},
 		{Source: "test", Type: "label"},
 		{Source: "test", Type: "opened"},
@@ -102,10 +102,10 @@ func TestTranslateRuleMultipleFields(t *testing.T) {
 		Prefix:  "xagent:",
 		Mention: "alice",
 	})
-	assert.DeepEqual(t, rules, []RoutingRule{{
+	assert.DeepEqual(t, rules, []model.RoutingRule{{
 		Source: "test",
 		Type:   "comment",
-		Conditions: []Condition{
+		Conditions: []model.Condition{
 			{Attr: "body", Op: "prefix", Value: "xagent:"},
 			{Attr: "mention", Op: "equals", Value: "alice"},
 		},
