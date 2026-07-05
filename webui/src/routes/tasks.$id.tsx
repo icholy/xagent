@@ -20,6 +20,7 @@ import { useShellState } from '@/hooks/use-shell-state'
 import { isShellActive } from '@/lib/shell-sessions'
 import { cn } from '@/lib/utils'
 import { ArchivedBadge } from '@/components/archived-badge'
+import { ArchiveButton } from '@/components/archive-button'
 import { TaskActionsMenu } from '@/components/task-actions-menu'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -200,6 +201,18 @@ function TaskDetail() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
+          {/* Archive sits just left of the overflow menu as its own icon button:
+              it's the most common single-click action, so it stays one tap away
+              rather than buried in the menu. The icon flips between archive and
+              restore to match whichever action the server exposes, and it greys
+              out (rather than disappearing) when neither is available so the
+              header layout doesn't shift as the task changes state. */}
+          <ArchiveButton
+            task={task}
+            onArchive={handleArchive}
+            onUnarchive={handleUnarchive}
+            pending={archiveMutation.isPending || unarchiveMutation.isPending}
+          />
           <TaskActionsMenu
             task={task}
             onAutoArchiveChange={(autoArchive) =>
@@ -210,10 +223,6 @@ function TaskDetail() {
             cancelPending={cancelMutation.isPending}
             onRestart={handleRestart}
             restartPending={restartMutation.isPending}
-            onArchive={handleArchive}
-            archivePending={archiveMutation.isPending}
-            onUnarchive={handleUnarchive}
-            unarchivePending={unarchiveMutation.isPending}
           />
         </div>
       </div>
