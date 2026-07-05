@@ -1,6 +1,11 @@
 package eventrouter2
 
-import "testing"
+import (
+	"testing"
+
+	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
+)
 
 // Test fixtures: clearly-synthetic schemas registered under the fake "test"
 // source. The package's tests stay self-contained — they exercise the registry
@@ -130,11 +135,10 @@ func TestRoutingRuleValidate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.rule.Validate()
-			if tt.wantErr && err == nil {
-				t.Fatalf("Validate() = nil, want error")
-			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("Validate() = %v, want nil", err)
+			if tt.wantErr {
+				assert.Assert(t, err != nil, "Validate() = nil, want error")
+			} else {
+				assert.NilError(t, err)
 			}
 		})
 	}
@@ -142,28 +146,18 @@ func TestRoutingRuleValidate(t *testing.T) {
 
 func TestDefaultRules(t *testing.T) {
 	rules := DefaultRules()
-	if len(rules) == 0 {
-		t.Fatal("DefaultRules() returned no rules")
-	}
-	for i, rule := range rules {
-		if err := rule.Validate(); err != nil {
-			t.Errorf("DefaultRules()[%d] (source=%q type=%q) failed Validate: %v", i, rule.Source, rule.Type, err)
-		}
-	}
+	assert.Assert(t, len(rules) > 0, "DefaultRules() returned no rules")
 	// test/comment is the only fixture carrying a default rule; DefaultRules()
 	// must surface it and no rule from a fixture that ships none (test/label).
 	var sawComment bool
-	for _, rule := range rules {
+	for i, rule := range rules {
+		assert.NilError(t, rule.Validate(), "DefaultRules()[%d] (source=%q type=%q)", i, rule.Source, rule.Type)
 		if rule.Source == "test" && rule.Type == "comment" {
 			sawComment = true
 		}
-		if rule.Type == "label" {
-			t.Errorf("DefaultRules() surfaced a rule for %q, which ships no defaults", rule.Type)
-		}
+		assert.Assert(t, rule.Type != "label", "DefaultRules() surfaced a rule for %q, which ships no defaults", rule.Type)
 	}
-	if !sawComment {
-		t.Error("DefaultRules() missing the test/comment default rule")
-	}
+	assert.Assert(t, sawComment, "DefaultRules() missing the test/comment default rule")
 }
 
 func TestEventTypes(t *testing.T) {
@@ -172,33 +166,24 @@ func TestEventTypes(t *testing.T) {
 		byKey[def.Source+":"+def.Type] = def
 	}
 	for _, want := range []string{"test:comment", "test:label", "test:opened"} {
-		if _, ok := byKey[want]; !ok {
-			t.Errorf("EventTypes() missing %q", want)
-		}
+		_, ok := byKey[want]
+		assert.Assert(t, ok, "EventTypes() missing %q", want)
 	}
 }
 
 func TestEventTypeFor(t *testing.T) {
 	def, ok := EventTypeFor("test", "comment")
-	if !ok {
-		t.Fatalf("EventTypeFor(test, comment) = _, false; want hit")
-	}
-	if def.Label != "Test: Comment" {
-		t.Errorf("Label = %q, want %q", def.Label, "Test: Comment")
-	}
+	assert.Assert(t, ok, "EventTypeFor(test, comment) = _, false; want hit")
+	assert.Equal(t, def.Label, "Test: Comment")
 
-	if _, ok := EventTypeFor("test", "nope"); ok {
-		t.Errorf("EventTypeFor(test, nope) = _, true; want miss")
-	}
+	_, ok = EventTypeFor("test", "nope")
+	assert.Assert(t, !ok, "EventTypeFor(test, nope) = _, true; want miss")
 }
 
 func TestMustRegisterSchemaDuplicatePanics(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("MustRegisterSchema did not panic on duplicate (source, type)")
-		}
-	}()
 	// test/comment is already registered by the fixtures; re-registering the
 	// same (source, type) must panic before mutating the registry.
-	MustRegisterSchema(EventTypeDef{Source: "test", Type: "comment", Attrs: []string{"body"}})
+	assert.Assert(t, cmp.Panics(func() {
+		MustRegisterSchema(EventTypeDef{Source: "test", Type: "comment", Attrs: []string{"body"}})
+	}))
 }
