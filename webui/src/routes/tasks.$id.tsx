@@ -275,7 +275,7 @@ function TaskDetail() {
                   />
                   <Button
                     type="submit"
-                    size="icon"
+                    size="icon-lg"
                     disabled={updateMutation.isPending}
                     title="Send instruction"
                   >
