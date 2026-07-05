@@ -32,7 +32,7 @@ var eventTypes []EventTypeDef
 var eventTypeByKey = map[string]EventTypeDef{}
 
 // MustRegisterSchema records def as the schema for its (Source, Type) event
-// kind, making it available to EventTypeFor, RegisteredEventTypes, and
+// kind, making it available to EventTypeFor, EventTypes, and
 // DefaultRules. It panics if a def with the same (Source, Type) is already
 // registered. Intended to be called from a producer package's init.
 func MustRegisterSchema(def EventTypeDef) {
@@ -51,9 +51,9 @@ func EventTypeFor(source, typ string) (EventTypeDef, bool) {
 	return def, ok
 }
 
-// RegisteredEventTypes returns every registered schema in registration order.
-// It backs iteration over the registry and the future GetEventTypes RPC.
-func RegisteredEventTypes() []EventTypeDef {
+// EventTypes returns every registered schema in registration order. It backs
+// iteration over the registry and the future GetEventTypes RPC.
+func EventTypes() []EventTypeDef {
 	return slices.Clone(eventTypes)
 }
 

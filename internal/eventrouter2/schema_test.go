@@ -166,14 +166,14 @@ func TestDefaultRules(t *testing.T) {
 	}
 }
 
-func TestRegisteredEventTypes(t *testing.T) {
+func TestEventTypes(t *testing.T) {
 	byKey := map[string]EventTypeDef{}
-	for _, def := range RegisteredEventTypes() {
+	for _, def := range EventTypes() {
 		byKey[def.Source+":"+def.Type] = def
 	}
 	for _, want := range []string{"test:comment", "test:label", "test:opened"} {
 		if _, ok := byKey[want]; !ok {
-			t.Errorf("RegisteredEventTypes() missing %q", want)
+			t.Errorf("EventTypes() missing %q", want)
 		}
 	}
 }
