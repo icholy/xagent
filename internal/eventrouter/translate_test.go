@@ -1,4 +1,4 @@
-package eventrouter2
+package eventrouter
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 
 func TestTranslateRuleConcreteType(t *testing.T) {
 	// A concrete, registered (Source, Type) rule with an applicable condition
-	// yields exactly one v2 rule.
+	// yields exactly one conditions rule.
 	reg := NewSchemaRegistry()
 	reg.MustRegister(testComment)
 
@@ -130,7 +130,7 @@ func TestTranslateRuleCarriesActions(t *testing.T) {
 }
 
 func TestTranslateRuleAllValid(t *testing.T) {
-	// Every rule TranslateRule produces is a valid v2 rule.
+	// Every rule TranslateRule produces is a valid conditions rule.
 	reg := NewSchemaRegistry()
 	reg.MustRegister(testComment)
 	reg.MustRegister(testLabel)
@@ -145,8 +145,8 @@ func TestTranslateRuleAllValid(t *testing.T) {
 		{URLPrefix: "https://github.com/icholy/xagent"},
 	}
 	for _, rule := range legacy {
-		for _, v2 := range reg.TranslateRule(rule) {
-			assert.NilError(t, reg.Validate(v2))
+		for _, out := range reg.TranslateRule(rule) {
+			assert.NilError(t, reg.Validate(out))
 		}
 	}
 }

@@ -240,7 +240,6 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Type:        EventTypeIssueAssigned,
 				Description: fmt.Sprintf("%s assigned issue #%d to @%s", senderLogin, number, assigneeLogin),
 				URL:         *event.Issue.HTMLURL,
-				Assignee:    assigneeLogin,
 				Attrs:       eventrouter.Attrs{"assignee": {assigneeLogin}},
 				Meta: GitHubMeta{
 					AuthorID:    *event.Sender.ID,
@@ -257,13 +256,12 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			senderLogin := event.Sender.GetLogin()
 			label := event.Label.GetName()
 			number := event.Issue.GetNumber()
-			// GitHub fires a separate "labeled" delivery per label, so Values
-			// carries the single added label for RoutingRule.Value membership.
+			// GitHub fires a separate "labeled" delivery per label, so the "label"
+			// attr carries the single added label for a label condition to match.
 			return &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        EventTypeLabelAdded,
 				Description: fmt.Sprintf("%s labeled issue #%d %q", senderLogin, number, label),
-				Values:      []string{label},
 				Attrs:       eventrouter.Attrs{"label": {label}},
 				URL:         *event.Issue.HTMLURL,
 				Meta: GitHubMeta{
@@ -311,7 +309,6 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Type:        EventTypePullRequestAssigned,
 				Description: fmt.Sprintf("%s assigned PR #%d to @%s", senderLogin, number, assigneeLogin),
 				URL:         *event.PullRequest.HTMLURL,
-				Assignee:    assigneeLogin,
 				Attrs:       eventrouter.Attrs{"assignee": {assigneeLogin}},
 				Meta: GitHubMeta{
 					AuthorID:    *event.Sender.ID,
@@ -328,13 +325,12 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			senderLogin := event.Sender.GetLogin()
 			label := event.Label.GetName()
 			number := event.PullRequest.GetNumber()
-			// GitHub fires a separate "labeled" delivery per label, so Values
-			// carries the single added label for RoutingRule.Value membership.
+			// GitHub fires a separate "labeled" delivery per label, so the "label"
+			// attr carries the single added label for a label condition to match.
 			return &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        EventTypeLabelAdded,
 				Description: fmt.Sprintf("%s labeled PR #%d %q", senderLogin, number, label),
-				Values:      []string{label},
 				Attrs:       eventrouter.Attrs{"label": {label}},
 				URL:         *event.PullRequest.HTMLURL,
 				Meta: GitHubMeta{

@@ -489,7 +489,6 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "issue_assigned",
 				Description: "octocat assigned issue #7 to @icholy-bot",
 				URL:         "https://github.com/owner/repo/issues/7",
-				Assignee:    "icholy-bot",
 				Attrs:       eventrouter.Attrs{"assignee": {"icholy-bot"}},
 				Meta: GitHubMeta{
 					AuthorID:    999,
@@ -554,7 +553,6 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_assigned",
 				Description: "alice assigned PR #12 to @icholy-bot",
 				URL:         "https://github.com/owner/repo/pull/12",
-				Assignee:    "icholy-bot",
 				Attrs:       eventrouter.Attrs{"assignee": {"icholy-bot"}},
 				Meta: GitHubMeta{
 					AuthorID:    42,
@@ -614,7 +612,6 @@ func TestToGithubInputEvent(t *testing.T) {
 				Source:      "github",
 				Type:        "label_added",
 				Description: `octocat labeled issue #7 "xagent"`,
-				Values:      []string{"xagent"},
 				Attrs:       eventrouter.Attrs{"label": {"xagent"}},
 				URL:         "https://github.com/owner/repo/issues/7",
 				Meta: GitHubMeta{
@@ -662,7 +659,6 @@ func TestToGithubInputEvent(t *testing.T) {
 				Source:      "github",
 				Type:        "label_added",
 				Description: `alice labeled PR #12 "needs-review"`,
-				Values:      []string{"needs-review"},
 				Attrs:       eventrouter.Attrs{"label": {"needs-review"}},
 				URL:         "https://github.com/owner/repo/pull/12",
 				Meta: GitHubMeta{

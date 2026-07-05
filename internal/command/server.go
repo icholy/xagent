@@ -14,6 +14,7 @@ import (
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/auth/oauthflow"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server"
@@ -160,6 +161,11 @@ var ServerCommand = &cli.Command{
 		defer db.Close()
 
 		st := store.New(db)
+		// The store translates legacy (flat-matcher) routing rows on read via the
+		// process-wide schema registry, which the producer packages populate from
+		// their init. Inject it here so decodeRoutingRules can fan legacy rules out
+		// to conditions-native rules.
+		st.Rules = eventrouter.DefaultSchemaRegistry
 
 		domain := cmd.String("auth-domain")
 		baseURL := cmd.String("base-url")

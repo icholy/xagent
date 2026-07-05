@@ -1,22 +1,24 @@
-package store
+package store_test
 
 import (
 	"testing"
 
-	"github.com/icholy/xagent/internal/eventrouter2"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/store"
 	"gotest.tools/v3/assert"
 )
 
 func TestDecodeRoutingRules(t *testing.T) {
 	// An isolated registry with a few GitHub-shaped event types, so the legacy
 	// fan-out has concrete types to translate onto without depending on the
-	// process-wide DefaultSchemaRegistry.
-	reg := eventrouter2.NewSchemaRegistry()
-	reg.MustRegister(eventrouter2.EventTypeDef{Source: "github", Type: "issue_comment", Attrs: []string{"body", "url", "mention"}})
-	reg.MustRegister(eventrouter2.EventTypeDef{Source: "github", Type: "issue_assigned", Attrs: []string{"body", "url", "assignee"}})
-	reg.MustRegister(eventrouter2.EventTypeDef{Source: "github", Type: "label_added", Attrs: []string{"body", "url", "label"}})
-	s := &Store{Registry: reg}
+	// process-wide DefaultSchemaRegistry. It lives in eventrouter now, so this
+	// test is external (package store_test) to import it without a cycle.
+	reg := eventrouter.NewSchemaRegistry()
+	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "issue_comment", Attrs: []string{"body", "url", "mention"}})
+	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "issue_assigned", Attrs: []string{"body", "url", "assignee"}})
+	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "label_added", Attrs: []string{"body", "url", "label"}})
+	s := &store.Store{Rules: reg}
 
 	bodyPrefix := []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}
 	tests := []struct {
@@ -108,9 +110,38 @@ func TestDecodeRoutingRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rules, err := s.decodeRoutingRules([]byte(tt.data))
+			rules, err := s.DecodeRoutingRules([]byte(tt.data))
 			assert.NilError(t, err)
 			assert.DeepEqual(t, rules, tt.want)
 		})
 	}
+}
+
+// TestDecodeRoutingRulesLegacyWithoutTranslator verifies the no-default rule:
+// a legacy row requires a translator, so decoding one while Rules is nil is an
+// error rather than a silent drop. Conditions-native and bare rows still decode.
+func TestDecodeRoutingRulesLegacyWithoutTranslator(t *testing.T) {
+	s := &store.Store{} // Rules nil
+
+	// A legacy (flat-matcher) row errors without a translator.
+	_, err := s.DecodeRoutingRules([]byte(`[{"prefix":"xagent:","wakeup":true}]`))
+	assert.ErrorContains(t, err, "store.Rules is nil")
+
+	// A conditions-native row decodes fine without a translator.
+	rules, err := s.DecodeRoutingRules([]byte(`[{"source":"github","type":"issue_comment","conditions":[{"attr":"body","op":"prefix","value":"x:"}]}]`))
+	assert.NilError(t, err)
+	assert.DeepEqual(t, rules, []model.RoutingRule{{
+		Source:     "github",
+		Type:       "issue_comment",
+		Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "x:"}},
+	}})
+
+	// A bare source/type row decodes fine too.
+	rules, err = s.DecodeRoutingRules([]byte(`[{"source":"github","type":"issue_comment","wakeup":true}]`))
+	assert.NilError(t, err)
+	assert.DeepEqual(t, rules, []model.RoutingRule{{
+		Source: "github",
+		Type:   "issue_comment",
+		Wakeup: true,
+	}})
 }

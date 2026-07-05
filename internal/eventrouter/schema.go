@@ -1,4 +1,4 @@
-package eventrouter2
+package eventrouter
 
 import (
 	"fmt"
@@ -56,7 +56,7 @@ func NewSchemaRegistry() *SchemaRegistry {
 func (r *SchemaRegistry) MustRegister(def EventTypeDef) {
 	key := def.Source + ":" + def.Type
 	if _, dup := r.eventTypeByKey[key]; dup {
-		panic(fmt.Sprintf("eventrouter2: duplicate schema registration for source=%q type=%q", def.Source, def.Type))
+		panic(fmt.Sprintf("eventrouter: duplicate schema registration for source=%q type=%q", def.Source, def.Type))
 	}
 	r.eventTypes = append(r.eventTypes, def)
 	r.eventTypeByKey[key] = def
@@ -80,8 +80,8 @@ func (r *SchemaRegistry) EventTypes() []EventTypeDef {
 // order, as accumulated during registration. It is the new-shape replacement
 // for the legacy type-less {Prefix:"xagent:", Wakeup:true} fallback: rather than
 // a validation special-case, the default set is an ordinary list of
-// fully-defined rules contributed by the producers. These are not wired into the
-// router here; that is a later layer.
+// fully-defined rules contributed by the producers. The router uses it as the
+// ruleless-org fallback.
 func (r *SchemaRegistry) DefaultRules() []model.RoutingRule {
 	return slices.Clone(r.defaultRules)
 }
@@ -119,5 +119,7 @@ func (r *SchemaRegistry) Validate(rule model.RoutingRule) error {
 
 // DefaultSchemaRegistry is the process-wide registry the producer packages
 // populate from their init functions (githubserver, atlassianserver) via their
-// registerSchemas helper. The apiserver GetEventTypes handler reads from it.
+// RegisterSchemas helper. The apiserver GetEventTypes handler reads from it, and
+// the server startup wiring hands it to the store as the routing-rule
+// translator.
 var DefaultSchemaRegistry = NewSchemaRegistry()

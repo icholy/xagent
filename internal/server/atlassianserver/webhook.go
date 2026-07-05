@@ -176,13 +176,12 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 			return nil, nil
 		}
 
-		// Emit a single event carrying all added labels in Values so routing
-		// rules can match a specific label via RoutingRule.Value (membership).
+		// Emit a single event carrying all added labels in the "label" attr so
+		// routing rules can match a specific label via a label condition.
 		return &eventrouter.InputEvent{
 			Source:      "atlassian",
 			Type:        EventTypeLabelAdded,
 			Description: fmt.Sprintf("%s added label(s) %s to %s", displayName, strings.Join(quote(added), ", "), payload.Issue.Key),
-			Values:      added,
 			Attrs:       eventrouter.Attrs{"label": added},
 			URL:         url,
 			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},

@@ -7,11 +7,11 @@ import (
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/authscope"
-	"github.com/icholy/xagent/internal/eventrouter2"
+	"github.com/icholy/xagent/internal/eventrouter"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
 
-// GetEventTypes returns the eventrouter2 event-type registry so clients (the
+// GetEventTypes returns the eventrouter event-type registry so clients (the
 // routing-rule editor UI) can discover the valid (source, type) event kinds and
 // the attributes a rule may condition on for each. The registry is global —
 // populated by the producer packages' init (githubserver, atlassianserver) — so
@@ -22,7 +22,7 @@ func (s *Server) GetEventTypes(ctx context.Context, req *xagentv1.GetEventTypesR
 	if !caller.Scopes.Allow(authscope.OpOrgRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read org"))
 	}
-	defs := eventrouter2.DefaultSchemaRegistry.EventTypes()
+	defs := eventrouter.DefaultSchemaRegistry.EventTypes()
 	pb := make([]*xagentv1.EventTypeDef, len(defs))
 	for i, def := range defs {
 		pb[i] = &xagentv1.EventTypeDef{
