@@ -288,68 +288,87 @@ type Store interface {
   (`Start`/`Load`/`List`/`Remove`/`Prune`) changes shape; only where the bytes land
   changes.
 - `internal/command/runner.go` (`taskstate.Open(cmd.String("state-dir"))` today)
-  selects the implementation. `--state-dir` is **not retired**: it is repurposed from
-  the authoritative taskstate to the durable outbox below (and, optionally, a
-  best-effort read cache).
+  selects the implementation. `--state-dir` is **not retired**: it stays the root for
+  the runner's durable local files — now the sandbox-op outbox below (and, optionally,
+  a best-effort read cache) rather than the authoritative taskstate.
 
 Because `Write`/`Remove` become network calls, they must survive not just a server
-blip but — per review — a *runner restart* mid-outage. The current in-memory
-`EventQueue` cannot: a restart drops whatever it was retrying. The next subsection
-generalizes it into a durable, on-disk outbox shared by both the runner-event path
-and the sandbox-state path.
+blip but a *runner restart* mid-outage. That durability now exists off the shelf: the
+[generic durable outbox](../implemented/generic-durable-outbox.md) shipped since this
+proposal was drafted, replacing the runner's in-memory `EventQueue` with an on-disk,
+at-least-once outbox. The sandbox-state writes ride the **same package** as a second
+consumer — the next subsection wires them up.
 
-### Durable outbox
+### Durable delivery via the generic outbox
 
-Today `internal/runner/eventqueue.go` buffers failed `SubmitRunnerEvents` calls in an
-**in-memory** `container/list` (`EventQueue`): `Enqueue` appends, a `Run` goroutine
-`Drain`s them FIFO, permanent errors are dropped (`isPermanentError` →
-`NotFound`/`InvalidArgument`/`PermissionDenied`), and everything is lost on a runner
-restart. Routing handle persistence through that same queue raises the stakes — a
-`SetTaskSandbox` dropped by a restart would silently un-track a live sandbox — so the
-queue is upgraded to a **durable, on-disk outbox**, one mechanism for *both* runner
-events and sandbox-state writes.
+The reliability machinery this proposal needs is already built. `internal/x/outbox`
+is a durable, at-least-once outbox generic over a JSON payload type `T` and a
+pluggable `Store` (`internal/x/outbox/outbox.go`):
 
-**Shape.** The queue element generalizes from `model.RunnerEvent` to a typed op:
+- `outbox.New[T](Options[T]{Store, Deliver, Backoff, Log})` returns an `Outbox[T]`.
+  `Enqueue(msg T)` marshals and **durably persists** the message before returning
+  (`FileStore` writes one atomic `<seq>.json` per record via temp-file → `fsync` →
+  `rename`, the same discipline `taskstate` uses). `Run(ctx)` drains the store FIFO
+  from the head, calling `Deliver(ctx, msg) (permanent bool, err error)` for each:
+  success removes the record, a **transient** error backs off and retries the same
+  head (head-of-line blocking), a **permanent** error dead-letters the record and
+  advances. Its first pass redelivers whatever survived a restart, so there is no
+  separate recovery path.
+- The runner already runs one instance today — `Outbox[model.RunnerEvent]`, built by
+  `runner.NewRunnerEventOutbox` (`internal/runner/eventoutbox.go`), whose `Deliver`
+  calls `SubmitRunnerEvents` and classifies permanence with `isPermanentError`
+  (`NotFound`/`InvalidArgument`/`PermissionDenied`). It is opened under the runner's
+  state root (`filepath.Join(filepath.Dir(state-dir), "outbox")`) so it is durable
+  across restarts.
+
+**Sandbox writes are a second outbox, not a shared lane.** Because `Outbox[T]` is
+generic over a *single* payload type, the sandbox-state path gets its **own** instance
+— `Outbox[SandboxOp]` with its own `FileStore` directory (a sibling of the event
+outbox under the state root) — rather than being folded into a union queue over both
+events and handles. This is both simpler (no `Op` union that has to carry either an
+event or a handle) and better-behaved: events and sandbox-state writes sit on
+**independent FIFOs**, so a stuck runner event can never block a `SetTaskSandbox`
+behind it. The head-of-line concern the earlier single-queue sketch raised (former
+Open Question 6) simply does not arise.
 
 ```go
-type Op struct {
-    Seq     int64             // monotonic; preserves FIFO across restarts
-    Kind    OpKind            // OpSubmitEvent | OpSetSandbox | OpClearSandbox
-    Event   *model.RunnerEvent // OpSubmitEvent
-    Sandbox *taskstate.Record  // OpSetSandbox
-    TaskID  int64              // OpClearSandbox
+// internal/runner: the payload for the sandbox-state outbox.
+type SandboxOp struct {
+    Kind    SandboxOpKind      // SandboxSet | SandboxClear
+    Record  *taskstate.Record  // SandboxSet: the handle to persist
+    TaskID  int64              // SandboxClear: whose handle to drop
+    Version int64              // SandboxSet: optimistic guard (the task version acted on)
 }
 ```
 
-`Enqueue` persists the op **before** returning, using the same atomic
-`marshal → temp → fsync → rename` discipline `taskstate` already uses (one file per
-`Seq` under `<state-dir>/outbox/`). `Drain` sends the head op through the matching
-RPC (`SubmitRunnerEvents` / `SetTaskSandbox` / `ClearTaskSandbox`) and removes the
-on-disk record only on success. On boot the runner enumerates `outbox/`, sorts by
-`Seq`, and drains — so retries survive a restart. The existing
-`Run`/`Drain`/`retryInterval`/permanent-drop loop is unchanged in spirit; only the
-backing store and the element type change.
+Its `Deliver` closure maps `SandboxSet` → `SetTaskSandbox` and `SandboxClear` →
+`ClearTaskSandbox`, and classifies a stale-version rejection (`FailedPrecondition`)
+as **permanent** — alongside the existing `isPermanentError` set — so a superseded
+write is dead-lettered instead of retried forever. The `serverstore` implementation
+then routes `Write` → `Enqueue(SandboxSet)` and `Remove` → `Enqueue(SandboxClear)`.
+`List` does **not** go through the outbox: it is a read (`ListRunnerSandboxes`), issued
+directly and not buffered.
 
-**Why at-least-once replay is safe.** Every op is idempotent server-side:
+**Why at-least-once replay is safe.** Every enqueued op is idempotent server-side:
 
 - `SetTaskSandbox` is an upsert keyed by `task_id`; re-applying is a no-op.
 - `ClearTaskSandbox` is a delete; re-applying is a no-op.
-- A *stale* replayed `SetTaskSandbox` (the task advanced past the recorded `version`
+- A *stale* replayed `SetTaskSandbox` (the task advanced past the recorded `Version`
   after a restart) is rejected by the optimistic guard as `FailedPrecondition`, which
-  the outbox classifies as **permanent** and drops rather than retrying forever.
-- `SubmitRunnerEvents` idempotency is unchanged from today.
+  the sandbox `Deliver` classifies as permanent — the outbox dead-letters it rather
+  than retrying forever.
 
-**Ordering.** A single FIFO preserves the one constraint that matters: for a given
-task, its `SetTaskSandbox` is enqueued before its `ClearTaskSandbox`, so they apply
-in that order even across a restart. Head-of-line blocking is retained from the
-current `EventQueue`; if a stuck event blocking a state write proves too coarse once
-the two share a lane, per-task lanes are a follow-up (Open Question 6).
+**Ordering.** The single FIFO within the sandbox outbox preserves the one constraint
+that matters: for a given task, its `SandboxSet` is enqueued before its
+`SandboxClear`, so they apply in that order even across a restart. Because events live
+in a separate outbox, no cross-lane ordering between events and handles is needed or
+promised.
 
 Note the deliberate inversion: this proposal moves the *authoritative* taskstate
-**off** local disk, yet keeps local disk for a *durable outbox* of not-yet-committed
+**off** local disk, yet keeps local disk for the *durable outbox* of not-yet-committed
 server writes. The two do not conflict — the server is the source of truth; the
 outbox is only a write-ahead buffer that empties as soon as the server is reachable.
-`--state-dir` shifts role from "the answer" to "the retry log".
+`--state-dir`'s role shifts from "the answer" to "the retry log".
 
 ### Rollout
 
@@ -364,7 +383,8 @@ cutover:
    constructs the `serverstore` implementation instead of the file store. A one-time
    boot reconcile (`for rec in localStore.List(): SetTaskSandbox(rec)`) seeds any
    handles the local disk still holds so no currently-running sandbox is orphaned by
-   the switch. `--state-dir` is repurposed to the durable outbox rather than dropped.
+   the switch. `--state-dir` remains the root for the runner's durable local files
+   (now including the sandbox-op outbox) rather than being dropped.
 3. **Keep or drop the local read cache.** The file implementation stays in the tree
    as an optional best-effort read cache (Open Question 2) or is removed outright —
    nothing depends on it for correctness, and either choice is safe.
@@ -383,8 +403,9 @@ explicitly not built now.
   read cache, so its own supervise goroutine is unaffected. Because the outbox is on
   disk, a runner that *also* restarts in that window replays the pending
   `SetTaskSandbox` on boot instead of losing it — a strict improvement over the
-  in-memory `EventQueue`, and over today's local store where a crash between `Launch`
-  and the state write leaves the same gap. The residual orphan window (crash after
+  in-memory `EventQueue` the outbox already replaced, and over today's local store
+  where a crash between `Launch` and the state write leaves the same gap. The
+  residual orphan window (crash after
   `Launch` but before the outbox `fsync` returns) is bounded exactly as today: Docker
   self-heals on the next `Start` via the deterministic `xagent-{taskID}` name, and
   `lambda-microvm` leans on `max_duration` as the reaper (the same backstop
@@ -415,10 +436,13 @@ explicitly not built now.
 internal/runner/taskstate/
 ├── taskstate.go        Record{...}; Store interface (unchanged method set)
 ├── filestore.go        existing atomic-JSON impl (renamed; kept as read cache/fallback)
-└── serverstore.go      new: Store backed by Set/Clear/ListRunnerSandboxes RPCs
+└── serverstore.go      new: Store backed by Set/Clear/ListRunnerSandboxes RPCs,
+                        buffering Write/Remove through an Outbox[SandboxOp]
 
-internal/runner/eventqueue.go         EventQueue → durable on-disk outbox:
-                                      Op{event|set-sandbox|clear-sandbox}, disk-backed, replayed on boot
+internal/x/outbox/                    generic durable outbox — ALREADY SHIPPED; reused
+                                      unchanged (a second Outbox[SandboxOp] instance)
+internal/runner/sandboxoutbox.go      new: SandboxOp{set|clear} payload + Deliver closure
+                                      mapping to Set/ClearTaskSandbox (mirrors eventoutbox.go)
 
 internal/store/
 ├── task.go             + Upsert/Delete/Get/ListTaskSandboxesForRunner
@@ -440,10 +464,10 @@ boundary. Only the `Store` implementation behind that boundary moves.
 network calls instead of `fsync`+`rename`. This is acceptable: sandbox
 create/teardown is already dominated by container/VM operations (seconds), a
 handle write is tiny, and the hot read path (`Start`) piggybacks on a poll the
-runner already makes — no added round trip. The **durable outbox** (generalized from
-the existing `EventQueue`) absorbs transient server failures for both the
-`SubmitRunnerEvents` and the new sandbox-state writes, and now survives a runner
-restart.
+runner already makes — no added round trip. The **durable outbox**
+(`internal/x/outbox`, already shipped and already carrying `SubmitRunnerEvents`)
+absorbs transient server failures for the new sandbox-state writes too, via a second
+`Outbox[SandboxOp]` instance, and survives a runner restart.
 
 **Reintroduces a dependency the local store removed.** `shared-runner-taskstate.md`
 valued a runner that can track its sandboxes with the server unreachable. Server-backed
@@ -504,12 +528,14 @@ and only on the runner's own poll.
    follow-up that merely *consumes* the durable handle this proposal provides?
    Recommendation: this proposal delivers the durable mapping; the reassignment
    policy is a follow-up.
-6. **Outbox ordering granularity and on-disk format.** The durable outbox keeps the
-   current single-FIFO / head-of-line-blocking semantics, so a stuck runner event can
-   delay a sandbox-state write behind it. Is that acceptable, or should the outbox use
-   per-task lanes (independent ordering per task, blocking only within a task)? And is
-   the on-disk representation best as one file per `Seq` (mirroring `taskstate`'s
-   atomic-file discipline) or an append-only segment with periodic compaction?
-   Recommendation: ship the single FIFO with one-file-per-op first (smallest change to
-   the existing `EventQueue`), and revisit lanes only if head-of-line blocking is
-   observed to matter once events and state writes share the queue.
+6. **Per-task ordering within the sandbox outbox.** Giving sandbox writes their own
+   `Outbox[SandboxOp]` already removes the cross-lane concern the original single-queue
+   sketch had (events can no longer block handle writes) — the shipped outbox is
+   single-FIFO with head-of-line blocking, and on-disk format (one atomic file per
+   `Seq`) is settled by `internal/x/outbox`. The residual question is *within* the
+   sandbox lane: a stuck `SetTaskSandbox` for one task blocks another task's handle
+   write behind it. Is that acceptable, or are per-task lanes (independent ordering per
+   task) worth adding to the outbox engine? Recommendation: ship the single FIFO the
+   package already provides and revisit per-task lanes only if head-of-line blocking
+   between tasks is observed to matter — a change that would live in `internal/x/outbox`
+   and benefit the event consumer equally.
