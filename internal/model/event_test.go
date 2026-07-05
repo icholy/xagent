@@ -6,6 +6,22 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+func TestFilterPayloads(t *testing.T) {
+	t.Parallel()
+	events := []*Event{
+		{Payload: &InstructionPayload{Text: "first"}},
+		{Payload: &LinkPayload{URL: "https://example.com"}},
+		{Payload: &InstructionPayload{Text: "second"}},
+		{Payload: &ExternalPayload{Description: "webhook"}},
+	}
+
+	// Only the *InstructionPayload events come back, in order.
+	assert.DeepEqual(t, FilterPayloads[*InstructionPayload](events), []*InstructionPayload{
+		{Text: "first"},
+		{Text: "second"},
+	})
+}
+
 func TestLifecyclePayload_ProtoRoundTrip(t *testing.T) {
 	t.Parallel()
 	want := &LifecyclePayload{
