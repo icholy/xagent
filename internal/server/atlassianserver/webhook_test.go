@@ -47,6 +47,30 @@ func TestToAtlassianInputEvents(t *testing.T) {
 			},
 		},
 		{
+			name: "CommentWithMentions",
+			payload: atlassian.WebhookPayload{
+				WebhookEvent: "comment_created",
+				Comment: &atlassian.Comment{
+					ID:     "10009",
+					Body:   "[~accountid:557058:abc] and [~accountid:5b10ac] please review",
+					Author: atlassian.User{AccountID: "abc123", DisplayName: "Test User"},
+				},
+				Issue: &atlassian.Issue{
+					Key:  "PROJ-123",
+					Self: "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "atlassian",
+				Type:        "comment_created",
+				Description: "Test User commented on PROJ-123",
+				Data:        "[~accountid:557058:abc] and [~accountid:5b10ac] please review",
+				URL:         "https://mycompany.atlassian.net/browse/PROJ-123?focusedCommentId=10009",
+				Attrs:       eventrouter.Attrs{"mention": {"557058:abc", "5b10ac"}},
+				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
+			},
+		},
+		{
 			name: "NoXAgentPrefix",
 			payload: atlassian.WebhookPayload{
 				WebhookEvent: "comment_created",
@@ -157,6 +181,7 @@ func TestToAtlassianInputEvents(t *testing.T) {
 				Type:        "label_added",
 				Description: `Test User added label(s) "xagent" to PROJ-7`,
 				Values:      []string{"xagent"},
+				Attrs:       eventrouter.Attrs{"label": {"xagent"}},
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-7",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			},
@@ -181,6 +206,7 @@ func TestToAtlassianInputEvents(t *testing.T) {
 				Type:        "label_added",
 				Description: `Test User added label(s) "xagent", "urgent" to PROJ-8`,
 				Values:      []string{"xagent", "urgent"},
+				Attrs:       eventrouter.Attrs{"label": {"xagent", "urgent"}},
 				URL:         "https://mycompany.atlassian.net/browse/PROJ-8",
 				Meta:        AtlassianMeta{AuthorAccountID: "abc123", AuthorDisplayName: "Test User"},
 			},
@@ -365,6 +391,7 @@ func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
 		Type:        "label_added",
 		Description: `Test User added label(s) "xagent", "urgent" to PROJ-10`,
 		Values:      []string{"xagent", "urgent"},
+		Attrs:       eventrouter.Attrs{"label": {"xagent", "urgent"}},
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
 		UserID:      "user-1",
 		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},

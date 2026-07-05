@@ -12,6 +12,14 @@ import (
 	"github.com/icholy/xagent/internal/store"
 )
 
+// Attrs maps a dimension name to the event's values for that dimension.
+// Single-valued dimensions are one-element slices. This mirrors the shape
+// prototyped in eventrouter2 and is being introduced here as an additive,
+// inert step of the attribute-based event-matching redesign: webhook handlers
+// populate it, but nothing reads it yet (v1 matching still uses the legacy
+// fields below). See proposals/draft/attribute-based-event-matching.md.
+type Attrs map[string][]string
+
 // InputEvent represents a parsed webhook event ready for routing.
 type InputEvent struct {
 	Source      string
@@ -25,10 +33,29 @@ type InputEvent struct {
 	// added Jira labels). RoutingRule.Value matches by membership. This is
 	// internal/transient — it is not part of the proto and is not persisted.
 	Values []string
+	// Attrs carries the same matchable dimensions as the legacy Assignee/Values
+	// fields, keyed by dimension name (mirroring eventrouter2). It is populated
+	// in addition to the legacy fields but is not yet consumed by v1 matching.
+	Attrs Attrs
 	// Meta carries source-specific data that the router does not interpret. It
 	// lets webhook handlers attach native identity (e.g. the GitHub author)
 	// without leaking source-specific types into eventrouter.
 	Meta any
+}
+
+// Attr returns the event's values for a dimension. The "body" and "url"
+// dimensions are derived views over Data and URL so extractors don't
+// duplicate them; any other key reads from Attrs (nil/absent -> nil). This
+// mirrors eventrouter2.InputEvent.Attr.
+func (e InputEvent) Attr(key string) []string {
+	switch key {
+	case "body":
+		return []string{e.Data}
+	case "url":
+		return []string{e.URL}
+	default:
+		return e.Attrs[key]
+	}
 }
 
 // RouteOutcome describes what the Router did with an InputEvent for one org. It
