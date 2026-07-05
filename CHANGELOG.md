@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.10.0](https://github.com/icholy/xagent/compare/v2.9.0...v2.10.0) (2026-07-05)
+
+
+### Features
+
+* **routing:** self-describing attribute schema (AttrDef) ([cd74ed6](https://github.com/icholy/xagent/commit/cd74ed64236e97ec2d32c7744167b97e69595eff))
+
+
+### Miscellaneous
+
+* **eventrouter:** drop projection/factory helpers from routing-rule tests ([dcd7cd1](https://github.com/icholy/xagent/commit/dcd7cd1afea2e22fc2445f9dd00b1f2b9afe0008))
+* **eventrouter:** remove legacy routing-rule translator ([b696b22](https://github.com/icholy/xagent/commit/b696b22d309ead03efd875a49f44e862d8835f12))
+* **eventrouter:** trim redundant routing-rule tests ([798eb0f](https://github.com/icholy/xagent/commit/798eb0f1ccfa0130ea46d559d7560b52156fd1ee))
+* move attribute-based event matching proposal to implemented ([efe1486](https://github.com/icholy/xagent/commit/efe148694386b48798358b538dd866eb50ed9378))
+
 ## [2.9.0](https://github.com/icholy/xagent/compare/v2.8.0...v2.9.0) (2026-07-05)
 
 
