@@ -25,8 +25,8 @@ Everything else requires shell access to the runner host to run
 them. Setup failures are the worst case: the timeline shows
 `setup command 2 failed: exit status 1` with none of the command's output.
 
-Driver logs should be shipped to the server, persisted in PostgreSQL, and
-viewable in the Web UI.
+Driver logs should be shipped to the server, persisted, and viewable in the
+Web UI.
 
 ## Current State
 
@@ -57,12 +57,17 @@ viewable in the Web UI.
   makes `Task.Version` the run identity: the version bumps exactly when a new
   run is provisioned, and every runner event carries it. Driver logs should
   adopt the same identity so a task's logs group cleanly by run.
+- **The server's disk is ephemeral on Fly.** `fly.toml` mounts no volume, and
+  the deployment is pinned to a single machine (the in-process pubsub
+  comment). Filesystem storage on the server therefore needs a Fly volume;
+  self-hosted deployments just need a directory.
 
 ## Design
 
 ### What counts as a driver log
 
-One row per line, from three sources inside the container, tagged by `stream`:
+One line per record, from three sources inside the container, tagged by
+`stream`:
 
 | `stream` | Source | `level` |
 |---|---|---|
@@ -84,43 +89,68 @@ The driver keeps writing everything to the container's stdio exactly as today
 — shipping is a tee, not a redirect, so `docker logs` still works and a broken
 shipper never blinds local debugging.
 
-### Storage: a new `driver_logs` table
+### Storage: flat files behind a `logstore` interface — not Postgres
 
-Log lines are high-volume machine diagnostics with different write rates, read
-patterns, and retention than the semantic `events` stream, so they get their
-own table rather than a sixth event payload (see Trade-offs):
+Log lines are bulk diagnostics, not relational state: nobody joins on them,
+nobody queries them by attribute, they are read back exactly once in a blue
+moon, and their retention is "delete the whole run". Putting them in Postgres
+would bloat the primary OLTP database and its backups with row-per-line write
+amplification and DELETE/vacuum churn for retention. Postgres keeps holding
+the semantic state (tasks, events, links); driver logs go to append-only
+files on the server, behind a small interface so the backend can change
+without touching the wire:
 
-```sql
--- migrate:up
-CREATE TABLE driver_logs (
-    id BIGSERIAL PRIMARY KEY,
-    task_id bigint NOT NULL,
-    org_id bigint NOT NULL,
-    version bigint NOT NULL DEFAULT 0,        -- run identity (task.Version at provisioning)
-    seq bigint NOT NULL,                      -- driver-assigned, monotonic per run
-    stream text NOT NULL,                     -- 'driver' | 'setup' | 'agent'
-    level text NOT NULL DEFAULT '',           -- slog level for stream='driver', else ''
-    line text NOT NULL,                       -- single line, truncated to 8 KiB
-    created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_driver_logs_task_id FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    CONSTRAINT fk_driver_logs_org_id FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,
-    CONSTRAINT uq_driver_logs_run_seq UNIQUE (task_id, version, seq)
-);
+```go
+// internal/server/logstore
+type Store interface {
+    // Append writes lines to the run's log. Lines with seq <= the run's
+    // last-appended seq are silently skipped (idempotent redelivery).
+    Append(ctx context.Context, taskID, version int64, lines []Line) error
+    // Read returns up to limit lines starting after cursor (empty = start),
+    // across all runs of the task in (version, seq) order, plus the next
+    // cursor and whether more lines exist.
+    Read(ctx context.Context, taskID int64, cursor string, limit int) ([]Line, string, bool, error)
+    // Delete removes all logs for the task.
+    Delete(ctx context.Context, taskID int64) error
+}
 
-CREATE INDEX idx_driver_logs_task_id_id ON driver_logs (task_id, id);
-
--- migrate:down
-DROP TABLE driver_logs;
+type Line struct {
+    Version int64     // run identity
+    Seq     int64     // driver-assigned, monotonic per run
+    Stream  string    // "driver" | "setup" | "agent"
+    Level   string    // slog level for Stream=="driver", else ""
+    Line    string    // single line, max 8 KiB
+    Time    time.Time // driver-side timestamp, informational
+}
 ```
 
-- `(task_id, version, seq)` is unique so at-least-once delivery is idempotent:
-  the insert is `ON CONFLICT DO NOTHING` and a retried batch is harmless.
-- `id` (like `events.id`) defines global read order and serves as the UI's
-  incremental-fetch cursor; `(version, seq)` preserves the driver's own order
-  even if batches land out of order.
-- Structured `slog` attrs are rendered into the line text (the default
-  `key=value` text form), not stored as jsonb. Nobody queries driver logs by
-  attribute; a text line keeps the table small and the UI trivial.
+The first implementation is a filesystem store, following the pattern the
+runner already trusts for `taskstate` and the outbox `FileStore` —
+stdlib-only, one directory per unit:
+
+```
+<log-dir>/driver-logs/<task-id>/<version>.jsonl
+```
+
+- One JSONL file per run, append-only:
+  `{"seq":42,"stream":"setup","level":"","line":"npm ERR! ...","ts":"..."}`.
+  Appends are batch-buffered writes; no per-line fsync — these are
+  best-effort diagnostics, and the crash window is one batch.
+- **Idempotency** lives in the store: it tracks the last-appended `seq` per
+  run in memory, lazily recovered by reading the file's final line on first
+  touch after a server restart. Since the driver sends one batch at a time
+  in order, redelivered batches are detected by `seq` and skipped — no
+  read-modify-write on the hot path.
+- **Cursor** is an opaque `"<version>:<seq>"` string, so `Read` needs no
+  global row id and the interface ports unchanged to an object-storage
+  backend (one object per run, listed by key prefix) if a deployment ever
+  wants S3/Tigris instead of a disk.
+- **Server flag**: `--log-dir` (default under the server's working
+  directory). The Fly deployment adds a `[mounts]` volume for it; without a
+  volume the logs simply don't survive a redeploy — degraded, not broken.
+- Access control never touches the filesystem: handlers load the task row
+  from Postgres first and enforce scopes on it, exactly like every other
+  task-scoped handler; the store is keyed by the already-authorized task id.
 
 ### Wire: two new RPCs on `XAgentService`
 
@@ -147,22 +177,22 @@ message SubmitDriverLogsResponse {
 
 message ListDriverLogsRequest {
   int64 task_id = 1;
-  int64 after_id = 2;                         // cursor: rows with id > after_id
+  string cursor = 2;                          // opaque; empty = from the beginning
   int32 limit = 3;                            // default 1000, max 1000
 }
 
 message DriverLog {
-  int64 id = 1;
-  int64 version = 2;
-  int64 seq = 3;
-  string stream = 4;
-  string level = 5;
-  string line = 6;
-  google.protobuf.Timestamp created_at = 7;
+  int64 version = 1;
+  int64 seq = 2;
+  string stream = 3;
+  string level = 4;
+  string line = 5;
+  google.protobuf.Timestamp created_at = 6;
 }
 
 message ListDriverLogsResponse {
   repeated DriverLog logs = 1;
+  string next_cursor = 2;                     // pass back to continue; empty = end
 }
 ```
 
@@ -174,16 +204,16 @@ message ListDriverLogsResponse {
   `task.archived` predicate. No new scope ops.
 - Server-side enforcement, independent of driver behavior: ≤ 500
   lines/request, each line truncated to 8 KiB, and a per-run cap (default
-  20,000 lines). Past the cap the handler inserts one final
-  `[xagent] log cap reached, dropping further lines` marker row and returns
+  20,000 lines). Past the cap the handler appends one final
+  `[xagent] log cap reached, dropping further lines` marker and returns
   `capped=true`.
 - The handler publishes a `change` notification with a
   `{Action: "appended", Type: "driver_logs", ID: task_id}` resource — same
   pattern `UploadLogs` uses with `task_logs` — so the Web UI's existing SSE
-  wake-and-refetch loop picks it up. Batching (below) naturally throttles this
-  to at most one notification per flush.
+  wake-and-refetch loop picks it up. Batching (below) naturally throttles
+  this to at most one notification per flush.
 - **`ListDriverLogs`** is read-side for the Web UI: `OpTaskRead` +
-  `task.ScopeAttr()`, keyset pagination on `id`. No streaming RPC — the UI
+  `task.ScopeAttr()`, cursor pagination. No streaming RPC — the UI
   convention is SSE signal + refetch, and the cursor makes refetch cheap.
 
 ### Driver-side capture and shipping
@@ -220,11 +250,11 @@ func (s *Shipper) Flush(ctx context.Context) error    // final drain, bounded by
   incremented; the next successful flush prepends a synthetic
   `[xagent] dropped N lines` line (with its own `seq`) so gaps are visible.
 - **Retry**: transient RPC errors back off and retry the same batch (the
-  unique key makes redelivery idempotent). Permanent errors
-  (`PermissionDenied` — e.g. task archived, `NotFound`, `InvalidArgument`) or
-  `capped=true` stop the shipper for the rest of the run; stdio output
-  continues untouched. This mirrors the `isPermanentError` classification in
-  `internal/runner/eventoutbox.go`.
+  store's seq check makes redelivery idempotent). Permanent errors
+  (`PermissionDenied` — e.g. task archived, `NotFound`, `InvalidArgument`,
+  `Unimplemented`) or `capped=true` stop the shipper for the rest of the run;
+  stdio output continues untouched. This mirrors the `isPermanentError`
+  classification in `internal/runner/eventoutbox.go`.
 - **Final flush**: `Driver.Run` already keeps `eventCtx` alive through
   SIGTERM for the terminal `SubmitRunnerEvents`. Before that terminal submit
   it calls `shipper.Flush(eventCtx)` with a short bound (~5 s). The flush is
@@ -252,7 +282,8 @@ in-memory, and correctness-critical reporting stays on `SubmitRunnerEvents`.
   follow toggle.
 - Data comes from `ListDriverLogs` via connect-query, refetched when the SSE
   `change` notification carries a `driver_logs` resource for the task —
-  incremental via `after_id`, so a follow session only transfers new rows.
+  incremental via `next_cursor`, so a follow session only transfers new
+  lines.
 - The timeline is unchanged. `report` events remain the agent's authored
   output in the conversation view; driver logs are a separate diagnostic
   surface, visually distinct (terminal styling vs. timeline cards), so the
@@ -260,12 +291,15 @@ in-memory, and correctness-critical reporting stays on `SubmitRunnerEvents`.
 
 ### Retention
 
-- `ON DELETE CASCADE` ties log lifetime to the task row, same as events.
+- Deleting is `rm -r` of the task's directory — no DELETE churn, no vacuum.
 - Archived tasks keep their logs for a grace window: the existing archiver
-  loop (`internal/server/archiver`) gains a step that deletes `driver_logs`
-  rows for tasks archived more than 7 days ago (batch-limited per tick, like
-  `Tick()`'s task batching). Live and recently-archived tasks stay fully
-  debuggable; the table cannot grow without bound.
+  loop (`internal/server/archiver`) gains a step that calls
+  `logstore.Delete` for tasks archived more than 7 days ago (batch-limited
+  per tick, like `Tick()`'s task batching). Live and recently-archived tasks
+  stay fully debuggable; the directory cannot grow without bound.
+- There is no FK cascade with file storage, so the same sweep removes
+  directories whose task id no longer exists in Postgres (orphans from
+  org/task deletion).
 - The per-run cap (20,000 lines × 8 KiB worst case) bounds a single runaway
   run at ~160 MB, and in practice runs are orders of magnitude smaller.
 
@@ -280,16 +314,26 @@ in-memory, and correctness-critical reporting stays on `SubmitRunnerEvents`.
 - **Server unreachable / socket errors**: the ring buffer absorbs up to 5,000
   lines, then drops oldest with a visible `dropped N lines` marker. The agent
   is never blocked or failed because of log delivery.
+- **Server disk full / write error**: `Append` fails, the handler returns
+  `Internal`, the driver backs off and retries, eventually dropping with
+  markers. Log delivery degrades; tasks and events are unaffected because
+  they live in Postgres.
+- **Server restart or redeploy**: the last-seq map is rebuilt lazily from
+  file tails, so a retry racing a restart is still deduplicated. On Fly the
+  log dir must be a mounted volume to survive a redeploy; without one the
+  history is lost but the pipeline resumes immediately — degraded, not
+  broken. (The deployment is a single machine by design — see the pubsub
+  note in `fly.toml` — so no cross-instance coordination is needed.)
 - **Task archived mid-run**: the token's `task.archived:"false"` predicate
   turns submits into `PermissionDenied`; the shipper classifies it permanent
   and goes quiet, matching how the sandbox is about to be pruned anyway.
-- **Retry duplicates**: `ON CONFLICT (task_id, version, seq) DO NOTHING`
-  makes redelivery invisible.
+- **Retry duplicates**: the store skips lines with `seq` at or below the
+  run's last-appended `seq`, making redelivery invisible.
 - **Restart while old run still flushing**: the old driver's lines carry the
-  old `version`, the new run's lines the new one — no interleaving in the
-  grouped UI, no clobbering. (With `version=0` before run-scoped-runner-events
-  lands, lines from both runs share a group; acceptable during the interim,
-  see Open Questions.)
+  old `version` and land in the old run's file, the new run's in the new one
+  — no interleaving in the grouped UI, no clobbering. (With `version=0`
+  before run-scoped-runner-events lands, lines from both runs share a file;
+  acceptable during the interim, see Open Questions.)
 - **Log flood**: per-line truncation, per-request limit, buffer cap, and the
   server-side per-run cap fail in that order; every drop point leaves a
   marker. The failure mode is "logs get sparse", never "task fails" or
@@ -297,48 +341,62 @@ in-memory, and correctness-critical reporting stays on `SubmitRunnerEvents`.
 
 ## Implementation Plan
 
-1. **Schema migration** — Delivers: the `driver_logs` table, constraints, and
-   index. Depends on: nothing. Verifiable by: migration runs cleanly up and
-   down (`mise run up:test`).
+1. **`logstore` package** — Delivers: the `Store` interface and the
+   filesystem implementation (JSONL files, seq dedup with lazy tail
+   recovery, cursor reads, delete). Depends on: nothing. Verifiable by: unit
+   tests (append/read/dedup/cursor/restart-recovery) against a temp dir.
 2. **Proto + generated code** — Delivers: `SubmitDriverLogs` /
    `ListDriverLogs` messages and RPCs, `mise run generate` output, moq
    regeneration. Depends on: nothing (mergeable before 1; handlers don't
    exist yet). Verifiable by: build + generated-code diff review.
-3. **Store methods** — Delivers: `CreateDriverLogs` (batch insert, conflict-
-   ignoring, cap-aware) and `ListDriverLogs` (keyset) in `internal/store`.
-   Depends on: (1). Verifiable by: store unit tests against the test
-   database.
-4. **Server handlers** — Delivers: the two handlers in
-   `internal/server/apiserver` with scope checks, limits, the cap marker, and
-   the `driver_logs` change notification. Depends on: (2), (3). Verifiable
-   by: handler tests following `log_test.go` / `runner_test.go` patterns
-   (permissions, truncation, cap, idempotent retry).
-5. **Driver shipper** — Delivers: `internal/agent/logship` (ring buffer,
+3. **Server handlers** — Delivers: the two handlers in
+   `internal/server/apiserver` with scope checks, limits, the cap marker,
+   the `driver_logs` change notification, and the `--log-dir` flag wiring.
+   Depends on: (1), (2). Verifiable by: handler tests following
+   `log_test.go` / `runner_test.go` patterns (permissions, truncation, cap,
+   idempotent retry).
+4. **Driver shipper** — Delivers: `internal/agent/logship` (ring buffer,
    flush loop, tee handler, line writer) plus wiring in `command/driver.go`,
    `Driver.setup`, and the agent providers' stderr; final flush in
-   `Driver.Run`. Depends on: (2), (4). Verifiable by: unit tests with the moq
+   `Driver.Run`. Depends on: (2), (3). Verifiable by: unit tests with the moq
    client (ordering, drop marker, permanent-error stop, flush bound) and a
-   live task showing rows in the table.
-6. **Web UI Logs tab** — Delivers: the Logs tab with incremental fetch,
-   SSE-driven refetch, run grouping, follow mode. Depends on: (4). Verifiable
+   live task showing lines in the log dir.
+5. **Web UI Logs tab** — Delivers: the Logs tab with incremental fetch,
+   SSE-driven refetch, run grouping, follow mode. Depends on: (3). Verifiable
    by: viewing a live task's logs streaming in the UI; `pnpm lint`.
-7. **Retention** — Delivers: archiver step pruning logs of long-archived
-   tasks. Depends on: (1). Verifiable by: archiver unit test with backdated
-   archived tasks.
+6. **Retention** — Delivers: archiver step pruning logs of long-archived
+   tasks and orphaned directories. Depends on: (1). Verifiable by: archiver
+   unit test with backdated archived tasks and an orphan dir.
+7. **Fly volume** — Delivers: `[mounts]` entry in `fly.toml` plus the created
+   volume, so logs survive redeploys. Depends on: (3). Verifiable by:
+   deploy, write logs, redeploy, logs still readable.
 
-Layers 1–4 are safe to merge with no producer; the driver ships nothing until
-layer 5. Old drivers against a new server are unaffected (new RPCs unused);
+Layers 1–3 are safe to merge with no producer; the driver ships nothing until
+layer 4. Old drivers against a new server are unaffected (new RPCs unused);
 new drivers against an old server hit `Unimplemented`, which the shipper
 treats as permanent and goes quiet — stdio behavior is unchanged either way.
 
 ## Trade-offs
 
-- **New table vs. a `log` event payload.** A sixth `events` arm would reuse
-  storage, RPCs, and the timeline. Rejected: log volume is 100–1000× event
-  volume and would swamp `ListEventsByTask` (which the agent's brief and the
-  timeline both read in full), `wake`/routing semantics are meaningless for
-  log lines, and retention diverges (events are the permanent record; logs
-  are prunable diagnostics). The unified-task-event-stream proposal
+- **Flat files vs. a Postgres table.** A `driver_logs` table would get
+  transactions, FK cascade, and org scoping for free. Rejected (explicitly —
+  logs do not belong in Postgres): log volume is 100–1000× event volume,
+  row-per-line inserts bloat the primary OLTP database and every backup of
+  it, retention becomes DELETE/vacuum churn instead of `rm -r`, and nothing
+  ever queries log lines relationally. Postgres remains the source of truth
+  for semantic state; the store interface keeps the wire and handlers
+  identical if the backend ever changes.
+- **Filesystem vs. object storage (S3/Tigris).** Object storage would
+  survive redeploys without a volume and scale past one machine. Deferred,
+  not rejected: it adds a credentialed external dependency the stack doesn't
+  have today, and the deployment is a single machine by design. The
+  `logstore.Store` interface and the opaque cursor are shaped so an
+  object-store implementation (one object per run) is a drop-in later.
+- **New table-less RPCs vs. a `log` event payload.** A sixth `events` arm
+  would reuse the timeline plumbing. Rejected: it puts the logs right back
+  into Postgres, would swamp `ListEventsByTask` (which the agent's brief and
+  the timeline both read in full), and `wake`/routing semantics are
+  meaningless for log lines. The unified-task-event-stream proposal
   anticipated exactly this split when it deferred a "verbose channel".
 - **New RPC vs. reviving `UploadLogs`.** The name is right but the shape is
   wrong: `LogEntry{type, content}` has no run, no ordering, no idempotency
@@ -350,7 +408,7 @@ treats as permanent and goes quiet — stdio behavior is unchanged either way.
   overhead but adds connection-lifetime state, reconnect logic, and a novel
   pattern — everything else in the system (runner events, report uploads) is
   batched unary with retries, and the Web UI reads via SSE-signal + refetch.
-  Batched unary with an idempotency key gets the same throughput at 2 s
+  Batched unary with seq-based idempotency gets the same throughput at 2 s
   latency with none of the machinery.
 - **Driver-side vs. runner-side capture.** The runner could tail
   `docker logs` and ship without touching the driver, and it would catch even
@@ -361,10 +419,10 @@ treats as permanent and goes quiet — stdio behavior is unchanged either way.
   the driver reporting for itself. The RPC deliberately doesn't care who the
   producer is, so a runner-side backstop for crashed drivers can be added
   later.
-- **Rendered text vs. structured jsonb attrs.** Storing slog attrs as jsonb
+- **Rendered text vs. structured attrs.** Storing slog attrs as JSON fields
   would allow attribute queries, but no consumer needs them: the UI renders
-  lines, and grep-shaped debugging works on text. Text keeps rows small and
-  the schema stable across attr changes.
+  lines, and grep-shaped debugging works on text. Text keeps the JSONL rows
+  small and the format stable across attr changes.
 
 ## Open Questions
 
@@ -373,14 +431,17 @@ treats as permanent and goes quiet — stdio behavior is unchanged either way.
    provisioned version if a command raced), or should this proposal wait for
    the runner to pass the version explicitly and ship logs with `version=0`
    grouping in the meantime?
-2. **Retention numbers.** Are 7-days-after-archive and a 20,000-line per-run
+2. **Fly volume vs. accepting redeploy loss.** Is a mounted volume worth the
+   operational step, or is "logs survive machine stop/start but not
+   redeploys" acceptable until object storage is wanted anyway?
+3. **Retention numbers.** Are 7-days-after-archive and a 20,000-line per-run
    cap the right defaults, and should they be server flags
    (`--driver-log-retention`, `--driver-log-cap`) or hardcoded until someone
    needs otherwise?
-3. **Debug-shell runs.** `shell.Serve` runs produce little of interest —
+4. **Debug-shell runs.** `shell.Serve` runs produce little of interest —
    should the shipper be disabled for `shell_session` tasks, or is uniform
    behavior simpler?
-4. **Claude CLI verbosity.** The CLI's stderr is quiet in normal operation.
+5. **Claude CLI verbosity.** The CLI's stderr is quiet in normal operation.
    Is it worth a workspace-level knob to also ship the raw `stream-json`
    stdout (heavily truncated) for deep debugging, or does the tool-summary
    slog line remain the permanent answer?
