@@ -5,6 +5,7 @@ import (
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
+	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 )
 
@@ -27,11 +28,10 @@ func TestRegisterWorkspaces(t *testing.T) {
 	// List workspaces
 	listResp, err := srv.ListWorkspaces(ctx, &xagentv1.ListWorkspacesRequest{})
 	assert.NilError(t, err)
-	assert.Equal(t, len(listResp.Workspaces), 2)
-	assert.Equal(t, listResp.Workspaces[0].Name, "workspace-a")
-	assert.Equal(t, listResp.Workspaces[0].Description, "First workspace")
-	assert.Equal(t, listResp.Workspaces[1].Name, "workspace-b")
-	assert.Equal(t, listResp.Workspaces[1].Description, "")
+	assert.DeepEqual(t, listResp.Workspaces, []*xagentv1.RegisteredWorkspace{
+		{Name: "workspace-a", RunnerId: "runner-1", Description: "First workspace"},
+		{Name: "workspace-b", RunnerId: "runner-1"},
+	}, protocmp.Transform(), protocmp.IgnoreFields(&xagentv1.RegisteredWorkspace{}, "updated_at"))
 }
 
 func TestRegisterWorkspaces_Permissions(t *testing.T) {
