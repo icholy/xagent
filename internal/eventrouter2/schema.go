@@ -31,6 +31,11 @@ var eventTypes []EventTypeDef
 // eventTypeByKey indexes eventTypes by "source:type" for O(1) lookup.
 var eventTypeByKey = map[string]EventTypeDef{}
 
+// defaultRules accumulates every registered schema's DefaultRules in
+// registration order; MustRegisterSchema appends each def's rules as it is
+// registered so DefaultRules is a plain lookup rather than a per-call flatten.
+var defaultRules []RoutingRule
+
 // MustRegisterSchema records def as the schema for its (Source, Type) event
 // kind, making it available to EventTypeFor, EventTypes, and
 // DefaultRules. It panics if a def with the same (Source, Type) is already
@@ -42,6 +47,7 @@ func MustRegisterSchema(def EventTypeDef) {
 	}
 	eventTypes = append(eventTypes, def)
 	eventTypeByKey[key] = def
+	defaultRules = append(defaultRules, def.DefaultRules...)
 }
 
 // EventTypeFor returns the registry entry for a (source, type) pair, and false
@@ -57,18 +63,14 @@ func EventTypes() []EventTypeDef {
 	return slices.Clone(eventTypes)
 }
 
-// DefaultRules flattens every registered schema's DefaultRules in registration
-// order. It is the new-shape replacement for the legacy type-less
-// {Prefix:"xagent:", Wakeup:true} fallback: rather than a validation
-// special-case, the default set is an ordinary list of fully-defined rules
-// contributed by the producers. These are not wired into the router here; that
-// is a later layer.
+// DefaultRules returns every registered schema's DefaultRules in registration
+// order, as accumulated during registration. It is the new-shape replacement
+// for the legacy type-less {Prefix:"xagent:", Wakeup:true} fallback: rather than
+// a validation special-case, the default set is an ordinary list of
+// fully-defined rules contributed by the producers. These are not wired into the
+// router here; that is a later layer.
 func DefaultRules() []RoutingRule {
-	var rules []RoutingRule
-	for _, def := range eventTypes {
-		rules = append(rules, def.DefaultRules...)
-	}
-	return rules
+	return slices.Clone(defaultRules)
 }
 
 // Validate checks the rule against the event-type registry, returning a wrapped
