@@ -26,19 +26,19 @@ type Condition struct {
 	Value string
 }
 
-// MatchRule reports whether the rule matches the event. The matcher is
-// generic: it never switches on the event source and does no source-specific
-// parsing. Empty Source/Type are wildcards. Each condition holds when any
-// value the event carries for cond.Attr satisfies (op, value); a condition on
-// an attr the event does not carry fails. Conditions AND together.
-func MatchRule(rule RoutingRule, event InputEvent) bool {
-	if rule.Source != "" && rule.Source != event.Source {
+// Match reports whether the rule matches the event. The matcher is generic:
+// it never switches on the event source and does no source-specific parsing.
+// Empty Source/Type are wildcards. Each condition holds when any value the
+// event carries for cond.Attr satisfies (op, value); a condition on an attr
+// the event does not carry fails. Conditions AND together.
+func (r RoutingRule) Match(event InputEvent) bool {
+	if r.Source != "" && r.Source != event.Source {
 		return false
 	}
-	if rule.Type != "" && rule.Type != event.Type {
+	if r.Type != "" && r.Type != event.Type {
 		return false
 	}
-	for _, cond := range rule.Conditions {
+	for _, cond := range r.Conditions {
 		if !cond.Match(event.Attr(cond.Attr)) {
 			return false
 		}
