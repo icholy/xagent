@@ -207,13 +207,12 @@ func (r *Runner) Poll(ctx context.Context) error {
 				// No running sandbox to signal: there is no driver to
 				// complete the cancel, so emit "stopped" to land the task in
 				// cancelled instead of sticking in cancelling.
-				ev := model.RunnerEvent{
+				if err := r.queue.Enqueue(model.RunnerEvent{
 					TaskID:  task.ID,
 					Event:   model.RunnerEventStopped,
 					Version: task.Version,
-				}
-				if err := r.queue.Enqueue(ev); err != nil {
-					r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
+				}); err != nil {
+					r.die(fmt.Errorf("persist %s for task %d: %w", model.RunnerEventStopped, task.ID, err))
 					return nil
 				}
 				return nil
@@ -235,14 +234,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "err", err)
-					ev := model.RunnerEvent{
+					err := r.queue.Enqueue(model.RunnerEvent{
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
 						Version: task.Version,
 						Reason:  err.Error(),
-					}
-					if err := r.queue.Enqueue(ev); err != nil {
-						r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
+					})
+					if err != nil {
+						r.die(fmt.Errorf("persist %s for task %d: %w", model.RunnerEventFailed, task.ID, err))
 					}
 					return nil
 				}
@@ -277,14 +276,14 @@ func (r *Runner) Poll(ctx context.Context) error {
 				if err := r.Start(ctx, task); err != nil {
 					r.sem.Release(1) // Release the slot on failure
 					r.log.Error("failed to start task", "task", task.ID, "err", err)
-					ev := model.RunnerEvent{
+					err := r.queue.Enqueue(model.RunnerEvent{
 						TaskID:  task.ID,
 						Event:   model.RunnerEventFailed,
 						Version: task.Version,
 						Reason:  err.Error(),
-					}
-					if err := r.queue.Enqueue(ev); err != nil {
-						r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
+					})
+					if err != nil {
+						r.die(fmt.Errorf("persist %s for task %d: %w", model.RunnerEventFailed, task.ID, err))
 					}
 					return nil
 				}
@@ -349,13 +348,12 @@ func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
 	}
 	r.log.Error("load: sandbox exited without reporting", "task", taskID)
 	// Use version 0 to bypass version check (spontaneous events)
-	ev := model.RunnerEvent{
+	if err := r.queue.Enqueue(model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
 		Reason: "sandbox exited",
-	}
-	if err := r.queue.Enqueue(ev); err != nil {
-		r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
+	}); err != nil {
+		r.die(fmt.Errorf("persist %s for task %d: %w", model.RunnerEventFailed, taskID, err))
 		return
 	}
 }
@@ -593,13 +591,12 @@ func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) 
 	}
 	r.log.Error("sandbox exited without reporting", "task", taskID, "exitCode", int(code))
 	// Use version 0 to bypass version check (spontaneous events)
-	ev := model.RunnerEvent{
+	if err := r.queue.Enqueue(model.RunnerEvent{
 		TaskID: taskID,
 		Event:  model.RunnerEventFailed,
 		Reason: fmt.Sprintf("sandbox exited with status code %d", code),
-	}
-	if err := r.queue.Enqueue(ev); err != nil {
-		r.die(fmt.Errorf("persist %s for task %d: %w", ev.Event, ev.TaskID, err))
+	}); err != nil {
+		r.die(fmt.Errorf("persist %s for task %d: %w", model.RunnerEventFailed, taskID, err))
 		return
 	}
 }
