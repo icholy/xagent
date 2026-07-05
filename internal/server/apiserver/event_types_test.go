@@ -7,7 +7,7 @@ import (
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 
-	// Blank-imported so their init registers the eventrouter2 schemas the
+	// Blank-imported so their init registers the eventrouter schemas the
 	// handler serves. atlassianserver is already imported transitively by the
 	// apiserver package; githubserver is only referenced via an interface, so it
 	// must be pulled in explicitly here for its github/* types to be registered.

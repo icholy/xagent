@@ -3,12 +3,12 @@ package atlassianserver
 import (
 	"testing"
 
-	"github.com/icholy/xagent/internal/eventrouter2"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"gotest.tools/v3/assert"
 )
 
 func TestSchemaRegistration(t *testing.T) {
-	reg := eventrouter2.NewSchemaRegistry()
+	reg := eventrouter.NewSchemaRegistry()
 	RegisterSchemas(reg)
 
 	def, ok := reg.EventTypeFor("atlassian", EventTypeCommentCreated)

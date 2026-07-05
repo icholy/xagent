@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server/atlassianserver"
@@ -18,12 +17,12 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// testRegistry builds an isolated eventrouter2 schema registry populated with the
-// real producer schemas via their exported RegisterSchemas helpers, so the Route
+// testRegistry builds an isolated schema registry populated with the real
+// producer schemas via their exported RegisterSchemas helpers, so the Route
 // tests exercise the same translation the server uses in production without
 // depending on the process-wide DefaultSchemaRegistry.
-func testRegistry() *eventrouter2.SchemaRegistry {
-	reg := eventrouter2.NewSchemaRegistry()
+func testRegistry() *eventrouter.SchemaRegistry {
+	reg := eventrouter.NewSchemaRegistry()
 	githubserver.RegisterSchemas(reg)
 	atlassianserver.RegisterSchemas(reg)
 	return reg
@@ -1078,7 +1077,6 @@ func TestRouteAssignmentCreatesTaskAndLink(t *testing.T) {
 		Description: "alice assigned PR #9 to @icholy-bot",
 		URL:         url,
 		UserID:      org.UserID,
-		Assignee:    "icholy-bot",
 		Attrs:       eventrouter.Attrs{"assignee": {"icholy-bot"}},
 	})
 
@@ -1126,7 +1124,6 @@ func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
 		Type:     "pull_request_assigned",
 		URL:      url,
 		UserID:   org.UserID,
-		Assignee: "icholy-bot",
 		Attrs:    eventrouter.Attrs{"assignee": {"icholy-bot"}},
 	})
 	assert.NilError(t, err)
@@ -1185,7 +1182,6 @@ func TestRouteAssignmentWrongAssigneeIsNoOp(t *testing.T) {
 		Type:     "pull_request_assigned",
 		URL:      url,
 		UserID:   org.UserID,
-		Assignee: "someone-else",
 		Attrs:    eventrouter.Attrs{"assignee": {"someone-else"}},
 	})
 

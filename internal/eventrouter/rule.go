@@ -1,23 +1,54 @@
 package eventrouter
 
 import (
-	"github.com/icholy/xagent/internal/eventrouter2"
+	"strings"
+
+	"github.com/icholy/xagent/internal/model"
 )
 
-// toV2 converts the event into the eventrouter2 shape for attribute-based
-// matching. It is a field copy: the legacy Assignee/Values fields are not
-// carried over — those dimensions now travel in Attrs (populated by the webhook
-// handlers), which is what the new matcher reads. Attrs converts directly since
-// eventrouter.Attrs and eventrouter2.Attrs are the same underlying type.
-func (e InputEvent) toV2() eventrouter2.InputEvent {
-	return eventrouter2.InputEvent{
-		Source:      e.Source,
-		Type:        e.Type,
-		Description: e.Description,
-		Data:        e.Data,
-		URL:         e.URL,
-		UserID:      e.UserID,
-		Attrs:       eventrouter2.Attrs(e.Attrs),
-		Meta:        e.Meta,
+// Match reports whether the rule matches the event. The matcher is generic: it
+// never switches on the event source and does no source-specific parsing. Empty
+// Source/Type are wildcards. Each condition holds when any value the event
+// carries for cond.Attr satisfies (op, value); a condition on an attr the event
+// does not carry fails. Conditions AND together.
+//
+// It operates on model.RoutingRule / model.Condition directly (the canonical
+// conditions types) and matches against the InputEvent it is given.
+func Match(rule model.RoutingRule, event InputEvent) bool {
+	if rule.Source != "" && rule.Source != event.Source {
+		return false
 	}
+	if rule.Type != "" && rule.Type != event.Type {
+		return false
+	}
+	for _, cond := range rule.Conditions {
+		if !conditionMatch(cond, event.Attr(cond.Attr)) {
+			return false
+		}
+	}
+	return true
+}
+
+// conditionMatch reports whether any of the given values (the event's values for
+// the condition's attr) satisfies the condition's op against its value. Passing
+// an empty slice — an attr the event does not carry — always fails. Unknown ops
+// never match.
+func conditionMatch(c model.Condition, values []string) bool {
+	for _, v := range values {
+		switch c.Op {
+		case "equals":
+			if v == c.Value {
+				return true
+			}
+		case "prefix":
+			if strings.HasPrefix(v, c.Value) {
+				return true
+			}
+		case "contains":
+			if strings.Contains(v, c.Value) {
+				return true
+			}
+		}
+	}
+	return false
 }

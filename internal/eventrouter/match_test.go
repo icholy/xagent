@@ -1,4 +1,4 @@
-package eventrouter2
+package eventrouter
 
 import (
 	"testing"

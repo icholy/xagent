@@ -1,4 +1,4 @@
-package eventrouter2
+package eventrouter
 
 import (
 	"slices"
@@ -8,13 +8,13 @@ import (
 
 // TranslateRule converts a legacy model.LegacyRoutingRule (flat matcher fields)
 // into the equivalent set of new-shape RoutingRule values. It is the bridge for
-// the translate-on-read cutover: the store uses it to decode pre-conditions
-// stored rows into conditions-native rules.
+// the translate-on-read cutover: the store uses it (via the store.RuleTranslator
+// interface) to decode pre-conditions stored rows into conditions-native rules.
 //
 // The result is a slice because the new shape requires every rule to name one
 // concrete registered (Source, Type), and a condition is only valid on a type
 // that emits its attr. A legacy rule with an empty Source and/or Type therefore
-// expands to one v2 rule per applicable registered event type: those whose
+// expands to one rule per applicable registered event type: those whose
 // Source/Type match the legacy selector (empty = wildcard) and that emit every
 // attr the rule's conditions reference. A rule whose condition attr no matching
 // type emits produces zero rules, mirroring v1 where such a rule silently never

@@ -10,7 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/authscope"
-	"github.com/icholy/xagent/internal/eventrouter2"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
@@ -266,7 +266,7 @@ func (s *Server) SetRoutingRules(ctx context.Context, req *xagentv1.SetRoutingRu
 	rules := make([]model.RoutingRule, len(req.Rules))
 	for i, r := range req.Rules {
 		rule := model.RoutingRuleFromProto(r)
-		if err := eventrouter2.DefaultSchemaRegistry.Validate(rule); err != nil {
+		if err := eventrouter.DefaultSchemaRegistry.Validate(rule); err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
 		rules[i] = rule

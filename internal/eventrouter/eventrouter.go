@@ -8,21 +8,20 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store"
 )
 
 // Attrs maps a dimension name to the event's values for that dimension.
-// Single-valued dimensions are one-element slices. This mirrors the shape
-// prototyped in eventrouter2 and is being introduced here as an additive,
-// inert step of the attribute-based event-matching redesign: webhook handlers
-// populate it, but nothing reads it yet (v1 matching still uses the legacy
-// fields below). See proposals/draft/attribute-based-event-matching.md.
+// Single-valued dimensions are one-element slices. Webhook handlers populate it
+// at extraction time and the attribute matcher (Match) reads from it. See
+// proposals/draft/attribute-based-event-matching.md.
 type Attrs map[string][]string
 
-// InputEvent represents a parsed webhook event ready for routing.
+// InputEvent represents a parsed webhook event ready for routing. Its matchable
+// dimensions travel in Attrs (populated by the webhook handlers), which the
+// attribute matcher reads via Attr.
 type InputEvent struct {
 	Source      string
 	Type        string
@@ -30,14 +29,8 @@ type InputEvent struct {
 	Data        string
 	URL         string
 	UserID      string
-	Assignee    string
-	// Values is a bag of discrete matchable tokens the event provides (e.g.
-	// added Jira labels). RoutingRule.Value matches by membership. This is
-	// internal/transient — it is not part of the proto and is not persisted.
-	Values []string
-	// Attrs carries the same matchable dimensions as the legacy Assignee/Values
-	// fields, keyed by dimension name (mirroring eventrouter2). It is populated
-	// in addition to the legacy fields but is not yet consumed by v1 matching.
+	// Attrs carries the event's matchable dimensions keyed by dimension name
+	// (e.g. "mention", "assignee", "label"), which the attribute matcher reads.
 	Attrs Attrs
 	// Meta carries source-specific data that the router does not interpret. It
 	// lets webhook handlers attach native identity (e.g. the GitHub author)
@@ -47,8 +40,7 @@ type InputEvent struct {
 
 // Attr returns the event's values for a dimension. The "body" and "url"
 // dimensions are derived views over Data and URL so extractors don't
-// duplicate them; any other key reads from Attrs (nil/absent -> nil). This
-// mirrors eventrouter2.InputEvent.Attr.
+// duplicate them; any other key reads from Attrs (nil/absent -> nil).
 func (e InputEvent) Attr(key string) []string {
 	switch key {
 	case "body":
@@ -82,12 +74,12 @@ type Router struct {
 	Store     *store.Store
 	Publisher pubsub.Publisher
 
-	// Registry supplies the eventrouter2 schemas backing the ruleless-org default
-	// rules (reg.DefaultRules()). When nil, Route falls back to
-	// eventrouter2.DefaultSchemaRegistry — the process-wide registry the producer
-	// packages populate from init — so production construction sites need not set
-	// it. Tests inject an isolated registry to control which schemas are present.
-	Registry *eventrouter2.SchemaRegistry
+	// Registry supplies the schemas backing the ruleless-org default rules
+	// (reg.DefaultRules()). When nil, Route falls back to DefaultSchemaRegistry —
+	// the process-wide registry the producer packages populate from init — so
+	// production construction sites need not set it. Tests inject an isolated
+	// registry to control which schemas are present.
+	Registry *SchemaRegistry
 
 	// OnRouteOutcome, if set, is called synchronously once per matched org
 	// after routing handles that org, with the request context. The Router
@@ -112,11 +104,10 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	}
 
 	// The store returns conditions-native rules (legacy rows translated on read),
-	// so matching runs directly through the attribute-based eventrouter2 matcher.
-	// Convert the event once. Resolve the registry once for the default-rule
-	// fallback (nil-defaulting to the process-wide registry).
-	v2Input := input.toV2()
-	reg := cmp.Or(r.Registry, eventrouter2.DefaultSchemaRegistry)
+	// so matching runs directly through the attribute-based matcher against the
+	// input event. Resolve the registry once for the default-rule fallback
+	// (nil-defaulting to the process-wide registry).
+	reg := cmp.Or(r.Registry, DefaultSchemaRegistry)
 
 	// First matching rule per org; orgs with no match are dropped.
 	matched := map[int64]*model.RoutingRule{}
@@ -127,7 +118,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 			rules = reg.DefaultRules()
 		}
 		for i := range rules {
-			if eventrouter2.Match(rules[i], v2Input) {
+			if Match(rules[i], input) {
 				matched[orgID] = &rules[i]
 				break
 			}

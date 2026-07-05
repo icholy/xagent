@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 
-	// Blank-imported so their init registers the eventrouter2 schemas that
+	// Blank-imported so their init registers the eventrouter schemas that
 	// SetRoutingRules validates against (see event_types_test.go).
 	_ "github.com/icholy/xagent/internal/server/githubserver"
 )
