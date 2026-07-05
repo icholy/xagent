@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -140,8 +141,12 @@ var ServerCommand = &cli.Command{
 		dbPath := cmd.String("db")
 		noAuth := cmd.Bool("no-auth")
 
-		// Enrich logs with org_id, task_id and trace_id from the context.
-		slog.SetDefault(slog.New(logctx.NewHandler(slog.Default().Handler())))
+		// Enrich logs with org_id, task_id and trace_id from the context. The
+		// handler must be a concrete one (not slog.Default().Handler()): the
+		// default handler emits through the log package, and slog.SetDefault
+		// reroutes the log package back through this handler, so wrapping the
+		// default handler would deadlock on the first record.
+		slog.SetDefault(slog.New(logctx.NewHandler(slog.NewTextHandler(os.Stderr, nil))))
 
 		// Initialize OpenTelemetry (configured via OTEL_EXPORTER_OTLP_ENDPOINT env var)
 		otel, err := otelx.Setup(ctx)
