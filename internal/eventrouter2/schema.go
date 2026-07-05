@@ -80,22 +80,23 @@ func typeEmitsAttr(def EventTypeDef, key string) bool {
 }
 
 // Validate checks the rule against the event-type registry, returning a wrapped
-// error naming the first offending op or attr. It rejects unknown ops, unknown
-// attrs, and — when the rule selects a concrete Type — an attr the selected
-// event type never emits. A rule with an empty Type may use any registered attr
-// (plus the always-valid body/url). Setting Type also requires that
-// (Source, Type) name a registered event type.
+// error naming the first offending selector, op, or attr. Every rule must name
+// exactly one registered (Source, Type) event type: an empty Type is rejected,
+// and — because the registry is keyed by (Source, Type) and label_added exists
+// under multiple sources — an empty Source is rejected too. Each condition's op
+// must be equals/prefix/contains, and its attr must be one the selected event
+// type emits, i.e. a declared attr of that type or an always-valid derived view
+// (body/url).
 func (r RoutingRule) Validate() error {
-	// A concrete Type selector must name a registered event type so its emitted
-	// attrs are known; label_added exists under multiple sources, so the lookup
-	// is keyed by (Source, Type) and implies Source is set too.
-	var def EventTypeDef
-	var typed bool
-	if r.Type != "" {
-		def, typed = EventTypeFor(r.Source, r.Type)
-		if !typed {
-			return fmt.Errorf("unknown event type: source=%q type=%q", r.Source, r.Type)
-		}
+	if r.Type == "" {
+		return fmt.Errorf("rule must select an event type: empty type")
+	}
+	if r.Source == "" {
+		return fmt.Errorf("rule must select an event source: empty source for type %q", r.Type)
+	}
+	def, ok := EventTypeFor(r.Source, r.Type)
+	if !ok {
+		return fmt.Errorf("unknown event type: source=%q type=%q", r.Source, r.Type)
 	}
 	for _, cond := range r.Conditions {
 		if !validOps[cond.Op] {
@@ -104,7 +105,7 @@ func (r RoutingRule) Validate() error {
 		if !knownAttr(cond.Attr) {
 			return fmt.Errorf("unknown attr %q", cond.Attr)
 		}
-		if typed && !typeEmitsAttr(def, cond.Attr) {
+		if !typeEmitsAttr(def, cond.Attr) {
 			return fmt.Errorf("attr %q not emitted by event type %q", cond.Attr, r.Type)
 		}
 	}
