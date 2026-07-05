@@ -408,9 +408,11 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 	// lifecycle events are reserved for user-initiated restarts via RestartTask.
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
 	assert.NilError(t, err)
-	assert.Equal(t, len(model.FilterPayloads[*model.ExternalPayload](events)), 1)
+	externals := model.FilterPayloads[*model.ExternalPayload](events)
+	assert.Equal(t, len(externals), 1)
+	lifecycles := model.FilterPayloads[*model.LifecyclePayload](events)
 	var restarted int
-	for _, p := range model.FilterPayloads[*model.LifecyclePayload](events) {
+	for _, p := range lifecycles {
 		if p.Kind == model.LifecycleKindRestarted {
 			restarted++
 		}
@@ -463,7 +465,8 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// exactly the configured prompt and nothing else.
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
-	assert.DeepEqual(t, model.FilterPayloads[*model.InstructionPayload](events), []*model.InstructionPayload{
+	insts := model.FilterPayloads[*model.InstructionPayload](events)
+	assert.DeepEqual(t, insts, []*model.InstructionPayload{
 		{Text: "Triage this issue."},
 	})
 
@@ -482,7 +485,8 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// instruction event it already seeds.
 	linkEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeLink})
 	assert.NilError(t, err)
-	assert.DeepEqual(t, model.FilterPayloads[*model.LinkPayload](linkEvents), []*model.LinkPayload{
+	linkPayloads := model.FilterPayloads[*model.LinkPayload](linkEvents)
+	assert.DeepEqual(t, linkPayloads, []*model.LinkPayload{
 		{LinkID: links[0].ID, Relevance: "trigger", URL: url, Subscribe: true},
 	})
 	assert.Equal(t, linkEvents[0].Wake, false)
@@ -509,7 +513,8 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// mirroring the wake path (attach).
 	externalEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeExternal})
 	assert.NilError(t, err)
-	assert.DeepEqual(t, model.FilterPayloads[*model.ExternalPayload](externalEvents), []*model.ExternalPayload{
+	externalPayloads := model.FilterPayloads[*model.ExternalPayload](externalEvents)
+	assert.DeepEqual(t, externalPayloads, []*model.ExternalPayload{
 		{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this"},
 	})
 }
@@ -655,7 +660,8 @@ func TestRouteCreateRuleOmittedPromptUsesPreambleOnly(t *testing.T) {
 	assert.Equal(t, len(tasks), 1)
 	events, err := s.ListEventsByTask(t.Context(), nil, tasks[0].ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
-	assert.Equal(t, len(model.FilterPayloads[*model.InstructionPayload](events)), 1)
+	insts := model.FilterPayloads[*model.InstructionPayload](events)
+	assert.Equal(t, len(insts), 1)
 }
 
 func TestRouteSecondEventWakesCreatedTask(t *testing.T) {
