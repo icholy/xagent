@@ -1,5 +1,58 @@
 # Changelog
 
+## [2.9.0](https://github.com/icholy/xagent/compare/v2.8.0...v2.9.0) (2026-07-05)
+
+
+### Features
+
+* **eventrouter2:** add attribute-based core matcher ([ccb5050](https://github.com/icholy/xagent/commit/ccb505092b272104a6e036cacf25902e8e51618f))
+* **eventrouter2:** add event-type registry and rule validation ([ba62549](https://github.com/icholy/xagent/commit/ba625491f076051af5a9dc752aa2bf13bd74eeb0))
+* **eventrouter2:** require registered event type and add default rules ([8531804](https://github.com/icholy/xagent/commit/85318048840f4e84314533aec512892ef83a23c2))
+* **eventrouter2:** translate legacy rules to attribute conditions ([62fb223](https://github.com/icholy/xagent/commit/62fb223fcc707d9d51771de839b313dfb84598e9))
+* **eventrouter:** populate inert event attrs from webhooks ([c81680a](https://github.com/icholy/xagent/commit/c81680a97722f34b9968b94310259da68bad1680))
+* **eventrouter:** route via attribute-based matcher (translate-on-read) ([07185b4](https://github.com/icholy/xagent/commit/07185b42562af82e40677a5d61f5145dd1b85136))
+* **observability:** attach org and task ids to traces and logs ([26b126e](https://github.com/icholy/xagent/commit/26b126ed5c6d64a67d07e6f9cb5d1b6827678878)), closes [#1053](https://github.com/icholy/xagent/issues/1053)
+* **routing:** switch rules to attribute conditions (backend) ([934e583](https://github.com/icholy/xagent/commit/934e583dc3ee86b7998bac21dce915cf360fecbc))
+* **server:** add GetEventTypes RPC exposing the event-type registry ([3457727](https://github.com/icholy/xagent/commit/345772790d4e34e715c6512790d06af131e521ca))
+* **shell:** log rendezvous leg connect / established / teardown at info ([1434e50](https://github.com/icholy/xagent/commit/1434e50ca75c753c2aca5b7d010dd7cbdd83242c))
+* **webui:** attribute-condition editor for routing rules ([46f8a4f](https://github.com/icholy/xagent/commit/46f8a4fa8043faf6d6eada782be6b113c3169cd0))
+* **webui:** show full task name on hover via title attribute ([9304660](https://github.com/icholy/xagent/commit/9304660c416b421c76f0ef65180a8c36321c0f0c))
+* **webui:** surface archive as an icon button beside the task menu ([37667bd](https://github.com/icholy/xagent/commit/37667bdda7036a1b65779e272e8a4b026a259b8e))
+
+
+### Bug Fixes
+
+* **otel:** enable honeycomb metrics ingestion ([330fc28](https://github.com/icholy/xagent/commit/330fc28bc10aaed7cb429b9fbe48ce42bdd614ce))
+* **webui:** keep task header controls right-aligned on overflow ([5fc8262](https://github.com/icholy/xagent/commit/5fc8262b1f29453f2fb63bbbeaf923a76299a11a)), closes [#1230](https://github.com/icholy/xagent/issues/1230)
+* **webui:** truncate task title on wide screens to keep header one line ([e7a5143](https://github.com/icholy/xagent/commit/e7a5143d413a52aac3a01166e9deff61a0d84430))
+* **webui:** use pointer cursor on tab triggers ([8c663f6](https://github.com/icholy/xagent/commit/8c663f698991255b61e4cc1bc226b15ae3c3b12d))
+
+
+### Miscellaneous
+
+* **eventrouter2:** accumulate defaultRules during registration ([9b79d17](https://github.com/icholy/xagent/commit/9b79d17ac441d5e481a958e8c64af91a7070791d))
+* **eventrouter2:** drop tautological registry tests ([a90e5ba](https://github.com/icholy/xagent/commit/a90e5baa6e96edf2b5bde4d9453d4adac4694ceb))
+* **eventrouter2:** format registry entries multi-line ([3f1afb6](https://github.com/icholy/xagent/commit/3f1afb6496456b0f3429521c50ac978736cf31e3))
+* **eventrouter2:** group registry vars in a single block ([28d96f8](https://github.com/icholy/xagent/commit/28d96f892531043884fcaaab606fd6fbce60cb08))
+* **eventrouter2:** index registry by key and simplify Validate ([73c0ffe](https://github.com/icholy/xagent/commit/73c0ffec008a8e8f7de9fc82a59a00f8304caece))
+* **eventrouter2:** init index map in NewSchemaRegistry ([634d6df](https://github.com/icholy/xagent/commit/634d6df2f0af2ee24cef2c16a2dd466f8c536cda))
+* **eventrouter2:** make condition matching a method on Condition ([6c0a988](https://github.com/icholy/xagent/commit/6c0a9882e679108bbb2bb74315828937c72031b3))
+* **eventrouter2:** make MatchRule a method on RoutingRule ([f734d7f](https://github.com/icholy/xagent/commit/f734d7f475e518703d4e34252c021d7c68cd6420))
+* **eventrouter2:** operate on model.RoutingRule, drop wrapper types ([4d9f290](https://github.com/icholy/xagent/commit/4d9f290e63a2346d37340629b2d02914f320c328))
+* **eventrouter2:** producers register via registerSchemas(reg) ([ca3139a](https://github.com/icholy/xagent/commit/ca3139ab935feda3c5f317a55d3bd13e70cc5904))
+* **eventrouter2:** register event-type schemas from producers ([578cbc6](https://github.com/icholy/xagent/commit/578cbc635b2c0d1c00775d09bc30f4209859037e))
+* **eventrouter2:** register fixtures per test, drop helper ([4ad9540](https://github.com/icholy/xagent/commit/4ad95401146f8002dea4315a327d06298de04fe7))
+* **eventrouter2:** registry as an explicit SchemaRegistry type ([ef2e9c6](https://github.com/icholy/xagent/commit/ef2e9c6a26175d4d5f3597d2889d229428a39acc))
+* **eventrouter2:** rename RegisteredEventTypes to EventTypes ([f2cdfcf](https://github.com/icholy/xagent/commit/f2cdfcf50dd4cbcae8e4e1948f3045817dbe888a))
+* **eventrouter2:** rename registeredEventTypes var to eventTypes ([998cd21](https://github.com/icholy/xagent/commit/998cd21d0e23ad5f748c54183b8358cc9918cbb6))
+* **eventrouter2:** use gotest.tools assert in schema tests ([3b5afd0](https://github.com/icholy/xagent/commit/3b5afd06f267c09f80c0aa8a3465ae99a7e82f9e))
+* **eventrouter:** inline mention attr at construction sites ([6446de3](https://github.com/icholy/xagent/commit/6446de3aa9e0957ff59b5cffe6b0ffbe5463470b))
+* **eventrouter:** merge eventrouter2 into eventrouter ([7cc98bc](https://github.com/icholy/xagent/commit/7cc98bc9eb0109c2998b565ff439ae1154914e08))
+* **eventrouter:** move mention extraction into domain packages ([9630501](https://github.com/icholy/xagent/commit/9630501babc1b09526b934a39ee7f61671bdb260))
+* **observability:** drop context logger from driver and runner ([6a53d2c](https://github.com/icholy/xagent/commit/6a53d2c82c674f920bb0aa6e536dad22f510a3e5))
+* **observability:** drop logctx handler test ([ea5c7fa](https://github.com/icholy/xagent/commit/ea5c7fadc0057962304d18e8857a99728714c8c8))
+* **store:** consolidate routing-rule decode tests into one table-driven test ([eb6650b](https://github.com/icholy/xagent/commit/eb6650b2d21c8288067fa7c93fe26fe4e3a6465b))
+
 ## [2.8.0](https://github.com/icholy/xagent/compare/v2.7.0...v2.8.0) (2026-07-05)
 
 
