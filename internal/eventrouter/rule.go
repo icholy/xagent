@@ -1,72 +1,43 @@
 package eventrouter
 
 import (
-	"regexp"
-	"slices"
-	"strings"
+	"cmp"
 
+	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/model"
 )
 
-// MatchRule reports whether the rule matches the event.
-// Empty fields are treated as wildcards. URLPrefix matches against the
-// event's URL; Prefix and Mention are checked against the event's Data field;
-// Value is checked for membership in the event's Values.
-func (e InputEvent) MatchRule(rule model.RoutingRule) bool {
-	if rule.Source != "" && rule.Source != e.Source {
-		return false
-	}
-	if rule.Type != "" && rule.Type != e.Type {
-		return false
-	}
-	if rule.URLPrefix != "" && !strings.HasPrefix(e.URL, rule.URLPrefix) {
-		return false
-	}
-	if rule.Prefix != "" && !strings.HasPrefix(e.Data, rule.Prefix) {
-		return false
-	}
-	if rule.Value != "" && !slices.Contains(e.Values, rule.Value) {
-		return false
-	}
-	if rule.Mention != "" && !e.matchMention(rule.Mention) {
-		return false
-	}
-	if rule.Assignee != "" && !e.matchAssignee(rule.Assignee) {
-		return false
-	}
-	return true
-}
-
-// matchMention checks whether the event data contains an @mention
-// using platform-specific syntax.
-func (e InputEvent) matchMention(mention string) bool {
-	switch e.Source {
-	case "github":
-		pattern := `(?i)(?:^|[\s(])@` + regexp.QuoteMeta(mention) + `(?:$|[\s,.)!?])`
-		matched, _ := regexp.MatchString(pattern, e.Data)
-		return matched
-	case "atlassian":
-		return strings.Contains(e.Data, "[~accountid:"+mention+"]")
-	default:
-		return false
+// toV2 converts the event into the eventrouter2 shape for attribute-based
+// matching. It is a field copy: the legacy Assignee/Values fields are not
+// carried over — those dimensions now travel in Attrs (populated by the webhook
+// handlers), which is what the new matcher reads. Attrs converts directly since
+// eventrouter.Attrs and eventrouter2.Attrs are the same underlying type.
+func (e InputEvent) toV2() eventrouter2.InputEvent {
+	return eventrouter2.InputEvent{
+		Source:      e.Source,
+		Type:        e.Type,
+		Description: e.Description,
+		Data:        e.Data,
+		URL:         e.URL,
+		UserID:      e.UserID,
+		Attrs:       eventrouter2.Attrs(e.Attrs),
+		Meta:        e.Meta,
 	}
 }
 
-// matchAssignee checks whether the event's assignee matches the rule's
-// configured assignee. A rule with Assignee set only matches events whose
-// InputEvent.Assignee is non-empty (i.e. assignment events).
-func (e InputEvent) matchAssignee(assignee string) bool {
-	if e.Assignee == "" {
-		return false
+// matchesV2 reports whether the legacy rule matches the event via the
+// attribute-based matcher, using the router's schema registry (nil-defaulting to
+// eventrouter2.DefaultSchemaRegistry so production sites need not set it).
+// reg.TranslateRule expands the flat legacy rule into one new-shape rule per
+// applicable registered event type; the legacy rule matches iff any of them
+// matches. An empty translation (a rule whose conditions no registered type
+// emits) never matches, mirroring the legacy behavior.
+func (r *Router) matchesV2(rule model.RoutingRule, event eventrouter2.InputEvent) bool {
+	reg := cmp.Or(r.Registry, eventrouter2.DefaultSchemaRegistry)
+	for _, v2 := range reg.TranslateRule(rule) {
+		if v2.Match(event) {
+			return true
+		}
 	}
-	switch e.Source {
-	case "github":
-		return strings.EqualFold(e.Assignee, assignee)
-	case "atlassian":
-		// Jira assignment matching is deferred — extractor does not emit
-		// assignment events yet.
-		return false
-	default:
-		return false
-	}
+	return false
 }
