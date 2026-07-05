@@ -29,6 +29,7 @@ import { CommandBadge } from '@/components/command-badge'
 import { TaskTimeline } from '@/components/task-timeline'
 import { TaskShellPanel } from '@/components/task-shell-panel'
 import { TaskLinksTab } from '@/components/task-links'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Send, Loader2, List, Terminal, Link2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
@@ -171,25 +172,55 @@ function TaskDetail() {
     <div className="container mx-auto py-8 px-4 space-y-6">
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
-        <TaskActionsMenu
-          task={task}
-          onAutoArchiveChange={(autoArchive) =>
-            autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })
-          }
-          autoArchivePending={autoArchiveMutation.isPending}
-          onCancel={handleCancel}
-          cancelPending={cancelMutation.isPending}
-          onRestart={handleRestart}
-          restartPending={restartMutation.isPending}
-          onArchive={handleArchive}
-          archivePending={archiveMutation.isPending}
-          onUnarchive={handleUnarchive}
-          unarchivePending={unarchiveMutation.isPending}
-        />
+        <div className="flex items-center gap-2">
+          {/* The panel switcher rides in the header, right beside the actions
+              menu, so timeline / shell / links stay reachable from the top of
+              the page. The active tab is still mirrored in ?tab= for deep links. */}
+          <Tabs value={tab} onValueChange={(value) => setTab(value as TaskTab)}>
+            <TabsList>
+              <TabsTrigger value="timeline">
+                <List className="h-4 w-4" />
+                Timeline
+                <TabCount active={tab === 'timeline'} count={timeline.length} />
+              </TabsTrigger>
+              <TabsTrigger value="shell">
+                <Terminal className="h-4 w-4" />
+                Shell
+                {shellActive && (
+                  <span
+                    className="h-2 w-2 rounded-full bg-green-500"
+                    aria-label="Shell session active"
+                  />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="links">
+                <Link2 className="h-4 w-4" />
+                Links
+                <TabCount active={tab === 'links'} count={links.length} />
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <TaskActionsMenu
+            task={task}
+            onAutoArchiveChange={(autoArchive) =>
+              autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })
+            }
+            autoArchivePending={autoArchiveMutation.isPending}
+            onCancel={handleCancel}
+            cancelPending={cancelMutation.isPending}
+            onRestart={handleRestart}
+            restartPending={restartMutation.isPending}
+            onArchive={handleArchive}
+            archivePending={archiveMutation.isPending}
+            onUnarchive={handleUnarchive}
+            unarchivePending={unarchiveMutation.isPending}
+          />
+        </div>
       </div>
 
-      {/* Details + activity in a single card: metadata header strip, an in-page
-          tab bar, then the selected view (timeline / shell / links). */}
+      {/* Details + activity in a single card: a metadata header strip followed
+          by the selected view (timeline / shell / links). The tab switcher that
+          picks the view lives up in the page header, beside the actions menu. */}
       <div className="overflow-hidden rounded-lg border">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b p-4 text-sm">
           <div className="flex items-center gap-2">
@@ -220,32 +251,6 @@ function TaskDetail() {
               </span>
             </div>
           )}
-        </div>
-
-        {/* In-page tab bar: switch between the timeline, the debug shell, and
-            the task's links without leaving the page. */}
-        <div className="flex items-center gap-1 border-b px-2">
-          <TabButton
-            active={tab === 'timeline'}
-            onClick={() => setTab('timeline')}
-            icon={<List className="h-4 w-4" />}
-            label="Timeline"
-            count={timeline.length}
-          />
-          <TabButton
-            active={tab === 'shell'}
-            onClick={() => setTab('shell')}
-            icon={<Terminal className="h-4 w-4" />}
-            label="Shell"
-            dot={shellActive}
-          />
-          <TabButton
-            active={tab === 'links'}
-            onClick={() => setTab('links')}
-            icon={<Link2 className="h-4 w-4" />}
-            label="Links"
-            count={links.length}
-          />
         </div>
 
         {tab === 'timeline' && (
@@ -296,51 +301,20 @@ function TaskDetail() {
   )
 }
 
-// TabButton is one entry in the in-page tab bar: an underline-style tab with an
-// icon, a label, and either a count badge or a "session active" dot.
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-  count,
-  dot,
-}: {
-  active: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
-  count?: number
-  dot?: boolean
-}) {
+// TabCount is the small pill after a tab's label showing how many items sit
+// behind that panel (timeline entries, links). It flips to a solid fill when its
+// tab is active so it stays legible against the highlighted trigger; a zero
+// count renders nothing.
+function TabCount({ active, count }: { active: boolean; count: number }) {
+  if (count <= 0) return null
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-selected={active}
+    <span
       className={cn(
-        // -mb-px pulls the active underline onto the bar's own bottom border.
-        'relative -mb-px flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors',
-        active
-          ? 'border-primary text-foreground'
-          : 'border-transparent text-muted-foreground hover:text-foreground',
+        'rounded-full px-1.5 py-0.5 text-xs font-medium leading-none',
+        active ? 'bg-foreground text-background' : 'bg-background text-muted-foreground',
       )}
     >
-      {icon}
-      {label}
-      {dot && (
-        <span className="h-2 w-2 rounded-full bg-green-500" aria-label="Shell session active" />
-      )}
-      {count !== undefined && count > 0 && (
-        <span
-          className={cn(
-            'rounded-full px-2 py-0.5 text-xs font-medium',
-            active ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {count}
-        </span>
-      )}
-    </button>
+      {count}
+    </span>
   )
 }
