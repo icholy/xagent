@@ -30,6 +30,8 @@ type Record struct {
 // queue. It is single-consumer — the head is stable between a Peek and the Drop
 // that follows it — but Append may run concurrently with the consumer.
 // Implementations must be safe for concurrent use.
+//
+//go:generate go tool moq -out store_moq.go . Store
 type Store interface {
 	// Append durably appends payload to the tail. It must not return until the
 	// record is durable.
