@@ -2,6 +2,38 @@ package eventrouter2
 
 import "testing"
 
+// Test fixtures: clearly-synthetic schemas registered under the fake "test"
+// source. The package's tests stay self-contained — they exercise the registry
+// through these fixtures rather than importing the producer packages that
+// register the real github/atlassian schemas. Only test/comment ships a default
+// rule, mirroring the comment/review types in production.
+func init() {
+	MustRegisterSchema(EventTypeDef{
+		Source: "test",
+		Type:   "comment",
+		Label:  "Test: Comment",
+		Attrs:  []string{"body", "url", "mention"},
+		DefaultRules: []RoutingRule{{
+			Source:     "test",
+			Type:       "comment",
+			Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+			Wakeup:     true,
+		}},
+	})
+	MustRegisterSchema(EventTypeDef{
+		Source: "test",
+		Type:   "label",
+		Label:  "Test: Label",
+		Attrs:  []string{"body", "url", "label"},
+	})
+	MustRegisterSchema(EventTypeDef{
+		Source: "test",
+		Type:   "opened",
+		Label:  "Test: Opened",
+		Attrs:  []string{"body", "url"},
+	})
+}
+
 func TestRoutingRuleValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -11,25 +43,25 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "default body-prefix rule",
 			rule: RoutingRule{
-				Source:     "github",
-				Type:       "issue_comment",
+				Source:     "test",
+				Type:       "comment",
 				Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 				Wakeup:     true,
 			},
 		},
 		{
-			name: "mention equals on issue_comment",
+			name: "mention equals on comment",
 			rule: RoutingRule{
-				Source:     "github",
-				Type:       "issue_comment",
+				Source:     "test",
+				Type:       "comment",
 				Conditions: []Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
 			},
 		},
 		{
-			name: "label equals on label_added",
+			name: "label equals on label",
 			rule: RoutingRule{
-				Source:     "github",
-				Type:       "label_added",
+				Source:     "test",
+				Type:       "label",
 				Conditions: []Condition{{Attr: "label", Op: "equals", Value: "bug"}},
 			},
 		},
@@ -43,7 +75,7 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "empty source is rejected",
 			rule: RoutingRule{
-				Type:       "issue_comment",
+				Type:       "comment",
 				Conditions: []Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
 			},
 			wantErr: true,
@@ -51,8 +83,8 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "url and body valid on any type",
 			rule: RoutingRule{
-				Source: "github",
-				Type:   "pull_request_opened",
+				Source: "test",
+				Type:   "opened",
 				Conditions: []Condition{
 					{Attr: "url", Op: "contains", Value: "icholy/xagent"},
 					{Attr: "body", Op: "contains", Value: "hi"},
@@ -62,8 +94,8 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "unknown op",
 			rule: RoutingRule{
-				Source:     "github",
-				Type:       "issue_comment",
+				Source:     "test",
+				Type:       "comment",
 				Conditions: []Condition{{Attr: "body", Op: "regex", Value: "x"}},
 			},
 			wantErr: true,
@@ -71,8 +103,8 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "unknown attr",
 			rule: RoutingRule{
-				Source:     "github",
-				Type:       "issue_comment",
+				Source:     "test",
+				Type:       "comment",
 				Conditions: []Condition{{Attr: "reviewer", Op: "equals", Value: "alice"}},
 			},
 			wantErr: true,
@@ -80,16 +112,16 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "attr not emitted by selected type",
 			rule: RoutingRule{
-				Source:     "github",
-				Type:       "issue_comment",
-				Conditions: []Condition{{Attr: "assignee", Op: "equals", Value: "alice"}},
+				Source:     "test",
+				Type:       "comment",
+				Conditions: []Condition{{Attr: "label", Op: "equals", Value: "bug"}},
 			},
 			wantErr: true,
 		},
 		{
 			name: "unknown event type",
 			rule: RoutingRule{
-				Source: "github",
+				Source: "test",
 				Type:   "star_added",
 			},
 			wantErr: true,
@@ -108,27 +140,65 @@ func TestRoutingRuleValidate(t *testing.T) {
 	}
 }
 
-func TestDefaultRulesValidate(t *testing.T) {
-	if len(DefaultRules) == 0 {
-		t.Fatal("DefaultRules is empty")
+func TestDefaultRules(t *testing.T) {
+	rules := DefaultRules()
+	if len(rules) == 0 {
+		t.Fatal("DefaultRules() returned no rules")
 	}
-	for i, rule := range DefaultRules {
+	for i, rule := range rules {
 		if err := rule.Validate(); err != nil {
-			t.Errorf("DefaultRules[%d] (source=%q type=%q) failed Validate: %v", i, rule.Source, rule.Type, err)
+			t.Errorf("DefaultRules()[%d] (source=%q type=%q) failed Validate: %v", i, rule.Source, rule.Type, err)
+		}
+	}
+	// test/comment is the only fixture carrying a default rule; DefaultRules()
+	// must surface it and no rule from a fixture that ships none (test/label).
+	var sawComment bool
+	for _, rule := range rules {
+		if rule.Source == "test" && rule.Type == "comment" {
+			sawComment = true
+		}
+		if rule.Type == "label" {
+			t.Errorf("DefaultRules() surfaced a rule for %q, which ships no defaults", rule.Type)
+		}
+	}
+	if !sawComment {
+		t.Error("DefaultRules() missing the test/comment default rule")
+	}
+}
+
+func TestRegisteredEventTypes(t *testing.T) {
+	byKey := map[string]EventTypeDef{}
+	for _, def := range RegisteredEventTypes() {
+		byKey[def.Source+":"+def.Type] = def
+	}
+	for _, want := range []string{"test:comment", "test:label", "test:opened"} {
+		if _, ok := byKey[want]; !ok {
+			t.Errorf("RegisteredEventTypes() missing %q", want)
 		}
 	}
 }
 
 func TestEventTypeFor(t *testing.T) {
-	def, ok := EventTypeFor("github", "issue_comment")
+	def, ok := EventTypeFor("test", "comment")
 	if !ok {
-		t.Fatalf("EventTypeFor(github, issue_comment) = _, false; want hit")
+		t.Fatalf("EventTypeFor(test, comment) = _, false; want hit")
 	}
-	if def.Label != "GitHub: Issue/PR Comment" {
-		t.Errorf("Label = %q, want %q", def.Label, "GitHub: Issue/PR Comment")
+	if def.Label != "Test: Comment" {
+		t.Errorf("Label = %q, want %q", def.Label, "Test: Comment")
 	}
 
-	if _, ok := EventTypeFor("github", "nope"); ok {
-		t.Errorf("EventTypeFor(github, nope) = _, true; want miss")
+	if _, ok := EventTypeFor("test", "nope"); ok {
+		t.Errorf("EventTypeFor(test, nope) = _, true; want miss")
 	}
+}
+
+func TestMustRegisterSchemaDuplicatePanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MustRegisterSchema did not panic on duplicate (source, type)")
+		}
+	}()
+	// test/comment is already registered by the fixtures; re-registering the
+	// same (source, type) must panic before mutating the registry.
+	MustRegisterSchema(EventTypeDef{Source: "test", Type: "comment", Attrs: []string{"body"}})
 }
