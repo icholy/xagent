@@ -586,22 +586,28 @@ message GenerateAtlassianWebhookSecretResponse {
   string webhook_url = 2;
 }
 
+// RuleCondition constrains one attribute dimension of an event. Op is one of
+// "equals", "prefix", or "contains"; comparisons are literal (exact,
+// case-sensitive) string operations.
+message RuleCondition {
+  string attr = 1;
+  string op = 2;
+  string value = 3;
+}
+
 message RoutingRule {
+  reserved 3, 4, 6, 7, 8;  // Previously: prefix, mention, assignee, url_prefix, value (legacy flat matchers)
   string source = 1;
   string type = 2;
-  string prefix = 3;
-  string mention = 4;
   CreateTaskAction create = 5;
-  string assignee = 6;
-  string url_prefix = 7;
-  // Matched against the event's discrete value tokens (e.g. Jira labels). A
-  // rule matches when this value is present in the event's values; empty is a
-  // wildcard.
-  string value = 8;
   // Controls whether a matched rule restarts (wakes) the linked task(s). When
   // false, the rule attaches the event and notifies the task(s) but does NOT
   // restart them. UI-created rules default to true.
   bool wakeup = 9;
+  // Attribute conditions the event must satisfy (ANDed together). Empty
+  // source/type are wildcards; an empty conditions list matches every event of
+  // the selected type.
+  repeated RuleCondition conditions = 10;
 }
 
 message CreateTaskAction {

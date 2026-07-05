@@ -13,7 +13,7 @@ func TestTranslateRuleConcreteType(t *testing.T) {
 	reg := NewSchemaRegistry()
 	reg.MustRegister(testComment)
 
-	rules := reg.TranslateRule(model.RoutingRule{
+	rules := reg.TranslateRule(model.LegacyRoutingRule{
 		Source:  "test",
 		Type:    "comment",
 		Mention: "alice",
@@ -33,7 +33,7 @@ func TestTranslateRuleTypelessMention(t *testing.T) {
 	reg.MustRegister(testLabel)
 	reg.MustRegister(testOpened)
 
-	rules := reg.TranslateRule(model.RoutingRule{Mention: "alice"})
+	rules := reg.TranslateRule(model.LegacyRoutingRule{Mention: "alice"})
 	assert.DeepEqual(t, rules, []RoutingRule{{
 		Source:     "test",
 		Type:       "comment",
@@ -49,7 +49,7 @@ func TestTranslateRuleTypelessBodyPrefix(t *testing.T) {
 	reg.MustRegister(testLabel)
 	reg.MustRegister(testOpened)
 
-	rules := reg.TranslateRule(model.RoutingRule{Prefix: "xagent:"})
+	rules := reg.TranslateRule(model.LegacyRoutingRule{Prefix: "xagent:"})
 	cond := []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}
 	assert.DeepEqual(t, rules, []RoutingRule{
 		{Source: "test", Type: "comment", Conditions: cond},
@@ -66,7 +66,7 @@ func TestTranslateRuleSourceOnly(t *testing.T) {
 	reg.MustRegister(testLabel)
 	reg.MustRegister(testOpened)
 
-	rules := reg.TranslateRule(model.RoutingRule{Source: "test"})
+	rules := reg.TranslateRule(model.LegacyRoutingRule{Source: "test"})
 	assert.DeepEqual(t, rules, []RoutingRule{
 		{Source: "test", Type: "comment"},
 		{Source: "test", Type: "label"},
@@ -81,7 +81,7 @@ func TestTranslateRuleConditionAttrNotEmitted(t *testing.T) {
 	reg := NewSchemaRegistry()
 	reg.MustRegister(testComment)
 
-	rules := reg.TranslateRule(model.RoutingRule{
+	rules := reg.TranslateRule(model.LegacyRoutingRule{
 		Source:   "test",
 		Type:     "comment",
 		Assignee: "bob",
@@ -98,7 +98,7 @@ func TestTranslateRuleMultipleFields(t *testing.T) {
 	reg.MustRegister(testLabel)
 	reg.MustRegister(testOpened)
 
-	rules := reg.TranslateRule(model.RoutingRule{
+	rules := reg.TranslateRule(model.LegacyRoutingRule{
 		Prefix:  "xagent:",
 		Mention: "alice",
 	})
@@ -118,7 +118,7 @@ func TestTranslateRuleCarriesActions(t *testing.T) {
 	reg.MustRegister(testComment)
 
 	create := &model.CreateTaskAction{Workspace: "ws", Runner: "rn", Prompt: "go"}
-	rules := reg.TranslateRule(model.RoutingRule{
+	rules := reg.TranslateRule(model.LegacyRoutingRule{
 		Source: "test",
 		Type:   "comment",
 		Wakeup: true,
@@ -136,7 +136,7 @@ func TestTranslateRuleAllValid(t *testing.T) {
 	reg.MustRegister(testLabel)
 	reg.MustRegister(testOpened)
 
-	legacy := []model.RoutingRule{
+	legacy := []model.LegacyRoutingRule{
 		{Source: "test", Type: "comment", Mention: "alice"},
 		{Mention: "alice"},
 		{Prefix: "xagent:"},

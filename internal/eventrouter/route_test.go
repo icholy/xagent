@@ -462,8 +462,8 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/issues/1"
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source:  "github",
-		Mention: "icholy-bot",
+		Source:     "github",
+		Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "icholy-bot"}},
 		Create: &model.CreateTaskAction{
 			Workspace: "default",
 			Runner:    "test-runner",
@@ -908,7 +908,7 @@ func TestRouteLinkQueryScopedToMatchedOrgs(t *testing.T) {
 	})
 	// Org A has rules that don't match this event (mention required, none present).
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, orgA.OrgID, []model.RoutingRule{
-		{Source: "github", Mention: "someone-else"},
+		{Source: "github", Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "someone-else"}}},
 	}))
 	// Org B has a matching create rule.
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, orgB.OrgID, []model.RoutingRule{
@@ -995,9 +995,9 @@ func TestRouteCreateRuleThatDoesNotMatch(t *testing.T) {
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/issues/8"
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source:  "github",
-		Mention: "bot",
-		Create:  &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+		Source:     "github",
+		Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "bot"}},
+		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 	}})
 	assert.NilError(t, err)
 	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
@@ -1029,7 +1029,7 @@ func TestRouteOrgRulesOverrideDefaults(t *testing.T) {
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Prefix: "bot:"},
+		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "bot:"}}},
 	})
 	assert.NilError(t, err)
 	r := &eventrouter.Router{
@@ -1063,10 +1063,10 @@ func TestRouteAssignmentCreatesTaskAndLink(t *testing.T) {
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/9"
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source:   "github",
-		Type:     "pull_request_assigned",
-		Assignee: "icholy-bot",
-		Create:   &model.CreateTaskAction{Workspace: "default", Runner: "r", Prompt: "Review it."},
+		Source:     "github",
+		Type:       "pull_request_assigned",
+		Conditions: []model.Condition{{Attr: "assignee", Op: "equals", Value: "icholy-bot"}},
+		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r", Prompt: "Review it."},
 	}})
 	assert.NilError(t, err)
 	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
@@ -1110,12 +1110,12 @@ func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
 	url := "https://github.com/owner/repo/pull/9"
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
 		{
-			Source:   "github",
-			Type:     "pull_request_assigned",
-			Assignee: "icholy-bot",
-			Create:   &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+			Source:     "github",
+			Type:       "pull_request_assigned",
+			Conditions: []model.Condition{{Attr: "assignee", Op: "equals", Value: "icholy-bot"}},
+			Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 		},
-		{Source: "github", Type: "issue_comment", Prefix: "xagent:", Wakeup: true},
+		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}, Wakeup: true},
 	})
 	assert.NilError(t, err)
 	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
@@ -1171,10 +1171,10 @@ func TestRouteAssignmentWrongAssigneeIsNoOp(t *testing.T) {
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/9"
 	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source:   "github",
-		Type:     "pull_request_assigned",
-		Assignee: "icholy-bot",
-		Create:   &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+		Source:     "github",
+		Type:       "pull_request_assigned",
+		Conditions: []model.Condition{{Attr: "assignee", Op: "equals", Value: "icholy-bot"}},
+		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 	}})
 	assert.NilError(t, err)
 	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
@@ -1438,7 +1438,7 @@ func TestRouteMentionRuleWakesSubscribedTask(t *testing.T) {
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Source: "github", Type: "issue_comment", Mention: "icholy-bot", Wakeup: true},
+		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "icholy-bot"}}, Wakeup: true},
 	}))
 	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
 
@@ -1474,7 +1474,7 @@ func TestRouteMentionIsCaseSensitive(t *testing.T) {
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Source: "github", Type: "issue_comment", Mention: "icholy-bot", Wakeup: true},
+		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "icholy-bot"}}, Wakeup: true},
 	}))
 	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
 

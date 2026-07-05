@@ -7,9 +7,35 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-// RoutingRule defines a routing rule that determines whether an event
-// should be routed to an org's tasks. Empty fields are treated as wildcards.
+// RoutingRule defines a routing rule that determines whether an event should be
+// routed to an org's tasks. A rule selects a (Source, Type) event kind — empty
+// Source/Type are wildcards — and constrains it with a list of attribute
+// Conditions (ANDed together). This is the conditions-native shape; pre-existing
+// stored rules in the legacy flat-matcher shape are decoded via
+// LegacyRoutingRule and translated on read.
 type RoutingRule struct {
+	Source     string            `json:"source,omitempty"`
+	Type       string            `json:"type,omitempty"`
+	Conditions []Condition       `json:"conditions,omitempty"`
+	Create     *CreateTaskAction `json:"create,omitempty"`
+	Wakeup     bool              `json:"wakeup,omitempty"`
+}
+
+// Condition constrains one attribute dimension of an event. Op is one of
+// "equals", "prefix", or "contains"; comparisons are literal (exact,
+// case-sensitive) string operations. It mirrors eventrouter2.Condition.
+type Condition struct {
+	Attr  string `json:"attr,omitempty"`
+	Op    string `json:"op,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
+// LegacyRoutingRule is the pre-conditions stored shape of a routing rule: the
+// flat matcher fields that predate attribute conditions. It exists ONLY to
+// decode rows written before the conditions cutover; those rows are translated
+// to conditions-native RoutingRule(s) on read (see the store's translate-on-read
+// path). Nothing writes this shape anymore.
+type LegacyRoutingRule struct {
 	Source    string            `json:"source,omitempty"`
 	Type      string            `json:"type,omitempty"`
 	Prefix    string            `json:"prefix,omitempty"`
@@ -19,6 +45,15 @@ type RoutingRule struct {
 	Value     string            `json:"value,omitempty"`
 	Create    *CreateTaskAction `json:"create,omitempty"`
 	Wakeup    bool              `json:"wakeup,omitempty"`
+}
+
+// HasMatcher reports whether the legacy rule carries any flat matcher field
+// (Prefix/Mention/Assignee/URLPrefix/Value). It distinguishes a genuinely
+// legacy-shaped stored rule — one that must be translated to conditions — from a
+// bare source/type/wakeup/create rule, which is already interpretable directly
+// as the conditions shape.
+func (r LegacyRoutingRule) HasMatcher() bool {
+	return r.Prefix != "" || r.Mention != "" || r.Assignee != "" || r.URLPrefix != "" || r.Value != ""
 }
 
 // CreateTaskAction configures a routing rule to create a new task on
@@ -61,14 +96,16 @@ func CreateTaskActionFromProto(pb *xagentv1.CreateTaskAction) *CreateTaskAction 
 // Proto converts a RoutingRule to its protobuf representation.
 func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 	pb := &xagentv1.RoutingRule{
-		Source:    r.Source,
-		Type:      r.Type,
-		Prefix:    r.Prefix,
-		Mention:   r.Mention,
-		Assignee:  r.Assignee,
-		UrlPrefix: r.URLPrefix,
-		Value:     r.Value,
-		Wakeup:    r.Wakeup,
+		Source: r.Source,
+		Type:   r.Type,
+		Wakeup: r.Wakeup,
+	}
+	for _, c := range r.Conditions {
+		pb.Conditions = append(pb.Conditions, &xagentv1.RuleCondition{
+			Attr:  c.Attr,
+			Op:    c.Op,
+			Value: c.Value,
+		})
 	}
 	if r.Create != nil {
 		pb.Create = r.Create.Proto()
@@ -78,15 +115,18 @@ func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 
 // RoutingRuleFromProto converts a protobuf RoutingRule to the model type.
 func RoutingRuleFromProto(pb *xagentv1.RoutingRule) RoutingRule {
-	return RoutingRule{
-		Source:    pb.Source,
-		Type:      pb.Type,
-		Prefix:    pb.Prefix,
-		Mention:   pb.Mention,
-		Assignee:  pb.Assignee,
-		URLPrefix: pb.UrlPrefix,
-		Value:     pb.Value,
-		Create:    CreateTaskActionFromProto(pb.Create),
-		Wakeup:    pb.Wakeup,
+	rule := RoutingRule{
+		Source: pb.Source,
+		Type:   pb.Type,
+		Create: CreateTaskActionFromProto(pb.Create),
+		Wakeup: pb.Wakeup,
 	}
+	for _, c := range pb.Conditions {
+		rule.Conditions = append(rule.Conditions, Condition{
+			Attr:  c.Attr,
+			Op:    c.Op,
+			Value: c.Value,
+		})
+	}
+	return rule
 }

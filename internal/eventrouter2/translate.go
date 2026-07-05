@@ -6,9 +6,10 @@ import (
 	"github.com/icholy/xagent/internal/model"
 )
 
-// TranslateRule converts a legacy model.RoutingRule (flat matcher fields) into
-// the equivalent set of new-shape RoutingRule values. It is the bridge for a
-// future translate-on-read cutover.
+// TranslateRule converts a legacy model.LegacyRoutingRule (flat matcher fields)
+// into the equivalent set of new-shape RoutingRule values. It is the bridge for
+// the translate-on-read cutover: the store uses it to decode pre-conditions
+// stored rows into conditions-native rules.
 //
 // The result is a slice because the new shape requires every rule to name one
 // concrete registered (Source, Type), and a condition is only valid on a type
@@ -18,7 +19,7 @@ import (
 // attr the rule's conditions reference. A rule whose condition attr no matching
 // type emits produces zero rules, mirroring v1 where such a rule silently never
 // matched.
-func (r *SchemaRegistry) TranslateRule(rule model.RoutingRule) []RoutingRule {
+func (r *SchemaRegistry) TranslateRule(rule model.LegacyRoutingRule) []RoutingRule {
 	// Build the condition list from the legacy matcher fields, skipping empty
 	// ones: an empty legacy field contributed no matcher clause in v1, so it
 	// contributes no condition here.
