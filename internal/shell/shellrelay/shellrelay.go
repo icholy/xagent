@@ -174,6 +174,7 @@ func (s *Session) register(conn *websocket.Conn) (<-chan struct{}, error) {
 				s.teardown("idle timeout")
 			})
 		}
+		s.log.Info("shell session established")
 		close(s.ready)
 	}
 	return s.ready, nil
@@ -237,7 +238,7 @@ func (s *Session) teardown(reason string) {
 				_ = leg.CloseNow()
 			}
 		}
-		s.log.Debug("shell session torn down", "reason", reason)
+		s.log.Info("shell session torn down", "reason", reason)
 	})
 }
 

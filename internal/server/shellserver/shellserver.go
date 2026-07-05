@@ -246,6 +246,7 @@ func (r *Registry) DriverHandler() http.Handler {
 			r.log.Debug("driver leg accept failed", "session", id, "err", err)
 			return
 		}
+		r.log.Info("shell driver leg connected", "session", id, "task", e.taskID)
 		_ = e.session.Join(req.Context(), conn)
 	})
 }
@@ -326,6 +327,7 @@ func (r *Registry) AttachHandler() http.Handler {
 			conn.Close(websocket.StatusPolicyViolation, "unsupported subprotocol")
 			return
 		}
+		r.log.Info("shell attach leg connected", "session", id, "org", e.orgID)
 		_ = e.session.Join(req.Context(), conn)
 	})
 }
