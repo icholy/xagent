@@ -46,7 +46,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			}
 			from := task.Status
 			applied := task.ApplyRunnerEvent(&event)
-			s.log.Info("runner event recieved",
+			s.log.InfoContext(ctx, "runner event recieved",
 				"task_id", event.TaskID,
 				"event", event.Event,
 				"version", event.Version,

@@ -61,7 +61,7 @@ func (s *Server) DeleteEvent(ctx context.Context, req *xagentv1.DeleteEventReque
 	if err := s.store.DeleteEvent(ctx, nil, req.Id, caller.OrgID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("event deleted", "id", req.Id)
+	s.log.InfoContext(ctx, "event deleted", "id", req.Id)
 	s.publish(model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "deleted", Type: "event", ID: req.Id}},

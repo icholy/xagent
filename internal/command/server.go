@@ -22,6 +22,7 @@ import (
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
 	"github.com/icholy/xagent/internal/store"
+	"github.com/icholy/xagent/internal/x/logctx"
 	"github.com/icholy/xagent/internal/x/otelx"
 	"github.com/urfave/cli/v3"
 )
@@ -137,6 +138,9 @@ var ServerCommand = &cli.Command{
 		addr := cmd.String("addr")
 		dbPath := cmd.String("db")
 		noAuth := cmd.Bool("no-auth")
+
+		// Enrich logs with org_id, task_id and trace_id from the context.
+		slog.SetDefault(slog.New(logctx.NewHandler(slog.Default().Handler())))
 
 		// Initialize OpenTelemetry (configured via OTEL_EXPORTER_OTLP_ENDPOINT env var)
 		otel, err := otelx.Setup(ctx)

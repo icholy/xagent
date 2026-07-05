@@ -42,8 +42,7 @@ func (s *Server) LinkGitHubInstallation(ctx context.Context, req *xagentv1.LinkG
 	if err := s.store.SetOrgGitHubInstallation(ctx, nil, caller.OrgID, req.InstallationId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("github installation linked",
-		"org_id", caller.OrgID,
+	s.log.InfoContext(ctx, "github installation linked",
 		"installation_id", req.InstallationId,
 		"user_id", caller.ID)
 	return &xagentv1.LinkGitHubInstallationResponse{}, nil

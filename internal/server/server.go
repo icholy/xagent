@@ -120,7 +120,7 @@ func (s *Server) Handler() http.Handler {
 		s.log.Error("failed to create otelconnect interceptor", "err", err)
 	}
 	path, handler := xagentv1connect.NewXAgentServiceHandler(s.api,
-		connect.WithInterceptors(otelInterceptor, apiauth.RequireUserInterceptor()),
+		connect.WithInterceptors(otelInterceptor, apiauth.RequireUserInterceptor(), apiauth.ObservabilityInterceptor()),
 	)
 	mux.Handle(path, alice.New(s.auth.CheckAuth()).Then(handler))
 	// SSE endpoint (protected)

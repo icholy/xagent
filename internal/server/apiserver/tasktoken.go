@@ -52,6 +52,6 @@ func (s *Server) CreateTaskToken(ctx context.Context, req *xagentv1.CreateTaskTo
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task token minted", "task_id", task.ID, "org_id", task.OrgID)
+	s.log.InfoContext(ctx, "task token minted")
 	return &xagentv1.CreateTaskTokenResponse{Token: token}, nil
 }

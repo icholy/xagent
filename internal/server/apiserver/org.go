@@ -42,7 +42,7 @@ func (s *Server) CreateOrg(ctx context.Context, req *xagentv1.CreateOrgRequest) 
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org created", "id", org.ID, "name", org.Name, "owner", caller.ID)
+	s.log.InfoContext(ctx, "org created", "id", org.ID, "name", org.Name, "owner", caller.ID)
 	return &xagentv1.CreateOrgResponse{Org: org.Proto()}, nil
 }
 
@@ -83,7 +83,7 @@ func (s *Server) DeleteOrg(ctx context.Context, req *xagentv1.DeleteOrgRequest) 
 	if err := s.store.ArchiveOrg(ctx, nil, req.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org archived", "id", req.Id, "owner", caller.ID)
+	s.log.InfoContext(ctx, "org archived", "id", req.Id, "owner", caller.ID)
 	return &xagentv1.DeleteOrgResponse{}, nil
 }
 
@@ -117,7 +117,7 @@ func (s *Server) AddOrgMember(ctx context.Context, req *xagentv1.AddOrgMemberReq
 	if err := s.store.AddOrgMember(ctx, nil, member); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org member added", "org_id", caller.OrgID, "user_id", user.ID, "email", req.Email)
+	s.log.InfoContext(ctx, "org member added", "user_id", user.ID, "email", req.Email)
 	s.publish(model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "added", Type: "org_members"}},
@@ -155,7 +155,7 @@ func (s *Server) RemoveOrgMember(ctx context.Context, req *xagentv1.RemoveOrgMem
 	if err := s.store.RemoveOrgMember(ctx, nil, caller.OrgID, req.UserId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("org member removed", "org_id", caller.OrgID, "user_id", req.UserId)
+	s.log.InfoContext(ctx, "org member removed", "user_id", req.UserId)
 	s.publish(model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "removed", Type: "org_members"}},
@@ -225,7 +225,7 @@ func (s *Server) UnlinkGitHubAccount(ctx context.Context, req *xagentv1.UnlinkGi
 	if err := s.store.UnlinkGitHubAccount(ctx, nil, caller.ID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("github account unlinked", "owner", caller.ID)
+	s.log.InfoContext(ctx, "github account unlinked", "owner", caller.ID)
 	return &xagentv1.UnlinkGitHubAccountResponse{}, nil
 }
 
@@ -237,7 +237,7 @@ func (s *Server) UnlinkAtlassianAccount(ctx context.Context, req *xagentv1.Unlin
 	if err := s.atlassian.UnlinkAccount(ctx, caller.ID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("atlassian account unlinked", "owner", caller.ID)
+	s.log.InfoContext(ctx, "atlassian account unlinked", "owner", caller.ID)
 	return &xagentv1.UnlinkAtlassianAccountResponse{}, nil
 }
 
