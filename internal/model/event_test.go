@@ -16,7 +16,8 @@ func TestFilterPayloads(t *testing.T) {
 	}
 
 	// Only the *InstructionPayload events come back, in order.
-	assert.DeepEqual(t, FilterPayloads[*InstructionPayload](events), []*InstructionPayload{
+	insts := FilterPayloads[*InstructionPayload](events)
+	assert.DeepEqual(t, insts, []*InstructionPayload{
 		{Text: "first"},
 		{Text: "second"},
 	})
