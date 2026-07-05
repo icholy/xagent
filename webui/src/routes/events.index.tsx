@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
+  getEventTypes,
   getRoutingRules,
   listExternalEvents,
   setRoutingRules,
@@ -34,7 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { RelativeTime } from '@/components/relative-time'
-import { eventTypeLabel } from '@/lib/routing-rules'
+import { eventTypeLabel, OP_LABELS, type ConditionOp } from '@/lib/routing-rules'
 import { ChevronDown, ChevronUp, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
@@ -160,17 +161,14 @@ function EventRow({ event }: { event: Event }) {
   )
 }
 
-// Compact labels for a rule's matchers, shown as badges in the routing rules
-// table. The url prefix value is omitted because URLs are too long to fit on a
-// single line.
+// Compact labels for a rule's conditions, shown as badges in the routing rules
+// table. Long values (e.g. URLs) are truncated so a badge stays on one line.
 function ruleMatchBadges(rule: RoutingRule): string[] {
-  const labels: string[] = []
-  if (rule.urlPrefix) labels.push('urlprefix')
-  if (rule.prefix) labels.push(`prefix:${rule.prefix}`)
-  if (rule.mention) labels.push(`mention:${rule.mention}`)
-  if (rule.assignee) labels.push(`assignee:${rule.assignee}`)
-  if (rule.value) labels.push(`value:${rule.value}`)
-  return labels
+  return rule.conditions.map((c) => {
+    const op = OP_LABELS[c.op as ConditionOp] ?? c.op
+    const value = c.value.length > 40 ? c.value.slice(0, 40) + '…' : c.value
+    return `${c.attr} ${op} ${value}`
+  })
 }
 
 function RoutingRulesCard() {
@@ -185,6 +183,8 @@ function RoutingRulesCard() {
   const updateMutation = useMutation(setRoutingRules, {
     onSuccess: () => refetch(),
   })
+  const { data: eventTypesData } = useQuery(getEventTypes, {})
+  const eventTypes = eventTypesData?.eventTypes ?? []
 
   const rules = data?.rules ?? []
 
@@ -240,7 +240,7 @@ function RoutingRulesCard() {
               {rules.map((rule, index) => (
                 <TableRow key={index}>
                   <TableCell className="font-medium whitespace-nowrap">
-                    {eventTypeLabel(rule.source, rule.type)}
+                    {eventTypeLabel(eventTypes, rule.source, rule.type)}
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <div className="flex flex-wrap gap-1">

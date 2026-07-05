@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@connectrpc/connect-query'
-import { listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import { getEventTypes, listWorkspaces } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,21 +13,17 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Plus, Trash2 } from 'lucide-react'
 import {
-  assigneeCopyForSource,
-  EVENT_TYPES,
+  attrCopy,
+  CONDITION_OPS,
   emptyRoutingRule,
+  eventTypeId,
   findEventType,
-  findEventTypeById,
-  isAssignmentType,
-  isLabelType,
   isRoutingRuleFormValid,
-  legacyEventTypeOption,
-  mentionCopyForSource,
-  prefixCopy,
-  urlPrefixCopyForSource,
-  valueCopyForEventType,
+  legacyEventType,
+  OP_LABELS,
+  type ConditionDraft,
   type RoutingRuleFormValues,
 } from '@/lib/routing-rules'
 
@@ -52,44 +48,32 @@ export function RoutingRuleForm({
 }: RoutingRuleFormProps) {
   const [values, setValues] = useState<RoutingRuleFormValues>(initialValues)
 
-  // For a brand-new rule (no fields set), suppress the synthetic legacy option so
-  // the user doesn't see a "Legacy: (any) / (any)" entry in the dropdown.
-  const legacyOption = useMemo(() => {
-    const isUntouched =
-      !initialValues.source &&
-      !initialValues.type &&
-      !initialValues.prefix &&
-      !initialValues.mention &&
-      !initialValues.assignee &&
-      !initialValues.urlPrefix &&
-      !initialValues.value
-    if (isUntouched) return null
-    return legacyEventTypeOption(initialValues.source, initialValues.type)
-  }, [initialValues])
+  const { data: eventTypesData, isLoading: eventTypesLoading } = useQuery(getEventTypes, {})
+  const eventTypes = useMemo(() => eventTypesData?.eventTypes ?? [], [eventTypesData])
 
-  const selectedId = useMemo(() => {
-    const known = findEventType(values.source, values.type)
-    if (known) return known.id
+  // For an existing rule whose (source, type) isn't in the registry (a legacy
+  // wildcard rule or a type from a different server), keep it selectable with a
+  // synthetic entry so the rule can still be viewed and saved.
+  const legacyOption = useMemo(
+    () => legacyEventType(eventTypes, initialValues.source, initialValues.type),
+    [eventTypes, initialValues.source, initialValues.type],
+  )
+
+  const selectedType = useMemo(() => {
+    const known = findEventType(eventTypes, values.source, values.type)
+    if (known) return known
     if (
       legacyOption &&
       legacyOption.source === values.source &&
       legacyOption.type === values.type
     ) {
-      return legacyOption.id
+      return legacyOption
     }
-    return ''
-  }, [values.source, values.type, legacyOption])
+    return undefined
+  }, [eventTypes, values.source, values.type, legacyOption])
 
-  const mentionCopy = mentionCopyForSource(values.source)
-  const assigneeCopy = assigneeCopyForSource(values.source)
-  const urlPrefixCopy = urlPrefixCopyForSource(values.source)
-  const valueCopy = valueCopyForEventType(values.source, values.type)
-  // Assignment events have no message body, so prefix/mention can't match —
-  // hide those fields and show the assignee field instead.
-  const isAssignment = isAssignmentType(values.source, values.type)
-  // Label events have no body — hide prefix/mention and show the Value field
-  // (the label-to-match) instead.
-  const isLabel = isLabelType(values.source, values.type)
+  const selectedId = selectedType ? eventTypeId(selectedType.source, selectedType.type) : ''
+  const availableAttrs = selectedType?.attrs ?? []
   const canSubmit = isRoutingRuleFormValid(values, selectedId !== '')
 
   const { data: workspacesData } = useQuery(listWorkspaces, {}, { enabled: values.createTask })
@@ -103,14 +87,37 @@ export function RoutingRuleForm({
   )
 
   const handleEventTypeChange = (id: string) => {
-    const known = findEventTypeById(id)
-    if (known) {
-      setValues({ ...values, source: known.source, type: known.type })
-      return
-    }
-    if (legacyOption && legacyOption.id === id) {
-      setValues({ ...values, source: legacyOption.source, type: legacyOption.type })
-    }
+    const known = eventTypes.find((t) => eventTypeId(t.source, t.type) === id)
+    const target =
+      known ??
+      (legacyOption && eventTypeId(legacyOption.source, legacyOption.type) === id
+        ? legacyOption
+        : undefined)
+    if (!target) return
+    // Drop conditions whose attr the newly selected type can't emit, so the
+    // rule can't carry a condition that would never match.
+    const keptConditions = values.conditions.filter((c) => target.attrs.includes(c.attr))
+    setValues({ ...values, source: target.source, type: target.type, conditions: keptConditions })
+  }
+
+  const setCondition = (index: number, patch: Partial<ConditionDraft>) => {
+    setValues({
+      ...values,
+      conditions: values.conditions.map((c, i) => (i === index ? { ...c, ...patch } : c)),
+    })
+  }
+
+  const addCondition = () => {
+    // Default the attr to the first one the selected type offers, if any.
+    const attr = availableAttrs[0] ?? ''
+    setValues({
+      ...values,
+      conditions: [...values.conditions, { attr, op: 'equals', value: '' }],
+    })
+  }
+
+  const removeCondition = (index: number) => {
+    setValues({ ...values, conditions: values.conditions.filter((_, i) => i !== index) })
   }
 
   const handleCreateRunnerChange = (newRunner: string) => {
@@ -129,17 +136,31 @@ export function RoutingRuleForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
         <Label htmlFor="event-type">Event type</Label>
-        <Select value={selectedId} onValueChange={handleEventTypeChange} required>
+        <Select
+          value={selectedId}
+          onValueChange={handleEventTypeChange}
+          disabled={eventTypesLoading}
+          required
+        >
           <SelectTrigger id="event-type">
-            <SelectValue placeholder="Select an event type" />
+            <SelectValue
+              placeholder={eventTypesLoading ? 'Loading event types…' : 'Select an event type'}
+            />
           </SelectTrigger>
           <SelectContent>
-            {EVENT_TYPES.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.label}
+            {eventTypes.map((t) => {
+              const id = eventTypeId(t.source, t.type)
+              return (
+                <SelectItem key={id} value={id}>
+                  {t.label}
+                </SelectItem>
+              )
+            })}
+            {legacyOption && (
+              <SelectItem value={eventTypeId(legacyOption.source, legacyOption.type)}>
+                {legacyOption.label}
               </SelectItem>
-            ))}
-            {legacyOption && <SelectItem value={legacyOption.id}>{legacyOption.label}</SelectItem>}
+            )}
           </SelectContent>
         </Select>
         <p className="text-muted-foreground text-xs">
@@ -147,68 +168,93 @@ export function RoutingRuleForm({
         </p>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="url-prefix">URL prefix</Label>
-        <Input
-          id="url-prefix"
-          placeholder={urlPrefixCopy.placeholder}
-          value={values.urlPrefix}
-          onChange={(e) => setValues({ ...values, urlPrefix: e.target.value })}
-        />
-        <p className="text-muted-foreground text-xs">{urlPrefixCopy.help}</p>
+      <div className="space-y-3 rounded-md border p-4">
+        <div className="space-y-1">
+          <Label>Conditions</Label>
+          <p className="text-muted-foreground text-xs">
+            The rule matches when the event satisfies every condition. Leave the list empty to match
+            any event of this type.
+          </p>
+        </div>
+
+        {values.conditions.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No conditions.</p>
+        ) : (
+          <div className="space-y-3">
+            {values.conditions.map((condition, index) => {
+              const copy = attrCopy(condition.attr, values.source)
+              return (
+                <div key={index} className="space-y-2 rounded-md border p-3">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <Select
+                      value={condition.attr}
+                      onValueChange={(attr) => setCondition(index, { attr })}
+                    >
+                      <SelectTrigger className="w-40" aria-label="Attribute">
+                        <SelectValue placeholder="Attribute" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableAttrs.map((attr) => (
+                          <SelectItem key={attr} value={attr}>
+                            {attrCopy(attr, values.source).label}
+                          </SelectItem>
+                        ))}
+                        {/* Keep a stored attr the current type no longer offers selectable. */}
+                        {condition.attr && !availableAttrs.includes(condition.attr) && (
+                          <SelectItem value={condition.attr}>{copy.label}</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={condition.op}
+                      onValueChange={(op) => setCondition(index, { op })}
+                    >
+                      <SelectTrigger className="w-36" aria-label="Operator">
+                        <SelectValue placeholder="Operator" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONDITION_OPS.map((op) => (
+                          <SelectItem key={op} value={op}>
+                            {OP_LABELS[op]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      className="flex-1 min-w-40"
+                      placeholder={copy.placeholder}
+                      value={condition.value}
+                      onChange={(e) => setCondition(index, { value: e.target.value })}
+                      aria-label="Value"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeCondition(index)}
+                      aria-label="Remove condition"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {copy.help && <p className="text-muted-foreground text-xs">{copy.help}</p>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addCondition}
+          disabled={!selectedType || availableAttrs.length === 0}
+        >
+          <Plus className="h-4 w-4" />
+          Add condition
+        </Button>
       </div>
-
-      {!isAssignment && !isLabel && (
-        <div className="space-y-2">
-          <Label htmlFor="prefix">{prefixCopy.label}</Label>
-          <Input
-            id="prefix"
-            placeholder={prefixCopy.placeholder}
-            value={values.prefix}
-            onChange={(e) => setValues({ ...values, prefix: e.target.value })}
-          />
-          <p className="text-muted-foreground text-xs">{prefixCopy.help}</p>
-        </div>
-      )}
-
-      {isLabel && (
-        <div className="space-y-2">
-          <Label htmlFor="value">{valueCopy.label}</Label>
-          <Input
-            id="value"
-            placeholder={valueCopy.placeholder}
-            value={values.value}
-            onChange={(e) => setValues({ ...values, value: e.target.value })}
-          />
-          <p className="text-muted-foreground text-xs">{valueCopy.help}</p>
-        </div>
-      )}
-
-      {!isAssignment && !isLabel && (
-        <div className="space-y-2">
-          <Label htmlFor="mention">{mentionCopy.label}</Label>
-          <Input
-            id="mention"
-            placeholder={mentionCopy.placeholder}
-            value={values.mention}
-            onChange={(e) => setValues({ ...values, mention: e.target.value })}
-          />
-          <p className="text-muted-foreground text-xs">{mentionCopy.help}</p>
-        </div>
-      )}
-
-      {isAssignment && (
-        <div className="space-y-2">
-          <Label htmlFor="assignee">{assigneeCopy.label}</Label>
-          <Input
-            id="assignee"
-            placeholder={assigneeCopy.placeholder}
-            value={values.assignee}
-            onChange={(e) => setValues({ ...values, assignee: e.target.value })}
-          />
-          <p className="text-muted-foreground text-xs">{assigneeCopy.help}</p>
-        </div>
-      )}
 
       <div className="space-y-4 rounded-md border p-4">
         <div className="flex items-start justify-between gap-4">
