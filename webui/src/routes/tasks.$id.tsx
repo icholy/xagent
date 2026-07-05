@@ -176,7 +176,11 @@ function TaskDetail() {
           title instead, so the whole header stays on a single line with the
           controls pinned to the right. */}
       <div className="flex flex-wrap md:flex-nowrap justify-between items-start gap-4 mb-6">
-        <h1 className="text-2xl font-bold md:min-w-0 md:truncate">
+        {/* title shows the full name on hover, useful once it's truncated. */}
+        <h1
+          className="text-2xl font-bold md:min-w-0 md:truncate"
+          title={task.name || `Unnamed - ${id}`}
+        >
           {task.name || `Unnamed - ${id}`}
         </h1>
         <div className="flex items-center gap-2 flex-shrink-0">
