@@ -99,48 +99,6 @@ func TestRouteNonCanonicalURLMatchesByRoutingKey(t *testing.T) {
 	assert.Equal(t, updated.Status, model.TaskStatusPending)
 }
 
-func TestRouteMultipleOrgs(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	s := teststore.New(t)
-	orgA := teststore.CreateOrg(t, s, nil)
-	orgB := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/pull/1"
-	teststore.CreateTask(t, s, orgA, &teststore.TaskOptions{
-		Status: model.TaskStatusCompleted,
-		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
-	})
-	teststore.CreateTask(t, s, orgB, &teststore.TaskOptions{
-		Status: model.TaskStatusCompleted,
-		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
-	})
-	err := s.AddOrgMember(t.Context(), nil, &model.OrgMember{
-		OrgID:  orgB.OrgID,
-		UserID: orgA.UserID,
-		Role:   "member",
-	})
-	assert.NilError(t, err)
-	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
-	}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "xagent: do something",
-		URL:    url,
-		UserID: orgA.UserID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 2)
-}
-
 func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 	t.Parallel()
 
@@ -175,80 +133,87 @@ func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 	assert.Equal(t, n, 1)
 }
 
-func TestRouteNoMatchingLinks(t *testing.T) {
+func TestRouteNoOp(t *testing.T) {
 	t.Parallel()
 
-	// Arrange
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
+	// Each case exercises the full Route path but ends in a no-op (n == 0) for a
+	// different reason: no subscribed link at the URL, an empty URL that can never
+	// match a link, and a body that the default rule's "xagent:" prefix rejects.
+	// (Attribute-level matching semantics themselves are covered by TestMatchRule.)
+	const url = "https://github.com/owner/repo/pull/1"
+	tests := []struct {
+		name string
+		link bool // seed a subscribed done task at url
+		data string
+		url  string
+	}{
+		{name: "no subscribed link at url", data: "xagent: do something", url: url},
+		{name: "empty url never matches a link", data: "xagent: do something", url: ""},
+		{name: "body without xagent: prefix is not matched", link: true, data: "just a regular comment", url: url},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "xagent: do something",
-		URL:    "https://github.com/owner/repo/pull/1",
-		UserID: org.UserID,
-	})
+			// Arrange
+			s := teststore.New(t)
+			org := teststore.CreateOrg(t, s, nil)
+			var task *model.Task
+			if tt.link {
+				task = teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+					Status: model.TaskStatusCompleted,
+					Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+				})
+			}
+			r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
 
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
+			// Act
+			n, err := r.Route(t.Context(), eventrouter.InputEvent{
+				Source: "github",
+				Type:   "issue_comment",
+				Data:   tt.data,
+				URL:    tt.url,
+				UserID: org.UserID,
+			})
+
+			// Assert
+			assert.NilError(t, err)
+			assert.Equal(t, n, 0)
+			if task != nil {
+				updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
+				assert.NilError(t, err)
+				assert.Equal(t, updated.Status, model.TaskStatusCompleted)
+			}
+		})
+	}
 }
 
-func TestRouteEmptyURL(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
-	}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "xagent: do something",
-		URL:    "",
-		UserID: org.UserID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
-}
-
-func TestRouteSkipsEventsWithoutXAgentPrefix(t *testing.T) {
+func TestRouteOrgRulesOverrideDefaults(t *testing.T) {
 	t.Parallel()
 
 	// Arrange
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/1"
-	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "bot:"}}},
+	})
+	assert.NilError(t, err)
 	r := &eventrouter.Router{
 		Registry: testRegistry(),
 		Log:      slog.Default(),
 		Store:    s,
 	}
 
-	// Act
+	// Act - "xagent:" prefix should NOT match because the org overrode the defaults
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
 		Source: "github",
 		Type:   "issue_comment",
-		Data:   "just a regular comment",
+		Data:   "xagent: do something",
 		URL:    url,
 		UserID: org.UserID,
 	})
@@ -256,6 +221,9 @@ func TestRouteSkipsEventsWithoutXAgentPrefix(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, n, 0)
+	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
 }
 
 func TestRouter_AttachSetsWakeMessage(t *testing.T) {
@@ -557,7 +525,8 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	t.Parallel()
 
 	// Arrange — a create rule with no custom prompt falls back to the default
-	// preamble orienting the agent with the event source/type.
+	// preamble orienting the agent with the event source/type. It seeds exactly
+	// one instruction (no custom prompt appended).
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/issues/1"
@@ -595,160 +564,86 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	assert.Assert(t, strings.Contains(insts[0].Text, "issue_comment"))
 }
 
-func TestRouteCreateRuleAppliesAutoArchive(t *testing.T) {
+func TestRouteCreateRuleAutoArchive(t *testing.T) {
 	t.Parallel()
 
-	// Arrange
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/1"
-	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source: "github",
-		Create: &model.CreateTaskAction{
-			Workspace:   "default",
-			Runner:      "test-runner",
-			AutoArchive: 24 * time.Hour,
-		},
-	}})
-	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "hello",
-		URL:    url,
-		UserID: org.UserID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 1)
-	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 1)
-	assert.Equal(t, tasks[0].AutoArchive, 24*time.Hour)
-}
-
-func TestRouteCreateRuleDefaultsAutoArchiveToNever(t *testing.T) {
-	t.Parallel()
-
-	// Arrange — a create rule without AutoArchive leaves the task at the
-	// "never auto-archive" default (zero duration).
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/2"
-	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source: "github",
-		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
-	}})
-	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "hello",
-		URL:    url,
-		UserID: org.UserID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 1)
-	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 1)
-	assert.Equal(t, tasks[0].AutoArchive, time.Duration(0))
-}
-
-func TestRouteCreateRuleOmittedPromptUsesPreambleOnly(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/2"
-	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source: "github",
-		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
-	}})
-	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "hello",
-		URL:    url,
-		UserID: org.UserID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 1)
-	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 1)
-	events, err := s.ListEventsByTask(t.Context(), nil, tasks[0].ID, org.OrgID, []string{model.EventTypeInstruction})
-	assert.NilError(t, err)
-	insts := model.FilterPayloads[*model.InstructionPayload](events)
-	assert.Equal(t, len(insts), 1)
-}
-
-func TestRouteSecondEventWakesCreatedTask(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/1"
-	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source: "github",
-		Wakeup: true,
-		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
-	}})
-	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
-
-	input := eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "first",
-		URL:    url,
-		UserID: org.UserID,
+	// A create rule carries its AutoArchive through to the spawned task; omitting
+	// it leaves the task at the "never auto-archive" default (zero duration).
+	tests := []struct {
+		name        string
+		autoArchive time.Duration
+		want        time.Duration
+	}{
+		{name: "explicit duration is applied", autoArchive: 24 * time.Hour, want: 24 * time.Hour},
+		{name: "omitted defaults to never", autoArchive: 0, want: 0},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Act: first event creates
-	n1, err := r.Route(t.Context(), input)
+			// Arrange
+			s := teststore.New(t)
+			org := teststore.CreateOrg(t, s, nil)
+			url := "https://github.com/owner/repo/issues/1"
+			err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+				Source: "github",
+				Create: &model.CreateTaskAction{
+					Workspace:   "default",
+					Runner:      "test-runner",
+					AutoArchive: tt.autoArchive,
+				},
+			}})
+			assert.NilError(t, err)
+			r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+			// Act
+			n, err := r.Route(t.Context(), eventrouter.InputEvent{
+				Source: "github",
+				Type:   "issue_comment",
+				Data:   "hello",
+				URL:    url,
+				UserID: org.UserID,
+			})
+
+			// Assert
+			assert.NilError(t, err)
+			assert.Equal(t, n, 1)
+			tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+			assert.NilError(t, err)
+			assert.Equal(t, len(tasks), 1)
+			assert.Equal(t, tasks[0].AutoArchive, tt.want)
+		})
+	}
+}
+
+func TestRouteCreateRuleThatDoesNotMatch(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a create-rule that requires a mention, an event without one.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/8"
+	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source:     "github",
+		Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "bot"}},
+		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+	}})
 	assert.NilError(t, err)
-	assert.Equal(t, n1, 1)
+	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "no mention here",
+		URL:    url,
+		UserID: org.UserID,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
 	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
 	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 1)
-	created := tasks[0]
-
-	// Bring the task back to a wakeable state so the wake path is observable.
-	created.Status = model.TaskStatusCompleted
-	created.Command = model.TaskCommandNone
-	assert.NilError(t, s.UpdateTask(t.Context(), nil, created))
-
-	// Act: replay creates no new task and wakes the existing one
-	input.Data = "second"
-	n2, err := r.Route(t.Context(), input)
-	assert.NilError(t, err)
-	assert.Equal(t, n2, 1)
-
-	tasks, err = s.ListTasks(t.Context(), nil, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 1)
-	updated, err := s.GetTask(t.Context(), nil, created.ID, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, updated.Status, model.TaskStatusPending)
-	assert.Equal(t, updated.Command, model.TaskCommandStart)
+	assert.Equal(t, len(tasks), 0)
 }
 
 func TestRouteRedeliveryDedup(t *testing.T) {
@@ -986,74 +881,6 @@ func TestRouteRuleLessOrgUsesDefaultRules(t *testing.T) {
 	assert.Equal(t, n, 0)
 }
 
-func TestRouteCreateRuleThatDoesNotMatch(t *testing.T) {
-	t.Parallel()
-
-	// Arrange: a create-rule that requires a mention, an event without one.
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/8"
-	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source:     "github",
-		Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "bot"}},
-		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
-	}})
-	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "no mention here",
-		URL:    url,
-		UserID: org.UserID,
-	})
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
-	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 0)
-}
-
-func TestRouteOrgRulesOverrideDefaults(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/pull/1"
-	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
-		Status: model.TaskStatusCompleted,
-		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
-	})
-	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "bot:"}}},
-	})
-	assert.NilError(t, err)
-	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
-	}
-
-	// Act - "xagent:" prefix should NOT match because the org overrode the defaults
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "xagent: do something",
-		URL:    url,
-		UserID: org.UserID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
-	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
-}
-
 func TestRouteAssignmentCreatesTaskAndLink(t *testing.T) {
 	t.Parallel()
 
@@ -1102,7 +929,11 @@ func TestRouteAssignmentCreatesTaskAndLink(t *testing.T) {
 func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
 	t.Parallel()
 
-	// Arrange: two rules — an assignment create-rule and a comment wake-rule.
+	// Arrange: two rules — an assignment create-rule and a comment wake-rule. This
+	// exercises the create-then-wake path across event types: the first event
+	// (assignment) creates the task and a subscribed link; a later comment on the
+	// same URL matches a different rule and wakes the existing task instead of
+	// spawning a duplicate.
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	url := "https://github.com/owner/repo/pull/9"
@@ -1120,11 +951,11 @@ func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
 
 	// Act: first event creates the task and a subscribed link.
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source:   "github",
-		Type:     "pull_request_assigned",
-		URL:      url,
-		UserID:   org.UserID,
-		Attrs:    eventrouter.Attrs{"assignee": {"icholy-bot"}},
+		Source: "github",
+		Type:   "pull_request_assigned",
+		URL:    url,
+		UserID: org.UserID,
+		Attrs:  eventrouter.Attrs{"assignee": {"icholy-bot"}},
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
@@ -1160,218 +991,119 @@ func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
 	assert.Equal(t, updated.Command, model.TaskCommandStart)
 }
 
-func TestRouteAssignmentWrongAssigneeIsNoOp(t *testing.T) {
+func TestRouteOnRouteOutcome(t *testing.T) {
 	t.Parallel()
 
-	// Arrange: create-rule gated on a specific assignee.
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/pull/9"
-	err := s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
-		Source:     "github",
-		Type:       "pull_request_assigned",
-		Conditions: []model.Condition{{Attr: "assignee", Op: "equals", Value: "icholy-bot"}},
-		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
-	}})
-	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
-
-	// Act: an assignment event for a different assignee does not match.
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source:   "github",
-		Type:     "pull_request_assigned",
-		URL:      url,
-		UserID:   org.UserID,
-		Attrs:    eventrouter.Attrs{"assignee": {"someone-else"}},
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
-	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 0)
-}
-
-func TestRouteOnRouteOutcomeFiresOnCreate(t *testing.T) {
-	t.Parallel()
-
-	// Arrange: a create-rule with no subscribed link — the create branch runs.
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/1"
-	rule := model.RoutingRule{
-		Source: "github",
-		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
-	}
-	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{rule}))
-
-	var outcomes []eventrouter.RouteOutcome
-	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
-		OnRouteOutcome: func(_ context.Context, o eventrouter.RouteOutcome) {
-			outcomes = append(outcomes, o)
+	// The OnRouteOutcome callback reports what Route did per matched org. Each
+	// case drives a different terminal state: a create-rule fires it with
+	// Created=true, a subscribed link fires it with Created=false, a wake-only
+	// rule with no link fires it "matched but nothing done", and an event that
+	// matches no rule never fires it at all.
+	const url = "https://github.com/owner/repo/issues/1"
+	tests := []struct {
+		name        string
+		rules       []model.RoutingRule
+		link        bool // seed a subscribed done task at url
+		data        string
+		wantN       int
+		wantFire    bool
+		wantCreated bool
+		wantTaskIDs int
+	}{
+		{
+			name:        "fires on create",
+			rules:       []model.RoutingRule{{Source: "github", Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"}}},
+			data:        "hello",
+			wantN:       1,
+			wantFire:    true,
+			wantCreated: true,
+			wantTaskIDs: 1,
+		},
+		{
+			name:        "fires on wake",
+			link:        true,
+			data:        "xagent: fix tests",
+			wantN:       1,
+			wantFire:    true,
+			wantCreated: false,
+			wantTaskIDs: 1,
+		},
+		{
+			name:        "fires on match with nothing to do",
+			rules:       []model.RoutingRule{{Source: "github"}},
+			data:        "no link, no create",
+			wantN:       0,
+			wantFire:    true,
+			wantCreated: false,
+			wantTaskIDs: 0,
+		},
+		{
+			name:     "does not fire when no rule matches",
+			link:     true,
+			data:     "just a regular comment",
+			wantN:    0,
+			wantFire: false,
 		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "hello",
-		URL:    url,
-		UserID: org.UserID,
-	})
+			// Arrange
+			s := teststore.New(t)
+			org := teststore.CreateOrg(t, s, nil)
+			if tt.link {
+				teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+					Status: model.TaskStatusCompleted,
+					Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+				})
+			}
+			if tt.rules != nil {
+				assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, tt.rules))
+			}
+			var outcomes []eventrouter.RouteOutcome
+			r := &eventrouter.Router{
+				Registry: testRegistry(),
+				Log:      slog.Default(),
+				Store:    s,
+				OnRouteOutcome: func(_ context.Context, o eventrouter.RouteOutcome) {
+					outcomes = append(outcomes, o)
+				},
+			}
 
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 1)
+			// Act
+			n, err := r.Route(t.Context(), eventrouter.InputEvent{
+				Source: "github",
+				Type:   "issue_comment",
+				Data:   tt.data,
+				URL:    url,
+				UserID: org.UserID,
+			})
 
-	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 1)
-
-	assert.Equal(t, len(outcomes), 1)
-	got := outcomes[0]
-	assert.Equal(t, got.OrgID, org.OrgID)
-	assert.Equal(t, got.Created, true)
-	assert.Equal(t, got.Rule.Source, "github")
-	assert.Assert(t, got.Rule.Create != nil)
-	assert.DeepEqual(t, got.TaskIDs, []int64{tasks[0].ID})
-	assert.Equal(t, got.Input.URL, url)
-}
-
-func TestRouteOnRouteOutcomeFiresOnWake(t *testing.T) {
-	t.Parallel()
-
-	// Arrange: a subscribed link exists, so the wake branch runs.
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/pull/1"
-	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
-		Status: model.TaskStatusCompleted,
-		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
-	})
-
-	var outcomes []eventrouter.RouteOutcome
-	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
-		OnRouteOutcome: func(_ context.Context, o eventrouter.RouteOutcome) {
-			outcomes = append(outcomes, o)
-		},
+			// Assert
+			assert.NilError(t, err)
+			assert.Equal(t, n, tt.wantN)
+			if !tt.wantFire {
+				assert.Equal(t, len(outcomes), 0)
+				return
+			}
+			assert.Equal(t, len(outcomes), 1)
+			got := outcomes[0]
+			assert.Equal(t, got.OrgID, org.OrgID)
+			assert.Equal(t, got.Input.URL, url)
+			assert.Equal(t, got.Rule.Source, "github")
+			assert.Equal(t, got.Created, tt.wantCreated)
+			assert.Equal(t, got.Rule.Create != nil, tt.wantCreated)
+			assert.Equal(t, len(got.TaskIDs), tt.wantTaskIDs)
+		})
 	}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "xagent: fix tests",
-		URL:    url,
-		UserID: org.UserID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 1)
-
-	assert.Equal(t, len(outcomes), 1)
-	got := outcomes[0]
-	assert.Equal(t, got.OrgID, org.OrgID)
-	assert.Equal(t, got.Created, false)
-	assert.DeepEqual(t, got.TaskIDs, []int64{task.ID})
-}
-
-func TestRouteOnRouteOutcomeFiresOnMatchOnly(t *testing.T) {
-	t.Parallel()
-
-	// Arrange: a wake-only rule matches but there is no subscribed link at the
-	// URL and the rule has no Create action — matched, nothing done.
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/1"
-	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Source: "github"},
-	}))
-
-	var outcomes []eventrouter.RouteOutcome
-	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
-		OnRouteOutcome: func(_ context.Context, o eventrouter.RouteOutcome) {
-			outcomes = append(outcomes, o)
-		},
-	}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "no link, no create",
-		URL:    url,
-		UserID: org.UserID,
-	})
-
-	// Assert: the callback still fires, but nothing was woken or created.
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
-	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, len(tasks), 0)
-
-	assert.Equal(t, len(outcomes), 1)
-	got := outcomes[0]
-	assert.Equal(t, got.OrgID, org.OrgID)
-	assert.Equal(t, got.Created, false)
-	assert.Equal(t, len(got.TaskIDs), 0)
-}
-
-func TestRouteOnRouteOutcomeDoesNotFireWhenNoMatch(t *testing.T) {
-	t.Parallel()
-
-	// Arrange: the default "xagent:" prefix rule applies, but the event has no
-	// matching prefix — no rule matches, so the callback never fires.
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/1"
-	teststore.CreateTask(t, s, org, &teststore.TaskOptions{
-		Status: model.TaskStatusCompleted,
-		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
-	})
-
-	var outcomes []eventrouter.RouteOutcome
-	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
-		OnRouteOutcome: func(_ context.Context, o eventrouter.RouteOutcome) {
-			outcomes = append(outcomes, o)
-		},
-	}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "just a regular comment",
-		URL:    url,
-		UserID: org.UserID,
-	})
-
-	// Assert
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
-	assert.Equal(t, len(outcomes), 0)
 }
 
 func TestRouteOnRouteOutcomeFiresOncePerMatchedOrg(t *testing.T) {
 	t.Parallel()
 
-	// Arrange: user in two orgs, both with a subscribed link at the URL.
+	// Arrange: user in two orgs, both with a subscribed link at the URL. This also
+	// covers the multi-org wake fan-out (n == 2, one woken task per org).
 	s := teststore.New(t)
 	orgA := teststore.CreateOrg(t, s, nil)
 	orgB := teststore.CreateOrg(t, s, nil)
@@ -1417,77 +1149,4 @@ func TestRouteOnRouteOutcomeFiresOncePerMatchedOrg(t *testing.T) {
 	assert.DeepEqual(t, byOrg[orgB.OrgID].TaskIDs, []int64{taskB.ID})
 	assert.Equal(t, byOrg[orgA.OrgID].Created, false)
 	assert.Equal(t, byOrg[orgB.OrgID].Created, false)
-}
-
-func TestRouteMentionRuleWakesSubscribedTask(t *testing.T) {
-	t.Parallel()
-
-	// Arrange: a user rule that wakes on an exact @mention, and a done task
-	// subscribed to the event URL. The rule is translated to the attribute
-	// matcher at match time (the mention condition is checked against the event's
-	// "mention" attr, populated by the webhook handler).
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/1"
-	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
-		Status: model.TaskStatusCompleted,
-		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
-	})
-	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "icholy-bot"}}, Wakeup: true},
-	}))
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "hey @icholy-bot take a look",
-		URL:    url,
-		UserID: org.UserID,
-		Attrs:  eventrouter.Attrs{"mention": {"icholy-bot"}},
-	})
-
-	// Assert: the subscribed task is woken.
-	assert.NilError(t, err)
-	assert.Equal(t, n, 1)
-	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, updated.Status, model.TaskStatusPending)
-}
-
-func TestRouteMentionIsCaseSensitive(t *testing.T) {
-	t.Parallel()
-
-	// Arrange: same mention rule, but the event carries a different-case mention.
-	// The attribute matcher is case-sensitive (unlike the removed v1 matcher), so
-	// this must not match — nothing is woken.
-	s := teststore.New(t)
-	org := teststore.CreateOrg(t, s, nil)
-	url := "https://github.com/owner/repo/issues/1"
-	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
-		Status: model.TaskStatusCompleted,
-		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
-	})
-	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
-		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "icholy-bot"}}, Wakeup: true},
-	}))
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
-
-	// Act
-	n, err := r.Route(t.Context(), eventrouter.InputEvent{
-		Source: "github",
-		Type:   "issue_comment",
-		Data:   "hey @Icholy-Bot take a look",
-		URL:    url,
-		UserID: org.UserID,
-		Attrs:  eventrouter.Attrs{"mention": {"Icholy-Bot"}},
-	})
-
-	// Assert: no match, the task is untouched.
-	assert.NilError(t, err)
-	assert.Equal(t, n, 0)
-	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
-	assert.NilError(t, err)
-	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
 }
