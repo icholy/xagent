@@ -136,17 +136,6 @@ const (
 	EventTypeLabelAdded               = "label_added"
 )
 
-// mentionAttrs builds the inert "mention" attribute for comment/review events
-// from the @mentions in the body (extracted by githubx.Mentions), or nil when
-// there are none.
-func mentionAttrs(body string) eventrouter.Attrs {
-	logins := githubx.Mentions(body)
-	if len(logins) == 0 {
-		return nil
-	}
-	return eventrouter.Attrs{"mention": logins}
-}
-
 func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 	switch event := webhookEvent.(type) {
 	case *github.IssueCommentEvent:
@@ -173,7 +162,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			// The expressive trigger URL is the comment itself; the router
 			// derives the parent routing key from it via model.RoutingKey.
 			URL:   *event.Comment.HTMLURL,
-			Attrs: mentionAttrs(body),
+			Attrs: eventrouter.Attrs{"mention": githubx.Mentions(body)},
 			Meta: GitHubMeta{
 				AuthorID:    *event.Comment.User.ID,
 				AuthorLogin: login,
@@ -201,7 +190,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			// The expressive trigger URL is the review comment itself; the
 			// router derives the parent PR routing key via model.RoutingKey.
 			URL:   *event.Comment.HTMLURL,
-			Attrs: mentionAttrs(body),
+			Attrs: eventrouter.Attrs{"mention": githubx.Mentions(body)},
 			Meta: GitHubMeta{
 				AuthorID:    *event.Comment.User.ID,
 				AuthorLogin: login,
@@ -227,7 +216,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			// The expressive trigger URL is the review itself; the router
 			// derives the parent PR routing key via model.RoutingKey.
 			URL:   *event.Review.HTMLURL,
-			Attrs: mentionAttrs(body),
+			Attrs: eventrouter.Attrs{"mention": githubx.Mentions(body)},
 			Meta: GitHubMeta{
 				AuthorID:    *event.Review.User.ID,
 				AuthorLogin: login,

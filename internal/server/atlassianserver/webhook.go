@@ -118,17 +118,6 @@ const (
 	EventTypeLabelAdded     = "label_added"
 )
 
-// mentionAttrs builds the inert "mention" attribute for comment events from
-// the account IDs mentioned in the body (extracted by atlassian.Mentions), or
-// nil when there are none.
-func mentionAttrs(body string) eventrouter.Attrs {
-	ids := atlassian.Mentions(body)
-	if len(ids) == 0 {
-		return nil
-	}
-	return eventrouter.Attrs{"mention": ids}
-}
-
 // toInputEvent extracts a single routable event from a Jira webhook payload. It
 // returns nil for events that should be ignored.
 func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
@@ -166,7 +155,7 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 			Description: description,
 			Data:        commentBody,
 			URL:         url,
-			Attrs:       mentionAttrs(commentBody),
+			Attrs:       eventrouter.Attrs{"mention": atlassian.Mentions(commentBody)},
 			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
 		}, nil
 
