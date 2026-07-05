@@ -20,15 +20,15 @@ type EventTypeDef struct {
 	DefaultRules []RoutingRule
 }
 
-// registeredEventTypes holds every schema registered via MustRegisterSchema, in
+// eventTypes holds every schema registered via MustRegisterSchema, in
 // registration order. It is the machine-readable contract that the router, rule
 // validation, and (later) the UI derive from, replacing hand-synced copies of
 // the (source, type) pairs and their applicable attrs. The set is assembled by
 // the producer packages that emit the events — each registers its own schemas
 // from an init — rather than a central table.
-var registeredEventTypes []EventTypeDef
+var eventTypes []EventTypeDef
 
-// eventTypeByKey indexes registeredEventTypes by "source:type" for O(1) lookup.
+// eventTypeByKey indexes eventTypes by "source:type" for O(1) lookup.
 var eventTypeByKey = map[string]EventTypeDef{}
 
 // MustRegisterSchema records def as the schema for its (Source, Type) event
@@ -40,7 +40,7 @@ func MustRegisterSchema(def EventTypeDef) {
 	if _, dup := eventTypeByKey[key]; dup {
 		panic(fmt.Sprintf("eventrouter2: duplicate schema registration for source=%q type=%q", def.Source, def.Type))
 	}
-	registeredEventTypes = append(registeredEventTypes, def)
+	eventTypes = append(eventTypes, def)
 	eventTypeByKey[key] = def
 }
 
@@ -54,7 +54,7 @@ func EventTypeFor(source, typ string) (EventTypeDef, bool) {
 // RegisteredEventTypes returns every registered schema in registration order.
 // It backs iteration over the registry and the future GetEventTypes RPC.
 func RegisteredEventTypes() []EventTypeDef {
-	return slices.Clone(registeredEventTypes)
+	return slices.Clone(eventTypes)
 }
 
 // DefaultRules flattens every registered schema's DefaultRules in registration
@@ -65,7 +65,7 @@ func RegisteredEventTypes() []EventTypeDef {
 // is a later layer.
 func DefaultRules() []RoutingRule {
 	var rules []RoutingRule
-	for _, def := range registeredEventTypes {
+	for _, def := range eventTypes {
 		rules = append(rules, def.DefaultRules...)
 	}
 	return rules
