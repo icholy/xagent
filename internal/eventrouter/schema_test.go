@@ -18,7 +18,7 @@ var (
 		Source: "test",
 		Type:   "comment",
 		Label:  "Test: Comment",
-		Attrs:  attrDefs("body", "url", "mention"),
+		Attrs:  []AttrDef{{Key: "body"}, {Key: "url"}, {Key: "mention"}},
 		DefaultRules: []model.RoutingRule{{
 			Source:     "test",
 			Type:       "comment",
@@ -30,26 +30,15 @@ var (
 		Source: "test",
 		Type:   "label",
 		Label:  "Test: Label",
-		Attrs:  attrDefs("body", "url", "label"),
+		Attrs:  []AttrDef{{Key: "body"}, {Key: "url"}, {Key: "label"}},
 	}
 	testOpened = EventTypeDef{
 		Source: "test",
 		Type:   "opened",
 		Label:  "Test: Opened",
-		Attrs:  attrDefs("body", "url"),
+		Attrs:  []AttrDef{{Key: "body"}, {Key: "url"}},
 	}
 )
-
-// attrDefs builds a bare AttrDef slice from attr keys for the synthetic test
-// schemas — the display copy is irrelevant to the router/validation tests, so
-// only Key is set.
-func attrDefs(keys ...string) []AttrDef {
-	defs := make([]AttrDef, len(keys))
-	for i, key := range keys {
-		defs[i] = AttrDef{Key: key}
-	}
-	return defs
-}
 
 func TestSchemaRegistryValidate(t *testing.T) {
 	reg := NewSchemaRegistry()
@@ -206,6 +195,6 @@ func TestSchemaRegistryMustRegisterDuplicatePanics(t *testing.T) {
 	reg.MustRegister(testComment)
 	// Re-registering the same (source, type) must panic.
 	assert.Assert(t, cmp.Panics(func() {
-		reg.MustRegister(EventTypeDef{Source: "test", Type: "comment", Attrs: attrDefs("body")})
+		reg.MustRegister(EventTypeDef{Source: "test", Type: "comment", Attrs: []AttrDef{{Key: "body"}}})
 	}))
 }

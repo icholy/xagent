@@ -5,6 +5,7 @@ import (
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
+	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 
 	// Blank-imported so their init registers the eventrouter schemas the
@@ -34,42 +35,56 @@ func TestGetEventTypes(t *testing.T) {
 	issueComment, ok := byKey["github:issue_comment"]
 	assert.Assert(t, ok, "expected github/issue_comment to be registered")
 	assert.Equal(t, issueComment.Label, "GitHub: Issue/PR Comment")
-	assert.DeepEqual(t, attrKeys(issueComment), []string{"body", "url", "mention"})
 
-	// AttrDefs carry display copy sourced from the schema, so the mention attr's
-	// label/help/placeholder come through the RPC rather than being hardcoded in
+	// AttrDefs carry display copy sourced from the schema, so each attr's
+	// label/help/placeholder comes through the RPC rather than being hardcoded in
 	// the frontend.
-	mention := findAttr(issueComment, "mention")
-	assert.Assert(t, mention != nil, "expected mention attr on issue_comment")
-	assert.Equal(t, mention.Label, "Mention")
-	assert.Equal(t, mention.Placeholder, "octocat")
-	assert.Assert(t, mention.Help != "", "expected mention attr to carry help text")
+	assert.DeepEqual(t, issueComment.Attrs, []*xagentv1.AttrDef{
+		{
+			Key:         "body",
+			Label:       "Body",
+			Placeholder: "xagent:",
+			Help:        "Matched against the event body — the comment or description text.",
+		},
+		{
+			Key:         "url",
+			Label:       "URL",
+			Placeholder: "https://github.com/owner/repo/",
+			Help:        "Matched against the event URL — e.g. to scope a rule to a single repo or project.",
+		},
+		{
+			Key:         "mention",
+			Label:       "Mention",
+			Placeholder: "octocat",
+			Help:        "GitHub username mentioned in the event body (no leading @).",
+		},
+	}, protocmp.Transform())
 
 	labelAdded, ok := byKey["github:label_added"]
 	assert.Assert(t, ok, "expected github/label_added to be registered")
-	assert.DeepEqual(t, attrKeys(labelAdded), []string{"body", "url", "label"})
+	assert.DeepEqual(t, labelAdded.Attrs, []*xagentv1.AttrDef{
+		{
+			Key:         "body",
+			Label:       "Body",
+			Placeholder: "xagent:",
+			Help:        "Matched against the event body — the comment or description text.",
+		},
+		{
+			Key:         "url",
+			Label:       "URL",
+			Placeholder: "https://github.com/owner/repo/",
+			Help:        "Matched against the event URL — e.g. to scope a rule to a single repo or project.",
+		},
+		{
+			Key:         "label",
+			Label:       "Label",
+			Placeholder: "xagent",
+			Help:        "A label added to the issue or PR.",
+		},
+	}, protocmp.Transform())
 
 	// The atlassian producer registers too (apiserver imports it), confirming the
 	// handler exposes the whole global registry, not just one source.
 	_, ok = byKey["atlassian:comment_created"]
 	assert.Assert(t, ok, "expected atlassian/comment_created to be registered")
-}
-
-// attrKeys extracts the attr keys from an event-type def, in order.
-func attrKeys(def *xagentv1.EventTypeDef) []string {
-	keys := make([]string, len(def.Attrs))
-	for i, a := range def.Attrs {
-		keys[i] = a.Key
-	}
-	return keys
-}
-
-// findAttr returns the AttrDef with the given key, or nil.
-func findAttr(def *xagentv1.EventTypeDef, key string) *xagentv1.AttrDef {
-	for _, a := range def.Attrs {
-		if a.Key == key {
-			return a
-		}
-	}
-	return nil
 }
