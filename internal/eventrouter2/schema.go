@@ -23,16 +23,66 @@ type EventTypeDef struct {
 // that type — the derived body/url plus the emitted dimensions from the design's
 // §1 extractor mapping.
 var EventTypes = []EventTypeDef{
-	{Source: "github", Type: "issue_comment", Label: "GitHub: Issue/PR Comment", Attrs: []string{"body", "url", "mention"}},
-	{Source: "github", Type: "pull_request_review_comment", Label: "GitHub: PR Review Comment", Attrs: []string{"body", "url", "mention"}},
-	{Source: "github", Type: "pull_request_review", Label: "GitHub: PR Review", Attrs: []string{"body", "url", "mention"}},
-	{Source: "github", Type: "issue_assigned", Label: "GitHub: Issue Assigned", Attrs: []string{"body", "url", "assignee"}},
-	{Source: "github", Type: "pull_request_assigned", Label: "GitHub: PR Assigned", Attrs: []string{"body", "url", "assignee"}},
-	{Source: "github", Type: "pull_request_opened", Label: "GitHub: PR Opened", Attrs: []string{"body", "url"}},
-	{Source: "github", Type: "pull_request_closed", Label: "GitHub: PR Closed", Attrs: []string{"body", "url", "state"}},
-	{Source: "github", Type: "label_added", Label: "GitHub: Label Added", Attrs: []string{"body", "url", "label"}},
-	{Source: "atlassian", Type: "comment_created", Label: "Jira: Issue Comment", Attrs: []string{"body", "url", "mention"}},
-	{Source: "atlassian", Type: "label_added", Label: "Jira: Label Added", Attrs: []string{"body", "url", "label"}},
+	{
+		Source: "github",
+		Type:   "issue_comment",
+		Label:  "GitHub: Issue/PR Comment",
+		Attrs:  []string{"body", "url", "mention"},
+	},
+	{
+		Source: "github",
+		Type:   "pull_request_review_comment",
+		Label:  "GitHub: PR Review Comment",
+		Attrs:  []string{"body", "url", "mention"},
+	},
+	{
+		Source: "github",
+		Type:   "pull_request_review",
+		Label:  "GitHub: PR Review",
+		Attrs:  []string{"body", "url", "mention"},
+	},
+	{
+		Source: "github",
+		Type:   "issue_assigned",
+		Label:  "GitHub: Issue Assigned",
+		Attrs:  []string{"body", "url", "assignee"},
+	},
+	{
+		Source: "github",
+		Type:   "pull_request_assigned",
+		Label:  "GitHub: PR Assigned",
+		Attrs:  []string{"body", "url", "assignee"},
+	},
+	{
+		Source: "github",
+		Type:   "pull_request_opened",
+		Label:  "GitHub: PR Opened",
+		Attrs:  []string{"body", "url"},
+	},
+	{
+		Source: "github",
+		Type:   "pull_request_closed",
+		Label:  "GitHub: PR Closed",
+		Attrs:  []string{"body", "url", "state"},
+	},
+	{
+		Source: "github",
+		Type:   "label_added",
+		Label:  "GitHub: Label Added",
+		Attrs:  []string{"body", "url", "label"},
+	},
+	{
+		Source: "atlassian",
+		Type:   "comment_created",
+		Label:  "Jira: Issue Comment",
+		Attrs:  []string{"body", "url", "mention"},
+	},
+	{
+		Source: "atlassian",
+		Type:   "label_added",
+		Label:  "Jira: Label Added",
+		Attrs:  []string{"body", "url", "label"},
+	},
 }
 
 // eventTypeByKey indexes EventTypes by "source:type" for O(1) lookup. Populated
