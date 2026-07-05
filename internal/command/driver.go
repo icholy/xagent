@@ -31,13 +31,15 @@ var DriverCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		taskID := cmd.Int64("task")
 		driver := &agent.Driver{
-			TaskID: cmd.Int64("task"),
+			TaskID: taskID,
 			Client: xagentclient.New(xagentclient.Options{
 				BaseURL: cmd.String("server"),
 				Token:   cmd.String("token"),
 			}),
-			Log:       slog.Default(),
+			// The driver runs a single task, so stamp task_id on every log line.
+			Log:       slog.With("task_id", taskID),
 			ServerURL: cmd.String("server"),
 			Token:     cmd.String("token"),
 		}

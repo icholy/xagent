@@ -32,7 +32,7 @@ func (s *Server) RegisterWorkspaces(ctx context.Context, req *xagentv1.RegisterW
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("workspaces registered", "runner_id", req.RunnerId, "org_id", caller.OrgID, "count", len(req.Workspaces))
+	s.log.InfoContext(ctx, "workspaces registered", "runner_id", req.RunnerId, "count", len(req.Workspaces))
 	s.publish(model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "registered", Type: "workspaces"}},
@@ -65,12 +65,12 @@ func (s *Server) ClearWorkspaces(ctx context.Context, req *xagentv1.ClearWorkspa
 		if err := s.store.DeleteWorkspacesByRunner(ctx, nil, req.RunnerId, caller.OrgID); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		s.log.Info("workspaces cleared", "org_id", caller.OrgID, "runner", req.RunnerId)
+		s.log.InfoContext(ctx, "workspaces cleared", "runner", req.RunnerId)
 	} else {
 		if err := s.store.ClearWorkspaces(ctx, nil, caller.OrgID); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		s.log.Info("workspaces cleared", "org_id", caller.OrgID)
+		s.log.InfoContext(ctx, "workspaces cleared")
 	}
 	s.publish(model.Notification{
 		Type:      "change",

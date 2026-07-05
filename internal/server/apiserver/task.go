@@ -129,7 +129,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace, "org_id", task.OrgID)
+	s.log.InfoContext(ctx, "task created", "id", task.ID, "runner", task.Runner, "workspace", task.Workspace)
 	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
@@ -291,7 +291,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task updated", "id", req.Id, "name", req.Name, "start", req.Start, "instructions_added", len(req.AddInstructions))
+	s.log.InfoContext(ctx, "task updated", "id", req.Id, "name", req.Name, "start", req.Start, "instructions_added", len(req.AddInstructions))
 	s.publish(notification)
 	return &xagentv1.UpdateTaskResponse{}, nil
 }
@@ -357,7 +357,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task archived", "id", req.Id)
+	s.log.InfoContext(ctx, "task archived", "id", req.Id)
 	s.publish(notification)
 	return &xagentv1.ArchiveTaskResponse{}, nil
 }
@@ -422,7 +422,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task unarchived", "id", req.Id)
+	s.log.InfoContext(ctx, "task unarchived", "id", req.Id)
 	s.publish(notification)
 	return &xagentv1.UnarchiveTaskResponse{}, nil
 }
@@ -493,7 +493,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task cancelled", "id", req.Id)
+	s.log.InfoContext(ctx, "task cancelled", "id", req.Id)
 	s.publish(notification)
 	return &xagentv1.CancelTaskResponse{}, nil
 }
@@ -559,7 +559,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("task restarted", "id", req.Id)
+	s.log.InfoContext(ctx, "task restarted", "id", req.Id)
 	s.publish(notification)
 	return &xagentv1.RestartTaskResponse{}, nil
 }

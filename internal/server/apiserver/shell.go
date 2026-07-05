@@ -116,7 +116,7 @@ func (s *Server) OpenShell(ctx context.Context, req *xagentv1.OpenShellRequest) 
 	if err := s.shells.Seed(sessionID, caller.OrgID, req.TaskId); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("register shell session: %w", err))
 	}
-	s.log.Info("shell session opened", "task", req.TaskId, "session", sessionID)
+	s.log.InfoContext(ctx, "shell session opened", "session", sessionID)
 	s.publish(notification)
 	return &xagentv1.OpenShellResponse{SessionId: sessionID}, nil
 }

@@ -42,7 +42,7 @@ func (s *Server) CreateKey(ctx context.Context, req *xagentv1.CreateKeyRequest) 
 	if err := s.store.CreateKey(ctx, nil, key); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("key created", "id", key.ID, "org_id", caller.OrgID)
+	s.log.InfoContext(ctx, "key created", "id", key.ID)
 	s.publish(model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "created", Type: "keys"}},
@@ -79,7 +79,7 @@ func (s *Server) DeleteKey(ctx context.Context, req *xagentv1.DeleteKeyRequest) 
 	if err := s.store.DeleteKey(ctx, nil, req.Id, caller.OrgID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("key deleted", "id", req.Id)
+	s.log.InfoContext(ctx, "key deleted", "id", req.Id)
 	s.publish(model.Notification{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "deleted", Type: "keys"}},

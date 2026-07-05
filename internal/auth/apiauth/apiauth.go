@@ -13,11 +13,14 @@ import (
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/x/logctx"
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/authentication"
 	openid "github.com/zitadel/zitadel-go/v3/pkg/authentication/oidc"
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Auth type labels for UserInfo.Type.
@@ -299,6 +302,29 @@ func RequireUserInterceptor() connect.UnaryInterceptorFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			if Caller(ctx) == nil {
 				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+			}
+			return next(ctx, req)
+		}
+	}
+}
+
+// ObservabilityInterceptor returns a Connect interceptor that attaches the
+// caller's org id and the request's task id (when present) to the active span
+// and request context, so they show up on traces and logs. It should run after
+// authentication has populated the caller.
+func ObservabilityInterceptor() connect.UnaryInterceptorFunc {
+	return func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			span := trace.SpanFromContext(ctx)
+			if u := Caller(ctx); u != nil {
+				ctx = logctx.WithOrgID(ctx, u.OrgID)
+				span.SetAttributes(attribute.Int64("org.id", u.OrgID))
+			}
+			if m, ok := req.Any().(interface{ GetTaskId() int64 }); ok {
+				if id := m.GetTaskId(); id != 0 {
+					ctx = logctx.WithTaskID(ctx, id)
+					span.SetAttributes(attribute.Int64("task.id", id))
+				}
 			}
 			return next(ctx, req)
 		}

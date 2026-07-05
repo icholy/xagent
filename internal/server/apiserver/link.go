@@ -61,7 +61,7 @@ func (s *Server) CreateLink(ctx context.Context, req *xagentv1.CreateLinkRequest
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	s.log.Info("link created", "task", req.TaskId, "relevance", req.Relevance, "url", req.Url)
+	s.log.InfoContext(ctx, "link created", "relevance", req.Relevance, "url", req.Url)
 	s.publish(model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
