@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -119,20 +118,11 @@ const (
 	EventTypeLabelAdded     = "label_added"
 )
 
-// mentionRe locates a Jira mention, capturing the account ID from the
-// `[~accountid:…]` syntax that eventrouter's matchMention/matchAssignee test
-// with strings.Contains today.
-var mentionRe = regexp.MustCompile(`\[~accountid:([^\]]+)\]`)
-
-// mentionAttrs builds the inert "mention" attribute for comment events by
-// extracting every mentioned account ID from the body, or nil when there are
-// none. The values are the account IDs verbatim, matching how matchMention
-// would test each.
+// mentionAttrs builds the inert "mention" attribute for comment events from
+// the account IDs mentioned in the body (extracted by atlassian.Mentions), or
+// nil when there are none.
 func mentionAttrs(body string) eventrouter.Attrs {
-	var ids []string
-	for _, m := range mentionRe.FindAllStringSubmatch(body, -1) {
-		ids = append(ids, m[1])
-	}
+	ids := atlassian.Mentions(body)
 	if len(ids) == 0 {
 		return nil
 	}

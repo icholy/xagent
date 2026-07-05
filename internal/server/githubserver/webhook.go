@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/google/go-github/v88/github"
@@ -137,39 +136,11 @@ const (
 	EventTypeLabelAdded               = "label_added"
 )
 
-// mentionRe locates a GitHub @mention: an "@" preceded by start-of-string,
-// whitespace, or "(", capturing the login. It generalizes the word-boundary
-// pattern eventrouter's matchMention uses to test a single login
-// (`(?:^|[\s(])@name(?:$|[\s,.)!?])`) into one that extracts every login. The
-// trailing boundary is verified separately (see mentionAttrs) rather than
-// matched here so a consumed trailing space can't hide an adjacent mention
-// like "@alice @bob".
-var mentionRe = regexp.MustCompile(`(?i)(?:^|[\s(])@([A-Za-z0-9-]+)`)
-
-// isMentionBoundary reports whether b is one of the characters matchMention
-// accepts immediately after a login (the `(?:$|[\s,.)!?])` set, with \s
-// expanded), so "@alice/team" is not treated as a mention of "alice".
-func isMentionBoundary(b byte) bool {
-	switch b {
-	case ' ', '\t', '\n', '\r', '\f', ',', '.', ')', '!', '?':
-		return true
-	default:
-		return false
-	}
-}
-
 // mentionAttrs builds the inert "mention" attribute for comment/review events
-// by extracting every @mention in the body, or nil when there are none. The
-// values are the logins verbatim, matching how matchMention would test each.
+// from the @mentions in the body (extracted by githubx.Mentions), or nil when
+// there are none.
 func mentionAttrs(body string) eventrouter.Attrs {
-	var logins []string
-	for _, loc := range mentionRe.FindAllStringSubmatchIndex(body, -1) {
-		end := loc[3] // end index of the captured login
-		if end < len(body) && !isMentionBoundary(body[end]) {
-			continue
-		}
-		logins = append(logins, body[loc[2]:end])
-	}
+	logins := githubx.Mentions(body)
 	if len(logins) == 0 {
 		return nil
 	}
