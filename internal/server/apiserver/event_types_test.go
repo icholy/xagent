@@ -34,14 +34,42 @@ func TestGetEventTypes(t *testing.T) {
 	issueComment, ok := byKey["github:issue_comment"]
 	assert.Assert(t, ok, "expected github/issue_comment to be registered")
 	assert.Equal(t, issueComment.Label, "GitHub: Issue/PR Comment")
-	assert.DeepEqual(t, issueComment.Attrs, []string{"body", "url", "mention"})
+	assert.DeepEqual(t, attrKeys(issueComment), []string{"body", "url", "mention"})
+
+	// AttrDefs carry display copy sourced from the schema, so the mention attr's
+	// label/help/placeholder come through the RPC rather than being hardcoded in
+	// the frontend.
+	mention := findAttr(issueComment, "mention")
+	assert.Assert(t, mention != nil, "expected mention attr on issue_comment")
+	assert.Equal(t, mention.Label, "Mention")
+	assert.Equal(t, mention.Placeholder, "octocat")
+	assert.Assert(t, mention.Help != "", "expected mention attr to carry help text")
 
 	labelAdded, ok := byKey["github:label_added"]
 	assert.Assert(t, ok, "expected github/label_added to be registered")
-	assert.DeepEqual(t, labelAdded.Attrs, []string{"body", "url", "label"})
+	assert.DeepEqual(t, attrKeys(labelAdded), []string{"body", "url", "label"})
 
 	// The atlassian producer registers too (apiserver imports it), confirming the
 	// handler exposes the whole global registry, not just one source.
 	_, ok = byKey["atlassian:comment_created"]
 	assert.Assert(t, ok, "expected atlassian/comment_created to be registered")
+}
+
+// attrKeys extracts the attr keys from an event-type def, in order.
+func attrKeys(def *xagentv1.EventTypeDef) []string {
+	keys := make([]string, len(def.Attrs))
+	for i, a := range def.Attrs {
+		keys[i] = a.Key
+	}
+	return keys
+}
+
+// findAttr returns the AttrDef with the given key, or nil.
+func findAttr(def *xagentv1.EventTypeDef, key string) *xagentv1.AttrDef {
+	for _, a := range def.Attrs {
+		if a.Key == key {
+			return a
+		}
+	}
+	return nil
 }

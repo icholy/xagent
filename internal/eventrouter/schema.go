@@ -7,19 +7,36 @@ import (
 	"github.com/icholy/xagent/internal/model"
 )
 
+// AttrDef is a self-describing attribute dimension a rule may condition on. Key
+// is the machine name conditions reference and that Validate/the matcher check
+// against; Label, Help, and Placeholder are display copy the routing-rule editor
+// renders straight from the schema (rather than hardcoding it per attr/source).
+type AttrDef struct {
+	Key         string // machine name, e.g. "body", "mention"
+	Label       string // human label for the attr dropdown, e.g. "Mention"
+	Help        string // one-line help shown under the condition row
+	Placeholder string // example value for the condition's value input
+}
+
 // EventTypeDef declares a (Source, Type) event kind and the complete set of
 // attribute dimensions a rule may condition on for that kind. Attrs is that full
 // set: it always includes the derived views "body" and "url" (see
-// InputEvent.Attr) plus the type's own emitted dimensions. DefaultRules holds
-// the fully-defined rules the producer ships for this type (e.g. the "xagent:"
-// body-prefix wakeup for comment types); DefaultRules aggregates them across
-// every registered def.
+// InputEvent.Attr) plus the type's own emitted dimensions. Each AttrDef carries
+// its own display copy so clients render labels/help/placeholders from the
+// schema. DefaultRules holds the fully-defined rules the producer ships for this
+// type (e.g. the "xagent:" body-prefix wakeup for comment types); DefaultRules
+// aggregates them across every registered def.
 type EventTypeDef struct {
 	Source       string
 	Type         string
-	Label        string   // human label, e.g. "GitHub: Issue/PR Comment"
-	Attrs        []string // complete valid attr set, including derived body/url
+	Label        string    // human label, e.g. "GitHub: Issue/PR Comment"
+	Attrs        []AttrDef // complete valid attr set, including derived body/url
 	DefaultRules []model.RoutingRule
+}
+
+// hasAttr reports whether def declares an attr with the given key.
+func (def EventTypeDef) hasAttr(key string) bool {
+	return slices.ContainsFunc(def.Attrs, func(a AttrDef) bool { return a.Key == key })
 }
 
 // SchemaRegistry holds the set of registered event-type schemas and the routing
@@ -110,7 +127,7 @@ func (r *SchemaRegistry) Validate(rule model.RoutingRule) error {
 		default:
 			return fmt.Errorf("unknown op %q on attr %q", cond.Op, cond.Attr)
 		}
-		if !slices.Contains(def.Attrs, cond.Attr) {
+		if !def.hasAttr(cond.Attr) {
 			return fmt.Errorf("attr %q not valid for event type %q/%q", cond.Attr, rule.Source, rule.Type)
 		}
 	}

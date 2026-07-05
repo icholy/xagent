@@ -634,15 +634,27 @@ message SetRoutingRulesResponse {
   repeated RoutingRule rules = 1;
 }
 
+// AttrDef is a self-describing attribute dimension a routing rule may condition
+// on. key is the machine name conditions reference; label, help, and placeholder
+// are display copy the routing-rule editor renders straight from the schema.
+message AttrDef {
+  string key = 1;
+  string label = 2;
+  string help = 3;
+  string placeholder = 4;
+}
+
 // EventTypeDef describes a registered (source, type) event kind and the complete
 // set of attribute dimensions a routing rule may condition on for that kind. It
-// mirrors the eventrouter2 registry entry, exposing only the client-relevant
-// fields (the shipped default rules are intentionally omitted).
+// mirrors the eventrouter registry entry, exposing only the client-relevant
+// fields (the shipped default rules are intentionally omitted). Each AttrDef
+// carries its own display copy so clients render labels/help/placeholders from
+// the schema rather than hardcoding them.
 message EventTypeDef {
   string source = 1;
   string type = 2;
   string label = 3;
-  repeated string attrs = 4;
+  repeated AttrDef attrs = 4;
 }
 
 message GetEventTypesRequest {}

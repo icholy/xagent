@@ -15,7 +15,6 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
 import {
-  attrCopy,
   CONDITION_OPS,
   emptyRoutingRule,
   eventTypeId,
@@ -96,7 +95,9 @@ export function RoutingRuleForm({
     if (!target) return
     // Drop conditions whose attr the newly selected type can't emit, so the
     // rule can't carry a condition that would never match.
-    const keptConditions = values.conditions.filter((c) => target.attrs.includes(c.attr))
+    const keptConditions = values.conditions.filter((c) =>
+      target.attrs.some((a) => a.key === c.attr),
+    )
     setValues({ ...values, source: target.source, type: target.type, conditions: keptConditions })
   }
 
@@ -109,7 +110,7 @@ export function RoutingRuleForm({
 
   const addCondition = () => {
     // Default the attr to the first one the selected type offers, if any.
-    const attr = availableAttrs[0] ?? ''
+    const attr = availableAttrs[0]?.key ?? ''
     setValues({
       ...values,
       conditions: [...values.conditions, { attr, op: 'equals', value: '' }],
@@ -182,7 +183,13 @@ export function RoutingRuleForm({
         ) : (
           <div className="space-y-3">
             {values.conditions.map((condition, index) => {
-              const copy = attrCopy(condition.attr, values.source)
+              // The selected attr's self-describing copy comes straight from the
+              // schema; fall back to the bare key when the current type no longer
+              // offers the stored attr.
+              const selectedAttr = availableAttrs.find((a) => a.key === condition.attr)
+              const label = selectedAttr?.label ?? condition.attr
+              const placeholder = selectedAttr?.placeholder ?? ''
+              const help = selectedAttr?.help ?? ''
               return (
                 <div key={index} className="space-y-2 rounded-md border p-3">
                   <div className="flex flex-wrap items-start gap-2">
@@ -195,13 +202,13 @@ export function RoutingRuleForm({
                       </SelectTrigger>
                       <SelectContent>
                         {availableAttrs.map((attr) => (
-                          <SelectItem key={attr} value={attr}>
-                            {attrCopy(attr, values.source).label}
+                          <SelectItem key={attr.key} value={attr.key}>
+                            {attr.label}
                           </SelectItem>
                         ))}
                         {/* Keep a stored attr the current type no longer offers selectable. */}
-                        {condition.attr && !availableAttrs.includes(condition.attr) && (
-                          <SelectItem value={condition.attr}>{copy.label}</SelectItem>
+                        {condition.attr && !selectedAttr && (
+                          <SelectItem value={condition.attr}>{label}</SelectItem>
                         )}
                       </SelectContent>
                     </Select>
@@ -222,7 +229,7 @@ export function RoutingRuleForm({
                     </Select>
                     <Input
                       className="flex-1 min-w-40"
-                      placeholder={copy.placeholder}
+                      placeholder={placeholder}
                       value={condition.value}
                       onChange={(e) => setCondition(index, { value: e.target.value })}
                       aria-label="Value"
@@ -237,7 +244,7 @@ export function RoutingRuleForm({
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  {copy.help && <p className="text-muted-foreground text-xs">{copy.help}</p>}
+                  {help && <p className="text-muted-foreground text-xs">{help}</p>}
                 </div>
               )
             })}

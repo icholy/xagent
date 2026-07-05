@@ -1,5 +1,10 @@
 import { create } from '@bufbuild/protobuf'
-import { type EventTypeDef, type RoutingRule, RoutingRuleSchema } from '@/gen/xagent/v1/xagent_pb'
+import {
+  type AttrDef,
+  type EventTypeDef,
+  type RoutingRule,
+  RoutingRuleSchema,
+} from '@/gen/xagent/v1/xagent_pb'
 import { durationFromHours, hoursFromDuration } from '@/lib/duration'
 
 // The condition operators the backend understands. Op semantics are literal
@@ -38,7 +43,7 @@ export function eventTypeLabel(eventTypes: EventTypeDef[], source: string, type:
 
 // Synthetic event-type definition for a stored (source, type) combo that isn't
 // in the registry, so legacy rules stay selectable. Returns null when the combo
-// is already a known event type. Its attrs are the union of well-known attrs so
+// is already a known event type. Its attrs are the well-known fallback set so
 // the condition editor can still edit the rule's existing conditions.
 export function legacyEventType(
   eventTypes: EventTypeDef[],
@@ -51,80 +56,31 @@ export function legacyEventType(
     source,
     type,
     label: eventTypeLabel(eventTypes, source, type),
-    attrs: [...ALL_ATTRS],
+    attrs: FALLBACK_ATTRS,
   }
 }
 
-// Well-known attribute dimensions. `body` and `url` are derived views over
-// every event; the rest are emitted per event type. Kept as the fallback attr
-// set for legacy rules whose event type isn't in the registry.
-export const ALL_ATTRS = ['body', 'url', 'mention', 'assignee', 'label', 'state'] as const
-
-export interface AttrCopy {
-  label: string
-  placeholder: string
-  help: string
-}
-
-// Per-attr display copy for a condition row, replacing the old per-event-type
-// field copy (mentionCopyForSource etc.). Some attrs read differently per
-// source, so the selected event type's source is threaded through.
-export function attrCopy(attr: string, source: string): AttrCopy {
-  switch (attr) {
-    case 'body':
-      return {
-        label: 'Body',
-        placeholder: 'xagent:',
-        help: 'Matched against the event body — the comment or description text.',
-      }
-    case 'url':
-      return {
-        label: 'URL',
-        placeholder:
-          source === 'atlassian'
-            ? 'https://your-domain.atlassian.net/browse/PROJ-'
-            : 'https://github.com/owner/repo/',
-        help: 'Matched against the event URL — e.g. to scope a rule to a single repo or project.',
-      }
-    case 'mention':
-      if (source === 'atlassian') {
-        return {
-          label: 'Mention',
-          placeholder: '5b10ac8d82e05b22cc7d4ef5',
-          help: 'Atlassian account id mentioned in the event body. Enter the bare id (no [~accountid:…] wrapper).',
-        }
-      }
-      return {
-        label: 'Mention',
-        placeholder: 'octocat',
-        help: 'GitHub username mentioned in the event body (no leading @).',
-      }
-    case 'assignee':
-      return {
-        label: 'Assignee',
-        placeholder: 'icholy-bot',
-        help: 'The new assignee on an assignment event (GitHub username, no leading @).',
-      }
-    case 'label':
-      return {
-        label: 'Label',
-        placeholder: 'xagent',
-        help: 'A label added to the issue or PR.',
-      }
-    case 'state':
-      return {
-        label: 'State',
-        placeholder: 'merged',
-        help: 'The resulting state — e.g. "merged" or "closed" for a closed PR.',
-      }
-    default:
-      return {
-        label: attr,
-        placeholder: '',
-        help: 'Value the condition matches against.',
-      }
-  }
-}
+// Fallback AttrDefs for legacy rules whose event type isn't in the registry, so
+// their conditions stay editable. Real event types carry their own richer copy
+// from the schema (see GetEventTypes); this is a minimal well-known set —
+// `body`/`url` are derived over every event, the rest are the per-type
+// dimensions the producers emit.
+const FALLBACK_ATTRS: AttrDef[] = (
+  [
+    ['body', 'Body'],
+    ['url', 'URL'],
+    ['mention', 'Mention'],
+    ['assignee', 'Assignee'],
+    ['label', 'Label'],
+    ['state', 'State'],
+  ] as const
+).map(([key, label]) => ({
+  $typeName: 'xagent.v1.AttrDef',
+  key,
+  label,
+  help: '',
+  placeholder: '',
+}))
 
 export interface ConditionDraft {
   attr: string
