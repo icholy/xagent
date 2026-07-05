@@ -315,9 +315,10 @@ func TestListEventsByTask(t *testing.T) {
 			external = append(external, x)
 		}
 	}
-	assert.Equal(t, len(external), 2)
-	assert.Equal(t, external[0].Description, "Event 1")
-	assert.Equal(t, external[1].Description, "Event 2")
+	assert.DeepEqual(t, external, []*xagentv1.ExternalPayload{
+		{Description: "Event 1"},
+		{Description: "Event 2"},
+	}, protocmp.Transform())
 }
 
 func TestListEventsByTask_Permissions(t *testing.T) {

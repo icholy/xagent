@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-github/v88/github"
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/x/testx"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -870,8 +871,7 @@ func TestHandleGitHubWebhookInstallationDeleted(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "cleared")
 	clears := store.ClearGitHubInstallationCalls()
-	assert.Assert(t, cmp.Len(clears, 1))
-	assert.Equal(t, clears[0].InstallationID, int64(42))
+	assert.DeepEqual(t, testx.ExtractField(clears, "InstallationID"), []int64{42})
 }
 
 func TestHandleGitHubWebhookInstallationOtherAction(t *testing.T) {
