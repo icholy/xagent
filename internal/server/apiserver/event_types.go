@@ -25,11 +25,20 @@ func (s *Server) GetEventTypes(ctx context.Context, req *xagentv1.GetEventTypesR
 	defs := eventrouter.DefaultSchemaRegistry.EventTypes()
 	pb := make([]*xagentv1.EventTypeDef, len(defs))
 	for i, def := range defs {
+		attrs := make([]*xagentv1.AttrDef, len(def.Attrs))
+		for j, attr := range def.Attrs {
+			attrs[j] = &xagentv1.AttrDef{
+				Key:         attr.Key,
+				Label:       attr.Label,
+				Help:        attr.Help,
+				Placeholder: attr.Placeholder,
+			}
+		}
 		pb[i] = &xagentv1.EventTypeDef{
 			Source: def.Source,
 			Type:   def.Type,
 			Label:  def.Label,
-			Attrs:  def.Attrs,
+			Attrs:  attrs,
 		}
 	}
 	return &xagentv1.GetEventTypesResponse{EventTypes: pb}, nil

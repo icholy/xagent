@@ -1,8 +1,6 @@
 package eventrouter
 
 import (
-	"slices"
-
 	"github.com/icholy/xagent/internal/model"
 )
 
@@ -65,7 +63,7 @@ func (r *SchemaRegistry) TranslateRule(rule model.LegacyRoutingRule) []model.Rou
 // emitsAll reports whether def emits every attr referenced by the conditions.
 func emitsAll(def EventTypeDef, conditions []model.Condition) bool {
 	for _, cond := range conditions {
-		if !slices.Contains(def.Attrs, cond.Attr) {
+		if !def.hasAttr(cond.Attr) {
 			return false
 		}
 	}

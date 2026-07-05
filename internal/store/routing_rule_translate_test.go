@@ -15,9 +15,9 @@ func TestDecodeRoutingRules(t *testing.T) {
 	// process-wide DefaultSchemaRegistry. It lives in eventrouter now, so this
 	// test is external (package store_test) to import it without a cycle.
 	reg := eventrouter.NewSchemaRegistry()
-	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "issue_comment", Attrs: []string{"body", "url", "mention"}})
-	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "issue_assigned", Attrs: []string{"body", "url", "assignee"}})
-	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "label_added", Attrs: []string{"body", "url", "label"}})
+	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "issue_comment", Attrs: attrDefs("body", "url", "mention")})
+	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "issue_assigned", Attrs: attrDefs("body", "url", "assignee")})
+	reg.MustRegister(eventrouter.EventTypeDef{Source: "github", Type: "label_added", Attrs: attrDefs("body", "url", "label")})
 	s := &store.Store{Rules: reg}
 
 	bodyPrefix := []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}
@@ -144,4 +144,14 @@ func TestDecodeRoutingRulesLegacyWithoutTranslator(t *testing.T) {
 		Type:   "issue_comment",
 		Wakeup: true,
 	}})
+}
+
+// attrDefs builds a bare AttrDef slice from attr keys — the translate/decode
+// tests only care about the attr keys, not their display copy.
+func attrDefs(keys ...string) []eventrouter.AttrDef {
+	defs := make([]eventrouter.AttrDef, len(keys))
+	for i, key := range keys {
+		defs[i] = eventrouter.AttrDef{Key: key}
+	}
+	return defs
 }
