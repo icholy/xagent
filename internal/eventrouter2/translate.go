@@ -18,7 +18,7 @@ import (
 // attr the rule's conditions reference. A rule whose condition attr no matching
 // type emits produces zero rules, mirroring v1 where such a rule silently never
 // matched.
-func TranslateRule(rule model.RoutingRule) []RoutingRule {
+func (r *SchemaRegistry) TranslateRule(rule model.RoutingRule) []RoutingRule {
 	// Build the condition list from the legacy matcher fields, skipping empty
 	// ones: an empty legacy field contributed no matcher clause in v1, so it
 	// contributes no condition here.
@@ -40,7 +40,7 @@ func TranslateRule(rule model.RoutingRule) []RoutingRule {
 	}
 
 	var out []RoutingRule
-	for _, def := range EventTypes() {
+	for _, def := range r.EventTypes() {
 		if rule.Source != "" && rule.Source != def.Source {
 			continue
 		}
