@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"text/template"
@@ -157,8 +158,19 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	}
 	defer a.Close()
 
+	// Fetch the task context and render the task brief into the bootstrap
+	// prompt, so the agent starts already knowing why it was run instead of
+	// spending its first turn on get_my_task (#946). A failure falls back to
+	// the pull flow: the prompt tells the agent to call get_my_task itself.
+	var brief string
+	if resp, err := d.Client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: d.TaskID}); err != nil {
+		d.Log.Warn("failed to get task details for brief, falling back to get_my_task", "err", err)
+	} else {
+		brief = buildBrief(cfg, resp)
+	}
+
 	// Bootstrap prompt
-	prompt, err := cfg.prompt()
+	prompt, err := cfg.prompt(brief)
 	if err != nil {
 		return fmt.Errorf("failed to build prompt: %w", err)
 	}
@@ -204,19 +216,50 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
+// buildBrief renders the bootstrap brief from a GetTaskDetails response and
+// advances cfg.LastEventID past every event in the response. The id is the
+// driver's own delivery marker (like Config.SetupCommandsCompleted): a resumed
+// session only gets the events above the previous mark, so a wakeup doesn't
+// replay what the session already saw, and a fresh session (new config, new
+// agent session) gets the full context. The caller persists cfg after a
+// successful run, so a failed run replays its events on the next one.
+func buildBrief(cfg *Config, resp *xagentv1.GetTaskDetailsResponse) string {
+	events := resp.GetEvents()
+	if cfg.Started {
+		events = slices.DeleteFunc(slices.Clone(events), func(e *xagentv1.Event) bool {
+			return e.GetId() <= cfg.LastEventID
+		})
+	}
+	for _, e := range resp.GetEvents() {
+		cfg.LastEventID = max(cfg.LastEventID, e.GetId())
+	}
+	b := taskBrief{
+		task:   resp.GetTask(),
+		events: events,
+		links:  resp.GetLinks(),
+		resume: cfg.Started,
+	}
+	return b.render()
+}
+
 //go:embed PROMPT.md
 var promptText string
 
 var promptTemplate = template.Must(template.New("prompt").Parse(promptText))
 
-// prompt builds the bootstrap prompt sent to the agent.
-func (c *Config) prompt() (string, error) {
+// prompt builds the bootstrap prompt sent to the agent. brief is the
+// server-rendered task brief (empty when unavailable, or when a resumed run
+// has no new activity — both fall back to directing the agent at
+// get_my_task).
+func (c *Config) prompt(brief string) (string, error) {
 	var b strings.Builder
 	err := promptTemplate.Execute(&b, struct {
 		Started bool
+		Brief   string
 		Prompt  string
 	}{
 		Started: c.Started,
+		Brief:   brief,
 		Prompt:  c.Prompt,
 	})
 	if err != nil {

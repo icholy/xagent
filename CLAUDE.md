@@ -40,12 +40,13 @@ XAGENT is an async agent orchestrator using a central control plane architecture
 - **Workspaces** define container config (image, volumes, env vars) and MCP servers in `workspaces.yaml`
 - Communication happens via Unix socket proxy at `/xagent/socket` inside containers
 - Runner auto-injects an `xagent` MCP server (see below)
+- The driver renders a **task brief** (instructions, events, links) from `GetTaskDetails` into the agent's bootstrap prompt, tracking the last injected event id in its config, so a resumed session only receives events that arrived since its last run
 
 ### MCP Server Tools
 
 The runner injects an `xagent` MCP server into each agent, providing these tools:
 
-- `get_my_task` - Get current task instructions, links, and events
+- `get_my_task` - Get current task instructions, links, and events (mid-run refresh; start-up context arrives via the task brief in the prompt)
 - `update_my_task` - Update the current task's name
 - `create_link` - Associate external resources (PRs, Jira tickets) with the task
 - `report` - Log messages visible in the Web UI

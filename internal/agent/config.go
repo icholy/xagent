@@ -30,6 +30,12 @@ type Config struct {
 	// Agent-managed state
 	SetupCommandsCompleted int  `json:"setup_commands_completed,omitempty"`
 	Started                bool `json:"started,omitempty"`
+	// LastEventID is the highest event id already injected into a bootstrap
+	// prompt via the task brief (#946). Like SetupCommandsCompleted, it is the
+	// driver's own progress marker: a resumed run only injects events above
+	// it, so a wakeup doesn't replay what the session already saw. Persisted
+	// with Started after a successful run, so a failed run replays its events.
+	LastEventID int64 `json:"last_event_id,omitempty"`
 }
 
 type McpServer struct {
