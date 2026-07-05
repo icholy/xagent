@@ -9,27 +9,11 @@ import (
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
-	"github.com/icholy/xagent/internal/store"
 
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
-
-// taskInstructions reads a task's instruction events from the stream — the
-// brief replacement for the old tasks.instructions column.
-func taskInstructions(t *testing.T, s *store.Store, taskID, orgID int64) []*model.InstructionPayload {
-	t.Helper()
-	events, err := s.ListEventsByTask(t.Context(), nil, taskID, orgID, []string{model.EventTypeInstruction})
-	assert.NilError(t, err)
-	var out []*model.InstructionPayload
-	for _, e := range events {
-		if inst, ok := e.Payload.(*model.InstructionPayload); ok {
-			out = append(out, inst)
-		}
-	}
-	return out
-}
 
 func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 	t.Parallel()
@@ -482,11 +466,10 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.Equal(t, task.Command, model.TaskCommandStart)
 	// A custom prompt replaces the default preamble entirely — the task gets
 	// exactly the configured prompt and nothing else.
-	insts := taskInstructions(t, s, task.ID, org.OrgID)
-	assert.Equal(t, len(insts), 1)
-	assert.DeepEqual(t, insts[0], &model.InstructionPayload{
-		Text: "Triage this issue.",
-		URL:  "",
+	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
+	assert.NilError(t, err)
+	assert.DeepEqual(t, model.FilterPayloads[*model.InstructionPayload](events), []*model.InstructionPayload{
+		{Text: "Triage this issue."},
 	})
 
 	// The subscription link keeps the trigger URL but carries no title — the
@@ -504,15 +487,8 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// instruction event it already seeds.
 	linkEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeLink})
 	assert.NilError(t, err)
-	assert.Equal(t, len(linkEvents), 1)
-	linkPayload, ok := linkEvents[0].Payload.(*model.LinkPayload)
-	assert.Assert(t, ok)
-	assert.DeepEqual(t, linkPayload, &model.LinkPayload{
-		LinkID:    links[0].ID,
-		Relevance: "trigger",
-		URL:       url,
-		Title:     "",
-		Subscribe: true,
+	assert.DeepEqual(t, model.FilterPayloads[*model.LinkPayload](linkEvents), []*model.LinkPayload{
+		{LinkID: links[0].ID, Relevance: "trigger", URL: url, Subscribe: true},
 	})
 	assert.Equal(t, linkEvents[0].Wake, false)
 
@@ -538,13 +514,8 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// mirroring the wake path (attach).
 	externalEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeExternal})
 	assert.NilError(t, err)
-	assert.Equal(t, len(externalEvents), 1)
-	externalPayload, ok := externalEvents[0].Payload.(*model.ExternalPayload)
-	assert.Assert(t, ok)
-	assert.DeepEqual(t, externalPayload, &model.ExternalPayload{
-		Description: "alice commented on issue #1",
-		URL:         url,
-		Data:        "@icholy-bot please look at this",
+	assert.DeepEqual(t, model.FilterPayloads[*model.ExternalPayload](externalEvents), []*model.ExternalPayload{
+		{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this"},
 	})
 }
 
@@ -580,7 +551,9 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(tasks), 1)
 	task := tasks[0]
-	insts := taskInstructions(t, s, task.ID, org.OrgID)
+	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
+	assert.NilError(t, err)
+	insts := model.FilterPayloads[*model.InstructionPayload](events)
 	assert.Equal(t, len(insts), 1)
 	assert.Assert(t, strings.Contains(insts[0].Text, "routing rule"))
 	assert.Assert(t, strings.Contains(insts[0].Text, "github"))
@@ -685,7 +658,9 @@ func TestRouteCreateRuleOmittedPromptUsesPreambleOnly(t *testing.T) {
 	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
 	assert.NilError(t, err)
 	assert.Equal(t, len(tasks), 1)
-	assert.Equal(t, len(taskInstructions(t, s, tasks[0].ID, org.OrgID)), 1)
+	events, err := s.ListEventsByTask(t.Context(), nil, tasks[0].ID, org.OrgID, []string{model.EventTypeInstruction})
+	assert.NilError(t, err)
+	assert.Equal(t, len(model.FilterPayloads[*model.InstructionPayload](events)), 1)
 }
 
 func TestRouteSecondEventWakesCreatedTask(t *testing.T) {
