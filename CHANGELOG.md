@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.8.0](https://github.com/icholy/xagent/compare/v2.7.0...v2.8.0) (2026-07-05)
+
+
+### Features
+
+* **outbox:** adopt durable outbox for runner events ([#1205](https://github.com/icholy/xagent/issues/1205)) ([28970c1](https://github.com/icholy/xagent/commit/28970c194116ad4bef4a924ef4a9a97713b6b2e7))
+* **webui:** add overflow actions menu to task page ([ebc6180](https://github.com/icholy/xagent/commit/ebc6180f13522b44e511f924072ee84240033a75))
+* **webui:** deep-link task page panels via ?tab= search param ([#1210](https://github.com/icholy/xagent/issues/1210)) ([e367979](https://github.com/icholy/xagent/commit/e3679790f8ede9be2d84bf9fdb6761e5b28f3eca))
+* **webui:** move cancel action into task overflow menu ([24e8ff6](https://github.com/icholy/xagent/commit/24e8ff6206d0d5c3650f89920ec2d8099959898a))
+* **webui:** move restart action into task overflow menu ([aab0a8c](https://github.com/icholy/xagent/commit/aab0a8c6c87ca764e62dc4b43778f816d23b3cb2))
+* **webui:** move task tabs into header beside actions menu ([2b29574](https://github.com/icholy/xagent/commit/2b29574024ad2ef84b8c8f0500b4e86744ed31c4)), closes [#1215](https://github.com/icholy/xagent/issues/1215)
+
+
+### Bug Fixes
+
+* **runner:** crash on durable store write failure ([e6dd3ff](https://github.com/icholy/xagent/commit/e6dd3ffbe9d98a639dcb0521ccf266fbf68a01a1))
+* **webui:** align add instruction send button with composer input ([bba7eb7](https://github.com/icholy/xagent/commit/bba7eb77f62d0f5d3e04167e8d0ed4c6439ac666)), closes [#1005](https://github.com/icholy/xagent/issues/1005)
+* **webui:** tidy task overflow menu layout ([e90f562](https://github.com/icholy/xagent/commit/e90f56230f08207729e6faa737debc66e20f65cb))
+
+
+### Miscellaneous
+
+* adopt testx.ExtractField for single-field call-log asserts ([#1211](https://github.com/icholy/xagent/issues/1211)) ([3d46e19](https://github.com/icholy/xagent/commit/3d46e198a0bb5a68e5394bf0a6b777a2c8720075))
+* **eventrouter:** extract FilterPayloads results into variables ([ea8f1f3](https://github.com/icholy/xagent/commit/ea8f1f30c0ae269ee671981f0688ef4ea816561a))
+* **eventrouter:** use FilterPayloads for external/restarted tally ([88e8991](https://github.com/icholy/xagent/commit/88e899122775232ac627dccd83b7315f33d77477))
+* **model:** add FilterPayloads and adopt it in eventrouter tests ([a2ccd2a](https://github.com/icholy/xagent/commit/a2ccd2a3c0e79cab7c7f556588456dd9397d303c))
+* **proposal:** reuse shipped generic outbox in server-side-taskstate ([72dc231](https://github.com/icholy/xagent/commit/72dc2317e9f416e1b3f95b85f00226856e400391))
+* **proposals:** tidy up draft directory ([#1213](https://github.com/icholy/xagent/issues/1213)) ([9f8d02e](https://github.com/icholy/xagent/commit/9f8d02e423524b37bf1512f1ee77240f01bbd7a5))
+* **runner:** default Fatal to no-op so die calls it directly ([951a6bd](https://github.com/icholy/xagent/commit/951a6bdbbdbe20a892594ba62352d25278e5f595))
+* **runner:** inline event literal at enqueue sites ([ef68828](https://github.com/icholy/xagent/commit/ef688282e2dd5bf5704ade2e3f8d5361d6c761a8))
+* **runner:** rename cancelCause to fatal ([1d5dcc0](https://github.com/icholy/xagent/commit/1d5dcc0be025337612c20155e8010743a8882127))
+* **runner:** rename fatal cancel func to cancel ([53a2ece](https://github.com/icholy/xagent/commit/53a2eced53c63cda1028fd178824c78ba3cccb09))
+* **runner:** rename FatalStoreError to FatalError ([9bb562d](https://github.com/icholy/xagent/commit/9bb562d4327eece6ad07dac507cebb9fb89ca8ea))
+* **runner:** use moq StoreMock for outbox store failure injection ([1456402](https://github.com/icholy/xagent/commit/14564024377b4a53f7a85d321360f5151fb8ea34))
+* **testx:** add ExtractField helper for moq call-log arguments ([#1206](https://github.com/icholy/xagent/issues/1206)) ([2ec87be](https://github.com/icholy/xagent/commit/2ec87bef3c22b4d6a8f591559aa1d2c88d73e5d0))
+* **webui:** format dropdown-menu with prettier ([47f8259](https://github.com/icholy/xagent/commit/47f825990ff90deb2bc83c7879523671118ff746))
+
 ## [2.7.0](https://github.com/icholy/xagent/compare/v2.6.0...v2.7.0) (2026-07-04)
 
 
