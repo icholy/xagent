@@ -20,21 +20,23 @@ type EventTypeDef struct {
 	DefaultRules []RoutingRule
 }
 
-// eventTypes holds every schema registered via MustRegisterSchema, in
-// registration order. It is the machine-readable contract that the router, rule
-// validation, and (later) the UI derive from, replacing hand-synced copies of
-// the (source, type) pairs and their applicable attrs. The set is assembled by
-// the producer packages that emit the events — each registers its own schemas
-// from an init — rather than a central table.
-var eventTypes []EventTypeDef
+// The registry state, populated by MustRegisterSchema from producer package
+// init functions rather than a central table.
+var (
+	// eventTypes holds every registered schema in registration order. It is the
+	// machine-readable contract that the router, rule validation, and (later) the
+	// UI derive from, replacing hand-synced copies of the (source, type) pairs
+	// and their applicable attrs.
+	eventTypes []EventTypeDef
 
-// eventTypeByKey indexes eventTypes by "source:type" for O(1) lookup.
-var eventTypeByKey = map[string]EventTypeDef{}
+	// eventTypeByKey indexes eventTypes by "source:type" for O(1) lookup.
+	eventTypeByKey = map[string]EventTypeDef{}
 
-// defaultRules accumulates every registered schema's DefaultRules in
-// registration order; MustRegisterSchema appends each def's rules as it is
-// registered so DefaultRules is a plain lookup rather than a per-call flatten.
-var defaultRules []RoutingRule
+	// defaultRules accumulates every registered schema's DefaultRules in
+	// registration order, so DefaultRules is a plain lookup rather than a
+	// per-call flatten.
+	defaultRules []RoutingRule
+)
 
 // MustRegisterSchema records def as the schema for its (Source, Type) event
 // kind, making it available to EventTypeFor, EventTypes, and
