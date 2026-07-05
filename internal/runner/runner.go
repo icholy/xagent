@@ -120,18 +120,18 @@ func New(opts Options) (*Runner, error) {
 	}, nil
 }
 
-// FatalStoreError wraps a durable local-store write failure that terminates the
+// FatalError wraps a durable local-store write failure that terminates the
 // runner. It is the cause set on the runner's root context by die; the command
 // layer matches it with errors.As to distinguish a broken-disk crash (non-zero
 // exit → supervisor restarts + alerts) from a graceful signal shutdown (exit 0),
 // without depending on whatever cause signal.NotifyContext sets.
-type FatalStoreError struct{ err error }
+type FatalError struct{ err error }
 
-func (e FatalStoreError) Error() string { return "durable store write failed: " + e.err.Error() }
-func (e FatalStoreError) Unwrap() error { return e.err }
+func (e FatalError) Error() string { return "durable store write failed: " + e.err.Error() }
+func (e FatalError) Unwrap() error { return e.err }
 
 // die terminates the runner by cancelling its root context with a
-// FatalStoreError cause. It is the response to a durable local-store write
+// FatalError cause. It is the response to a durable local-store write
 // failure (outbox Enqueue or taskstate Write): those failures are non-transient
 // (ENOSPC/EIO/EROFS) and silently dropping a lifecycle event defeats the whole
 // point of the durable store, so the runner fails loud and lets its supervisor
@@ -139,7 +139,7 @@ func (e FatalStoreError) Unwrap() error { return e.err }
 // detach-don't-kill teardown — in-flight sandboxes stay alive and are re-adopted
 // by Load on the next boot. First cause wins (WithCancelCause is idempotent), so
 // the first failure is the one reported.
-func (r *Runner) die(err error) { r.fatal(FatalStoreError{err}) }
+func (r *Runner) die(err error) { r.fatal(FatalError{err}) }
 
 // WakeC returns a channel that receives one value per coalesced burst of
 // internally-generated wake-ups. Currently signalled when a concurrency
