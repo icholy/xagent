@@ -11,6 +11,8 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "default body-prefix rule",
 			rule: RoutingRule{
+				Source:     "github",
+				Type:       "issue_comment",
 				Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 				Wakeup:     true,
 			},
@@ -32,10 +34,19 @@ func TestRoutingRuleValidate(t *testing.T) {
 			},
 		},
 		{
-			name: "any registered attr allowed when type is empty",
+			name: "empty type is rejected",
 			rule: RoutingRule{
-				Conditions: []Condition{{Attr: "assignee", Op: "equals", Value: "bob"}},
+				Conditions: []Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 			},
+			wantErr: true,
+		},
+		{
+			name: "empty source is rejected",
+			rule: RoutingRule{
+				Type:       "issue_comment",
+				Conditions: []Condition{{Attr: "mention", Op: "equals", Value: "alice"}},
+			},
+			wantErr: true,
 		},
 		{
 			name: "url and body valid on any type",
@@ -51,6 +62,8 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "unknown op",
 			rule: RoutingRule{
+				Source:     "github",
+				Type:       "issue_comment",
 				Conditions: []Condition{{Attr: "body", Op: "regex", Value: "x"}},
 			},
 			wantErr: true,
@@ -58,6 +71,8 @@ func TestRoutingRuleValidate(t *testing.T) {
 		{
 			name: "unknown attr",
 			rule: RoutingRule{
+				Source:     "github",
+				Type:       "issue_comment",
 				Conditions: []Condition{{Attr: "reviewer", Op: "equals", Value: "alice"}},
 			},
 			wantErr: true,
@@ -90,6 +105,17 @@ func TestRoutingRuleValidate(t *testing.T) {
 				t.Fatalf("Validate() = %v, want nil", err)
 			}
 		})
+	}
+}
+
+func TestDefaultRulesValidate(t *testing.T) {
+	if len(DefaultRules) == 0 {
+		t.Fatal("DefaultRules is empty")
+	}
+	for i, rule := range DefaultRules {
+		if err := rule.Validate(); err != nil {
+			t.Errorf("DefaultRules[%d] (source=%q type=%q) failed Validate: %v", i, rule.Source, rule.Type, err)
+		}
 	}
 }
 
