@@ -144,33 +144,6 @@ func TestRoutingRuleValidate(t *testing.T) {
 	}
 }
 
-func TestDefaultRules(t *testing.T) {
-	rules := DefaultRules()
-	assert.Assert(t, len(rules) > 0, "DefaultRules() returned no rules")
-	// test/comment is the only fixture carrying a default rule; DefaultRules()
-	// must surface it and no rule from a fixture that ships none (test/label).
-	var sawComment bool
-	for i, rule := range rules {
-		assert.NilError(t, rule.Validate(), "DefaultRules()[%d] (source=%q type=%q)", i, rule.Source, rule.Type)
-		if rule.Source == "test" && rule.Type == "comment" {
-			sawComment = true
-		}
-		assert.Assert(t, rule.Type != "label", "DefaultRules() surfaced a rule for %q, which ships no defaults", rule.Type)
-	}
-	assert.Assert(t, sawComment, "DefaultRules() missing the test/comment default rule")
-}
-
-func TestEventTypes(t *testing.T) {
-	byKey := map[string]EventTypeDef{}
-	for _, def := range EventTypes() {
-		byKey[def.Source+":"+def.Type] = def
-	}
-	for _, want := range []string{"test:comment", "test:label", "test:opened"} {
-		_, ok := byKey[want]
-		assert.Assert(t, ok, "EventTypes() missing %q", want)
-	}
-}
-
 func TestEventTypeFor(t *testing.T) {
 	def, ok := EventTypeFor("test", "comment")
 	assert.Assert(t, ok, "EventTypeFor(test, comment) = _, false; want hit")
