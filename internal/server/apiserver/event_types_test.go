@@ -32,34 +32,21 @@ func TestGetEventTypes(t *testing.T) {
 		byKey[et.Source+":"+et.Type] = et
 	}
 
+	// The handler exposes the registry: the type comes through with its label and
+	// its attr keys in order. The exact per-source display copy is owned by the
+	// producer schema tests (githubserver/atlassianserver); here we only prove the
+	// RPC surfaces it.
 	issueComment, ok := byKey["github:issue_comment"]
 	assert.Assert(t, ok, "expected github/issue_comment to be registered")
 	assert.Equal(t, issueComment.Label, "GitHub: Issue/PR Comment")
+	var keys []string
+	for _, a := range issueComment.Attrs {
+		keys = append(keys, a.Key)
+	}
+	assert.DeepEqual(t, keys, []string{"body", "url", "mention"})
 
-	// AttrDefs carry display copy sourced from the schema, so each attr's
-	// label/help/placeholder comes through the RPC rather than being hardcoded in
-	// the frontend.
-	assert.DeepEqual(t, issueComment.Attrs, []*xagentv1.AttrDef{
-		{
-			Key:         "body",
-			Label:       "Body",
-			Placeholder: "xagent:",
-			Help:        "Matched against the event body — the comment or description text.",
-		},
-		{
-			Key:         "url",
-			Label:       "URL",
-			Placeholder: "https://github.com/owner/repo/",
-			Help:        "Matched against the event URL — e.g. to scope a rule to a single repo or project.",
-		},
-		{
-			Key:         "mention",
-			Label:       "Mention",
-			Placeholder: "octocat",
-			Help:        "GitHub username mentioned in the event body (no leading @).",
-		},
-	}, protocmp.Transform())
-
+	// One type asserted whole to prove the AttrDef -> proto conversion carries
+	// every display field (label/placeholder/help), not just the key.
 	labelAdded, ok := byKey["github:label_added"]
 	assert.Assert(t, ok, "expected github/label_added to be registered")
 	assert.DeepEqual(t, labelAdded.Attrs, []*xagentv1.AttrDef{
