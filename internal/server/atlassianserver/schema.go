@@ -2,13 +2,18 @@ package atlassianserver
 
 import "github.com/icholy/xagent/internal/eventrouter2"
 
-// init registers the eventrouter2 schema for every event type atlassianserver
-// emits (see toInputEvent). Each schema declares the complete valid attr set for
-// its type — the derived body/url plus its emitted dimensions — and the default
-// rules the producer ships. comment_created carries the "xagent:" body-prefix
-// wakeup default; label_added ships no default rules.
+// init registers atlassianserver's schemas on the process-wide default registry.
 func init() {
-	eventrouter2.MustRegisterSchema(eventrouter2.EventTypeDef{
+	registerSchemas(eventrouter2.DefaultSchemaRegistry)
+}
+
+// registerSchemas records the eventrouter2 schema for every event type
+// atlassianserver emits (see toInputEvent) on reg. Each schema declares the
+// complete valid attr set for its type — the derived body/url plus its emitted
+// dimensions — and the default rules the producer ships. comment_created carries
+// the "xagent:" body-prefix wakeup default; label_added ships no default rules.
+func registerSchemas(reg *eventrouter2.SchemaRegistry) {
+	reg.MustRegister(eventrouter2.EventTypeDef{
 		Source: "atlassian",
 		Type:   EventTypeCommentCreated,
 		Label:  "Jira: Issue Comment",
@@ -20,7 +25,7 @@ func init() {
 			Wakeup:     true,
 		}},
 	})
-	eventrouter2.MustRegisterSchema(eventrouter2.EventTypeDef{
+	reg.MustRegister(eventrouter2.EventTypeDef{
 		Source: "atlassian",
 		Type:   EventTypeLabelAdded,
 		Label:  "Jira: Label Added",

@@ -22,7 +22,7 @@ func (s *Server) GetEventTypes(ctx context.Context, req *xagentv1.GetEventTypesR
 	if !caller.Scopes.Allow(authscope.OpOrgRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read org"))
 	}
-	defs := eventrouter2.EventTypes()
+	defs := eventrouter2.DefaultSchemaRegistry.EventTypes()
 	pb := make([]*xagentv1.EventTypeDef, len(defs))
 	for i, def := range defs {
 		pb[i] = &xagentv1.EventTypeDef{
