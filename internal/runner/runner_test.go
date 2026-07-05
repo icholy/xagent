@@ -780,7 +780,7 @@ func TestRunnerStart_GoneViaProbe(t *testing.T) {
 // (Load has nothing to probe and cannot re-derive "stopped"), so a dropped persist
 // would leave the task stuck in cancelling forever. When the durable outbox write
 // fails there, the runner must crash — die cancels the root ctx with a
-// FatalStoreError cause — instead of logging and continuing.
+// FatalError cause — instead of logging and continuing.
 func TestRunnerDie_StopWithoutSandbox(t *testing.T) {
 	t.Parallel()
 	task := &model.Task{
@@ -823,15 +823,15 @@ func TestRunnerDie_StopWithoutSandbox(t *testing.T) {
 	// Act - the "stopped" enqueue fails durably, so die fires.
 	assert.NilError(t, r.Poll(ctx))
 
-	// Assert - the root ctx is cancelled with a FatalStoreError cause, which the
+	// Assert - the root ctx is cancelled with a FatalError cause, which the
 	// command layer maps to a non-zero exit.
-	var fatal FatalStoreError
+	var fatal FatalError
 	assert.Assert(t, errors.As(context.Cause(ctx), &fatal))
 }
 
 // TestRunnerGracefulShutdown_NoFatalCause is the complement: on the happy path the
 // durable write succeeds, die never fires, and a plain ctx cancel (the signal
-// shutdown) leaves no FatalStoreError cause — so the command layer's exit mapping
+// shutdown) leaves no FatalError cause — so the command layer's exit mapping
 // returns nil (exit 0) rather than crashing.
 func TestRunnerGracefulShutdown_NoFatalCause(t *testing.T) {
 	t.Parallel()
@@ -871,9 +871,9 @@ func TestRunnerGracefulShutdown_NoFatalCause(t *testing.T) {
 	// The durable enqueue succeeds, so die never fires.
 	assert.NilError(t, r.Poll(ctx))
 
-	// A graceful signal shutdown cancels ctx with no FatalStoreError cause.
+	// A graceful signal shutdown cancels ctx with no FatalError cause.
 	cancelCause(nil)
-	var fatal FatalStoreError
+	var fatal FatalError
 	assert.Assert(t, !errors.As(context.Cause(ctx), &fatal))
 }
 

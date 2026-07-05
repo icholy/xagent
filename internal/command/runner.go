@@ -113,7 +113,7 @@ var RunnerCommand = &cli.Command{
 		debug := cmd.Bool("debug")
 
 		// Wrap the incoming ctx so a durable local-store write failure can
-		// terminate the runner by cancelling it with a FatalStoreError cause. This
+		// terminate the runner by cancelling it with a FatalError cause. This
 		// must happen before anything that takes ctx is spawned (Load's supervise
 		// goroutines, queue.Run, the supervise/autoprune/notify goroutines, and the
 		// Poll loop) so they all observe the cancellation.
@@ -276,10 +276,10 @@ var RunnerCommand = &cli.Command{
 			case <-time.After(pollInterval):
 			case <-ctx.Done():
 				// Distinguish a durable-store-write crash (die set a
-				// FatalStoreError cause) from a graceful signal shutdown. The
+				// FatalError cause) from a graceful signal shutdown. The
 				// sentinel is what lets us return non-zero on a broken disk
 				// without depending on whatever cause signal.NotifyContext sets.
-				var fatal runner.FatalStoreError
+				var fatal runner.FatalError
 				if cause := context.Cause(ctx); errors.As(cause, &fatal) {
 					log.Error("runner terminating: durable store write failed", "err", cause)
 					return cause // non-zero exit → supervisor restarts + alerts
