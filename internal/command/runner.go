@@ -117,8 +117,8 @@ var RunnerCommand = &cli.Command{
 		// must happen before anything that takes ctx is spawned (Load's supervise
 		// goroutines, queue.Run, the supervise/autoprune/notify goroutines, and the
 		// Poll loop) so they all observe the cancellation.
-		ctx, fatal := context.WithCancelCause(ctx)
-		defer fatal(nil)
+		ctx, cancel := context.WithCancelCause(ctx)
+		defer cancel(nil)
 
 		// Create logger if debug is enabled
 		log := slog.Default()
@@ -217,7 +217,7 @@ var RunnerCommand = &cli.Command{
 			RunnerID:    runnerID,
 			Log:         log,
 			Queue:       queue,
-			Fatal:       fatal,
+			Fatal:       cancel,
 		})
 		if err != nil {
 			return err
@@ -279,8 +279,8 @@ var RunnerCommand = &cli.Command{
 				// FatalError cause) from a graceful signal shutdown. The
 				// sentinel is what lets us return non-zero on a broken disk
 				// without depending on whatever cause signal.NotifyContext sets.
-				var ferr runner.FatalError
-				if cause := context.Cause(ctx); errors.As(cause, &ferr) {
+				var fatal runner.FatalError
+				if cause := context.Cause(ctx); errors.As(cause, &fatal) {
 					log.Error("runner terminating: durable store write failed", "err", cause)
 					return cause // non-zero exit → supervisor restarts + alerts
 				}
