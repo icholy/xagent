@@ -189,44 +189,15 @@ func toModelOrgMember(row sqlc.OrgMember) *model.OrgMember {
 }
 
 // DecodeRoutingRules decodes stored routing_rules JSONB into conditions-native
-// model.RoutingRule values. Storage is mixed: rows written before the conditions
-// cutover carry the legacy flat matcher fields, while new writes are
-// conditions-shaped. Each stored rule is inspected independently — a rule
-// carrying any legacy matcher field is decoded as a model.LegacyRoutingRule and
-// translated (registry fan-out) into one conditions rule per applicable event
-// type; otherwise it is decoded directly as a conditions-native
-// model.RoutingRule (a bare source/type/wakeup/create rule is already
-// interpretable as conditions). The result is always conditions-native.
-//
-// A legacy row requires a translator: if one is encountered while s.Rules is
-// nil, it returns an error rather than silently dropping the rule. Conditions-
-// native and bare rows decode without a translator.
-func (s *Store) DecodeRoutingRules(data []byte) ([]model.RoutingRule, error) {
+// model.RoutingRule values. Storage is conditions-native, so this is a plain
+// unmarshal; empty/absent data decodes to a nil slice.
+func DecodeRoutingRules(data []byte) ([]model.RoutingRule, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
-	var raws []json.RawMessage
-	if err := json.Unmarshal(data, &raws); err != nil {
-		return nil, err
-	}
 	var rules []model.RoutingRule
-	for _, raw := range raws {
-		var legacy model.LegacyRoutingRule
-		if err := json.Unmarshal(raw, &legacy); err != nil {
-			return nil, err
-		}
-		if legacy.HasMatcher() {
-			if s.Rules == nil {
-				return nil, fmt.Errorf("legacy routing rule requires a translator: store.Rules is nil")
-			}
-			rules = append(rules, s.Rules.TranslateRule(legacy)...)
-			continue
-		}
-		var rule model.RoutingRule
-		if err := json.Unmarshal(raw, &rule); err != nil {
-			return nil, err
-		}
-		rules = append(rules, rule)
+	if err := json.Unmarshal(data, &rules); err != nil {
+		return nil, err
 	}
 	return rules, nil
 }
@@ -236,7 +207,7 @@ func (s *Store) GetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64)
 	if err != nil {
 		return nil, err
 	}
-	return s.DecodeRoutingRules(data)
+	return DecodeRoutingRules(data)
 }
 
 func (s *Store) SetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64, rules []model.RoutingRule) error {
@@ -257,7 +228,7 @@ func (s *Store) GetRoutingRulesByOrgs(ctx context.Context, tx *sql.Tx, orgIDs []
 	}
 	result := make(map[int64][]model.RoutingRule, len(rows))
 	for _, row := range rows {
-		rules, err := s.DecodeRoutingRules(row.RoutingRules)
+		rules, err := DecodeRoutingRules(row.RoutingRules)
 		if err != nil {
 			return nil, fmt.Errorf("org %d: %w", row.ID, err)
 		}
@@ -276,7 +247,7 @@ func (s *Store) ListRoutingRulesForUser(ctx context.Context, tx *sql.Tx, userID 
 	}
 	result := make(map[int64][]model.RoutingRule, len(rows))
 	for _, row := range rows {
-		rules, err := s.DecodeRoutingRules(row.RoutingRules)
+		rules, err := DecodeRoutingRules(row.RoutingRules)
 		if err != nil {
 			return nil, fmt.Errorf("org %d: %w", row.ID, err)
 		}
