@@ -8,91 +8,40 @@ import (
 // EventTypeDef declares a (Source, Type) event kind and the complete set of
 // attribute dimensions a rule may condition on for that kind. Attrs is that full
 // set: it always includes the derived views "body" and "url" (see
-// InputEvent.Attr) plus the type's own emitted dimensions.
+// InputEvent.Attr) plus the type's own emitted dimensions. DefaultRules holds
+// the fully-defined rules the producer ships for this type (e.g. the "xagent:"
+// body-prefix wakeup for comment types); DefaultRules aggregates them across
+// every registered def.
 type EventTypeDef struct {
-	Source string
-	Type   string
-	Label  string   // human label, e.g. "GitHub: Issue/PR Comment"
-	Attrs  []string // complete valid attr set, including derived body/url
+	Source       string
+	Type         string
+	Label        string   // human label, e.g. "GitHub: Issue/PR Comment"
+	Attrs        []string // complete valid attr set, including derived body/url
+	DefaultRules []RoutingRule
 }
 
-// EventTypes is the registry of event kinds the webhook extractors emit. It is
-// the machine-readable contract that the router, rule validation, and (later)
-// the UI derive from, replacing hand-synced copies of the (source, type) pairs
-// and their applicable attrs. Each entry's Attrs is the complete valid set for
-// that type — the derived body/url plus the emitted dimensions from the design's
-// §1 extractor mapping.
-var EventTypes = []EventTypeDef{
-	{
-		Source: "github",
-		Type:   "issue_comment",
-		Label:  "GitHub: Issue/PR Comment",
-		Attrs:  []string{"body", "url", "mention"},
-	},
-	{
-		Source: "github",
-		Type:   "pull_request_review_comment",
-		Label:  "GitHub: PR Review Comment",
-		Attrs:  []string{"body", "url", "mention"},
-	},
-	{
-		Source: "github",
-		Type:   "pull_request_review",
-		Label:  "GitHub: PR Review",
-		Attrs:  []string{"body", "url", "mention"},
-	},
-	{
-		Source: "github",
-		Type:   "issue_assigned",
-		Label:  "GitHub: Issue Assigned",
-		Attrs:  []string{"body", "url", "assignee"},
-	},
-	{
-		Source: "github",
-		Type:   "pull_request_assigned",
-		Label:  "GitHub: PR Assigned",
-		Attrs:  []string{"body", "url", "assignee"},
-	},
-	{
-		Source: "github",
-		Type:   "pull_request_opened",
-		Label:  "GitHub: PR Opened",
-		Attrs:  []string{"body", "url"},
-	},
-	{
-		Source: "github",
-		Type:   "pull_request_closed",
-		Label:  "GitHub: PR Closed",
-		Attrs:  []string{"body", "url", "state"},
-	},
-	{
-		Source: "github",
-		Type:   "label_added",
-		Label:  "GitHub: Label Added",
-		Attrs:  []string{"body", "url", "label"},
-	},
-	{
-		Source: "atlassian",
-		Type:   "comment_created",
-		Label:  "Jira: Issue Comment",
-		Attrs:  []string{"body", "url", "mention"},
-	},
-	{
-		Source: "atlassian",
-		Type:   "label_added",
-		Label:  "Jira: Label Added",
-		Attrs:  []string{"body", "url", "label"},
-	},
-}
+// registeredEventTypes holds every schema registered via MustRegisterSchema, in
+// registration order. It is the machine-readable contract that the router, rule
+// validation, and (later) the UI derive from, replacing hand-synced copies of
+// the (source, type) pairs and their applicable attrs. The set is assembled by
+// the producer packages that emit the events — each registers its own schemas
+// from an init — rather than a central table.
+var registeredEventTypes []EventTypeDef
 
-// eventTypeByKey indexes EventTypes by "source:type" for O(1) lookup. Populated
-// once in init.
+// eventTypeByKey indexes registeredEventTypes by "source:type" for O(1) lookup.
 var eventTypeByKey = map[string]EventTypeDef{}
 
-func init() {
-	for _, def := range EventTypes {
-		eventTypeByKey[def.Source+":"+def.Type] = def
+// MustRegisterSchema records def as the schema for its (Source, Type) event
+// kind, making it available to EventTypeFor, RegisteredEventTypes, and
+// DefaultRules. It panics if a def with the same (Source, Type) is already
+// registered. Intended to be called from a producer package's init.
+func MustRegisterSchema(def EventTypeDef) {
+	key := def.Source + ":" + def.Type
+	if _, dup := eventTypeByKey[key]; dup {
+		panic(fmt.Sprintf("eventrouter2: duplicate schema registration for source=%q type=%q", def.Source, def.Type))
 	}
+	registeredEventTypes = append(registeredEventTypes, def)
+	eventTypeByKey[key] = def
 }
 
 // EventTypeFor returns the registry entry for a (source, type) pair, and false
@@ -100,6 +49,26 @@ func init() {
 func EventTypeFor(source, typ string) (EventTypeDef, bool) {
 	def, ok := eventTypeByKey[source+":"+typ]
 	return def, ok
+}
+
+// RegisteredEventTypes returns every registered schema in registration order.
+// It backs iteration over the registry and the future GetEventTypes RPC.
+func RegisteredEventTypes() []EventTypeDef {
+	return slices.Clone(registeredEventTypes)
+}
+
+// DefaultRules flattens every registered schema's DefaultRules in registration
+// order. It is the new-shape replacement for the legacy type-less
+// {Prefix:"xagent:", Wakeup:true} fallback: rather than a validation
+// special-case, the default set is an ordinary list of fully-defined rules
+// contributed by the producers. These are not wired into the router here; that
+// is a later layer.
+func DefaultRules() []RoutingRule {
+	var rules []RoutingRule
+	for _, def := range registeredEventTypes {
+		rules = append(rules, def.DefaultRules...)
+	}
+	return rules
 }
 
 // Validate checks the rule against the event-type registry, returning a wrapped
