@@ -10,9 +10,8 @@ import (
 // RoutingRule defines a routing rule that determines whether an event should be
 // routed to an org's tasks. A rule selects a (Source, Type) event kind — empty
 // Source/Type are wildcards — and constrains it with a list of attribute
-// Conditions (ANDed together). This is the conditions-native shape; pre-existing
-// stored rules in the legacy flat-matcher shape are decoded via
-// LegacyRoutingRule and translated on read.
+// Conditions (ANDed together). This is the canonical conditions-native shape:
+// storage is conditions-native and rules decode by a plain JSON unmarshal.
 type RoutingRule struct {
 	Source     string            `json:"source,omitempty"`
 	Type       string            `json:"type,omitempty"`
@@ -29,32 +28,6 @@ type Condition struct {
 	Attr  string `json:"attr,omitempty"`
 	Op    string `json:"op,omitempty"`
 	Value string `json:"value,omitempty"`
-}
-
-// LegacyRoutingRule is the pre-conditions stored shape of a routing rule: the
-// flat matcher fields that predate attribute conditions. It exists ONLY to
-// decode rows written before the conditions cutover; those rows are translated
-// to conditions-native RoutingRule(s) on read (see the store's translate-on-read
-// path). Nothing writes this shape anymore.
-type LegacyRoutingRule struct {
-	Source    string            `json:"source,omitempty"`
-	Type      string            `json:"type,omitempty"`
-	Prefix    string            `json:"prefix,omitempty"`
-	Mention   string            `json:"mention,omitempty"`
-	Assignee  string            `json:"assignee,omitempty"`
-	URLPrefix string            `json:"url_prefix,omitempty"`
-	Value     string            `json:"value,omitempty"`
-	Create    *CreateTaskAction `json:"create,omitempty"`
-	Wakeup    bool              `json:"wakeup,omitempty"`
-}
-
-// HasMatcher reports whether the legacy rule carries any flat matcher field
-// (Prefix/Mention/Assignee/URLPrefix/Value). It distinguishes a genuinely
-// legacy-shaped stored rule — one that must be translated to conditions — from a
-// bare source/type/wakeup/create rule, which is already interpretable directly
-// as the conditions shape.
-func (r LegacyRoutingRule) HasMatcher() bool {
-	return r.Prefix != "" || r.Mention != "" || r.Assignee != "" || r.URLPrefix != "" || r.Value != ""
 }
 
 // CreateTaskAction configures a routing rule to create a new task on
