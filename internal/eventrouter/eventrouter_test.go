@@ -408,18 +408,13 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 	// lifecycle events are reserved for user-initiated restarts via RestartTask.
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
 	assert.NilError(t, err)
-	var external, restarted int
-	for _, e := range events {
-		switch p := e.Payload.(type) {
-		case *model.ExternalPayload:
-			external++
-		case *model.LifecyclePayload:
-			if p.Kind == model.LifecycleKindRestarted {
-				restarted++
-			}
+	assert.Equal(t, len(model.FilterPayloads[*model.ExternalPayload](events)), 1)
+	var restarted int
+	for _, p := range model.FilterPayloads[*model.LifecyclePayload](events) {
+		if p.Kind == model.LifecycleKindRestarted {
+			restarted++
 		}
 	}
-	assert.Equal(t, external, 1)
 	assert.Equal(t, restarted, 0)
 }
 
