@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Archive, ArchiveRestore, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { autoArchiveDeadline } from '@/lib/task'
+import { autoArchiveDeadline, canArchiveTask, canUnarchiveTask } from '@/lib/task'
 import { formatCountdown } from '@/lib/duration'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 
@@ -22,31 +22,49 @@ function useAutoArchiveCountdown(task: ArchiveTask): string | null {
   return formatCountdown(deadlineTime - now)
 }
 
-// ArchiveButton renders the manual archive control. When the task is scheduled
-// to be auto-archived, it shows a live countdown in the label ("Archive (5m)")
-// so the automatic behavior is co-located with the manual action.
+// ArchiveButton is the manual archive/unarchive control, shared by the task list
+// and the task page header. It renders as a compact icon button; when the task is
+// scheduled to be auto-archived, the live countdown ("5m") sits beside the icon so
+// the automatic behavior stays visible next to the manual action. The icon flips
+// to a restore glyph when the server exposes unarchive instead of archive.
+//
+// `compact` shrinks it to sit inside a table row. `onUnarchive` is only needed
+// where unarchive is reachable (the task page); the list is filtered to archivable
+// tasks and never surfaces it.
 export function ArchiveButton({
   task,
   onArchive,
+  onUnarchive,
   pending,
   disabled,
+  compact,
 }: {
   task: ArchiveTask
   onArchive: () => void
+  onUnarchive?: () => void
   pending: boolean
   disabled?: boolean
+  compact?: boolean
 }) {
   const countdown = useAutoArchiveCountdown(task)
+  const unarchive = canUnarchiveTask(task)
+  const canAct = canArchiveTask(task) || unarchive
+  const label = unarchive ? 'Unarchive task' : 'Archive task'
+  const Icon = unarchive ? ArchiveRestore : Archive
+  // Icon-only unless a countdown needs room; sizes track their host (compact for
+  // the dense table row, full height to line up with the task-page menu button).
+  const size = countdown ? (compact ? 'sm' : 'default') : compact ? 'icon-sm' : 'icon'
   return (
     <Button
       variant="outline"
-      size="sm"
-      onClick={onArchive}
-      disabled={disabled ?? pending}
-      title={countdown ? `Auto-archives in ${countdown}` : undefined}
+      size={size}
+      onClick={unarchive ? onUnarchive : onArchive}
+      disabled={(disabled ?? pending) || !canAct}
+      aria-label={label}
+      title={countdown ? `Auto-archives in ${countdown}` : label}
     >
-      {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      {countdown ? `Archive (${countdown})` : 'Archive'}
+      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+      {countdown && <span className="tabular-nums">{countdown}</span>}
     </Button>
   )
 }

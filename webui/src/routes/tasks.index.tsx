@@ -157,6 +157,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
             task={task}
             onArchive={handleArchive}
             pending={archiveMutation.isPending}
+            compact
           />
         )}
       </TableCell>
