@@ -91,7 +91,7 @@ export function TaskActionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Task actions" disabled={pending}>
+        <Button variant="outline" size="icon" aria-label="Task actions" disabled={pending}>
           {pending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
@@ -99,7 +99,21 @@ export function TaskActionsMenu({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align="end">
+        {showCancel && (
+          <DropdownMenuItem variant="destructive" onSelect={onCancel}>
+            Cancel task
+          </DropdownMenuItem>
+        )}
+        {showRestart && <DropdownMenuItem onSelect={onRestart}>Restart task</DropdownMenuItem>}
+        {/* Archive-state-aware: the server exposes exactly one of these actions. */}
+        {showUnarchive && (
+          <DropdownMenuItem onSelect={onUnarchive}>Unarchive task</DropdownMenuItem>
+        )}
+        {showArchive && <DropdownMenuItem onSelect={onArchive}>Archive task</DropdownMenuItem>}
+
+        {(showCancel || showRestart || showArchive || showUnarchive) && <DropdownMenuSeparator />}
+
         <DropdownMenuSub>
           {/* Disabled once archived: an archived task no longer auto-archives. */}
           <DropdownMenuSubTrigger disabled={isArchivedTask(task)}>
@@ -107,7 +121,7 @@ export function TaskActionsMenu({
             <span className="ml-auto text-muted-foreground">{currentLabel}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
-            <DropdownMenuSubContent>
+            <DropdownMenuSubContent sideOffset={8}>
               <DropdownMenuRadioGroup
                 value={current}
                 onValueChange={(v) => onAutoArchiveChange(durationFromAutoArchiveSelect(v))}
@@ -124,20 +138,6 @@ export function TaskActionsMenu({
             </DropdownMenuSubContent>
           </DropdownMenuPortal>
         </DropdownMenuSub>
-
-        {(showCancel || showRestart || showArchive || showUnarchive) && <DropdownMenuSeparator />}
-
-        {showCancel && (
-          <DropdownMenuItem variant="destructive" onSelect={onCancel}>
-            Cancel task
-          </DropdownMenuItem>
-        )}
-        {showRestart && <DropdownMenuItem onSelect={onRestart}>Restart task</DropdownMenuItem>}
-        {/* Archive-state-aware: the server exposes exactly one of these actions. */}
-        {showUnarchive && (
-          <DropdownMenuItem onSelect={onUnarchive}>Unarchive task</DropdownMenuItem>
-        )}
-        {showArchive && <DropdownMenuItem onSelect={onArchive}>Archive task</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   )
