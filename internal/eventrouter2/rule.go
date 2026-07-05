@@ -39,34 +39,33 @@ func MatchRule(rule RoutingRule, event InputEvent) bool {
 		return false
 	}
 	for _, cond := range rule.Conditions {
-		if !matchCondition(cond, event.Attr(cond.Attr)) {
+		if !cond.Match(event.Attr(cond.Attr)) {
 			return false
 		}
 	}
 	return true
 }
 
-// matchCondition reports whether any of the event's values for the condition's
-// attr satisfies the condition's op against its value.
-func matchCondition(cond Condition, values []string) bool {
+// Match reports whether any of the given values (the event's values for the
+// condition's attr) satisfies the condition's op against its value. Passing an
+// empty slice — an attr the event does not carry — always fails. Unknown ops
+// never match.
+func (c Condition) Match(values []string) bool {
 	for _, v := range values {
-		if matchOp(cond.Op, v, cond.Value) {
-			return true
+		switch c.Op {
+		case "equals":
+			if v == c.Value {
+				return true
+			}
+		case "prefix":
+			if strings.HasPrefix(v, c.Value) {
+				return true
+			}
+		case "contains":
+			if strings.Contains(v, c.Value) {
+				return true
+			}
 		}
 	}
 	return false
-}
-
-// matchOp applies a single literal string operator. Unknown ops never match.
-func matchOp(op, value, want string) bool {
-	switch op {
-	case "equals":
-		return value == want
-	case "prefix":
-		return strings.HasPrefix(value, want)
-	case "contains":
-		return strings.Contains(value, want)
-	default:
-		return false
-	}
 }
