@@ -116,25 +116,6 @@ func (r *SchemaRegistry) Validate(rule RoutingRule) error {
 }
 
 // DefaultSchemaRegistry is the process-wide registry the producer packages
-// populate from their init functions. The apiserver GetEventTypes handler and
-// the producer packages' own tests read from it.
+// populate from their init functions (githubserver, atlassianserver) via their
+// registerSchemas helper. The apiserver GetEventTypes handler reads from it.
 var DefaultSchemaRegistry = NewSchemaRegistry()
-
-// MustRegisterSchema records def on DefaultSchemaRegistry. It is the thin
-// package-level entry point the producer packages (githubserver,
-// atlassianserver) call from their init functions.
-func MustRegisterSchema(def EventTypeDef) {
-	DefaultSchemaRegistry.MustRegister(def)
-}
-
-// EventTypeFor returns the DefaultSchemaRegistry entry for a (source, type)
-// pair, and false if none is registered.
-func EventTypeFor(source, typ string) (EventTypeDef, bool) {
-	return DefaultSchemaRegistry.EventTypeFor(source, typ)
-}
-
-// EventTypes returns every schema registered on DefaultSchemaRegistry in
-// registration order.
-func EventTypes() []EventTypeDef {
-	return DefaultSchemaRegistry.EventTypes()
-}
