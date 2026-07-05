@@ -171,12 +171,15 @@ function TaskDetail() {
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
-      <div className="flex flex-wrap items-start gap-4 mb-6">
-        <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
-        {/* ml-auto keeps the controls pushed to the right even after they wrap
-            onto their own line — justify-between only right-aligns them while
-            they share a line with the title. */}
-        <div className="flex items-center gap-2 ml-auto">
+      {/* On small screens the controls wrap onto their own line below the
+          title (flex-wrap). On md+ we switch to flex-nowrap and truncate the
+          title instead, so the whole header stays on a single line with the
+          controls pinned to the right. */}
+      <div className="flex flex-wrap md:flex-nowrap justify-between items-start gap-4 mb-6">
+        <h1 className="text-2xl font-bold md:min-w-0 md:truncate">
+          {task.name || `Unnamed - ${id}`}
+        </h1>
+        <div className="flex items-center gap-2 flex-shrink-0">
           {/* The panel switcher rides in the header, right beside the actions
               menu, so timeline / shell / links stay reachable from the top of
               the page. The active tab is still mirrored in ?tab= for deep links. */}
