@@ -1,6 +1,9 @@
 package atlassianserver
 
-import "github.com/icholy/xagent/internal/eventrouter2"
+import (
+	"github.com/icholy/xagent/internal/eventrouter2"
+	"github.com/icholy/xagent/internal/model"
+)
 
 // init registers atlassianserver's schemas on the process-wide default registry.
 func init() {
@@ -20,10 +23,10 @@ func RegisterSchemas(reg *eventrouter2.SchemaRegistry) {
 		Type:   EventTypeCommentCreated,
 		Label:  "Jira: Issue Comment",
 		Attrs:  []string{"body", "url", "mention"},
-		DefaultRules: []eventrouter2.RoutingRule{{
+		DefaultRules: []model.RoutingRule{{
 			Source:     "atlassian",
 			Type:       EventTypeCommentCreated,
-			Conditions: []eventrouter2.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 			Wakeup:     true,
 		}},
 	})

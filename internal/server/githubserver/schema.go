@@ -1,14 +1,17 @@
 package githubserver
 
-import "github.com/icholy/xagent/internal/eventrouter2"
+import (
+	"github.com/icholy/xagent/internal/eventrouter2"
+	"github.com/icholy/xagent/internal/model"
+)
 
 // wakeOnXagentPrefix is the default rule shipped for GitHub comment/review event
 // types: wake the linked task when the comment body is prefixed with "xagent:".
-func wakeOnXagentPrefix(typ string) eventrouter2.RoutingRule {
-	return eventrouter2.RoutingRule{
+func wakeOnXagentPrefix(typ string) model.RoutingRule {
+	return model.RoutingRule{
 		Source:     "github",
 		Type:       typ,
-		Conditions: []eventrouter2.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+		Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
 		Wakeup:     true,
 	}
 }
@@ -31,21 +34,21 @@ func RegisterSchemas(reg *eventrouter2.SchemaRegistry) {
 		Type:         EventTypeIssueComment,
 		Label:        "GitHub: Issue/PR Comment",
 		Attrs:        []string{"body", "url", "mention"},
-		DefaultRules: []eventrouter2.RoutingRule{wakeOnXagentPrefix(EventTypeIssueComment)},
+		DefaultRules: []model.RoutingRule{wakeOnXagentPrefix(EventTypeIssueComment)},
 	})
 	reg.MustRegister(eventrouter2.EventTypeDef{
 		Source:       "github",
 		Type:         EventTypePullRequestReviewComment,
 		Label:        "GitHub: PR Review Comment",
 		Attrs:        []string{"body", "url", "mention"},
-		DefaultRules: []eventrouter2.RoutingRule{wakeOnXagentPrefix(EventTypePullRequestReviewComment)},
+		DefaultRules: []model.RoutingRule{wakeOnXagentPrefix(EventTypePullRequestReviewComment)},
 	})
 	reg.MustRegister(eventrouter2.EventTypeDef{
 		Source:       "github",
 		Type:         EventTypePullRequestReview,
 		Label:        "GitHub: PR Review",
 		Attrs:        []string{"body", "url", "mention"},
-		DefaultRules: []eventrouter2.RoutingRule{wakeOnXagentPrefix(EventTypePullRequestReview)},
+		DefaultRules: []model.RoutingRule{wakeOnXagentPrefix(EventTypePullRequestReview)},
 	})
 	reg.MustRegister(eventrouter2.EventTypeDef{
 		Source: "github",

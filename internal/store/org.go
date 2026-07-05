@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/icholy/xagent/internal/eventrouter2"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
@@ -214,9 +213,7 @@ func (s *Store) decodeRoutingRules(data []byte) ([]model.RoutingRule, error) {
 			return nil, err
 		}
 		if legacy.HasMatcher() {
-			for _, v2 := range reg.TranslateRule(legacy) {
-				rules = append(rules, routingRuleFromV2(v2))
-			}
+			rules = append(rules, reg.TranslateRule(legacy)...)
 			continue
 		}
 		var rule model.RoutingRule
@@ -226,23 +223,6 @@ func (s *Store) decodeRoutingRules(data []byte) ([]model.RoutingRule, error) {
 		rules = append(rules, rule)
 	}
 	return rules, nil
-}
-
-// routingRuleFromV2 converts an eventrouter2.RoutingRule (the matcher shape
-// TranslateRule emits) into the conditions-native model.RoutingRule the store
-// returns.
-func routingRuleFromV2(v eventrouter2.RoutingRule) model.RoutingRule {
-	var conds []model.Condition
-	for _, c := range v.Conditions {
-		conds = append(conds, model.Condition{Attr: c.Attr, Op: c.Op, Value: c.Value})
-	}
-	return model.RoutingRule{
-		Source:     v.Source,
-		Type:       v.Type,
-		Conditions: conds,
-		Wakeup:     v.Wakeup,
-		Create:     v.Create,
-	}
 }
 
 func (s *Store) GetOrgRoutingRules(ctx context.Context, tx *sql.Tx, orgID int64) ([]model.RoutingRule, error) {

@@ -23,7 +23,8 @@ type RoutingRule struct {
 
 // Condition constrains one attribute dimension of an event. Op is one of
 // "equals", "prefix", or "contains"; comparisons are literal (exact,
-// case-sensitive) string operations. It mirrors eventrouter2.Condition.
+// case-sensitive) string operations. It is the canonical conditions type the
+// eventrouter2 matcher, registry, and store all operate on directly.
 type Condition struct {
 	Attr  string `json:"attr,omitempty"`
 	Op    string `json:"op,omitempty"`
