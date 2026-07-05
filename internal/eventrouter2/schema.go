@@ -22,9 +22,8 @@ type EventTypeDef struct {
 
 // SchemaRegistry holds the set of registered event-type schemas and the routing
 // state derived from them (the source:type index and the accumulated default
-// rules). It is populated by MustRegister rather than a central table. The zero
-// value (&SchemaRegistry{}) is ready to use; the index map is created lazily on
-// first registration.
+// rules). It is populated by MustRegister rather than a central table.
+// Construct one with NewSchemaRegistry, which initializes the index map.
 type SchemaRegistry struct {
 	// eventTypes holds every registered schema in registration order. It is the
 	// machine-readable contract that the router, rule validation, and (later) the
@@ -41,10 +40,12 @@ type SchemaRegistry struct {
 	defaultRules []RoutingRule
 }
 
-// NewSchemaRegistry returns an empty registry ready for registration. It is
-// equivalent to &SchemaRegistry{}; use whichever reads cleaner at the call site.
+// NewSchemaRegistry returns an empty registry ready for registration, with its
+// source:type index map initialized.
 func NewSchemaRegistry() *SchemaRegistry {
-	return &SchemaRegistry{}
+	return &SchemaRegistry{
+		eventTypeByKey: map[string]EventTypeDef{},
+	}
 }
 
 // MustRegister records def as the schema for its (Source, Type) event kind,
@@ -54,9 +55,6 @@ func (r *SchemaRegistry) MustRegister(def EventTypeDef) {
 	key := def.Source + ":" + def.Type
 	if _, dup := r.eventTypeByKey[key]; dup {
 		panic(fmt.Sprintf("eventrouter2: duplicate schema registration for source=%q type=%q", def.Source, def.Type))
-	}
-	if r.eventTypeByKey == nil {
-		r.eventTypeByKey = map[string]EventTypeDef{}
 	}
 	r.eventTypes = append(r.eventTypes, def)
 	r.eventTypeByKey[key] = def
@@ -120,7 +118,7 @@ func (r *SchemaRegistry) Validate(rule RoutingRule) error {
 // DefaultSchemaRegistry is the process-wide registry the producer packages
 // populate from their init functions. The apiserver GetEventTypes handler and
 // the producer packages' own tests read from it.
-var DefaultSchemaRegistry = &SchemaRegistry{}
+var DefaultSchemaRegistry = NewSchemaRegistry()
 
 // MustRegisterSchema records def on DefaultSchemaRegistry. It is the thin
 // package-level entry point the producer packages (githubserver,
