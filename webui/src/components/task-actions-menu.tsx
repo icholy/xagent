@@ -21,7 +21,13 @@ import {
   durationToMillis,
   formatCountdown,
 } from '@/lib/duration'
-import { canArchiveTask, canCancelTask, canUnarchiveTask, isArchivedTask } from '@/lib/task'
+import {
+  canArchiveTask,
+  canCancelTask,
+  canRestartTask,
+  canUnarchiveTask,
+  isArchivedTask,
+} from '@/lib/task'
 import type { Duration } from '@bufbuild/protobuf/wkt'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 
@@ -39,8 +45,8 @@ const AUTO_ARCHIVE_PRESETS: { value: string; label: string }[] = [
 ]
 
 // TaskActionsMenu is the overflow (…) menu in the task page header. It is the
-// single entry point for the task's auto-archive delay (a duration submenu), its
-// cancel action, and its archive/unarchive action. Each action is shown only
+// single entry point for every task action: the auto-archive delay (a duration
+// submenu), cancel, restart, and archive/unarchive. Each action is shown only
 // when the server reports it as available for the task's current state.
 export function TaskActionsMenu({
   task,
@@ -48,6 +54,8 @@ export function TaskActionsMenu({
   autoArchivePending,
   onCancel,
   cancelPending,
+  onRestart,
+  restartPending,
   onArchive,
   archivePending,
   onUnarchive,
@@ -58,6 +66,8 @@ export function TaskActionsMenu({
   autoArchivePending?: boolean
   onCancel: () => void
   cancelPending?: boolean
+  onRestart: () => void
+  restartPending?: boolean
   onArchive: () => void
   archivePending?: boolean
   onUnarchive: () => void
@@ -71,8 +81,10 @@ export function TaskActionsMenu({
   const customLabel =
     !preset && task.autoArchive ? formatCountdown(durationToMillis(task.autoArchive)) : null
   const currentLabel = preset?.label ?? customLabel ?? 'Never'
-  const pending = autoArchivePending || cancelPending || archivePending || unarchivePending
+  const pending =
+    autoArchivePending || cancelPending || restartPending || archivePending || unarchivePending
   const showCancel = canCancelTask(task)
+  const showRestart = canRestartTask(task)
   const showArchive = canArchiveTask(task)
   const showUnarchive = canUnarchiveTask(task)
 
@@ -113,13 +125,14 @@ export function TaskActionsMenu({
           </DropdownMenuPortal>
         </DropdownMenuSub>
 
-        {(showCancel || showArchive || showUnarchive) && <DropdownMenuSeparator />}
+        {(showCancel || showRestart || showArchive || showUnarchive) && <DropdownMenuSeparator />}
 
         {showCancel && (
           <DropdownMenuItem variant="destructive" onSelect={onCancel}>
             Cancel task
           </DropdownMenuItem>
         )}
+        {showRestart && <DropdownMenuItem onSelect={onRestart}>Restart task</DropdownMenuItem>}
         {/* Archive-state-aware: the server exposes exactly one of these actions. */}
         {showUnarchive && (
           <DropdownMenuItem onSelect={onUnarchive}>Unarchive task</DropdownMenuItem>

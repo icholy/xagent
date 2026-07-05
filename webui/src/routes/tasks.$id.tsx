@@ -13,7 +13,7 @@ import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState, useRef, useLayoutEffect } from 'react'
 import type { TaskTab } from '@/lib/task'
 import { toTaskTab } from '@/lib/task'
-import { canRestartTask, canOpenShell, isArchivedTask } from '@/lib/task'
+import { canOpenShell, isArchivedTask } from '@/lib/task'
 import { eventsToTimeline } from '@/lib/timeline'
 import { useOrgId } from '@/hooks/use-org-id'
 import { useShellState } from '@/hooks/use-shell-state'
@@ -167,37 +167,25 @@ function TaskDetail() {
     )
   }
 
-  const isMutating =
-    archiveMutation.isPending ||
-    unarchiveMutation.isPending ||
-    cancelMutation.isPending ||
-    restartMutation.isPending
-
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <h1 className="text-2xl font-bold">{task.name || `Unnamed - ${id}`}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {canRestartTask(task) && (
-            <Button variant="outline" size="sm" onClick={handleRestart} disabled={isMutating}>
-              {restartMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Restart
-            </Button>
-          )}
-          <TaskActionsMenu
-            task={task}
-            onAutoArchiveChange={(autoArchive) =>
-              autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })
-            }
-            autoArchivePending={autoArchiveMutation.isPending}
-            onCancel={handleCancel}
-            cancelPending={cancelMutation.isPending}
-            onArchive={handleArchive}
-            archivePending={archiveMutation.isPending}
-            onUnarchive={handleUnarchive}
-            unarchivePending={unarchiveMutation.isPending}
-          />
-        </div>
+        <TaskActionsMenu
+          task={task}
+          onAutoArchiveChange={(autoArchive) =>
+            autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })
+          }
+          autoArchivePending={autoArchiveMutation.isPending}
+          onCancel={handleCancel}
+          cancelPending={cancelMutation.isPending}
+          onRestart={handleRestart}
+          restartPending={restartMutation.isPending}
+          onArchive={handleArchive}
+          archivePending={archiveMutation.isPending}
+          onUnarchive={handleUnarchive}
+          unarchivePending={unarchiveMutation.isPending}
+        />
       </div>
 
       {/* Details + activity in a single card: metadata header strip, an in-page
