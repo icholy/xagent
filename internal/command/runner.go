@@ -22,7 +22,6 @@ import (
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/awsmicrovm"
 	"github.com/icholy/xagent/internal/x/common"
-	"github.com/icholy/xagent/internal/x/logctx"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"github.com/urfave/cli/v3"
 )
@@ -130,8 +129,6 @@ var RunnerCommand = &cli.Command{
 			handler := slog.NewTextHandler(os.Stderr, opts)
 			log = slog.New(handler)
 		}
-		// Enrich logs with org_id, task_id and trace_id from the context.
-		log = slog.New(logctx.NewHandler(log.Handler()))
 
 		cfg, err := configfile.Load(&configfile.Overrides{
 			Token: cmd.String("key"),
