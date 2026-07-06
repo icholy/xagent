@@ -52,21 +52,21 @@ func TestGetEventTypes(t *testing.T) {
 	assert.DeepEqual(t, labelAdded.Attrs, []*xagentv1.AttrDef{
 		{
 			Key:         "body",
-			Label:       "Body",
+			Label:       "Issue/PR Body",
 			Placeholder: "xagent:",
-			Help:        "Matched against the event body — the comment or description text.",
+			Help:        "Matched against the description of the labeled issue or PR.",
 		},
 		{
 			Key:         "url",
-			Label:       "URL",
+			Label:       "Issue/PR URL",
 			Placeholder: "https://github.com/owner/repo/",
-			Help:        "Matched against the event URL — e.g. to scope a rule to a single repo or project.",
+			Help:        "Matched against the labeled issue or PR URL, e.g. to scope a rule to a single repo.",
 		},
 		{
 			Key:         "label",
 			Label:       "Label",
 			Placeholder: "xagent",
-			Help:        "A label added to the issue or PR.",
+			Help:        "The label added to the issue or PR.",
 		},
 	}, protocmp.Transform())
 

@@ -15,26 +15,26 @@ func TestSchemaRegistration(t *testing.T) {
 	assert.Assert(t, ok, "EventTypeFor(atlassian, %q) = _, false; want hit", EventTypeCommentCreated)
 	assert.Assert(t, len(def.DefaultRules) > 0, "comment_created DefaultRules is empty; want the xagent: wakeup rule")
 
-	// AttrDefs carry Jira-flavoured display copy for the routing-rule editor —
+	// AttrDefs carry Jira-flavoured display copy declared inline per event type;
 	// the mention placeholder is an Atlassian account id, not a GitHub username.
 	assert.DeepEqual(t, def.Attrs, []eventrouter.AttrDef{
 		{
 			Key:         "body",
-			Label:       "Body",
+			Label:       "Comment Body",
 			Placeholder: "xagent:",
-			Help:        "Matched against the event body — the comment or description text.",
+			Help:        "Matched against the comment text.",
 		},
 		{
 			Key:         "url",
-			Label:       "URL",
+			Label:       "Issue URL",
 			Placeholder: "https://your-domain.atlassian.net/browse/PROJ-",
-			Help:        "Matched against the event URL — e.g. to scope a rule to a single repo or project.",
+			Help:        "Matched against the commented issue URL, e.g. to scope a rule to a single project.",
 		},
 		{
 			Key:         "mention",
 			Label:       "Mention",
 			Placeholder: "5b10ac8d82e05b22cc7d4ef5",
-			Help:        "Atlassian account id mentioned in the event body. Enter the bare id (no [~accountid:…] wrapper).",
+			Help:        "Atlassian account id @-mentioned in the comment. Enter the bare id (no [~accountid:…] wrapper).",
 		},
 	})
 
