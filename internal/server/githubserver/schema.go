@@ -5,17 +5,6 @@ import (
 	"github.com/icholy/xagent/internal/model"
 )
 
-// wakeOnXagentPrefix is the default rule shipped for GitHub comment/review event
-// types: wake the linked task when the comment body is prefixed with "xagent:".
-func wakeOnXagentPrefix(typ string) model.RoutingRule {
-	return model.RoutingRule{
-		Source:     "github",
-		Type:       typ,
-		Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
-		Wakeup:     true,
-	}
-}
-
 // init registers githubserver's schemas on the process-wide default registry.
 func init() {
 	RegisterSchemas(eventrouter.DefaultSchemaRegistry)
@@ -57,7 +46,13 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Help:        "GitHub username @-mentioned in the comment (no leading @).",
 			},
 		},
-		DefaultRules: []model.RoutingRule{wakeOnXagentPrefix(EventTypeIssueComment)},
+		// Wake the linked task when the comment body is prefixed with "xagent:".
+		DefaultRules: []model.RoutingRule{{
+			Source:     "github",
+			Type:       EventTypeIssueComment,
+			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+			Wakeup:     true,
+		}},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "github",
@@ -83,7 +78,13 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Help:        "GitHub username @-mentioned in the review comment (no leading @).",
 			},
 		},
-		DefaultRules: []model.RoutingRule{wakeOnXagentPrefix(EventTypePullRequestReviewComment)},
+		// Wake the linked task when the review comment body is prefixed with "xagent:".
+		DefaultRules: []model.RoutingRule{{
+			Source:     "github",
+			Type:       EventTypePullRequestReviewComment,
+			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+			Wakeup:     true,
+		}},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "github",
@@ -109,7 +110,13 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Help:        "GitHub username @-mentioned in the review (no leading @).",
 			},
 		},
-		DefaultRules: []model.RoutingRule{wakeOnXagentPrefix(EventTypePullRequestReview)},
+		// Wake the linked task when the review body is prefixed with "xagent:".
+		DefaultRules: []model.RoutingRule{{
+			Source:     "github",
+			Type:       EventTypePullRequestReview,
+			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
+			Wakeup:     true,
+		}},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "github",
