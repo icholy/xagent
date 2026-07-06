@@ -15,25 +15,26 @@ func TestSchemaRegistration(t *testing.T) {
 	assert.Assert(t, ok, "EventTypeFor(github, %q) = _, false; want hit", EventTypeIssueComment)
 	assert.Assert(t, len(def.DefaultRules) > 0, "issue_comment DefaultRules is empty; want the xagent: wakeup rule")
 
-	// AttrDefs carry GitHub-flavoured display copy for the routing-rule editor.
+	// AttrDefs carry GitHub-flavoured display copy declared inline per event
+	// type, so the copy speaks to this specific event (a comment's body/URL).
 	assert.DeepEqual(t, def.Attrs, []eventrouter.AttrDef{
 		{
 			Key:         "body",
-			Label:       "Body",
+			Label:       "Comment Body",
 			Placeholder: "xagent:",
-			Help:        "Matched against the event body — the comment or description text.",
+			Help:        "Matched against the comment text.",
 		},
 		{
 			Key:         "url",
-			Label:       "URL",
+			Label:       "Issue/PR URL",
 			Placeholder: "https://github.com/owner/repo/",
-			Help:        "Matched against the event URL — e.g. to scope a rule to a single repo or project.",
+			Help:        "Matched against the commented issue or PR URL, e.g. to scope a rule to a single repo.",
 		},
 		{
 			Key:         "mention",
 			Label:       "Mention",
 			Placeholder: "octocat",
-			Help:        "GitHub username mentioned in the event body (no leading @).",
+			Help:        "GitHub username @-mentioned in the comment (no leading @).",
 		},
 	})
 
