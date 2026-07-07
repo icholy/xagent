@@ -111,50 +111,59 @@ the safe default (member-only).
 
 ### Router: combine member and non-member orgs
 
-The member orgs and the event's non-member orgs are fetched in a **single store
-call**. `ListRoutingRulesForUser` is extended to take the event's orgs alongside
-the user id, and its query becomes a `UNION` of two branches: the actor's member
-orgs (all their rules, unchanged) and the passed-in orgs (only their
-`allow_non_members` rules, and only where the actor is not already a member).
-The router just passes both inputs through — no second query, no in-Go org
-bookkeeping.
+The member orgs and the event's other orgs are fetched in a **single store
+call** that returns each org **tagged with whether the actor is a member**. The
+store doesn't decide policy — it just labels the two sources; the router then
+uses the `AllowNonMembers` flag to decide, per rule, whether a non-member org's
+rule is eligible. Keeping the flag decision in the router (next to `Match`)
+rather than in SQL is what lets the same result set serve both the member and
+non-member cases, and keeps the ruleless-org default-rule fallback working.
 
-**Store** (`internal/store/sql/queries/org.sql`). Extend the existing query to a
-`UNION`; the second branch filters the JSONB rule array down to opted-in rules
-in SQL, so only the flagged rules ever come back for non-member orgs:
+**Store** (`internal/store/sql/queries/org.sql`). The query becomes a `UNION` of
+a member branch and an event-orgs branch, each selecting a constant `is_member`
+column so the caller can tell them apart:
 
 ```sql
--- name: ListRoutingRulesForUser :many
--- Member orgs (joined via org_members) contribute all their rules. The orgs in
--- $2 (the event's orgs) contribute only rules with allow_non_members = true,
--- and only when the user is NOT already a member of that org — membership wins
--- on overlap. Passing an empty $2 reduces this to today's member-only behavior;
--- passing an empty user id ($1) yields just the non-member branch.
-SELECT o.id, o.routing_rules
+-- name: ListRoutingRulesForEvent :many
+-- Member orgs (joined via org_members) are returned with is_member = TRUE and
+-- all their rules. The orgs in $2 (the event's orgs) that the actor is NOT a
+-- member of are returned with is_member = FALSE; the caller keeps only their
+-- allow_non_members rules. Membership wins on overlap (the NOT EXISTS drops a
+-- passed org the actor already belongs to). An empty $2 reduces this to today's
+-- member-only behavior; an empty user id ($1) yields just the non-member branch.
+SELECT o.id, o.routing_rules, TRUE AS is_member
 FROM orgs o
 JOIN org_members m ON m.org_id = o.id
 WHERE m.user_id = $1 AND o.archived = FALSE
 UNION
-SELECT o.id, jsonb_agg(rule) AS routing_rules
+SELECT o.id, o.routing_rules, FALSE AS is_member
 FROM orgs o
-CROSS JOIN LATERAL jsonb_array_elements(o.routing_rules) AS rule
 WHERE o.id = ANY($2::BIGINT[])
   AND o.archived = FALSE
-  AND (rule->>'allow_non_members')::boolean IS TRUE
   AND NOT EXISTS (
       SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = $1
-  )
-GROUP BY o.id;
+  );
 ```
 
-The store method signature gains the orgs slice; the decode loop is unchanged:
+The method is **renamed** — `ListRoutingRulesForUser` no longer fits now that it
+also takes the event's orgs — to `ListRoutingRulesForEvent`, returning the org id,
+its rules, and the membership tag:
 
 ```go
-func (s *Store) ListRoutingRulesForUser(ctx context.Context, tx *sql.Tx, userID string, orgs []int64) (map[int64][]model.RoutingRule, error)
+// OrgRoutingRules pairs an org's rules with whether the routing actor is a
+// member of it. Non-member orgs contribute only their AllowNonMembers rules.
+type OrgRoutingRules struct {
+	OrgID    int64
+	IsMember bool
+	Rules    []model.RoutingRule
+}
+
+func (s *Store) ListRoutingRulesForEvent(ctx context.Context, tx *sql.Tx, userID string, orgs []int64) ([]OrgRoutingRules, error)
 ```
 
 **Router** (`internal/eventrouter/eventrouter.go`). The augmentation collapses to
-the relaxed guard plus one call:
+the relaxed guard, one call, and a per-org eligibility check in the existing
+match loop:
 
 ```go
 func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
@@ -162,33 +171,52 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, nil
 	}
 
-	rulesByOrg, err := r.Store.ListRoutingRulesForUser(ctx, nil, input.UserID, input.Orgs)
+	orgs, err := r.Store.ListRoutingRulesForEvent(ctx, nil, input.UserID, input.Orgs)
 	if err != nil {
 		return 0, err
 	}
 
-	// ... unchanged from here: default-rule fallback per org, Match, link
-	// lookup, wake/create.
+	reg := cmp.Or(r.Registry, DefaultSchemaRegistry)
+	matched := map[int64]*model.RoutingRule{}
+	for _, org := range orgs {
+		rules := org.Rules
+		if len(rules) == 0 && org.IsMember {
+			// Default-rule fallback stays member-only.
+			rules = reg.DefaultRules()
+		}
+		for i := range rules {
+			// Member org: every rule is eligible. Non-member org: only rules
+			// that opted in via AllowNonMembers.
+			if !org.IsMember && !rules[i].AllowNonMembers {
+				continue
+			}
+			if Match(rules[i], input) {
+				matched[org.OrgID] = &rules[i]
+				break
+			}
+		}
+	}
+
+	// ... unchanged from here: link lookup, wake/create.
 }
 ```
 
 Key properties:
 
+- **Member vs. non-member orgs are distinguishable.** The store tags each org
+  with `IsMember`; the router uses the `AllowNonMembers` flag to gate rules from
+  non-member orgs, so a flagged rule reaches *all* the event's orgs while an
+  unflagged rule stays confined to the actor's member orgs — exactly the "all of
+  them vs. just the user orgs" distinction the flag is meant to control.
 - **Member orgs keep today's semantics** — all rules apply, and the ruleless-org
   `reg.DefaultRules()` fallback (the `xagent:` body-prefix wakeup defaults) still
-  runs. That fallback is intentionally **not** applied to non-member orgs: the
-  second branch only returns orgs that have at least one `allow_non_members` rule
-  (a ruleless or unflagged non-member org drops out of the `jsonb_agg` /
-  `GROUP BY`), so a non-member org never reaches the default-rule fallback.
-  Non-member routing always requires an explicit opt-in rule.
+  runs. The fallback is gated on `org.IsMember`, so a ruleless non-member org
+  routes nothing; non-member routing always requires an explicit opt-in rule.
 - **Overlap resolves in favor of membership.** An org that is both a member org
-  and in `input.Orgs` is returned by the first branch with its full rule set; the
-  second branch's `NOT EXISTS (... org_members ...)` excludes it, so `UNION`
-  yields exactly one row with all rules — a member is never down-scoped to the
-  non-member rule subset, and the same org is never processed twice.
-- **The flag filter lives in SQL** — with `AllowNonMembers` serialized as
-  `allow_non_members` (omitted when false via `omitempty`), `(rule->>'...')::boolean
-  IS TRUE` keeps only opted-in rules and treats a missing key as false.
+  and in `input.Orgs` is returned only by the member branch (the event-orgs
+  branch's `NOT EXISTS (... org_members ...)` excludes it), so it arrives once
+  with `IsMember = TRUE` and its full rule set — a member is never down-scoped to
+  the non-member rule subset, and the same org is never processed twice.
 
 The old early-return on `input.UserID == ""` is replaced by the `input.URL == ""`
 guard alone. An empty `UserID` matches no `org_members` row, so the first branch
@@ -282,17 +310,21 @@ handlers consume it.
    diff; a model round-trip unit test (`model → proto → model`) preserves the
    flag.
 
-2. **Store: `ListRoutingRulesForUser` UNION** — Delivers: the extended query
-   (member branch `UNION` opted-in-orgs branch) and the store method's new
-   `orgs []int64` param. Depends on: (1) (the second branch filters on the
-   `allow_non_members` JSONB key). Verifiable by: store unit tests — a member
-   gets all rules; a passed org contributes only its `allow_non_members` rules;
-   an org that is both a member org and passed in returns its full set once;
+2. **Store: `ListRoutingRulesForEvent` UNION** — Delivers: the renamed store
+   method (`ListRoutingRulesForUser` → `ListRoutingRulesForEvent`) taking
+   `(userID, orgs)`, the `UNION` query with the `is_member` column, and the
+   `OrgRoutingRules{OrgID, IsMember, Rules}` return type. Depends on: nothing
+   (the flag filter now lives in the router, so this layer is independent of the
+   proto field). Verifiable by: store unit tests — member orgs return
+   `IsMember=true` with all rules; passed orgs return `IsMember=false`; an org
+   that is both a member org and passed in returns once with `IsMember=true`;
    archived orgs are excluded from both branches.
 
 3. **`InputEvent.Orgs` + router** — Delivers: the `Orgs` field on `InputEvent`,
-   the relaxed entry guard (`input.URL == ""` only), and passing `input.Orgs`
-   through to `ListRoutingRulesForUser`. Depends on: (2). Verifiable by:
+   the relaxed entry guard (`input.URL == ""` only), the call to
+   `ListRoutingRulesForEvent`, and the per-org eligibility check (non-member orgs
+   contribute only `AllowNonMembers` rules; default-rule fallback gated on
+   `IsMember`). Depends on: (1) (reads `AllowNonMembers`), (2). Verifiable by:
    eventrouter unit tests — a member still matches all rules; a non-member with
    `Orgs` matches only an `AllowNonMembers` rule; an empty `UserID` with `Orgs`
    routes; a member org that also appears in `Orgs` still uses its full rule
@@ -340,12 +372,18 @@ handlers consume it.
 - **One UNION query vs. two store calls.** An earlier sketch fetched member orgs
   and non-member orgs with two calls (`ListRoutingRulesForUser` +
   `GetRoutingRulesByOrgs`) and filtered `AllowNonMembers` in Go. Folding both
-  into a single `UNION` on `ListRoutingRulesForUser` — with the flag filter and
-  the membership-wins exclusion expressed in SQL — is one round trip, keeps the
-  member-vs-non-member policy in one place, and removes the in-Go org
-  bookkeeping. The `jsonb_array_elements` unnest on the non-member branch is the
-  cost; it only runs for the (few) orgs named in `input.Orgs`.
+  into a single `UNION` (`ListRoutingRulesForEvent`) is one round trip and keeps
+  the membership-wins exclusion in SQL (`NOT EXISTS (... org_members ...)`).
   `GetRoutingRulesByOrgs` stays as-is for its existing callers.
+
+- **Tag membership, filter the flag in Go — not in SQL.** The `UNION` returns an
+  `is_member` column rather than pre-filtering the non-member branch's JSONB to
+  `allow_non_members` rules. Keeping the flag decision in the router (beside
+  `Match`) means the store returns a faithful view of each org's rules — which is
+  what lets a member org keep *all* its rules and still feed the ruleless-org
+  default-rule fallback, while non-member orgs are narrowed to opted-in rules.
+  Pushing the filter into SQL (a `jsonb_array_elements` unnest) would collapse
+  that distinction and couple the store query to the JSONB rule shape.
 
 ## Open Questions
 
