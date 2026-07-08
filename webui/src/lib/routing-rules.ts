@@ -98,6 +98,10 @@ export interface RoutingRuleFormValues {
   // Whether a matched rule wakes (restarts) the linked task(s). Defaults to
   // true for new rules; unchecking it sends wakeup: false.
   wakeup: boolean
+  // Whether the rule may fire for actors who are not members of the org (and
+  // need not have linked their GitHub/Jira accounts). Defaults to false —
+  // rules are member-only unless explicitly opted in.
+  public: boolean
   createTask: boolean
   createWorkspace: string
   createRunner: string
@@ -112,6 +116,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   type: '',
   conditions: [],
   wakeup: true,
+  public: false,
   createTask: false,
   createWorkspace: '',
   createRunner: '',
@@ -125,6 +130,7 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     type: rule.type,
     conditions: rule.conditions.map((c) => ({ attr: c.attr, op: c.op, value: c.value })),
     wakeup: rule.wakeup,
+    public: rule.public,
     createTask: rule.create !== undefined,
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
@@ -144,6 +150,7 @@ export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
       .filter((c) => c.attr.trim() !== '')
       .map((c) => ({ attr: c.attr, op: c.op, value: c.value })),
     wakeup: values.wakeup,
+    public: values.public,
     create: values.createTask
       ? {
           workspace: values.createWorkspace,
