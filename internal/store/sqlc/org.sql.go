@@ -199,6 +199,38 @@ func (q *Queries) IsOrgMember(ctx context.Context, arg IsOrgMemberParams) (bool,
 	return is_member, err
 }
 
+const listOrgIDsByGitHubInstallation = `-- name: ListOrgIDsByGitHubInstallation :many
+SELECT id FROM orgs
+WHERE github_installation_id = $1::BIGINT
+  AND archived = FALSE
+`
+
+// Returns the ids of the non-archived orgs that share the given GitHub App
+// installation. Used to resolve a webhook's installation to the orgs an event
+// belongs to, independent of the actor's membership.
+func (q *Queries) ListOrgIDsByGitHubInstallation(ctx context.Context, githubInstallationID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listOrgIDsByGitHubInstallation, githubInstallationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgMembers = `-- name: ListOrgMembers :many
 SELECT om.org_id, om.user_id, om.role, om.created_at
 FROM org_members om

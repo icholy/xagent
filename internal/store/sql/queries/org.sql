@@ -64,6 +64,14 @@ UPDATE orgs SET
     updated_at = CURRENT_TIMESTAMP
 WHERE github_installation_id = sqlc.arg(github_installation_id)::BIGINT;
 
+-- name: ListOrgIDsByGitHubInstallation :many
+-- Returns the ids of the non-archived orgs that share the given GitHub App
+-- installation. Used to resolve a webhook's installation to the orgs an event
+-- belongs to, independent of the actor's membership.
+SELECT id FROM orgs
+WHERE github_installation_id = sqlc.arg(github_installation_id)::BIGINT
+  AND archived = FALSE;
+
 -- name: DestroyOrg :exec
 DELETE FROM orgs WHERE id = $1;
 
