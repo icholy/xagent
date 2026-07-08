@@ -5369,7 +5369,11 @@ type RoutingRule struct {
 	// Attribute conditions the event must satisfy (ANDed together). Empty
 	// source/type are wildcards; an empty conditions list matches every event of
 	// the selected type.
-	Conditions    []*RuleCondition `protobuf:"bytes,10,rep,name=conditions,proto3" json:"conditions,omitempty"`
+	Conditions []*RuleCondition `protobuf:"bytes,10,rep,name=conditions,proto3" json:"conditions,omitempty"`
+	// public lets this rule fire for actors who are not members of the org (and
+	// need not be oauth-linked). Defaults false — rules are member-only unless
+	// explicitly opted in.
+	Public        bool `protobuf:"varint,11,opt,name=public,proto3" json:"public,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5437,6 +5441,13 @@ func (x *RoutingRule) GetConditions() []*RuleCondition {
 		return x.Conditions
 	}
 	return nil
+}
+
+func (x *RoutingRule) GetPublic() bool {
+	if x != nil {
+		return x.Public
+	}
+	return false
 }
 
 type CreateTaskAction struct {
@@ -6302,7 +6313,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\rRuleCondition\x12\x12\n" +
 	"\x04attr\x18\x01 \x01(\tR\x04attr\x12\x0e\n" +
 	"\x02op\x18\x02 \x01(\tR\x02op\x12\x14\n" +
-	"\x05value\x18\x03 \x01(\tR\x05value\"\xde\x01\n" +
+	"\x05value\x18\x03 \x01(\tR\x05value\"\xf6\x01\n" +
 	"\vRoutingRule\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x123\n" +
@@ -6311,7 +6322,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\n" +
 	"conditions\x18\n" +
 	" \x03(\v2\x18.xagent.v1.RuleConditionR\n" +
-	"conditionsJ\x04\b\x03\x10\x04J\x04\b\x04\x10\x05J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\t\"\x9e\x01\n" +
+	"conditions\x12\x16\n" +
+	"\x06public\x18\v \x01(\bR\x06publicJ\x04\b\x03\x10\x04J\x04\b\x04\x10\x05J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\t\"\x9e\x01\n" +
 	"\x10CreateTaskAction\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
 	"\x06runner\x18\x02 \x01(\tR\x06runner\x12\x16\n" +

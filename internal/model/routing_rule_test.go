@@ -29,6 +29,15 @@ func TestRoutingRuleProtoRoundTrip(t *testing.T) {
 					AutoArchive: time.Hour,
 				},
 				Wakeup: true,
+				Public: true,
+			},
+		},
+		{
+			name: "public opt-in",
+			rule: RoutingRule{
+				Source: "github",
+				Type:   "issue_comment",
+				Public: true,
 			},
 		},
 		{
