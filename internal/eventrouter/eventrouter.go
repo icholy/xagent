@@ -29,6 +29,14 @@ type InputEvent struct {
 	Data        string
 	URL         string
 	UserID      string
+	// Orgs names the orgs this event belongs to, resolved by the webhook handler
+	// independent of the actor's membership (GitHub: the orgs sharing the App
+	// installation; Atlassian: the org in the webhook's ?org= param). It gates
+	// non-member routing: a rule with Public can fire for one of these orgs even
+	// when UserID is empty or the actor is not a member. The webhook wire-up that
+	// populates it lands in later layers; until then it is nil and Route behaves
+	// exactly as before (member-only).
+	Orgs []int64
 	// Attrs carries the event's matchable dimensions keyed by dimension name
 	// (e.g. "mention", "assignee", "label"), which the attribute matcher reads.
 	Attrs Attrs
@@ -89,16 +97,22 @@ type Router struct {
 	OnRouteOutcome func(ctx context.Context, outcome RouteOutcome)
 }
 
-// Route evaluates routing rules for every org the user belongs to. For each
-// org with a matching rule, it either wakes the subscribed task(s) for the
-// event URL or — if the matched rule has a Create action — creates a new
-// task in a single transaction. Returns the number of tasks woken or created.
+// Route evaluates routing rules for every org the event belongs to. An org's
+// rules are eligible when the actor is a member of it (existing behavior — all
+// the org's rules apply) or when the org appears in input.Orgs and the rule
+// opted in via Public. For each org with a matching rule, it either wakes the
+// subscribed task(s) for the event URL or — if the matched rule has a Create
+// action — creates a new task in a single transaction. Returns the number of
+// tasks woken or created.
 func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
-	if input.URL == "" || input.UserID == "" {
+	// An empty UserID no longer short-circuits: a non-member event (no linked
+	// actor) can still route through input.Orgs. A URL is still required — it's
+	// the routing key for the subscribed-link lookup below.
+	if input.URL == "" {
 		return 0, nil
 	}
 
-	orgs, err := r.Store.ListRoutingRulesForEvent(ctx, nil, input.UserID, nil)
+	orgs, err := r.Store.ListRoutingRulesForEvent(ctx, nil, input.UserID, input.Orgs)
 	if err != nil {
 		return 0, err
 	}
@@ -113,12 +127,20 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	matched := map[int64]*model.RoutingRule{}
 	for _, org := range orgs {
 		rules := org.Rules
-		if len(rules) == 0 {
+		if len(rules) == 0 && org.IsMember {
 			// Ruleless orgs fall back to the producers' per-type "xagent:"
-			// body-prefix wakeup defaults, already conditions-native.
+			// body-prefix wakeup defaults, already conditions-native. The
+			// fallback stays member-only: a ruleless non-member org routes
+			// nothing, since non-member routing always requires an explicit
+			// opt-in rule.
 			rules = reg.DefaultRules()
 		}
 		for i := range rules {
+			// Member org: every rule is eligible. Non-member org (in input.Orgs
+			// but not the actor's): only rules that opted in via Public.
+			if !org.IsMember && !rules[i].Public {
+				continue
+			}
 			if Match(rules[i], input) {
 				matched[org.OrgID] = &rules[i]
 				break
