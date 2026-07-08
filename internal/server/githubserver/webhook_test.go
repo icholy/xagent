@@ -689,6 +689,7 @@ func TestToGithubInputEvent(t *testing.T) {
 					NodeID:  github.Ptr("PR_node12"),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/12"),
 					Merged:  github.Ptr(true),
+					Body:    github.Ptr("Implements the thing, cc @bob"),
 				},
 				Sender: &github.User{
 					ID:    github.Ptr[int64](42),
@@ -704,7 +705,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_closed",
 				Description: "alice merged PR #12",
 				Data:        "merged",
-				Attrs:       eventrouter.Attrs{"state": {"merged"}},
+				Attrs:       eventrouter.Attrs{"state": {"merged"}, "mention": {"bob"}},
 				URL:         "https://github.com/owner/repo/pull/12",
 				Meta: GitHubMeta{
 					AuthorID:    42,
@@ -737,7 +738,7 @@ func TestToGithubInputEvent(t *testing.T) {
 				Type:        "pull_request_closed",
 				Description: "alice closed PR #12",
 				Data:        "closed",
-				Attrs:       eventrouter.Attrs{"state": {"closed"}},
+				Attrs:       eventrouter.Attrs{"state": {"closed"}, "mention": nil},
 				URL:         "https://github.com/owner/repo/pull/12",
 				Meta: GitHubMeta{
 					AuthorID:    42,

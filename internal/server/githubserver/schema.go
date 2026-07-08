@@ -210,6 +210,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Placeholder: "merged",
 				Help:        `Whether the PR was "merged" or just "closed".`,
 			},
+			{
+				Key:         "mention",
+				Label:       "Mention",
+				Placeholder: "xagent",
+				Help:        "GitHub username @-mentioned in the PR description (no leading @).",
+			},
 		},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{

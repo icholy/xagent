@@ -349,6 +349,7 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			// GitHub fires "closed" for both merges and plain closes; the merge
 			// state goes in Data so a routing rule can target merges via
 			// Prefix=merged if desired.
+			body := strings.TrimSpace(event.PullRequest.GetBody())
 			data := "closed"
 			verb := "closed"
 			if event.PullRequest.GetMerged() {
@@ -360,8 +361,9 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Type:        EventTypePullRequestClosed,
 				Description: fmt.Sprintf("%s %s PR #%d", senderLogin, verb, number),
 				Data:        data,
-				// state mirrors the "merged"/"closed" string already in Data.
-				Attrs: eventrouter.Attrs{"state": {data}},
+				// state mirrors the "merged"/"closed" string already in Data;
+				// mention carries the logins @-mentioned in the PR description.
+				Attrs: eventrouter.Attrs{"state": {data}, "mention": githubx.Mentions(body)},
 				// model.RoutingKey reduces this PR URL to the canonical /pull/N,
 				// matching the link the agent created when it opened the PR.
 				URL: *event.PullRequest.HTMLURL,
