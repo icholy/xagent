@@ -237,21 +237,41 @@ func (s *Store) GetRoutingRulesByOrgs(ctx context.Context, tx *sql.Tx, orgIDs []
 	return result, nil
 }
 
-// ListRoutingRulesForUser returns routing rules for every org the user is a
-// member of, keyed by org ID. Member orgs without configured rules are
-// included with a nil/empty slice so callers can apply a fallback.
-func (s *Store) ListRoutingRulesForUser(ctx context.Context, tx *sql.Tx, userID string) (map[int64][]model.RoutingRule, error) {
-	rows, err := s.q(tx).ListRoutingRulesForUser(ctx, userID)
+// OrgRoutingRules pairs an org's routing rules with whether the routing actor
+// is a member of it. Non-member orgs (IsMember == false) contribute only their
+// public rules; the caller decides eligibility from the rule flag.
+type OrgRoutingRules struct {
+	OrgID    int64
+	IsMember bool
+	Rules    []model.RoutingRule
+}
+
+// ListRoutingRulesForEvent returns routing rules for the event's orgs, tagging
+// each with whether the actor is a member. It unions two sources: every org the
+// user is a member of (IsMember == true, all rules), and the passed-in orgs the
+// user is NOT a member of (IsMember == false). Membership wins on overlap — an
+// org the user belongs to is returned once, from the member branch. Member orgs
+// without configured rules are included with a nil/empty slice so callers can
+// apply a fallback. An empty orgs slice reduces this to the member-only set.
+func (s *Store) ListRoutingRulesForEvent(ctx context.Context, tx *sql.Tx, userID string, orgs []int64) ([]OrgRoutingRules, error) {
+	rows, err := s.q(tx).ListRoutingRulesForEvent(ctx, sqlc.ListRoutingRulesForEventParams{
+		UserID: userID,
+		OrgIds: orgs,
+	})
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[int64][]model.RoutingRule, len(rows))
+	result := make([]OrgRoutingRules, 0, len(rows))
 	for _, row := range rows {
 		rules, err := DecodeRoutingRules(row.RoutingRules)
 		if err != nil {
 			return nil, fmt.Errorf("org %d: %w", row.ID, err)
 		}
-		result[row.ID] = rules
+		result = append(result, OrgRoutingRules{
+			OrgID:    row.ID,
+			IsMember: row.IsMember,
+			Rules:    rules,
+		})
 	}
 	return result, nil
 }
