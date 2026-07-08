@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.11.0](https://github.com/icholy/xagent/compare/v2.10.0...v2.11.0) (2026-07-08)
+
+
+### Features
+
+* add ListOrgIDsByGitHubInstallation store method ([7b685bc](https://github.com/icholy/xagent/commit/7b685bc98256d0cf930286a92464966116df63e8))
+* add public flag to RoutingRule ([a4da159](https://github.com/icholy/xagent/commit/a4da159dc7321cb01b39e0f912ce753402dc4f4e))
+* add public toggle to the routing rule editor ([098a3c6](https://github.com/icholy/xagent/commit/098a3c68f16598d2a480c0444aa65bb9c313038b))
+* populate InputEvent.Orgs from GitHub App installation ([a34ee40](https://github.com/icholy/xagent/commit/a34ee4051db3d24ca14952179cfff3e7c4d6c6f4))
+* populate InputEvent.Orgs from the Atlassian webhook org ([b68644e](https://github.com/icholy/xagent/commit/b68644e6ba9bbaba6f2cc76abdd9e1738f1e9036))
+* replace ListRoutingRulesForUser with ListRoutingRulesForEvent ([d46b07b](https://github.com/icholy/xagent/commit/d46b07b795fb9612a301eb7a20cea4898166c4df))
+* route non-member events via InputEvent.Orgs and Public rules ([ca0c2a2](https://github.com/icholy/xagent/commit/ca0c2a24482d46fd5b165de85925480166f64d9b))
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([24f6f45](https://github.com/icholy/xagent/commit/24f6f452c73c00f72f8ed8889da882922d8d59c4))
+* **deps:** update module github.com/urfave/cli/v3 to v3.10.1 ([4d2d779](https://github.com/icholy/xagent/commit/4d2d779f264488d41c42512b528326c3e353883a))
+
+
+### Miscellaneous
+
+* **deps:** update dependency eslint to v10.6.0 ([5222048](https://github.com/icholy/xagent/commit/52220488e1329830e5a232da33e57545216fe55f))
+* **deps:** update dependency flyctl to v0.4.62 ([2c40c99](https://github.com/icholy/xagent/commit/2c40c99221b2f567c18fe651d73458d6050706df))
+* **deps:** update dependency flyctl to v0.4.63 ([8434e24](https://github.com/icholy/xagent/commit/8434e24872f6b2a6b27ed8f74ccae3d0d6db13f0))
+* **deps:** update dependency globals to v17.7.0 ([fe2555f](https://github.com/icholy/xagent/commit/fe2555fd846d1b4f2934cadcc790f3255662181b))
+* **deps:** update dependency lucide-react to v1.22.0 ([1b45068](https://github.com/icholy/xagent/commit/1b4506881308c9b9dbe9b1cd723a58ad9d014598))
+* **deps:** update dependency typescript-eslint to v8.62.1 ([22a81fd](https://github.com/icholy/xagent/commit/22a81fdaf5e131729cae3b4298a571141a8e8037))
+* **deps:** update tailwindcss monorepo to v4.3.2 ([6801ddb](https://github.com/icholy/xagent/commit/6801ddb9359e969a35d5494447aeda552a4bb147))
+* **deps:** update tanstack-query monorepo to v5.101.2 ([61495c5](https://github.com/icholy/xagent/commit/61495c501aafbcf410721b5509c5ca35565d1e97))
+* **eventrouter:** declare schema attributes inline per event type ([5c3ea94](https://github.com/icholy/xagent/commit/5c3ea94f093b57273cb7f05c97af4d64e0fca705))
+* **githubserver:** inline wakeOnXagentPrefix into each schema ([b3a5109](https://github.com/icholy/xagent/commit/b3a5109e579e836c9dee56d99ea5cdae94b8591d))
+* range over rule value instead of index in Route ([163a129](https://github.com/icholy/xagent/commit/163a1298d38893670a6384c7595ccddb089a6565))
+* replace findOrgRules helper with testx.FindFunc ([354fbdf](https://github.com/icholy/xagent/commit/354fbdf821c6bc18a9ea3b089cc633783158d928))
+
 ## [2.10.0](https://github.com/icholy/xagent/compare/v2.9.0...v2.10.0) (2026-07-05)
 
 
