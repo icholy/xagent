@@ -77,21 +77,27 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// safe. It panics loudly if that invariant is ever broken.
 	meta := input.Meta.(AtlassianMeta)
 
-	// Look up xagent owner by Atlassian account ID
+	// The event belongs to the org addressed by the ?org= param, independent of
+	// the actor's membership. It gates non-member routing: a Public rule on this
+	// org can fire even when the actor is unlinked.
+	input.Orgs = []int64{orgID}
+
+	// Look up the xagent user by Atlassian account ID. A linked actor routes to
+	// their member orgs as before; an unlinked actor keeps an empty UserID and
+	// routes only via Public rules on input.Orgs.
 	user, err := h.Store.GetUserByAtlassianAccountID(r.Context(), nil, meta.AuthorAccountID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			slog.Info("no linked Atlassian account", "atlassian_account_id", meta.AuthorAccountID)
-			fmt.Fprintf(w, "no linked account")
-			return
-		}
+	switch {
+	case err == nil:
+		input.UserID = user.ID
+	case errors.Is(err, sql.ErrNoRows):
+		slog.Info("no linked Atlassian account; routing via org", "atlassian_account_id", meta.AuthorAccountID, "org_id", orgID)
+	default:
 		slog.Error("failed to look up Atlassian account", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	// Route the event to subscribed tasks
-	input.UserID = user.ID
 	routed, err := h.Router.Route(r.Context(), *input)
 	if err != nil {
 		slog.Error("failed to route event", "err", err)
