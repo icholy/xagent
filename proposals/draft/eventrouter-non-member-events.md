@@ -38,12 +38,12 @@ Two new pieces, exactly as sketched in the issue:
 1. A new `Orgs []int64` field on `eventrouter.InputEvent`, populated by the
    integrations, naming the orgs the event belongs to **independent of the
    actor's membership**.
-2. A new per-rule opt-in, `AllowNonMembers`, surfaced as a toggle in the rule
+2. A new per-rule opt-in, `Public`, surfaced as a toggle in the rule
    editor UI.
 
 The router combines them: an org's rules are eligible for an event if the actor
 is a **member** of that org (existing behavior — all the org's rules apply), or
-if the org appears in `input.Orgs` and the rule has `AllowNonMembers = true`.
+if the org appears in `input.Orgs` and the rule has `Public = true`.
 
 ### `eventrouter.InputEvent.Orgs`
 
@@ -60,7 +60,7 @@ type InputEvent struct {
 	// Orgs names the orgs this event belongs to, resolved by the webhook
 	// handler independent of the actor's membership (GitHub: the orgs sharing
 	// the App installation; Atlassian: the org in the webhook's ?org= param).
-	// It gates non-member routing: a rule with AllowNonMembers can fire for one
+	// It gates non-member routing: a rule with Public can fire for one
 	// of these orgs even when UserID is empty or the actor is not a member.
 	Orgs  []int64
 	Attrs Attrs
@@ -71,7 +71,7 @@ type InputEvent struct {
 `UserID` becomes optional: with non-member routing, an event may route with no
 linked actor at all.
 
-### `RoutingRule.AllowNonMembers`
+### `RoutingRule.Public`
 
 **Proto** (`proto/xagent/v1/xagent.proto`). The next free field number is `11`
 (reserved: `3,4,6,7,8`; used: `1,2,5,9,10`):
@@ -84,10 +84,10 @@ message RoutingRule {
   CreateTaskAction create = 5;
   bool wakeup = 9;
   repeated RuleCondition conditions = 10;
-  // allow_non_members lets this rule fire for actors who are not members of the
+  // public lets this rule fire for actors who are not members of the
   // org (and need not be oauth-linked). Defaults false — rules are member-only
   // unless explicitly opted in.
-  bool allow_non_members = 11;
+  bool public = 11;
 }
 ```
 
@@ -101,12 +101,12 @@ type RoutingRule struct {
 	Conditions      []Condition       `json:"conditions,omitempty"`
 	Create          *CreateTaskAction `json:"create,omitempty"`
 	Wakeup          bool              `json:"wakeup,omitempty"`
-	AllowNonMembers bool              `json:"allow_non_members,omitempty"`
+	Public bool              `json:"public,omitempty"`
 }
 ```
 
 Rules are stored as JSONB in `orgs.routing_rules`, so the new field needs no
-schema migration — existing rows decode with `AllowNonMembers = false`, which is
+schema migration — existing rows decode with `Public = false`, which is
 the safe default (member-only).
 
 ### Router: combine member and non-member orgs
@@ -114,7 +114,7 @@ the safe default (member-only).
 The member orgs and the event's other orgs are fetched in a **single store
 call** that returns each org **tagged with whether the actor is a member**. The
 store doesn't decide policy — it just labels the two sources; the router then
-uses the `AllowNonMembers` flag to decide, per rule, whether a non-member org's
+uses the `Public` flag to decide, per rule, whether a non-member org's
 rule is eligible. Keeping the flag decision in the router (next to `Match`)
 rather than in SQL is what lets the same result set serve both the member and
 non-member cases, and keeps the ruleless-org default-rule fallback working.
@@ -128,7 +128,7 @@ column so the caller can tell them apart:
 -- Member orgs (joined via org_members) are returned with is_member = TRUE and
 -- all their rules. The orgs in $2 (the event's orgs) that the actor is NOT a
 -- member of are returned with is_member = FALSE; the caller keeps only their
--- allow_non_members rules. Membership wins on overlap (the NOT EXISTS drops a
+-- public rules. Membership wins on overlap (the NOT EXISTS drops a
 -- passed org the actor already belongs to). An empty $2 reduces this to today's
 -- member-only behavior; an empty user id ($1) yields just the non-member branch.
 SELECT o.id, o.routing_rules, TRUE AS is_member
@@ -151,7 +151,7 @@ its rules, and the membership tag:
 
 ```go
 // OrgRoutingRules pairs an org's rules with whether the routing actor is a
-// member of it. Non-member orgs contribute only their AllowNonMembers rules.
+// member of it. Non-member orgs contribute only their Public rules.
 type OrgRoutingRules struct {
 	OrgID    int64
 	IsMember bool
@@ -186,8 +186,8 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		}
 		for i := range rules {
 			// Member org: every rule is eligible. Non-member org: only rules
-			// that opted in via AllowNonMembers.
-			if !org.IsMember && !rules[i].AllowNonMembers {
+			// that opted in via Public.
+			if !org.IsMember && !rules[i].Public {
 				continue
 			}
 			if Match(rules[i], input) {
@@ -204,7 +204,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 Key properties:
 
 - **Member vs. non-member orgs are distinguishable.** The store tags each org
-  with `IsMember`; the router uses the `AllowNonMembers` flag to gate rules from
+  with `IsMember`; the router uses the `Public` flag to gate rules from
   non-member orgs, so a flagged rule reaches *all* the event's orgs while an
   unflagged rule stays confined to the actor's member orgs — exactly the "all of
   them vs. just the user orgs" distinction the flag is meant to control.
@@ -237,7 +237,7 @@ case err == nil:
 	input.UserID = user.Id
 case errors.Is(err, sql.ErrNoRows):
 	// Unlinked actor: leave UserID empty and let the router decide via
-	// AllowNonMembers rules for input.Orgs.
+	// Public rules for input.Orgs.
 default:
 	// ... internal error
 }
@@ -275,7 +275,7 @@ ids:
       input.UserID = user.ID
       // (existing cached-username refresh stays here)
   case errors.Is(err, sql.ErrNoRows):
-      // Unlinked actor: route via AllowNonMembers rules for input.Orgs.
+      // Unlinked actor: route via Public rules for input.Orgs.
   default:
       // ... internal error
   }
@@ -290,12 +290,12 @@ on the repo the event came from, not arbitrary orgs.
 ### Web UI: the toggle
 
 `RoutingRuleFormValues` (`webui/src/lib/routing-rules.ts`) gains an
-`allowNonMembers: boolean` field (default `false` in `emptyRoutingRule`), wired
+`public: boolean` field (default `false` in `emptyRoutingRule`), wired
 through `formValuesFromRoutingRule` and `buildRoutingRule`. The rule editor
 (`webui/src/components/routing-rule-form.tsx`) gains a checkbox next to the
-existing **Wake up** toggle, labeled e.g. *"Allow non-members"* with help text
-explaining that the rule can then be triggered by users who are not org members
-and need not have linked their GitHub/Jira accounts.
+existing **Wake up** toggle, labeled e.g. *"Public"* with help text explaining
+that the rule can then be triggered by users who are not org members and need
+not have linked their GitHub/Jira accounts.
 
 ## Implementation Plan
 
@@ -303,8 +303,8 @@ An ordered stack of small PRs. Each foundational layer is safe to merge before
 the ones above it land — the field simply goes unused until the router and
 handlers consume it.
 
-1. **Proto + model field** — Delivers: `allow_non_members` on the `RoutingRule`
-   proto (field 11) plus regenerated code, and `AllowNonMembers` on
+1. **Proto + model field** — Delivers: `public` on the `RoutingRule`
+   proto (field 11) plus regenerated code, and `Public` on
    `model.RoutingRule` plumbed through `Proto()` / `RoutingRuleFromProto()`.
    Depends on: nothing. Verifiable by: `mise run generate` produces a clean
    diff; a model round-trip unit test (`model → proto → model`) preserves the
@@ -323,10 +323,10 @@ handlers consume it.
 3. **`InputEvent.Orgs` + router** — Delivers: the `Orgs` field on `InputEvent`,
    the relaxed entry guard (`input.URL == ""` only), the call to
    `ListRoutingRulesForEvent`, and the per-org eligibility check (non-member orgs
-   contribute only `AllowNonMembers` rules; default-rule fallback gated on
-   `IsMember`). Depends on: (1) (reads `AllowNonMembers`), (2). Verifiable by:
+   contribute only `Public` rules; default-rule fallback gated on
+   `IsMember`). Depends on: (1) (reads `Public`), (2). Verifiable by:
    eventrouter unit tests — a member still matches all rules; a non-member with
-   `Orgs` matches only an `AllowNonMembers` rule; an empty `UserID` with `Orgs`
+   `Orgs` matches only a `Public` rule; an empty `UserID` with `Orgs`
    routes; a member org that also appears in `Orgs` still uses its full rule
    set; a ruleless non-member org routes nothing.
 
@@ -339,7 +339,7 @@ handlers consume it.
    handler populating `input.Orgs` from the installation, and the change from
    dropping unlinked actors to routing them (empty `UserID`). Depends on: (3),
    (4). Verifiable by: webhook handler tests — a linked member routes as before;
-   an unlinked actor routes only through an `AllowNonMembers` rule on an org
+   an unlinked actor routes only through a `Public` rule on an org
    sharing the installation.
 
 6. **Atlassian webhook wire-up** — Delivers: the handler setting
@@ -347,7 +347,7 @@ handlers consume it.
    them. Depends on: (3). Verifiable by: webhook handler tests mirroring the
    GitHub cases, using the `?org=` param.
 
-7. **Web UI toggle** — Delivers: `allowNonMembers` in the form values/build/parse
+7. **Web UI toggle** — Delivers: `public` in the form values/build/parse
    helpers and the checkbox in the rule editor. Depends on: (1) (consumes the
    regenerated proto). Verifiable by: `pnpm lint` in `webui/` and rendering the
    editor against a rule with the flag set/unset.
@@ -371,14 +371,14 @@ handlers consume it.
 
 - **One UNION query vs. two store calls.** An earlier sketch fetched member orgs
   and non-member orgs with two calls (`ListRoutingRulesForUser` +
-  `GetRoutingRulesByOrgs`) and filtered `AllowNonMembers` in Go. Folding both
+  `GetRoutingRulesByOrgs`) and filtered `Public` in Go. Folding both
   into a single `UNION` (`ListRoutingRulesForEvent`) is one round trip and keeps
   the membership-wins exclusion in SQL (`NOT EXISTS (... org_members ...)`).
   `GetRoutingRulesByOrgs` stays as-is for its existing callers.
 
 - **Tag membership, filter the flag in Go — not in SQL.** The `UNION` returns an
   `is_member` column rather than pre-filtering the non-member branch's JSONB to
-  `allow_non_members` rules. Keeping the flag decision in the router (beside
+  `public` rules. Keeping the flag decision in the router (beside
   `Match`) means the store returns a faithful view of each org's rules — which is
   what lets a member org keep *all* its rules and still feed the ruleless-org
   default-rule fallback, while non-member orgs are narrowed to opted-in rules.

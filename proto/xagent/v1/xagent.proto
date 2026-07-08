@@ -608,6 +608,10 @@ message RoutingRule {
   // source/type are wildcards; an empty conditions list matches every event of
   // the selected type.
   repeated RuleCondition conditions = 10;
+  // public lets this rule fire for actors who are not members of the org (and
+  // need not be oauth-linked). Defaults false — rules are member-only unless
+  // explicitly opted in.
+  bool public = 11;
 }
 
 message CreateTaskAction {

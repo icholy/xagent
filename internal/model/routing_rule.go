@@ -18,6 +18,10 @@ type RoutingRule struct {
 	Conditions []Condition       `json:"conditions,omitempty"`
 	Create     *CreateTaskAction `json:"create,omitempty"`
 	Wakeup     bool              `json:"wakeup,omitempty"`
+	// Public lets this rule fire for actors who are not members of the org (and
+	// need not be oauth-linked). Defaults false — rules are member-only unless
+	// explicitly opted in.
+	Public bool `json:"public,omitempty"`
 }
 
 // Condition constrains one attribute dimension of an event. Op is one of
@@ -73,6 +77,7 @@ func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 		Source: r.Source,
 		Type:   r.Type,
 		Wakeup: r.Wakeup,
+		Public: r.Public,
 	}
 	for _, c := range r.Conditions {
 		pb.Conditions = append(pb.Conditions, &xagentv1.RuleCondition{
@@ -94,6 +99,7 @@ func RoutingRuleFromProto(pb *xagentv1.RoutingRule) RoutingRule {
 		Type:   pb.Type,
 		Create: CreateTaskActionFromProto(pb.Create),
 		Wakeup: pb.Wakeup,
+		Public: pb.Public,
 	}
 	for _, c := range pb.Conditions {
 		rule.Conditions = append(rule.Conditions, Condition{
