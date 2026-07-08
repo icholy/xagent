@@ -338,6 +338,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10?focusedCommentId=30003",
 		Attrs:       eventrouter.Attrs{"mention": nil},
 		UserID:      "user-1",
+		Orgs:        []int64{1},
 		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
 	})
 }
@@ -395,6 +396,7 @@ func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
 		Attrs:       eventrouter.Attrs{"label": {"xagent", "urgent"}},
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
 		UserID:      "user-1",
+		Orgs:        []int64{1},
 		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
 	})
 }
@@ -420,9 +422,17 @@ func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
 	assert.Equal(t, rec.Body.String(), "ignored")
 }
 
-func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
+// An unlinked actor is no longer dropped: the handler leaves UserID empty and
+// routes via the org named in the ?org= param, where a Public rule can match.
+func TestHandleAtlassianWebhookUnlinkedActorRoutesViaOrg(t *testing.T) {
 	secret := "test-webhook-secret"
+	router := &RouterMock{
+		RouteFunc: func(ctx context.Context, input eventrouter.InputEvent) (int, error) {
+			return 1, nil
+		},
+	}
 	h := &WebhookHandler{
+		Router: router,
 		Store: &StoreMock{
 			GetOrgAtlassianWebhookSecretFunc: func(ctx context.Context, tx *sql.Tx, orgID int64) (string, error) {
 				return secret, nil
@@ -449,7 +459,14 @@ func TestHandleAtlassianWebhookNoLinkedAccount(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	assert.Equal(t, rec.Code, http.StatusOK)
-	assert.Equal(t, rec.Body.String(), "no linked account")
+	assert.Equal(t, rec.Body.String(), "processed")
+
+	// The event routes with an empty UserID and the ?org= org, so a Public rule
+	// on that org can fire.
+	calls := router.RouteCalls()
+	assert.Assert(t, cmp.Len(calls, 1))
+	assert.Equal(t, calls[0].Input.UserID, "")
+	assert.DeepEqual(t, calls[0].Input.Orgs, []int64{1})
 }
 
 func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {
