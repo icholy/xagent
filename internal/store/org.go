@@ -179,6 +179,13 @@ func (s *Store) ClearGitHubInstallation(ctx context.Context, tx *sql.Tx, install
 	return s.q(tx).ClearGitHubInstallation(ctx, installationID)
 }
 
+// ListOrgIDsByGitHubInstallation returns the ids of the non-archived orgs that
+// share the given GitHub App installation. It resolves a webhook's installation
+// to the orgs an event belongs to, independent of the actor's membership.
+func (s *Store) ListOrgIDsByGitHubInstallation(ctx context.Context, tx *sql.Tx, installationID int64) ([]int64, error) {
+	return s.q(tx).ListOrgIDsByGitHubInstallation(ctx, installationID)
+}
+
 func toModelOrgMember(row sqlc.OrgMember) *model.OrgMember {
 	return &model.OrgMember{
 		OrgID:     row.OrgID,
