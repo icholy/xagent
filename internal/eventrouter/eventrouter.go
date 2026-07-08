@@ -135,14 +135,14 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 			// opt-in rule.
 			rules = reg.DefaultRules()
 		}
-		for i := range rules {
+		for _, rule := range rules {
 			// Member org: every rule is eligible. Non-member org (in input.Orgs
 			// but not the actor's): only rules that opted in via Public.
-			if !org.IsMember && !rules[i].Public {
+			if !org.IsMember && !rule.Public {
 				continue
 			}
-			if Match(rules[i], input) {
-				matched[org.OrgID] = &rules[i]
+			if Match(rule, input) {
+				matched[org.OrgID] = &rule
 				break
 			}
 		}
