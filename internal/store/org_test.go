@@ -6,27 +6,9 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/store/teststore"
+	"github.com/icholy/xagent/internal/x/testx"
 	"gotest.tools/v3/assert"
 )
-
-// findOrgRules returns the entry for orgID in result, failing if it is missing
-// or appears more than once.
-func findOrgRules(t *testing.T, result []store.OrgRoutingRules, orgID int64) store.OrgRoutingRules {
-	t.Helper()
-	var found *store.OrgRoutingRules
-	for i := range result {
-		if result[i].OrgID == orgID {
-			if found != nil {
-				t.Fatalf("org %d appears more than once in result", orgID)
-			}
-			found = &result[i]
-		}
-	}
-	if found == nil {
-		t.Fatalf("org %d not found in result", orgID)
-	}
-	return *found
-}
 
 func TestGetOrgRoutingRulesDefault(t *testing.T) {
 	t.Parallel()
@@ -122,11 +104,11 @@ func TestListRoutingRulesForEvent(t *testing.T) {
 	// passed org is tagged IsMember=false with its rules (the store returns a
 	// faithful view — the public-flag filter is the router's job).
 	assert.NilError(t, err)
-	member := findOrgRules(t, result, memberOrg.OrgID)
+	member := testx.FindFunc(t, result, func(o store.OrgRoutingRules, _ int) bool { return o.OrgID == memberOrg.OrgID })
 	assert.Equal(t, member.IsMember, true)
 	assert.DeepEqual(t, member.Rules, memberRules)
 
-	nonMember := findOrgRules(t, result, nonMemberOrg.OrgID)
+	nonMember := testx.FindFunc(t, result, func(o store.OrgRoutingRules, _ int) bool { return o.OrgID == nonMemberOrg.OrgID })
 	assert.Equal(t, nonMember.IsMember, false)
 	assert.DeepEqual(t, nonMember.Rules, nonMemberRules)
 }
@@ -143,9 +125,10 @@ func TestListRoutingRulesForEventMembershipWins(t *testing.T) {
 	// membership (returned once, from the member branch).
 	result, err := s.ListRoutingRulesForEvent(t.Context(), nil, org.UserID, []int64{org.OrgID})
 
-	// Assert
+	// Assert: the overlapping org is returned exactly once, from the member branch.
 	assert.NilError(t, err)
-	got := findOrgRules(t, result, org.OrgID) // fails if it appears twice
+	assert.Equal(t, len(result), 1)
+	got := testx.FindFunc(t, result, func(o store.OrgRoutingRules, _ int) bool { return o.OrgID == org.OrgID })
 	assert.Equal(t, got.IsMember, true)
 	assert.DeepEqual(t, got.Rules, rules)
 }
@@ -183,7 +166,7 @@ func TestListRoutingRulesForEventEmptyOrgs(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	member := findOrgRules(t, result, memberOrg.OrgID)
+	member := testx.FindFunc(t, result, func(o store.OrgRoutingRules, _ int) bool { return o.OrgID == memberOrg.OrgID })
 	assert.Equal(t, member.IsMember, true)
 	assert.DeepEqual(t, member.Rules, rules)
 }
@@ -201,7 +184,7 @@ func TestListRoutingRulesForEventEmptyUser(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	got := findOrgRules(t, result, org.OrgID)
+	got := testx.FindFunc(t, result, func(o store.OrgRoutingRules, _ int) bool { return o.OrgID == org.OrgID })
 	assert.Equal(t, got.IsMember, false)
 	assert.DeepEqual(t, got.Rules, rules)
 }
