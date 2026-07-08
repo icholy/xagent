@@ -22,6 +22,23 @@ func At[T any](t assert.TestingT, s []T, i int) T {
 	return s[i]
 }
 
+// FindFunc returns the first element of s for which pred returns true, failing
+// the test (via t.Fatal) if no element matches, so the caller can safely chain
+// assertions on the returned value. pred receives each element and its index.
+func FindFunc[T any](t assert.TestingT, s []T, pred func(v T, i int) bool) T {
+	if h, ok := t.(interface{ Helper() }); ok {
+		h.Helper()
+	}
+	for i, v := range s {
+		if pred(v, i) {
+			return v
+		}
+	}
+	assert.Assert(t, false, "no matching element in %d-element slice", len(s))
+	var zero T
+	return zero
+}
+
 // SafeSlice is a concurrency-safe append-only slice, handy for collecting values
 // from goroutines under test. The zero value is ready to use.
 type SafeSlice[T any] struct {

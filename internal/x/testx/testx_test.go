@@ -64,6 +64,47 @@ func TestAt(t *testing.T) {
 	}
 }
 
+func TestFindFunc(t *testing.T) {
+	tests := []struct {
+		name     string
+		s        []string
+		target   string
+		wantFail bool
+		want     string
+	}{
+		{"first of one", []string{"a"}, "a", false, "a"},
+		{"first of many", []string{"a", "b", "c"}, "a", false, "a"},
+		{"middle of many", []string{"a", "b", "c"}, "b", false, "b"},
+		{"last of many", []string{"a", "b", "c"}, "c", false, "c"},
+		{"no match", []string{"a", "b"}, "z", true, ""},
+		{"empty", nil, "a", true, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got string
+			failed := runAssert(func(t assert.TestingT) {
+				got = FindFunc(t, tt.s, func(v string, _ int) bool { return v == tt.target })
+			})
+			assert.Equal(t, failed, tt.wantFail)
+			if !tt.wantFail {
+				assert.Equal(t, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFindFunc_UsesIndex(t *testing.T) {
+	// Arrange: two elements share a value; the predicate uses the index to pick
+	// the second one.
+	s := []string{"a", "a"}
+
+	// Act
+	got := FindFunc(t, s, func(_ string, i int) bool { return i == 1 })
+
+	// Assert
+	assert.Equal(t, got, "a")
+}
+
 func TestSafeSlice_ConcurrentAppend(t *testing.T) {
 	// Arrange
 	var s SafeSlice[int]
