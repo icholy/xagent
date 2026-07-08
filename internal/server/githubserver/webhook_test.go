@@ -26,7 +26,8 @@ func TestToGithubInputEvent(t *testing.T) {
 		{
 			name: "IssueComment",
 			event: &github.IssueCommentEvent{
-				Action: github.Ptr("created"),
+				Action:       github.Ptr("created"),
+				Installation: &github.Installation{ID: github.Ptr[int64](42)},
 				Comment: &github.IssueComment{
 					ID:      github.Ptr[int64](555),
 					NodeID:  github.Ptr("IC_node555"),
@@ -54,9 +55,10 @@ func TestToGithubInputEvent(t *testing.T) {
 				URL:         "https://github.com/owner/repo/issues/1#issuecomment-555",
 				Attrs:       eventrouter.Attrs{"mention": nil},
 				Meta: GitHubMeta{
-					AuthorID:    123,
-					AuthorLogin: "testuser",
-					NodeID:      "IC_node555",
+					AuthorID:       123,
+					AuthorLogin:    "testuser",
+					InstallationID: 42,
+					NodeID:         "IC_node555",
 				},
 			},
 		},
@@ -823,28 +825,31 @@ func makeWebhookRequest(t *testing.T, eventType string, payload any) *http.Reque
 
 func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	var ghUserID int64 = 12345
+	var installationID int64 = 99
 	router := &RouterMock{
 		RouteFunc: func(ctx context.Context, input eventrouter.InputEvent) (int, error) {
 			return 1, nil
 		},
 	}
-	h := &WebhookHandler{
-		Router: router,
-		Store: &StoreMock{
-			GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
-				if id == ghUserID {
-					return &model.User{ID: "user-1", GitHubUserID: ghUserID, GitHubUsername: "testuser"}, nil
-				}
-				return nil, sql.ErrNoRows
-			},
-			UpdateGitHubUsernameFunc: func(ctx context.Context, tx *sql.Tx, id int64, username string) error {
-				return nil
-			},
+	store := &StoreMock{
+		GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
+			if id == ghUserID {
+				return &model.User{ID: "user-1", GitHubUserID: ghUserID, GitHubUsername: "testuser"}, nil
+			}
+			return nil, sql.ErrNoRows
+		},
+		UpdateGitHubUsernameFunc: func(ctx context.Context, tx *sql.Tx, id int64, username string) error {
+			return nil
+		},
+		ListOrgIDsByGitHubInstallationFunc: func(ctx context.Context, tx *sql.Tx, id int64) ([]int64, error) {
+			return []int64{7}, nil
 		},
 	}
+	h := &WebhookHandler{Router: router, Store: store}
 
 	payload := github.IssueCommentEvent{
-		Action: github.Ptr("created"),
+		Action:       github.Ptr("created"),
+		Installation: &github.Installation{ID: github.Ptr(installationID)},
 		Comment: &github.IssueComment{
 			Body:    github.Ptr("xagent: please fix the tests"),
 			HTMLURL: github.Ptr("https://github.com/owner/repo/pull/10#issuecomment-1000"),
@@ -876,8 +881,13 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		URL:         "https://github.com/owner/repo/pull/10#issuecomment-1000",
 		Attrs:       eventrouter.Attrs{"mention": nil},
 		UserID:      "user-1",
-		Meta:        GitHubMeta{AuthorID: ghUserID, AuthorLogin: "testuser"},
+		Orgs:        []int64{7},
+		Meta:        GitHubMeta{AuthorID: ghUserID, AuthorLogin: "testuser", InstallationID: installationID},
 	})
+
+	// The installation is resolved with the event's installation id.
+	listCalls := store.ListOrgIDsByGitHubInstallationCalls()
+	assert.DeepEqual(t, testx.ExtractField(listCalls, "InstallationID"), []int64{installationID})
 }
 
 func TestHandleGitHubWebhookIgnoredEventType(t *testing.T) {
@@ -963,17 +973,28 @@ func TestHandleGitHubWebhookInstallationOtherAction(t *testing.T) {
 	assert.Assert(t, cmp.Len(store.ClearGitHubInstallationCalls(), 0))
 }
 
-func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {
-	h := &WebhookHandler{
-		Store: &StoreMock{
-			GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
-				return nil, sql.ErrNoRows
-			},
+// An unlinked actor is no longer dropped: the handler leaves UserID empty and
+// routes via the installation's orgs, where a Public rule can match.
+func TestHandleGitHubWebhookUnlinkedActorRoutesViaInstallationOrgs(t *testing.T) {
+	var installationID int64 = 55
+	router := &RouterMock{
+		RouteFunc: func(ctx context.Context, input eventrouter.InputEvent) (int, error) {
+			return 1, nil
 		},
 	}
+	store := &StoreMock{
+		GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, id int64) (*model.User, error) {
+			return nil, sql.ErrNoRows
+		},
+		ListOrgIDsByGitHubInstallationFunc: func(ctx context.Context, tx *sql.Tx, id int64) ([]int64, error) {
+			return []int64{3}, nil
+		},
+	}
+	h := &WebhookHandler{Router: router, Store: store}
 
 	payload := github.IssueCommentEvent{
-		Action: github.Ptr("created"),
+		Action:       github.Ptr("created"),
+		Installation: &github.Installation{ID: github.Ptr(installationID)},
 		Comment: &github.IssueComment{
 			Body:    github.Ptr("xagent: test"),
 			HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1#issuecomment-2000"),
@@ -983,6 +1004,7 @@ func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {
 			},
 		},
 		Issue: &github.Issue{
+			Number:  github.Ptr(1),
 			HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
 		},
 	}
@@ -991,5 +1013,12 @@ func TestHandleGitHubWebhookNoLinkedAccount(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	assert.Equal(t, rec.Code, http.StatusOK)
-	assert.Equal(t, rec.Body.String(), "no linked account")
+	assert.Equal(t, rec.Body.String(), "processed")
+
+	// The event routes with an empty UserID and the installation's orgs, so a
+	// Public rule on one of those orgs can fire.
+	calls := router.RouteCalls()
+	assert.Assert(t, cmp.Len(calls, 1))
+	assert.Equal(t, calls[0].Input.UserID, "")
+	assert.DeepEqual(t, calls[0].Input.Orgs, []int64{3})
 }

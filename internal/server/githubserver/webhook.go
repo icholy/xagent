@@ -49,28 +49,38 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// assertion is safe. It panics loudly if that invariant is ever broken.
 	meta := input.Meta.(GitHubMeta)
 
-	// Look up xagent owner by GitHub user ID
-	user, err := h.Store.GetUserByGitHubUserID(r.Context(), nil, meta.AuthorID)
+	// Resolve the App installation to the orgs the event belongs to,
+	// independent of the actor's membership. These gate non-member routing: a
+	// Public rule on one of these orgs can fire even when the actor is unlinked.
+	input.Orgs, err = h.Store.ListOrgIDsByGitHubInstallation(r.Context(), nil, meta.InstallationID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			slog.Info("no linked GitHub account", "github_user_id", meta.AuthorID)
-			fmt.Fprintf(w, "no linked account")
-			return
+		slog.Error("failed to list orgs for GitHub installation", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Look up the xagent user by GitHub user ID. A linked actor routes to their
+	// member orgs as before; an unlinked actor keeps an empty UserID and routes
+	// only via Public rules on the installation's orgs (input.Orgs).
+	user, err := h.Store.GetUserByGitHubUserID(r.Context(), nil, meta.AuthorID)
+	switch {
+	case err == nil:
+		input.UserID = user.ID
+		// Update cached username if it changed.
+		if meta.AuthorLogin != "" && meta.AuthorLogin != user.GitHubUsername {
+			if err := h.Store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, meta.AuthorLogin); err != nil {
+				slog.Warn("failed to update GitHub username", "err", err)
+			}
 		}
+	case errors.Is(err, sql.ErrNoRows):
+		slog.Info("no linked GitHub account; routing via installation orgs", "github_user_id", meta.AuthorID)
+	default:
 		slog.Error("failed to look up GitHub account", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	// Update cached username if it changed
-	if meta.AuthorLogin != "" && meta.AuthorLogin != user.GitHubUsername {
-		if err := h.Store.UpdateGitHubUsername(r.Context(), nil, user.GitHubUserID, meta.AuthorLogin); err != nil {
-			slog.Warn("failed to update GitHub username", "err", err)
-		}
-	}
-
-	// Route event to subscribed tasks
-	input.UserID = user.ID
+	// Route event to subscribed tasks.
 	totalRouted, err := h.Router.Route(r.Context(), *input)
 	if err != nil {
 		slog.Error("failed to route event", "err", err)
@@ -111,6 +121,12 @@ func (h *WebhookHandler) handleInstallationEvent(w http.ResponseWriter, r *http.
 type GitHubMeta struct {
 	AuthorID    int64
 	AuthorLogin string
+
+	// InstallationID is the GitHub App installation the event was delivered
+	// through. The handler resolves it to the orgs the event belongs to
+	// (eventrouter.InputEvent.Orgs) so non-member actors can route via Public
+	// rules on those orgs.
+	InstallationID int64
 
 	// NodeID is the GraphQL global node ID of this event's reactable target: the
 	// comment for issue_comment and pull_request_review_comment events, the
@@ -164,9 +180,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			URL:   *event.Comment.HTMLURL,
 			Attrs: eventrouter.Attrs{"mention": githubx.Mentions(body)},
 			Meta: GitHubMeta{
-				AuthorID:    *event.Comment.User.ID,
-				AuthorLogin: login,
-				NodeID:      event.GetComment().GetNodeID(),
+				AuthorID:       *event.Comment.User.ID,
+				AuthorLogin:    login,
+				InstallationID: event.GetInstallation().GetID(),
+				NodeID:         event.GetComment().GetNodeID(),
 			},
 		}
 
@@ -192,9 +209,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			URL:   *event.Comment.HTMLURL,
 			Attrs: eventrouter.Attrs{"mention": githubx.Mentions(body)},
 			Meta: GitHubMeta{
-				AuthorID:    *event.Comment.User.ID,
-				AuthorLogin: login,
-				NodeID:      event.GetComment().GetNodeID(),
+				AuthorID:       *event.Comment.User.ID,
+				AuthorLogin:    login,
+				InstallationID: event.GetInstallation().GetID(),
+				NodeID:         event.GetComment().GetNodeID(),
 			},
 		}
 
@@ -218,9 +236,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 			URL:   *event.Review.HTMLURL,
 			Attrs: eventrouter.Attrs{"mention": githubx.Mentions(body)},
 			Meta: GitHubMeta{
-				AuthorID:    *event.Review.User.ID,
-				AuthorLogin: login,
-				NodeID:      event.GetReview().GetNodeID(),
+				AuthorID:       *event.Review.User.ID,
+				AuthorLogin:    login,
+				InstallationID: event.GetInstallation().GetID(),
+				NodeID:         event.GetReview().GetNodeID(),
 			},
 		}
 
@@ -242,9 +261,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				URL:         *event.Issue.HTMLURL,
 				Attrs:       eventrouter.Attrs{"assignee": {assigneeLogin}},
 				Meta: GitHubMeta{
-					AuthorID:    *event.Sender.ID,
-					AuthorLogin: senderLogin,
-					NodeID:      event.GetIssue().GetNodeID(),
+					AuthorID:       *event.Sender.ID,
+					AuthorLogin:    senderLogin,
+					InstallationID: event.GetInstallation().GetID(),
+					NodeID:         event.GetIssue().GetNodeID(),
 				},
 			}
 		case "labeled":
@@ -265,9 +285,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Attrs:       eventrouter.Attrs{"label": {label}},
 				URL:         *event.Issue.HTMLURL,
 				Meta: GitHubMeta{
-					AuthorID:    *event.Sender.ID,
-					AuthorLogin: senderLogin,
-					NodeID:      event.GetIssue().GetNodeID(),
+					AuthorID:       *event.Sender.ID,
+					AuthorLogin:    senderLogin,
+					InstallationID: event.GetInstallation().GetID(),
+					NodeID:         event.GetIssue().GetNodeID(),
 				},
 			}
 		}
@@ -290,9 +311,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				// matching the link the agent created when it opened the PR.
 				URL: *event.PullRequest.HTMLURL,
 				Meta: GitHubMeta{
-					AuthorID:    *event.Sender.ID,
-					AuthorLogin: senderLogin,
-					NodeID:      event.GetPullRequest().GetNodeID(),
+					AuthorID:       *event.Sender.ID,
+					AuthorLogin:    senderLogin,
+					InstallationID: event.GetInstallation().GetID(),
+					NodeID:         event.GetPullRequest().GetNodeID(),
 				},
 			}
 		case "assigned":
@@ -311,9 +333,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				URL:         *event.PullRequest.HTMLURL,
 				Attrs:       eventrouter.Attrs{"assignee": {assigneeLogin}},
 				Meta: GitHubMeta{
-					AuthorID:    *event.Sender.ID,
-					AuthorLogin: senderLogin,
-					NodeID:      event.GetPullRequest().GetNodeID(),
+					AuthorID:       *event.Sender.ID,
+					AuthorLogin:    senderLogin,
+					InstallationID: event.GetInstallation().GetID(),
+					NodeID:         event.GetPullRequest().GetNodeID(),
 				},
 			}
 		case "labeled":
@@ -334,9 +357,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				Attrs:       eventrouter.Attrs{"label": {label}},
 				URL:         *event.PullRequest.HTMLURL,
 				Meta: GitHubMeta{
-					AuthorID:    *event.Sender.ID,
-					AuthorLogin: senderLogin,
-					NodeID:      event.GetPullRequest().GetNodeID(),
+					AuthorID:       *event.Sender.ID,
+					AuthorLogin:    senderLogin,
+					InstallationID: event.GetInstallation().GetID(),
+					NodeID:         event.GetPullRequest().GetNodeID(),
 				},
 			}
 		case "closed":
@@ -366,9 +390,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 				// matching the link the agent created when it opened the PR.
 				URL: *event.PullRequest.HTMLURL,
 				Meta: GitHubMeta{
-					AuthorID:    *event.Sender.ID,
-					AuthorLogin: senderLogin,
-					NodeID:      event.GetPullRequest().GetNodeID(),
+					AuthorID:       *event.Sender.ID,
+					AuthorLogin:    senderLogin,
+					InstallationID: event.GetInstallation().GetID(),
+					NodeID:         event.GetPullRequest().GetNodeID(),
 				},
 			}
 		}
