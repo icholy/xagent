@@ -330,28 +330,49 @@ func (q *Queries) ListOrgsByMember(ctx context.Context, userID string) ([]ListOr
 	return items, nil
 }
 
-const listRoutingRulesForUser = `-- name: ListRoutingRulesForUser :many
-SELECT o.id, o.routing_rules
+const listRoutingRulesForEvent = `-- name: ListRoutingRulesForEvent :many
+SELECT o.id, o.routing_rules, TRUE::boolean AS is_member
 FROM orgs o
 JOIN org_members m ON m.org_id = o.id
 WHERE m.user_id = $1 AND o.archived = FALSE
+UNION
+SELECT o.id, o.routing_rules, FALSE::boolean AS is_member
+FROM orgs o
+WHERE o.id = ANY($2::BIGINT[])
+  AND o.archived = FALSE
+  AND NOT EXISTS (
+      SELECT 1 FROM org_members m
+      WHERE m.org_id = o.id AND m.user_id = $1
+  )
 `
 
-type ListRoutingRulesForUserRow struct {
-	ID           int64           `json:"id"`
-	RoutingRules json.RawMessage `json:"routing_rules"`
+type ListRoutingRulesForEventParams struct {
+	UserID string  `json:"user_id"`
+	OrgIds []int64 `json:"org_ids"`
 }
 
-func (q *Queries) ListRoutingRulesForUser(ctx context.Context, userID string) ([]ListRoutingRulesForUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRoutingRulesForUser, userID)
+type ListRoutingRulesForEventRow struct {
+	ID           int64           `json:"id"`
+	RoutingRules json.RawMessage `json:"routing_rules"`
+	IsMember     bool            `json:"is_member"`
+}
+
+// Member orgs (joined via org_members) are returned with is_member = TRUE and
+// all their rules. The orgs in org_ids (the event's orgs) that the actor is NOT
+// a member of are returned with is_member = FALSE; the caller keeps only their
+// public rules. Membership wins on overlap (the NOT EXISTS drops a passed org
+// the actor already belongs to). An empty org_ids reduces this to the
+// member-only behavior; an empty user_id yields just the non-member branch.
+func (q *Queries) ListRoutingRulesForEvent(ctx context.Context, arg ListRoutingRulesForEventParams) ([]ListRoutingRulesForEventRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRoutingRulesForEvent, arg.UserID, pq.Array(arg.OrgIds))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListRoutingRulesForUserRow{}
+	items := []ListRoutingRulesForEventRow{}
 	for rows.Next() {
-		var i ListRoutingRulesForUserRow
-		if err := rows.Scan(&i.ID, &i.RoutingRules); err != nil {
+		var i ListRoutingRulesForEventRow
+		if err := rows.Scan(&i.ID, &i.RoutingRules, &i.IsMember); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

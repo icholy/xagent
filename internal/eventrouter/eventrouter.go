@@ -98,7 +98,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, nil
 	}
 
-	rulesByOrg, err := r.Store.ListRoutingRulesForUser(ctx, nil, input.UserID)
+	orgs, err := r.Store.ListRoutingRulesForEvent(ctx, nil, input.UserID, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -111,7 +111,8 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 
 	// First matching rule per org; orgs with no match are dropped.
 	matched := map[int64]*model.RoutingRule{}
-	for orgID, rules := range rulesByOrg {
+	for _, org := range orgs {
+		rules := org.Rules
 		if len(rules) == 0 {
 			// Ruleless orgs fall back to the producers' per-type "xagent:"
 			// body-prefix wakeup defaults, already conditions-native.
@@ -119,7 +120,7 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		}
 		for i := range rules {
 			if Match(rules[i], input) {
-				matched[orgID] = &rules[i]
+				matched[org.OrgID] = &rules[i]
 				break
 			}
 		}
