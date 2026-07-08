@@ -283,6 +283,23 @@ export function RoutingRuleForm({
       <div className="space-y-4 rounded-md border p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
+            <Label htmlFor="public">Public</Label>
+            <p className="text-muted-foreground text-xs">
+              Allow this rule to be triggered by users who are not members of the org. They need not
+              have linked their GitHub or Jira accounts. Leave off to keep the rule member-only.
+            </p>
+          </div>
+          <Switch
+            id="public"
+            checked={values.public}
+            onCheckedChange={(checked) => setValues({ ...values, public: checked })}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-md border p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
             <Label htmlFor="create-task">Create a task</Label>
             <p className="text-muted-foreground text-xs">
               When the rule matches and no subscribed task is found, create a new task in the
