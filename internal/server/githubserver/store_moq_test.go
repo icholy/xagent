@@ -26,6 +26,9 @@ var _ Store = &StoreMock{}
 //			GetUserByGitHubUserIDFunc: func(ctx context.Context, tx *sql.Tx, githubUserID int64) (*model.User, error) {
 //				panic("mock out the GetUserByGitHubUserID method")
 //			},
+//			ListOrgIDsByGitHubInstallationFunc: func(ctx context.Context, tx *sql.Tx, installationID int64) ([]int64, error) {
+//				panic("mock out the ListOrgIDsByGitHubInstallation method")
+//			},
 //			UpdateGitHubUsernameFunc: func(ctx context.Context, tx *sql.Tx, githubUserID int64, username string) error {
 //				panic("mock out the UpdateGitHubUsername method")
 //			},
@@ -41,6 +44,9 @@ type StoreMock struct {
 
 	// GetUserByGitHubUserIDFunc mocks the GetUserByGitHubUserID method.
 	GetUserByGitHubUserIDFunc func(ctx context.Context, tx *sql.Tx, githubUserID int64) (*model.User, error)
+
+	// ListOrgIDsByGitHubInstallationFunc mocks the ListOrgIDsByGitHubInstallation method.
+	ListOrgIDsByGitHubInstallationFunc func(ctx context.Context, tx *sql.Tx, installationID int64) ([]int64, error)
 
 	// UpdateGitHubUsernameFunc mocks the UpdateGitHubUsername method.
 	UpdateGitHubUsernameFunc func(ctx context.Context, tx *sql.Tx, githubUserID int64, username string) error
@@ -65,6 +71,15 @@ type StoreMock struct {
 			// GithubUserID is the githubUserID argument value.
 			GithubUserID int64
 		}
+		// ListOrgIDsByGitHubInstallation holds details about calls to the ListOrgIDsByGitHubInstallation method.
+		ListOrgIDsByGitHubInstallation []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Tx is the tx argument value.
+			Tx *sql.Tx
+			// InstallationID is the installationID argument value.
+			InstallationID int64
+		}
 		// UpdateGitHubUsername holds details about calls to the UpdateGitHubUsername method.
 		UpdateGitHubUsername []struct {
 			// Ctx is the ctx argument value.
@@ -77,9 +92,10 @@ type StoreMock struct {
 			Username string
 		}
 	}
-	lockClearGitHubInstallation sync.RWMutex
-	lockGetUserByGitHubUserID   sync.RWMutex
-	lockUpdateGitHubUsername    sync.RWMutex
+	lockClearGitHubInstallation        sync.RWMutex
+	lockGetUserByGitHubUserID          sync.RWMutex
+	lockListOrgIDsByGitHubInstallation sync.RWMutex
+	lockUpdateGitHubUsername           sync.RWMutex
 }
 
 // ClearGitHubInstallation calls ClearGitHubInstallationFunc.
@@ -159,6 +175,46 @@ func (mock *StoreMock) GetUserByGitHubUserIDCalls() []struct {
 	mock.lockGetUserByGitHubUserID.RLock()
 	calls = mock.calls.GetUserByGitHubUserID
 	mock.lockGetUserByGitHubUserID.RUnlock()
+	return calls
+}
+
+// ListOrgIDsByGitHubInstallation calls ListOrgIDsByGitHubInstallationFunc.
+func (mock *StoreMock) ListOrgIDsByGitHubInstallation(ctx context.Context, tx *sql.Tx, installationID int64) ([]int64, error) {
+	if mock.ListOrgIDsByGitHubInstallationFunc == nil {
+		panic("StoreMock.ListOrgIDsByGitHubInstallationFunc: method is nil but Store.ListOrgIDsByGitHubInstallation was just called")
+	}
+	callInfo := struct {
+		Ctx            context.Context
+		Tx             *sql.Tx
+		InstallationID int64
+	}{
+		Ctx:            ctx,
+		Tx:             tx,
+		InstallationID: installationID,
+	}
+	mock.lockListOrgIDsByGitHubInstallation.Lock()
+	mock.calls.ListOrgIDsByGitHubInstallation = append(mock.calls.ListOrgIDsByGitHubInstallation, callInfo)
+	mock.lockListOrgIDsByGitHubInstallation.Unlock()
+	return mock.ListOrgIDsByGitHubInstallationFunc(ctx, tx, installationID)
+}
+
+// ListOrgIDsByGitHubInstallationCalls gets all the calls that were made to ListOrgIDsByGitHubInstallation.
+// Check the length with:
+//
+//	len(mockedStore.ListOrgIDsByGitHubInstallationCalls())
+func (mock *StoreMock) ListOrgIDsByGitHubInstallationCalls() []struct {
+	Ctx            context.Context
+	Tx             *sql.Tx
+	InstallationID int64
+} {
+	var calls []struct {
+		Ctx            context.Context
+		Tx             *sql.Tx
+		InstallationID int64
+	}
+	mock.lockListOrgIDsByGitHubInstallation.RLock()
+	calls = mock.calls.ListOrgIDsByGitHubInstallation
+	mock.lockListOrgIDsByGitHubInstallation.RUnlock()
 	return calls
 }
 
