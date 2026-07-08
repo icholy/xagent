@@ -991,6 +991,183 @@ func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
 	assert.Equal(t, updated.Command, model.TaskCommandStart)
 }
 
+func TestRouteNonMemberOrgMatchesOnlyPublicRule(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: an org the actor is NOT a member of, named in input.Orgs. It has a
+	// non-public rule and a public one. Only the public rule is eligible.
+	s := teststore.New(t)
+	actorOrg := teststore.CreateOrg(t, s, nil) // supplies a valid non-member actor
+	nonMemberOrg := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, nonMemberOrg.OrgID, []model.RoutingRule{
+		// Non-public rule matches the event but must be skipped for a non-member.
+		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "icholy-bot"}}},
+		// Public create-rule is the only eligible one.
+		{
+			Source:     "github",
+			Type:       "issue_comment",
+			Public:     true,
+			Conditions: []model.Condition{{Attr: "mention", Op: "equals", Value: "icholy-bot"}},
+			Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+		},
+	}))
+	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "@icholy-bot please look",
+		URL:    url,
+		UserID: actorOrg.UserID,
+		Orgs:   []int64{nonMemberOrg.OrgID},
+		Attrs:  eventrouter.Attrs{"mention": {"icholy-bot"}},
+	})
+
+	// Assert: the public rule fired and created a task in the non-member org.
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	tasks, err := s.ListTasks(t.Context(), nil, nonMemberOrg.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+}
+
+func TestRouteNonMemberOrgWithoutPublicRuleIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a non-member org whose matching rule is not public — it must not
+	// fire, and its ruleless-org default fallback must not apply either.
+	s := teststore.New(t)
+	actorOrg := teststore.CreateOrg(t, s, nil)
+	nonMemberOrg := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, nonMemberOrg.OrgID, []model.RoutingRule{
+		{Source: "github", Type: "issue_comment", Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"}},
+	}))
+	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "xagent: do it",
+		URL:    url,
+		UserID: actorOrg.UserID,
+		Orgs:   []int64{nonMemberOrg.OrgID},
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
+	tasks, err := s.ListTasks(t.Context(), nil, nonMemberOrg.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 0)
+}
+
+func TestRouteRuleLessNonMemberOrgRoutesNothing(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a non-member org with no routing rules at all. The default-rule
+	// fallback is gated on membership, so nothing routes even though the body
+	// carries the "xagent:" prefix that the defaults would otherwise match.
+	s := teststore.New(t)
+	actorOrg := teststore.CreateOrg(t, s, nil)
+	nonMemberOrg := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	teststore.CreateTask(t, s, nonMemberOrg, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "xagent: do it",
+		URL:    url,
+		UserID: actorOrg.UserID,
+		Orgs:   []int64{nonMemberOrg.OrgID},
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
+}
+
+func TestRouteEmptyUserWithOrgsRoutesPublicRule(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: an unlinked actor (empty UserID) — the member branch returns
+	// nothing, so routing is driven entirely by input.Orgs and public rules.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source: "github",
+		Type:   "issue_comment",
+		Public: true,
+		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+	}}))
+	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "@icholy-bot please look",
+		URL:    url,
+		UserID: "",
+		Orgs:   []int64{org.OrgID},
+	})
+
+	// Assert
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+}
+
+func TestRouteMemberOrgInOrgsUsesFullRuleSet(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: an org that is both the actor's member org AND named in input.Orgs.
+	// Membership wins (the store returns it once, IsMember=true), so its
+	// non-public rule is still eligible — the actor is not down-scoped to the
+	// public subset.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	task := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+	// A non-public wake rule — only eligible if the org is treated as a member org.
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		{Source: "github", Type: "issue_comment", Wakeup: true},
+	}))
+	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+	// Act: pass the member org's own id in Orgs.
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "anything",
+		URL:    url,
+		UserID: org.UserID,
+		Orgs:   []int64{org.OrgID},
+	})
+
+	// Assert: the non-public rule matched and woke the task.
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	updated, err := s.GetTask(t.Context(), nil, task.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusPending)
+}
+
 func TestRouteOnRouteOutcome(t *testing.T) {
 	t.Parallel()
 
