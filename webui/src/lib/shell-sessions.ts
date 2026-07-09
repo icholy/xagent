@@ -36,13 +36,7 @@ import {
 //                when a session already has an operator attached
 //   error      — the RPC failed, or the socket errored / dropped mid-session
 export type ShellPhase =
-  | 'idle'
-  | 'opening'
-  | 'starting'
-  | 'connected'
-  | 'exited'
-  | 'detached'
-  | 'error'
+  'idle' | 'opening' | 'starting' | 'connected' | 'exited' | 'detached' | 'error'
 
 export interface ShellState {
   phase: ShellPhase
