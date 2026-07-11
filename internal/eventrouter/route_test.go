@@ -556,11 +556,11 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
 	insts := model.FilterPayloads(events, []string{model.EventTypeInstruction})
-	assert.Equal(t, len(insts), 1)
-	inst := insts[0].(*model.InstructionPayload)
-	assert.Assert(t, strings.Contains(inst.Text, "routing rule"))
-	assert.Assert(t, strings.Contains(inst.Text, "github"))
-	assert.Assert(t, strings.Contains(inst.Text, "issue_comment"))
+	assert.DeepEqual(t, insts, []model.EventPayload{
+		&model.InstructionPayload{
+			Text: "You were created by a routing rule in response to a github issue_comment event.",
+		},
+	})
 }
 
 func TestRouteCreateRuleAutoArchive(t *testing.T) {
