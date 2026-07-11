@@ -48,21 +48,40 @@ The driver appends all of its output to a single fixed file in the container:
 /xagent/log
 ```
 
-`/xagent` is chosen deliberately over the existing config convention
-`/tmp/xagent` (`internal/agent/config.go:16`): `/tmp` is frequently a tmpfs or a
-directory a setup step may clear, whereas `/xagent` lives on the container's
-writable layer, which the runner *preserves across runs* when it adopts an
-exited container (`docker.go` `adopt`). Persistence across runs is exactly the
-property post-mortem debugging needs.
+The path is a fixed runner/driver convention, mirroring
+`agent.DefaultConfigStore` — add an `agent.DefaultLogPath = "/xagent/log"`
+constant that both sides reference. `/xagent` is chosen deliberately over the
+existing config convention `/tmp/xagent` (`internal/agent/config.go:16`): `/tmp`
+is frequently a tmpfs or a directory a setup step may clear, whereas `/xagent`
+lives on the container's writable layer, which the runner *preserves across
+runs* when it adopts an exited container (`docker.go` `adopt`). Persistence
+across runs is exactly the property post-mortem debugging needs.
 
-At startup the driver ensures the parent directory exists
-(`os.MkdirAll("/xagent", 0o777)`, matching the `0777` the runner already uses
-for the config dir so a non-root agent user can also write there) and opens the
-file with `os.OpenFile("/xagent/log", os.O_CREATE|os.O_WRONLY|os.O_APPEND,
-0o666)`. Opening in append mode means every run adds to the end of the same
-file; nothing is truncated. If either step fails, the failure is non-fatal and
-logged, and the sink degrades to a no-op — logging to a file is best-effort and
-must never take down a run.
+**The runner pre-creates the directory.** The driver may run as a non-root user,
+and `os.MkdirAll("/xagent", …)` creates a directory directly under `/`, which a
+non-root driver cannot do — it would fail, and the sink would silently
+degrade to a no-op, turning the feature off invisibly. The runner already solves
+exactly this for the config dir by shipping a directory entry in the sandbox
+spec's `Files` list (`Runner.spec`, `internal/runner/runner.go:495-499`):
+
+```go
+Files: []backend.File{
+    // Allow non-root agents to write to this directory.
+    {Path: path.Dir(agent.DefaultConfigStore.Path(task.ID)), Mode: 0777, Dir: true},
+    {Path: agent.DefaultConfigStore.Path(task.ID), Data: cfgData, Mode: 0666},
+    // New: pre-create the log dir so a non-root driver can write /xagent/log.
+    {Path: path.Dir(agent.DefaultLogPath), Mode: 0777, Dir: true},
+}
+```
+
+With `/xagent` pre-created `0777`, a non-root driver can create and append to the
+file inside it. The driver still runs `os.MkdirAll(path.Dir(agent.DefaultLogPath),
+0o777)` as a fallback (e.g. for a directly-invoked driver outside the runner),
+then opens the file with `os.OpenFile(agent.DefaultLogPath,
+os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)`. Opening in append mode means every
+run adds to the end of the same file; nothing is truncated. If the open still
+fails, the failure is non-fatal and logged, and the sink degrades to a no-op —
+logging to a file is best-effort and must never take down a run.
 
 ### Runs are not separated
 
@@ -150,26 +169,41 @@ the runner, server, event stream, or Web UI changes.
 
 ### Viewing
 
-No new command. An operator opens a shell into the sandbox and reads the file:
+No new command, and the use case is **post-mortem inspection**, not live
+tailing. A sandbox run is one mode chosen once at startup — either an agent run
+or a shell run (`proposals/implemented/driver-reverse-shell.md`) — so an operator
+cannot attach a shell to a *live* agent run. Opening a shell provisions a
+*replacement* run in the same container; because the log is a single append-only
+file on the container's persisted writable layer, that shell run sees the prior
+agent run's output already sitting in `/xagent/log`. The operator reads the
+completed run's logs after the fact:
 
 ```
 xagent shell <task-id>
 $ less /xagent/log            # scroll back through prior runs
-$ tail -n 200 /xagent/log     # the most recent run
-$ tail -f /xagent/log         # a live run
+$ tail -n 200 /xagent/log     # the most recent (just-finished) run
+$ grep -n '==== run' /xagent/log   # jump between run boundaries
 ```
 
 ## Implementation Plan
 
-1. **Append-only sink + directory setup** — Delivers: a small `internal/agent`
-   helper that `MkdirAll`s `/xagent` and opens `/xagent/log` in
+1. **Append-only sink + directory setup** — Delivers: the
+   `agent.DefaultLogPath` constant plus a small `internal/agent` helper that
+   `MkdirAll`s the parent dir (fallback) and opens the log file in
    `O_CREATE|O_WRONLY|O_APPEND` mode, returning an `io.WriteCloser`
    (best-effort: returns an `io.Discard`-backed no-op closer and a nil error on
    filesystem failure). Depends on: nothing. Verifiable by: unit tests over a
    temp path — file is created if absent, existing content is preserved
    (appended, not truncated), and a failed open degrades to the no-op.
 
-2. **Driver slog + struct wiring + run delimiter** — Delivers:
+2. **Runner pre-creates the log dir** — Delivers: `Runner.spec` adds a
+   `backend.File{Path: path.Dir(agent.DefaultLogPath), Mode: 0777, Dir: true}`
+   entry so a non-root driver can write the file. Depends on: (1). Verifiable
+   by: launching a task with a non-root sandbox user and asserting `/xagent`
+   exists `0777` and the driver's log file is populated (not silently
+   discarded).
+
+3. **Driver slog + struct wiring + run delimiter** — Delivers:
    `command/driver.go` opens the sink (from layer 1) after the task fetch, sets
    `driver.Log` to a handler over `io.MultiWriter(os.Stderr, sink)`, stores the
    sink on the `Driver` struct (default `io.Discard`), and writes the
@@ -178,18 +212,18 @@ $ tail -f /xagent/log         # a live run
    delimiter and the driver's `slog` lines appear in both stderr and
    `/xagent/log`, and that a second run appends below the first.
 
-3. **Setup command tee** — Delivers: `Driver.setup` tees each setup command's
-   stdout/stderr into the sink. Depends on: (2). Verifiable by: a unit/e2e test
+4. **Setup command tee** — Delivers: `Driver.setup` tees each setup command's
+   stdout/stderr into the sink. Depends on: (3). Verifiable by: a unit/e2e test
    with a failing setup command asserting the command's output lands in the log
    alongside the `setup command N failed` error.
 
-4. **Claude stderr tee** — Delivers: `Options`/`NewAgent` carry the sink and
-   `claude.go` tees the CLI's stderr into it. Depends on: (2). Verifiable by: a
+5. **Claude stderr tee** — Delivers: `Options`/`NewAgent` carry the sink and
+   `claude.go` tees the CLI's stderr into it. Depends on: (3). Verifiable by: a
    test asserting Claude CLI stderr reaches the log while stdout JSON is still
    parsed into tool summaries (and is not duplicated raw).
 
-Layers 3 and 4 are independent of each other and can land in either order once
-(2) is in.
+Layer 2 is independent of layer 3 and can land alongside it. Layers 4 and 5 are
+independent of each other and can land in either order once (3) is in.
 
 ## Trade-offs
 
