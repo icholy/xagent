@@ -17,12 +17,14 @@ func TestFilterPayloads(t *testing.T) {
 
 	// Payloads whose type is in the filter come back in stream order; the
 	// LinkPayload, whose type isn't requested, is dropped.
-	payloads := FilterPayloads(events, []string{EventTypeInstruction, EventTypeExternal})
-	assert.DeepEqual(t, payloads, []EventPayload{
-		&InstructionPayload{Text: "first"},
-		&InstructionPayload{Text: "second"},
-		&ExternalPayload{Description: "webhook"},
-	})
+	assert.DeepEqual(t,
+		FilterPayloads(events, []string{EventTypeInstruction, EventTypeExternal}),
+		[]EventPayload{
+			&InstructionPayload{Text: "first"},
+			&InstructionPayload{Text: "second"},
+			&ExternalPayload{Description: "webhook"},
+		},
+	)
 }
 
 func TestLifecyclePayload_ProtoRoundTrip(t *testing.T) {
