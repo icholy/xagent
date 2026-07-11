@@ -30,9 +30,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].N, model.Notification{
+	assert.DeepEqual(t, pub.PublishedNotifications(), []model.Notification{{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "created", Type: "task", ID: resp.Task.Id},
@@ -41,7 +39,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 		OrgID:  org.OrgID,
 		Runner: "r",
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestUpdateTask_Publishes(t *testing.T) {
@@ -66,9 +64,7 @@ func TestUpdateTask_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].N, model.Notification{
+	assert.DeepEqual(t, pub.PublishedNotifications(), []model.Notification{{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: resp.Task.Id},
@@ -77,7 +73,7 @@ func TestUpdateTask_Publishes(t *testing.T) {
 		OrgID:  org.OrgID,
 		Runner: "r",
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestCancelTask_Publishes(t *testing.T) {
@@ -100,9 +96,7 @@ func TestCancelTask_Publishes(t *testing.T) {
 	_, err = srv.CancelTask(ctx, &xagentv1.CancelTaskRequest{Id: resp.Task.Id})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].N, model.Notification{
+	assert.DeepEqual(t, pub.PublishedNotifications(), []model.Notification{{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "cancelled", Type: "task", ID: resp.Task.Id},
@@ -110,7 +104,7 @@ func TestCancelTask_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestArchiveTask_Publishes(t *testing.T) {
@@ -139,9 +133,8 @@ func TestArchiveTask_Publishes(t *testing.T) {
 	_, err = srv.ArchiveTask(ctx, &xagentv1.ArchiveTaskRequest{Id: resp.Task.Id})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].N, model.Notification{
+	notifications := pub.PublishedNotifications()
+	assert.DeepEqual(t, notifications, []model.Notification{{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "archived", Type: "task", ID: resp.Task.Id},
@@ -149,8 +142,8 @@ func TestArchiveTask_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
-	msg := calls[0].N.ChannelMessage
+	}}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	msg := notifications[0].ChannelMessage
 	assert.Assert(t, strings.Contains(msg, "archived"), "expected archived in message, got %q", msg)
 }
 
@@ -179,14 +172,12 @@ func TestUploadLogs_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].N, model.Notification{
+	assert.DeepEqual(t, pub.PublishedNotifications(), []model.Notification{{
 		Type:      "change",
 		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
 		UserID:    org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestCreateLink_Publishes(t *testing.T) {
@@ -213,9 +204,7 @@ func TestCreateLink_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].N, model.Notification{
+	assert.DeepEqual(t, pub.PublishedNotifications(), []model.Notification{{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "created", Type: "task_links", ID: resp.Task.Id},
@@ -223,7 +212,7 @@ func TestCreateLink_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestUpdateTask_ChannelMessage_QueuedOnStart(t *testing.T) {
@@ -257,9 +246,9 @@ func TestUpdateTask_ChannelMessage_QueuedOnStart(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	msg := calls[0].N.ChannelMessage
+	notifications := pub.PublishedNotifications()
+	assert.Assert(t, cmp.Len(notifications, 1))
+	msg := notifications[0].ChannelMessage
 	assert.Assert(t, strings.Contains(msg, "queued"), "expected queued in message, got %q", msg)
 }
 
@@ -293,9 +282,9 @@ func TestUpdateTask_NoChannelMessage_NameOnly(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.Equal(t, calls[0].N.ChannelMessage, "")
+	notifications := pub.PublishedNotifications()
+	assert.Assert(t, cmp.Len(notifications, 1))
+	assert.Equal(t, notifications[0].ChannelMessage, "")
 }
 
 func TestSubmitRunnerEvents_Publishes(t *testing.T) {
@@ -326,9 +315,7 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].N, model.Notification{
+	assert.DeepEqual(t, pub.PublishedNotifications(), []model.Notification{{
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: taskResp.Task.Id},
@@ -336,7 +323,7 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
-	}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
+	}}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
 }
 
 func TestSubmitRunnerEvents_NotApplied_DoesNotPublish(t *testing.T) {
@@ -364,7 +351,7 @@ func TestSubmitRunnerEvents_NotApplied_DoesNotPublish(t *testing.T) {
 		},
 	})
 	assert.NilError(t, err)
-	assert.Assert(t, cmp.Len(pub.PublishCalls(), 0))
+	assert.Assert(t, cmp.Len(pub.PublishedNotifications(), 0))
 }
 
 func TestServerPublish_IgnoreSuppressesDelivery(t *testing.T) {
@@ -376,8 +363,8 @@ func TestServerPublish_IgnoreSuppressesDelivery(t *testing.T) {
 	srv := New(Options{Publisher: pub})
 
 	srv.publish(model.Notification{Type: "change", OrgID: 1, Ignore: true})
-	assert.Assert(t, cmp.Len(pub.PublishCalls(), 0))
+	assert.Assert(t, cmp.Len(pub.PublishedNotifications(), 0))
 
 	srv.publish(model.Notification{Type: "change", OrgID: 1})
-	assert.Assert(t, cmp.Len(pub.PublishCalls(), 1))
+	assert.Assert(t, cmp.Len(pub.PublishedNotifications(), 1))
 }

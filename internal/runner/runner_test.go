@@ -24,6 +24,7 @@ import (
 	"github.com/icholy/xagent/internal/runner/workspace"
 	"github.com/icholy/xagent/internal/x/dockerx"
 	"github.com/icholy/xagent/internal/x/outbox"
+	"github.com/icholy/xagent/internal/x/testx"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
@@ -157,13 +158,7 @@ func TestRunnerStart(t *testing.T) {
 	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 1))
 
 	// Verify the driver reported its own lifecycle: started, then stopped.
-	var events []string
-	for _, call := range mock.SubmitRunnerEventsCalls() {
-		for _, e := range call.SubmitRunnerEventsRequest.Events {
-			events = append(events, e.Event)
-		}
-	}
-	assert.DeepEqual(t, events, []string{"started", "stopped"})
+	assert.DeepEqual(t, testx.ExtractField(mock.SubmittedRunnerEvents(), "Event"), []string{"started", "stopped"})
 }
 
 // submitted drives the outbox until it drains the persisted events, then returns
@@ -187,11 +182,7 @@ func submitted(t *testing.T, mock *xagentclient.ClientMock, queue *outbox.Outbox
 		}
 		time.Sleep(time.Millisecond)
 	}
-	var events []*xagentv1.RunnerEvent
-	for _, call := range mock.SubmitRunnerEventsCalls() {
-		events = append(events, call.SubmitRunnerEventsRequest.Events...)
-	}
-	return events
+	return mock.SubmittedRunnerEvents()
 }
 
 // TestRunnerEventsSurviveRestart is the durability payoff of this layer: events

@@ -8,7 +8,6 @@ import (
 	"github.com/icholy/xagent/internal/x/cmpx"
 	"github.com/icholy/xagent/internal/x/mcpchannel"
 	"github.com/icholy/xagent/internal/x/mcptest"
-	"github.com/icholy/xagent/internal/x/testx"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -31,11 +30,9 @@ func TestForward_DefaultForwardsEverything(t *testing.T) {
 	})
 
 	// Assert: exactly one forward carrying the summary and no metadata.
-	calls := sender.SendChannelCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t,
-		testx.At(t, calls, 0).P,
-		mcpchannel.Params{Content: "Task 42 completed."},
+		sender.SentChannelParams(),
+		[]mcpchannel.Params{{Content: "Task 42 completed."}},
 	)
 }
 
@@ -56,7 +53,7 @@ func TestForward_EmptyChannelMessage(t *testing.T) {
 	})
 
 	// Assert
-	assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 0))
+	assert.Assert(t, cmp.Len(sender.SentChannelParams(), 0))
 }
 
 // TestForward_MutedTaskDropped drops notifications for a muted task while
@@ -83,11 +80,9 @@ func TestForward_MutedTaskDropped(t *testing.T) {
 	})
 
 	// Assert: only the un-muted task's notification survived.
-	calls := sender.SendChannelCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t,
-		testx.At(t, calls, 0).P,
-		mcpchannel.Params{Content: "Task 7 completed."},
+		sender.SentChannelParams(),
+		[]mcpchannel.Params{{Content: "Task 7 completed."}},
 		cmpx.OnlyFields("Content"),
 	)
 }
@@ -108,11 +103,9 @@ func TestForward_NonTaskScopedAlwaysForwarded(t *testing.T) {
 	ch.Forward(context.Background(), model.Notification{ChannelMessage: "System notice."})
 
 	// Assert
-	calls := sender.SendChannelCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t,
-		testx.At(t, calls, 0).P,
-		mcpchannel.Params{Content: "System notice."},
+		sender.SentChannelParams(),
+		[]mcpchannel.Params{{Content: "System notice."}},
 		cmpx.OnlyFields("Content"),
 	)
 }
@@ -136,7 +129,7 @@ func TestForward_Unmute(t *testing.T) {
 	})
 
 	// Assert
-	assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 1))
+	assert.Assert(t, cmp.Len(sender.SentChannelParams(), 1))
 }
 
 // TestForward_MuteAllDropsEveryTask confirms mute-all suppresses
@@ -164,7 +157,7 @@ func TestForward_MuteAllDropsEveryTask(t *testing.T) {
 	})
 
 	// Assert
-	assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 0))
+	assert.Assert(t, cmp.Len(sender.SentChannelParams(), 0))
 }
 
 // TestForward_MuteAllStillForwardsNonTaskScoped confirms mute-all only
@@ -184,11 +177,9 @@ func TestForward_MuteAllStillForwardsNonTaskScoped(t *testing.T) {
 	ch.Forward(context.Background(), model.Notification{ChannelMessage: "System notice."})
 
 	// Assert
-	calls := sender.SendChannelCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t,
-		testx.At(t, calls, 0).P,
-		mcpchannel.Params{Content: "System notice."},
+		sender.SentChannelParams(),
+		[]mcpchannel.Params{{Content: "System notice."}},
 		cmpx.OnlyFields("Content"),
 	)
 }
@@ -215,7 +206,7 @@ func TestForward_MuteAllThenUnmuteAll(t *testing.T) {
 	})
 
 	// Assert
-	assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 1))
+	assert.Assert(t, cmp.Len(sender.SentChannelParams(), 1))
 }
 
 func TestMuteTool_All(t *testing.T) {
@@ -264,11 +255,9 @@ func TestForward_MuteAllThenUnmuteOne(t *testing.T) {
 	})
 
 	// Assert: only the un-muted exception (123) kept delivering.
-	calls := sender.SendChannelCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
 	assert.DeepEqual(t,
-		testx.At(t, calls, 0).P,
-		mcpchannel.Params{Content: "Task 123 completed."},
+		sender.SentChannelParams(),
+		[]mcpchannel.Params{{Content: "Task 123 completed."}},
 		cmpx.OnlyFields("Content"),
 	)
 }
@@ -318,7 +307,7 @@ func TestMuteTool_RemuteUnderMuteAll(t *testing.T) {
 		Resources:      []model.NotificationResource{{Action: "updated", Type: "task", ID: 123}},
 		ChannelMessage: "Task 123 completed.",
 	})
-	assert.Assert(t, cmp.Len(sender.SendChannelCalls(), 0))
+	assert.Assert(t, cmp.Len(sender.SentChannelParams(), 0))
 }
 
 func TestMuteTool(t *testing.T) {
