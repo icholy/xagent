@@ -48,15 +48,15 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			// bump the version and clear the command, so the pre-fold version,
 			// command, and status must be read from the original to diagnose
 			// stale-vs-state rejections and read applied events as a transition.
-			orig := task.Clone()
+			original := task.Clone()
 			applied := task.ApplyRunnerEvent(&event)
 			s.log.InfoContext(ctx, "runner event received",
 				"task_id", event.TaskID,
 				"event", event.Event,
 				"version", event.Version,
-				"task_version", orig.Version,
-				"command", orig.Command,
-				"from_status", orig.Status,
+				"task_version", original.Version,
+				"command", original.Command,
+				"from_status", original.Status,
 				"status", task.Status,
 				"reason", event.Reason,
 				"applied", applied,
@@ -69,9 +69,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				return err
 			}
 			// Append the sandbox lifecycle event beside the status fold (status is
-			// the materialized projection; the fold logic is unchanged). orig
+			// the materialized projection; the fold logic is unchanged). original
 			// carries the pre-fold status; the task carries the post-fold status.
-			if ev, ok := event.LifecycleEvent(task, orig.Status); ok {
+			if ev, ok := event.LifecycleEvent(task, original.Status); ok {
 				if err := s.store.CreateEvent(ctx, tx, ev); err != nil {
 					return err
 				}
