@@ -2,9 +2,6 @@ package command
 
 import (
 	"context"
-	"io"
-	"log/slog"
-	"os"
 
 	"github.com/icholy/xagent/internal/agent"
 	"github.com/icholy/xagent/internal/xagentclient"
@@ -33,18 +30,13 @@ var DriverCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		// Open the append-only in-sandbox log sink and tee the driver's slog
-		// output into it alongside os.Stderr, so a completed run can be
-		// inspected post-mortem via the reverse-shell. Opening is best-effort:
-		// on failure the sink is a no-op and we log, but never fail the run.
-		sink, err := agent.OpenLogSink(agent.DefaultLogPath)
-		if err != nil {
-			slog.Default().Warn("failed to open driver log sink, continuing without it",
-				"path", agent.DefaultLogPath, "err", err)
-		}
-		defer sink.Close()
-
-		log := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, sink), nil))
+		// Open the append-only in-sandbox log: its logger tees the driver's slog
+		// output to os.Stderr and /xagent/log, and its sink is teed into setup
+		// command and Claude CLI stdio, so a completed run can be inspected
+		// post-mortem via the reverse-shell. Opening is best-effort and never
+		// fails the run (see agent.OpenDriverLog).
+		log := agent.OpenDriverLog(agent.DefaultLogPath)
+		defer log.Close()
 
 		driver := &agent.Driver{
 			TaskID: cmd.Int64("task"),
@@ -53,7 +45,6 @@ var DriverCommand = &cli.Command{
 				Token:   cmd.String("token"),
 			}),
 			Log:       log,
-			LogSink:   sink,
 			Config:    agent.DefaultConfigStore,
 			ServerURL: cmd.String("server"),
 			Token:     cmd.String("token"),

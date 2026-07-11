@@ -67,3 +67,23 @@ func TestOpenLogSink_FailureDegradesToNoop(t *testing.T) {
 	assert.NilError(t, werr)
 	assert.NilError(t, sink.Close())
 }
+
+func TestOpenDriverLog_FailureDegrades(t *testing.T) {
+	t.Parallel()
+	// Arrange - a path whose parent is an existing regular file, so the sink
+	// cannot be opened.
+	file := filepath.Join(t.TempDir(), "file")
+	assert.NilError(t, os.WriteFile(file, nil, 0o666))
+	logPath := filepath.Join(file, "log")
+
+	// Act - OpenDriverLog never returns nil and never fails the run
+	log := OpenDriverLog(logPath)
+	defer log.Close()
+
+	// Assert - the sink is a usable no-op and the logger still works
+	assert.Assert(t, log.Sink() != nil)
+	_, werr := io.WriteString(log.Sink(), "discarded\n")
+	assert.NilError(t, werr)
+	log.Info("still logs to stderr")
+	assert.NilError(t, log.Close())
+}

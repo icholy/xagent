@@ -3,8 +3,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +35,9 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Version: testTaskVersion}}, nil
 		},
 	}
-	return &Driver{TaskID: 1, Client: mock, Log: slog.Default(), Config: store}, mock
+	// Log is left nil: the driver defaults to a discard log, so tests that
+	// don't inspect output need no wiring. TestDriverRun_LogsToSink overrides it.
+	return &Driver{TaskID: 1, Client: mock, Config: store}, mock
 }
 
 func TestDriverRun(t *testing.T) {
@@ -247,16 +247,13 @@ func TestDriverRun_GetTaskError(t *testing.T) {
 	assert.Assert(t, cmp.Len(mock.SubmittedRunnerEvents(), 0))
 }
 
-// withLogSink points the driver's sink and slog logger at a real file (as the
-// command wires them in production), and returns a func to read it back.
+// withLogSink points the driver's DriverLog at a real file (as the command
+// wires it in production via OpenDriverLog), and returns a func to read it back.
 func withLogSink(t *testing.T, driver *Driver) func() string {
 	t.Helper()
 	logPath := filepath.Join(t.TempDir(), "log")
-	sink, err := OpenLogSink(logPath)
-	assert.NilError(t, err)
-	t.Cleanup(func() { _ = sink.Close() })
-	driver.LogSink = sink
-	driver.Log = slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, sink), nil))
+	driver.Log = OpenDriverLog(logPath)
+	t.Cleanup(func() { _ = driver.Log.Close() })
 	return func() string {
 		data, err := os.ReadFile(logPath)
 		assert.NilError(t, err)
@@ -274,11 +271,13 @@ func TestDriverRun_LogsToSink(t *testing.T) {
 	assert.NilError(t, driver.Run(t.Context()))
 	assert.NilError(t, driver.Run(t.Context()))
 
-	// Assert - the run delimiter and the driver's slog lines both reach the log,
-	// and the second run appended a second delimiter below the first.
+	// Assert - the run delimiter, the driver's slog lines, and the agent's own
+	// slog lines (the logger is threaded through to the agent) all reach the
+	// log, and the second run appended a second delimiter below the first.
 	got := read()
 	assert.Assert(t, cmp.Contains(got, "==== run version=7 pid="))
 	assert.Assert(t, cmp.Contains(got, "loaded config"))
+	assert.Assert(t, cmp.Contains(got, "dummy agent received prompt"))
 	assert.Equal(t, strings.Count(got, "==== run version="), 2)
 }
 

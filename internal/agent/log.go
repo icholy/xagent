@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 )
@@ -42,4 +44,66 @@ func OpenLogSink(logPath string) (io.WriteCloser, error) {
 		return nopWriteCloser{io.Discard}, err
 	}
 	return f, nil
+}
+
+// DriverLog bundles the driver's structured logger with the raw byte sink they
+// both feed, so the two travel together as a single value instead of as loose
+// fields. The embedded *slog.Logger writes to os.Stderr and the sink; Sink is
+// the append-only /xagent/log file the driver tees setup command and Claude CLI
+// stdio into. Close releases the underlying log file.
+//
+// os.Stderr stays in the tee, so docker logs output is unchanged.
+type DriverLog struct {
+	*slog.Logger
+	sink   io.Writer
+	closer io.Closer
+}
+
+// discardDriverLog is the default used when a Driver has no DriverLog
+// configured (tests, directly-invoked drivers): it discards everything.
+var discardDriverLog = &DriverLog{
+	Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	sink:   io.Discard,
+}
+
+// OpenDriverLog opens the append-only sandbox log at logPath and returns a
+// DriverLog whose logger tees to os.Stderr and the log file, and whose Sink is
+// the raw log file used for the driver's stdio tees.
+//
+// Opening is best-effort: on failure the sink degrades to a no-op, the logger
+// still writes to os.Stderr, and the failure is logged through that logger — a
+// run never fails because logging could not be set up. The returned DriverLog
+// must be closed.
+func OpenDriverLog(logPath string) *DriverLog {
+	sink, err := OpenLogSink(logPath)
+	logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, sink), nil))
+	if err != nil {
+		logger.Warn("failed to open driver log sink, continuing without it",
+			"path", logPath, "err", err)
+	}
+	return &DriverLog{Logger: logger, sink: sink, closer: sink}
+}
+
+// Sink returns the raw byte sink to tee stdio into, defaulting to io.Discard so
+// the tees degrade to plain os.Stdout/os.Stderr behavior when unset.
+func (l *DriverLog) Sink() io.Writer {
+	if l == nil || l.sink == nil {
+		return io.Discard
+	}
+	return l.sink
+}
+
+// StartRun writes the per-run delimiter to os.Stderr and the sink before the
+// run's first event, so an operator can find run boundaries in the single
+// append-only log (runs are not split into separate files).
+func (l *DriverLog) StartRun(version int64) {
+	fmt.Fprintf(io.MultiWriter(os.Stderr, l.Sink()), "==== run version=%d pid=%d ====\n", version, os.Getpid())
+}
+
+// Close releases the underlying log file, if any. It is nil-safe.
+func (l *DriverLog) Close() error {
+	if l == nil || l.closer == nil {
+		return nil
+	}
+	return l.closer.Close()
 }
