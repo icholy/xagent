@@ -67,7 +67,8 @@ func (d *Driver) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
-	version := resp.GetTask().GetVersion()
+	task := resp.GetTask()
+	version := task.GetVersion()
 
 	// Report started: replaces the startup ping — an acked submit proves the
 	// connection, token, server, and DB are all healthy.
@@ -75,7 +76,7 @@ func (d *Driver) Run(ctx context.Context) error {
 		return err
 	}
 
-	err = d.run(ctx, resp)
+	err = d.run(ctx, task)
 	if err != nil && context.Cause(ctx) == ErrStop {
 		d.Log.Info("agent stopped gracefully")
 		err = nil
@@ -117,10 +118,10 @@ func (d *Driver) submit(ctx context.Context, event model.RunnerEvent) error {
 // sandbox run is one mode, chosen once at startup (see the design in
 // proposals/draft/driver-reverse-shell.md). The fork lives inside run so a
 // shell run emits the same started/stopped/failed lifecycle events as an agent
-// run. The task response is fetched once by Run and passed in, so this reuses
-// that single read rather than fetching again.
-func (d *Driver) run(ctx context.Context, resp *xagentv1.GetTaskResponse) error {
-	if session := resp.GetTask().GetShellSession(); session != "" {
+// run. The task is fetched once by Run and passed in, so this reuses that
+// single read rather than fetching again.
+func (d *Driver) run(ctx context.Context, task *xagentv1.Task) error {
+	if session := task.GetShellSession(); session != "" {
 		return shell.Serve(ctx, shell.ServeOptions{
 			ServerURL: d.ServerURL,
 			Token:     d.Token,
