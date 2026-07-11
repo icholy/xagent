@@ -25,8 +25,8 @@ func TestRouterPublish_IgnoreSuppressesDelivery(t *testing.T) {
 	r := &Router{Log: slog.Default(), Publisher: pub}
 
 	r.publish(t.Context(), model.Notification{Type: "change", OrgID: 1, Ignore: true})
-	assert.Assert(t, cmp.Len(pub.PublishCalls(), 0))
+	assert.Assert(t, cmp.Len(pub.PublishedNotifications(), 0))
 
 	r.publish(t.Context(), model.Notification{Type: "change", OrgID: 1})
-	assert.Assert(t, cmp.Len(pub.PublishCalls(), 1))
+	assert.Assert(t, cmp.Len(pub.PublishedNotifications(), 1))
 }

@@ -872,9 +872,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	calls := router.RouteCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
+	assert.DeepEqual(t, router.RoutedInputs(), []eventrouter.InputEvent{{
 		Source:      "github",
 		Type:        "issue_comment",
 		Description: "testuser commented on PR #10",
@@ -884,7 +882,7 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		UserID:      "user-1",
 		Orgs:        []int64{7},
 		Meta:        GitHubMeta{AuthorID: ghUserID, AuthorLogin: "testuser", InstallationID: installationID},
-	})
+	}})
 
 	// The installation is resolved with the event's installation id.
 	listCalls := store.ListOrgIDsByGitHubInstallationCalls()
@@ -1018,8 +1016,8 @@ func TestHandleGitHubWebhookUnlinkedActorRoutesViaInstallationOrgs(t *testing.T)
 
 	// The event routes with an empty UserID and the installation's orgs, so a
 	// Public rule on one of those orgs can fire.
-	calls := router.RouteCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.Equal(t, calls[0].Input.UserID, "")
-	assert.DeepEqual(t, calls[0].Input.Orgs, []int64{3})
+	inputs := router.RoutedInputs()
+	assert.Assert(t, cmp.Len(inputs, 1))
+	assert.Equal(t, inputs[0].UserID, "")
+	assert.DeepEqual(t, inputs[0].Orgs, []int64{3})
 }

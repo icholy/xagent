@@ -328,9 +328,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	calls := router.RouteCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
+	assert.DeepEqual(t, router.RoutedInputs(), []eventrouter.InputEvent{{
 		Source:      "atlassian",
 		Type:        "comment_created",
 		Description: "Test User commented on PROJ-10",
@@ -340,7 +338,7 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 		UserID:      "user-1",
 		Orgs:        []int64{1},
 		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
-	})
+	}})
 }
 
 func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
@@ -387,9 +385,7 @@ func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
 	assert.Equal(t, rec.Code, http.StatusOK)
 	assert.Equal(t, rec.Body.String(), "processed")
 
-	calls := router.RouteCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.DeepEqual(t, calls[0].Input, eventrouter.InputEvent{
+	assert.DeepEqual(t, router.RoutedInputs(), []eventrouter.InputEvent{{
 		Source:      "atlassian",
 		Type:        "label_added",
 		Description: `Test User added label(s) "xagent", "urgent" to PROJ-10`,
@@ -398,7 +394,7 @@ func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
 		UserID:      "user-1",
 		Orgs:        []int64{1},
 		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
-	})
+	}})
 }
 
 func TestHandleAtlassianWebhookIgnoredEventType(t *testing.T) {
@@ -463,10 +459,10 @@ func TestHandleAtlassianWebhookUnlinkedActorRoutesViaOrg(t *testing.T) {
 
 	// The event routes with an empty UserID and the ?org= org, so a Public rule
 	// on that org can fire.
-	calls := router.RouteCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.Equal(t, calls[0].Input.UserID, "")
-	assert.DeepEqual(t, calls[0].Input.Orgs, []int64{1})
+	inputs := router.RoutedInputs()
+	assert.Assert(t, cmp.Len(inputs, 1))
+	assert.Equal(t, inputs[0].UserID, "")
+	assert.DeepEqual(t, inputs[0].Orgs, []int64{1})
 }
 
 func TestHandleAtlassianWebhookInvalidSignature(t *testing.T) {

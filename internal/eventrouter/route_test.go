@@ -259,9 +259,9 @@ func TestRouter_AttachSetsWakeMessage(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, n, 1)
 
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	msg := calls[0].N.ChannelMessage
+	notifications := pub.PublishedNotifications()
+	assert.Assert(t, cmp.Len(notifications, 1))
+	msg := notifications[0].ChannelMessage
 	assert.Assert(t, msg != "", "expected non-empty ChannelMessage, got empty")
 	assert.Assert(t, strings.Contains(msg, "Task "), "expected task id in message: %q", msg)
 	assert.Assert(t, strings.Contains(msg, "woken by event"), "expected wake phrase in message: %q", msg)
@@ -305,10 +305,10 @@ func TestRouter_AttachToRunningTaskStaysSilent(t *testing.T) {
 	// The notification still publishes with the usual resources so the FE
 	// invalidates, but ChannelMessage is empty — PR #725's gate keeps the
 	// agent channel silent on a no-transition attach.
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	assert.Equal(t, calls[0].N.ChannelMessage, "")
-	assert.Equal(t, len(calls[0].N.Resources), 3)
+	notifications := pub.PublishedNotifications()
+	assert.Assert(t, cmp.Len(notifications, 1))
+	assert.Equal(t, notifications[0].ChannelMessage, "")
+	assert.Equal(t, len(notifications[0].Resources), 3)
 }
 
 func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
@@ -359,9 +359,9 @@ func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
 
 	// A channel notification is published unconditionally so the event isn't
 	// silently swallowed, even though the task wasn't restarted.
-	calls := pub.PublishCalls()
-	assert.Assert(t, cmp.Len(calls, 1))
-	msg := calls[0].N.ChannelMessage
+	notifications := pub.PublishedNotifications()
+	assert.Assert(t, cmp.Len(notifications, 1))
+	msg := notifications[0].ChannelMessage
 	assert.Assert(t, msg != "", "expected non-empty ChannelMessage, got empty")
 	assert.Assert(t, strings.Contains(msg, "PR comment from alice"), "expected description in message: %q", msg)
 	assert.Assert(t, strings.Contains(msg, url), "expected URL in message: %q", msg)
