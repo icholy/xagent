@@ -103,6 +103,73 @@ type Router struct {
 	OnRouteOutcome func(ctx context.Context, outcome RouteOutcome)
 }
 
+// RouteMatch is the read-only result of evaluating routing rules for one org:
+// the rule that matched and its position in the org's configured list. It is
+// what a dry run reports and what apply consumes. The subscribed-link lookup and
+// the wake-vs-create decision are derived from this by the caller, not stored
+// here.
+type RouteMatch struct {
+	OrgID     int64
+	Rule      *model.RoutingRule
+	RuleIndex int // index into the org's configured rules (-1 = shipped default)
+}
+
+// Plan evaluates routing rules for the event and returns one RouteMatch per org
+// whose rules matched, without any side effects and without touching links. When
+// orgFilter is non-zero, only that org is evaluated (the test path scopes to
+// caller.OrgID); zero preserves the webhook path's all-member-orgs behavior.
+func (r *Router) Plan(ctx context.Context, input InputEvent, orgFilter int64) ([]RouteMatch, error) {
+	orgs, err := r.Store.ListRoutingRulesForEvent(ctx, nil, input.UserID, input.Orgs)
+	if err != nil {
+		return nil, err
+	}
+
+	// The store returns conditions-native rules (legacy rows translated on read),
+	// so matching runs directly through the attribute-based matcher against the
+	// input event. Resolve the registry once for the default-rule fallback
+	// (nil-defaulting to the process-wide registry).
+	reg := cmp.Or(r.Registry, DefaultSchemaRegistry)
+
+	// First matching rule per org; orgs with no match are dropped.
+	var matches []RouteMatch
+	for _, org := range orgs {
+		// orgFilter scopes the simulation to a single org (the test path); zero
+		// evaluates every returned org, preserving the webhook path's behavior.
+		if orgFilter != 0 && org.OrgID != orgFilter {
+			continue
+		}
+		rules := org.Rules
+		// RuleIndex points into the org's configured rules; -1 flags a match
+		// against the shipped default rules used for ruleless orgs.
+		defaulted := false
+		if len(rules) == 0 && org.IsMember {
+			// Ruleless orgs fall back to the producers' per-type "xagent:"
+			// body-prefix wakeup defaults, already conditions-native. The
+			// fallback stays member-only: a ruleless non-member org routes
+			// nothing, since non-member routing always requires an explicit
+			// opt-in rule.
+			rules = reg.DefaultRules()
+			defaulted = true
+		}
+		for i, rule := range rules {
+			// Member org: every rule is eligible. Non-member org (in input.Orgs
+			// but not the actor's): only rules that opted in via Public.
+			if !org.IsMember && !rule.Public {
+				continue
+			}
+			if Match(rule, input) {
+				index := i
+				if defaulted {
+					index = -1
+				}
+				matches = append(matches, RouteMatch{OrgID: org.OrgID, Rule: &rule, RuleIndex: index})
+				break
+			}
+		}
+	}
+	return matches, nil
+}
+
 // Route evaluates routing rules for every org the event belongs to. An org's
 // rules are eligible when the actor is a member of it (existing behavior — all
 // the org's rules apply) or when the org appears in input.Orgs and the rule
@@ -118,42 +185,13 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, nil
 	}
 
-	orgs, err := r.Store.ListRoutingRulesForEvent(ctx, nil, input.UserID, input.Orgs)
+	// Plan is the shared read-only matcher; Route applies its result. The zero
+	// orgFilter keeps Route evaluating every org the event belongs to.
+	matches, err := r.Plan(ctx, input, 0)
 	if err != nil {
 		return 0, err
 	}
-
-	// The store returns conditions-native rules (legacy rows translated on read),
-	// so matching runs directly through the attribute-based matcher against the
-	// input event. Resolve the registry once for the default-rule fallback
-	// (nil-defaulting to the process-wide registry).
-	reg := cmp.Or(r.Registry, DefaultSchemaRegistry)
-
-	// First matching rule per org; orgs with no match are dropped.
-	matched := map[int64]*model.RoutingRule{}
-	for _, org := range orgs {
-		rules := org.Rules
-		if len(rules) == 0 && org.IsMember {
-			// Ruleless orgs fall back to the producers' per-type "xagent:"
-			// body-prefix wakeup defaults, already conditions-native. The
-			// fallback stays member-only: a ruleless non-member org routes
-			// nothing, since non-member routing always requires an explicit
-			// opt-in rule.
-			rules = reg.DefaultRules()
-		}
-		for _, rule := range rules {
-			// Member org: every rule is eligible. Non-member org (in input.Orgs
-			// but not the actor's): only rules that opted in via Public.
-			if !org.IsMember && !rule.Public {
-				continue
-			}
-			if Match(rule, input) {
-				matched[org.OrgID] = &rule
-				break
-			}
-		}
-	}
-	if len(matched) == 0 {
+	if len(matches) == 0 {
 		return 0, nil
 	}
 
@@ -161,9 +199,9 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	// with routing_key = model.RoutingKey(url), so derive the key the same way:
 	// a non-canonical event URL (a comment URL, an API URL) resolves to the same
 	// key as the stored link.
-	orgIDs := make([]int64, 0, len(matched))
-	for orgID := range matched {
-		orgIDs = append(orgIDs, orgID)
+	orgIDs := make([]int64, 0, len(matches))
+	for _, match := range matches {
+		orgIDs = append(orgIDs, match.OrgID)
 	}
 	key := model.RoutingKey(input.URL)
 	linksByOrg, err := r.Store.FindSubscribedLinksForOrgs(ctx, nil, key, orgIDs)
@@ -173,7 +211,8 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 
 	// Wake if a subscribed link exists; otherwise create if the matched rule opts in.
 	var n int
-	for orgID, rule := range matched {
+	for _, match := range matches {
+		orgID, rule := match.OrgID, match.Rule
 		// Built at the top, updated by whichever branch runs, passed to the
 		// callback at the end. Defaults to "matched, nothing done" (no TaskIDs,
 		// Created false).

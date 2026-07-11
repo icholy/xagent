@@ -28,6 +28,125 @@ func testRegistry() *eventrouter.SchemaRegistry {
 	return reg
 }
 
+func TestPlanMatchesRulePerOrgWithoutSideEffects(t *testing.T) {
+	t.Parallel()
+
+	// Plan is the read-only matcher Route consumes: it reports the matched rule
+	// per org and writes nothing. Each case exercises a distinct outcome — a
+	// configured rule matches (RuleIndex points at its position), a configured
+	// rule does not match (org dropped), and a ruleless org falls back to the
+	// shipped defaults (RuleIndex -1). None of them touch the store.
+	const url = "https://github.com/owner/repo/issues/1"
+	tests := []struct {
+		name      string
+		rules     []model.RoutingRule // nil => ruleless org, defaults apply
+		data      string
+		wantMatch bool
+		wantIndex int
+	}{
+		{
+			name:      "configured rule matches",
+			rules:     []model.RoutingRule{{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}}},
+			data:      "xagent: do it",
+			wantMatch: true,
+			wantIndex: 0,
+		},
+		{
+			name:      "configured rule does not match",
+			rules:     []model.RoutingRule{{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "bot:"}}}},
+			data:      "xagent: do it",
+			wantMatch: false,
+		},
+		{
+			name:      "ruleless org falls back to shipped default",
+			rules:     nil,
+			data:      "xagent: do it",
+			wantMatch: true,
+			wantIndex: -1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Arrange
+			s := teststore.New(t)
+			org := teststore.CreateOrg(t, s, nil)
+			if tt.rules != nil {
+				assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, tt.rules))
+			}
+			r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+			// Act
+			matches, err := r.Plan(t.Context(), eventrouter.InputEvent{
+				Source: "github",
+				Type:   "issue_comment",
+				Data:   tt.data,
+				URL:    url,
+				UserID: org.UserID,
+			}, org.OrgID)
+
+			// Assert
+			assert.NilError(t, err)
+			if !tt.wantMatch {
+				assert.Assert(t, cmp.Len(matches, 0))
+			} else {
+				assert.Assert(t, cmp.Len(matches, 1))
+				assert.Equal(t, matches[0].OrgID, org.OrgID)
+				assert.Equal(t, matches[0].Rule.Source, "github")
+				assert.Equal(t, matches[0].RuleIndex, tt.wantIndex)
+			}
+
+			// Plan is read-only: no tasks (and therefore no events) are written.
+			tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+			assert.NilError(t, err)
+			assert.Assert(t, cmp.Len(tasks, 0))
+		})
+	}
+}
+
+func TestPlanOrgFilterScopesToSingleOrg(t *testing.T) {
+	t.Parallel()
+
+	// orgFilter is the test path's single-org scoping: a zero filter evaluates
+	// every org the actor belongs to (the webhook path), while a non-zero filter
+	// drops all but that one org even though both would otherwise match.
+	s := teststore.New(t)
+	orgA := teststore.CreateOrg(t, s, nil)
+	orgB := teststore.CreateOrg(t, s, nil)
+	assert.NilError(t, s.AddOrgMember(t.Context(), nil, &model.OrgMember{
+		OrgID: orgB.OrgID, UserID: orgA.UserID, Role: "member",
+	}))
+	rule := []model.RoutingRule{{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}}}
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, orgA.OrgID, rule))
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, orgB.OrgID, rule))
+	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+	input := eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "xagent: do it",
+		URL:    "https://github.com/owner/repo/issues/1",
+		UserID: orgA.UserID,
+	}
+
+	// Zero filter: both member orgs match.
+	all, err := r.Plan(t.Context(), input, 0)
+	assert.NilError(t, err)
+	gotOrgs := map[int64]bool{}
+	for _, m := range all {
+		gotOrgs[m.OrgID] = true
+	}
+	assert.Assert(t, cmp.Len(all, 2))
+	assert.Assert(t, gotOrgs[orgA.OrgID] && gotOrgs[orgB.OrgID])
+
+	// Filtered to orgA: only orgA is evaluated.
+	scoped, err := r.Plan(t.Context(), input, orgA.OrgID)
+	assert.NilError(t, err)
+	assert.Assert(t, cmp.Len(scoped, 1))
+	assert.Equal(t, scoped[0].OrgID, orgA.OrgID)
+}
+
 func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 	t.Parallel()
 
