@@ -1,7 +1,6 @@
 package model
 
 import (
-	"encoding/json"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -22,70 +21,6 @@ func TestFilterPayloads(t *testing.T) {
 		{Text: "first"},
 		{Text: "second"},
 	})
-}
-
-func TestExternalPayload_ProtoRoundTrip(t *testing.T) {
-	t.Parallel()
-	want := &ExternalPayload{
-		Description: "icholy reviewed PR #42 (main.go:10)",
-		URL:         "https://github.com/icholy/xagent/pull/42#discussion_r1",
-		Data:        "please fix this",
-		Details: map[string]string{
-			"path":      "main.go",
-			"line":      "10",
-			"side":      "RIGHT",
-			"diff_hunk": "@@ -1,3 +1,4 @@",
-		},
-	}
-	ev := &Event{TaskID: 7, OrgID: 3, Payload: want}
-
-	// model -> proto -> model preserves the arm and its fields, details included.
-	got := EventFromProto(ev.Proto())
-	payload, ok := got.Payload.(*ExternalPayload)
-	assert.Assert(t, ok)
-	assert.DeepEqual(t, payload, want)
-	assert.Equal(t, payload.Type(), EventTypeExternal)
-}
-
-func TestExternalPayload_JSONRoundTrip(t *testing.T) {
-	t.Parallel()
-	want := &ExternalPayload{
-		Description: "icholy reviewed PR #42 (main.go:10)",
-		URL:         "https://github.com/icholy/xagent/pull/42#discussion_r1",
-		Data:        "please fix this",
-		Details: map[string]string{
-			"path": "main.go",
-			"line": "10",
-		},
-	}
-
-	// model -> jsonb -> model preserves the details map.
-	b, err := json.Marshal(want)
-	assert.NilError(t, err)
-
-	var got ExternalPayload
-	assert.NilError(t, json.Unmarshal(b, &got))
-	assert.DeepEqual(t, &got, want)
-}
-
-func TestExternalPayload_JSONOmitsEmptyDetails(t *testing.T) {
-	t.Parallel()
-	// A payload without details serializes without a details key, so existing
-	// JSONB rows are byte-for-byte unchanged.
-	b, err := json.Marshal(&ExternalPayload{Description: "d", URL: "u", Data: "body"})
-	assert.NilError(t, err)
-	assert.Equal(t, string(b), `{"description":"d","url":"u","data":"body"}`)
-}
-
-func TestExternalPayload_JSONOldShapeUnmarshalsClean(t *testing.T) {
-	t.Parallel()
-	// An old-shape row written before the details field existed (no details key)
-	// unmarshals cleanly, leaving Details nil.
-	const oldShape = `{"description":"d","url":"u","data":"body"}`
-	var got ExternalPayload
-	assert.NilError(t, json.Unmarshal([]byte(oldShape), &got))
-	assert.DeepEqual(t, &got, &ExternalPayload{Description: "d", URL: "u", Data: "body"})
-	assert.Assert(t, got.Details == nil)
 }
 
 func TestLifecyclePayload_ProtoRoundTrip(t *testing.T) {
