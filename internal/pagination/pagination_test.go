@@ -11,32 +11,6 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// intCursor is the keyset for the tests: the row's own value.
-type intCursor struct {
-	V int `json:"v"`
-}
-
-// sliceSource returns a Source mock backed by an in-memory, descending-sorted
-// slice of unique ints. Query honors the cursor by returning up to limit rows
-// whose value sorts after it, mimicking a keyset scan.
-func sliceSource(rows []int) *pagination.SourceMock[int, intCursor] {
-	return &pagination.SourceMock[int, intCursor]{
-		QueryFunc: func(_ context.Context, cursor *intCursor, limit int32) ([]int, error) {
-			start := 0
-			if cursor != nil {
-				for start < len(rows) && rows[start] >= cursor.V {
-					start++
-				}
-			}
-			end := min(start+int(limit), len(rows))
-			return rows[start:end], nil
-		},
-		CursorFunc: func(row int) intCursor {
-			return intCursor{V: row}
-		},
-	}
-}
-
 // TestList walks every page end-to-end, feeding each NextToken back in, and
 // asserts the concatenated pages reproduce every row once in order. This
 // covers token encode on one call and decode on the next, the over-fetch
@@ -45,7 +19,7 @@ func TestList(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	cfg := pagination.Config{Default: 50, Max: 100}
-	src := sliceSource([]int{10, 9, 8, 7, 6, 5, 4, 3, 2, 1})
+	src := pagination.NewMockSource[int, int]([]int{10, 9, 8, 7, 6, 5, 4, 3, 2, 1})
 
 	// Act
 	var got []int
@@ -92,7 +66,8 @@ func TestList_SinglePage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			page, err := pagination.List(context.Background(), tt.cfg, tt.pageSize, "", sliceSource(tt.rows))
+			src := pagination.NewMockSource[int, int](tt.rows)
+			page, err := pagination.List(context.Background(), tt.cfg, tt.pageSize, "", src)
 			assert.NilError(t, err)
 			assert.DeepEqual(t, page.Items, tt.wantItems)
 			assert.Equal(t, page.NextToken != "", tt.wantToken)
@@ -118,7 +93,8 @@ func TestList_Errors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := pagination.List(context.Background(), cfg, tt.pageSize, tt.token, sliceSource([]int{3, 2, 1}))
+			src := pagination.NewMockSource[int, int]([]int{3, 2, 1})
+			_, err := pagination.List(context.Background(), cfg, tt.pageSize, tt.token, src)
 			assert.Assert(t, errors.Is(err, pagination.ErrInvalidRequest))
 		})
 	}
