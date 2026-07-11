@@ -65,7 +65,8 @@ ALTER TABLE tasks ADD COLUMN namespace TEXT NOT NULL DEFAULT '';
 Links do **not** get a namespace column. A link belongs to a task, and the
 subscription query already joins `task_links → tasks`
 (`internal/store/sql/queries/link.sql:16-22`), so a link's namespace is simply its
-task's namespace. This is deliberate:
+task's namespace — selected onto `model.Link` as a read-only `Namespace` field so
+the router can filter on it (see Router changes). This is deliberate:
 
 - **Single source of truth.** A task's subscriptions are always in the task's
   namespace; they cannot drift.
@@ -138,16 +139,25 @@ for _, org := range orgs {
 Because every existing rule has `Namespace == ""`, this reduces to the current
 "first matching rule per org" behavior when no rule opts into a namespace.
 
-**2. Scope the subscription lookup to the rule's namespace.** The batch
-`FindSubscribedLinksForOrgs` (keyed only by org) is replaced by a lookup scoped to
-`(routing_key, org, namespace)`, called once per matched entry (the matched set is
-tiny — at most one rule per (org, namespace)):
+**2. Scope the subscription lookup to the rule's namespace — filtering in the
+loop, not per-rule queries.** We keep the **single** batch lookup
+`FindSubscribedLinksForOrgs(key, orgIDs)` and extend it to return each link's
+`namespace` (the task's, via the existing join). The router then filters the
+returned links by the matched rule's namespace inside the wake-vs-create loop — no
+extra query per matched rule:
 
 ```go
 key := model.RoutingKey(input.URL)
+linksByOrg, err := r.Store.FindSubscribedLinksForOrgs(ctx, nil, key, orgIDs)
+// ...
 for k, rule := range matched {
-    links, err := r.Store.FindSubscribedLinks(ctx, nil, key, k.orgID, k.namespace)
-    // ...
+    // links already in hand from the single batch call; filter to this namespace.
+    var links []model.Link
+    for _, l := range linksByOrg[k.orgID] {
+        if l.Namespace == k.namespace {
+            links = append(links, l)
+        }
+    }
     if len(links) > 0 {
         // wake/attach — fan out only to subscribers in THIS namespace
     } else if rule.Create != nil {
@@ -156,20 +166,25 @@ for k, rule := range matched {
 }
 ```
 
-The store query gains a namespace predicate:
+The store query is unchanged except that it now also selects the task's namespace,
+so each returned link carries the namespace to filter on (no namespace predicate in
+SQL — the partitioning happens in Go):
 
 ```sql
--- name: FindSubscribedLinks :many
-SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_key, t.org_id
+-- name: FindSubscribedLinksForOrgs :many
+SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_key,
+       t.org_id, t.namespace                              -- + t.namespace
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
-WHERE l.routing_key = sqlc.arg(routing_key)
-  AND l.subscribe = TRUE
-  AND t.archived = FALSE
-  AND t.org_id = sqlc.arg(org_id)
-  AND t.namespace = sqlc.arg(namespace)
-ORDER BY l.created_at DESC;
+WHERE l.routing_key = sqlc.arg(routing_key) AND l.subscribe = TRUE AND t.archived = FALSE
+  AND t.org_id = ANY(sqlc.arg(org_ids)::BIGINT[])
+ORDER BY t.org_id, l.created_at DESC;
 ```
+
+`model.Link` gains a `Namespace` field populated from `t.namespace` so the loop can
+filter on it. Keeping one call means the routing key is looked up once regardless of
+how many namespaces matched, and the namespace grouping is a cheap in-memory pass
+over an already-small result set.
 
 **Fan-out is scoped, not global.** A woken/attached event fans out only to
 subscribers **within the matched rule's namespace**, never across all namespaces.
@@ -197,15 +212,15 @@ The reviewbot rule is authored with `namespace: "reviewbot"`. When the label is
 applied to a PR opened by an implementing task:
 
 1. The reviewbot rule matches under `(org, "reviewbot")`.
-2. `FindSubscribedLinks(key, org, "reviewbot")` finds **no** subscriber — the
-   implementing task's link is in namespace `""`.
+2. The batch lookup returns the implementing task's link (namespace `""`), but
+   filtering to `reviewbot` leaves **no** subscriber for this rule.
 3. The create branch runs: a reviewer task is created in namespace `reviewbot`,
    with a subscribed link scoped to `reviewbot`.
 
 The implementing task in the default namespace is untouched. On a redelivery of the
-same label event, `FindSubscribedLinks(key, org, "reviewbot")` now finds the
-reviewer's own link and takes the wake path — so the existing per-URL dedup still
-holds, but only *within* the reviewbot namespace.
+same label event, the batch lookup returns both links; filtering to `reviewbot` now
+finds the reviewer's own link and takes the wake path — so the existing per-URL
+dedup still holds, but only *within* the reviewbot namespace.
 
 ### Proto surface
 
@@ -271,9 +286,9 @@ message RoutingRule {
   unchanged and needs no data migration.
 - Per-(org, namespace) matching reduces to per-org matching when every rule is in
   the default namespace.
-- The scoped `FindSubscribedLinks(key, org, "")` returns exactly what the global
-  `FindSubscribedLinksForOrgs(key, [org])` returned when everything is in the
-  default namespace.
+- `FindSubscribedLinksForOrgs` keeps its signature and returns the same rows as
+  today plus a namespace column; filtering to `""` matches every link when
+  everything is in the default namespace.
 
 Net: a deployment that never sets a namespace behaves identically to today.
 
@@ -291,19 +306,20 @@ Net: a deployment that never sets a namespace behaves identically to today.
    the column. Depends on: (1). Verifiable by: store round-trip unit test creating
    and reading a task with a non-default namespace.
 
-3. **Scoped subscription query** — Delivers: `FindSubscribedLinks` sqlc query +
-   `store/link.go` wrapper scoped to `(routing_key, org, namespace)`. Keep the old
-   `FindSubscribedLinksForOrgs` until the router is switched, or replace in the
-   same slice. Depends on: (1). Verifiable by: store test — a default-namespace
-   subscription is invisible to a `namespace='reviewbot'` lookup and vice versa.
+3. **Namespace on returned links** — Delivers: `t.namespace` added to the
+   `FindSubscribedLinksForOrgs` SELECT and a `Namespace` field on `model.Link` +
+   the `store/link.go` scan. The query keeps its existing signature (one batch call
+   keyed by org). Depends on: (1). Verifiable by: store test — a link returned for a
+   task in `namespace='reviewbot'` carries that namespace, a default-namespace link
+   carries `""`.
 
-4. **Router matching + create** — Delivers: per-(org, namespace) matching,
-   namespace-scoped subscription lookup, and `create` stamping
-   `task.Namespace = rule.Namespace`. Adds `RoutingRule.Namespace` to the model.
-   Depends on: (2), (3). Verifiable by: eventrouter test reproducing the motivating
-   scenario — a default-namespace subscriber present, a `reviewbot` create rule
-   still creates the reviewer; and the two-rules-different-namespace case fires
-   both. This is the slice that closes the issue.
+4. **Router matching + create** — Delivers: per-(org, namespace) matching, in-loop
+   filtering of the single batch lookup by the matched rule's namespace, and
+   `create` stamping `task.Namespace = rule.Namespace`. Adds `RoutingRule.Namespace`
+   to the model. Depends on: (2), (3). Verifiable by: eventrouter test reproducing
+   the motivating scenario — a default-namespace subscriber present, a `reviewbot`
+   create rule still creates the reviewer; and the two-rules-different-namespace
+   case fires both. This is the slice that closes the issue.
 
 5. **Proto + API handlers** — Delivers: `namespace` on `Task`, `CreateTaskRequest`,
    `RoutingRule` in `proto/xagent/v1/xagent.proto` (regenerate); `CreateTask`
