@@ -235,14 +235,22 @@ func TestToGithubInputEvent(t *testing.T) {
 			expected: nil,
 		},
 		{
+			// A comment on the current diff: line is set, and the full location
+			// (path, line, start_line, side, diff_hunk) folds into Details and the
+			// path:line into the description.
 			name: "PullRequestReviewComment",
 			event: &github.PullRequestReviewCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.PullRequestComment{
-					ID:      github.Ptr[int64](777),
-					NodeID:  github.Ptr("PRRC_node777"),
-					Body:    github.Ptr("xagent: fix this"),
-					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3#discussion_r777"),
+					ID:        github.Ptr[int64](777),
+					NodeID:    github.Ptr("PRRC_node777"),
+					Body:      github.Ptr("xagent: fix this"),
+					HTMLURL:   github.Ptr("https://github.com/owner/repo/pull/3#discussion_r777"),
+					Path:      github.Ptr("internal/server/githubserver/webhook.go"),
+					Line:      github.Ptr(202),
+					StartLine: github.Ptr(200),
+					Side:      github.Ptr("RIGHT"),
+					DiffHunk:  github.Ptr("@@ -200,3 +200,3 @@\n-old\n+new"),
 					User: &github.User{
 						ID:    github.Ptr[int64](789),
 						Login: github.Ptr("reviewer"),
@@ -260,10 +268,17 @@ func TestToGithubInputEvent(t *testing.T) {
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_review_comment",
-				Description: "reviewer reviewed PR #3",
+				Description: "reviewer reviewed PR #3 (internal/server/githubserver/webhook.go:202)",
 				Data:        "xagent: fix this",
 				URL:         "https://github.com/owner/repo/pull/3#discussion_r777",
 				Attrs:       eventrouter.Attrs{"mention": nil, "user": {"reviewer"}},
+				Details: map[string]string{
+					"path":       "internal/server/githubserver/webhook.go",
+					"line":       "202",
+					"start_line": "200",
+					"side":       "RIGHT",
+					"diff_hunk":  "@@ -200,3 +200,3 @@\n-old\n+new",
+				},
 				Meta: GitHubMeta{
 					AuthorID:    789,
 					AuthorLogin: "reviewer",
@@ -272,12 +287,19 @@ func TestToGithubInputEvent(t *testing.T) {
 			},
 		},
 		{
-			name: "PullRequestReviewComment_NoXAgentPrefix",
+			// line is null (comment on an outdated diff): the line key falls back
+			// to original_line, and no start_line/side/diff_hunk are present.
+			name: "PullRequestReviewComment_NullLineFallsBackToOriginalLine",
 			event: &github.PullRequestReviewCommentEvent{
 				Action: github.Ptr("created"),
 				Comment: &github.PullRequestComment{
-					Body:    github.Ptr("looks good"),
-					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3#discussion_r800"),
+					ID:           github.Ptr[int64](778),
+					NodeID:       github.Ptr("PRRC_node778"),
+					Body:         github.Ptr("xagent: outdated"),
+					HTMLURL:      github.Ptr("https://github.com/owner/repo/pull/3#discussion_r778"),
+					Path:         github.Ptr("main.go"),
+					Line:         nil,
+					OriginalLine: github.Ptr(42),
 					User: &github.User{
 						ID:    github.Ptr[int64](789),
 						Login: github.Ptr("reviewer"),
@@ -291,11 +313,52 @@ func TestToGithubInputEvent(t *testing.T) {
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_review_comment",
-				Description: "reviewer reviewed PR #3",
+				Description: "reviewer reviewed PR #3 (main.go:42)",
+				Data:        "xagent: outdated",
+				URL:         "https://github.com/owner/repo/pull/3#discussion_r778",
+				Attrs:       eventrouter.Attrs{"mention": nil, "user": {"reviewer"}},
+				Details: map[string]string{
+					"path": "main.go",
+					"line": "42",
+				},
+				Meta: GitHubMeta{
+					AuthorID:    789,
+					AuthorLogin: "reviewer",
+					NodeID:      "PRRC_node778",
+				},
+			},
+		},
+		{
+			name: "PullRequestReviewComment_NoXAgentPrefix",
+			event: &github.PullRequestReviewCommentEvent{
+				Action: github.Ptr("created"),
+				Comment: &github.PullRequestComment{
+					Body:    github.Ptr("looks good"),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3#discussion_r800"),
+					Path:    github.Ptr("main.go"),
+					Line:    github.Ptr(10),
+					User: &github.User{
+						ID:    github.Ptr[int64](789),
+						Login: github.Ptr("reviewer"),
+					},
+				},
+				PullRequest: &github.PullRequest{
+					Number:  github.Ptr(3),
+					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3"),
+				},
+			},
+			expected: &eventrouter.InputEvent{
+				Source:      "github",
+				Type:        "pull_request_review_comment",
+				Description: "reviewer reviewed PR #3 (main.go:10)",
 				Data:        "looks good",
 				URL:         "https://github.com/owner/repo/pull/3#discussion_r800",
 				Attrs:       eventrouter.Attrs{"mention": nil, "user": {"reviewer"}},
-				Meta:        GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
+				Details: map[string]string{
+					"path": "main.go",
+					"line": "10",
+				},
+				Meta: GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
 			},
 		},
 		{
@@ -310,6 +373,8 @@ func TestToGithubInputEvent(t *testing.T) {
 				Comment: &github.PullRequestComment{
 					Body:    github.Ptr("xagent: fix this"),
 					HTMLURL: github.Ptr("https://github.com/owner/repo/pull/3#discussion_r801"),
+					Path:    github.Ptr("main.go"),
+					Line:    github.Ptr(10),
 					User: &github.User{
 						ID:    github.Ptr[int64](789),
 						Login: github.Ptr("reviewer"),
@@ -323,11 +388,15 @@ func TestToGithubInputEvent(t *testing.T) {
 			expected: &eventrouter.InputEvent{
 				Source:      "github",
 				Type:        "pull_request_review_comment",
-				Description: "reviewer reviewed PR #3",
+				Description: "reviewer reviewed PR #3 (main.go:10)",
 				Data:        "xagent: fix this",
 				URL:         "https://github.com/owner/repo/pull/3#discussion_r801",
 				Attrs:       eventrouter.Attrs{"mention": nil, "user": {"reviewer"}},
-				Meta:        GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
+				Details: map[string]string{
+					"path": "main.go",
+					"line": "10",
+				},
+				Meta: GitHubMeta{AuthorID: 789, AuthorLogin: "reviewer"},
 			},
 		},
 		{
