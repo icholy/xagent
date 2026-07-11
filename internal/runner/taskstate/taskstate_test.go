@@ -32,6 +32,39 @@ func TestWriteRead(t *testing.T) {
 	assert.DeepEqual(t, got, rec)
 }
 
+func TestWriteRead_Version(t *testing.T) {
+	// Arrange - a record stamped with the launch-time task version.
+	s, err := Open(t.TempDir())
+	assert.NilError(t, err)
+	rec := Record{TaskID: 42, Version: 7, Type: "docker", ID: "c42"}
+
+	// Act
+	assert.NilError(t, s.Write(rec))
+	got, ok, err := s.Read(42)
+
+	// Assert - the version round-trips.
+	assert.NilError(t, err)
+	assert.Equal(t, ok, true)
+	assert.Equal(t, got.Version, int64(7))
+}
+
+func TestRead_LegacyRecordVersionZero(t *testing.T) {
+	// Arrange - a record written by an older runner has no "version" key.
+	s, err := Open(t.TempDir())
+	assert.NilError(t, err)
+	legacy := []byte(`{"task_id":9,"type":"docker","id":"c9"}`)
+	assert.NilError(t, os.WriteFile(s.path(9), legacy, 0o644))
+
+	// Act
+	got, ok, err := s.Read(9)
+
+	// Assert - the missing key unmarshals to the zero value, preserving the
+	// unscoped backstop bypass.
+	assert.NilError(t, err)
+	assert.Equal(t, ok, true)
+	assert.Equal(t, got.Version, int64(0))
+}
+
 func TestRead_Absent(t *testing.T) {
 	s, err := Open(t.TempDir())
 	assert.NilError(t, err)

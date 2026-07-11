@@ -472,15 +472,16 @@ func TestRunnerSupervise_ReportLost(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Assert(t, r.sem.TryAcquire(1)) // the slot supervise will release
 
-	// Act
-	r.supervise(t.Context(), 2, backend.Handle{ID: "c2"})
+	// Act - supervise the run at version 4; the emitted failed is scoped to it.
+	r.supervise(t.Context(), 2, 4, backend.Handle{ID: "c2"})
 
-	// Assert - a failed event is emitted and the concurrency slot is released.
+	// Assert - a failed event is emitted, scoped to the run's version, and the
+	// concurrency slot is released.
 	events := submitted(t, mock, queue)
 	assert.Equal(t, len(events), 1)
 	assert.DeepEqual(t,
 		events[0],
-		&xagentv1.RunnerEvent{Event: "failed", TaskId: 2, Reason: "sandbox exited with status code -1"},
+		&xagentv1.RunnerEvent{Event: "failed", TaskId: 2, Version: 4, Reason: "sandbox exited with status code -1"},
 		protocmp.Transform(),
 	)
 	assert.Assert(t, r.sem.TryAcquire(1)) // the slot was released
@@ -508,7 +509,7 @@ func TestRunnerSupervise_CleanExit(t *testing.T) {
 	assert.Assert(t, r.sem.TryAcquire(1))
 
 	// Act
-	r.supervise(t.Context(), 3, backend.Handle{ID: "c3"})
+	r.supervise(t.Context(), 3, 1, backend.Handle{ID: "c3"})
 
 	// Assert - no event, slot released.
 	n, err := queue.Len()
@@ -539,7 +540,7 @@ func TestRunnerSupervise_Shutdown(t *testing.T) {
 	assert.Assert(t, r.sem.TryAcquire(1))
 
 	// Act
-	r.supervise(t.Context(), 4, backend.Handle{ID: "c4"})
+	r.supervise(t.Context(), 4, 1, backend.Handle{ID: "c4"})
 
 	// Assert - no event, and the slot is still held (not released on shutdown).
 	n, err := queue.Len()
@@ -628,6 +629,69 @@ func TestRunnerLoad(t *testing.T) {
 	// The semaphore was seeded with the one running sandbox.
 	assert.Assert(t, r.sem.TryAcquire(4))
 	assert.Assert(t, !r.sem.TryAcquire(1))
+}
+
+// TestRunnerLoad_VersionScopedBackstop is the payoff of this slice: the
+// boot-time backstop stamps the exited record's version onto its "failed", so
+// the ApplyRunnerEvent guard drops the event when the task has since moved to a
+// newer run and applies it when the task is still on that run. A legacy record
+// (no version, unmarshals to 0) keeps the unscoped bypass and applies
+// regardless of the task's current version.
+func TestRunnerLoad_VersionScopedBackstop(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		recVersion int64 // version stamped in the seeded exited record
+		taskNow    int64 // the task's current version when the event is applied
+		wantApply  bool
+	}{
+		{name: "superseded run dropped", recVersion: 4, taskNow: 5, wantApply: false},
+		{name: "current run applies", recVersion: 4, taskNow: 4, wantApply: true},
+		{name: "legacy record bypasses", recVersion: 0, taskNow: 5, wantApply: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// Arrange - one exited husk whose task is still RUNNING on the server,
+			// so the boot-time backstop fires a "failed".
+			mock := &xagentclient.ClientMock{
+				GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+					return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Status: xagentv1.TaskStatus_RUNNING}}, nil
+				},
+				SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+					return &xagentv1.SubmitRunnerEventsResponse{}, nil
+				},
+			}
+			be := &backend.BackendMock{
+				ProbeFunc: func(_ context.Context, _ backend.Handle) (backend.State, error) {
+					return backend.StateExited, nil
+				},
+			}
+			store := testStore(t, taskstate.Record{TaskID: 1, Version: tt.recVersion, Type: "docker", ID: "c1"})
+			queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{
+				StoreDir: t.TempDir(),
+				Client:   mock,
+				Backoff:  backoff.NewConstantBackOff(0),
+				Log:      slog.Default(),
+			})
+			assert.NilError(t, err)
+			r, err := New(Options{Client: mock, Backend: be, Store: store, RunnerID: "test-runner", Concurrency: 1, Queue: queue})
+			assert.NilError(t, err)
+
+			// Act - Load drives the exited husk through failIfTaskRunning, which
+			// emits a "failed" stamped with the record's version.
+			assert.NilError(t, r.Load(t.Context()))
+			events := submitted(t, mock, queue)
+			assert.Equal(t, len(events), 1)
+			assert.Equal(t, events[0].Version, tt.recVersion) // stamped from the record
+
+			// The existing guard decides: apply the backstop against a task at its
+			// current version.
+			task := &model.Task{ID: 1, Status: model.TaskStatusRunning, Version: tt.taskNow}
+			ev := model.RunnerEventFromProto(events[0])
+			assert.Equal(t, task.ApplyRunnerEvent(&ev), tt.wantApply)
+		})
+	}
 }
 
 func TestRunnerPrune(t *testing.T) {
