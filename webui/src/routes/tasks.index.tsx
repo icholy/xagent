@@ -14,6 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { StatusBadge } from '@/components/status-badge'
 import { ArchiveButton } from '@/components/archive-button'
 import { Button } from '@/components/ui/button'
@@ -21,6 +28,9 @@ import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Plus } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
+import { useOrgLocalStorage } from '@/hooks/use-org-local-storage'
+
+const PAGE_SIZE_OPTIONS = ['10', '20', '50', '100']
 
 export const Route = createFileRoute('/tasks/')({
   component: TasksPage,
@@ -29,6 +39,8 @@ export const Route = createFileRoute('/tasks/')({
 function TasksPage() {
   const orgId = useOrgId()
 
+  const [pageSize, setPageSize] = useOrgLocalStorage('tasks-page-size', '20')
+
   // Stack of page tokens for the pages navigated past the first. The current
   // page's token is the top of the stack; an empty stack is the first page.
   const [tokens, setTokens] = useState<string[]>([])
@@ -36,12 +48,19 @@ function TasksPage() {
 
   const { data, isLoading, error, isPlaceholderData, refetch } = useQuery(
     listTasks,
-    { pageSize: 50, pageToken },
+    { pageSize: Number(pageSize), pageToken },
     {
       placeholderData: keepPreviousData,
       refetchInterval: 60000,
     },
   )
+
+  // Changing the page size invalidates the cursor stack, so start over from
+  // the first page.
+  const handlePageSizeChange = (value: string) => {
+    setPageSize(value)
+    setTokens([])
+  }
 
   const nextPageToken = data?.nextPageToken ?? ''
   const goNext = () => {
@@ -72,6 +91,18 @@ function TasksPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex flex-wrap items-center gap-4">
+          <Select value={pageSize} onValueChange={handlePageSizeChange}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={size}>
+                  {size} / page
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Link to="/tasks/new" search={{ org: orgId }}>
             <Button>
               <Plus className="h-4 w-4" />
