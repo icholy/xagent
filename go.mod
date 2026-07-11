@@ -82,6 +82,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.36.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.43.5 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
+	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/bufbuild/buf v1.71.0 // indirect
 	github.com/bufbuild/protocompile v0.14.2-0.20260605203730-cd7c3c124e10 // indirect
 	github.com/bufbuild/protoplugin v0.0.0-20260414125817-25d1d281b46b // indirect
@@ -93,11 +94,14 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/cubicdaiya/gonp v1.0.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/docker/docker-credential-helpers v0.9.8 // indirect
 	github.com/docker/go-connections v0.7.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
+	github.com/fatih/color v1.18.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
+	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -109,6 +113,7 @@ require (
 	github.com/google/go-github/v73 v73.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
@@ -184,6 +189,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260610212136-7ab31c22f7ad // indirect
 	google.golang.org/grpc v1.81.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+	gotest.tools/gotestsum v1.13.0 // indirect
 	mvdan.cc/xurls/v2 v2.6.0 // indirect
 	pluginrpc.com/pluginrpc v0.5.0 // indirect
 )
@@ -193,4 +199,5 @@ tool (
 	github.com/matryer/moq
 	github.com/sqlc-dev/sqlc/cmd/sqlc
 	golang.org/x/tools/cmd/stringer
+	gotest.tools/gotestsum
 )
