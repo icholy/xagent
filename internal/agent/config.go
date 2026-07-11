@@ -7,9 +7,59 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/icholy/xagent/internal/x/atomicio"
 )
 
 var ConfigDir = "/tmp/xagent"
+
+// DefaultConfigStore is the in-sandbox location of the task config file. The
+// runner writes the file into the sandbox here and the driver reads and
+// rewrites it here; it is a fixed convention shared across the runner/driver
+// boundary, not runtime state.
+const DefaultConfigStore = ConfigStore("/tmp/xagent")
+
+// ConfigStore reads and writes the per-task config file rooted at its directory.
+type ConfigStore string
+
+// Path returns the config file path for the given task ID.
+func (s ConfigStore) Path(taskID int64) string {
+	return filepath.Join(string(s), fmt.Sprintf("%d.json", taskID))
+}
+
+// Load reads and unmarshals the config file for the given task ID. A missing
+// file yields an empty config rather than an error.
+func (s ConfigStore) Load(taskID int64) (*Config, error) {
+	path := s.Path(taskID)
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return &Config{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// Save marshals cfg and writes it atomically to the config file for the given
+// task ID, creating the directory if needed. The file is written 0666 so the
+// runner ships it and a non-root agent can rewrite it. The atomic write ensures
+// a container killed mid-write leaves the previous config intact.
+func (s ConfigStore) Save(taskID int64, cfg *Config) error {
+	path := s.Path(taskID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicio.WriteFile(path, data, 0o666)
+}
 
 type Config struct {
 	// Runner-provided
@@ -61,45 +111,15 @@ func (m *McpServer) Validate() error {
 }
 
 func ConfigPath(taskID int64) string {
-	return filepath.Join(ConfigDir, fmt.Sprintf("%d.json", taskID))
+	return ConfigStore(ConfigDir).Path(taskID)
 }
 
 func LoadConfig(taskID int64) (*Config, error) {
-	path := ConfigPath(taskID)
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return &Config{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
+	return ConfigStore(ConfigDir).Load(taskID)
 }
 
 func SaveConfig(taskID int64, cfg *Config) error {
-	path := ConfigPath(taskID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	// Write to a temporary file first, then rename atomically.
-	// This ensures that if the container is killed mid-write,
-	// the original config file remains intact.
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0o666); err != nil {
-		return err
-	}
-
-	// Rename is atomic on POSIX systems
-	return os.Rename(tmpPath, path)
+	return ConfigStore(ConfigDir).Save(taskID, cfg)
 }
 
 // Tar returns a tar archive containing the config file for the given task ID.
