@@ -15,11 +15,19 @@ func TestFilterPayloads(t *testing.T) {
 		{Payload: &ExternalPayload{Description: "webhook"}},
 	}
 
-	// Only the *InstructionPayload events come back, in order.
-	insts := FilterPayloads[*InstructionPayload](events)
-	assert.DeepEqual(t, insts, []*InstructionPayload{
-		{Text: "first"},
-		{Text: "second"},
+	// Only the instruction events come back, in order.
+	insts := FilterPayloads(events, []string{EventTypeInstruction})
+	assert.DeepEqual(t, insts, []EventPayload{
+		&InstructionPayload{Text: "first"},
+		&InstructionPayload{Text: "second"},
+	})
+
+	// Passing multiple types returns every matching payload in stream order.
+	mixed := FilterPayloads(events, []string{EventTypeInstruction, EventTypeExternal})
+	assert.DeepEqual(t, mixed, []EventPayload{
+		&InstructionPayload{Text: "first"},
+		&InstructionPayload{Text: "second"},
+		&ExternalPayload{Description: "webhook"},
 	})
 }
 
