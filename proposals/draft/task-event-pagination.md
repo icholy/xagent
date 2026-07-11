@@ -49,120 +49,210 @@ live-followed **timeline**.
 
 ### Overview
 
-Paginate the **timeline** RPC, `ListEventsByTask`, with keyset pagination reusing the existing
-`internal/pagination` package. The request gains `page_size`/`page_token`; the response gains
-`next_page_token`.
+Paginate the **timeline** RPC, `ListEventsByTask`, with a **bidirectional keyset cursor** that
+starts at the tail. The request keeps a single opaque `page_token`; the response returns **two**
+tokens, `prev_page_token` (older) and `next_page_token` (newer).
 
-Pagination direction is **oldest-first with a forward cursor**, and the forward walk *is* the
-live-follow mechanism:
+The shape is dictated by how a timeline is used: open at the newest events, scroll **up** for
+history, and watch new events arrive at the **bottom**. So:
 
-- The first page is the oldest `page_size` events; `next_page_token` walks **forward** toward
-  newer events (`id > cursor`).
-- `next_page_token` is **always populated** in the paged path — even a short or empty tail page
-  returns the cursor to resume from, so a client that has reached the newest event keeps calling
-  `fetchNextPage()` with that token to pick up **appended** events. There is no separate "live
-  update" channel for the timeline; polling the forward cursor forward is the update.
+- **Open = the tail.** An empty request token returns the **newest** page (one request, O(1)),
+  not the oldest — the user sees current activity immediately with no history walk.
+- **Scroll up = older.** `prev_page_token` (derived from the page's **first**/oldest row) fetches
+  the previous, older page. It is **empty once history is exhausted** (the oldest event is
+  loaded).
+- **Live-follow = newer.** `next_page_token` (derived from the page's **last**/newest row) fetches
+  newer events. It is **always populated** in the paged path: even at the tail with nothing newer
+  yet, it returns the resume cursor so a client keeps polling forward for appends. The forward
+  walk *is* the live-update mechanism — there is no separate live channel for the timeline.
 
-This is the opposite of the task list (newest-first, page toward older tasks), and it is chosen
-deliberately: a timeline is read top-down (oldest at top, newest at the bottom by the composer),
-so oldest-first pages render in place with no reversal, and the same forward cursor that loads
-history also fetches the newest delta.
+**Every page is ascending (display order)**, in both directions and in the legacy path. The
+cursor is a single boundary `id`; forward reads `id > X ORDER BY id ASC`, backward reads
+`id < X ORDER BY id DESC` and the store reverses those rows to ascending before returning. The
+direction is encoded *inside* the opaque token, so the request surface stays a single
+`page_token`.
 
 Because the event stream is **append-only** (rows are only ever inserted, with monotonically
-increasing `id`), every fully-loaded page is an **immutable window** over a fixed id range. That
-removes all of the machinery an in-place-mutating list needs: no page reversal, no
-`refetchInterval`, no cache invalidation, and no "is the head still fresh?" bookkeeping. The web
-UI walks pages oldest→newest until the tail, then appends the delta on each SSE `task_logs`
-signal.
+increasing `id`), every fully-loaded page is an **immutable window** over a fixed id range.
+That removes all of the machinery an in-place-mutating list needs: **no page reversal in the
+client, no `refetchInterval`, no cache invalidation of loaded pages, and no head-aware
+bookkeeping.** The web UI opens at the tail, prepends older pages on scroll-up, and appends the
+live delta on each SSE `task_logs` signal.
 
 The **agent brief** (`GetTaskDetails`) is deliberately **left unbounded** — it keeps fetching
 all instruction + external events exactly as it does today. It is out of scope for this
 proposal. See [The agent brief](#4b-the-agent-brief-gettaskdetails---unchanged-out-of-scope).
 
-Pagination mechanics stay owned entirely by the **store**, exactly as for tasks:
-`Store.ListEventsByTaskPage` takes the request's `page_size`/`page_token` as plain values and
-returns a page of events plus the next token; the cursor type, token encoding, page-size bounds,
-and the "fetch one extra, trim" step all live behind the store boundary. The forward-follow
-"always emit a resume token" rule is also the store's — layered on top of `pagination.List`
-(see [Store method](#store-method)). The handler passes fields through and maps errors.
+Pagination mechanics stay owned by the **store** and the `internal/pagination` package: the
+store's `ListEventsByTaskPage` takes the request's `page_size`/`page_token` as plain values and
+returns items plus the two tokens; the cursor type, direction encoding, token format, page-size
+bounds, and over-fetch all live behind that boundary. The handler passes fields through and maps
+errors.
 
 Keyset (not `LIMIT`/`OFFSET`) is the right fit and is even simpler here than for tasks:
 `events.id` is a monotonic, unique `bigserial`, so the cursor is a **single column** (`id`), with
-no `(created_at, id)` tiebreaker. The existing `idx_events_task_id_id (task_id, id)` index already
-serves the forward range scan, so **no new migration is required**.
+no `(created_at, id)` tiebreaker. The existing `idx_events_task_id_id (task_id, id)` index serves
+both the forward and backward range scans, so **no new migration is required**.
 
 ### 1. Proto Definitions
 
-`proto/xagent/v1/xagent.proto` — extend the existing request/response with the standard page
-fields. `task_id` stays field 1; the pagination fields are additive, so existing callers are
-unaffected (see [Backward compatibility](#7-backward-compatibility)):
+`proto/xagent/v1/xagent.proto` — extend the existing request/response. `task_id` stays field 1;
+the pagination fields are additive, so existing callers are unaffected (see
+[Backward compatibility](#7-backward-compatibility)):
 
 ```protobuf
 message ListEventsByTaskRequest {
   int64 task_id = 1;
-  int32 page_size = 2;    // Max events per page (default: 50, max: 200). 0 with an empty
-                          // page_token selects the legacy unpaged path (all events).
-  string page_token = 3;  // Opaque forward cursor from a previous next_page_token; empty for
-                          // the first (oldest) page.
+  int32 page_size = 2;    // Max events per page (default 50, max 200). 0 with an empty
+                          // page_token selects the legacy unpaged path (all events, ascending).
+  string page_token = 3;  // Opaque bidirectional cursor (encodes a boundary id + direction).
+                          // Empty returns the newest page.
 }
 
 message ListEventsByTaskResponse {
-  repeated Event events = 1;   // Oldest-first (ascending id).
-  // Forward cursor to resume from. In the paged path this is ALWAYS set — even a
-  // short or empty tail page returns the cursor to resume forward polling from, so
-  // a live-following client keeps calling with it to pick up appended events. A
-  // page shorter than page_size means the tail is (currently) reached. Empty only
-  // in the legacy unpaged path.
-  string next_page_token = 2;
+  repeated Event events = 1;   // Always oldest-first (ascending id), every page and path.
+  string prev_page_token = 2;  // Older page (scroll back); empty when history is exhausted.
+  string next_page_token = 3;  // Newer page (scroll forward / live-follow); ALWAYS populated in
+                               // the paged path so a client can keep polling the tail for appends.
+                               // A page shorter than page_size means the tail is currently reached.
 }
 ```
 
-The `page_token` is opaque — the server encodes the keyset (`id`) of the last returned row as
-base64, matching the task-list convention. Clients treat it as a blob and pass it back verbatim.
+Both tokens are opaque — the server encodes a boundary `id` and a direction as base64. Clients
+treat them as blobs and pass one back as the next request's `page_token`.
 
-### 2. Pagination Package — one additive export
+### 2. Pagination Package — bidirectional extension
 
-Events reuse `pagination.List`, `Config`, `Page[T]`, `Source[T, C]`, and `ErrInvalidRequest`
-verbatim; `pagination.List`'s behavior is **unchanged** (it still returns an empty `NextToken`
-once the last page is reached — the contract the task list relies on to detect "done").
-
-The one addition is a tiny exported helper so a *followed* list can synthesize its always-on
-resume token from a cursor, using the same encoding `List` uses internally:
+The package currently derives a single next-token from the last row (`List`/`Source`, used by
+`ListTasksPage`). A followed timeline needs both directions and an ascending result regardless of
+scan direction, so add a **bidirectional** entry point alongside the existing one. `List`,
+`Config`, `Page`, `Source`, and `ErrInvalidRequest` are unchanged; the task list is untouched.
 
 ```go
-// Token encodes a cursor into an opaque page token — the same encoding List uses
-// for NextToken. Exposed for append-only, live-followed lists that must return a
-// resume token even at the tail, where List itself yields an empty token. See
-// Store.ListEventsByTaskPage.
-func Token[C any](c C) (string, error) { return encode(c) }
+// Direction is which way a bidirectional keyset page reads relative to its cursor.
+// The empty token (no cursor) is the newest page; a non-empty token always carries
+// Older or Newer.
+type Direction int8
+
+const (
+    Newest Direction = iota // no cursor: the newest (tail) page
+    Older                    // rows older than the cursor (scroll back)
+    Newer                    // rows newer than the cursor (scroll forward / follow)
+)
+
+// biToken is what a bidirectional page token encodes: a caller cursor plus the
+// direction to read from it.
+type biToken[C any] struct {
+    Cursor C         `json:"c"`
+    Dir    Direction `json:"d"`
+}
+
+// BiPage is one page of a bidirectional keyset list. Items are always ascending
+// (display order). PrevToken pages older; NextToken pages newer.
+type BiPage[T any] struct {
+    Items     []T
+    PrevToken string // older page; empty when no older rows remain
+    NextToken string // newer page; append-only follow keeps this populated past the tail
+}
+
+// BiSource fetches a bounded slice of rows in a direction and maps a row to a
+// cursor. Rows are returned in the query's natural order (descending for
+// Newest/Older, ascending for Newer); ListBi normalizes Items to ascending.
+type BiSource[T, C any] interface {
+    Query(ctx context.Context, cursor *C, dir Direction, limit int32) ([]T, error)
+    Cursor(row T) C
+}
+
+// ListBi runs one page of a bidirectional keyset query. An empty pageToken reads
+// the newest page. It over-fetches size+1 to detect more rows in the scanned
+// direction, normalizes Items to ascending, and derives both tokens:
+//   - PrevToken (older): from the first row, when older rows remain.
+//   - NextToken (newer): from the last row, always — the stream is append-only and
+//     followed, so the tail is only "currently" the end. An empty forward poll
+//     (no new rows yet) echoes the request token so the caller keeps its place.
+func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken string, src BiSource[T, C]) (*BiPage[T], error) {
+    size := cmp.Or(int(pageSize), cfg.Default)
+    if size < 1 || size > cfg.Max {
+        return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, cfg.Max)
+    }
+    dir := Newest
+    var cursor *C
+    if pageToken != "" {
+        t, err := decode[biToken[C]](pageToken)
+        if err != nil {
+            return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
+        }
+        cursor, dir = &t.Cursor, t.Dir
+    }
+    rows, err := src.Query(ctx, cursor, dir, int32(size+1))
+    if err != nil {
+        return nil, err
+    }
+    more := len(rows) > size
+    if more {
+        rows = rows[:size]
+    }
+    if dir != Newer {
+        slices.Reverse(rows) // Newest/Older are fetched descending → ascending
+    }
+    page := &BiPage[T]{Items: rows}
+    if len(rows) == 0 {
+        if dir == Newer {
+            page.NextToken = pageToken // empty forward poll → keep the caller's place
+        }
+        return page, nil // empty Newest/Older page → empty stream; client re-requests newest
+    }
+    // Older rows remain when scrolling forward (Newer, by construction) or when the
+    // older-ward scan over-fetched (Newest/Older).
+    if dir == Newer || more {
+        if page.PrevToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[0]), Dir: Older}); err != nil {
+            return nil, err
+        }
+    }
+    // Newer token is always populated: append-only live-follow.
+    if page.NextToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[len(rows)-1]), Dir: Newer}); err != nil {
+        return nil, err
+    }
+    return page, nil
+}
 ```
 
-That keeps the "always emit a token" semantics out of the generic `List` (where it would break
-the task list) and in the one store method that wants it. The store still adds only an
-`eventCursor` struct and an `eventSource` implementation of `Source` — the same shape as
-`taskSource`.
+`ListBi` bakes the two timeline-specific rules — always-on `NextToken` and empty-poll echo — so
+the store method is a thin call. (The lone case `ListBi` can't synthesize is an *empty* stream:
+`Newest` with zero rows returns empty tokens. A task effectively always has its opening
+instruction event, and even if not, the web UI simply re-requests the newest page on the next
+signal until the first event lands — no synthetic "zero cursor" is needed.)
 
 ### 3. Store Layer
 
-#### SQL query
+#### SQL queries
 
-`internal/store/sql/queries/event.sql` — add a paged variant alongside the retained
-`ListEventsByTask`. It keeps the optional `types` filter for parity with the existing query (so
-future arm-filtered paging is a param, not a new query), adds a single-column forward keyset
-predicate, and bounds with `LIMIT`. Order stays ascending, matching the unpaged query:
+`internal/store/sql/queries/event.sql` — add two paged variants alongside the retained
+`ListEventsByTask`, one per scan direction. Both keep the optional `types` filter (parity with
+the existing query, so future arm-filtered paging is a param, not a new query) and both are
+covered by `idx_events_task_id_id`:
 
 ```sql
--- name: ListEventsByTaskPage :many
--- A task's events oldest-first (ORDER BY id ASC) for forward keyset pagination
--- and live-follow. The optional types filter narrows to specific arms — an
--- empty/nil array matches all types. use_cursor lets the first page skip the
--- keyset predicate.
+-- name: ListEventsByTaskBackward :many
+-- Newest-first slice for the newest-page (no cursor) and scroll-back (id < cursor)
+-- cases. Rows come back DESC; the caller reverses to ascending.
 SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
 WHERE task_id = sqlc.arg(task_id)
   AND org_id = sqlc.arg(org_id)
   AND (cardinality(sqlc.arg(types)::text[]) = 0 OR type = ANY(sqlc.arg(types)::text[]))
-  AND (NOT sqlc.arg(use_cursor)::bool OR id > sqlc.arg(cursor_id)::bigint)
+  AND (NOT sqlc.arg(use_cursor)::bool OR id < sqlc.arg(cursor_id)::bigint)
+ORDER BY id DESC
+LIMIT sqlc.arg(page_limit);
+
+-- name: ListEventsByTaskForward :many
+-- Scroll-forward / live-follow slice (id > cursor), ascending.
+SELECT id, org_id, created_at, task_id, type, wake, payload
+FROM events
+WHERE task_id = sqlc.arg(task_id)
+  AND org_id = sqlc.arg(org_id)
+  AND (cardinality(sqlc.arg(types)::text[]) = 0 OR type = ANY(sqlc.arg(types)::text[]))
+  AND id > sqlc.arg(cursor_id)::bigint
 ORDER BY id ASC
 LIMIT sqlc.arg(page_limit);
 ```
@@ -170,24 +260,23 @@ LIMIT sqlc.arg(page_limit);
 Notes:
 
 - **Single-column keyset.** `id` is a unique monotonic `bigserial` (the `events_id_seq` PK), so
-  `id > cursor_id` with `ORDER BY id ASC` is a total order — no `created_at` tiebreaker, unlike
-  tasks. `id` order *is* insertion (stream) order.
-- **No new index.** `idx_events_task_id_id ON events (task_id, id)` already exists and supports
-  the forward range scan (`WHERE task_id = ? AND id > ? ORDER BY id ASC LIMIT ?`).
-- **Over-fetch/trim** (`page_size + 1`, drop the extra, encode the token from the last returned
-  row) happens inside `pagination.List` — the SQL and handler never see it.
+  `id <=> cursor_id` is a total order — no `created_at` tiebreaker, unlike tasks. `id` order *is*
+  insertion (stream) order.
+- **No new index.** `idx_events_task_id_id ON events (task_id, id)` already exists and a B-tree
+  serves both `id > ? ORDER BY id ASC` and `id < ? ORDER BY id DESC`.
+- The `Backward` query serves both the newest page (`use_cursor = false`) and scroll-back
+  (`use_cursor = true`); `ListBi` reverses its rows to ascending.
 - The existing `ListEventsByTask` query is **retained** for the legacy unpaged path and internal
   callers (see [Backward compatibility](#7-backward-compatibility)).
 
 #### Store method
 
-`internal/store/event.go` — mirror `ListTasksPage`, then layer the forward-follow "always return
-a resume token" rule on top. Both `eventCursor` and `eventSource` are unexported: callers only
-ever see opaque tokens.
+`internal/store/event.go` — `eventCursor` and `eventSource` are unexported; callers only ever see
+opaque tokens. `eventSource` implements `pagination.BiSource`, dispatching on direction:
 
 ```go
-// eventCursor is the keyset an event page token encodes. events.id is a unique
-// monotonic bigserial, so it is a total order on its own — no tiebreaker.
+// eventCursor is the keyset a bidirectional event page token encodes. events.id is
+// a unique monotonic bigserial, so it is a total order on its own — no tiebreaker.
 type eventCursor struct {
     ID int64 `json:"i"`
 }
@@ -201,32 +290,40 @@ type ListEventsByTaskPageParams struct {
     OrgID     int64
     Types     []string // nil/empty → all arms; a future arm-filtered page passes e.g. [external]
     PageSize  int32    // 0 → default (50); max 200
-    PageToken string   // opaque forward cursor; empty for the first (oldest) page
+    PageToken string   // opaque bidirectional cursor; empty for the newest page
 }
 
-// eventSource implements pagination.Source for a task's events, oldest-first (forward).
+// eventSource implements pagination.BiSource for a task's events.
 type eventSource struct {
     store  *Store
     tx     *sql.Tx
     params ListEventsByTaskPageParams
 }
 
-func (src eventSource) Query(ctx context.Context, cursor *eventCursor, limit int32) ([]*model.Event, error) {
+func (src eventSource) Query(ctx context.Context, cursor *eventCursor, dir pagination.Direction, limit int32) ([]*model.Event, error) {
     types := src.params.Types
     if types == nil {
         types = []string{} // nil encodes as SQL NULL; empty array matches the cardinality(...) = 0 guard
     }
-    args := sqlc.ListEventsByTaskPageParams{
-        TaskID:    src.params.TaskID,
-        OrgID:     src.params.OrgID,
-        Types:     types,
-        UseCursor: cursor != nil,
-        PageLimit: limit,
+    if dir == pagination.Newer {
+        rows, err := src.store.q(src.tx).ListEventsByTaskForward(ctx, sqlc.ListEventsByTaskForwardParams{
+            TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: types,
+            CursorID: cursor.ID, PageLimit: limit,
+        })
+        if err != nil {
+            return nil, err
+        }
+        return toModelEvents(rows)
+    }
+    // Newest (cursor == nil) and Older both scan descending.
+    args := sqlc.ListEventsByTaskBackwardParams{
+        TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: types,
+        UseCursor: cursor != nil, PageLimit: limit,
     }
     if cursor != nil {
         args.CursorID = cursor.ID
     }
-    rows, err := src.store.q(src.tx).ListEventsByTaskPage(ctx, args)
+    rows, err := src.store.q(src.tx).ListEventsByTaskBackward(ctx, args)
     if err != nil {
         return nil, err
     }
@@ -237,41 +334,10 @@ func (src eventSource) Cursor(e *model.Event) eventCursor {
     return eventCursor{ID: e.ID}
 }
 
-func (s *Store) ListEventsByTaskPage(ctx context.Context, tx *sql.Tx, p ListEventsByTaskPageParams) (*pagination.Page[*model.Event], error) {
-    src := eventSource{store: s, tx: tx, params: p}
-    page, err := pagination.List(ctx, listEventsPaging, p.PageSize, p.PageToken, src)
-    if err != nil {
-        return nil, err
-    }
-    // Forward live-follow: always hand back a resume cursor, even at the tail,
-    // so a client can keep polling forward for appended rows. pagination.List
-    // only sets NextToken when it over-fetched (a full page with more behind it);
-    // a short/empty tail page leaves it empty, so fill it here.
-    if page.NextToken == "" {
-        switch {
-        case len(page.Items) > 0:
-            // Tail page with rows → resume just after the newest row returned.
-            if page.NextToken, err = pagination.Token(src.Cursor(page.Items[len(page.Items)-1])); err != nil {
-                return nil, err
-            }
-        case p.PageToken != "":
-            // Empty tail page → resume from the same point the caller was at.
-            page.NextToken = p.PageToken
-        default:
-            // Empty stream, first page → resume from the start (id > 0).
-            if page.NextToken, err = pagination.Token(eventCursor{ID: 0}); err != nil {
-                return nil, err
-            }
-        }
-    }
-    return page, nil
+func (s *Store) ListEventsByTaskPage(ctx context.Context, tx *sql.Tx, p ListEventsByTaskPageParams) (*pagination.BiPage[*model.Event], error) {
+    return pagination.ListBi(ctx, listEventsPaging, p.PageSize, p.PageToken, eventSource{store: s, tx: tx, params: p})
 }
 ```
-
-`pagination.List` builds its own `NextToken` from the **last** returned row, and with
-`ORDER BY id ASC` the last row is the **newest** in the page — exactly the forward boundary for
-the next page. The store's post-step only fills the token in the three tail cases so the paged
-path never returns an empty token.
 
 A bad `PageSize` or undecodable `PageToken` surfaces as a wrapped `pagination.ErrInvalidRequest`;
 query failures surface as-is. Same contract as `ListTasksPage`.
@@ -279,15 +345,15 @@ query failures surface as-is. Same contract as `ListTasksPage`.
 ### 4. Server Handler (`ListEventsByTask`)
 
 `internal/server/apiserver/event.go` — keep the scope checks, then branch on whether the caller
-opted into pagination. When `page_size == 0 && page_token == ""` the handler preserves today's
-behavior exactly (all events, oldest-first, no token); otherwise it serves a forward keyset page.
+opted into pagination. `page_size == 0 && page_token == ""` preserves today's behavior (all
+events, ascending, no tokens); otherwise serve a bidirectional page.
 
 ```go
 func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
     caller := apiauth.MustCaller(ctx)
     // ... unchanged scope / instance checks ...
 
-    // Legacy unpaged path: no pagination fields → all events, oldest-first.
+    // Legacy unpaged path: no pagination fields → all events, ascending.
     if req.PageSize == 0 && req.PageToken == "" {
         events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID, nil)
         if err != nil {
@@ -296,7 +362,7 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
         return &xagentv1.ListEventsByTaskResponse{Events: model.ProtoMap(events)}, nil
     }
 
-    // Paged path: oldest-first forward keyset page with an always-populated cursor.
+    // Paged path: bidirectional keyset page (empty token → newest page).
     page, err := s.store.ListEventsByTaskPage(ctx, nil, store.ListEventsByTaskPageParams{
         TaskID:    req.TaskId,
         OrgID:     caller.OrgID,
@@ -312,19 +378,20 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
     }
     return &xagentv1.ListEventsByTaskResponse{
         Events:        model.ProtoMap(page.Items),
+        PrevPageToken: page.PrevToken,
         NextPageToken: page.NextToken,
     }, nil
 }
 ```
 
-Both paths return events oldest-first, so the client never reorders. The `errors.Is` mapping is
-the one place the handler acknowledges pagination, matching `ListTasks`.
+Every path returns events ascending, so the client never reorders. The `errors.Is` mapping is the
+one place the handler acknowledges pagination, matching `ListTasks`.
 
 ### 4b. The agent brief (`GetTaskDetails`) — unchanged, out of scope
 
 `GetTaskDetails` and the agent's `get_my_task` tool are **left exactly as they are**: they keep
-fetching the full brief (all instruction + external events, oldest-first) with no bound, no
-tail, and no paging.
+fetching the full brief (all instruction + external events, ascending) with no bound, no tail,
+and no paging.
 
 This is a deliberate scope decision. The brief is the agent's one-shot picture of its task, read
 once per wake, and it is already narrowed to the two low-volume, semantically-required arms
@@ -341,78 +408,65 @@ paged agent tool, or a head-preserving tail) — not part of this change.
 
 ### 5. Web UI
 
-`webui/src/routes/tasks.$id.tsx` switches the timeline from `useQuery(listEventsByTask)` to
-`useInfiniteQuery` walking **forward**. The store returns pages oldest-first, and the timeline
-renders oldest-at-top (composer at the bottom), so pages flatten directly — **no reversal**:
+`webui/src/routes/tasks.$id.tsx` switches the timeline from `useQuery(listEventsByTask)` to a
+**bidirectional** `useInfiniteQuery`: open at the tail, prepend older pages on scroll-up, append
+the live delta on SSE. Every page is already ascending, so pages flatten directly — **no
+reversal**:
 
 ```tsx
 const PAGE_SIZE = 50
 
 const {
   data,
-  fetchNextPage,
-  isFetchingNextPage,
+  fetchPreviousPage,     // older history (scroll up)
+  hasPreviousPage,
+  isFetchingPreviousPage,
+  fetchNextPage,         // newer events (live-follow)
 } = useInfiniteQuery(
   listEventsByTask,
   { taskId, pageSize: PAGE_SIZE },
   {
+    // Empty initial pageParam → the newest (tail) page: one request on open.
     pageParamKey: 'pageToken',
-    // The paged path always returns a token (it doubles as the live-follow
-    // resume cursor), so a truthy token can't mean "stop". We keep it so we can
-    // resume forward, and drive auto-advance off page fullness instead.
+    getPreviousPageParam: (firstPage) => firstPage.prevPageToken || undefined,
+    // next_page_token is always set (it doubles as the live-follow cursor), so it
+    // can't signal "stop"; we only fetch it on an SSE signal, never as "load more".
     getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
   },
 )
 
-const pages = data?.pages ?? []
-const events = pages.flatMap((p) => p.events) // already ascending; no reverse
+// TanStack keeps pages in navigation order and prepends fetchPreviousPage results,
+// so flattening yields one ascending stream across all loaded pages.
+const events = data?.pages.flatMap((p) => p.events) ?? []
 const timeline = eventsToTimeline(events)
-
-// A page shorter than PAGE_SIZE means the tail is (currently) reached.
-const lastPage = pages.at(-1)
-const atTail = !lastPage || lastPage.events.length < PAGE_SIZE
 ```
 
-**Progressive initial load.** On mount, keep pulling until the tail, so the timeline fills in
-oldest→newest as pages arrive:
+- **Open (O(1)).** The initial request carries an empty token and gets the newest page — the user
+  sees current activity immediately, no history walk.
+- **Scroll up.** A "Load older" control (or a scroll/intersection trigger) calls
+  `fetchPreviousPage()` while `hasPreviousPage`; TanStack prepends the older page and
+  `getPreviousPageParam` reads `prev_page_token`, which goes empty at the oldest event. The
+  connect-query wrapper passes `getPreviousPageParam` through (verified against the installed
+  types).
+- **Live-follow.** On each SSE `task_logs` signal for this task, call `fetchNextPage()` once: it
+  requests `id > <newest seen>` and appends any newly-inserted events at the bottom. Loaded full
+  pages are immutable windows over append-only rows, so nothing already rendered changes — **no
+  invalidation, no `refetchInterval`, no reversal, no head-aware bookkeeping.**
+  `use-org-sse.ts`'s `task_logs` case changes from `invalidateQueries(listEventsByTask)` to
+  "`fetchNextPage()` for this task's timeline."
+- **Empty tail polls.** When nothing new has been appended, `fetchNextPage()` returns an empty
+  page whose token echoes the same cursor; left alone these accumulate. Trim trailing empty pages
+  after each follow fetch (the preceding page's `next_page_token` already points at the same
+  resume cursor, so the forward walk is unaffected):
 
-```tsx
-useEffect(() => {
-  if (!atTail && !isFetchingNextPage) fetchNextPage()
-}, [atTail, isFetchingNextPage, fetchNextPage])
-```
-
-**Live-follow via the forward cursor.** Once at the tail, the last page's `next_page_token` is
-the resume cursor. On each SSE `task_logs` signal for this task, call `fetchNextPage()` once: it
-requests `id > <newest seen>` and appends any newly-inserted events at the bottom. Because loaded
-full pages are immutable windows over append-only rows, nothing already rendered changes — there
-is **no invalidation, no `refetchInterval`, no page reversal, and no head-aware bookkeeping**.
-`use-org-sse.ts`'s `task_logs` case changes from `invalidateQueries(listEventsByTask)` to
-"`fetchNextPage()` if this task's timeline is at the tail."
-
-**Empty tail pages.** If no new events have been appended since the last poll, `fetchNextPage()`
-returns an empty page (whose token echoes the same cursor). Left alone, repeated SSE polls would
-accumulate empty pages in the query cache. Handle it by trimming trailing empty pages after each
-follow fetch — the preceding page's `next_page_token` already points at the same resume cursor,
-so the forward walk is unaffected:
-
-```tsx
-// After a follow fetch, drop trailing empty pages so idle polls don't grow the cache.
-queryClient.setQueryData(key, (prev) =>
-  !prev ? prev : {
-    ...prev,
-    pages: dropTrailingEmpty(prev.pages),
-    pageParams: prev.pageParams.slice(0, dropTrailingEmpty(prev.pages).length),
-  },
-)
-```
-
-(An equivalent alternative is to skip `useInfiniteQuery` for the follow step and issue a manual
-forward fetch that appends via `setQueryData` only when it returns rows; trimming keeps the fetch
-in `useInfiniteQuery` and is simpler.)
+  ```tsx
+  queryClient.setQueryData(key, (prev) =>
+    !prev ? prev : { ...prev, pages: dropTrailingEmpty(prev.pages), pageParams: /* sliced to match */ },
+  )
+  ```
 
 `GetTaskDetails` (task + links) keeps its existing `useQuery` + SSE invalidation unchanged; only
-the timeline query moves to the forward-walking infinite model.
+the timeline query moves to the bidirectional infinite model.
 
 ### 6. Other callers
 
@@ -423,21 +477,22 @@ the timeline query moves to the forward-walking infinite model.
 - Tests and any internal consumers that legitimately want the full stream.
 
 Only the web UI timeline moves to the paged path. The `ListEventsByTask` **RPC** serves both:
-legacy callers (empty page fields) get the full list; the web UI opts into forward paging.
+legacy callers (empty page fields) get the full list; the web UI opts into bidirectional paging.
 
 ### 7. Backward compatibility
 
 - **`ListEventsByTaskRequest`** gains two fields (`page_size`, `page_token`); the response gains
-  `next_page_token`. All additive — old clients that send neither field hit the legacy branch
-  and get **exactly today's behavior**: every event, oldest-first, empty `next_page_token`.
-  Existing server tests (`event_test.go`, `log_test.go`, `link_test.go`, `lifecycle_test.go`,
-  `taskscope_test.go`) that call `ListEventsByTask` with only `TaskId` keep passing unchanged.
-- **Ordering is unchanged.** Both the legacy and paged paths return events oldest-first
-  (ascending `id`), so there is no order caveat: a caller that opts into paging sees the same
-  ordering it saw before, just in bounded pages.
-- **Always-populated token.** The paged path's `next_page_token` is never empty — it doubles as
-  the live-follow resume cursor. Clients detect "caught up" from a page shorter than `page_size`,
-  not from an empty token. Documented on the proto fields.
+  `prev_page_token` and `next_page_token`. All additive — old clients that send neither request
+  field hit the legacy branch and get **exactly today's behavior**: every event, ascending, empty
+  tokens. Existing server tests (`event_test.go`, `log_test.go`, `link_test.go`,
+  `lifecycle_test.go`, `taskscope_test.go`) that call `ListEventsByTask` with only `TaskId` keep
+  passing unchanged.
+- **Ordering is unchanged.** Legacy and every paged page return events ascending (`id`), so a
+  caller that opts into paging sees the same order it saw before, just in bounded pages.
+- **Always-populated `next_page_token`.** In the paged path it is never empty — it doubles as the
+  live-follow resume cursor. Clients detect "caught up" from a page shorter than `page_size`, not
+  from an empty token. `prev_page_token` follows the usual rule (empty = no older rows).
+  Documented on the proto fields.
 - **`GetTaskDetails` / `get_my_task`** are untouched — no proto change, no behavior change. The
   agent brief keeps returning every instruction + external event as it does today (see
   [The agent brief](#4b-the-agent-brief-gettaskdetails---unchanged-out-of-scope)).
@@ -445,64 +500,66 @@ legacy callers (empty page fields) get the full list; the web UI opts into forwa
 ## Implementation Plan
 
 1. **Proto fields** — Delivers: `page_size`/`page_token` on `ListEventsByTaskRequest`,
-   `next_page_token` on the response, with the tail/always-populated semantics documented on the
-   fields; regenerate Go + webui (`mise run generate`, buf for webui). Depends on: nothing.
-   Verifiable by: generated code compiles; no behavior change yet.
-2. **Pagination export + store paged query & method** — Delivers: the additive `pagination.Token`
-   helper; the `ListEventsByTaskPage` SQL query (sqlc-generated); `eventCursor`, `eventSource`,
-   `Store.ListEventsByTaskPage` with the always-on forward-follow token. Depends on: nothing
-   (reuses `pagination.List` and `idx_events_task_id_id`; no migration). Verifiable by: store unit
-   tests — the forward keyset walks the whole stream oldest-first without gaps/dups; the tail page
-   returns a resume token that picks up a subsequently-inserted event; an empty poll echoes the
-   cursor; token round-trips; `types` filter honored; bad size/token → `ErrInvalidRequest`.
-3. **`ListEventsByTask` handler paging** — Delivers: the legacy/paged branch + `errors.Is`
-   mapping. Depends on: (1), (2). Verifiable by: handler tests — empty page fields → full
-   oldest-first list (unchanged); `page_size` set → oldest-first page + non-empty
-   `next_page_token`; walking the token forward reaches and follows the tail; invalid page size →
-   `CodeInvalidArgument`.
-4. **Web UI forward-walking timeline** — Delivers: `useInfiniteQuery` timeline that fetches pages
-   oldest→newest until the tail (progressive render), follows the tail by calling `fetchNextPage()`
-   on each SSE `task_logs` signal, and trims trailing empty pages; drops the timeline's
-   `refetchInterval` and the old `invalidateQueries(listEventsByTask)` in favor of the forward
-   fetch. Depends on: (3). Verifiable by: rendering a task with > `page_size` events fills in
-   progressively; appending an event and firing a `task_logs` signal appends it at the bottom with
-   no reflow; idle polls don't grow the page cache; run `pnpm lint`.
+   `prev_page_token`/`next_page_token` on the response, with the tail / always-populated / empty
+   semantics documented on the fields; regenerate Go + webui (`mise run generate`, buf for webui).
+   Depends on: nothing. Verifiable by: generated code compiles; no behavior change yet.
+2. **Pagination bidirectional extension** — Delivers: `Direction`, `BiPage`, `BiSource`, `ListBi`
+   in `internal/pagination` (existing `List`/`Source` untouched). Depends on: nothing. Verifiable
+   by: package unit tests (mocked `BiSource`) — newest page, scroll-back to exhaustion (`PrevToken`
+   empties), forward follow (`NextToken` always set), empty-forward-poll echo, ascending Items in
+   both directions, page-size bounds, undecodable token → `ErrInvalidRequest`.
+3. **Store paged queries + method** — Delivers: `ListEventsByTaskForward` / `ListEventsByTaskBackward`
+   SQL (sqlc-generated), `eventCursor`, `eventSource` (`BiSource`), `Store.ListEventsByTaskPage`.
+   Depends on: (2) (reuses `idx_events_task_id_id`; no migration). Verifiable by: store unit tests
+   against a real DB — walking `prev`/`next` covers the whole stream ascending without gaps/dups; a
+   tail `next` token picks up a subsequently-inserted event; `types` filter honored; bad size/token
+   → `ErrInvalidRequest`.
+4. **`ListEventsByTask` handler paging** — Delivers: the legacy/paged branch + `errors.Is` mapping,
+   returning both tokens. Depends on: (1), (3). Verifiable by: handler tests — empty page fields →
+   full ascending list (unchanged); empty token + `page_size` → newest page with both tokens;
+   walking `prev`/`next` reaches history/tail; invalid page size → `CodeInvalidArgument`.
+5. **Web UI bidirectional timeline** — Delivers: `useInfiniteQuery` opening at the tail,
+   `fetchPreviousPage` for history (with a "Load older" trigger), `fetchNextPage` on SSE `task_logs`
+   for live-follow, trailing-empty-page trimming; drops the timeline's `refetchInterval` and the old
+   `invalidateQueries(listEventsByTask)`. Depends on: (4). Verifiable by: opening a task with >
+   `page_size` events shows the newest page in one request; scroll-up prepends older pages and stops
+   at the oldest; appending an event + firing `task_logs` appends it at the bottom with no reflow;
+   idle polls don't grow the page cache; run `pnpm lint`.
 
 ## Trade-offs
 
-### Oldest-first forward cursor vs newest-first "load older"
+### Bidirectional tail-start cursor vs one-directional walks
 
-**Chosen: oldest-first with a forward cursor.** A task timeline reads top-down — oldest at the
-top, newest by the composer at the bottom — and it is append-only. Paging forward matches that
-render order (pages drop in with no reversal) and, crucially, the same forward cursor that loads
-history also **fetches the live delta**: once at the tail, `next_page_token` is the resume point,
-so following the stream is just "keep calling `fetchNextPage()`." A newest-first "load older"
-scheme would need a *separate* mechanism to discover and append new events at the head, plus
-reversal to render top-down. Forward paging collapses history-loading and live-follow into one
-walk.
+**Chosen: a bidirectional cursor that opens at the tail.** A timeline is opened at "now," read
+upward for history, and watched downward for new events — three motions the bidirectional cursor
+serves directly: empty token → newest page (O(1) open), `prev_page_token` → older history on
+demand, `next_page_token` → the live delta. The rejected alternatives each fail one motion: a
+newest-first "load older" cursor needs a *separate* mechanism to discover and append new events at
+the head (and reversal to render top-down); an oldest-first forward-only cursor makes live-follow
+trivial but forces walking the **entire history on open** (O(N) requests) before the user reaches
+current activity. The bidirectional cursor gets O(1) open *and* one-cursor live-follow.
 
-The cost is that opening a task with a long history walks the whole stream page by page —
-bounded per response (`page_size`), but O(N) requests overall to reach the tail. Acceptable for a
-first cut: pages render progressively, and each request is cheap and indexed. If it becomes a
-problem for very long timelines, a follow-up can "start near the tail" (e.g. a reverse-seek to
-the last page, then walk backward for history on demand) without changing the RPC contract.
+The cost is that `internal/pagination` grows direction awareness — a second entry point
+(`ListBi`), a `Direction` in the token, two query shapes, and reversing backward pages to
+ascending. That is more surface than the one-directional `List`, but it is contained in the
+package (the store and handler stay thin) and is reusable by the next append-only timeline (e.g.
+an org or run event feed).
 
-### Always-populated token (store-owned) vs empty-token-means-done
+### Always-populated `next_page_token` vs empty-token-means-done
 
-**Chosen: the paged path always returns a resume token, and that rule lives in the store.**
-An append-only followed stream has no real "done" — the tail is only *currently* the end, and new
-rows will arrive. So `next_page_token` must survive the tail to serve as the live-follow cursor;
-"caught up" is signalled by a short page instead. `pagination.List`'s default (empty token at the
-end) is exactly right for the *task list* and must not change, so the always-on rule is layered in
-`ListEventsByTaskPage` via the small `pagination.Token` export rather than baked into `List`. This
-keeps two genuinely different pagination semantics — bounded (tasks) and followed (events) — side
-by side without either compromising the other.
+**Chosen: `next_page_token` always resumes forward; `prev_page_token` empties at history's end.**
+An append-only followed stream has no real "done" at the newest end — the tail is only *currently*
+the end, and new rows will arrive — so the forward token must survive the tail to act as the
+live-follow cursor ("caught up" is signalled by a short page). The older end *is* finite, so
+`prev_page_token` empties normally. This asymmetry is baked into `ListBi` rather than the
+task-list `List` (whose empty-token-means-done contract stays intact), keeping bounded pagination
+(tasks) and followed pagination (events) side by side without either compromising the other.
 
 ### Single-column `id` keyset vs `(created_at, id)`
 
 **Chosen: `id` alone.** `events.id` is a unique monotonic `bigserial` and *is* the stream order,
 so it is a total order with no tiebreaker — unlike `tasks`, where `created_at` is not unique and
-needs `id` appended. This also means the pre-existing `idx_events_task_id_id` covers the scan and
+needs `id` appended. This also means the pre-existing `idx_events_task_id_id` covers both scans and
 **no migration is needed**. Using `created_at` would be both unnecessary and weaker (ties
 possible).
 
@@ -511,7 +568,7 @@ possible).
 **Chosen: keep the legacy unpaged path.** `ListEventsByTask` has several internal/test callers
 that want the whole stream, and `GetTaskDetails` still uses the unpaged store method for the
 complete brief. A backward-compatible branch (empty page fields → legacy behavior) lets the RPC
-serve both without a flag-day migration of every caller, and since both paths return oldest-first
+serve both without a flag-day migration of every caller, and since both paths return ascending
 there is no ordering seam.
 
 ### Leaving the agent brief unbounded vs bounding it now
@@ -527,23 +584,23 @@ separate follow-up (a dedicated paged agent tool, or a head-preserving tail).
 
 ### Reusing `internal/pagination` vs an events-specific helper
 
-**Chosen: reuse.** The package was built generic for exactly this second caller. Events add only
-an `eventCursor`, an `eventSource`, and a one-line `pagination.Token` export; `pagination.List`
-is unchanged. This is the payoff the task-pagination proposal anticipated ("The same `List` call
-backs any future paginated store method (`ListEventsPage`, …)").
+**Chosen: extend the package.** Adding `ListBi` beside `List` keeps token encode/decode, page-size
+bounds, over-fetch, and the `ErrInvalidRequest` contract shared, and the store still adds only an
+`eventCursor` and an `eventSource`. An events-specific open-coding was the fallback if the generic
+extension got awkward; it did not — the bidirectional logic is regular enough to live generically,
+and a followed timeline is a shape the codebase will hit again.
 
 ## Open Questions
 
-1. **Default / max page size.** Proposed 50 / 200 (vs the task list's 50 / 100) because
-   timelines are denser than task lists. Is 50 the right page size for progressive load, and is
-   200 a safe ceiling for a single response?
-2. **Long-history open cost.** Forward-walking from the oldest event is O(N) requests to reach
-   the tail on open. Is that acceptable as the first cut (with "start near the tail" as a later
-   optimization), or should the initial jump-to-tail land in this proposal?
-3. **Type-filtered scans.** Any future arm-filtered paging scans `(task_id, id)` and filters
-   `type` in place. On a task that is overwhelmingly reports, finding N events of a given type
-   may read many rows. Acceptable now; if it bites, add `(task_id, type, id)`. Worth pre-empting,
-   or defer until measured?
-4. **`ListExternalEvents` (org feed).** The org-level external feed (`ListEvents`, bare `limit`,
-   no cursor) has the same unbounded shape and could adopt the same `eventSource` pattern (with an
-   org-scoped cursor). In scope as a follow-up, or a separate proposal?
+1. **Default / max page size.** Proposed 50 / 200 (vs the task list's 50 / 100) because timelines
+   are denser than task lists. Is 50 the right page size, and is 200 a safe ceiling for a single
+   response?
+2. **Scroll-up trigger.** History via `fetchPreviousPage` can be a "Load older" button or an
+   intersection-observer at the top of the list. Which for the first cut?
+3. **Type-filtered scans.** Any future arm-filtered paging scans `(task_id, id)` and filters `type`
+   in place. On a task that is overwhelmingly reports, finding N events of a given type may read
+   many rows. Acceptable now; if it bites, add `(task_id, type, id)`. Worth pre-empting, or defer
+   until measured?
+4. **`ListExternalEvents` (org feed).** The org-level external feed (`ListEvents`, bare `limit`, no
+   cursor) has the same unbounded shape and could adopt `ListBi` with an org-scoped `BiSource`. In
+   scope as a follow-up, or a separate proposal?
