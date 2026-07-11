@@ -631,12 +631,10 @@ func TestRunnerLoad(t *testing.T) {
 	assert.Assert(t, !r.sem.TryAcquire(1))
 }
 
-// TestRunnerLoad_VersionScopedBackstop is the payoff of this slice: the
-// boot-time backstop stamps the exited record's version onto its "failed", so
-// the ApplyRunnerEvent guard drops the event when the task has since moved to a
-// newer run and applies it when the task is still on that run. A legacy record
-// (no version, unmarshals to 0) keeps the unscoped bypass and applies
-// regardless of the task's current version.
+// TestRunnerLoad_VersionScopedBackstop checks that the boot-time backstop stamps
+// the exited record's version onto its "failed" so ApplyRunnerEvent drops it for
+// a superseded run, applies it for the current run, and bypasses for a legacy
+// version-0 record.
 func TestRunnerLoad_VersionScopedBackstop(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
