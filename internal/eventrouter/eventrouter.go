@@ -212,13 +212,12 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 	// Wake if a subscribed link exists; otherwise create if the matched rule opts in.
 	var n int
 	for _, match := range matches {
-		orgID, rule := match.OrgID, match.Rule
 		// Built at the top, updated by whichever branch runs, passed to the
 		// callback at the end. Defaults to "matched, nothing done" (no TaskIDs,
 		// Created false).
-		outcome := RouteOutcome{Input: input, OrgID: orgID, Rule: rule}
+		outcome := RouteOutcome{Input: input, OrgID: match.OrgID, Rule: match.Rule}
 
-		if links := linksByOrg[orgID]; len(links) > 0 {
+		if links := linksByOrg[match.OrgID]; len(links) > 0 {
 			// Events are task-scoped: fan the external event out as one event row
 			// per subscribed task instead of a shared row plus junction rows.
 			seen := map[int64]bool{}
@@ -227,17 +226,17 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 					continue
 				}
 				seen[link.TaskID] = true
-				if err := r.attach(ctx, link.TaskID, input, orgID, rule.Wakeup); err != nil {
+				if err := r.attach(ctx, link.TaskID, input, match.OrgID, match.Rule.Wakeup); err != nil {
 					r.Log.Error("failed to attach event to task", "task_id", link.TaskID, "err", err)
 					continue
 				}
 				outcome.TaskIDs = append(outcome.TaskIDs, link.TaskID)
 				n++
 			}
-		} else if rule.Create != nil {
-			taskID, err := r.create(ctx, input, orgID, rule)
+		} else if match.Rule.Create != nil {
+			taskID, err := r.create(ctx, input, match.OrgID, match.Rule)
 			if err != nil {
-				r.Log.Error("failed to create task from rule", "org_id", orgID, "err", err)
+				r.Log.Error("failed to create task from rule", "org_id", match.OrgID, "err", err)
 				continue
 			}
 			outcome.TaskIDs = []int64{taskID}
