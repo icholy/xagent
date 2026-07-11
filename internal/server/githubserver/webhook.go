@@ -1,6 +1,7 @@
 package githubserver
 
 import (
+	"cmp"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -206,10 +207,10 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 		// round trip. line/start_line are capture-time hints; diff_hunk is the
 		// durable anchor (see proposals/draft/pr-review-comment-code-location.md).
 		c := event.Comment
-		line := c.GetLine()
-		if line == 0 { // GitHub sends a null line for comments on an outdated diff
-			line = c.GetOriginalLine() // fall back, but record no freshness claim
-		}
+		// GitHub sends a null line for comments on an outdated diff; fall back to
+		// original_line, which still points at the reviewed commit. This records
+		// no freshness claim about the number (see the proposal).
+		line := cmp.Or(c.GetLine(), c.GetOriginalLine())
 		details := map[string]string{
 			"path": c.GetPath(),
 			"line": strconv.Itoa(line),
