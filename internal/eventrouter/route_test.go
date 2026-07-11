@@ -3,7 +3,6 @@ package eventrouter_test
 import (
 	"context"
 	"log/slog"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -410,13 +409,14 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 	// lifecycle events are reserved for user-initiated restarts via RestartTask.
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
 	assert.NilError(t, err)
-	externals := model.FilterPayloads(events, []string{model.EventTypeExternal})
-	assert.Equal(t, len(externals), 1)
-	lifecycles := model.FilterPayloads(events, []string{model.EventTypeLifecycle})
-	restarted := slices.ContainsFunc(lifecycles, func(p model.EventPayload) bool {
-		return p.(*model.LifecyclePayload).Kind == model.LifecycleKindRestarted
+	payloads := model.FilterPayloads(events, []string{model.EventTypeExternal, model.EventTypeLifecycle})
+	assert.DeepEqual(t, payloads, []model.EventPayload{
+		&model.ExternalPayload{
+			Description: "PR comment from alice",
+			URL:         url,
+			Data:        "anything",
+		},
 	})
-	assert.Equal(t, restarted, false)
 }
 
 func TestRouteCreateRuleSpawnsTask(t *testing.T) {
