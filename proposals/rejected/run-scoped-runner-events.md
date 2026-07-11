@@ -2,6 +2,16 @@
 
 Issue: https://github.com/icholy/xagent/issues/1052
 
+> **Status: rejected.** The useful pieces landed through other proposals: §4's
+> version realignment via `task-run-versions.md` (PR #1293, in amended form —
+> the wake bump moved to the stopped fold), and §5/§6's stamping halves via
+> `version-stamped-runner-events.md` (PRs #1298/#1299). The remaining
+> machinery — the wire verdict (§1–§2), ignored timeline entries (§3), driver
+> reaction (§6), and the probe-driven start branch (§7) — is not being pursued:
+> it builds a fix on a diagnosis of #1052 that we no longer trust. The current
+> direction is observability first (enriched `SubmitRunnerEvents` logging),
+> then a fix informed by real data.
+
 ## Problem
 
 When `Task.ApplyRunnerEvent` rejects a runner event, `SubmitRunnerEvents`
