@@ -18,7 +18,7 @@ We want an **optional** way to include archived tasks in the list, **off by defa
 
 ### Overview
 
-Add a single `archived` boolean to `ListTasksRequest`. When false (the default), the list behaves exactly as today: active tasks only, backed by the tight partial index. When true, the query drops the `archived = FALSE` predicate and returns active **and** archived tasks interleaved by `created_at DESC, id DESC`, backed by a new full index. The page token binds the filter so a cursor minted under one filter cannot be silently replayed under the other. The Web UI gains a "Show archived" switch beside the page-size selector; archived rows are marked with the existing `ArchivedBadge` and muted. The CLI gains a matching opt-in flag; the MCP `list_tasks` tool is left out of scope.
+Add a single `archived` boolean to `ListTasksRequest`. When false (the default), the list behaves exactly as today: active tasks only. When true, the query drops the `archived = FALSE` predicate and returns active **and** archived tasks interleaved by `created_at DESC, id DESC`. The partial keyset index is replaced with a full one so a single index backs both paths. The page token binds the filter so a cursor minted under one filter cannot be silently replayed under the other. The Web UI gains a "Show archived" switch beside the page-size selector; archived rows are marked with the existing `ArchivedBadge` and muted. The CLI gains a matching opt-in flag; the MCP `list_tasks` tool is left out of scope.
 
 The keyset itself does not change shape semantically — the ordering is still `created_at DESC, id DESC`, and archived rows simply take their place in that ordering. That is what makes this an additive change rather than a rework of the cursor.
 
@@ -68,25 +68,29 @@ CREATE INDEX tasks_org_created_id_idx
   WHERE archived = FALSE;
 ```
 
-The planner can only use a partial index for a query whose predicate implies the index's `WHERE`. The default (`archived = false`) path still carries `archived = FALSE`, so it keeps using this index — no regression on the hot path. But the `archived = true` path has no such predicate, so it *cannot* use the partial index and would fall back to a bitmap heap scan + sort of the org's whole history.
+The planner can only use a partial index for a query whose predicate implies the index's `WHERE`. The default (`archived = false`) path carries `archived = FALSE` and uses it fine. But the `archived = true` path has no such predicate, so it *cannot* use the partial index — and there is no other ordered index over `(org_id, created_at, id)` for it to fall back to, so the keyset scan collapses into fetching all of the org's tasks via `idx_tasks_org_id` and top-N sorting on every page. A keyset cursor can't resume a scan that has no ordered index beneath it.
 
-Add a **second, full index** that covers all rows in the same order:
+**Replace the partial index with a full one** — drop the `WHERE archived = FALSE` clause so a single index serves both the default and the `archived = true` paged scans:
 
 ```sql
 -- migrate:up
-CREATE INDEX tasks_org_created_id_all_idx
+DROP INDEX tasks_org_created_id_idx;
+CREATE INDEX tasks_org_created_id_idx
   ON tasks (org_id, created_at DESC, id DESC);
 
 -- migrate:down
-DROP INDEX tasks_org_created_id_all_idx;
+DROP INDEX tasks_org_created_id_idx;
+CREATE INDEX tasks_org_created_id_idx
+  ON tasks (org_id, created_at DESC, id DESC)
+  WHERE archived = FALSE;
 ```
 
-Both indexes are kept:
+The index keeps its name and key columns; only the partial predicate is removed. Now both paths are ordered index range scans with no sort:
 
-- The default active-only scan (every 60s poll, every first page load) uses the **partial** index `tasks_org_created_id_idx`. Because auto-archive is pushing most rows into the archived state, this index stays small and dense — exactly the case it was introduced for — and the active-only scan never pays to skip archived index entries.
-- The opt-in include-archived scan uses the new **full** index `tasks_org_created_id_all_idx`, so it too is an ordered index range scan with no sort, just over a larger set.
+- The default active-only scan applies `archived = FALSE` as a filter *on top of* the full-index range scan — it walks the index in `created_at DESC, id DESC` order and skips the archived entries interleaved among the active ones.
+- The `archived = true` scan walks the same index with no filter.
 
-Keeping both trades a second index's write-amplification for keeping the common path on the tight partial index; see [Trade-offs](#two-indexes-vs-one-full-index) for why that's the right call given auto-archive.
+This is one index doing both jobs rather than two indexes doing one each; see [Trade-offs](#replace-the-partial-index-vs-keep-it-and-add-a-full-one) for the maintenance-vs-hot-path reasoning and the accepted cost.
 
 ### 4. Store layer
 
@@ -214,7 +218,7 @@ The `list_tasks` **MCP tool is out of scope** for this proposal — it stays act
 ## Implementation Plan
 
 1. **Proto field** — Delivers: `archived` on `ListTasksRequest` + regenerated Go/TS (`mise run generate`, webui buf generate). Depends on: nothing. Verifiable by: generated code compiles; field present in both stubs.
-2. **Full index migration** — Delivers: `tasks_org_created_id_all_idx` migration. Depends on: nothing. Verifiable by: `dbmate up`/`down` run cleanly; `\d tasks` shows the new index.
+2. **Index migration** — Delivers: a migration that drops `tasks_org_created_id_idx` and recreates it without the `WHERE archived = FALSE` clause (full keyset index). Depends on: nothing. Verifiable by: `dbmate up`/`down` run cleanly; `\d tasks` shows the index with no partial predicate (and the partial predicate restored on `down`).
 3. **SQL query + store** — Delivers: conditional `archived` predicate in `ListTasksPage`, `Archived` on `ListTasksPageParams`/`taskCursor`, filter threading + token-mismatch rejection (`sqlc generate`). Depends on: (2). Verifiable by: store tests — active-only unchanged; archived-included returns archived rows in keyset order; a token minted under one filter is rejected under the other with `ErrInvalidRequest`.
 4. **Server handler** — Delivers: pass `req.Archived` through. Depends on: (1), (3). Verifiable by: handler test paging with `archived` true/false; mismatch → `CodeInvalidArgument`.
 5. **Web UI** — Delivers: "Show archived" switch (reset tokens on change), archived badge + muted row. Depends on: (4). Verifiable by: rendering against an org with archived tasks; toggling shows/hides them and resets to page 1; `pnpm lint` passes.
@@ -226,11 +230,17 @@ The `list_tasks` **MCP tool is out of scope** for this proposal — it stays act
 
 **Chosen: a bool.** The feature the issue asks for is a binary toggle — "also show archived." A bool expresses exactly that, is the proto3 default-false so every existing caller is unaffected, and keeps the query a one-line conditional. A broader enum (e.g. `TaskFilter { ACTIVE, ARCHIVED, ALL }`, or a repeated status filter) would additionally allow "archived **only**," which no surface currently needs — both the UI toggle and the CLI want "active, optionally plus archived." An enum is also a larger, harder-to-narrow API commitment. If an "archived only" view or status filtering is wanted later, it can be added as a *separate* additive field (or the bool can be widened to an enum in a backward-compatible way) without redoing this work. Starting narrow avoids designing a filter language on speculation, matching how the pagination proposal deferred its `pg_trgm` search filter until there was demand.
 
-### Two indexes vs one full index
+### Replace the partial index vs keep it and add a full one
 
-**Chosen: keep the partial index and add a full one.** The alternative — replace the partial index with a single full `tasks_org_created_id_all_idx` and let the active-only path filter `archived = FALSE` during the scan — is simpler (one index, less write amplification) but degrades the *hot* path. With auto-archive (#633) driving most of an org's tasks into the archived state, an active-only page over a full index would have to read and discard a growing majority of archived index entries to fill each 50-row page — the exact skip-the-dead-rows cost the partial index was introduced to eliminate. The default poll runs constantly; the archived-included scan is a deliberate, occasional opt-in. So the common path keeps its tight partial index, and the rare path gets its own full index. The cost is one extra index maintained on writes; acceptable, and revisitable if write throughput ever becomes the bottleneck (in which case collapsing to the single full index is the fallback).
+**Chosen: replace the partial index with a single full one.** The `archived = true` paged scan *needs* an ordered index over `(org_id, created_at, id)` that includes archived rows — without one it degrades to fetching all of the org's tasks via `idx_tasks_org_id` and top-N sorting on every page, because a keyset cursor cannot resume a scan that has no ordered index beneath it. So the only real question is whether to make the existing keyset index full, or keep it partial and add a *second* full index beside it.
 
-A composite `(org_id, archived, created_at DESC, id DESC)` index was also considered: it serves the active-only path well but *cannot* serve the archived-included path as a single ordered scan, because grouping by `archived` first breaks the global `created_at` ordering the keyset needs. It doesn't solve the opt-in path, so it isn't a substitute for the full index.
+Keeping both would preserve a minimal, dense index for the hot (non-archived) view, but it pays **double index maintenance on every task write, forever** — every insert and every non-HOT update touches both indexes — to optimize a read path that is already cheap. One full index is the simpler trade: a single index serves both scans and there's only one to maintain.
+
+The **accepted cost** of replacing: the non-archived list now scans an index interleaved with archived entries and filters them out, so the common view degrades *gradually* as an org's archive grows (auto-archive, #633, means the archived fraction only rises). At current scale this is negligible — the filter is cheap and the extra index entries walked are bounded by the archived-to-active ratio — but it is a real, if slow, regression on the hot path and is called out here explicitly. If it ever bites, re-introducing a partial index as a second index is the escape hatch.
+
+A composite `(org_id, archived, created_at DESC, id DESC)` is **not** a rescue: with no `archived` predicate in the `archived = true` query, the leading `archived` column splits the btree into two separately-ordered ranges, so there is no single ordered scan across both — exactly what the keyset needs. It also doesn't help the default path enough to justify itself.
+
+Runner polling is a non-factor in this decision: `ListTasksForRunner` is anchored on `idx_tasks_runner_status` (a runner-equality prefix) and never reads archived rows, so it is unaffected by the keyset index's shape.
 
 ### Binding the filter into the token vs leaving it free
 
