@@ -140,10 +140,14 @@ message GetProfileResponse {
   AtlassianAccount atlassian_account = 5;
 }
 
-message ListTasksRequest {}
+message ListTasksRequest {
+  int32 page_size = 1;     // Max tasks to return (default: 50, max: 100)
+  string page_token = 2;   // Opaque cursor from a previous next_page_token; empty for the first page
+}
 
 message ListTasksResponse {
   repeated Task tasks = 1;
+  string next_page_token = 2;  // Token for the next page; empty when there are no more results
 }
 
 message ListRunnerTasksRequest {

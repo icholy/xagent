@@ -1,9 +1,11 @@
 package apiserver
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -236,6 +238,89 @@ func TestListTasks_Permissions(t *testing.T) {
 	// Assert
 	assert.Equal(t, len(respA.Tasks), 2)
 	assert.Equal(t, len(respB.Tasks), 1)
+}
+
+func TestListTasks_Pagination(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	// Create tasks in order; newest-first paging returns them in reverse.
+	var wantNames []string
+	for i := range 5 {
+		_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+			Name:      "task-" + strconv.Itoa(i),
+			Runner:    "test-runner",
+			Workspace: "test-workspace",
+		})
+		assert.NilError(t, err)
+		wantNames = append([]string{"task-" + strconv.Itoa(i)}, wantNames...)
+	}
+
+	// Page through in size-2 chunks following next_page_token; the concatenated
+	// pages must equal the full newest-first ordering with no gaps or dupes.
+	var gotNames []string
+	token := ""
+	pages := 0
+	for {
+		resp, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 2, PageToken: token})
+		assert.NilError(t, err)
+		assert.Assert(t, len(resp.Tasks) <= 2, "page must respect page_size")
+		for _, task := range resp.Tasks {
+			gotNames = append(gotNames, task.Name)
+		}
+		pages++
+		if resp.NextPageToken == "" {
+			break
+		}
+		token = resp.NextPageToken
+		assert.Assert(t, pages < 100, "pagination did not terminate")
+	}
+	assert.DeepEqual(t, gotNames, wantNames)
+	assert.Equal(t, pages, 3) // 2 + 2 + 1
+}
+
+func TestListTasks_DefaultPageSize(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+	for i := range 3 {
+		_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+			Name:      "task-" + strconv.Itoa(i),
+			Runner:    "test-runner",
+			Workspace: "test-workspace",
+		})
+		assert.NilError(t, err)
+	}
+
+	// An empty request (page_size 0, as the MCP list_tasks tool sends) falls back
+	// to the default page, which is large enough to hold all three tasks.
+	resp, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{})
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Tasks), 3)
+	assert.Equal(t, resp.NextPageToken, "")
+}
+
+func TestListTasks_InvalidPageSize(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
+
+	_, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 1000})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
+}
+
+func TestListTasks_InvalidPageToken(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
+
+	_, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageToken: "not-a-valid-token!!"})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
 }
 
 func TestCreateTask_BadRunner(t *testing.T) {

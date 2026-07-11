@@ -822,6 +822,8 @@ func (x *GetProfileResponse) GetAtlassianAccount() *AtlassianAccount {
 
 type ListTasksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageSize      int32                  `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`   // Max tasks to return (default: 50, max: 100)
+	PageToken     string                 `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"` // Opaque cursor from a previous next_page_token; empty for the first page
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -856,9 +858,24 @@ func (*ListTasksRequest) Descriptor() ([]byte, []int) {
 	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{9}
 }
 
+func (x *ListTasksRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListTasksRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
 type ListTasksResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tasks         []*Task                `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"` // Token for the next page; empty when there are no more results
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -898,6 +915,13 @@ func (x *ListTasksResponse) GetTasks() []*Task {
 		return x.Tasks
 	}
 	return nil
+}
+
+func (x *ListTasksResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
 }
 
 type ListRunnerTasksRequest struct {
@@ -6068,10 +6092,14 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04orgs\x18\x02 \x03(\v2\x0e.xagent.v1.OrgR\x04orgs\x12$\n" +
 	"\x0edefault_org_id\x18\x03 \x01(\x03R\fdefaultOrgId\x12?\n" +
 	"\x0egithub_account\x18\x04 \x01(\v2\x18.xagent.v1.GitHubAccountR\rgithubAccount\x12H\n" +
-	"\x11atlassian_account\x18\x05 \x01(\v2\x1b.xagent.v1.AtlassianAccountR\x10atlassianAccount\"\x12\n" +
-	"\x10ListTasksRequest\":\n" +
+	"\x11atlassian_account\x18\x05 \x01(\v2\x1b.xagent.v1.AtlassianAccountR\x10atlassianAccount\"N\n" +
+	"\x10ListTasksRequest\x12\x1b\n" +
+	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\"b\n" +
 	"\x11ListTasksResponse\x12%\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"0\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"0\n" +
 	"\x16ListRunnerTasksRequest\x12\x16\n" +
 	"\x06runner\x18\x01 \x01(\tR\x06runner\"@\n" +
 	"\x17ListRunnerTasksResponse\x12%\n" +
