@@ -18,7 +18,7 @@ We want an **optional** way to include archived tasks in the list, **off by defa
 
 ### Overview
 
-Add a single `include_archived` boolean to `ListTasksRequest`. When false (the default), the list behaves exactly as today: active tasks only, backed by the tight partial index. When true, the query drops the `archived = FALSE` predicate and returns active **and** archived tasks interleaved by `created_at DESC, id DESC`, backed by a new full index. The page token binds the filter so a cursor minted under one filter cannot be silently replayed under the other. The Web UI gains a "Show archived" switch beside the page-size selector; archived rows are marked with the existing `ArchivedBadge` and muted. The MCP tool and CLI each gain a matching opt-in flag.
+Add a single `archived` boolean to `ListTasksRequest`. When false (the default), the list behaves exactly as today: active tasks only, backed by the tight partial index. When true, the query drops the `archived = FALSE` predicate and returns active **and** archived tasks interleaved by `created_at DESC, id DESC`, backed by a new full index. The page token binds the filter so a cursor minted under one filter cannot be silently replayed under the other. The Web UI gains a "Show archived" switch beside the page-size selector; archived rows are marked with the existing `ArchivedBadge` and muted. The MCP tool and CLI each gain a matching opt-in flag.
 
 The keyset itself does not change shape semantically — the ordering is still `created_at DESC, id DESC`, and archived rows simply take their place in that ordering. That is what makes this an additive change rather than a rework of the cursor.
 
@@ -28,15 +28,15 @@ The keyset itself does not change shape semantically — the ordering is still `
 
 ```protobuf
 message ListTasksRequest {
-  int32 page_size = 1;         // Max tasks to return (default: 50, max: 100)
-  string page_token = 2;       // Opaque cursor from a previous next_page_token; empty for the first page
-  bool include_archived = 3;   // Include archived tasks alongside active ones (default: false)
+  int32 page_size = 1;     // Max tasks to return (default: 50, max: 100)
+  string page_token = 2;   // Opaque cursor from a previous next_page_token; empty for the first page
+  bool archived = 3;       // Include archived tasks alongside active ones (default: false)
 }
 ```
 
-`include_archived = false` (the proto3 default, and what every existing empty-request caller sends) preserves today's behavior exactly. `true` means "active **and** archived," matching the mental model of a "Show archived" toggle — it *adds* archived rows to the active list rather than replacing it.
+`archived = false` (the proto3 default, and what every existing empty-request caller sends) preserves today's behavior exactly. `true` means "active **and** archived," matching the mental model of a "Show archived" toggle — it *adds* archived rows to the active list rather than replacing it.
 
-A bool rather than a filter enum is chosen deliberately; see [Trade-offs](#bool-include_archived-vs-a-filter-enum). The response (`ListTasksResponse`) is unchanged — the `Task.archived` field (already present, tag 13) is what lets clients distinguish rows.
+A bool rather than a filter enum is chosen deliberately; see [Trade-offs](#archived-bool-vs-a-filter-enum). The response (`ListTasksResponse`) is unchanged — the `Task.archived` field (already present, tag 13) is what lets clients distinguish rows.
 
 ### 2. SQL query
 
@@ -47,7 +47,7 @@ A bool rather than a filter enum is chosen deliberately; see [Trade-offs](#bool-
 SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
 FROM tasks
 WHERE org_id = sqlc.arg(org_id)
-  AND (sqlc.arg(include_archived)::bool OR archived = FALSE)
+  AND (sqlc.arg(archived)::bool OR archived = FALSE)
   AND (
     NOT sqlc.arg(use_cursor)::bool
     OR (created_at, id) < (sqlc.arg(cursor_created_at)::timestamp, sqlc.arg(cursor_id)::bigint)
@@ -56,7 +56,7 @@ ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(page_limit);
 ```
 
-When `include_archived` is true the `archived = FALSE` half of the disjunction drops out and the scan visits all of the org's rows in `created_at DESC, id DESC` order. The keyset predicate `(created_at, id) < (cursor)` is untouched and remains correct, because the ordering the cursor anchors to is identical in both modes — archived rows are just interleaved by timestamp. The over-fetch-and-trim and token building inside `pagination.List` are unaffected.
+When the `archived` arg is true the `archived = FALSE` half of the disjunction drops out and the scan visits all of the org's rows in `created_at DESC, id DESC` order. The keyset predicate `(created_at, id) < (cursor)` is untouched and remains correct, because the ordering the cursor anchors to is identical in both modes — archived rows are just interleaved by timestamp. The over-fetch-and-trim and token building inside `pagination.List` are unaffected.
 
 ### 3. Pagination index
 
@@ -68,7 +68,7 @@ CREATE INDEX tasks_org_created_id_idx
   WHERE archived = FALSE;
 ```
 
-The planner can only use a partial index for a query whose predicate implies the index's `WHERE`. The default (`include_archived = false`) path still carries `archived = FALSE`, so it keeps using this index — no regression on the hot path. But the `include_archived = true` path has no such predicate, so it *cannot* use the partial index and would fall back to a bitmap heap scan + sort of the org's whole history.
+The planner can only use a partial index for a query whose predicate implies the index's `WHERE`. The default (`archived = false`) path still carries `archived = FALSE`, so it keeps using this index — no regression on the hot path. But the `archived = true` path has no such predicate, so it *cannot* use the partial index and would fall back to a bitmap heap scan + sort of the org's whole history.
 
 Add a **second, full index** that covers all rows in the same order:
 
@@ -94,30 +94,30 @@ Keeping both trades a second index's write-amplification for keeping the common 
 
 ```go
 type ListTasksPageParams struct {
-	OrgID           int64
-	PageSize        int32  // 0 means the default (50); max 100
-	PageToken       string // opaque token from a previous page; empty for the first page
-	IncludeArchived bool   // include archived tasks alongside active ones
+	OrgID     int64
+	PageSize  int32  // 0 means the default (50); max 100
+	PageToken string // opaque token from a previous page; empty for the first page
+	Archived  bool   // include archived tasks alongside active ones
 }
 
 // taskCursor is the keyset a task page token encodes. created_at is not
-// unique, so id is the tiebreaker. IncludeArchived binds the token to the
-// filter it was minted under so a cursor can't be replayed across filters.
+// unique, so id is the tiebreaker. Archived binds the token to the filter it
+// was minted under so a cursor can't be replayed across filters.
 type taskCursor struct {
-	CreatedAt       time.Time `json:"c"`
-	ID              int64     `json:"i"`
-	IncludeArchived bool      `json:"a,omitempty"`
+	CreatedAt time.Time `json:"c"`
+	ID        int64     `json:"i"`
+	Archived  bool      `json:"a,omitempty"`
 }
 
 func (src taskSource) Query(ctx context.Context, cursor *taskCursor, limit int32) ([]*model.Task, error) {
-	if cursor != nil && cursor.IncludeArchived != src.params.IncludeArchived {
-		return nil, fmt.Errorf("%w: page token does not match include_archived", pagination.ErrInvalidRequest)
+	if cursor != nil && cursor.Archived != src.params.Archived {
+		return nil, fmt.Errorf("%w: page token does not match archived filter", pagination.ErrInvalidRequest)
 	}
 	args := sqlc.ListTasksPageParams{
-		OrgID:           src.params.OrgID,
-		IncludeArchived: src.params.IncludeArchived,
-		UseCursor:       cursor != nil,
-		PageLimit:       limit,
+		OrgID:     src.params.OrgID,
+		Archived:  src.params.Archived,
+		UseCursor: cursor != nil,
+		PageLimit: limit,
 	}
 	if cursor != nil {
 		args.CursorCreatedAt = cursor.CreatedAt
@@ -131,13 +131,13 @@ func (src taskSource) Query(ctx context.Context, cursor *taskCursor, limit int32
 }
 
 func (src taskSource) Cursor(t *model.Task) taskCursor {
-	return taskCursor{CreatedAt: t.CreatedAt, ID: t.ID, IncludeArchived: src.params.IncludeArchived}
+	return taskCursor{CreatedAt: t.CreatedAt, ID: t.ID, Archived: src.params.Archived}
 }
 ```
 
 Two things to note:
 
-- **Token binds the filter.** `Cursor` stamps the request's `IncludeArchived` into every token it mints; `Query` rejects a cursor whose stamp disagrees with the current request, returning a wrapped `pagination.ErrInvalidRequest` (→ `CodeInvalidArgument`). This is entirely contained in the store's `taskSource`; the generic `internal/pagination` package is untouched — it already treats the cursor as an opaque `C` it only JSON-marshals. See [Trade-offs](#binding-the-filter-into-the-token-vs-leaving-it-free).
+- **Token binds the filter.** `Cursor` stamps the request's `Archived` into every token it mints; `Query` rejects a cursor whose stamp disagrees with the current request, returning a wrapped `pagination.ErrInvalidRequest` (→ `CodeInvalidArgument`). This is entirely contained in the store's `taskSource`; the generic `internal/pagination` package is untouched — it already treats the cursor as an opaque `C` it only JSON-marshals. See [Trade-offs](#binding-the-filter-into-the-token-vs-leaving-it-free).
 - `json:"a,omitempty"` keeps the common (`false`) token byte-compatible with tokens minted before this change, so in-flight tokens from the active-only path keep decoding.
 
 ### 5. Server handler
@@ -146,14 +146,14 @@ Two things to note:
 
 ```go
 page, err := s.store.ListTasksPage(ctx, nil, store.ListTasksPageParams{
-	OrgID:           caller.OrgID,
-	PageSize:        req.PageSize,
-	PageToken:       req.PageToken,
-	IncludeArchived: req.IncludeArchived,
+	OrgID:     caller.OrgID,
+	PageSize:  req.PageSize,
+	PageToken: req.PageToken,
+	Archived:  req.Archived,
 })
 ```
 
-The existing `errors.Is(err, pagination.ErrInvalidRequest)` → `CodeInvalidArgument` mapping now also covers the token/filter-mismatch case for free. No scope change: `include_archived` reads the same rows the caller can already read for their org; `OpTaskRead` still gates it.
+The existing `errors.Is(err, pagination.ErrInvalidRequest)` → `CodeInvalidArgument` mapping now also covers the token/filter-mismatch case for free. No scope change: `archived` reads the same rows the caller can already read for their org; `OpTaskRead` still gates it.
 
 ### 6. Web UI
 
@@ -161,11 +161,11 @@ The existing `errors.Is(err, pagination.ErrInvalidRequest)` → `CodeInvalidArgu
 
 ```tsx
 const [showArchived, setShowArchived] = useOrgLocalStorage('tasks-show-archived', 'false')
-const includeArchived = showArchived === 'true'
+const archived = showArchived === 'true'
 
 const { data, isLoading, error, isPlaceholderData, refetch } = useQuery(
   listTasks,
-  { pageSize: Number(pageSize), pageToken, includeArchived },
+  { pageSize: Number(pageSize), pageToken, archived },
   { placeholderData: keepPreviousData, refetchInterval: 60000 },
 )
 
@@ -200,12 +200,12 @@ Both surfaces send an empty `ListTasksRequest` today and only ever see the first
 
 ```go
 type listTasksInput struct {
-	IncludeArchived bool `json:"include_archived,omitempty" jsonschema:"Include archived tasks (default: false)"`
+	Archived bool `json:"archived,omitempty" jsonschema:"Include archived tasks (default: false)"`
 }
 
 // in listTasks:
 resp, err := h.service.ListTasks(ctx, &xagentv1.ListTasksRequest{
-	IncludeArchived: input.IncludeArchived,
+	Archived: input.Archived,
 })
 
 // taskSummary gains:
@@ -223,12 +223,12 @@ type taskSummary struct {
 
 ```go
 &cli.BoolFlag{
-	Name:  "include-archived",
+	Name:  "archived",
 	Usage: "include archived tasks",
 },
 // ...
 resp, err := client.ListTasks(ctx, &xagentv1.ListTasksRequest{
-	IncludeArchived: cmd.Bool("include-archived"),
+	Archived: cmd.Bool("archived"),
 })
 ```
 
@@ -236,28 +236,28 @@ Both default to false, so existing scripts and agent behavior are unchanged.
 
 ## Implementation Plan
 
-1. **Proto field** — Delivers: `include_archived` on `ListTasksRequest` + regenerated Go/TS (`mise run generate`, webui buf generate). Depends on: nothing. Verifiable by: generated code compiles; field present in both stubs.
+1. **Proto field** — Delivers: `archived` on `ListTasksRequest` + regenerated Go/TS (`mise run generate`, webui buf generate). Depends on: nothing. Verifiable by: generated code compiles; field present in both stubs.
 2. **Full index migration** — Delivers: `tasks_org_created_id_all_idx` migration. Depends on: nothing. Verifiable by: `dbmate up`/`down` run cleanly; `\d tasks` shows the new index.
-3. **SQL query + store** — Delivers: conditional `archived` predicate in `ListTasksPage`, `IncludeArchived` on `ListTasksPageParams`/`taskCursor`, filter threading + token-mismatch rejection (`sqlc generate`). Depends on: (2). Verifiable by: store tests — active-only unchanged; include-archived returns archived rows in keyset order; a token minted under one filter is rejected under the other with `ErrInvalidRequest`.
-4. **Server handler** — Delivers: pass `req.IncludeArchived` through. Depends on: (1), (3). Verifiable by: handler test paging with `include_archived` true/false; mismatch → `CodeInvalidArgument`.
+3. **SQL query + store** — Delivers: conditional `archived` predicate in `ListTasksPage`, `Archived` on `ListTasksPageParams`/`taskCursor`, filter threading + token-mismatch rejection (`sqlc generate`). Depends on: (2). Verifiable by: store tests — active-only unchanged; archived-included returns archived rows in keyset order; a token minted under one filter is rejected under the other with `ErrInvalidRequest`.
+4. **Server handler** — Delivers: pass `req.Archived` through. Depends on: (1), (3). Verifiable by: handler test paging with `archived` true/false; mismatch → `CodeInvalidArgument`.
 5. **Web UI** — Delivers: "Show archived" switch (reset tokens on change), archived badge + muted row. Depends on: (4). Verifiable by: rendering against an org with archived tasks; toggling shows/hides them and resets to page 1; `pnpm lint` passes.
-6. **MCP tool + CLI** — Delivers: `include_archived` on the `list_tasks` tool (+ `archived` in the summary) and a `--include-archived` CLI flag. Depends on: (4). Verifiable by: tool call / `xagent task list --include-archived` returns archived tasks; default omits them.
+6. **MCP tool + CLI** — Delivers: `archived` on the `list_tasks` tool (+ `archived` in the summary) and a `--archived` CLI flag. Depends on: (4). Verifiable by: tool call / `xagent task list --archived` returns archived tasks; default omits them.
 
 ## Trade-offs
 
-### `bool include_archived` vs a filter enum
+### `archived` bool vs a filter enum
 
 **Chosen: a bool.** The feature the issue asks for is a binary toggle — "also show archived." A bool expresses exactly that, is the proto3 default-false so every existing caller is unaffected, and keeps the query a one-line conditional. A broader enum (e.g. `TaskFilter { ACTIVE, ARCHIVED, ALL }`, or a repeated status filter) would additionally allow "archived **only**," which no surface currently needs — the UI toggle, the CLI, and the MCP tool all want "active, optionally plus archived." An enum is also a larger, harder-to-narrow API commitment. If an "archived only" view or status filtering is wanted later, it can be added as a *separate* additive field (or the bool can be widened to an enum in a backward-compatible way) without redoing this work. Starting narrow avoids designing a filter language on speculation, matching how the pagination proposal deferred its `pg_trgm` search filter until there was demand.
 
 ### Two indexes vs one full index
 
-**Chosen: keep the partial index and add a full one.** The alternative — replace the partial index with a single full `tasks_org_created_id_all_idx` and let the active-only path filter `archived = FALSE` during the scan — is simpler (one index, less write amplification) but degrades the *hot* path. With auto-archive (#633) driving most of an org's tasks into the archived state, an active-only page over a full index would have to read and discard a growing majority of archived index entries to fill each 50-row page — the exact skip-the-dead-rows cost the partial index was introduced to eliminate. The default poll runs constantly; the include-archived scan is a deliberate, occasional opt-in. So the common path keeps its tight partial index, and the rare path gets its own full index. The cost is one extra index maintained on writes; acceptable, and revisitable if write throughput ever becomes the bottleneck (in which case collapsing to the single full index is the fallback).
+**Chosen: keep the partial index and add a full one.** The alternative — replace the partial index with a single full `tasks_org_created_id_all_idx` and let the active-only path filter `archived = FALSE` during the scan — is simpler (one index, less write amplification) but degrades the *hot* path. With auto-archive (#633) driving most of an org's tasks into the archived state, an active-only page over a full index would have to read and discard a growing majority of archived index entries to fill each 50-row page — the exact skip-the-dead-rows cost the partial index was introduced to eliminate. The default poll runs constantly; the archived-included scan is a deliberate, occasional opt-in. So the common path keeps its tight partial index, and the rare path gets its own full index. The cost is one extra index maintained on writes; acceptable, and revisitable if write throughput ever becomes the bottleneck (in which case collapsing to the single full index is the fallback).
 
-A composite `(org_id, archived, created_at DESC, id DESC)` index was also considered: it serves the active-only path well but *cannot* serve the include-archived path as a single ordered scan, because grouping by `archived` first breaks the global `created_at` ordering the keyset needs. It doesn't solve the opt-in path, so it isn't a substitute for the full index.
+A composite `(org_id, archived, created_at DESC, id DESC)` index was also considered: it serves the active-only path well but *cannot* serve the archived-included path as a single ordered scan, because grouping by `archived` first breaks the global `created_at` ordering the keyset needs. It doesn't solve the opt-in path, so it isn't a substitute for the full index.
 
 ### Binding the filter into the token vs leaving it free
 
-**Chosen: bind the filter into the token.** The keyset `(created_at, id)` is technically valid under either filter — the ordering is the same — so replaying a token across filters would not *corrupt* results; it would resume from that position over whichever row set the new filter selects. But it is a latent footgun: a caller that flips `include_archived` while paging would get a page that is internally consistent yet mismatched with what the toggle now claims to show, with no error. Because the pagination proposal deliberately kept the token an opaque JSON blob "flexible" for exactly this, stamping `IncludeArchived` into the cursor and rejecting a mismatched replay is nearly free (one field, one comparison in `taskSource.Query`) and turns a confusing silent-inconsistency into a clear `CodeInvalidArgument`. The `omitempty` tag keeps the default-false token wire-compatible with tokens already in flight.
+**Chosen: bind the filter into the token.** The keyset `(created_at, id)` is technically valid under either filter — the ordering is the same — so replaying a token across filters would not *corrupt* results; it would resume from that position over whichever row set the new filter selects. But it is a latent footgun: a caller that flips `archived` while paging would get a page that is internally consistent yet mismatched with what the toggle now claims to show, with no error. Because the pagination proposal deliberately kept the token an opaque JSON blob "flexible" for exactly this, stamping `Archived` into the cursor and rejecting a mismatched replay is nearly free (one field, one comparison in `taskSource.Query`) and turns a confusing silent-inconsistency into a clear `CodeInvalidArgument`. The `omitempty` tag keeps the default-false token wire-compatible with tokens already in flight.
 
 The alternative — leave the token filter-agnostic and just document "reset pagination when you change the filter" — is simpler and would be fine for the UI alone (which already resets the token stack on toggle, as it does on page-size change). It was rejected because it pushes a correctness expectation onto every non-UI client (CLI scripts, future API consumers) that the server can cheaply enforce instead. Binding is defensive rather than strictly required; a reviewer who prefers the minimal change can drop the `taskCursor` field and the `Query` check without affecting the rest of the design.
 
