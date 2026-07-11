@@ -32,6 +32,8 @@ type Page[T any] struct {
 // Source supplies the query-specific parts of a keyset-paginated list:
 // how to fetch a bounded slice of rows after a cursor, and how to derive
 // a cursor from a returned row.
+//
+//go:generate go tool moq -out source_moq_test.go . Source
 type Source[T, C any] interface {
 	// Query fetches up to limit rows that sort after cursor.
 	// A nil cursor means the first page.
