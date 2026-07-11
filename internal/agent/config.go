@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"archive/tar"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,8 +8,6 @@ import (
 
 	"github.com/icholy/xagent/internal/x/atomicio"
 )
-
-var ConfigDir = "/tmp/xagent"
 
 // DefaultConfigStore is the in-sandbox location of the task config file. The
 // runner writes the file into the sandbox here and the driver reads and
@@ -108,49 +104,4 @@ func (m *McpServer) Validate() error {
 		return fmt.Errorf("unknown type: %s", m.Type)
 	}
 	return nil
-}
-
-func ConfigPath(taskID int64) string {
-	return ConfigStore(ConfigDir).Path(taskID)
-}
-
-func LoadConfig(taskID int64) (*Config, error) {
-	return ConfigStore(ConfigDir).Load(taskID)
-}
-
-func SaveConfig(taskID int64, cfg *Config) error {
-	return ConfigStore(ConfigDir).Save(taskID, cfg)
-}
-
-// Tar returns a tar archive containing the config file for the given task ID.
-func (c *Config) Tar(taskID int64) ([]byte, error) {
-	data, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	// Create directory entry
-	if err := tw.WriteHeader(&tar.Header{
-		Name:     ConfigDir + "/",
-		Mode:     0777,
-		Typeflag: tar.TypeDir,
-	}); err != nil {
-		return nil, err
-	}
-	// Create file entry
-	if err := tw.WriteHeader(&tar.Header{
-		Name: ConfigPath(taskID),
-		Mode: 0666,
-		Size: int64(len(data)),
-	}); err != nil {
-		return nil, err
-	}
-	if _, err := tw.Write(data); err != nil {
-		return nil, err
-	}
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
