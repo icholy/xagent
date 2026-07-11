@@ -161,7 +161,7 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 			Description: description,
 			Data:        commentBody,
 			URL:         url,
-			Attrs:       eventrouter.Attrs{"mention": atlassian.Mentions(commentBody)},
+			Attrs:       eventrouter.Attrs{"mention": atlassian.Mentions(commentBody), "user": {accountID}},
 			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
 		}, nil
 
@@ -188,7 +188,7 @@ func toInputEvent(body []byte) (*eventrouter.InputEvent, error) {
 			Source:      "atlassian",
 			Type:        EventTypeLabelAdded,
 			Description: fmt.Sprintf("%s added label(s) %s to %s", displayName, strings.Join(quote(added), ", "), payload.Issue.Key),
-			Attrs:       eventrouter.Attrs{"label": added},
+			Attrs:       eventrouter.Attrs{"label": added, "user": {accountID}},
 			URL:         url,
 			Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: displayName},
 		}, nil

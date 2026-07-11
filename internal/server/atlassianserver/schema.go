@@ -43,6 +43,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Placeholder: "5b10ac8d82e05b22cc7d4ef5",
 				Help:        "Atlassian account id @-mentioned in the comment. Enter the bare id (no [~accountid:…] wrapper).",
 			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "5b10ac8d82e05b22cc7d4ef5",
+				Help:        "Atlassian account id of the user who commented. Enter the bare id (no [~accountid:…] wrapper).",
+			},
 		},
 		DefaultRules: []model.RoutingRule{{
 			Source:     "atlassian",
@@ -73,6 +79,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Label:       "Label",
 				Placeholder: "xagent",
 				Help:        "The label added to the issue.",
+			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "5b10ac8d82e05b22cc7d4ef5",
+				Help:        "Atlassian account id of the user who added the label(s). Enter the bare id (no [~accountid:…] wrapper).",
 			},
 		},
 	})

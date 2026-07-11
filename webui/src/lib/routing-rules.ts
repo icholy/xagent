@@ -73,6 +73,7 @@ const FALLBACK_ATTRS: AttrDef[] = (
     ['assignee', 'Assignee'],
     ['label', 'Label'],
     ['state', 'State'],
+    ['user', 'User'],
   ] as const
 ).map(([key, label]) => ({
   $typeName: 'xagent.v1.AttrDef',

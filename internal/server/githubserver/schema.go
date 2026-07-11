@@ -45,6 +45,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Placeholder: "octocat",
 				Help:        "GitHub username @-mentioned in the comment (no leading @).",
 			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "octocat",
+				Help:        "The GitHub username of the user who commented (no leading @).",
+			},
 		},
 		// Wake the linked task when the comment body is prefixed with "xagent:".
 		DefaultRules: []model.RoutingRule{{
@@ -76,6 +82,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Label:       "Mention",
 				Placeholder: "octocat",
 				Help:        "GitHub username @-mentioned in the review comment (no leading @).",
+			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "octocat",
+				Help:        "The GitHub username of the user who left the review comment (no leading @).",
 			},
 		},
 		// Wake the linked task when the review comment body is prefixed with "xagent:".
@@ -109,6 +121,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Placeholder: "octocat",
 				Help:        "GitHub username @-mentioned in the review (no leading @).",
 			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "octocat",
+				Help:        "The GitHub username of the user who submitted the review (no leading @).",
+			},
 		},
 		// Wake the linked task when the review body is prefixed with "xagent:".
 		DefaultRules: []model.RoutingRule{{
@@ -141,6 +159,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Placeholder: "icholy-bot",
 				Help:        "The GitHub username newly assigned to the issue (no leading @).",
 			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "octocat",
+				Help:        "The GitHub username of the user who assigned the issue (no leading @).",
+			},
 		},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
@@ -166,6 +190,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Placeholder: "icholy-bot",
 				Help:        "The GitHub username newly assigned to the pull request (no leading @).",
 			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "octocat",
+				Help:        "The GitHub username of the user who assigned the pull request (no leading @).",
+			},
 		},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
@@ -184,6 +214,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Label:       "PR URL",
 				Placeholder: "https://github.com/owner/repo/pull/123",
 				Help:        "Matched against the opened PR URL, e.g. to scope a rule to a single repo.",
+			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "octocat",
+				Help:        "The GitHub username of the user who opened the pull request (no leading @).",
 			},
 		},
 	})
@@ -210,6 +246,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Placeholder: "merged",
 				Help:        `Whether the PR was "merged" or just "closed".`,
 			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "octocat",
+				Help:        "The GitHub username of the user who closed the pull request (no leading @).",
+			},
 		},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
@@ -234,6 +276,12 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Label:       "Label",
 				Placeholder: "xagent",
 				Help:        "The label added to the issue or PR.",
+			},
+			{
+				Key:         "user",
+				Label:       "User",
+				Placeholder: "octocat",
+				Help:        "The GitHub username of the user who added the label (no leading @).",
 			},
 		},
 	})

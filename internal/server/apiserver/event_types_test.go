@@ -43,7 +43,7 @@ func TestGetEventTypes(t *testing.T) {
 	for _, a := range issueComment.Attrs {
 		keys = append(keys, a.Key)
 	}
-	assert.DeepEqual(t, keys, []string{"body", "url", "mention"})
+	assert.DeepEqual(t, keys, []string{"body", "url", "mention", "user"})
 
 	// One type asserted whole to prove the AttrDef -> proto conversion carries
 	// every display field (label/placeholder/help), not just the key.
@@ -67,6 +67,12 @@ func TestGetEventTypes(t *testing.T) {
 			Label:       "Label",
 			Placeholder: "xagent",
 			Help:        "The label added to the issue or PR.",
+		},
+		{
+			Key:         "user",
+			Label:       "User",
+			Placeholder: "octocat",
+			Help:        "The GitHub username of the user who added the label (no leading @).",
 		},
 	}, protocmp.Transform())
 
