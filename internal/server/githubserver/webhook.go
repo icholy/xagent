@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v88/github"
@@ -199,11 +200,42 @@ func toInputEvent(webhookEvent any) *eventrouter.InputEvent {
 		body := strings.TrimSpace(*event.Comment.Body)
 		login := event.Comment.User.GetLogin()
 		number := event.PullRequest.GetNumber()
+
+		// Carry the comment's code location into the persisted payload so the
+		// agent and UI see the anchored file/line and diff without a GitHub API
+		// round trip. line/start_line are capture-time hints; diff_hunk is the
+		// durable anchor (see proposals/draft/pr-review-comment-code-location.md).
+		c := event.Comment
+		line := c.GetLine()
+		if line == 0 { // GitHub sends a null line for comments on an outdated diff
+			line = c.GetOriginalLine() // fall back, but record no freshness claim
+		}
+		details := map[string]string{
+			"path": c.GetPath(),
+			"line": strconv.Itoa(line),
+		}
+		if s := c.GetStartLine(); s != 0 {
+			details["start_line"] = strconv.Itoa(s)
+		}
+		if s := c.GetSide(); s != "" {
+			details["side"] = s
+		}
+		if h := c.GetDiffHunk(); h != "" {
+			details["diff_hunk"] = h
+		}
+
+		// Fold path:line into the description so even the timeline row and the
+		// data channel read better before any UI change lands.
+		description := fmt.Sprintf("%s reviewed PR #%d", login, number)
+		if path := c.GetPath(); path != "" {
+			description = fmt.Sprintf("%s reviewed PR #%d (%s:%d)", login, number, path, line)
+		}
 		return &eventrouter.InputEvent{
 			Source:      "github",
 			Type:        EventTypePullRequestReviewComment,
-			Description: fmt.Sprintf("%s reviewed PR #%d", login, number),
+			Description: description,
 			Data:        body,
+			Details:     details,
 			// The expressive trigger URL is the review comment itself; the
 			// router derives the parent PR routing key via model.RoutingKey.
 			URL:   *event.Comment.HTMLURL,
