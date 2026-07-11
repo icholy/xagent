@@ -108,6 +108,56 @@ func (fakeOrgResolver) ResolveOrg(ctx context.Context, userID string, orgID int6
 
 See `internal/xagentclient/client_moq.go` (`ClientMock`) for a checked-in `*_moq.go` example.
 
+## Extending Generated Mocks
+
+Hand-written helper methods on a generated mock live in a sibling `*_moq_ext.go` file named after the generated file — extensions to `client_moq.go` belong in `client_moq_ext.go`, in the same package. Never add them to the `*_moq.go` file itself: `go generate` regenerates it and clobbers manual edits. For a test-only mock generated as `*_moq_test.go`, extensions go in `*_moq_ext_test.go`.
+
+Reach for an extension when multiple tests (especially across packages) re-implement the same call-log extraction. An extension flattens or projects recorded calls into a shape one assertion can cover. It returns data — it never takes a `*testing.T` (a non-test file importing `testing` links it into production builds) and never asserts itself:
+
+```go
+// client_moq_ext.go
+
+// SubmittedRunnerEvents returns every runner event submitted across all
+// SubmitRunnerEvents calls, flattened in submission order.
+func (m *ClientMock) SubmittedRunnerEvents() []*xagentv1.RunnerEvent {
+	var events []*xagentv1.RunnerEvent
+	for _, call := range m.SubmitRunnerEventsCalls() {
+		events = append(events, call.SubmitRunnerEventsRequest.GetEvents()...)
+	}
+	return events
+}
+```
+
+which collapses the per-call count-and-index dance into one comparison:
+
+```go
+// Good: one whole-stream comparison via the extension
+assert.DeepEqual(t,
+	mock.SubmittedRunnerEvents(),
+	[]*xagentv1.RunnerEvent{
+		{TaskId: 1, Version: 7, Event: "started"},
+		{TaskId: 1, Version: 7, Event: "stopped"},
+	},
+	protocmp.Transform(),
+)
+
+// Bad: cmp.Len plus an indexed DeepEqual per call against each request wrapper
+calls := mock.SubmitRunnerEventsCalls()
+assert.Assert(t, cmp.Len(calls, 2))
+assert.DeepEqual(t,
+	calls[0].SubmitRunnerEventsRequest,
+	&xagentv1.SubmitRunnerEventsRequest{Events: []*xagentv1.RunnerEvent{{TaskId: 1, Version: 7, Event: "started"}}},
+	protocmp.Transform(),
+)
+assert.DeepEqual(t,
+	calls[1].SubmitRunnerEventsRequest,
+	&xagentv1.SubmitRunnerEventsRequest{Events: []*xagentv1.RunnerEvent{{TaskId: 1, Version: 7, Event: "stopped"}}},
+	protocmp.Transform(),
+)
+```
+
+Name extensions so they cannot collide with what moq generates for the interface (`Foo`, `FooFunc`, `FooCalls` per method): `SubmittedRunnerEvents`, not another `SubmitRunnerEvents*` variant.
+
 ## Asserting on Mock Calls
 
 Assert on a mock's `...Calls()` log instead of hand-rolling `len(...)` count checks. Use `cmp.Len` from `gotest.tools/v3/assert/cmp` for the count:
