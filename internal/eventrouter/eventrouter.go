@@ -157,7 +157,12 @@ func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, erro
 				continue
 			}
 			if Match(rule, input) {
-				matches = append(matches, RouteMatch{OrgID: org.OrgID, Rule: &rule, RuleIndex: i, RuleDefault: defaulted})
+				matches = append(matches, RouteMatch{
+					OrgID:       org.OrgID,
+					Rule:        &rule,
+					RuleIndex:   i,
+					RuleDefault: defaulted,
+				})
 				break
 			}
 		}
