@@ -63,14 +63,14 @@ history, and watch new events arrive at the **bottom**. So:
   loaded).
 - **Live-follow = newer.** `next_page_token` (derived from the page's **last**/newest row) fetches
   newer events. It is **always populated** in the paged path: even at the tail with nothing newer
-  yet, it returns the resume cursor so a client keeps polling forward for appends. The forward
-  walk *is* the live-update mechanism — there is no separate live channel for the timeline.
+  yet, it returns the resume cursor so a client keeps polling for appends. Polling this cursor *is*
+  the live-update mechanism — there is no separate live channel for the timeline.
 
 **Every page is ascending (display order)**, in both directions and in the legacy path. The
-cursor is a single boundary `id`; forward reads `id > X ORDER BY id ASC`, backward reads
-`id < X ORDER BY id DESC` and the store reverses those rows to ascending before returning. The
-direction is encoded *inside* the opaque token, so the request surface stays a single
-`page_token`.
+cursor is a single boundary `id`; the older/newest-page read scans `id < X ORDER BY id DESC`
+(reversed to ascending before returning), and the newer/live-follow read scans
+`id > X ORDER BY id ASC`. The direction is encoded *inside* the opaque token, so the request
+surface stays a single `page_token`.
 
 Because the event stream is **append-only** (rows are only ever inserted, with monotonically
 increasing `id`), every fully-loaded page is an **immutable window** over a fixed id range.
@@ -121,171 +121,117 @@ message ListEventsByTaskResponse {
 Both tokens are opaque — the server encodes a boundary `id` and a direction as base64. Clients
 treat them as blobs and pass one back as the next request's `page_token`.
 
-### 2. Pagination Package — one `Source`, two entry points
+### 2. Pagination Package — one `Source`, one `List`, one `Page`
 
-There is a **single** `Source` interface with **two query methods**, `QueryForward` and
-`QueryBackward` (rather than one `Query` taking a direction flag), and two entry points that drive
-it: the existing `List` (one-directional, single next-token — the task list) and a new `ListBi`
-(bidirectional, two tokens — the timeline). Terminology is generic **forward/backward** by key
-order, not domain newer/older: `QueryForward` reads the ascending side (keys above the cursor);
-`QueryBackward` reads the descending side (keys below the cursor; a nil cursor starts at the
-highest key — the newest page). A source implements only the directions it supports and returns
-`ErrUnsupportedDirection` from the rest — the task list pages only backward (through its
-newest-first rows) and errors from `QueryForward`; the event source supports both. `Config`,
-`Page`, and `ErrInvalidRequest` are unchanged; we add `ErrUnsupportedDirection`, `BiPage`, and
-`ListBi`. `Source` grows from one `Query` method to `QueryForward`/`QueryBackward`, so the
-just-landed `taskSource` and `List` are adjusted (task keeps its query as `QueryBackward`, adds an
-erroring `QueryForward`; `List` calls `QueryBackward`) — a mechanical, behavior-preserving refactor
-of the task pagination code.
+`List`, `Source`, and `Page` become bidirectional in place — there is no separate `ListBi`/`BiPage`.
+A page token carries a **`Backward bool`** (not a direction enum) that defaults to `false`
+(**forward**), so the zero value is the intuitive default. `Source` gains a second query method so
+it can walk both ways; a source that only walks one way returns `ErrUnsupportedDirection` from the
+other, and `List` leaves that direction's page token empty.
 
-The storage-agnostic package deals in plain `int` for counts (`limit`, `Config.Default/Max`,
-the internal `size`). `int32` appears at exactly two type boundaries and nowhere else: the
-`page_size` request value, which is the proto field type passed verbatim into the entry points and
-store params; and the `LIMIT` argument at the sqlc call, converted with `int32(limit)` inside each
-store `Query*` method. (The just-landed `pagination.List`/`Source` use `int32` for `limit` too;
-this narrows it to `int` as part of the same `Source` change.)
+**Forward is the primary walk, backward is the reverse.** Forward reads the descending side (keys
+below the cursor; a **nil cursor starts at the newest page**) and continues toward older rows —
+this is exactly the task list's existing behavior *and* a timeline's open + scroll-back. Backward
+reads the ascending side (keys above the cursor) toward newer rows — a timeline's live-follow. So
+the task list is **forward-only** (unchanged), and only a followed timeline also implements
+backward. The append-only shape gives each direction a fixed rule: the **forward** (older) token
+empties when history runs out; the **backward** (newer) token, when supported, stays populated so
+a client keeps polling the tail.
 
 ```go
-// ErrUnsupportedDirection is returned by a Source asked to page in a direction it
-// does not implement (e.g. the task list, backward-only, from QueryForward). List
-// only ever calls QueryBackward, so handlers treat it as internal, not a bad request.
+// ErrUnsupportedDirection is returned by a Source asked to walk a direction it does
+// not implement (e.g. the task list from QueryBackward). List catches it and leaves
+// that direction's page token empty.
 var ErrUnsupportedDirection = errors.New("unsupported page direction")
 
-// Source walks a keyset in two directions and maps a row to a cursor.
-// QueryBackward reads the descending side (keys below the cursor; a nil cursor
-// starts at the highest key — the newest page). QueryForward reads the ascending
-// side (keys above the cursor). Rows come back in the query's natural order
-// (descending / ascending respectively); ListBi reverses backward pages so its Items
-// are ascending. A one-directional list implements one method and returns
-// ErrUnsupportedDirection from the other.
+// Source walks a keyset and maps a row to a cursor. QueryForward is the primary
+// (default) walk — descending by key: a nil cursor starts at the newest page; a
+// non-nil cursor continues to lower keys (older). QueryBackward is the reverse walk —
+// ascending, keys above the cursor (newer). Each returns rows in its scan order
+// (descending / ascending). A one-directional source returns ErrUnsupportedDirection
+// from the walk it doesn't implement.
 type Source[T, C any] interface {
-    QueryBackward(ctx context.Context, cursor *C, limit int) ([]T, error)
     QueryForward(ctx context.Context, cursor *C, limit int) ([]T, error)
+    QueryBackward(ctx context.Context, cursor *C, limit int) ([]T, error)
     Cursor(row T) C
 }
 
-// direction is which method a page token resumes from. It is an unexported binary,
-// internal to token encoding — it is not a source-facing value. "No cursor" is a
-// separate fact (nil cursor / empty token); the newest page is a backward read with
-// no cursor.
-type direction int8
-
-const (
-    backward direction = iota // QueryBackward (descending); nil cursor → newest page
-    forward                   // QueryForward (ascending)
-)
-
-// biToken is what a bidirectional page token encodes: a caller cursor plus the
-// direction to resume from. A token always carries backward (prev) or forward (next).
-type biToken[C any] struct {
-    Cursor C         `json:"c"`
-    Dir    direction `json:"d"`
+// Config bounds page size and sets the display order of Page.Items. Ascending is
+// false for a newest-first list (the task list, unchanged) and true for a timeline
+// rendered oldest-at-top. It affects only Items ordering, never token derivation.
+type Config struct {
+    Default   int
+    Max       int
+    Ascending bool
 }
 
-// BiPage is one page of a bidirectional keyset list. Items are always ascending
-// (display order). PrevToken pages backward (older); NextToken pages forward (newer).
-type BiPage[T any] struct {
-    Items     []T
-    PrevToken string // backward page; empty when no older rows remain
-    NextToken string // forward page; append-only follow keeps this populated past the tail
+// keysetToken is what an opaque page token encodes: a cursor plus the direction to
+// resume. Backward defaults to false — the forward (primary) walk.
+type keysetToken[C any] struct {
+    Cursor   C    `json:"c"`
+    Backward bool `json:"b,omitempty"`
 }
 
-// ListBi runs one page of a bidirectional keyset query. An empty pageToken reads the
-// newest page (backward, no cursor). It over-fetches size+1 to detect more rows in
-// the scanned direction, normalizes Items to ascending, and derives both tokens:
-//   - PrevToken (backward): from the first row, when older rows remain.
-//   - NextToken (forward): from the last row, always — the stream is append-only and
-//     followed, so the tail is only "currently" the end. An empty forward poll
-//     (no new rows yet) echoes the request token so the caller keeps its place.
-func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken string, src Source[T, C]) (*BiPage[T], error) {
-    size := cmp.Or(int(pageSize), cfg.Default)
-    if size < 1 || size > cfg.Max {
-        return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, cfg.Max)
-    }
-    dir := backward // no token → newest page (backward, no cursor)
-    var cursor *C
-    if pageToken != "" {
-        t, err := decode[biToken[C]](pageToken)
-        if err != nil {
-            return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
-        }
-        cursor, dir = &t.Cursor, t.Dir
-    }
-    var rows []T
-    var err error
-    if dir == forward {
-        rows, err = src.QueryForward(ctx, cursor, size+1) // ascending
-    } else {
-        rows, err = src.QueryBackward(ctx, cursor, size+1) // descending
-    }
-    if err != nil {
-        return nil, err
-    }
-    more := len(rows) > size
-    if more {
-        rows = rows[:size]
-    }
-    if dir == backward {
-        slices.Reverse(rows) // backward is fetched descending → ascending
-    }
-    page := &BiPage[T]{Items: rows}
-    if len(rows) == 0 {
-        if dir == forward {
-            page.NextToken = pageToken // empty forward poll → keep the caller's place
-        }
-        return page, nil // empty newest page → empty stream; client re-requests newest
-    }
-    // Older rows remain when scrolling forward (by construction) or when the
-    // backward scan over-fetched.
-    if dir == forward || more {
-        if page.PrevToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[0]), Dir: backward}); err != nil {
-            return nil, err
-        }
-    }
-    // Forward token is always populated: append-only live-follow.
-    if page.NextToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[len(rows)-1]), Dir: forward}); err != nil {
-        return nil, err
-    }
-    return page, nil
+// Page is one page plus the two continuation tokens. ForwardToken continues the
+// primary walk (older); BackwardToken the reverse (newer). A token is empty when its
+// direction is exhausted (forward, at the oldest row) or unsupported (a
+// one-directional source). BackwardToken, when supported, stays populated past the
+// tail so an append-only stream can be followed.
+type Page[T any] struct {
+    Items         []T
+    ForwardToken  string
+    BackwardToken string
 }
 ```
 
-`ListBi` bakes the two timeline-specific rules — always-on `NextToken` and empty-poll echo — so
-the store method is a thin call. (The lone case `ListBi` can't synthesize is an *empty* stream:
-the newest page (backward, nil cursor) with zero rows returns empty tokens. A task effectively
-always has its opening instruction event, and even if not, the web UI simply re-requests the
-newest page on the next signal until the first event lands — no synthetic "zero cursor" is
-needed.)
+`List` runs one page:
 
-The existing `List` calls `src.QueryBackward(ctx, cursor, size+1)`, and the just-landed
-`taskSource` splits into its existing backward query plus an erroring forward one:
+1. Decode the token → `(cursor, backward)`; an empty token is `(nil, false)` — the newest page.
+2. Call `QueryForward` or `QueryBackward` (per `backward`) with `limit = size+1`; over-fetch tells
+   whether more rows lie further in that direction. `ErrUnsupportedDirection` from the requested
+   walk surfaces as a bad token (the client shouldn't have had it).
+3. Compute both continuation tokens from the **scan-order** rows *before* reordering: the
+   forward/older boundary is the lowest-key row, the backward/newer boundary the highest-key row.
+   - **ForwardToken** (older): from the older boundary, populated only when older rows remain.
+   - **BackwardToken** (newer): from the newer boundary, populated whenever the source supports
+     backward — always, for append-only follow; an empty follow-poll echoes the request token so
+     the caller keeps its place. Support is checked by calling the other walk; a source that
+     returns `ErrUnsupportedDirection` (the task list) yields an empty `BackwardToken` with no DB
+     round-trip, since it errors without querying.
+4. Order `Items`: if `cfg.Ascending`, reverse the descending forward-scan (and keep the ascending
+   backward-scan) so Items read oldest-first; otherwise leave the forward-scan newest-first. This
+   is the *only* per-list behavioral difference, and it is a `Config` field, not a code fork.
 
-```go
-func (src taskSource) QueryBackward(ctx context.Context, cursor *taskCursor, limit int) ([]*model.Task, error) {
-    // ... existing ListTasksPage query; convert limit to int32 only at the sqlc call ...
-}
+The task list keeps `Ascending: false` (newest-first, unchanged), implements `QueryForward` (its
+existing `ListTasksPage` query), and returns `ErrUnsupportedDirection` from `QueryBackward` — so
+its `BackwardToken` is always empty and its `ForwardToken` is the same next-page token it emits
+today. The timeline uses `Ascending: true` and implements both walks.
 
-func (src taskSource) QueryForward(ctx context.Context, _ *taskCursor, _ int) ([]*model.Task, error) {
-    return nil, fmt.Errorf("task list: %w", pagination.ErrUnsupportedDirection)
-}
-```
+The one case `List` can't synthesize a follow token for is a *truly empty* stream: the newest page
+returns zero rows, so there is no newer boundary to derive `BackwardToken` from and both tokens
+come back empty. A task effectively always has its opening instruction event; even if not, the web
+UI just re-requests the newest page (empty token) on the next signal until the first event lands —
+no synthetic "zero cursor" is needed.
 
-`List` only ever calls `QueryBackward`, so the erroring `QueryForward` never runs in practice; it
-documents and enforces that the task list is one-directional.
+The storage-agnostic package deals in plain `int` for counts (`limit`, `Config.Default/Max`, the
+internal `size`). `int32` appears at exactly two type boundaries: the `page_size` request value
+(the proto field type, passed verbatim into `List` and store params) and the `LIMIT` argument at
+the sqlc call (`int32(limit)` inside each store `Query*` method).
 
 ### 3. Store Layer
 
 #### SQL queries
 
 `internal/store/sql/queries/event.sql` — add two paged variants alongside the retained
-`ListEventsByTask`, one per scan direction. Both keep the optional `types` filter (parity with
-the existing query, so future arm-filtered paging is a param, not a new query) and both are
-covered by `idx_events_task_id_id`:
+`ListEventsByTask`, named by SQL order (`Desc`/`Asc`) to stay decoupled from the pagination
+package's forward/backward. Both keep the optional `types` filter (parity with the existing query,
+so future arm-filtered paging is a param, not a new query) and both are covered by
+`idx_events_task_id_id`:
 
 ```sql
--- name: ListEventsByTaskBackward :many
--- Newest-first slice for the newest-page (no cursor) and scroll-back (id < cursor)
--- cases. Rows come back DESC; the caller reverses to ascending.
+-- name: ListEventsByTaskDesc :many
+-- Newest-first slice: the newest page (no cursor) and scroll-back (id < cursor).
+-- Backs the pagination-forward (primary) walk; List reverses to ascending for display.
 SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
 WHERE task_id = sqlc.arg(task_id)
@@ -295,8 +241,8 @@ WHERE task_id = sqlc.arg(task_id)
 ORDER BY id DESC
 LIMIT sqlc.arg(page_limit);
 
--- name: ListEventsByTaskForward :many
--- Scroll-forward / live-follow slice (id > cursor), ascending.
+-- name: ListEventsByTaskAsc :many
+-- Live-follow slice (id > cursor), ascending. Backs the pagination-backward walk.
 SELECT id, org_id, created_at, task_id, type, wake, payload
 FROM events
 WHERE task_id = sqlc.arg(task_id)
@@ -314,38 +260,38 @@ Notes:
   insertion (stream) order.
 - **No new index.** `idx_events_task_id_id ON events (task_id, id)` already exists and a B-tree
   serves both `id > ? ORDER BY id ASC` and `id < ? ORDER BY id DESC`.
-- The `Backward` query serves both the newest page (`use_cursor = false`) and scroll-back
-  (`use_cursor = true`); `ListBi` reverses its rows to ascending.
+- The `Desc` query serves both the newest page (`use_cursor = false`) and scroll-back
+  (`use_cursor = true`); `List` reverses its rows to ascending (`Config.Ascending`).
 - The existing `ListEventsByTask` query is **retained** for the legacy unpaged path and internal
   callers (see [Backward compatibility](#7-backward-compatibility)).
 
 #### Store method
 
 `internal/store/event.go` — `eventCursor` and `eventSource` are unexported; callers only ever see
-opaque tokens. `eventSource` implements `pagination.Source` with both query methods (unlike
-`taskSource`, whose `QueryForward` errors):
+opaque tokens. `eventSource` implements both walks (unlike `taskSource`, whose `QueryBackward`
+errors). `Ascending: true` makes `List` return each page oldest-first:
 
 ```go
-// eventCursor is the keyset a bidirectional event page token encodes. events.id is
-// a unique monotonic bigserial, so it is a total order on its own — no tiebreaker.
+// eventCursor is the keyset an event page token encodes. events.id is a unique
+// monotonic bigserial, so it is a total order on its own — no tiebreaker.
 type eventCursor struct {
     ID int64 `json:"i"`
 }
 
 // Timelines are dense (a report/lifecycle/tool row per step), so the default and
-// max pages are larger than the task list's.
-var listEventsPaging = pagination.Config{Default: 50, Max: 200}
+// max pages are larger than the task list's; Ascending renders oldest-at-top.
+var listEventsPaging = pagination.Config{Default: 50, Max: 200, Ascending: true}
 
 type ListEventsByTaskPageParams struct {
     TaskID    int64
     OrgID     int64
     Types     []string // nil/empty → all arms; a future arm-filtered page passes e.g. [external]
     PageSize  int32    // 0 → default (50); max 200
-    PageToken string   // opaque bidirectional cursor; empty for the newest page
+    PageToken string   // opaque cursor; empty for the newest page
 }
 
-// eventSource implements pagination.Source for a task's events, supporting both
-// directions: QueryBackward → the Backward SQL, QueryForward → the Forward SQL.
+// eventSource implements pagination.Source for a task's events, supporting both walks:
+// QueryForward (primary, descending) → the Desc SQL, QueryBackward (ascending) → the Asc SQL.
 type eventSource struct {
     store  *Store
     tx     *sql.Tx
@@ -359,25 +305,25 @@ func (src eventSource) types() []string {
     return src.params.Types
 }
 
-// QueryBackward reads descending; a nil cursor is the newest page (no lower bound).
-func (src eventSource) QueryBackward(ctx context.Context, cursor *eventCursor, limit int) ([]*model.Event, error) {
-    args := sqlc.ListEventsByTaskBackwardParams{
+// QueryForward is the primary walk: descending; a nil cursor is the newest page.
+func (src eventSource) QueryForward(ctx context.Context, cursor *eventCursor, limit int) ([]*model.Event, error) {
+    args := sqlc.ListEventsByTaskDescParams{
         TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: src.types(),
         UseCursor: cursor != nil, PageLimit: int32(limit), // int32 only at the sqlc boundary
     }
     if cursor != nil {
         args.CursorID = cursor.ID
     }
-    rows, err := src.store.q(src.tx).ListEventsByTaskBackward(ctx, args)
+    rows, err := src.store.q(src.tx).ListEventsByTaskDesc(ctx, args)
     if err != nil {
         return nil, err
     }
     return toModelEvents(rows)
 }
 
-// QueryForward reads ascending, rows after the cursor.
-func (src eventSource) QueryForward(ctx context.Context, cursor *eventCursor, limit int) ([]*model.Event, error) {
-    rows, err := src.store.q(src.tx).ListEventsByTaskForward(ctx, sqlc.ListEventsByTaskForwardParams{
+// QueryBackward is the reverse walk: ascending, rows newer than the cursor.
+func (src eventSource) QueryBackward(ctx context.Context, cursor *eventCursor, limit int) ([]*model.Event, error) {
+    rows, err := src.store.q(src.tx).ListEventsByTaskAsc(ctx, sqlc.ListEventsByTaskAscParams{
         TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: src.types(),
         CursorID: cursor.ID, PageLimit: int32(limit), // int32 only at the sqlc boundary
     })
@@ -391,8 +337,8 @@ func (src eventSource) Cursor(e *model.Event) eventCursor {
     return eventCursor{ID: e.ID}
 }
 
-func (s *Store) ListEventsByTaskPage(ctx context.Context, tx *sql.Tx, p ListEventsByTaskPageParams) (*pagination.BiPage[*model.Event], error) {
-    return pagination.ListBi(ctx, listEventsPaging, p.PageSize, p.PageToken, eventSource{store: s, tx: tx, params: p})
+func (s *Store) ListEventsByTaskPage(ctx context.Context, tx *sql.Tx, p ListEventsByTaskPageParams) (*pagination.Page[*model.Event], error) {
+    return pagination.List(ctx, listEventsPaging, p.PageSize, p.PageToken, eventSource{store: s, tx: tx, params: p})
 }
 ```
 
@@ -433,10 +379,12 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
         }
         return nil, connect.NewError(code, err)
     }
+    // The primary (forward) walk goes toward older rows, so it is the timeline's
+    // "previous" page; the reverse (backward) walk is the newer/live-follow "next".
     return &xagentv1.ListEventsByTaskResponse{
         Events:        model.ProtoMap(page.Items),
-        PrevPageToken: page.PrevToken,
-        NextPageToken: page.NextToken,
+        PrevPageToken: page.ForwardToken,
+        NextPageToken: page.BackwardToken,
     }, nil
 }
 ```
@@ -514,7 +462,7 @@ const timeline = eventsToTimeline(events)
 - **Empty tail polls.** When nothing new has been appended, `fetchNextPage()` returns an empty
   page whose token echoes the same cursor; left alone these accumulate. Trim trailing empty pages
   after each follow fetch (the preceding page's `next_page_token` already points at the same
-  resume cursor, so the forward walk is unaffected):
+  resume cursor, so the live-follow is unaffected):
 
   ```tsx
   queryClient.setQueryData(key, (prev) =>
@@ -560,20 +508,21 @@ legacy callers (empty page fields) get the full list; the web UI opts into bidir
    `prev_page_token`/`next_page_token` on the response, with the tail / always-populated / empty
    semantics documented on the fields; regenerate Go + webui (`mise run generate`, buf for webui).
    Depends on: nothing. Verifiable by: generated code compiles; no behavior change yet.
-2. **Pagination bidirectional extension** — Delivers: `ErrUnsupportedDirection`, `BiPage`, `ListBi`
-   in `internal/pagination`, plus splitting `Source.Query` into `QueryForward`/`QueryBackward` and
-   narrowing `limit` from `int32` to `int` (`List` calls `QueryBackward`; `taskSource` keeps its
-   query as `QueryBackward` and adds an erroring `QueryForward`) — behavior-preserving. Depends on:
-   nothing. Verifiable by: package unit
-   tests (mocked `Source`) — newest page, scroll-back to exhaustion (`PrevToken` empties), forward
-   follow (`NextToken` always set), empty-forward-poll echo, ascending Items in both directions,
-   page-size bounds, undecodable token → `ErrInvalidRequest`; task list still green.
-3. **Store paged queries + method** — Delivers: `ListEventsByTaskForward` / `ListEventsByTaskBackward`
-   SQL (sqlc-generated), `eventCursor`, `eventSource` (two-directional `Source`), `Store.ListEventsByTaskPage`.
+2. **Pagination bidirectional `List`** — Delivers: `ErrUnsupportedDirection`, the `Backward`-bool
+   token, `Config.Ascending`, and both continuation tokens on `Page` — folded into the existing
+   `List`/`Source`/`Page` (no `ListBi`/`BiPage`); split `Source` into `QueryForward`/`QueryBackward`
+   and narrow `limit` to `int`. `taskSource` keeps its query as `QueryForward` and adds an erroring
+   `QueryBackward` — behavior-preserving. Depends on: nothing. Verifiable by: package unit tests
+   (mocked `Source`) — newest page (empty token), forward scroll to exhaustion (`ForwardToken`
+   empties), backward follow (`BackwardToken` always set), empty-follow-poll echo, unsupported
+   backward → empty `BackwardToken`, `Ascending` on/off ordering, page-size bounds, undecodable
+   token → `ErrInvalidRequest`; task list still green.
+3. **Store paged queries + method** — Delivers: `ListEventsByTaskDesc` / `ListEventsByTaskAsc`
+   SQL (sqlc-generated), `eventCursor`, `eventSource` (both walks), `Store.ListEventsByTaskPage`.
    Depends on: (2) (reuses `idx_events_task_id_id`; no migration). Verifiable by: store unit tests
-   against a real DB — walking `prev`/`next` covers the whole stream ascending without gaps/dups; a
-   tail `next` token picks up a subsequently-inserted event; `types` filter honored; bad size/token
-   → `ErrInvalidRequest`.
+   against a real DB — walking forward/backward covers the whole stream ascending without gaps/dups;
+   a tail backward token picks up a subsequently-inserted event; `types` filter honored; bad
+   size/token → `ErrInvalidRequest`.
 4. **`ListEventsByTask` handler paging** — Delivers: the legacy/paged branch + `errors.Is` mapping,
    returning both tokens. Depends on: (1), (3). Verifiable by: handler tests — empty page fields →
    full ascending list (unchanged); empty token + `page_size` → newest page with both tokens;
@@ -599,44 +548,40 @@ the head (and reversal to render top-down); an oldest-first forward-only cursor 
 trivial but forces walking the **entire history on open** (O(N) requests) before the user reaches
 current activity. The bidirectional cursor gets O(1) open *and* one-cursor live-follow.
 
-The cost is that `internal/pagination` grows a second entry point (`ListBi`) and two query
-shapes. But it is *not* a second, parallel source abstraction — see the next trade-off — and it
-is contained in the package (the store and handler stay thin) and is reusable by the next
-append-only timeline (e.g. an org or run event feed).
+The cost is that `List`/`Source`/`Page` grow bidirectionality and there are two query shapes. But
+this stays inside the package (the store and handler stay thin), the task list keeps its exact
+behavior, and it is reusable by the next append-only timeline (e.g. an org or run event feed).
 
-### One `Source` with two query methods (unsupported direction errors)
+### Folding bidirectionality into `List`/`Source`/`Page` vs a separate `ListBi`/`BiPage`
 
-**Chosen: a single `Source` interface with `QueryForward`/`QueryBackward`, where a source errors
-from the method it doesn't implement.** `List` and `ListBi` consume the *same* interface; `List`
-calls only `QueryBackward`, `ListBi` calls both. The task source implements `QueryBackward` (its
-existing query) and returns `ErrUnsupportedDirection` from `QueryForward`; the event source
-implements both. Two alternatives were weighed:
+**Chosen: one `List`, one `Source`, one `Page` — bidirectionality folded in, not a parallel
+`ListBi`/`BiPage`.** The token carries a `Backward bool` (default `false` = forward), so the zero
+value is the intuitive default; there is no exported `Direction` type. `Source` splits into
+`QueryForward` (the primary, descending, newest-first walk — the task list's existing behavior) and
+`QueryBackward` (the ascending, newer/live-follow walk). A one-directional source returns
+`ErrUnsupportedDirection` from the walk it doesn't implement; `List` catches it and leaves that
+direction's token empty — for the task list, `QueryBackward` errors *without a DB round-trip*, so
+its `BackwardToken` is always empty and it pays nothing. Alternatives weighed and rejected: a
+`dir Direction` **flag** on one method (re-exposes a direction type and switches inside every
+source); two **parallel interfaces** or `BiSource` embedding `Source` (a second interface); and a
+separate `ListBi`/`BiPage` (duplicate entry points and page types). The one real cost of the fold
+is that `List` must serve two display orders — the task list's newest-first and the timeline's
+oldest-first — so `Config` gains an `Ascending` flag (the sole per-list behavioral knob, defaulting
+to the task list's current order). Terminology is generic **forward/backward** (by key order), not
+domain newer/older, and the guard is a **runtime** `ErrUnsupportedDirection` rather than a
+compile-time impossibility — accepted for the smaller surface.
 
-- *A single method taking a `dir Direction` flag* — one method, but the direction becomes a
-  runtime parameter to switch on inside every source, and it re-exposes a `Direction` type.
-- *Two parallel interfaces / `BiSource` embedding `Source`* — a second interface (compile-time
-  proof a one-directional source can't be asked the other way, at the cost of extra surface).
+### Always-populated newer token vs empty-token-means-done
 
-The two-method single interface is the sweet spot: no `dir` flag to switch on (each method has one
-job and maps 1:1 to one SQL query), no second interface, and "which directions do I support?" is
-answered by which method a source fills in vs. errors. The price is that the guard is a **runtime**
-`ErrUnsupportedDirection` rather than a compile-time impossibility — acceptable because `List` only
-ever calls `QueryBackward`, so the task source's erroring `QueryForward` can't be reached through
-the public entry points. Terminology is generic **forward/backward** (by key order), not domain
-newer/older, so the package reads the same for any keyset list; direction survives only as an
-unexported bit in the token, so the earlier `Newest`-as-a-third-value concern stays resolved. The
-cost elsewhere is that `Source` splits its one `Query` into two and the just-landed `taskSource` /
-`List` adopt them — a mechanical, behavior-preserving refactor of the task pagination code.
-
-### Always-populated `next_page_token` vs empty-token-means-done
-
-**Chosen: `next_page_token` always resumes forward; `prev_page_token` empties at history's end.**
-An append-only followed stream has no real "done" at the newest end — the tail is only *currently*
-the end, and new rows will arrive — so the forward token must survive the tail to act as the
-live-follow cursor ("caught up" is signalled by a short page). The older end *is* finite, so
-`prev_page_token` empties normally. This asymmetry is baked into `ListBi` rather than the
-task-list `List` (whose empty-token-means-done contract stays intact), keeping bounded pagination
-(tasks) and followed pagination (events) side by side without either compromising the other.
+**Chosen: the newer (backward) token always resumes; the older (forward) token empties at
+history's end.** An append-only followed stream has no real "done" at the newest end — the tail is
+only *currently* the end, and new rows will arrive — so the newer token must survive the tail to
+act as the live-follow cursor ("caught up" is signalled by a short page). The older end *is*
+finite, so the forward/older token empties normally. `List` applies this by direction: the forward
+(older) token is over-fetch-gated (empties), the backward (newer) token stays populated whenever
+the source supports backward. The task list, forward-only, therefore behaves exactly as before
+(its forward token empties at the end; it has no newer token) — bounded and followed pagination
+coexist in one `List` without either compromising the other.
 
 ### Single-column `id` keyset vs `(created_at, id)`
 
@@ -667,7 +612,7 @@ separate follow-up (a dedicated paged agent tool, or a head-preserving tail).
 
 ### Reusing `internal/pagination` vs an events-specific helper
 
-**Chosen: extend the package.** Adding `ListBi` beside `List` keeps token encode/decode, page-size
+**Chosen: extend the package.** Making `List` bidirectional keeps token encode/decode, page-size
 bounds, over-fetch, and the `ErrInvalidRequest` contract shared, and the store still adds only an
 `eventCursor` and an `eventSource`. An events-specific open-coding was the fallback if the generic
 extension got awkward; it did not — the bidirectional logic is regular enough to live generically,
@@ -685,5 +630,5 @@ and a followed timeline is a shape the codebase will hit again.
    many rows. Acceptable now; if it bites, add `(task_id, type, id)`. Worth pre-empting, or defer
    until measured?
 4. **`ListExternalEvents` (org feed).** The org-level external feed (`ListEvents`, bare `limit`, no
-   cursor) has the same unbounded shape and could adopt `ListBi` with an org-scoped `Source`. In
+   cursor) has the same unbounded shape and could adopt the bidirectional `List` with an org-scoped `Source`. In
    scope as a follow-up, or a separate proposal?
