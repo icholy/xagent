@@ -158,6 +158,16 @@ assert.DeepEqual(t,
 
 Name extensions so they cannot collide with what moq generates for the interface (`Foo`, `FooFunc`, `FooCalls` per method): `SubmittedRunnerEvents`, not another `SubmitRunnerEvents*` variant.
 
+Do NOT add an extension overfit to one test case. An extension must be a general projection of the call log — whole recorded values that other tests can assert against too — not a narrow slice of it that only one test wants. If only one test needs it, keep a test-local helper (or assert inline); if the projection drops most of the data, it's too narrow to be an extension:
+
+```go
+// Good: general — returns the whole events; any test can compare any fields
+func (m *ClientMock) SubmittedRunnerEvents() []*xagentv1.RunnerEvent
+
+// Bad: overfit — a single-field projection only one test will ever want
+func (m *ClientMock) SubmittedRunnerEventVersions() []int64
+```
+
 ## Asserting on Mock Calls
 
 Assert on a mock's `...Calls()` log instead of hand-rolling `len(...)` count checks. Use `cmp.Len` from `gotest.tools/v3/assert/cmp` for the count:
