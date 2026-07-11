@@ -409,14 +409,16 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 	// lifecycle events are reserved for user-initiated restarts via RestartTask.
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
 	assert.NilError(t, err)
-	payloads := model.FilterPayloads(events, []string{model.EventTypeExternal, model.EventTypeLifecycle})
-	assert.DeepEqual(t, payloads, []model.EventPayload{
-		&model.ExternalPayload{
-			Description: "PR comment from alice",
-			URL:         url,
-			Data:        "anything",
+	assert.DeepEqual(t,
+		model.FilterPayloads(events, []string{model.EventTypeExternal, model.EventTypeLifecycle}),
+		[]model.EventPayload{
+			&model.ExternalPayload{
+				Description: "PR comment from alice",
+				URL:         url,
+				Data:        "anything",
+			},
 		},
-	})
+	)
 }
 
 func TestRouteCreateRuleSpawnsTask(t *testing.T) {
@@ -465,10 +467,12 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// exactly the configured prompt and nothing else.
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
-	insts := model.FilterPayloads(events, []string{model.EventTypeInstruction})
-	assert.DeepEqual(t, insts, []model.EventPayload{
-		&model.InstructionPayload{Text: "Triage this issue."},
-	})
+	assert.DeepEqual(t,
+		model.FilterPayloads(events, []string{model.EventTypeInstruction}),
+		[]model.EventPayload{
+			&model.InstructionPayload{Text: "Triage this issue."},
+		},
+	)
 
 	// The subscription link keeps the trigger URL but carries no title — the
 	// trigger's description lives on the external event instead, so the link no
@@ -485,10 +489,12 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// instruction event it already seeds.
 	linkEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeLink})
 	assert.NilError(t, err)
-	linkPayloads := model.FilterPayloads(linkEvents, []string{model.EventTypeLink})
-	assert.DeepEqual(t, linkPayloads, []model.EventPayload{
-		&model.LinkPayload{LinkID: links[0].ID, Relevance: "trigger", URL: url, Subscribe: true},
-	})
+	assert.DeepEqual(t,
+		model.FilterPayloads(linkEvents, []string{model.EventTypeLink}),
+		[]model.EventPayload{
+			&model.LinkPayload{LinkID: links[0].ID, Relevance: "trigger", URL: url, Subscribe: true},
+		},
+	)
 	assert.Equal(t, linkEvents[0].Wake, false)
 
 	// The timeline (ordered by event id) must read
@@ -513,10 +519,12 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// mirroring the wake path (attach).
 	externalEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeExternal})
 	assert.NilError(t, err)
-	externalPayloads := model.FilterPayloads(externalEvents, []string{model.EventTypeExternal})
-	assert.DeepEqual(t, externalPayloads, []model.EventPayload{
-		&model.ExternalPayload{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this"},
-	})
+	assert.DeepEqual(t,
+		model.FilterPayloads(externalEvents, []string{model.EventTypeExternal}),
+		[]model.EventPayload{
+			&model.ExternalPayload{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this"},
+		},
+	)
 }
 
 func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
@@ -555,12 +563,14 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	task := tasks[0]
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
-	insts := model.FilterPayloads(events, []string{model.EventTypeInstruction})
-	assert.DeepEqual(t, insts, []model.EventPayload{
-		&model.InstructionPayload{
-			Text: "You were created by a routing rule in response to a github issue_comment event.",
+	assert.DeepEqual(t,
+		model.FilterPayloads(events, []string{model.EventTypeInstruction}),
+		[]model.EventPayload{
+			&model.InstructionPayload{
+				Text: "You were created by a routing rule in response to a github issue_comment event.",
+			},
 		},
-	})
+	)
 }
 
 func TestRouteCreateRuleAutoArchive(t *testing.T) {
