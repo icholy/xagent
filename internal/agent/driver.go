@@ -53,18 +53,34 @@ func (d *Driver) Run(ctx context.Context) error {
 	}()
 	defer signal.Stop(sigCh)
 
+	// Fetch the task once at the top of the run, before any event is emitted.
+	// task.Version is this run's version — stamped on every runner event below
+	// so the server's stale guard drops events from a superseded run instead of
+	// clobbering the live one. The same response is reused for the shell-session
+	// fork in run, so this is a single fetch.
+	//
+	// A GetTask failure returns here before started is emitted: the driver exits
+	// non-zero and the runner's supervise backstop reports the lost run. A failed
+	// GetTask means the driver has no working server connection to report through
+	// anyway (see the proposal's resolved open question).
+	resp, err := d.Client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: d.TaskID})
+	if err != nil {
+		return fmt.Errorf("failed to get task: %w", err)
+	}
+	version := resp.GetTask().GetVersion()
+
 	// Report started: replaces the startup ping — an acked submit proves the
 	// connection, token, server, and DB are all healthy.
-	if err := d.submit(eventCtx, model.RunnerEvent{TaskID: d.TaskID, Event: model.RunnerEventStarted}); err != nil {
+	if err := d.submit(eventCtx, model.RunnerEvent{TaskID: d.TaskID, Version: version, Event: model.RunnerEventStarted}); err != nil {
 		return err
 	}
 
-	err := d.run(ctx)
+	err = d.run(ctx, resp)
 	if err != nil && context.Cause(ctx) == ErrStop {
 		d.Log.Info("agent stopped gracefully")
 		err = nil
 	}
-	event := model.RunnerEvent{TaskID: d.TaskID, Event: model.RunnerEventStopped}
+	event := model.RunnerEvent{TaskID: d.TaskID, Version: version, Event: model.RunnerEventStopped}
 	if err != nil {
 		d.Log.Error("task failed", "err", err)
 		// The error already distinguishes setup failures from agent failures
@@ -96,17 +112,14 @@ func (d *Driver) submit(ctx context.Context, event model.RunnerEvent) error {
 	return nil
 }
 
-// run reads the task and forks into one of two mutually exclusive modes: a
-// debug-shell run when the task carries a shell_session, or the normal agent
-// path otherwise. A sandbox run is one mode, chosen once at startup (see the
-// design in proposals/draft/driver-reverse-shell.md). The fork lives inside run
-// so a shell run emits the same started/stopped/failed lifecycle events as an
-// agent run.
-func (d *Driver) run(ctx context.Context) error {
-	resp, err := d.Client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: d.TaskID})
-	if err != nil {
-		return fmt.Errorf("failed to get task: %w", err)
-	}
+// run forks into one of two mutually exclusive modes: a debug-shell run when
+// the task carries a shell_session, or the normal agent path otherwise. A
+// sandbox run is one mode, chosen once at startup (see the design in
+// proposals/draft/driver-reverse-shell.md). The fork lives inside run so a
+// shell run emits the same started/stopped/failed lifecycle events as an agent
+// run. The task response is fetched once by Run and passed in, so this reuses
+// that single read rather than fetching again.
+func (d *Driver) run(ctx context.Context, resp *xagentv1.GetTaskResponse) error {
 	if session := resp.GetTask().GetShellSession(); session != "" {
 		return shell.Serve(ctx, shell.ServeOptions{
 			ServerURL: d.ServerURL,

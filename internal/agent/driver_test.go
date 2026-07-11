@@ -13,6 +13,10 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+// testTaskVersion is the version returned by setupDriver's GetTask mock. The
+// driver reads it once at the top of Run and stamps it on every runner event.
+const testTaskVersion = 7
+
 // setupDriver writes cfg for task 1 in a temporary config dir and returns a
 // driver backed by a mock client whose SubmitRunnerEvents always acks.
 // The tests mutate the global ConfigDir, so they must not run in parallel.
@@ -28,7 +32,7 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 		},
 		// run() forks on shell_session; an empty one takes the normal agent path.
 		GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
-			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id}}, nil
+			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Version: testTaskVersion}}, nil
 		},
 	}
 	return &Driver{TaskID: 1, Client: mock, Log: slog.Default()}, mock
@@ -45,6 +49,18 @@ func submittedEvents(mock *xagentclient.ClientMock) []string {
 	return events
 }
 
+// submittedVersions returns the versions of the runner events submitted to the
+// mock, in order.
+func submittedVersions(mock *xagentclient.ClientMock) []int64 {
+	var versions []int64
+	for _, call := range mock.SubmitRunnerEventsCalls() {
+		for _, e := range call.SubmitRunnerEventsRequest.Events {
+			versions = append(versions, e.Version)
+		}
+	}
+	return versions
+}
+
 func TestDriverRun(t *testing.T) {
 	// Arrange
 	driver, mock := setupDriver(t, &Config{Type: TypeDummy})
@@ -52,9 +68,10 @@ func TestDriverRun(t *testing.T) {
 	// Act
 	err := driver.Run(t.Context())
 
-	// Assert
+	// Assert - both events carry the fetched task version
 	assert.NilError(t, err)
 	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "stopped"})
+	assert.DeepEqual(t, submittedVersions(mock), []int64{testTaskVersion, testTaskVersion})
 }
 
 func TestDriverRun_AgentError(t *testing.T) {
@@ -70,6 +87,7 @@ func TestDriverRun_AgentError(t *testing.T) {
 	// Assert - the failure was reported and acked, so the driver exits 0
 	assert.NilError(t, err)
 	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "failed"})
+	assert.DeepEqual(t, submittedVersions(mock), []int64{testTaskVersion, testTaskVersion})
 }
 
 func TestDriverRun_AgentConfiguredError(t *testing.T) {
@@ -180,6 +198,22 @@ func TestDriverRun_FailedSubmitError(t *testing.T) {
 	// Assert - both the agent error and the lost report surface
 	assert.ErrorContains(t, err, "dummy command failed")
 	assert.ErrorContains(t, err, "failed to submit failed event")
+}
+
+func TestDriverRun_GetTaskError(t *testing.T) {
+	// Arrange - GetTask (hoisted to the top of Run) fails before any event
+	driver, mock := setupDriver(t, &Config{Type: TypeDummy})
+	mock.GetTaskFunc = func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+		return nil, errors.New("server unreachable")
+	}
+
+	// Act
+	err := driver.Run(t.Context())
+
+	// Assert - the error is returned and no events were emitted; the runner's
+	// supervise backstop reports the lost run via the non-zero exit code.
+	assert.ErrorContains(t, err, "failed to get task")
+	assert.Assert(t, len(submittedEvents(mock)) == 0)
 }
 
 func TestConfigPrompt(t *testing.T) {
