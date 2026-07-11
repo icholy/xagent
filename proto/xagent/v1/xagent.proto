@@ -310,6 +310,12 @@ message ExternalPayload {
   string description = 1;
   string url = 2;
   string data = 3;
+  // details carries optional, source-defined key/value context for consumers
+  // (the agent via get_my_task, the web UI timeline). The payload does not
+  // interpret it: GitHub review comments populate path/line/side/diff_hunk; other
+  // sources may set their own keys or none. Distinct from the router's matchable
+  // Attrs, which are not persisted.
+  map<string, string> details = 4;
 }
 
 // ReportPayload is the body of a report event — a from-agent message written by

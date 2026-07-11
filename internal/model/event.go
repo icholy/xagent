@@ -58,9 +58,10 @@ func (p *InstructionPayload) SetPayloadProto(pb *xagentv1.Event) {
 // ExternalPayload is the body of an external event — a self-contained webhook
 // trigger.
 type ExternalPayload struct {
-	Description string `json:"description"`
-	URL         string `json:"url"`
-	Data        string `json:"data"`
+	Description string            `json:"description"`
+	URL         string            `json:"url"`
+	Data        string            `json:"data"`
+	Details     map[string]string `json:"details,omitempty"`
 }
 
 func (*ExternalPayload) Type() string    { return EventTypeExternal }
@@ -71,6 +72,7 @@ func (p *ExternalPayload) SetPayloadProto(pb *xagentv1.Event) {
 		Description: p.Description,
 		Url:         p.URL,
 		Data:        p.Data,
+		Details:     p.Details,
 	}}
 }
 
@@ -317,6 +319,7 @@ func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 			Description: arm.External.Description,
 			URL:         arm.External.Url,
 			Data:        arm.External.Data,
+			Details:     arm.External.Details,
 		}
 	case *xagentv1.Event_Report:
 		return &ReportPayload{
