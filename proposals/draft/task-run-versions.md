@@ -1,75 +1,94 @@
-# Task Version as Run Identity (Run-Versions)
+# Task Version as Run Counter (Run-Versions)
 
 Issue: https://github.com/icholy/xagent/issues/1274
 
 ## Problem
 
-`tasks.version` is bumped by the task state machine but consumed by nothing:
-every producer of runner events hardcodes `Version: 0`, which bypasses the
-guard in `ApplyRunnerEvent` (`internal/model/task.go`). The version's one
-convention — "0 overrides anything" — is actively harmful: a version-0 `failed`
-from a dead run can clobber a live one (#1052), and 0 being the Go zero value
-means *forgetting* to set a version silently grants bypass.
+`tasks.version` is bumped by the task state machine but has no defined
+semantics. The only consumer is the guard in `ApplyRunnerEvent`
+(`internal/model/task.go`), and the producers that matter bypass it: the
+driver hardcodes `Version: 0` on `started`/`stopped`/`failed`
+(`internal/agent/driver.go`), and the runner's `supervise` and
+`failIfTaskRunning` backstops emit `failed` with version 0
+(`internal/runner/runner.go`). The version's one convention — "0 overrides
+anything" — is actively harmful: a version-0 `failed` from a dead run can
+clobber a live one (#1052), and 0 being the Go zero value means *forgetting*
+to set a version silently grants bypass.
 
-Meanwhile the system has no notion of a "run", even though a task's life is a
-sequence of sandbox runs:
+Worse, the bump sites don't correspond to anything. `Start`, `Restart`,
+`Cancel`, and the zombie-kill paths in `applyRunnerEventStarted` all bump,
+so one physical sandbox run can consume several versions and a version can
+change while the run it belongs to is still alive. That misalignment is what
+blocks run-scoping the events (`run-scoped-runner-events.md`): the moment
+events carry real versions, a bump-while-live makes the live run's terminal
+event stale. Two examples:
 
-- **Driver logs are unattributable.** Restarts reuse the `xagent-{task-id}`
-  container, so `docker logs` concatenates every run; there is no per-run key
-  to store or display driver output against, and non-Docker backends have no
-  `docker logs` at all.
-- **The timeline can't be grouped by run.** Reports and lifecycle events from
-  run 3 look exactly like those from run 1, and the started/exited lifecycle
-  pairing that implies run boundaries can be missing entirely (#1052).
-- **Event delivery to agents is unsynchronized.** A woken agent is told "the
-  task was updated — check `get_my_task`", but the brief returns all events
-  with no marker of which are new. The agent either re-handles old events or
-  ignores the new one — the event is silently dropped. Server-side, there is
-  no answer to "which run was this event assigned to, and did that run start?"
+- **Cancel**: the live driver's SIGTERM-induced `stopped` carries run N;
+  `Cancel`'s bump puts the task at N+1, the `stopped` is rejected, and the
+  task wedges in `Cancelling`.
+- **Wake (`Start` on a running task)**: the bump puts the task at N+1 while
+  run N is live, so run N's exit `stopped` is rejected and the
+  `Running+start → Pending` re-queue never fires. And since each `Start()`
+  bumps, k back-to-back wakes burn k versions on what ends up being a single
+  follow-up run.
 
 This proposal gives the version a single normative meaning — **the version is
-the run counter** — and uses it to stamp events with run identity, fixing both
-attribution (driver logs, timeline grouping) and agent event sync (dropped
-events).
+the run counter** — and realigns the bump sites so the counter moves exactly
+at run boundaries, never under a live run.
 
 ## Design
 
 ### 1. Version = run counter
 
-`Task.Version` counts provisioned runs:
+`Task.Version` identifies the latest provisioned run:
 
-- **`0` — never run.** The task exists but no run has ever been queued.
-- **`N ≥ 1` — run N is the latest provisioned run.** The version bumps to N at
-  the moment run N is queued, and run N is the sandbox run that consumes that
-  provisioning command.
+- **`0` — never provisioned.** The task exists but no run has ever been
+  queued.
+- **`N ≥ 1` — run N is the latest provisioned run.** A provisioned run may
+  still be cancelled before it starts; the version is never reused.
 
-The bump sites realign to match (this adopts §4 of
-[`run-scoped-runner-events.md`](run-scoped-runner-events.md) verbatim):
+The invariant that makes run-scoped events workable: **the version never
+changes while its run is live, unless the run is deliberately disowned by a
+restart.** A live run's terminal event therefore always matches the current
+version; a disowned or dead prior run's events are stale by construction.
 
-- `Task.Start()` and `Task.Restart()` keep their `t.Version++` — each
-  provisions a new run.
-- `Task.Cancel()` **drops** its bump — stopping the current run is not a new
-  run, and the live driver's terminal event (scoped to run N) must still
-  apply, or cancellation wedges in `Cancelling`.
-- The zombie-kill paths in `applyRunnerEventStarted` (archived/cancelled →
-  `Cancelling+stop`) **drop** their bumps for the same reason: the zombie's
-  `stopped` must land the task in `Cancelled`.
+### 2. Bump sites: provision-time only
+
+The version bumps exactly when the next run is provisioned:
+
+| Transition | Bump | Why |
+|---|---|---|
+| `Start()` from terminal → `Pending` | **keep** | provisions the next run now; no runner event is coming |
+| `Restart()` (terminal → `Pending`, running → `Restarting`) | **keep** | provisions the replacement now; the killed run is disowned — its terminal events *should* be stale (this is today's intentional restart-flow rejection, `internal/runner/runner.go` restart branch) |
+| `Start()` on `Running` | **drop** | nothing is provisioned yet — the wake is queued; `command=start` is set and the version stays with the live run |
+| `applyRunnerEventStopped`: `Running`+`command=start` → `Pending` | **add** | this is the run boundary: run N's exit is what provisions run N+1. The `stopped` is scoped to N, the task is at N, it applies, and the fold bumps to N+1 with the command kept for the runner |
+| `Cancel()` | **drop** | stopping the current run provisions nothing; the live driver's `stopped` (scoped N) must still apply or cancellation wedges in `Cancelling` |
+| `applyRunnerEventStarted` zombie paths (archived/cancelled → `Cancelling+stop`) | **drop** | same shape: the zombie's `stopped` must land the task in `Cancelled` |
 
 `CreateTask` (`internal/server/apiserver/task.go`) and the eventrouter's
-rule-created tasks already seed `Version: 1` with `Pending+Start` — under the
-new semantics that reads as "creation queues run 1", which is exactly what
-happens. Version 0 therefore has no producer today; it is the reserved value
-for any future create-without-start flow (drafts, templated tasks), and for
-free it makes "has this task ever run?" a column predicate.
+rule-created tasks already seed `Version: 1` with `Pending+Start` — under
+these semantics that reads as "creation provisions run 1", which is exactly
+what happens. Version 0 has no producer today; it is the reserved value for
+any future create-without-start flow, and for free it makes "has this task
+ever run?" a column predicate.
 
-### 2. The bypass sentinel becomes -1
+**Back-to-back wakes coalesce.** Task `Running` at N; three instructions
+arrive before the runner reacts. Each fold sets `command=start` idempotently;
+the version stays N. Run N exits, its `stopped` applies (`Running+start →
+Pending`), the fold bumps to N+1, and the runner provisions run N+1 — which
+sees all three instructions. One physical run, one version, no phantom runs.
+Instructions that land while the task is `Pending`/`Restarting` need no fold
+at all (`CanStart` is false): the already-provisioned run will see them when
+it starts.
+
+### 3. The bypass sentinel becomes -1
 
 `RunnerEvent.Version` (proto and model) gets defined semantics:
 
 - **`N ≥ 1`** — scoped to run N: applies only when `N == task.Version`.
 - **`-1`** — unscoped bypass, the explicit replacement for today's
-  "0 overrides anything". Reserved for emitters that genuinely cannot know the
-  run (legacy `taskstate` records without a stamped version).
+  "0 overrides anything". Reserved for emitters that genuinely cannot know
+  the run (legacy `taskstate` records without a stamped version).
 - **`0`** — invalid. No run 0 exists, so a 0-versioned event can never match;
   it is rejected as stale.
 
@@ -93,208 +112,101 @@ whatever run is current.
 two-phase:
 
 1. Server release A: accept both `0` and `-1` as bypass; all in-tree emitters
-   (driver, runner backstops) switch to `-1`. The runner binary embeds the
-   prebuilt driver, so both roll together.
+   that hardcode 0 (driver, `supervise`, `failIfTaskRunning`) switch to `-1`.
+   The runner binary embeds the prebuilt driver, so both roll together. The
+   two `Poll` emits that already carry `task.Version` (the no-sandbox
+   `stopped`, the dispatch-failure `failed`) are already correctly scoped and
+   stay as they are.
 2. Server release B (after runners are upgraded): `0` becomes reject-as-stale.
 
-`taskstate.Record.Version == 0` (records written by older runners) is mapped to
-`-1` at emit time — "legacy record, run unknown" — which is honest and keeps
-the boot-time backstop working across the upgrade.
-
-### 3. Events are stamped with their run: `events.run_version`
-
-```sql
--- migration
-ALTER TABLE events ADD COLUMN run_version bigint NOT NULL DEFAULT 0;
-```
-
-`0` means unattributed: pre-migration rows, and events on a task that has
-never run. `model.Event` and `CreateEvent` (`internal/store/event.go`) gain the
-field; the `Event` proto gains `int64 run_version`.
-
-**Stamping rule: `run_version` = `task.Version` at commit time, where
-wake-driven creation stamps *after* the `Start()` fold.** A wake event is
-thereby assigned to the run it provisions. Per call site:
-
-| Site | Stamp |
-|---|---|
-| `eventrouter.attach` wake path | post-`Start()` version — the run the event provisions (or the already-queued run when `Start()` refuses, e.g. `Pending`) |
-| `eventrouter.attach` no-wake path | current version (needs a task read this path doesn't do today) |
-| `UpdateTask` `AddInstructions` | post-`Start()` version when `req.Start` is set — requires folding `task.Start()` *before* the instruction-event creates (today the events are created first) |
-| `CreateTask` / router create-task seeds | `1` — creation queues run 1 |
-| `SubmitRunnerEvents` lifecycle events | the runner event's version when `≥ 1`, else the task's current version |
-| `UploadLogs` report events | the loaded task row's version (the handler already reads it) |
-| `CreateLink` link events, archiver / shell / update lifecycle events | current version |
-
-The reorderings are small: `attach` locks the task row first (it already does
-`GetTaskForUpdate` in the wake path), folds `Start()`, then creates the event;
-`UpdateTask` moves the `req.Start` fold above the instruction loop.
-
-**Delivery invariant.** A wake event stamped V commits in the same transaction
-as (or after) the command that provisions run V, and run V's driver starts
-strictly later — so *every wake event stamped V is visible to run V's first
-`get_my_task`*. Events can no longer fall between runs:
-
-- Task `Running` at N, event arrives → `Start()` bumps to N+1, event stamped
-  N+1, `command=start` survives until run N+1's `started` consumes it. Even if
-  run N's agent never polls again, run N+1 is guaranteed and owns the event.
-- Task `Pending`/`Restarting` at N (run N queued, not started) → `Start()`
-  refuses, event stamped N, run N starts later and sees it.
-- Task terminal at N → `Start()` moves it to `Pending`, bumps to N+1, event
-  stamped N+1.
-
-The one remaining gap — an event attached while the task is `Cancelling` never
-wakes anything — becomes *detectable* instead of invisible: a wake event
-stamped V with no `SANDBOX_STARTED` lifecycle event stamped ≥ V on a terminal,
-command-less task is a dropped delivery, queryable by a future reconciler (see
-Open Questions).
-
-### 4. Consumer: agent event sync
-
-`GetTaskDetails` already returns the task (with `version`) and its events; with
-`run_version` on the wire, the agent-side `get_my_task`
-(`internal/agentmcp/xmcp.go`) can mark exactly which events are new:
-
-- Each event in the brief carries its `run_version`.
-- The brief gains a `new_events` marker: events with
-  `run_version == task.version` are the ones assigned to the current run —
-  the events this run was started *for*.
-
-The bootstrap prompt's re-run branch (`internal/agent/PROMPT.md`, "The task
-was updated. Check xagent:get_my_task and continue.") can then point the agent
-at precisely the new events instead of asking it to diff the stream by
-intuition. That closes both failure modes from the issue: the agent no longer
-re-handles events a previous run already answered, and it can no longer
-mistake a genuinely new event for an old one and drop it.
-
-### 5. Consumer: driver logs
-
-The driver learns its run version the same way run-scoped-runner-events §6
-prescribes: `GetTask` at startup (it already calls this for the shell-session
-fork). Baking the version into the sandbox spec is not an option — the Docker
-adopt path (`internal/runner/backend/docker/docker.go`) reuses containers
-without refreshing `Cmd`/`Env`/`Files`, so anything baked at first launch is
-stale for every subsequent run of the same container.
-
-What the run key enables (deliberately left as follow-ups — this proposal
-delivers the key, not the features):
-
-- **Per-run timeline grouping.** The web UI and `get_task` can render a task
-  as a sequence of runs — run N's header from its `SANDBOX_STARTED`/`EXITED`
-  lifecycle events, with the reports and external events stamped N nested
-  under it — instead of one undifferentiated stream.
-- **Per-run driver log capture.** A future slice can upload the driver's own
-  output keyed by `(task_id, run_version)` (as a new event arm or a blob
-  store), giving `xagent logs --run N` and UI access to exactly one run's
-  output on any backend, instead of `docker logs`' concatenation on Docker
-  only.
-
-Reports uploaded through `UploadLogs` are stamped server-side from the task
-row rather than by the driver. A report from a stale run that arrives after a
-newer run was provisioned gets stamped with the newer version — a small,
-bounded misattribution (see Trade-offs) that avoids threading the version
-through the agent-mcp process.
+`taskstate.Record.Version == 0` (records written by older runners) is mapped
+to `-1` at emit time — "legacy record, run unknown" — which keeps the
+boot-time backstop working across the upgrade.
 
 ### Relationship to `run-scoped-runner-events.md`
 
-The two proposals share the version-realignment foundation and divide the rest:
+This proposal owns the version *semantics*; that draft owns the rejection
+*machinery* (the `ApplyRunnerEvent` verdict, per-event results, ignored-event
+timeline entries, driver reaction to rejection). Two amendments to it:
 
-- **This proposal** owns the version *semantics* (0 = never run, bump = new
-  run), the `-1` bypass sentinel, and event run-stamping with its two
-  consumers.
-- **run-scoped-runner-events** owns the rejection machinery: the
-  `ApplyRunnerEvent` verdict, per-event results on `SubmitRunnerEventsResponse`,
-  ignored-event timeline entries, driver reaction to rejection, and the
-  probe-driven start branch.
+- **§4 (version = run identity)**: its rule kept `Start`'s bump
+  unconditionally. Under this proposal, `Start` bumps only in the
+  terminal→`Pending` arm; the running-task arm's bump moves to the
+  `Running+start → Pending` fold in `applyRunnerEventStopped`. The rest of
+  §4 (drop `Cancel` and zombie bumps) is adopted verbatim.
+- **§7 (probe-driven start)**: its motivating deadlock — run N's `stopped`
+  arriving stale because a wake bumped to N+1 — no longer exists, because the
+  wake no longer bumps. The wake path flows through the existing
+  `Running+start → Pending` re-queue as the *primary* path, not a legacy one.
+  §7's probe remains useful as desync repair (a stale `Running` with no live
+  sandbox), but it is no longer load-bearing for the wake flow.
+- Wherever it says legacy emitters "degrade to today's bypass behavior" with
+  version 0, the bypass value becomes `-1` (with the two-phase acceptance of
+  0 above).
 
-One amendment to that draft: wherever it says legacy emitters "degrade to
-today's bypass behavior" with version 0, the bypass value becomes `-1` (with
-the two-phase acceptance of 0 above). Its layers (4)–(6) and this proposal's
-layers (1) and (6) below are the shared pieces; whichever lands first, the
-other rebases mechanically.
+The archiver's change-fence (`internal/server/archiver/archiver.go`) is the
+version's only other consumer; it only lists terminal tasks and re-validates
+`CanArchive` in its transaction, so the realignment does not affect it.
+
+## Non-goals
+
+Everything that *consumes* run identity is out of scope here: stamping
+`events` rows with a run version, marking new-this-run events in
+`get_my_task`, per-run timeline grouping, and per-run driver-log capture.
+The realigned counter is the primitive those features would build on; none
+of them are needed to fix the version itself.
 
 ## Implementation Plan
 
-1. **Model: version realignment + `-1` sentinel** — Delivers:
-   `model.VersionBypass = -1`; `Cancel` and the `applyRunnerEventStarted`
-   zombie paths stop bumping; the guard accepts `-1` (and, behind a
-   transition constant, `0`) as bypass and documents `0 = invalid`. Depends
-   on: nothing (inert while all senders emit 0/bypass). Verifiable by: state
-   machine tests — versioned cancel round-trip (cancel → `stopped` at the
-   pre-cancel version → `Cancelled`); `0` and `-1` both bypass; `N != version`
-   rejected.
-2. **Migration + store: `events.run_version`** — Delivers: the column,
-   sqlc regeneration, `model.Event.RunVersion`, `CreateEvent` writing it,
-   list/get reads returning it. Depends on: nothing. Verifiable by: migration
-   runs cleanly up and down; store round-trip test.
-3. **Server: stamp every event-create site** — Delivers: the stamping table
-   above, including the two reorderings (`attach` locks-then-folds-then-creates;
-   `UpdateTask` folds `Start()` before the instruction loop) and the task read
-   on the no-wake attach path. Depends on: (2). Verifiable by: handler and
-   eventrouter tests asserting the stamped version per scenario (running task
-   → N+1, pending task → N, terminal task → N+1, no-wake → N).
-4. **Proto + agent brief: expose run versions** — Delivers: `run_version` on
-   the `Event` message, the current-run marker in the agent-side `get_my_task`
-   brief, and the PROMPT.md re-run wording pointing at new-this-run events.
-   Depends on: (2), (3). Verifiable by: agentmcp brief test — events stamped
-   with the current version are marked new, older ones are not.
-5. **Runner + driver: emit `-1`** — Delivers: driver events and the runner's
-   `supervise`/`failIfTaskRunning` backstops send `-1` instead of 0 (or the
-   `taskstate` record's stamped version, once run-scoped-runner-events' layer
-   lands); `Record.Version == 0` maps to `-1` at emit. Depends on: (1) deployed
-   server-side. Verifiable by: runner/driver tests asserting the emitted
-   version.
-6. **Server: reject version 0** — Delivers: the transition constant flips;
-   `0` is rejected as stale. Depends on: (5) rolled out to all runners.
+1. **Model: bump realignment + `-1` sentinel** — Delivers:
+   `model.VersionBypass = -1`; `Start()` on a running task stops bumping;
+   the `Running+start → Pending` fold in `applyRunnerEventStopped` bumps;
+   `Cancel` and the `applyRunnerEventStarted` zombie paths stop bumping; the
+   guard accepts `-1` (and, behind a transition constant, `0`) as bypass and
+   documents `0 = invalid`. Depends on: nothing (inert while all senders emit
+   0/bypass). Verifiable by: state machine tests — back-to-back wake
+   coalescing (k folds, one bump at the exit fold); versioned cancel
+   round-trip; restart disown (old run's versioned `stopped` rejected, new
+   run's `started` consumes the command); `0` and `-1` both bypass;
+   `N != version` rejected.
+2. **Runner + driver: emit `-1`** — Delivers: the driver's three events and
+   the runner's `supervise`/`failIfTaskRunning` backstops send `-1` instead
+   of 0 (or the `taskstate` record's stamped version, once
+   run-scoped-runner-events §5 lands); `Record.Version == 0` maps to `-1` at
+   emit. Depends on: (1) deployed server-side. Verifiable by: runner/driver
+   tests asserting the emitted version.
+3. **Server: reject version 0** — Delivers: the transition constant flips;
+   `0` is rejected as stale. Depends on: (2) rolled out to all runners.
    Verifiable by: state machine test; staged after a release gap.
-7. **Web UI: per-run timeline grouping** *(optional follow-up slice)* —
-   Delivers: the task timeline grouped by `run_version`, unattributed (0) rows
-   in a single legacy group. Depends on: (4). Verifiable by: rendering a task
-   with multiple runs.
-
-Layers 1–4 are server-only and safe to merge independently; layer 5 rides the
-normal runner+driver release; layer 6 is a one-line flip gated on rollout.
 
 ## Trade-offs
 
-- **A dedicated `runs` table (or run UUID) instead of overloading `version`.**
-  Cleaner identity semantics and a home for per-run metadata (started_at,
-  exit reason), but it costs a new table, spec plumbing through both backends,
-  and a parallel guard in the state machine. After the realignment, `version`
-  already changes at exactly the run boundaries, so it serves as run identity
-  with zero new plumbing — and a `runs` table can be added later keyed by
-  `(task_id, run_version)` without unwinding anything here.
+- **A dedicated `runs` table (or run UUID) instead of realigning `version`.**
+  Cleaner identity semantics and a home for per-run metadata, but it costs a
+  new table, spec plumbing through both backends, and a parallel guard in the
+  state machine. After the realignment, `version` already changes at exactly
+  the run boundaries, so it serves as run identity with zero new plumbing —
+  and a `runs` table can be added later keyed by `(task_id, version)` without
+  unwinding anything here.
+- **Keeping `Start`'s bump on running tasks (the earlier draft of this
+  proposal).** Rejected: it burns a version per wake on a single physical
+  run, and it makes the live run's terminal event stale — the same wedge that
+  forced dropping `Cancel`'s bump, which run-scoped-runner-events §7 then had
+  to work around with a probe. Bumping at the exit fold keeps the counter
+  aligned with physical runs and lets the `stopped` apply honestly.
 - **Keeping 0 as the bypass sentinel.** Rejected: 0 is now a meaningful state
-  ("never run"), and the zero-value-means-bypass footgun is one of the root
-  causes in #1052. `-1` must be set deliberately.
-- **Driver-provided `run_version` on `UploadLogs` instead of server-side
-  stamping.** More precise for the stale-run-report edge, but it threads the
-  version through the agent-mcp process (a separate process from the driver)
-  for a misattribution window that is rare and bounded to one version. Server-
-  side stamping needs no wire or driver changes; revisit if misattribution
-  shows up in practice.
-- **Baking the run version into the sandbox spec / task token.** Rejected for
-  the same reason run-scoped-runner-events rejected the `--version` flag: the
-  Docker adopt path reuses containers without refreshing `Cmd`/`Env`/`Files`,
-  so anything baked at first launch is permanently stale for reused
-  containers. `GetTask` at driver startup works uniformly across backends and
-  fresh/adopted sandboxes.
-- **Stamping `run_version` lazily (view over lifecycle events) instead of a
-  column.** Reconstructing run boundaries from started/exited pairs is exactly
-  the heuristic that breaks today when those events go missing (#1052). The
-  column is assigned transactionally with the provisioning decision, which is
-  the whole point.
+  ("never provisioned"), and the zero-value-means-bypass footgun is one of
+  the root causes in #1052. `-1` must be set deliberately.
 
 ## Open Questions
 
-- **Should a reconciler actively repair detectably-dropped wake events** (the
-  `Cancelling`-attach case, or desync leftovers), e.g. re-queue tasks that
-  have a wake event stamped newer than their last started run? Or is
-  visibility (a UI badge / metric) enough to start?
-- **Should the brief hide or de-emphasize events from completed runs** rather
-  than just marking new ones? Hiding risks removing context the agent needs;
-  marking is the conservative first step.
-- **Does `get_my_task`'s `new_events` marker interact with mid-run polling?**
-  An agent that polls mid-run sees events stamped N+1 (assigned to the next
-  run) before that run starts. Proposed: still mark them new — handling early
-  is fine, and run N+1 will see them again with full context.
+- **`failed` wipes a queued wake.** `applyRunnerEventFailed` unconditionally
+  clears the command, so a wake queued behind a run that dies with `failed`
+  (instead of `stopped`) is lost — the follow-up run is never provisioned.
+  Should `failed` with `command=start` mirror the `stopped` fold (→ `Pending`,
+  keep command, bump), at the cost of auto-restarting after a failure? Or is
+  the wipe correct and the loss acceptable?
+- **Should `Cancel` on `Pending` un-provision the queued run?** Today it
+  lands `Cancelled` directly and the provisioned version is simply never
+  started. That's consistent with "version = latest provisioned run", but it
+  means a version can name a run that never existed physically.
