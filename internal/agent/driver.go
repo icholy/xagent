@@ -178,8 +178,7 @@ func (d *Driver) runAgent(ctx context.Context) error {
 		Cursor:     cfg.Cursor,
 		Sloppy:     cfg.Sloppy,
 		Dummy:      cfg.Dummy,
-		Log:        &d.Log.Logger,
-		LogSink:    d.Log.Sink(),
+		Log:        d.Log,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
