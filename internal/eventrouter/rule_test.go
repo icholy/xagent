@@ -23,8 +23,12 @@ func TestInputEventAttr(t *testing.T) {
 	assert.DeepEqual(t, e.Attr("label"), []string{"urgent"})
 	// An absent key yields nil.
 	assert.Assert(t, e.Attr("assignee") == nil)
-	// body/url are derived even when Attrs is nil.
+	// user is a derived view over the User field (the acting user's login/id).
+	withUser := InputEvent{User: "octocat"}
+	assert.DeepEqual(t, withUser.Attr("user"), []string{"octocat"})
+	// body/url/user are derived even when Attrs is nil.
 	empty := InputEvent{Data: "d", URL: "u"}
 	assert.DeepEqual(t, empty.Attr("body"), []string{"d"})
+	assert.DeepEqual(t, empty.Attr("user"), []string{""})
 	assert.Assert(t, empty.Attr("mention") == nil)
 }

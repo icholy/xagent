@@ -37,6 +37,14 @@ type InputEvent struct {
 	// populates it lands in later layers; until then it is nil and Route behaves
 	// exactly as before (member-only).
 	Orgs []int64
+	// User identifies the person who performed the action, taken straight from
+	// the event payload (GitHub: the actor's login; Atlassian: the actor's
+	// account id). The webhook handlers set it from the source-native identity on
+	// Meta. It is exposed to conditions as the derived "user" attribute (see Attr
+	// and UniversalAttrs) so a rule can match on who triggered the event — e.g.
+	// user equals a specific login. Empty when the source payload does not name
+	// an actor.
+	User string
 	// Attrs carries the event's matchable dimensions keyed by dimension name
 	// (e.g. "mention", "assignee", "label"), which the attribute matcher reads.
 	Attrs Attrs
@@ -46,15 +54,18 @@ type InputEvent struct {
 	Meta any
 }
 
-// Attr returns the event's values for a dimension. The "body" and "url"
-// dimensions are derived views over Data and URL so extractors don't
-// duplicate them; any other key reads from Attrs (nil/absent -> nil).
+// Attr returns the event's values for a dimension. The "body", "url", and
+// "user" dimensions are derived views over Data, URL, and User so extractors
+// don't duplicate them (see UniversalAttrs for "user"); any other key reads
+// from Attrs (nil/absent -> nil).
 func (e InputEvent) Attr(key string) []string {
 	switch key {
 	case "body":
 		return []string{e.Data}
 	case "url":
 		return []string{e.URL}
+	case "user":
+		return []string{e.User}
 	default:
 		return e.Attrs[key]
 	}

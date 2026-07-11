@@ -18,14 +18,32 @@ type AttrDef struct {
 	Placeholder string // example value for the condition's value input
 }
 
+// UniversalAttrs are attribute dimensions available on every event type. Every
+// event names the person who performed the action, so rather than each producer
+// restating the copy, MustRegister appends these to every registered schema's
+// Attrs. Being in every def's Attrs makes them offered by the UI and accepted by
+// Validate for any (source, type). Their value comes straight from the event
+// payload (see InputEvent.User / Attr). The derived "body"/"url" views predate
+// this and stay declared inline per type because their copy speaks to the
+// specific event (see the producer schemas).
+var UniversalAttrs = []AttrDef{
+	{
+		Key:         "user",
+		Label:       "User",
+		Placeholder: "octocat",
+		Help:        "The user who performed the action — for GitHub, the actor's login; for Atlassian, the actor's account id. Compare with \"equals\".",
+	},
+}
+
 // EventTypeDef declares a (Source, Type) event kind and the complete set of
 // attribute dimensions a rule may condition on for that kind. Attrs is that full
 // set: it always includes the derived views "body" and "url" (see
-// InputEvent.Attr) plus the type's own emitted dimensions. Each AttrDef carries
-// its own display copy so clients render labels/help/placeholders from the
-// schema. DefaultRules holds the fully-defined rules the producer ships for this
-// type (e.g. the "xagent:" body-prefix wakeup for comment types); DefaultRules
-// aggregates them across every registered def.
+// InputEvent.Attr), the type's own emitted dimensions, and the UniversalAttrs
+// (appended by MustRegister). Each AttrDef carries its own display copy so
+// clients render labels/help/placeholders from the schema. DefaultRules holds
+// the fully-defined rules the producer ships for this type (e.g. the "xagent:"
+// body-prefix wakeup for comment types); DefaultRules aggregates them across
+// every registered def.
 type EventTypeDef struct {
 	Source       string
 	Type         string
@@ -68,13 +86,16 @@ func NewSchemaRegistry() *SchemaRegistry {
 }
 
 // MustRegister records def as the schema for its (Source, Type) event kind,
-// making it available to EventTypeFor, EventTypes, and DefaultRules. It panics
-// if a def with the same (Source, Type) is already registered.
+// making it available to EventTypeFor, EventTypes, and DefaultRules. It appends
+// UniversalAttrs to the def's Attrs so every event type offers them without each
+// producer restating the copy. It panics if a def with the same (Source, Type)
+// is already registered.
 func (r *SchemaRegistry) MustRegister(def EventTypeDef) {
 	key := def.Source + ":" + def.Type
 	if _, dup := r.eventTypeByKey[key]; dup {
 		panic(fmt.Sprintf("eventrouter: duplicate schema registration for source=%q type=%q", def.Source, def.Type))
 	}
+	def.Attrs = append(slices.Clone(def.Attrs), UniversalAttrs...)
 	r.eventTypes = append(r.eventTypes, def)
 	r.eventTypeByKey[key] = def
 	r.defaultRules = append(r.defaultRules, def.DefaultRules...)
@@ -109,7 +130,8 @@ func (r *SchemaRegistry) DefaultRules() []model.RoutingRule {
 // and — because the registry is keyed by (Source, Type) and label_added exists
 // under multiple sources — an empty Source is rejected too. Each condition's op
 // must be equals/prefix/contains, and its attr must be one of the selected event
-// type's valid attrs (its Attrs set, which includes the derived body/url).
+// type's valid attrs (its Attrs set, which includes the derived body/url and the
+// UniversalAttrs appended at registration).
 func (r *SchemaRegistry) Validate(rule model.RoutingRule) error {
 	if rule.Type == "" {
 		return fmt.Errorf("rule must select an event type: empty type")

@@ -63,7 +63,7 @@ export function legacyEventType(
 // Fallback AttrDefs for legacy rules whose event type isn't in the registry, so
 // their conditions stay editable. Real event types carry their own richer copy
 // from the schema (see GetEventTypes); this is a minimal well-known set —
-// `body`/`url` are derived over every event, the rest are the per-type
+// `body`/`url`/`user` are derived over every event, the rest are the per-type
 // dimensions the producers emit.
 const FALLBACK_ATTRS: AttrDef[] = (
   [
@@ -73,6 +73,7 @@ const FALLBACK_ATTRS: AttrDef[] = (
     ['assignee', 'Assignee'],
     ['label', 'Label'],
     ['state', 'State'],
+    ['user', 'User'],
   ] as const
 ).map(([key, label]) => ({
   $typeName: 'xagent.v1.AttrDef',

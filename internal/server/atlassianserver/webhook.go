@@ -77,6 +77,12 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// safe. It panics loudly if that invariant is ever broken.
 	meta := input.Meta.(AtlassianMeta)
 
+	// Expose the acting user as the "user" attribute so rules can match on who
+	// triggered the event. It comes straight from the webhook payload (no store
+	// lookup); the account id is the actor's stable identifier, matching how the
+	// "mention" attribute keys Atlassian users.
+	input.User = meta.AuthorAccountID
+
 	// The event belongs to the org addressed by the ?org= param, independent of
 	// the actor's membership. It gates non-member routing: a Public rule on this
 	// org can fire even when the actor is unlinked.

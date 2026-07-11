@@ -16,8 +16,9 @@ func TestSchemaRegistration(t *testing.T) {
 	assert.Assert(t, len(def.DefaultRules) > 0, "issue_comment DefaultRules is empty; want the xagent: wakeup rule")
 
 	// AttrDefs carry GitHub-flavoured display copy declared inline per event
-	// type, so the copy speaks to this specific event (a comment's body/URL).
-	assert.DeepEqual(t, def.Attrs, []eventrouter.AttrDef{
+	// type, so the copy speaks to this specific event (a comment's body/URL). The
+	// registry appends the source-agnostic UniversalAttrs (user) to every type.
+	assert.DeepEqual(t, def.Attrs, append([]eventrouter.AttrDef{
 		{
 			Key:         "body",
 			Label:       "Comment Body",
@@ -36,7 +37,7 @@ func TestSchemaRegistration(t *testing.T) {
 			Placeholder: "octocat",
 			Help:        "GitHub username @-mentioned in the comment (no leading @).",
 		},
-	})
+	}, eventrouter.UniversalAttrs...))
 
 	// A non-comment type registers but ships no default rules.
 	labelDef, ok := reg.EventTypeFor("github", EventTypeLabelAdded)

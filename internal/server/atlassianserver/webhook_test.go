@@ -337,9 +337,11 @@ func TestHandleAtlassianWebhookRoutesToTask(t *testing.T) {
 		Data:        "xagent: please fix the tests",
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10?focusedCommentId=30003",
 		Attrs:       eventrouter.Attrs{"mention": nil},
-		UserID:      "user-1",
-		Orgs:        []int64{1},
-		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
+		// The handler promotes the acting user's account id to the "user" attribute.
+		User:   accountID,
+		UserID: "user-1",
+		Orgs:   []int64{1},
+		Meta:   AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
 	})
 }
 
@@ -395,9 +397,11 @@ func TestHandleAtlassianWebhookRoutesLabelAdded(t *testing.T) {
 		Description: `Test User added label(s) "xagent", "urgent" to PROJ-10`,
 		Attrs:       eventrouter.Attrs{"label": {"xagent", "urgent"}},
 		URL:         "https://mycompany.atlassian.net/browse/PROJ-10",
-		UserID:      "user-1",
-		Orgs:        []int64{1},
-		Meta:        AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
+		// The handler promotes the acting user's account id to the "user" attribute.
+		User:   accountID,
+		UserID: "user-1",
+		Orgs:   []int64{1},
+		Meta:   AtlassianMeta{AuthorAccountID: accountID, AuthorDisplayName: "Test User"},
 	})
 }
 

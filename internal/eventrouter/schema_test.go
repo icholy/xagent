@@ -92,6 +92,16 @@ func TestSchemaRegistryValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			// user is a universal attr appended to every type, so a condition on
+			// it validates even though the schema fixture never declared it.
+			name: "user valid on any type",
+			rule: model.RoutingRule{
+				Source:     "test",
+				Type:       "label",
+				Conditions: []model.Condition{{Attr: "user", Op: "equals", Value: "octocat"}},
+			},
+		},
+		{
 			name: "url and body valid on any type",
 			rule: model.RoutingRule{
 				Source: "test",

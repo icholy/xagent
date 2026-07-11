@@ -49,6 +49,11 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// assertion is safe. It panics loudly if that invariant is ever broken.
 	meta := input.Meta.(GitHubMeta)
 
+	// Expose the acting user's login as the "user" attribute so rules can match
+	// on who triggered the event. It comes straight from the webhook payload (no
+	// store lookup) — the same login already carried on Meta.
+	input.User = meta.AuthorLogin
+
 	// Resolve the App installation to the orgs the event belongs to,
 	// independent of the actor's membership. These gate non-member routing: a
 	// Public rule on one of these orgs can fire even when the actor is unlinked.

@@ -17,7 +17,8 @@ func TestSchemaRegistration(t *testing.T) {
 
 	// AttrDefs carry Jira-flavoured display copy declared inline per event type;
 	// the mention placeholder is an Atlassian account id, not a GitHub username.
-	assert.DeepEqual(t, def.Attrs, []eventrouter.AttrDef{
+	// The registry appends the source-agnostic UniversalAttrs (user) to every type.
+	assert.DeepEqual(t, def.Attrs, append([]eventrouter.AttrDef{
 		{
 			Key:         "body",
 			Label:       "Comment Body",
@@ -36,7 +37,7 @@ func TestSchemaRegistration(t *testing.T) {
 			Placeholder: "5b10ac8d82e05b22cc7d4ef5",
 			Help:        "Atlassian account id @-mentioned in the comment. Enter the bare id (no [~accountid:…] wrapper).",
 		},
-	})
+	}, eventrouter.UniversalAttrs...))
 
 	// label_added registers but ships no default rules.
 	labelDef, ok := reg.EventTypeFor("atlassian", EventTypeLabelAdded)

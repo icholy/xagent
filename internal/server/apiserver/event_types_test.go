@@ -3,6 +3,7 @@ package apiserver
 import (
 	"testing"
 
+	"github.com/icholy/xagent/internal/eventrouter"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -43,13 +44,16 @@ func TestGetEventTypes(t *testing.T) {
 	for _, a := range issueComment.Attrs {
 		keys = append(keys, a.Key)
 	}
-	assert.DeepEqual(t, keys, []string{"body", "url", "mention"})
+	// "user" is the source-agnostic universal attr the registry appends to every type.
+	assert.DeepEqual(t, keys, []string{"body", "url", "mention", "user"})
 
 	// One type asserted whole to prove the AttrDef -> proto conversion carries
-	// every display field (label/placeholder/help), not just the key.
+	// every display field (label/placeholder/help), not just the key. The
+	// universal "user" attr (built from eventrouter.UniversalAttrs so the copy
+	// can't drift) is appended to every type, so it trails the type's own attrs.
 	labelAdded, ok := byKey["github:label_added"]
 	assert.Assert(t, ok, "expected github/label_added to be registered")
-	assert.DeepEqual(t, labelAdded.Attrs, []*xagentv1.AttrDef{
+	wantAttrs := []*xagentv1.AttrDef{
 		{
 			Key:         "body",
 			Label:       "Issue/PR Body",
@@ -68,7 +72,16 @@ func TestGetEventTypes(t *testing.T) {
 			Placeholder: "xagent",
 			Help:        "The label added to the issue or PR.",
 		},
-	}, protocmp.Transform())
+	}
+	for _, a := range eventrouter.UniversalAttrs {
+		wantAttrs = append(wantAttrs, &xagentv1.AttrDef{
+			Key:         a.Key,
+			Label:       a.Label,
+			Placeholder: a.Placeholder,
+			Help:        a.Help,
+		})
+	}
+	assert.DeepEqual(t, labelAdded.Attrs, wantAttrs, protocmp.Transform())
 
 	// The atlassian producer registers too (apiserver imports it), confirming the
 	// handler exposes the whole global registry, not just one source.

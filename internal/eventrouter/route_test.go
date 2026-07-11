@@ -1168,6 +1168,58 @@ func TestRouteMemberOrgInOrgsUsesFullRuleSet(t *testing.T) {
 	assert.Equal(t, updated.Status, model.TaskStatusPending)
 }
 
+func TestRouteUserConditionMatchesActingUser(t *testing.T) {
+	t.Parallel()
+
+	// Arrange: a Public create-rule gated on user == "octocat". The "user"
+	// attribute is derived from the acting user's login (InputEvent.User), so an
+	// org can single out a specific external contributor — here an unlinked
+	// (non-member) actor commenting on a PR.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/issues/1"
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source:     "github",
+		Type:       "issue_comment",
+		Public:     true,
+		Conditions: []model.Condition{{Attr: "user", Op: "equals", Value: "octocat"}},
+		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+	}}))
+	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+
+	// Act 1: the non-member actor octocat triggers the event — the user condition
+	// matches and the public rule creates a task.
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "@icholy-bot please look",
+		URL:    url,
+		User:   "octocat",
+		Orgs:   []int64{org.OrgID},
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1)
+
+	// Act 2: a different user triggers the same event — the user condition fails,
+	// so nothing routes.
+	n, err = r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "issue_comment",
+		Data:   "@icholy-bot please look",
+		URL:    "https://github.com/owner/repo/issues/2",
+		User:   "someoneelse",
+		Orgs:   []int64{org.OrgID},
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, n, 0)
+	tasks, err = s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 1) // still just octocat's task
+}
+
 func TestRouteOnRouteOutcome(t *testing.T) {
 	t.Parallel()
 

@@ -333,6 +333,39 @@ func TestMatchRule(t *testing.T) {
 			want: false,
 		},
 
+		// --- user -> derived from InputEvent.User ---
+		{
+			name:  "user equals match",
+			rule:  model.RoutingRule{Conditions: []model.Condition{{Attr: "user", Op: "equals", Value: "octocat"}}},
+			event: InputEvent{User: "octocat"},
+			want:  true,
+		},
+		{
+			name:  "user equals mismatch",
+			rule:  model.RoutingRule{Conditions: []model.Condition{{Attr: "user", Op: "equals", Value: "octocat"}}},
+			event: InputEvent{User: "someoneelse"},
+			want:  false,
+		},
+		{
+			// An event with no acting user carries an empty "user", so a non-empty
+			// user condition fails.
+			name:  "user equals fails when event has no user",
+			rule:  model.RoutingRule{Conditions: []model.Condition{{Attr: "user", Op: "equals", Value: "octocat"}}},
+			event: InputEvent{},
+			want:  false,
+		},
+		{
+			// user is always present (derived), so it AND-composes with the body
+			// prefix: only octocat's "xagent:" comment matches.
+			name: "user composes with another condition",
+			rule: model.RoutingRule{Conditions: []model.Condition{
+				{Attr: "body", Op: "prefix", Value: "xagent:"},
+				{Attr: "user", Op: "equals", Value: "octocat"},
+			}},
+			event: InputEvent{Data: "xagent: do it", User: "octocat"},
+			want:  true,
+		},
+
 		// --- unknown op never matches ---
 		{
 			name:  "unknown op never matches",

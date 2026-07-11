@@ -880,9 +880,11 @@ func TestHandleGitHubWebhookRoutesToTask(t *testing.T) {
 		Data:        "xagent: please fix the tests",
 		URL:         "https://github.com/owner/repo/pull/10#issuecomment-1000",
 		Attrs:       eventrouter.Attrs{"mention": nil},
-		UserID:      "user-1",
-		Orgs:        []int64{7},
-		Meta:        GitHubMeta{AuthorID: ghUserID, AuthorLogin: "testuser", InstallationID: installationID},
+		// The handler promotes the acting user's login to the "user" attribute.
+		User:   "testuser",
+		UserID: "user-1",
+		Orgs:   []int64{7},
+		Meta:   GitHubMeta{AuthorID: ghUserID, AuthorLogin: "testuser", InstallationID: installationID},
 	})
 
 	// The installation is resolved with the event's installation id.
