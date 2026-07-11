@@ -61,20 +61,28 @@ per-consumer plumbing, and the payload stays source-agnostic.
 
 The map is opaque to the schema, but the GitHub extractor and the consumers agree on a
 key convention. The minimum useful anchor is `path` + `line`; we also set `side`,
-`start_line`, and `diff_hunk`, and mark whether the anchor is outdated:
+`start_line`, and `diff_hunk`:
 
 | Key          | Source (go-github `PullRequestComment`) | Why keep it |
 |--------------|------------------------------------------|-------------|
 | `path`       | `Path`                                   | The file — required to locate the code at all. |
-| `line`       | `Line`, falling back to `OriginalLine`   | The line the comment anchors to. GitHub sends `line == nil` when the comment is on an outdated diff; `original_line` still points at the line in the reviewed commit. |
+| `line`       | `Line`, falling back to `OriginalLine`   | The line the comment anchors to. GitHub sends `line == nil` when the comment is on an outdated diff; `original_line` still points at the line in the reviewed commit, so it's the right fallback for populating the key. |
 | `start_line` | `StartLine` (omitted when single-line)   | Multi-line comments anchor to a range; without the start the agent only sees the last line. |
 | `side`       | `Side` (`LEFT`/`RIGHT`)                   | Disambiguates a deletion (old side) from an addition/context (new side) on the same displayed line. |
 | `diff_hunk`  | `DiffHunk`                               | The actual diff context the comment is attached to — the single biggest token-saver: the agent sees the exact code without fetching anything. |
-| `outdated`   | derived: `Line == nil && OriginalLine != nil` | Tells the agent (and UI) that `line` came from the original diff and may not match the current file, so it should locate by content rather than trusting the number blindly. |
 
-All values are strings (`line` → `"42"`, `outdated` → `"true"`; unset keys are simply
-absent). `diff_hunk` can be large for a wide multi-line range; see Open Questions on
-capping.
+All values are strings (`line` → `"42"`; unset keys are simply absent). `diff_hunk` can be
+large for a wide multi-line range; see Open Questions on capping.
+
+**`line`/`start_line` are capture-time hints, `diff_hunk` is the durable anchor.** The
+line numbers are correct against the diff at the instant the webhook arrived, but the
+stored event is never updated — as soon as the branch moves, a line that was current can
+become stale, and vice versa. We therefore record no freshness claim about the numbers
+(an earlier draft had an `outdated` key; it's dropped — a boolean captured once would tell
+a later reader exactly the wrong thing as the branch evolves). The guidance for the agent,
+carried in the extractor doc and worth surfacing in the UI, is: treat `line`/`start_line`
+as hints for a quick jump, and locate the code by matching the **`diff_hunk` content**,
+which is self-describing and survives line renumbering.
 
 We deliberately do **not** set `commit_id`/`original_commit_id`, `position`,
 `start_side`, or `subject_type` in the first cut — they add weight without clearly paying
@@ -142,9 +150,9 @@ unchanged. `SetPayloadProto` / `EventPayloadFromProto` copy the map through.
 
 ### Carrying it through the router
 
-`ExternalPayload` is built inside `Router.attach`, which today reads only three fields
-off `InputEvent`. `InputEvent` therefore needs to carry the map too — `Meta` won't do,
-because `attach` drops it. Add a field:
+`ExternalPayload` is built inside `internal/eventrouter/eventrouter.go`, which today reads
+only three fields off `InputEvent`. `InputEvent` therefore needs to carry the map too —
+`Meta` won't do, because the router drops it. Add a field:
 
 ```go
 // eventrouter.InputEvent
@@ -157,7 +165,7 @@ because `attach` drops it. Add a field:
 Attributes map[string]string
 ```
 
-and in `attach`:
+copied into the payload as:
 
 ```go
 Payload: &model.ExternalPayload{
@@ -171,6 +179,17 @@ Payload: &model.ExternalPayload{
 The router forwards it the same way it forwards `Data`, without interpreting it. (The
 near-identical names `Attrs` vs `Attributes` are a readability smell — see Open Questions.)
 
+**There are two `ExternalPayload` construction sites, and both must copy `Attributes`:**
+
+- `Router.attach` (~`eventrouter.go:242`) — the **wake path**: an event routed to an
+  already-subscribed task.
+- `Router.create` (~`eventrouter.go:337`) — the **rule-created-task path**: the trigger
+  event emitted first on the timeline of a task a routing rule just created.
+
+Miss the second and code location silently vanishes whenever a rule spins up a fresh task
+from a review comment — exactly the case where the agent has the least context. The router
+slice's test must cover **both** paths (see Implementation Plan).
+
 ### GitHub extractor
 
 In the `*github.PullRequestReviewCommentEvent` arm of `toInputEvent`, build the map from
@@ -179,10 +198,8 @@ the comment and fold `path:line` into the description:
 ```go
 c := event.Comment
 line := c.GetLine()
-outdated := false
-if line == 0 { // GitHub sends null line for comments on an outdated diff
-    line = c.GetOriginalLine()
-    outdated = true
+if line == 0 { // GitHub sends a null line for comments on an outdated diff
+    line = c.GetOriginalLine() // fall back, but record no freshness claim
 }
 attrs := map[string]string{
     "path": c.GetPath(),
@@ -196,9 +213,6 @@ if s := c.GetSide(); s != "" {
 }
 if h := c.GetDiffHunk(); h != "" {
     attrs["diff_hunk"] = h
-}
-if outdated {
-    attrs["outdated"] = "true"
 }
 
 description := fmt.Sprintf("%s reviewed PR #%d", login, number)
@@ -220,10 +234,10 @@ needs three small changes:
    `TimelineItem` variant and populate it in `eventsToTimeline` from the proto.
 2. `webui/src/components/task-timeline.tsx` (`ExternalRow`) — when `attributes.path` is
    present, render a monospace `path:line` chip (linking to `item.url`, which already
-   deep-links to the comment) between the description and the body, with a subtle
-   "outdated" marker when `attributes.outdated === "true"`. Optionally render `diff_hunk`
-   in a collapsed `<pre>`. The UI applies a light convention over well-known keys; the
-   schema stays generic.
+   deep-links to the comment) between the description and the body. Optionally render
+   `diff_hunk` in a collapsed `<pre>` — since the numbers are only capture-time hints, the
+   hunk is the more reliable thing to show. The UI applies a light convention over
+   well-known keys; the schema stays generic.
 3. Run `pnpm lint` in `webui/`.
 
 ### PR review events (`pull_request_review`) and inline comments
@@ -272,18 +286,20 @@ reason.
    nothing. Verifiable by: `ExternalPayload` proto↔model round-trip unit tests, including
    an old-shape payload (no `attributes`) unmarshalling cleanly.
 2. **Router plumbing** — Delivers: `InputEvent.Attributes` and its copy into the persisted
-   `ExternalPayload` in `Router.attach`. Depends on: (1). Verifiable by: an `eventrouter`
-   test that routes an `InputEvent` with `Attributes` and asserts the persisted event
-   carries them.
+   `ExternalPayload` at **both** construction sites — `Router.attach` (wake path) and
+   `Router.create` (rule-created-task path). Depends on: (1). Verifiable by: `eventrouter`
+   tests that route an `InputEvent` with `Attributes` down each path and assert the
+   persisted event carries them — including the `create` path, so a rule-created task
+   doesn't silently drop the location.
 3. **GitHub extractor** — Delivers: `toInputEvent` populating `Attributes` for
-   `pull_request_review_comment` (path, resolved line with outdated fallback, start_line,
+   `pull_request_review_comment` (path, line with the `original_line` fallback, start_line,
    side, diff_hunk) and folding `path:line` into the description. Depends on: (2).
    Verifiable by: a webhook table test asserting the built `InputEvent` for a sample
-   review-comment payload (both current-diff and outdated-diff cases).
+   review-comment payload, covering both the current-diff case (`line` set) and the
+   null-`line` case where the key is populated from `original_line`.
 4. **Web UI** — Delivers: the `attributes` map in `timeline.ts` and the `path:line` chip
-   (plus outdated marker / optional diff-hunk) in `ExternalRow`. Depends on: (1).
-   Verifiable by: rendering the timeline against an event with `attributes`, and
-   `pnpm lint`.
+   (plus optional collapsed diff-hunk) in `ExternalRow`. Depends on: (1). Verifiable by:
+   rendering the timeline against an event with `attributes`, and `pnpm lint`.
 
 ## Trade-offs
 
@@ -315,5 +331,6 @@ reason.
   store it whole, or truncate to the last N lines around the anchor? Leaning whole in the
   first cut, revisit if payloads get large.
 - **Carry the commit SHA?** A `commit_id` key would let the agent `git show` the exact
-  reviewed revision, which matters when the anchor is outdated. Cheap to add later given the
-  generic map; deferred until the `outdated` flag proves insufficient.
+  reviewed revision — a durable anchor that pins the line numbers to the commit they were
+  captured against, unlike the bare `line`. Cheap to add later given the generic map;
+  deferred until `diff_hunk`-based location proves insufficient in practice.
