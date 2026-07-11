@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +16,7 @@ import (
 
 // CursorAgent implements Agent using the Cursor Agent CLI.
 type CursorAgent struct {
-	log        *slog.Logger
+	log        *DriverLog
 	cwd        string
 	verbose    bool
 	mcpServers map[string]McpServer

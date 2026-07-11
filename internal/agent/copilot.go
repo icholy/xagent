@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"log/slog"
 	"os"
 	"os/exec"
 	"syscall"
@@ -13,7 +12,7 @@ import (
 
 // CopilotAgent implements Agent using GitHub Copilot CLI.
 type CopilotAgent struct {
-	log        *slog.Logger
+	log        *DriverLog
 	cwd        string
 	mcpServers map[string]McpServer
 	options    *CopilotOptions

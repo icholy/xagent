@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +17,7 @@ import (
 
 // CodexAgent implements Agent using OpenAI Codex CLI.
 type CodexAgent struct {
-	log        *slog.Logger
+	log        *DriverLog
 	cwd        string
 	verbose    bool
 	mcpServers map[string]McpServer

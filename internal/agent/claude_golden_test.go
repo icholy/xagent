@@ -31,7 +31,7 @@ func TestClaudeGolden(t *testing.T) {
 			return a
 		},
 	}))
-	agent := &ClaudeAgent{log: log}
+	agent := &ClaudeAgent{log: &DriverLog{Logger: *log}}
 
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {

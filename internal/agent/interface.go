@@ -110,8 +110,7 @@ type DummyToolCall struct {
 // NewAgent creates an Agent based on the type specified in options.
 // If Type is empty, it defaults to TypeClaude.
 func NewAgent(opts Options) (Agent, error) {
-	dlog := cmp.Or(opts.Log, DiscardDriverLog)
-	log := &dlog.Logger
+	log := cmp.Or(opts.Log, DiscardDriverLog)
 
 	switch cmp.Or(opts.Type, TypeClaude) {
 	case TypeClaude:
@@ -121,7 +120,6 @@ func NewAgent(opts Options) (Agent, error) {
 			verbose:    opts.Verbose,
 			mcpServers: opts.McpServers,
 			options:    opts.Claude,
-			logSink:    dlog.Sink(),
 		}, nil
 	case TypeCodex:
 		return &CodexAgent{

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +14,7 @@ import (
 
 // SloppyAgent implements Agent using the Sloppy CLI.
 type SloppyAgent struct {
-	log        *slog.Logger
+	log        *DriverLog
 	cwd        string
 	mcpServers map[string]McpServer
 	options    *SloppyOptions
