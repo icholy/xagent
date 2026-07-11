@@ -32,8 +32,13 @@ A task's event stream is returned unbounded. Two RPCs hand events back with no l
 
 A long-lived task accumulates events continuously: every report, lifecycle transition, tool
 call, and inbound PR/Jira event is a row. As the timeline grows, the `ListEventsByTask` payload
-and the work to render it grow without bound, and the `GetTaskDetails` brief grows with every
-instruction and external nudge.
+and the work to render it grow without bound.
+
+This proposal targets that timeline. The **agent brief** (`GetTaskDetails`) is explicitly **out
+of scope** — it stays unbounded and unchanged, per maintainer direction: it is already narrowed
+to the two low-volume arms the agent needs (instruction + external), and it is the agent's
+one-shot task picture rather than a scrollable surface (see
+[The agent brief](#4b-the-agent-brief-gettaskdetails---unchanged-out-of-scope)).
 
 Task **list** pagination already landed — the generic `internal/pagination` keyset package and
 `Store.ListTasksPage` / `taskSource` (see `proposals/draft/task-pagination.md`). This proposal
@@ -51,10 +56,9 @@ Paginate the **timeline** RPC, `ListEventsByTask`, with keyset pagination reusin
 opposite of the task list, which pages toward older *tasks* but whose first page is also the
 newest. The web UI switches the timeline to `useInfiniteQuery` with a "Load older" control.
 
-The **agent brief** (`GetTaskDetails`) is bounded a different way. It is not a scrollable
-surface — the agent reads it once per wake — so it does not gain page tokens. Instead the brief
-is capped by a **head-preserving tail**: *all* instruction events (the task definition — must
-never be dropped) plus the newest N external events. See [The agent brief](#4b-the-agent-brief-gettaskdetails).
+The **agent brief** (`GetTaskDetails`) is deliberately **left unbounded** — it keeps fetching
+all instruction + external events exactly as it does today. It is out of scope for this
+proposal. See [The agent brief](#4b-the-agent-brief-gettaskdetails).
 
 Pagination mechanics stay owned entirely by the **store**, exactly as for tasks:
 `Store.ListEventsByTaskPage` takes the request's `page_size`/`page_token` as plain values and
@@ -102,9 +106,9 @@ struct and an `eventSource` implementation of `Source` — the same shape as `ta
 #### SQL query
 
 `internal/store/sql/queries/event.sql` — add a paged variant alongside the retained
-`ListEventsByTask`. It keeps the optional `types` filter (so the brief can request "newest N
-externals"), adds a single-column keyset predicate, flips the order to `DESC`, and bounds with
-`LIMIT`:
+`ListEventsByTask`. It keeps the optional `types` filter for parity with the existing query (so
+future arm-filtered paging is a param, not a new query), adds a single-column keyset predicate,
+flips the order to `DESC`, and bounds with `LIMIT`:
 
 ```sql
 -- name: ListEventsByTaskPage :many
@@ -153,7 +157,7 @@ var listEventsPaging = pagination.Config{Default: 50, Max: 200}
 type ListEventsByTaskPageParams struct {
     TaskID    int64
     OrgID     int64
-    Types     []string // nil/empty → all arms; e.g. the brief passes [external]
+    Types     []string // nil/empty → all arms; a future arm-filtered page passes e.g. [external]
     PageSize  int32    // 0 → default (50); max 200
     PageToken string   // opaque token from a previous page; empty for the first page
 }
@@ -249,40 +253,24 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 The paged response is newest-first; the client reverses each page for display. The `errors.Is`
 mapping is the one place the handler acknowledges pagination, matching `ListTasks`.
 
-### 4b. The agent brief (`GetTaskDetails`)
+### 4b. The agent brief (`GetTaskDetails`) — unchanged, out of scope
 
-`GetTaskDetails` is the agent's brief, not a scrollable surface — `get_my_task` reads it once
-per wake and needs a coherent, self-contained picture of the task. Paging it would force the
-agent to make follow-up calls just to reconstruct its own instructions, and a plain tail would
-risk dropping the **first** instruction, which *is* the task definition. So the brief does not
-page and is not blindly tailed. It is bounded by a **head-preserving tail**:
+`GetTaskDetails` and the agent's `get_my_task` tool are **left exactly as they are**: they keep
+fetching the full brief (all instruction + external events, oldest-first) with no bound, no
+tail, and no paging.
 
-- **All `instruction` events** — complete, order preserved. Instructions are low-volume (a
-  human/router sends a handful) and each one is load-bearing, so the head is never dropped.
-- **The newest `briefExternalLimit` `external` events** (proposed 50) — external nudges (PR
-  comments, Jira updates) are the arm that can accumulate on a busy task; the agent needs the
-  *recent* ones, not a full replay.
+This is a deliberate scope decision. The brief is the agent's one-shot picture of its task, read
+once per wake, and it is already narrowed to the two low-volume, semantically-required arms
+(instruction + external) — it excludes the high-volume arms (report, lifecycle, link) that make
+the *timeline* grow. Paging it would force the agent to make follow-up calls just to reconstruct
+its own instructions, and any tail risks dropping context the agent needs mid-task. The
+unbounded growth this proposal targets is the full **timeline** (`ListEventsByTask`), not the
+brief.
 
-The two sets are merged and returned in ascending `id` order, unchanged from today's shape
-(`repeated Event events`). Implementation reuses the paged store method for the tail:
-
-```go
-// GetTaskDetails brief: all instructions + newest-N externals, chronological.
-instrs, _ := s.store.ListEventsByTask(ctx, nil, req.Id, caller.OrgID,
-    []string{model.EventTypeInstruction}) // low-volume, unbounded is fine
-externals, _ := s.store.ListEventsByTaskPage(ctx, nil, store.ListEventsByTaskPageParams{
-    TaskID: req.Id, OrgID: caller.OrgID,
-    Types:    []string{model.EventTypeExternal},
-    PageSize: briefExternalLimit,
-}) // newest 50 externals
-brief := mergeByID(instrs, externals.Items) // ascending id
-```
-
-`get_my_task` needs no change: it already projects `instructions` out of the brief's events and
-returns the events list as-is. Its `instructions` stay complete; its `events` list is now
-bounded. `get_my_task` **does not page** — the agent gets one coherent brief per call. If a
-pathological task ever needs deep event history for the agent, that is a future dedicated tool
-(e.g. `list_my_events` backed by the same `ListEventsByTaskPage`), out of scope here.
+Concretely: `internal/server/apiserver/task.go`'s `GetTaskDetails` and
+`internal/agentmcp/xmcp.go`'s `getMyTask` / `taskDetailsToMap` are untouched. If the brief ever
+does become a problem for a pathological task, bounding it is a separate follow-up (a dedicated
+paged agent tool, or a head-preserving tail) — not part of this change.
 
 ### 5. Web UI
 
@@ -354,8 +342,8 @@ the timeline query moves to the infinite/head-aware model.
 
 `store.ListEventsByTask` (unpaged) is kept and still used by:
 
-- `GetTaskDetails` — for the complete instruction list (low-volume; see
-  [The agent brief](#4b-the-agent-brief-gettaskdetails)).
+- `GetTaskDetails` — for the complete agent brief, unchanged (see
+  [The agent brief](#4b-the-agent-brief-gettaskdetails---unchanged-out-of-scope)).
 - Tests and any internal consumers that legitimately want the full stream.
 
 Only the web UI timeline moves to the paged path. The `ListEventsByTask` **RPC** serves both:
@@ -372,11 +360,9 @@ legacy callers (empty page fields) get the full oldest-first list; the web UI op
   therefore depends on whether the caller paginates. This is deliberate — a timeline is read
   newest-first — and is contained: the only order-sensitive consumer is the web UI timeline,
   which reverses pages for display. Documented on the proto fields.
-- **`GetTaskDetailsResponse`** shape is unchanged (`repeated Event events`). Its **content**
-  becomes bounded (all instructions + newest-50 externals) instead of every instruction/external
-  event. For all but pathological tasks the content is identical; when it differs, the drop is
-  limited to the oldest external nudges, never an instruction. The web UI ignores
-  `GetTaskDetails.events`, so it is unaffected; the only consumer is `get_my_task`.
+- **`GetTaskDetails` / `get_my_task`** are untouched — no proto change, no behavior change. The
+  agent brief keeps returning every instruction + external event as it does today (see
+  [The agent brief](#4b-the-agent-brief-gettaskdetails---unchanged-out-of-scope)).
 
 ## Implementation Plan
 
@@ -392,15 +378,12 @@ legacy callers (empty page fields) get the full oldest-first list; the web UI op
    mapping. Depends on: (1), (2). Verifiable by: handler tests — empty page fields → full
    oldest-first list (unchanged); `page_size` set → newest-first page + `next_page_token`;
    invalid page size → `CodeInvalidArgument`.
-4. **`GetTaskDetails` brief bound** — Delivers: all-instructions + newest-N-externals merge,
-   `briefExternalLimit`. Depends on: (2). Verifiable by: handler test — a task with many
-   externals returns all instructions and only the newest N externals, chronological.
-5. **Web UI timeline paging** — Delivers: `useInfiniteQuery` timeline, page reversal, "Load
+4. **Web UI timeline paging** — Delivers: `useInfiniteQuery` timeline, page reversal, "Load
    older" button. Depends on: (3). Verifiable by: rendering a task with > `page_size` events;
    "Load older" appends older entries above; run `pnpm lint`.
-6. **Web UI live-head SSE handling** — Delivers: head-aware `task_logs` invalidation in
+5. **Web UI live-head SSE handling** — Delivers: head-aware `task_logs` invalidation in
    `use-org-sse.ts`, "New events ↓" affordance, drop the timeline's `refetchInterval`. Depends
-   on: (5). Verifiable by: with only the head loaded, new events appear on signal; with older
+   on: (4). Verifiable by: with only the head loaded, new events appear on signal; with older
    pages loaded, the affordance shows and reset returns to the live head; no boundary gap.
 
 ## Trade-offs
@@ -426,21 +409,21 @@ possible).
 ### Legacy oldest-first path vs migrating every caller to paging
 
 **Chosen: keep the legacy unpaged path.** `ListEventsByTask` has several internal/test callers
-that want the whole stream oldest-first, and `GetTaskDetails` needs the complete instruction
-list. A backward-compatible branch (empty page fields → legacy behavior) lets the RPC serve both
+that want the whole stream oldest-first, and `GetTaskDetails` still uses the unpaged store method
+for the complete brief. A backward-compatible branch (empty page fields → legacy behavior) lets the RPC serve both
 without a flag-day migration of every caller, at the cost of ordering depending on whether the
 caller paginates — contained to one documented proto note and one client that reverses anyway.
 
-### Bounding the brief vs paging it vs leaving it unbounded
+### Leaving the agent brief unbounded vs bounding it now
 
-**Chosen: head-preserving tail (all instructions + newest-N externals), no paging.** The brief
-is the agent's one-shot task picture, not a scrollable UI. Paging it would make the agent issue
-follow-up calls to reassemble its own instructions; leaving it unbounded is the very growth the
-issue flags; a naive tail could drop the foundational first instruction. Keeping *all*
-instructions (cheap — they are few and each is load-bearing) and tailing only the high-volume
-external arm bounds the payload while preserving everything the agent must not lose. The residual
-cost is that a task with hundreds of external nudges hides the oldest ones from the agent — the
-"New events" style follow-up (a dedicated paged agent tool) can address that if it ever matters.
+**Chosen: leave the brief unbounded (out of scope).** The brief is the agent's one-shot task
+picture, read once per wake, and it is already narrowed to the two low-volume, load-bearing arms
+(instruction + external) — it excludes the high-volume report/lifecycle/link arms that actually
+drive timeline growth. Paging it would make the agent issue follow-up calls just to reassemble
+its own instructions, and any tail risks dropping context it needs mid-task. The concrete
+unbounded-growth problem is the full timeline, which this proposal paginates; the brief keeps its
+current behavior. If the brief ever becomes a problem for a pathological task, bounding it is a
+separate follow-up (a dedicated paged agent tool, or a head-preserving tail).
 
 ### Head-aware live refetch vs blind invalidate vs append-from-SSE
 
@@ -465,16 +448,13 @@ method (`ListEventsPage`, …)").
 1. **Default / max page size.** Proposed 50 / 200 (vs the task list's 50 / 100) because
    timelines are denser than task lists. Is 50 the right first-screen size, and is 200 a safe
    ceiling for a single render?
-2. **`briefExternalLimit`.** Proposed 50 newest externals in the brief. Enough recent context
-   for the agent on a busy multi-round PR task? Should instructions ever be capped too (they are
-   assumed low-volume — is that always true)?
-3. **Type-filtered scans.** The brief's "newest-N externals" and any future arm-filtered paging
-   scan `(task_id, id)` and filter `type` in place. On a task that is overwhelmingly reports,
-   finding N externals may read many rows. Acceptable now; if it bites, add `(task_id, type, id)`.
-   Worth pre-empting, or defer until measured?
-4. **`ListExternalEvents` (org feed).** The org-level external feed (`ListEvents`, bare `limit`,
+2. **Type-filtered scans.** Any future arm-filtered paging scans `(task_id, id)` and filters
+   `type` in place. On a task that is overwhelmingly reports, finding N events of a given type
+   may read many rows. Acceptable now; if it bites, add `(task_id, type, id)`. Worth pre-empting,
+   or defer until measured?
+3. **`ListExternalEvents` (org feed).** The org-level external feed (`ListEvents`, bare `limit`,
    no cursor) has the same unbounded shape and could adopt `ListEventsPage` via this same
    `eventSource` pattern (with an org-scoped cursor). In scope as a follow-up, or a separate
    proposal?
-5. **Scroll-anchored auto-load.** The first cut uses a "Load older" button. Is an intersection-
+4. **Scroll-anchored auto-load.** The first cut uses a "Load older" button. Is an intersection-
    observer auto-load wanted in this proposal, or a later UI-only follow-up?
