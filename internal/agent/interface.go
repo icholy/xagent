@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"log/slog"
 )
 
 // ErrStop is a sentinel error used to signal graceful agent cancellation.
@@ -45,21 +43,20 @@ type Agent interface {
 
 // Options contains configuration for creating an Agent.
 type Options struct {
-	Type       string
-	Cwd        string
-	Log        *slog.Logger
+	Type string
+	Cwd  string
+	// Log carries both the structured logger the agent writes to and the raw
+	// sink the Claude CLI's stderr is teed into. It defaults to
+	// DiscardDriverLog when unset.
+	Log        *DriverLog
 	Verbose    bool
 	McpServers map[string]McpServer
-	// LogSink tees the underlying CLI's stderr into the driver's append-only
-	// /xagent/log file. It defaults to io.Discard when unset, so the stderr
-	// wiring degrades to plain os.Stderr.
-	LogSink io.Writer
-	Claude  *ClaudeOptions
-	Codex   *CodexOptions
-	Copilot *CopilotOptions
-	Cursor  *CursorOptions
-	Sloppy  *SloppyOptions
-	Dummy   *DummyOptions
+	Claude     *ClaudeOptions
+	Codex      *CodexOptions
+	Copilot    *CopilotOptions
+	Cursor     *CursorOptions
+	Sloppy     *SloppyOptions
+	Dummy      *DummyOptions
 }
 
 // ClaudeOptions contains Claude-specific agent options.
@@ -113,7 +110,8 @@ type DummyToolCall struct {
 // NewAgent creates an Agent based on the type specified in options.
 // If Type is empty, it defaults to TypeClaude.
 func NewAgent(opts Options) (Agent, error) {
-	log := cmp.Or(opts.Log, slog.Default())
+	dlog := cmp.Or(opts.Log, DiscardDriverLog)
+	log := &dlog.Logger
 
 	switch cmp.Or(opts.Type, TypeClaude) {
 	case TypeClaude:
@@ -123,7 +121,7 @@ func NewAgent(opts Options) (Agent, error) {
 			verbose:    opts.Verbose,
 			mcpServers: opts.McpServers,
 			options:    opts.Claude,
-			logSink:    cmp.Or(opts.LogSink, io.Writer(io.Discard)),
+			logSink:    dlog.Sink(),
 		}, nil
 	case TypeCodex:
 		return &CodexAgent{
