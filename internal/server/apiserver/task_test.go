@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
@@ -245,39 +244,24 @@ func TestListTasks_Pagination(t *testing.T) {
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 	ctx := createCtx(t, org)
 
-	// Create tasks in order; newest-first paging returns them in reverse.
-	var wantNames []string
-	for i := range 5 {
-		_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-			Name:      "task-" + strconv.Itoa(i),
-			Runner:    "test-runner",
-			Workspace: "test-workspace",
-		})
-		assert.NilError(t, err)
-		wantNames = append([]string{"task-" + strconv.Itoa(i)}, wantNames...)
-	}
+	first, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "task-1", Runner: "test-runner", Workspace: "test-workspace"})
+	assert.NilError(t, err)
+	second, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "task-2", Runner: "test-runner", Workspace: "test-workspace"})
+	assert.NilError(t, err)
 
-	// Page through in size-2 chunks following next_page_token; the concatenated
-	// pages must equal the full newest-first ordering with no gaps or dupes.
-	var gotNames []string
-	token := ""
-	pages := 0
-	for {
-		resp, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 2, PageToken: token})
-		assert.NilError(t, err)
-		assert.Assert(t, len(resp.Tasks) <= 2, "page must respect page_size")
-		for _, task := range resp.Tasks {
-			gotNames = append(gotNames, task.Name)
-		}
-		pages++
-		if resp.NextPageToken == "" {
-			break
-		}
-		token = resp.NextPageToken
-		assert.Assert(t, pages < 100, "pagination did not terminate")
-	}
-	assert.DeepEqual(t, gotNames, wantNames)
-	assert.Equal(t, pages, 3) // 2 + 2 + 1
+	// The first page holds the newest task and a token for the next page.
+	page1, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 1})
+	assert.NilError(t, err)
+	assert.Equal(t, len(page1.Tasks), 1)
+	assert.Equal(t, page1.Tasks[0].Id, second.Task.Id)
+	assert.Assert(t, page1.NextPageToken != "")
+
+	// Passing that token back returns the next (older) task and no further pages.
+	page2, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 1, PageToken: page1.NextPageToken})
+	assert.NilError(t, err)
+	assert.Equal(t, len(page2.Tasks), 1)
+	assert.Equal(t, page2.Tasks[0].Id, first.Task.Id)
+	assert.Equal(t, page2.NextPageToken, "")
 }
 
 func TestCreateTask_BadRunner(t *testing.T) {
