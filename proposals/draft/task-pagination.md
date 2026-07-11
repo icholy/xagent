@@ -20,9 +20,11 @@ The web UI fetches the full list, refetches it every 60 seconds, and filters by 
 
 ### Overview
 
-Add **keyset (cursor) pagination** to `ListTasks`. The request gains a page size and an opaque page token; the response returns a `next_page_token`. The name search currently done client-side moves server-side so it works across the full dataset rather than only the loaded page. The web UI switches to `useInfiniteQuery` with a "Load more" control.
+Add **keyset (cursor) pagination** to `ListTasks`. The request gains a page size and an opaque page token; the response returns a `next_page_token`. The web UI switches to `useInfiniteQuery` with a "Load more" control.
 
-Pagination mechanics are owned entirely by the **store**. `Store.ListTasksPage` accepts the request's `page_size`/`page_token`/`filter` verbatim and returns a page of tasks plus the next token; the cursor type, token encoding, page-size bounds, and the "fetch one extra, trim" step are all behind the store boundary. The RPC handler passes fields through and maps errors — it does not know the pagination is keyset-based at all.
+The name search box currently on the task page is **removed**. Its client-side filtering only matches already-loaded pages once the list is paginated, and the server-side alternative is an un-indexed `ILIKE` scan over the org's whole task history in the worst case — see [Trade-offs](#trade-offs).
+
+Pagination mechanics are owned entirely by the **store**. `Store.ListTasksPage` accepts the request's `page_size`/`page_token` verbatim and returns a page of tasks plus the next token; the cursor type, token encoding, page-size bounds, and the "fetch one extra, trim" step are all behind the store boundary. The RPC handler passes fields through and maps errors — it does not know the pagination is keyset-based at all.
 
 Keyset pagination (rather than `LIMIT`/`OFFSET`) is chosen because tasks are ordered `created_at DESC` and new tasks are continually inserted at the top while the UI polls. Offset pagination would skip or duplicate rows whenever a task is created between page loads. A cursor anchored to a specific row is stable against inserts. See [Trade-offs](#trade-offs).
 
@@ -34,7 +36,6 @@ Keyset pagination (rather than `LIMIT`/`OFFSET`) is chosen because tasks are ord
 message ListTasksRequest {
   int32 page_size = 1;     // Max tasks to return (default: 50, max: 100)
   string page_token = 2;   // Opaque cursor from a previous next_page_token; empty for the first page
-  string filter = 3;       // Optional case-insensitive substring match on task name
 }
 
 message ListTasksResponse {
@@ -149,7 +150,7 @@ The same `List` call backs any future paginated store method (`ListEventsPage`, 
 
 ### 3. SQL Query
 
-`internal/store/sql/queries/task.sql` — add a tiebreaker to the ordering, a keyset predicate, an optional name filter, and a limit. The existing `ListTasks` query is retained (callers that want every task continue to use the unfiltered path; see [Other callers](#5-other-callers)):
+`internal/store/sql/queries/task.sql` — add a tiebreaker to the ordering, a keyset predicate, and a limit. The existing `ListTasks` query is retained (callers that want every task continue to use the unpaged path; see [Other callers](#5-other-callers)):
 
 ```sql
 -- name: ListTasksPage :many
@@ -157,10 +158,6 @@ SELECT id, name, runner, workspace, status, command, version, org_id, archived, 
 FROM tasks
 WHERE archived = FALSE
   AND org_id = sqlc.arg(org_id)
-  AND (
-    sqlc.arg(filter)::text = ''
-    OR name ILIKE '%' || sqlc.arg(filter)::text || '%'
-  )
   AND (
     NOT sqlc.arg(use_cursor)::bool
     OR (created_at, id) < (sqlc.arg(cursor_created_at)::timestamptz, sqlc.arg(cursor_id)::bigint)
@@ -200,7 +197,6 @@ var listTasksPaging = pagination.Config{Default: 50, Max: 100}
 
 type ListTasksPageParams struct {
     OrgID     int64
-    Filter    string // optional case-insensitive substring match on name
     PageSize  int32  // 0 means the default (50); max 100
     PageToken string // opaque token from a previous page; empty for the first page
 }
@@ -215,7 +211,6 @@ type taskSource struct {
 func (src taskSource) Query(ctx context.Context, cursor *taskCursor, limit int32) ([]*model.Task, error) {
     args := sqlc.ListTasksPageParams{
         OrgID:     src.params.OrgID,
-        Filter:    src.params.Filter,
         UseCursor: cursor != nil,
         PageLimit: limit,
     }
@@ -265,7 +260,6 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 
     page, err := s.store.ListTasksPage(ctx, nil, store.ListTasksPageParams{
         OrgID:     caller.OrgID,
-        Filter:    req.Filter,
         PageSize:  req.PageSize,
         PageToken: req.PageToken,
     })
@@ -305,7 +299,7 @@ const {
   refetch,
 } = useInfiniteQuery(
   listTasks,
-  { pageSize: 50, filter: debouncedSearch },
+  { pageSize: 50 },
   {
     pageParamKey: 'pageToken',
     getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
@@ -318,7 +312,7 @@ const tasks = data?.pages.flatMap((p) => p.tasks) ?? []
 
 Changes:
 
-- **Search moves server-side.** The current client-side `allTasks.filter(...)` is removed. The search input is debounced (~300ms) and passed as the `filter` request field, so a new query (a fresh first page) is issued when the term changes. This makes search correct across all tasks instead of only the currently loaded page.
+- **Search box removed.** The search input and the client-side `allTasks.filter(...)` behind it (`tasks.index.tsx`) are deleted. Once the list is paginated, client-side filtering silently matches only the loaded pages, which is worse than no search at all; the server-side alternative was rejected (see [Trade-offs](#trade-offs)).
 - **"Load more" control.** A button below the table calls `fetchNextPage()` and is shown while `hasNextPage` is true, disabled while `isFetchingNextPage`. (Infinite scroll via an intersection observer is a possible follow-up; a button keeps the first cut simple.)
 - **Polling.** `refetchInterval: 60000` with `useInfiniteQuery` refetches all currently loaded pages, preserving the live-update behavior. Because pagination is keyset-based, refetched pages remain stable even as new tasks are inserted at the top — newly created tasks appear when the first page is refetched.
 
@@ -331,18 +325,20 @@ No other RPC clients consume `ListTasksResponse` in a way that breaks: adding `n
 3. SQL migration: add `tasks_org_created_id_idx`; add the `ListTasksPage` query; `sqlc` generate.
 4. Store layer: `taskCursor`, `taskSource`, `ListTasksPageParams`, `ListTasksPage`.
 5. Server handler: pass-through wiring + `errors.Is` mapping.
-6. Web UI: `useInfiniteQuery`, debounced server-side filter, "Load more".
+6. Web UI: `useInfiniteQuery`, remove the search box, "Load more".
 7. Tests (package round-trip + bounds; store-level keyset correctness and token round-trip driven entirely through `ListTasksPage`; handler validation).
 
 ## Trade-offs
 
 ### Keyset (cursor) vs offset/limit
 
-**Chosen: keyset.** Tasks are ordered newest-first and inserted continuously while the UI polls every 60s. With `OFFSET`, inserting a task at the top shifts every subsequent row down by one, so page 2 would repeat the last item of page 1 (or skip one). Keyset anchors each page to a concrete `(created_at, id)` and is immune to inserts above the cursor. The cost is that random page access ("jump to page 7") is not supported — acceptable for a task list where users scan recent work and "Load more" / search are the primary navigation modes.
+**Chosen: keyset.** Tasks are ordered newest-first and inserted continuously while the UI polls every 60s. With `OFFSET`, inserting a task at the top shifts every subsequent row down by one, so page 2 would repeat the last item of page 1 (or skip one). Keyset anchors each page to a concrete `(created_at, id)` and is immune to inserts above the cursor. The cost is that random page access ("jump to page 7") is not supported — acceptable for a task list where users scan recent work and "Load more" is the primary navigation mode.
 
-### Server-side vs client-side search
+### Dropping search vs moving it server-side
 
-**Chosen: server-side `filter`.** Once results are paginated, the existing client-side `.filter()` would only match within already-loaded pages, silently hiding matches further down. Moving the substring match into the query (`name ILIKE '%...%'`) keeps search correct over the entire dataset. The trade-off is an un-indexed `ILIKE` scan; at current task volumes this is fine, and a trigram index (`pg_trgm`) is a clear future optimization if needed.
+**Chosen: drop the search box.** The task page currently has a name search input backed by client-side filtering of the fully-fetched list. Pagination breaks it: the filter would only see already-loaded pages, so a search for an older task silently shows nothing even when matches exist — worse than no search. The obvious fix, a server-side `filter` field implemented as `name ILIKE '%...%'`, was considered and rejected: a leading-wildcard match cannot use a B-tree index, so a term matching few or no rows degenerates into scanning the org's entire task history on every (debounced) keystroke. The only real index support is a `pg_trgm` trigram GIN index, which drags in an extension and write-side cost to serve an occasional query.
+
+Rather than ship either a misleading search or an unbounded scan, this proposal removes the search input alongside pagination. Search can return later as a backward-compatible proto change (a new `filter` request field) backed by `pg_trgm` so it never scans; an earlier revision of this document contains the full server-side design if that's picked up.
 
 ### Simple `limit` (the `ListExternalEvents` convention) vs full pagination
 
@@ -371,6 +367,6 @@ Placement: `internal/pagination` as proposed. Now that the store is its only con
 ## Open Questions
 
 1. **Default page size.** Proposed 50 (max 100). Is 50 the right first-screen size for the table, or should it match a typical viewport more tightly (e.g. 25)?
-2. **Archived tasks.** The list excludes archived tasks today. Out of scope here, but if a future "show archived" toggle is added, it would become another request field that participates in the cursor's filter — worth keeping the cursor format flexible (the JSON blob already is).
+2. **Archived tasks.** The list excludes archived tasks today. Out of scope here, but if a future "show archived" toggle is added, it would become another request field that changes which rows the keyset scan visits — worth keeping the cursor format flexible (the JSON blob already is).
 3. **Total count.** Should the response include an approximate total (e.g. for a "showing X of ~Y" label)? An exact `COUNT(*)` defeats some of the pagination win; an estimate via `pg_class.reltuples` is possible but org-filtered counts complicate it. Left out unless the UI needs it.
-4. **Status filtering.** Should server-side filtering extend beyond name to status (running/finished/etc.)? The UI only filters by name today; adding status filters is a natural follow-up that fits the same `filter`-style request fields.
+4. **Search and filtering follow-up.** Removing the search box is a small UX regression for users who relied on it. If it's missed, the follow-up is a server-side `filter` request field backed by a `pg_trgm` trigram index (and possibly status filters alongside it) — a backward-compatible proto change. Does that need to be scheduled together with this work, or wait for demand?
