@@ -297,7 +297,7 @@ func EventFromProto(pb *xagentv1.Event) *Event {
 // FilterPayloads returns the payloads of the given events whose discriminator
 // (Payload.Type()) is in types, in order. Events whose type is not in types are
 // skipped.
-func FilterPayloads(events []*Event, types []string) []EventPayload {
+func FilterPayloads(events []*Event, types ...string) []EventPayload {
 	var payloads []EventPayload
 	for _, e := range events {
 		if slices.Contains(types, e.Payload.Type()) {

@@ -18,7 +18,7 @@ func TestFilterPayloads(t *testing.T) {
 	// Payloads whose type is in the filter come back in stream order; the
 	// LinkPayload, whose type isn't requested, is dropped.
 	assert.DeepEqual(t,
-		FilterPayloads(events, []string{EventTypeInstruction, EventTypeExternal}),
+		FilterPayloads(events, EventTypeInstruction, EventTypeExternal),
 		[]EventPayload{
 			&InstructionPayload{Text: "first"},
 			&InstructionPayload{Text: "second"},
