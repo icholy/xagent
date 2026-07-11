@@ -194,7 +194,11 @@ func (t *Task) ApplyRunnerEvent(e *RunnerEvent) bool {
 		return false
 	}
 
-	// Check version match (version 0 bypasses check for spontaneous failures)
+	// The version is the run counter (see proposals/draft/task-run-versions.md):
+	// N >= 1 is scoped to run N, so the event applies only when it matches the
+	// task's current run; 0 is the unscoped bypass, applying regardless of the
+	// task's version. The guard logic is unchanged — only its meaning is now
+	// normative.
 	if e.Version != 0 && e.Version != t.Version {
 		return false
 	}
@@ -216,7 +220,6 @@ func (t *Task) applyRunnerEventStarted() bool {
 	if t.Archived {
 		t.Status = TaskStatusCancelling
 		t.Command = TaskCommandStop
-		t.Version++
 		return true
 	}
 	switch t.Status {
@@ -230,7 +233,6 @@ func (t *Task) applyRunnerEventStarted() bool {
 	case TaskStatusCancelled:
 		t.Status = TaskStatusCancelling
 		t.Command = TaskCommandStop
-		t.Version++
 		return true
 	default:
 		return false
@@ -246,10 +248,13 @@ func (t *Task) applyRunnerEventStopped() bool {
 			return true
 		}
 		if t.Command == TaskCommandStart {
-			// Container finished, but start command pending
-			// Go back to pending so runner picks it up and starts a new container
+			// Container finished, but start command pending. This is the run
+			// boundary: run N's exit provisions run N+1. Go back to pending so
+			// the runner picks it up and starts a new container, keep the start
+			// command for it, and bump the version to N+1 (see
+			// proposals/draft/task-run-versions.md).
 			t.Status = TaskStatusPending
-			// Keep command as "start" so runner will start it
+			t.Version++
 			return true
 		}
 		if t.Command == TaskCommandNone {
@@ -373,7 +378,9 @@ func (t *Task) CanCancel() bool {
 
 // Cancel transitions the task to cancelling/cancelled status and sets the stop command.
 // Returns true if the transition is valid and was applied.
-// For running or restarting tasks: sets status to cancelling, command to stop, increments version.
+// For running or restarting tasks: sets status to cancelling, command to stop. The
+// version stays with the live run so its SIGTERM-induced stopped (scoped to that
+// version) still applies and lands the task in cancelled.
 // For pending tasks: sets status to cancelled directly (no runner action needed).
 func (t *Task) Cancel() bool {
 	if !t.CanCancel() {
@@ -383,7 +390,6 @@ func (t *Task) Cancel() bool {
 	case TaskStatusRunning, TaskStatusRestarting:
 		t.Status = TaskStatusCancelling
 		t.Command = TaskCommandStop
-		t.Version++
 	case TaskStatusPending:
 		t.Status = TaskStatusCancelled
 		t.Command = TaskCommandNone
@@ -438,17 +444,21 @@ func (t *Task) CanStart() bool {
 
 // Start sets the start command without interrupting a running task.
 // Returns true if the transition is valid and was applied.
-// For running tasks: sets command to start (container continues, will restart after exit).
-// For completed, failed, or cancelled tasks: sets status to pending, command to start, increments version.
+// For running tasks: sets command to start (container continues, will restart
+// after exit). Nothing is provisioned yet — the wake is queued and the version
+// stays with the live run; the bump happens at the run boundary when the exit
+// stopped folds Running+start back to Pending (see applyRunnerEventStopped).
+// For completed, failed, or cancelled tasks: sets status to pending, command to
+// start, increments version — this provisions the next run now.
 func (t *Task) Start() bool {
 	if !t.CanStart() {
 		return false
 	}
 	if t.Status != TaskStatusRunning {
 		t.Status = TaskStatusPending
+		t.Version++
 	}
 	t.Command = TaskCommandStart
-	t.Version++
 	return true
 }
 
