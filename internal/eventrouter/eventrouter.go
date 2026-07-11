@@ -115,10 +115,11 @@ type RouteMatch struct {
 }
 
 // Plan evaluates routing rules for the event and returns one RouteMatch per org
-// whose rules matched, without any side effects and without touching links. When
-// orgFilter is non-zero, only that org is evaluated (the test path scopes to
-// caller.OrgID); zero preserves the webhook path's all-member-orgs behavior.
-func (r *Router) Plan(ctx context.Context, input InputEvent, orgFilter int64) ([]RouteMatch, error) {
+// whose rules matched, without any side effects and without touching links. It
+// evaluates every org the event belongs to — the same set Route applies.
+// Scoping the result to a single org (e.g. the test path's caller.OrgID) is the
+// caller's job, done by filtering the returned matches.
+func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, error) {
 	orgs, err := r.Store.ListRoutingRulesForEvent(ctx, nil, input.UserID, input.Orgs)
 	if err != nil {
 		return nil, err
@@ -133,11 +134,6 @@ func (r *Router) Plan(ctx context.Context, input InputEvent, orgFilter int64) ([
 	// First matching rule per org; orgs with no match are dropped.
 	var matches []RouteMatch
 	for _, org := range orgs {
-		// orgFilter scopes the simulation to a single org (the test path); zero
-		// evaluates every returned org, preserving the webhook path's behavior.
-		if orgFilter != 0 && org.OrgID != orgFilter {
-			continue
-		}
 		rules := org.Rules
 		// RuleIndex points into the org's configured rules; -1 flags a match
 		// against the shipped default rules used for ruleless orgs.
@@ -185,9 +181,9 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, nil
 	}
 
-	// Plan is the shared read-only matcher; Route applies its result. The zero
-	// orgFilter keeps Route evaluating every org the event belongs to.
-	matches, err := r.Plan(ctx, input, 0)
+	// Plan is the shared read-only matcher; Route applies its result across
+	// every org the event belongs to.
+	matches, err := r.Plan(ctx, input)
 	if err != nil {
 		return 0, err
 	}

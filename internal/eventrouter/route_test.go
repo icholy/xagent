@@ -84,7 +84,7 @@ func TestPlanMatchesRulePerOrgWithoutSideEffects(t *testing.T) {
 				Data:   tt.data,
 				URL:    url,
 				UserID: org.UserID,
-			}, org.OrgID)
+			})
 
 			// Assert
 			assert.NilError(t, err)
@@ -105,12 +105,12 @@ func TestPlanMatchesRulePerOrgWithoutSideEffects(t *testing.T) {
 	}
 }
 
-func TestPlanOrgFilterScopesToSingleOrg(t *testing.T) {
+func TestPlanReturnsMatchPerMemberOrg(t *testing.T) {
 	t.Parallel()
 
-	// orgFilter is the test path's single-org scoping: a zero filter evaluates
-	// every org the actor belongs to (the webhook path), while a non-zero filter
-	// drops all but that one org even though both would otherwise match.
+	// Plan evaluates every org the event belongs to: an actor in two member orgs
+	// that both match gets a RouteMatch for each. Scoping the result to a single
+	// org is the caller's job (layer 3), not Plan's.
 	s := teststore.New(t)
 	orgA := teststore.CreateOrg(t, s, nil)
 	orgB := teststore.CreateOrg(t, s, nil)
@@ -122,29 +122,21 @@ func TestPlanOrgFilterScopesToSingleOrg(t *testing.T) {
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, orgB.OrgID, rule))
 	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
 
-	input := eventrouter.InputEvent{
+	matches, err := r.Plan(t.Context(), eventrouter.InputEvent{
 		Source: "github",
 		Type:   "issue_comment",
 		Data:   "xagent: do it",
 		URL:    "https://github.com/owner/repo/issues/1",
 		UserID: orgA.UserID,
-	}
+	})
 
-	// Zero filter: both member orgs match.
-	all, err := r.Plan(t.Context(), input, 0)
 	assert.NilError(t, err)
+	assert.Assert(t, cmp.Len(matches, 2))
 	gotOrgs := map[int64]bool{}
-	for _, m := range all {
+	for _, m := range matches {
 		gotOrgs[m.OrgID] = true
 	}
-	assert.Assert(t, cmp.Len(all, 2))
 	assert.Assert(t, gotOrgs[orgA.OrgID] && gotOrgs[orgB.OrgID])
-
-	// Filtered to orgA: only orgA is evaluated.
-	scoped, err := r.Plan(t.Context(), input, orgA.OrgID)
-	assert.NilError(t, err)
-	assert.Assert(t, cmp.Len(scoped, 1))
-	assert.Equal(t, scoped[0].OrgID, orgA.OrgID)
 }
 
 func TestRouteCreatesEventAndStartsTask(t *testing.T) {
