@@ -36,6 +36,12 @@ func TestSchemaRegistration(t *testing.T) {
 			Placeholder: "5b10ac8d82e05b22cc7d4ef5",
 			Help:        "Atlassian account id @-mentioned in the comment. Enter the bare id (no [~accountid:…] wrapper).",
 		},
+		{
+			Key:         "user",
+			Label:       "User",
+			Placeholder: "5b10ac8d82e05b22cc7d4ef5",
+			Help:        "Atlassian account id of the user who commented. Enter the bare id (no [~accountid:…] wrapper).",
+		},
 	})
 
 	// label_added registers but ships no default rules.

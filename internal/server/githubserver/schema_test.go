@@ -36,6 +36,12 @@ func TestSchemaRegistration(t *testing.T) {
 			Placeholder: "octocat",
 			Help:        "GitHub username @-mentioned in the comment (no leading @).",
 		},
+		{
+			Key:         "user",
+			Label:       "User",
+			Placeholder: "octocat",
+			Help:        "The GitHub username of the user who commented (no leading @).",
+		},
 	})
 
 	// A non-comment type registers but ships no default rules.
