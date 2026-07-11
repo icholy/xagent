@@ -63,6 +63,8 @@ function TasksPage() {
   }
 
   const nextPageToken = data?.nextPageToken ?? ''
+  const pageNumber = tokens.length + 1
+  const goFirst = () => setTokens([])
   const goNext = () => {
     if (nextPageToken) setTokens((t) => [...t, nextPageToken])
   }
@@ -133,10 +135,14 @@ function TasksPage() {
         </Table>
       )}
       {(tokens.length > 0 || nextPageToken) && (
-        <div className="flex justify-center gap-2 py-6">
+        <div className="flex items-center justify-center gap-2 py-6">
+          <Button variant="outline" onClick={goFirst} disabled={tokens.length === 0}>
+            First
+          </Button>
           <Button variant="outline" onClick={goPrev} disabled={tokens.length === 0}>
             Previous
           </Button>
+          <span className="text-muted-foreground px-2 text-sm">Page {pageNumber}</span>
           <Button variant="outline" onClick={goNext} disabled={!nextPageToken || isPlaceholderData}>
             Next
           </Button>
