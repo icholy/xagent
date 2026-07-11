@@ -8,6 +8,7 @@ on:
       - '.release-please-manifest.json'
       - 'images/**'
       - 'n8n-node/**'
+      - 'webui/**'
   pull_request:
     branches: [ master ]
     paths-ignore:
@@ -15,6 +16,7 @@ on:
       - '.release-please-manifest.json'
       - 'images/**'
       - 'n8n-node/**'
+      - 'webui/**'
 
 jobs:
   test:
