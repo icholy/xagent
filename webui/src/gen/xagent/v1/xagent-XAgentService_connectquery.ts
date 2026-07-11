@@ -215,6 +215,11 @@ export const setRoutingRules = XAgentService.method.setRoutingRules;
 export const getEventTypes = XAgentService.method.getEventTypes;
 
 /**
+ * @generated from rpc xagent.v1.XAgentService.TestEvent
+ */
+export const testEvent = XAgentService.method.testEvent;
+
+/**
  * @generated from rpc xagent.v1.XAgentService.CreateGitHubToken
  */
 export const createGitHubToken = XAgentService.method.createGitHubToken;

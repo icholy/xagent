@@ -5951,6 +5951,296 @@ func (x *GetEventTypesResponse) GetEventTypes() []*EventTypeDef {
 	return nil
 }
 
+// TestEventRequest composes a synthetic event from the schema and feeds it into
+// the real routing code, scoped to the caller's org. Attribute values are keyed
+// by AttrDef.Key — the same keys GetEventTypes hands the form — and carry a
+// single value per attr (the handler wraps each into the one-element slice
+// eventrouter.Attrs expects). The derived "body" and "url" attrs travel as
+// ordinary attrs entries and are unpacked server-side into Data and URL.
+type TestEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`                                                                             // registered EventTypeDef.Source, e.g. "github"
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`                                                                                 // registered EventTypeDef.Type, e.g. "issue_comment"
+	Attrs         map[string]string      `protobuf:"bytes,3,rep,name=attrs,proto3" json:"attrs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`     // matchable values keyed by AttrDef.Key (incl. "body", "url")
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`                                                                   // optional human description for the event timeline
+	Fire          bool                   `protobuf:"varint,5,opt,name=fire,proto3" json:"fire,omitempty"`                                                                                // false = dry run (default); true = fire for real
+	Details       map[string]string      `protobuf:"bytes,6,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // source-defined context persisted verbatim (see §2a)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestEventRequest) Reset() {
+	*x = TestEventRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestEventRequest) ProtoMessage() {}
+
+func (x *TestEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestEventRequest.ProtoReflect.Descriptor instead.
+func (*TestEventRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{110}
+}
+
+func (x *TestEventRequest) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *TestEventRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *TestEventRequest) GetAttrs() map[string]string {
+	if x != nil {
+		return x.Attrs
+	}
+	return nil
+}
+
+func (x *TestEventRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *TestEventRequest) GetFire() bool {
+	if x != nil {
+		return x.Fire
+	}
+	return false
+}
+
+func (x *TestEventRequest) GetDetails() map[string]string {
+	if x != nil {
+		return x.Details
+	}
+	return nil
+}
+
+type TestEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Matches       []*TestEventMatch      `protobuf:"bytes,1,rep,name=matches,proto3" json:"matches,omitempty"` // one per org that matched (0 or 1 for the test path)
+	Fired         bool                   `protobuf:"varint,2,opt,name=fired,proto3" json:"fired,omitempty"`    // whether side effects were applied
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestEventResponse) Reset() {
+	*x = TestEventResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestEventResponse) ProtoMessage() {}
+
+func (x *TestEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestEventResponse.ProtoReflect.Descriptor instead.
+func (*TestEventResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *TestEventResponse) GetMatches() []*TestEventMatch {
+	if x != nil {
+		return x.Matches
+	}
+	return nil
+}
+
+func (x *TestEventResponse) GetFired() bool {
+	if x != nil {
+		return x.Fired
+	}
+	return false
+}
+
+// TestEventMatch is the per-org dry-run/fire report the handler builds from a
+// RouteMatch plus a subscribed-link lookup. rule_index comes from the match; the
+// wake/create fields are derived by the handler (they are not stored on
+// RouteMatch).
+type TestEventMatch struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrgId          int64                  `protobuf:"varint,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	RuleIndex      int32                  `protobuf:"varint,2,opt,name=rule_index,json=ruleIndex,proto3" json:"rule_index,omitempty"`                         // which configured rule matched (-1 = shipped default)
+	WouldWake      bool                   `protobuf:"varint,3,opt,name=would_wake,json=wouldWake,proto3" json:"would_wake,omitempty"`                         // matched rule's wakeup flag
+	WakeTasks      []*TestEventTask       `protobuf:"bytes,4,rep,name=wake_tasks,json=wakeTasks,proto3" json:"wake_tasks,omitempty"`                          // subscribed tasks that (would) wake
+	WouldCreate    bool                   `protobuf:"varint,5,opt,name=would_create,json=wouldCreate,proto3" json:"would_create,omitempty"`                   // a task would be / was created
+	CreatedTaskIds []int64                `protobuf:"varint,6,rep,packed,name=created_task_ids,json=createdTaskIds,proto3" json:"created_task_ids,omitempty"` // populated only when fired && would_create
+	EventIds       []int64                `protobuf:"varint,7,rep,packed,name=event_ids,json=eventIds,proto3" json:"event_ids,omitempty"`                     // synthetic event rows written when fired
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TestEventMatch) Reset() {
+	*x = TestEventMatch{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[112]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestEventMatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestEventMatch) ProtoMessage() {}
+
+func (x *TestEventMatch) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[112]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestEventMatch.ProtoReflect.Descriptor instead.
+func (*TestEventMatch) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{112}
+}
+
+func (x *TestEventMatch) GetOrgId() int64 {
+	if x != nil {
+		return x.OrgId
+	}
+	return 0
+}
+
+func (x *TestEventMatch) GetRuleIndex() int32 {
+	if x != nil {
+		return x.RuleIndex
+	}
+	return 0
+}
+
+func (x *TestEventMatch) GetWouldWake() bool {
+	if x != nil {
+		return x.WouldWake
+	}
+	return false
+}
+
+func (x *TestEventMatch) GetWakeTasks() []*TestEventTask {
+	if x != nil {
+		return x.WakeTasks
+	}
+	return nil
+}
+
+func (x *TestEventMatch) GetWouldCreate() bool {
+	if x != nil {
+		return x.WouldCreate
+	}
+	return false
+}
+
+func (x *TestEventMatch) GetCreatedTaskIds() []int64 {
+	if x != nil {
+		return x.CreatedTaskIds
+	}
+	return nil
+}
+
+func (x *TestEventMatch) GetEventIds() []int64 {
+	if x != nil {
+		return x.EventIds
+	}
+	return nil
+}
+
+type TestEventTask struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestEventTask) Reset() {
+	*x = TestEventTask{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestEventTask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestEventTask) ProtoMessage() {}
+
+func (x *TestEventTask) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestEventTask.ProtoReflect.Descriptor instead.
+func (*TestEventTask) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *TestEventTask) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *TestEventTask) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type CreateGitHubTokenRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -5959,7 +6249,7 @@ type CreateGitHubTokenRequest struct {
 
 func (x *CreateGitHubTokenRequest) Reset() {
 	*x = CreateGitHubTokenRequest{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[110]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5971,7 +6261,7 @@ func (x *CreateGitHubTokenRequest) String() string {
 func (*CreateGitHubTokenRequest) ProtoMessage() {}
 
 func (x *CreateGitHubTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[110]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5984,7 +6274,7 @@ func (x *CreateGitHubTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGitHubTokenRequest.ProtoReflect.Descriptor instead.
 func (*CreateGitHubTokenRequest) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{110}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{114}
 }
 
 type CreateGitHubTokenResponse struct {
@@ -5997,7 +6287,7 @@ type CreateGitHubTokenResponse struct {
 
 func (x *CreateGitHubTokenResponse) Reset() {
 	*x = CreateGitHubTokenResponse{}
-	mi := &file_xagent_v1_xagent_proto_msgTypes[111]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6009,7 +6299,7 @@ func (x *CreateGitHubTokenResponse) String() string {
 func (*CreateGitHubTokenResponse) ProtoMessage() {}
 
 func (x *CreateGitHubTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_xagent_v1_xagent_proto_msgTypes[111]
+	mi := &file_xagent_v1_xagent_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6022,7 +6312,7 @@ func (x *CreateGitHubTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGitHubTokenResponse.ProtoReflect.Descriptor instead.
 func (*CreateGitHubTokenResponse) Descriptor() ([]byte, []int) {
-	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{111}
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *CreateGitHubTokenResponse) GetToken() string {
@@ -6394,7 +6684,38 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x14GetEventTypesRequest\"Q\n" +
 	"\x15GetEventTypesResponse\x128\n" +
 	"\vevent_types\x18\x01 \x03(\v2\x17.xagent.v1.EventTypeDefR\n" +
-	"eventTypes\"\x1a\n" +
+	"eventTypes\"\xec\x02\n" +
+	"\x10TestEventRequest\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12<\n" +
+	"\x05attrs\x18\x03 \x03(\v2&.xagent.v1.TestEventRequest.AttrsEntryR\x05attrs\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x12\n" +
+	"\x04fire\x18\x05 \x01(\bR\x04fire\x12B\n" +
+	"\adetails\x18\x06 \x03(\v2(.xagent.v1.TestEventRequest.DetailsEntryR\adetails\x1a8\n" +
+	"\n" +
+	"AttrsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n" +
+	"\fDetailsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"^\n" +
+	"\x11TestEventResponse\x123\n" +
+	"\amatches\x18\x01 \x03(\v2\x19.xagent.v1.TestEventMatchR\amatches\x12\x14\n" +
+	"\x05fired\x18\x02 \x01(\bR\x05fired\"\x88\x02\n" +
+	"\x0eTestEventMatch\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\x03R\x05orgId\x12\x1d\n" +
+	"\n" +
+	"rule_index\x18\x02 \x01(\x05R\truleIndex\x12\x1d\n" +
+	"\n" +
+	"would_wake\x18\x03 \x01(\bR\twouldWake\x127\n" +
+	"\n" +
+	"wake_tasks\x18\x04 \x03(\v2\x18.xagent.v1.TestEventTaskR\twakeTasks\x12!\n" +
+	"\fwould_create\x18\x05 \x01(\bR\vwouldCreate\x12(\n" +
+	"\x10created_task_ids\x18\x06 \x03(\x03R\x0ecreatedTaskIds\x12\x1b\n" +
+	"\tevent_ids\x18\a \x03(\x03R\beventIds\"3\n" +
+	"\rTestEventTask\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\x1a\n" +
 	"\x18CreateGitHubTokenRequest\"l\n" +
 	"\x19CreateGitHubTokenResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x129\n" +
@@ -6430,7 +6751,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x1eLIFECYCLE_KIND_SANDBOX_STARTED\x10\b\x12!\n" +
 	"\x1dLIFECYCLE_KIND_SANDBOX_EXITED\x10\t\x12!\n" +
 	"\x1dLIFECYCLE_KIND_SANDBOX_FAILED\x10\n" +
-	"2\xa0\x1c\n" +
+	"2\xe8\x1c\n" +
 	"\rXAgentService\x127\n" +
 	"\x04Ping\x12\x16.xagent.v1.PingRequest\x1a\x17.xagent.v1.PingResponse\x12I\n" +
 	"\n" +
@@ -6479,7 +6800,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x1eGenerateAtlassianWebhookSecret\x120.xagent.v1.GenerateAtlassianWebhookSecretRequest\x1a1.xagent.v1.GenerateAtlassianWebhookSecretResponse\x12X\n" +
 	"\x0fGetRoutingRules\x12!.xagent.v1.GetRoutingRulesRequest\x1a\".xagent.v1.GetRoutingRulesResponse\x12X\n" +
 	"\x0fSetRoutingRules\x12!.xagent.v1.SetRoutingRulesRequest\x1a\".xagent.v1.SetRoutingRulesResponse\x12R\n" +
-	"\rGetEventTypes\x12\x1f.xagent.v1.GetEventTypesRequest\x1a .xagent.v1.GetEventTypesResponse\x12^\n" +
+	"\rGetEventTypes\x12\x1f.xagent.v1.GetEventTypesRequest\x1a .xagent.v1.GetEventTypesResponse\x12F\n" +
+	"\tTestEvent\x12\x1b.xagent.v1.TestEventRequest\x1a\x1c.xagent.v1.TestEventResponse\x12^\n" +
 	"\x11CreateGitHubToken\x12#.xagent.v1.CreateGitHubTokenRequest\x1a$.xagent.v1.CreateGitHubTokenResponseB<Z:github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1b\x06proto3"
 
 var (
@@ -6495,7 +6817,7 @@ func file_xagent_v1_xagent_proto_rawDescGZIP() []byte {
 }
 
 var file_xagent_v1_xagent_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 114)
+var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 120)
 var file_xagent_v1_xagent_proto_goTypes = []any{
 	(TaskStatus)(0),                                // 0: xagent.v1.TaskStatus
 	(TaskCommand)(0),                               // 1: xagent.v1.TaskCommand
@@ -6610,21 +6932,27 @@ var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*EventTypeDef)(nil),                           // 110: xagent.v1.EventTypeDef
 	(*GetEventTypesRequest)(nil),                   // 111: xagent.v1.GetEventTypesRequest
 	(*GetEventTypesResponse)(nil),                  // 112: xagent.v1.GetEventTypesResponse
-	(*CreateGitHubTokenRequest)(nil),               // 113: xagent.v1.CreateGitHubTokenRequest
-	(*CreateGitHubTokenResponse)(nil),              // 114: xagent.v1.CreateGitHubTokenResponse
-	nil,                                            // 115: xagent.v1.McpServer.EnvEntry
-	nil,                                            // 116: xagent.v1.ExternalPayload.DetailsEntry
-	(*timestamppb.Timestamp)(nil),                  // 117: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),                    // 118: google.protobuf.Duration
+	(*TestEventRequest)(nil),                       // 113: xagent.v1.TestEventRequest
+	(*TestEventResponse)(nil),                      // 114: xagent.v1.TestEventResponse
+	(*TestEventMatch)(nil),                         // 115: xagent.v1.TestEventMatch
+	(*TestEventTask)(nil),                          // 116: xagent.v1.TestEventTask
+	(*CreateGitHubTokenRequest)(nil),               // 117: xagent.v1.CreateGitHubTokenRequest
+	(*CreateGitHubTokenResponse)(nil),              // 118: xagent.v1.CreateGitHubTokenResponse
+	nil,                                            // 119: xagent.v1.McpServer.EnvEntry
+	nil,                                            // 120: xagent.v1.ExternalPayload.DetailsEntry
+	nil,                                            // 121: xagent.v1.TestEventRequest.AttrsEntry
+	nil,                                            // 122: xagent.v1.TestEventRequest.DetailsEntry
+	(*timestamppb.Timestamp)(nil),                  // 123: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),                    // 124: google.protobuf.Duration
 }
 var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	0,   // 0: xagent.v1.Task.status:type_name -> xagent.v1.TaskStatus
-	117, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
-	117, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	123, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	123, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 3: xagent.v1.Task.command:type_name -> xagent.v1.TaskCommand
 	6,   // 4: xagent.v1.Task.actions:type_name -> xagent.v1.TaskActions
-	118, // 5: xagent.v1.Task.auto_archive:type_name -> google.protobuf.Duration
-	115, // 6: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
+	124, // 5: xagent.v1.Task.auto_archive:type_name -> google.protobuf.Duration
+	119, // 6: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
 	9,   // 7: xagent.v1.GetProfileResponse.profile:type_name -> xagent.v1.Profile
 	84,  // 8: xagent.v1.GetProfileResponse.orgs:type_name -> xagent.v1.Org
 	76,  // 9: xagent.v1.GetProfileResponse.github_account:type_name -> xagent.v1.GitHubAccount
@@ -6632,149 +6960,155 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	7,   // 11: xagent.v1.ListTasksResponse.tasks:type_name -> xagent.v1.Task
 	7,   // 12: xagent.v1.ListRunnerTasksResponse.tasks:type_name -> xagent.v1.Task
 	5,   // 13: xagent.v1.CreateTaskRequest.instructions:type_name -> xagent.v1.Instruction
-	118, // 14: xagent.v1.CreateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
+	124, // 14: xagent.v1.CreateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
 	7,   // 15: xagent.v1.CreateTaskResponse.task:type_name -> xagent.v1.Task
 	7,   // 16: xagent.v1.GetTaskResponse.task:type_name -> xagent.v1.Task
 	7,   // 17: xagent.v1.GetTaskDetailsResponse.task:type_name -> xagent.v1.Task
 	42,  // 18: xagent.v1.GetTaskDetailsResponse.events:type_name -> xagent.v1.Event
 	37,  // 19: xagent.v1.GetTaskDetailsResponse.links:type_name -> xagent.v1.TaskLink
 	5,   // 20: xagent.v1.UpdateTaskRequest.add_instructions:type_name -> xagent.v1.Instruction
-	118, // 21: xagent.v1.UpdateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
-	117, // 22: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
+	124, // 21: xagent.v1.UpdateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
+	123, // 22: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
 	34,  // 23: xagent.v1.UploadLogsRequest.entries:type_name -> xagent.v1.LogEntry
-	117, // 24: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
+	123, // 24: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
 	37,  // 25: xagent.v1.CreateLinkResponse.link:type_name -> xagent.v1.TaskLink
 	37,  // 26: xagent.v1.ListLinksResponse.links:type_name -> xagent.v1.TaskLink
-	117, // 27: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
+	123, // 27: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
 	43,  // 28: xagent.v1.Event.instruction:type_name -> xagent.v1.InstructionPayload
 	44,  // 29: xagent.v1.Event.external:type_name -> xagent.v1.ExternalPayload
 	45,  // 30: xagent.v1.Event.report:type_name -> xagent.v1.ReportPayload
 	47,  // 31: xagent.v1.Event.lifecycle:type_name -> xagent.v1.LifecyclePayload
 	46,  // 32: xagent.v1.Event.link:type_name -> xagent.v1.LinkPayload
-	116, // 33: xagent.v1.ExternalPayload.details:type_name -> xagent.v1.ExternalPayload.DetailsEntry
+	120, // 33: xagent.v1.ExternalPayload.details:type_name -> xagent.v1.ExternalPayload.DetailsEntry
 	2,   // 34: xagent.v1.LifecyclePayload.kind:type_name -> xagent.v1.LifecycleKind
 	48,  // 35: xagent.v1.LifecyclePayload.actor:type_name -> xagent.v1.Actor
 	42,  // 36: xagent.v1.ListExternalEventsResponse.events:type_name -> xagent.v1.Event
 	42,  // 37: xagent.v1.GetEventResponse.event:type_name -> xagent.v1.Event
 	42,  // 38: xagent.v1.ListEventsByTaskResponse.events:type_name -> xagent.v1.Event
 	57,  // 39: xagent.v1.SubmitRunnerEventsRequest.events:type_name -> xagent.v1.RunnerEvent
-	117, // 40: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
+	123, // 40: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
 	62,  // 41: xagent.v1.RegisterWorkspacesRequest.workspaces:type_name -> xagent.v1.RegisteredWorkspace
 	62,  // 42: xagent.v1.ListWorkspacesResponse.workspaces:type_name -> xagent.v1.RegisteredWorkspace
-	117, // 43: xagent.v1.Key.expires_at:type_name -> google.protobuf.Timestamp
-	117, // 44: xagent.v1.Key.created_at:type_name -> google.protobuf.Timestamp
-	117, // 45: xagent.v1.CreateKeyRequest.expires_at:type_name -> google.protobuf.Timestamp
+	123, // 43: xagent.v1.Key.expires_at:type_name -> google.protobuf.Timestamp
+	123, // 44: xagent.v1.Key.created_at:type_name -> google.protobuf.Timestamp
+	123, // 45: xagent.v1.CreateKeyRequest.expires_at:type_name -> google.protobuf.Timestamp
 	69,  // 46: xagent.v1.CreateKeyResponse.key:type_name -> xagent.v1.Key
 	69,  // 47: xagent.v1.ListKeysResponse.keys:type_name -> xagent.v1.Key
-	117, // 48: xagent.v1.GitHubAccount.created_at:type_name -> google.protobuf.Timestamp
-	117, // 49: xagent.v1.AtlassianAccount.created_at:type_name -> google.protobuf.Timestamp
-	117, // 50: xagent.v1.Org.created_at:type_name -> google.protobuf.Timestamp
-	117, // 51: xagent.v1.Org.updated_at:type_name -> google.protobuf.Timestamp
-	117, // 52: xagent.v1.OrgMember.created_at:type_name -> google.protobuf.Timestamp
+	123, // 48: xagent.v1.GitHubAccount.created_at:type_name -> google.protobuf.Timestamp
+	123, // 49: xagent.v1.AtlassianAccount.created_at:type_name -> google.protobuf.Timestamp
+	123, // 50: xagent.v1.Org.created_at:type_name -> google.protobuf.Timestamp
+	123, // 51: xagent.v1.Org.updated_at:type_name -> google.protobuf.Timestamp
+	123, // 52: xagent.v1.OrgMember.created_at:type_name -> google.protobuf.Timestamp
 	84,  // 53: xagent.v1.CreateOrgResponse.org:type_name -> xagent.v1.Org
 	84,  // 54: xagent.v1.ListOrgsResponse.orgs:type_name -> xagent.v1.Org
 	85,  // 55: xagent.v1.AddOrgMemberResponse.member:type_name -> xagent.v1.OrgMember
 	85,  // 56: xagent.v1.ListOrgMembersResponse.members:type_name -> xagent.v1.OrgMember
 	104, // 57: xagent.v1.RoutingRule.create:type_name -> xagent.v1.CreateTaskAction
 	102, // 58: xagent.v1.RoutingRule.conditions:type_name -> xagent.v1.RuleCondition
-	118, // 59: xagent.v1.CreateTaskAction.auto_archive:type_name -> google.protobuf.Duration
+	124, // 59: xagent.v1.CreateTaskAction.auto_archive:type_name -> google.protobuf.Duration
 	103, // 60: xagent.v1.GetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
 	103, // 61: xagent.v1.SetRoutingRulesRequest.rules:type_name -> xagent.v1.RoutingRule
 	103, // 62: xagent.v1.SetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
 	109, // 63: xagent.v1.EventTypeDef.attrs:type_name -> xagent.v1.AttrDef
 	110, // 64: xagent.v1.GetEventTypesResponse.event_types:type_name -> xagent.v1.EventTypeDef
-	117, // 65: xagent.v1.CreateGitHubTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
-	3,   // 66: xagent.v1.XAgentService.Ping:input_type -> xagent.v1.PingRequest
-	10,  // 67: xagent.v1.XAgentService.GetProfile:input_type -> xagent.v1.GetProfileRequest
-	12,  // 68: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
-	14,  // 69: xagent.v1.XAgentService.ListRunnerTasks:input_type -> xagent.v1.ListRunnerTasksRequest
-	16,  // 70: xagent.v1.XAgentService.CreateTask:input_type -> xagent.v1.CreateTaskRequest
-	18,  // 71: xagent.v1.XAgentService.GetTask:input_type -> xagent.v1.GetTaskRequest
-	20,  // 72: xagent.v1.XAgentService.GetTaskDetails:input_type -> xagent.v1.GetTaskDetailsRequest
-	22,  // 73: xagent.v1.XAgentService.UpdateTask:input_type -> xagent.v1.UpdateTaskRequest
-	24,  // 74: xagent.v1.XAgentService.ArchiveTask:input_type -> xagent.v1.ArchiveTaskRequest
-	26,  // 75: xagent.v1.XAgentService.UnarchiveTask:input_type -> xagent.v1.UnarchiveTaskRequest
-	28,  // 76: xagent.v1.XAgentService.CancelTask:input_type -> xagent.v1.CancelTaskRequest
-	30,  // 77: xagent.v1.XAgentService.RestartTask:input_type -> xagent.v1.RestartTaskRequest
-	32,  // 78: xagent.v1.XAgentService.OpenShell:input_type -> xagent.v1.OpenShellRequest
-	35,  // 79: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
-	38,  // 80: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
-	40,  // 81: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
-	49,  // 82: xagent.v1.XAgentService.ListExternalEvents:input_type -> xagent.v1.ListExternalEventsRequest
-	51,  // 83: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
-	53,  // 84: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
-	55,  // 85: xagent.v1.XAgentService.ListEventsByTask:input_type -> xagent.v1.ListEventsByTaskRequest
-	58,  // 86: xagent.v1.XAgentService.SubmitRunnerEvents:input_type -> xagent.v1.SubmitRunnerEventsRequest
-	60,  // 87: xagent.v1.XAgentService.CreateTaskToken:input_type -> xagent.v1.CreateTaskTokenRequest
-	63,  // 88: xagent.v1.XAgentService.RegisterWorkspaces:input_type -> xagent.v1.RegisterWorkspacesRequest
-	65,  // 89: xagent.v1.XAgentService.ListWorkspaces:input_type -> xagent.v1.ListWorkspacesRequest
-	67,  // 90: xagent.v1.XAgentService.ClearWorkspaces:input_type -> xagent.v1.ClearWorkspacesRequest
-	70,  // 91: xagent.v1.XAgentService.CreateKey:input_type -> xagent.v1.CreateKeyRequest
-	72,  // 92: xagent.v1.XAgentService.ListKeys:input_type -> xagent.v1.ListKeysRequest
-	74,  // 93: xagent.v1.XAgentService.DeleteKey:input_type -> xagent.v1.DeleteKeyRequest
-	77,  // 94: xagent.v1.XAgentService.UnlinkGitHubAccount:input_type -> xagent.v1.UnlinkGitHubAccountRequest
-	79,  // 95: xagent.v1.XAgentService.LinkGitHubInstallation:input_type -> xagent.v1.LinkGitHubInstallationRequest
-	82,  // 96: xagent.v1.XAgentService.UnlinkAtlassianAccount:input_type -> xagent.v1.UnlinkAtlassianAccountRequest
-	86,  // 97: xagent.v1.XAgentService.CreateOrg:input_type -> xagent.v1.CreateOrgRequest
-	88,  // 98: xagent.v1.XAgentService.ListOrgs:input_type -> xagent.v1.ListOrgsRequest
-	90,  // 99: xagent.v1.XAgentService.DeleteOrg:input_type -> xagent.v1.DeleteOrgRequest
-	92,  // 100: xagent.v1.XAgentService.AddOrgMember:input_type -> xagent.v1.AddOrgMemberRequest
-	94,  // 101: xagent.v1.XAgentService.RemoveOrgMember:input_type -> xagent.v1.RemoveOrgMemberRequest
-	96,  // 102: xagent.v1.XAgentService.ListOrgMembers:input_type -> xagent.v1.ListOrgMembersRequest
-	98,  // 103: xagent.v1.XAgentService.GetOrgSettings:input_type -> xagent.v1.GetOrgSettingsRequest
-	100, // 104: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:input_type -> xagent.v1.GenerateAtlassianWebhookSecretRequest
-	105, // 105: xagent.v1.XAgentService.GetRoutingRules:input_type -> xagent.v1.GetRoutingRulesRequest
-	107, // 106: xagent.v1.XAgentService.SetRoutingRules:input_type -> xagent.v1.SetRoutingRulesRequest
-	111, // 107: xagent.v1.XAgentService.GetEventTypes:input_type -> xagent.v1.GetEventTypesRequest
-	113, // 108: xagent.v1.XAgentService.CreateGitHubToken:input_type -> xagent.v1.CreateGitHubTokenRequest
-	4,   // 109: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
-	11,  // 110: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
-	13,  // 111: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
-	15,  // 112: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
-	17,  // 113: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
-	19,  // 114: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
-	21,  // 115: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
-	23,  // 116: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
-	25,  // 117: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
-	27,  // 118: xagent.v1.XAgentService.UnarchiveTask:output_type -> xagent.v1.UnarchiveTaskResponse
-	29,  // 119: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
-	31,  // 120: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
-	33,  // 121: xagent.v1.XAgentService.OpenShell:output_type -> xagent.v1.OpenShellResponse
-	36,  // 122: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
-	39,  // 123: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
-	41,  // 124: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
-	50,  // 125: xagent.v1.XAgentService.ListExternalEvents:output_type -> xagent.v1.ListExternalEventsResponse
-	52,  // 126: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
-	54,  // 127: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
-	56,  // 128: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
-	59,  // 129: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
-	61,  // 130: xagent.v1.XAgentService.CreateTaskToken:output_type -> xagent.v1.CreateTaskTokenResponse
-	64,  // 131: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
-	66,  // 132: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
-	68,  // 133: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
-	71,  // 134: xagent.v1.XAgentService.CreateKey:output_type -> xagent.v1.CreateKeyResponse
-	73,  // 135: xagent.v1.XAgentService.ListKeys:output_type -> xagent.v1.ListKeysResponse
-	75,  // 136: xagent.v1.XAgentService.DeleteKey:output_type -> xagent.v1.DeleteKeyResponse
-	78,  // 137: xagent.v1.XAgentService.UnlinkGitHubAccount:output_type -> xagent.v1.UnlinkGitHubAccountResponse
-	80,  // 138: xagent.v1.XAgentService.LinkGitHubInstallation:output_type -> xagent.v1.LinkGitHubInstallationResponse
-	83,  // 139: xagent.v1.XAgentService.UnlinkAtlassianAccount:output_type -> xagent.v1.UnlinkAtlassianAccountResponse
-	87,  // 140: xagent.v1.XAgentService.CreateOrg:output_type -> xagent.v1.CreateOrgResponse
-	89,  // 141: xagent.v1.XAgentService.ListOrgs:output_type -> xagent.v1.ListOrgsResponse
-	91,  // 142: xagent.v1.XAgentService.DeleteOrg:output_type -> xagent.v1.DeleteOrgResponse
-	93,  // 143: xagent.v1.XAgentService.AddOrgMember:output_type -> xagent.v1.AddOrgMemberResponse
-	95,  // 144: xagent.v1.XAgentService.RemoveOrgMember:output_type -> xagent.v1.RemoveOrgMemberResponse
-	97,  // 145: xagent.v1.XAgentService.ListOrgMembers:output_type -> xagent.v1.ListOrgMembersResponse
-	99,  // 146: xagent.v1.XAgentService.GetOrgSettings:output_type -> xagent.v1.GetOrgSettingsResponse
-	101, // 147: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:output_type -> xagent.v1.GenerateAtlassianWebhookSecretResponse
-	106, // 148: xagent.v1.XAgentService.GetRoutingRules:output_type -> xagent.v1.GetRoutingRulesResponse
-	108, // 149: xagent.v1.XAgentService.SetRoutingRules:output_type -> xagent.v1.SetRoutingRulesResponse
-	112, // 150: xagent.v1.XAgentService.GetEventTypes:output_type -> xagent.v1.GetEventTypesResponse
-	114, // 151: xagent.v1.XAgentService.CreateGitHubToken:output_type -> xagent.v1.CreateGitHubTokenResponse
-	109, // [109:152] is the sub-list for method output_type
-	66,  // [66:109] is the sub-list for method input_type
-	66,  // [66:66] is the sub-list for extension type_name
-	66,  // [66:66] is the sub-list for extension extendee
-	0,   // [0:66] is the sub-list for field type_name
+	121, // 65: xagent.v1.TestEventRequest.attrs:type_name -> xagent.v1.TestEventRequest.AttrsEntry
+	122, // 66: xagent.v1.TestEventRequest.details:type_name -> xagent.v1.TestEventRequest.DetailsEntry
+	115, // 67: xagent.v1.TestEventResponse.matches:type_name -> xagent.v1.TestEventMatch
+	116, // 68: xagent.v1.TestEventMatch.wake_tasks:type_name -> xagent.v1.TestEventTask
+	123, // 69: xagent.v1.CreateGitHubTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	3,   // 70: xagent.v1.XAgentService.Ping:input_type -> xagent.v1.PingRequest
+	10,  // 71: xagent.v1.XAgentService.GetProfile:input_type -> xagent.v1.GetProfileRequest
+	12,  // 72: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
+	14,  // 73: xagent.v1.XAgentService.ListRunnerTasks:input_type -> xagent.v1.ListRunnerTasksRequest
+	16,  // 74: xagent.v1.XAgentService.CreateTask:input_type -> xagent.v1.CreateTaskRequest
+	18,  // 75: xagent.v1.XAgentService.GetTask:input_type -> xagent.v1.GetTaskRequest
+	20,  // 76: xagent.v1.XAgentService.GetTaskDetails:input_type -> xagent.v1.GetTaskDetailsRequest
+	22,  // 77: xagent.v1.XAgentService.UpdateTask:input_type -> xagent.v1.UpdateTaskRequest
+	24,  // 78: xagent.v1.XAgentService.ArchiveTask:input_type -> xagent.v1.ArchiveTaskRequest
+	26,  // 79: xagent.v1.XAgentService.UnarchiveTask:input_type -> xagent.v1.UnarchiveTaskRequest
+	28,  // 80: xagent.v1.XAgentService.CancelTask:input_type -> xagent.v1.CancelTaskRequest
+	30,  // 81: xagent.v1.XAgentService.RestartTask:input_type -> xagent.v1.RestartTaskRequest
+	32,  // 82: xagent.v1.XAgentService.OpenShell:input_type -> xagent.v1.OpenShellRequest
+	35,  // 83: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
+	38,  // 84: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
+	40,  // 85: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
+	49,  // 86: xagent.v1.XAgentService.ListExternalEvents:input_type -> xagent.v1.ListExternalEventsRequest
+	51,  // 87: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
+	53,  // 88: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
+	55,  // 89: xagent.v1.XAgentService.ListEventsByTask:input_type -> xagent.v1.ListEventsByTaskRequest
+	58,  // 90: xagent.v1.XAgentService.SubmitRunnerEvents:input_type -> xagent.v1.SubmitRunnerEventsRequest
+	60,  // 91: xagent.v1.XAgentService.CreateTaskToken:input_type -> xagent.v1.CreateTaskTokenRequest
+	63,  // 92: xagent.v1.XAgentService.RegisterWorkspaces:input_type -> xagent.v1.RegisterWorkspacesRequest
+	65,  // 93: xagent.v1.XAgentService.ListWorkspaces:input_type -> xagent.v1.ListWorkspacesRequest
+	67,  // 94: xagent.v1.XAgentService.ClearWorkspaces:input_type -> xagent.v1.ClearWorkspacesRequest
+	70,  // 95: xagent.v1.XAgentService.CreateKey:input_type -> xagent.v1.CreateKeyRequest
+	72,  // 96: xagent.v1.XAgentService.ListKeys:input_type -> xagent.v1.ListKeysRequest
+	74,  // 97: xagent.v1.XAgentService.DeleteKey:input_type -> xagent.v1.DeleteKeyRequest
+	77,  // 98: xagent.v1.XAgentService.UnlinkGitHubAccount:input_type -> xagent.v1.UnlinkGitHubAccountRequest
+	79,  // 99: xagent.v1.XAgentService.LinkGitHubInstallation:input_type -> xagent.v1.LinkGitHubInstallationRequest
+	82,  // 100: xagent.v1.XAgentService.UnlinkAtlassianAccount:input_type -> xagent.v1.UnlinkAtlassianAccountRequest
+	86,  // 101: xagent.v1.XAgentService.CreateOrg:input_type -> xagent.v1.CreateOrgRequest
+	88,  // 102: xagent.v1.XAgentService.ListOrgs:input_type -> xagent.v1.ListOrgsRequest
+	90,  // 103: xagent.v1.XAgentService.DeleteOrg:input_type -> xagent.v1.DeleteOrgRequest
+	92,  // 104: xagent.v1.XAgentService.AddOrgMember:input_type -> xagent.v1.AddOrgMemberRequest
+	94,  // 105: xagent.v1.XAgentService.RemoveOrgMember:input_type -> xagent.v1.RemoveOrgMemberRequest
+	96,  // 106: xagent.v1.XAgentService.ListOrgMembers:input_type -> xagent.v1.ListOrgMembersRequest
+	98,  // 107: xagent.v1.XAgentService.GetOrgSettings:input_type -> xagent.v1.GetOrgSettingsRequest
+	100, // 108: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:input_type -> xagent.v1.GenerateAtlassianWebhookSecretRequest
+	105, // 109: xagent.v1.XAgentService.GetRoutingRules:input_type -> xagent.v1.GetRoutingRulesRequest
+	107, // 110: xagent.v1.XAgentService.SetRoutingRules:input_type -> xagent.v1.SetRoutingRulesRequest
+	111, // 111: xagent.v1.XAgentService.GetEventTypes:input_type -> xagent.v1.GetEventTypesRequest
+	113, // 112: xagent.v1.XAgentService.TestEvent:input_type -> xagent.v1.TestEventRequest
+	117, // 113: xagent.v1.XAgentService.CreateGitHubToken:input_type -> xagent.v1.CreateGitHubTokenRequest
+	4,   // 114: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
+	11,  // 115: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
+	13,  // 116: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
+	15,  // 117: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
+	17,  // 118: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
+	19,  // 119: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
+	21,  // 120: xagent.v1.XAgentService.GetTaskDetails:output_type -> xagent.v1.GetTaskDetailsResponse
+	23,  // 121: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
+	25,  // 122: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
+	27,  // 123: xagent.v1.XAgentService.UnarchiveTask:output_type -> xagent.v1.UnarchiveTaskResponse
+	29,  // 124: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
+	31,  // 125: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
+	33,  // 126: xagent.v1.XAgentService.OpenShell:output_type -> xagent.v1.OpenShellResponse
+	36,  // 127: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
+	39,  // 128: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
+	41,  // 129: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
+	50,  // 130: xagent.v1.XAgentService.ListExternalEvents:output_type -> xagent.v1.ListExternalEventsResponse
+	52,  // 131: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
+	54,  // 132: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
+	56,  // 133: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
+	59,  // 134: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
+	61,  // 135: xagent.v1.XAgentService.CreateTaskToken:output_type -> xagent.v1.CreateTaskTokenResponse
+	64,  // 136: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
+	66,  // 137: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
+	68,  // 138: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
+	71,  // 139: xagent.v1.XAgentService.CreateKey:output_type -> xagent.v1.CreateKeyResponse
+	73,  // 140: xagent.v1.XAgentService.ListKeys:output_type -> xagent.v1.ListKeysResponse
+	75,  // 141: xagent.v1.XAgentService.DeleteKey:output_type -> xagent.v1.DeleteKeyResponse
+	78,  // 142: xagent.v1.XAgentService.UnlinkGitHubAccount:output_type -> xagent.v1.UnlinkGitHubAccountResponse
+	80,  // 143: xagent.v1.XAgentService.LinkGitHubInstallation:output_type -> xagent.v1.LinkGitHubInstallationResponse
+	83,  // 144: xagent.v1.XAgentService.UnlinkAtlassianAccount:output_type -> xagent.v1.UnlinkAtlassianAccountResponse
+	87,  // 145: xagent.v1.XAgentService.CreateOrg:output_type -> xagent.v1.CreateOrgResponse
+	89,  // 146: xagent.v1.XAgentService.ListOrgs:output_type -> xagent.v1.ListOrgsResponse
+	91,  // 147: xagent.v1.XAgentService.DeleteOrg:output_type -> xagent.v1.DeleteOrgResponse
+	93,  // 148: xagent.v1.XAgentService.AddOrgMember:output_type -> xagent.v1.AddOrgMemberResponse
+	95,  // 149: xagent.v1.XAgentService.RemoveOrgMember:output_type -> xagent.v1.RemoveOrgMemberResponse
+	97,  // 150: xagent.v1.XAgentService.ListOrgMembers:output_type -> xagent.v1.ListOrgMembersResponse
+	99,  // 151: xagent.v1.XAgentService.GetOrgSettings:output_type -> xagent.v1.GetOrgSettingsResponse
+	101, // 152: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:output_type -> xagent.v1.GenerateAtlassianWebhookSecretResponse
+	106, // 153: xagent.v1.XAgentService.GetRoutingRules:output_type -> xagent.v1.GetRoutingRulesResponse
+	108, // 154: xagent.v1.XAgentService.SetRoutingRules:output_type -> xagent.v1.SetRoutingRulesResponse
+	112, // 155: xagent.v1.XAgentService.GetEventTypes:output_type -> xagent.v1.GetEventTypesResponse
+	114, // 156: xagent.v1.XAgentService.TestEvent:output_type -> xagent.v1.TestEventResponse
+	118, // 157: xagent.v1.XAgentService.CreateGitHubToken:output_type -> xagent.v1.CreateGitHubTokenResponse
+	114, // [114:158] is the sub-list for method output_type
+	70,  // [70:114] is the sub-list for method input_type
+	70,  // [70:70] is the sub-list for extension type_name
+	70,  // [70:70] is the sub-list for extension extendee
+	0,   // [0:70] is the sub-list for field type_name
 }
 
 func init() { file_xagent_v1_xagent_proto_init() }
@@ -6795,7 +7129,7 @@ func file_xagent_v1_xagent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_xagent_v1_xagent_proto_rawDesc), len(file_xagent_v1_xagent_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   114,
+			NumMessages:   120,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
