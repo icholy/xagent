@@ -18,7 +18,7 @@ We want an **optional** way to include archived tasks in the list, **off by defa
 
 ### Overview
 
-Add a single `archived` boolean to `ListTasksRequest`. When false (the default), the list behaves exactly as today: active tasks only, backed by the tight partial index. When true, the query drops the `archived = FALSE` predicate and returns active **and** archived tasks interleaved by `created_at DESC, id DESC`, backed by a new full index. The page token binds the filter so a cursor minted under one filter cannot be silently replayed under the other. The Web UI gains a "Show archived" switch beside the page-size selector; archived rows are marked with the existing `ArchivedBadge` and muted. The MCP tool and CLI each gain a matching opt-in flag.
+Add a single `archived` boolean to `ListTasksRequest`. When false (the default), the list behaves exactly as today: active tasks only, backed by the tight partial index. When true, the query drops the `archived = FALSE` predicate and returns active **and** archived tasks interleaved by `created_at DESC, id DESC`, backed by a new full index. The page token binds the filter so a cursor minted under one filter cannot be silently replayed under the other. The Web UI gains a "Show archived" switch beside the page-size selector; archived rows are marked with the existing `ArchivedBadge` and muted. The CLI gains a matching opt-in flag; the MCP `list_tasks` tool is left out of scope.
 
 The keyset itself does not change shape semantically — the ordering is still `created_at DESC, id DESC`, and archived rows simply take their place in that ordering. That is what makes this an additive change rather than a rework of the cursor.
 
@@ -192,34 +192,9 @@ const handleShowArchivedChange = (checked: boolean) => {
 
 The archive action column already gates on `canArchiveTask(task)`, which is false for archived tasks, so archived rows simply show no archive button — no extra handling needed. Run `pnpm lint` in `webui/` before finishing (CI enforces ESLint).
 
-### 7. MCP tool and CLI
+### 7. CLI
 
-Both surfaces send an empty `ListTasksRequest` today and only ever see the first page (neither paginates). Adding the opt-in is cheap parity:
-
-**MCP `list_tasks`** (`internal/server/mcpserver/mcpserver.go`) — give the input an optional field and surface `archived` in the summary so results are distinguishable:
-
-```go
-type listTasksInput struct {
-	Archived bool `json:"archived,omitempty" jsonschema:"Include archived tasks (default: false)"`
-}
-
-// in listTasks:
-resp, err := h.service.ListTasks(ctx, &xagentv1.ListTasksRequest{
-	Archived: input.Archived,
-})
-
-// taskSummary gains:
-type taskSummary struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Workspace string `json:"workspace"`
-	Status    string `json:"status"`
-	Archived  bool   `json:"archived,omitempty"`
-	URL       string `json:"url,omitempty"`
-}
-```
-
-**CLI `xagent task list`** (`internal/command/task_list.go`) — add a bool flag threaded into the request:
+`xagent task list` (`internal/command/task_list.go`) sends an empty `ListTasksRequest` today and only ever sees the first page (it doesn't paginate). Add a bool flag threaded into the request:
 
 ```go
 &cli.BoolFlag{
@@ -232,7 +207,9 @@ resp, err := client.ListTasks(ctx, &xagentv1.ListTasksRequest{
 })
 ```
 
-Both default to false, so existing scripts and agent behavior are unchanged.
+It defaults to false, so existing scripts are unchanged.
+
+The `list_tasks` **MCP tool is out of scope** for this proposal — it stays active-only. It can adopt the same `archived` field later as a backward-compatible addition if an agent use case appears, but it isn't driving this work.
 
 ## Implementation Plan
 
@@ -241,13 +218,13 @@ Both default to false, so existing scripts and agent behavior are unchanged.
 3. **SQL query + store** — Delivers: conditional `archived` predicate in `ListTasksPage`, `Archived` on `ListTasksPageParams`/`taskCursor`, filter threading + token-mismatch rejection (`sqlc generate`). Depends on: (2). Verifiable by: store tests — active-only unchanged; archived-included returns archived rows in keyset order; a token minted under one filter is rejected under the other with `ErrInvalidRequest`.
 4. **Server handler** — Delivers: pass `req.Archived` through. Depends on: (1), (3). Verifiable by: handler test paging with `archived` true/false; mismatch → `CodeInvalidArgument`.
 5. **Web UI** — Delivers: "Show archived" switch (reset tokens on change), archived badge + muted row. Depends on: (4). Verifiable by: rendering against an org with archived tasks; toggling shows/hides them and resets to page 1; `pnpm lint` passes.
-6. **MCP tool + CLI** — Delivers: `archived` on the `list_tasks` tool (+ `archived` in the summary) and a `--archived` CLI flag. Depends on: (4). Verifiable by: tool call / `xagent task list --archived` returns archived tasks; default omits them.
+6. **CLI** — Delivers: a `--archived` flag on `xagent task list`. Depends on: (4). Verifiable by: `xagent task list --archived` returns archived tasks; default omits them.
 
 ## Trade-offs
 
 ### `archived` bool vs a filter enum
 
-**Chosen: a bool.** The feature the issue asks for is a binary toggle — "also show archived." A bool expresses exactly that, is the proto3 default-false so every existing caller is unaffected, and keeps the query a one-line conditional. A broader enum (e.g. `TaskFilter { ACTIVE, ARCHIVED, ALL }`, or a repeated status filter) would additionally allow "archived **only**," which no surface currently needs — the UI toggle, the CLI, and the MCP tool all want "active, optionally plus archived." An enum is also a larger, harder-to-narrow API commitment. If an "archived only" view or status filtering is wanted later, it can be added as a *separate* additive field (or the bool can be widened to an enum in a backward-compatible way) without redoing this work. Starting narrow avoids designing a filter language on speculation, matching how the pagination proposal deferred its `pg_trgm` search filter until there was demand.
+**Chosen: a bool.** The feature the issue asks for is a binary toggle — "also show archived." A bool expresses exactly that, is the proto3 default-false so every existing caller is unaffected, and keeps the query a one-line conditional. A broader enum (e.g. `TaskFilter { ACTIVE, ARCHIVED, ALL }`, or a repeated status filter) would additionally allow "archived **only**," which no surface currently needs — both the UI toggle and the CLI want "active, optionally plus archived." An enum is also a larger, harder-to-narrow API commitment. If an "archived only" view or status filtering is wanted later, it can be added as a *separate* additive field (or the bool can be widened to an enum in a backward-compatible way) without redoing this work. Starting narrow avoids designing a filter language on speculation, matching how the pagination proposal deferred its `pg_trgm` search filter until there was demand.
 
 ### Two indexes vs one full index
 
@@ -261,9 +238,9 @@ A composite `(org_id, archived, created_at DESC, id DESC)` index was also consid
 
 The alternative — leave the token filter-agnostic and just document "reset pagination when you change the filter" — is simpler and would be fine for the UI alone (which already resets the token stack on toggle, as it does on page-size change). It was rejected because it pushes a correctness expectation onto every non-UI client (CLI scripts, future API consumers) that the server can cheaply enforce instead. Binding is defensive rather than strictly required; a reviewer who prefers the minimal change can drop the `taskCursor` field and the `Query` check without affecting the rest of the design.
 
-### Surfacing on MCP/CLI vs UI-only
+### CLI included, MCP tool deferred
 
-**Chosen: surface everywhere, default off.** The store change makes archived tasks reachable through the shared `ListTasksPage`; exposing the flag on the MCP tool and CLI is a few lines each and keeps the three read surfaces consistent (an orchestrator agent looking for a task it archived, or a script auditing archived work, both benefit). Adding `archived` to the MCP `taskSummary` is needed regardless so agents can tell the rows apart. The cost is negligible and every surface stays default-false, so nothing changes for callers that don't ask.
+**Chosen: surface on the Web UI and CLI, leave the MCP tool out of scope.** The store change makes archived tasks reachable through the shared `ListTasksPage`; exposing the flag on the CLI is a couple of lines and matches the primary human surface (a script auditing archived work). The `list_tasks` MCP tool is deliberately left active-only for now — there's no established agent use case for browsing archived tasks, and if one appears the same `archived` field is a backward-compatible addition (it would also want `archived` added to `taskSummary` so an agent can tell the rows apart). Both surfaces stay default-false, so nothing changes for callers that don't ask.
 
 ## Open Questions
 
