@@ -2,7 +2,6 @@ package atlassianserver
 
 import (
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/model"
 )
 
 // init registers atlassianserver's schemas on the process-wide default registry.
@@ -13,12 +12,11 @@ func init() {
 // RegisterSchemas records the eventrouter schema for every event type
 // atlassianserver emits (see toInputEvent) on reg. Each schema declares the
 // complete valid attr set for its type (the derived body/url plus its emitted
-// dimensions) and the default rules the producer ships. comment_created carries
-// the "xagent:" body-prefix wakeup default; label_added ships no default rules.
-// Every AttrDef is declared inline per event type so its display copy
-// (label/help/placeholder) speaks to that specific event rather than sharing a
-// single generic definition. It is exported so tests (e.g. eventrouter's Route
-// tests) can populate an isolated registry with the real producer schemas.
+// dimensions). Every AttrDef is declared inline per event type so its display
+// copy (label/help/placeholder) speaks to that specific event rather than
+// sharing a single generic definition. It is exported so tests (e.g.
+// eventrouter's Route tests) can populate an isolated registry with the real
+// producer schemas.
 func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "atlassian",
@@ -50,12 +48,6 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Help:        "Atlassian account id of the user who commented. Enter the bare id (no [~accountid:…] wrapper).",
 			},
 		},
-		DefaultRules: []model.RoutingRule{{
-			Source:     "atlassian",
-			Type:       EventTypeCommentCreated,
-			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
-			Wakeup:     true,
-		}},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "atlassian",

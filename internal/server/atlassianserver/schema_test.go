@@ -13,7 +13,8 @@ func TestSchemaRegistration(t *testing.T) {
 
 	def, ok := reg.EventTypeFor("atlassian", EventTypeCommentCreated)
 	assert.Assert(t, ok, "EventTypeFor(atlassian, %q) = _, false; want hit", EventTypeCommentCreated)
-	assert.Assert(t, len(def.DefaultRules) > 0, "comment_created DefaultRules is empty; want the xagent: wakeup rule")
+	// Producers no longer register default rules.
+	assert.Assert(t, def.DefaultRules == nil, "comment_created DefaultRules = %v, want nil", def.DefaultRules)
 
 	// AttrDefs carry Jira-flavoured display copy declared inline per event type;
 	// the mention placeholder is an Atlassian account id, not a GitHub username.
@@ -44,7 +45,7 @@ func TestSchemaRegistration(t *testing.T) {
 		},
 	})
 
-	// label_added registers but ships no default rules.
+	// label_added also registers and ships no default rules.
 	labelDef, ok := reg.EventTypeFor("atlassian", EventTypeLabelAdded)
 	assert.Assert(t, ok, "EventTypeFor(atlassian, %q) = _, false; want hit", EventTypeLabelAdded)
 	assert.Assert(t, labelDef.DefaultRules == nil, "label_added DefaultRules = %v, want nil", labelDef.DefaultRules)
