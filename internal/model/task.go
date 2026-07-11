@@ -80,6 +80,14 @@ type Task struct {
 	ShellSession string `json:"shell_session,omitempty"`
 }
 
+// Clone returns an independent copy of the task. Every field is value-typed,
+// so a shallow struct copy is a complete snapshot — callers can retain it
+// across in-place mutations (e.g. the ApplyRunnerEvent fold).
+func (t *Task) Clone() *Task {
+	c := *t
+	return &c
+}
+
 // ScopeAttr returns the authscope attributes describing this task, for the
 // post-load Allow check in the apiserver task handlers. Centralizing the set
 // here keeps a handler from forgetting one (especially task.archived): own-task

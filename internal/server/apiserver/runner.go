@@ -44,20 +44,19 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 				return connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 			}
-			from := task.Status
-			// Capture version and command before the fold: ApplyRunnerEvent can
-			// legitimately bump the version and clear the command, so these must
-			// be read pre-fold to diagnose stale-vs-state rejections.
-			taskVersion := task.Version
-			command := task.Command
+			// Snapshot the task before the fold: ApplyRunnerEvent can legitimately
+			// bump the version and clear the command, so the pre-fold version,
+			// command, and status must be read from the original to diagnose
+			// stale-vs-state rejections and read applied events as a transition.
+			orig := task.Clone()
 			applied := task.ApplyRunnerEvent(&event)
 			s.log.InfoContext(ctx, "runner event received",
 				"task_id", event.TaskID,
 				"event", event.Event,
 				"version", event.Version,
-				"task_version", taskVersion,
-				"command", command,
-				"from_status", from,
+				"task_version", orig.Version,
+				"command", orig.Command,
+				"from_status", orig.Status,
 				"status", task.Status,
 				"reason", event.Reason,
 				"applied", applied,
@@ -70,9 +69,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				return err
 			}
 			// Append the sandbox lifecycle event beside the status fold (status is
-			// the materialized projection; the fold logic is unchanged). from is the
-			// status before ApplyRunnerEvent; the task carries the post-fold status.
-			if ev, ok := event.LifecycleEvent(task, from); ok {
+			// the materialized projection; the fold logic is unchanged). orig
+			// carries the pre-fold status; the task carries the post-fold status.
+			if ev, ok := event.LifecycleEvent(task, orig.Status); ok {
 				if err := s.store.CreateEvent(ctx, tx, ev); err != nil {
 					return err
 				}
