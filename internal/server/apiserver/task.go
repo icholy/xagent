@@ -12,7 +12,9 @@ import (
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/pagination"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/store"
 )
 
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
@@ -20,14 +22,23 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 	if !caller.Scopes.Allow(authscope.OpTaskRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list tasks"))
 	}
-	tasks, err := s.store.ListTasks(ctx, nil, caller.OrgID)
+	page, err := s.store.ListTasksPage(ctx, nil, store.ListTasksPageParams{
+		OrgID:     caller.OrgID,
+		PageSize:  req.PageSize,
+		PageToken: req.PageToken,
+	})
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		code := connect.CodeInternal
+		if errors.Is(err, pagination.ErrInvalidRequest) {
+			code = connect.CodeInvalidArgument
+		}
+		return nil, connect.NewError(code, err)
 	}
 	resp := &xagentv1.ListTasksResponse{
-		Tasks: make([]*xagentv1.Task, len(tasks)),
+		Tasks:         make([]*xagentv1.Task, len(page.Items)),
+		NextPageToken: page.NextToken,
 	}
-	for i, t := range tasks {
+	for i, t := range page.Items {
 		resp.Tasks[i] = t.Proto(s.baseURL)
 	}
 	return resp, nil

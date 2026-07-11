@@ -280,6 +280,70 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 	return items, nil
 }
 
+const listTasksPage = `-- name: ListTasksPage :many
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
+FROM tasks
+WHERE archived = FALSE
+  AND org_id = $1
+  AND (
+    NOT $2::bool
+    OR (created_at, id) < ($3::timestamp, $4::bigint)
+  )
+ORDER BY created_at DESC, id DESC
+LIMIT $5
+`
+
+type ListTasksPageParams struct {
+	OrgID           int64     `json:"org_id"`
+	UseCursor       bool      `json:"use_cursor"`
+	CursorCreatedAt time.Time `json:"cursor_created_at"`
+	CursorID        int64     `json:"cursor_id"`
+	PageLimit       int32     `json:"page_limit"`
+}
+
+func (q *Queries) ListTasksPage(ctx context.Context, arg ListTasksPageParams) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, listTasksPage,
+		arg.OrgID,
+		arg.UseCursor,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Task{}
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Runner,
+			&i.Workspace,
+			&i.Status,
+			&i.Command,
+			&i.Version,
+			&i.OrgID,
+			&i.Archived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AutoArchive,
+			&i.ShellSession,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateTask = `-- name: UpdateTask :exec
 UPDATE tasks
 SET name = $1, runner = $2, workspace = $3, status = $4, command = $5, version = $6, updated_at = $7, archived = $8, auto_archive = $9, shell_session = $10

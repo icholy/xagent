@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/pagination"
 	"github.com/icholy/xagent/internal/store/sqlc"
 )
 
@@ -62,6 +63,61 @@ func (s *Store) ListTasks(ctx context.Context, tx *sql.Tx, orgID int64) ([]*mode
 		return nil, err
 	}
 	return toModelTasks(rows)
+}
+
+// taskCursor is the keyset a task page token encodes. created_at is not
+// unique, so id is the tiebreaker.
+type taskCursor struct {
+	CreatedAt time.Time `json:"c"`
+	ID        int64     `json:"i"`
+}
+
+var listTasksPaging = pagination.Config{Default: 50, Max: 100}
+
+// ListTasksPageParams mirrors the RPC's pagination fields as plain values so
+// the handler can pass them through untouched.
+type ListTasksPageParams struct {
+	OrgID     int64
+	PageSize  int32  // 0 means the default (50); max 100
+	PageToken string // opaque token from a previous page; empty for the first page
+}
+
+// taskSource implements pagination.Source for the tasks table.
+type taskSource struct {
+	store  *Store
+	tx     *sql.Tx
+	params ListTasksPageParams
+}
+
+func (src taskSource) Query(ctx context.Context, cursor *taskCursor, limit int32) ([]*model.Task, error) {
+	args := sqlc.ListTasksPageParams{
+		OrgID:     src.params.OrgID,
+		UseCursor: cursor != nil,
+		PageLimit: limit,
+	}
+	if cursor != nil {
+		args.CursorCreatedAt = cursor.CreatedAt
+		args.CursorID = cursor.ID
+	}
+	rows, err := src.store.q(src.tx).ListTasksPage(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return toModelTasks(rows)
+}
+
+func (src taskSource) Cursor(t *model.Task) taskCursor {
+	return taskCursor{CreatedAt: t.CreatedAt, ID: t.ID}
+}
+
+// ListTasksPage returns a keyset-paginated page of non-archived tasks for the
+// org, newest first, plus the token for the next page. It owns everything
+// pagination-related: the cursor keyset (created_at, id), the page-size bounds,
+// and the opaque token format. A bad PageSize or an undecodable PageToken
+// surfaces as a wrapped pagination.ErrInvalidRequest; query failures surface
+// as-is.
+func (s *Store) ListTasksPage(ctx context.Context, tx *sql.Tx, p ListTasksPageParams) (*pagination.Page[*model.Task], error) {
+	return pagination.List(ctx, listTasksPaging, p.PageSize, p.PageToken, taskSource{store: s, tx: tx, params: p})
 }
 
 func (s *Store) ListTasksForRunner(ctx context.Context, tx *sql.Tx, runner string, orgID int64) ([]*model.Task, error) {
