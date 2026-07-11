@@ -3,6 +3,7 @@ package eventrouter_test
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -409,16 +410,13 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 	// lifecycle events are reserved for user-initiated restarts via RestartTask.
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
 	assert.NilError(t, err)
-	externals := model.FilterPayloads[*model.ExternalPayload](events)
+	externals := model.FilterPayloads(events, []string{model.EventTypeExternal})
 	assert.Equal(t, len(externals), 1)
-	lifecycles := model.FilterPayloads[*model.LifecyclePayload](events)
-	var restarted int
-	for _, p := range lifecycles {
-		if p.Kind == model.LifecycleKindRestarted {
-			restarted++
-		}
-	}
-	assert.Equal(t, restarted, 0)
+	lifecycles := model.FilterPayloads(events, []string{model.EventTypeLifecycle})
+	restarted := slices.ContainsFunc(lifecycles, func(p model.EventPayload) bool {
+		return p.(*model.LifecyclePayload).Kind == model.LifecycleKindRestarted
+	})
+	assert.Equal(t, restarted, false)
 }
 
 func TestRouteCreateRuleSpawnsTask(t *testing.T) {
@@ -467,9 +465,9 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// exactly the configured prompt and nothing else.
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
-	insts := model.FilterPayloads[*model.InstructionPayload](events)
-	assert.DeepEqual(t, insts, []*model.InstructionPayload{
-		{Text: "Triage this issue."},
+	insts := model.FilterPayloads(events, []string{model.EventTypeInstruction})
+	assert.DeepEqual(t, insts, []model.EventPayload{
+		&model.InstructionPayload{Text: "Triage this issue."},
 	})
 
 	// The subscription link keeps the trigger URL but carries no title — the
@@ -487,9 +485,9 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// instruction event it already seeds.
 	linkEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeLink})
 	assert.NilError(t, err)
-	linkPayloads := model.FilterPayloads[*model.LinkPayload](linkEvents)
-	assert.DeepEqual(t, linkPayloads, []*model.LinkPayload{
-		{LinkID: links[0].ID, Relevance: "trigger", URL: url, Subscribe: true},
+	linkPayloads := model.FilterPayloads(linkEvents, []string{model.EventTypeLink})
+	assert.DeepEqual(t, linkPayloads, []model.EventPayload{
+		&model.LinkPayload{LinkID: links[0].ID, Relevance: "trigger", URL: url, Subscribe: true},
 	})
 	assert.Equal(t, linkEvents[0].Wake, false)
 
@@ -515,9 +513,9 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	// mirroring the wake path (attach).
 	externalEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeExternal})
 	assert.NilError(t, err)
-	externalPayloads := model.FilterPayloads[*model.ExternalPayload](externalEvents)
-	assert.DeepEqual(t, externalPayloads, []*model.ExternalPayload{
-		{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this"},
+	externalPayloads := model.FilterPayloads(externalEvents, []string{model.EventTypeExternal})
+	assert.DeepEqual(t, externalPayloads, []model.EventPayload{
+		&model.ExternalPayload{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this"},
 	})
 }
 
@@ -557,11 +555,12 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	task := tasks[0]
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
-	insts := model.FilterPayloads[*model.InstructionPayload](events)
+	insts := model.FilterPayloads(events, []string{model.EventTypeInstruction})
 	assert.Equal(t, len(insts), 1)
-	assert.Assert(t, strings.Contains(insts[0].Text, "routing rule"))
-	assert.Assert(t, strings.Contains(insts[0].Text, "github"))
-	assert.Assert(t, strings.Contains(insts[0].Text, "issue_comment"))
+	inst := insts[0].(*model.InstructionPayload)
+	assert.Assert(t, strings.Contains(inst.Text, "routing rule"))
+	assert.Assert(t, strings.Contains(inst.Text, "github"))
+	assert.Assert(t, strings.Contains(inst.Text, "issue_comment"))
 }
 
 func TestRouteCreateRuleAutoArchive(t *testing.T) {

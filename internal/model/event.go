@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -293,13 +294,14 @@ func EventFromProto(pb *xagentv1.Event) *Event {
 	return e
 }
 
-// FilterPayloads returns the payloads of the given events whose concrete type is
-// T, in order. Events whose Payload is not a T are skipped.
-func FilterPayloads[T any](events []*Event) []T {
-	var payloads []T
+// FilterPayloads returns the payloads of the given events whose discriminator
+// (Payload.Type()) is in types, in order. Events whose type is not in types are
+// skipped.
+func FilterPayloads(events []*Event, types []string) []EventPayload {
+	var payloads []EventPayload
 	for _, e := range events {
-		if v, ok := e.Payload.(T); ok {
-			payloads = append(payloads, v)
+		if slices.Contains(types, e.Payload.Type()) {
+			payloads = append(payloads, e.Payload)
 		}
 	}
 	return payloads
