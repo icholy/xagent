@@ -145,11 +145,11 @@ function ExternalRow({ item }: { item: Extract<TimelineItem, { kind: 'external' 
         </div>
         <div className="border-t border-amber-300/40 px-4 py-3">
           <p className="text-sm font-medium text-foreground">{item.description}</p>
-          {item.details && <EventDetails details={item.details} />}
           {item.data && (
             <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">{item.data}</p>
           )}
           {item.url && <SourceLink url={item.url} />}
+          {item.details && <EventDetails details={item.details} />}
         </div>
       </div>
     </Row>
