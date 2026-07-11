@@ -45,12 +45,21 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				return connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 			}
 			from := task.Status
+			// Capture version and command before the fold: ApplyRunnerEvent can
+			// legitimately bump the version and clear the command, so these must
+			// be read pre-fold to diagnose stale-vs-state rejections.
+			taskVersion := task.Version
+			command := task.Command
 			applied := task.ApplyRunnerEvent(&event)
-			s.log.InfoContext(ctx, "runner event recieved",
+			s.log.InfoContext(ctx, "runner event received",
 				"task_id", event.TaskID,
 				"event", event.Event,
 				"version", event.Version,
+				"task_version", taskVersion,
+				"command", command,
+				"from_status", from,
 				"status", task.Status,
+				"reason", event.Reason,
 				"applied", applied,
 			)
 			if !applied {
