@@ -22,6 +22,8 @@ The web UI fetches the full list, refetches it every 60 seconds, and filters by 
 
 Add **keyset (cursor) pagination** to `ListTasks`. The request gains a page size and an opaque page token; the response returns a `next_page_token`. The name search currently done client-side moves server-side so it works across the full dataset rather than only the loaded page. The web UI switches to `useInfiniteQuery` with a "Load more" control.
 
+Pagination mechanics are owned entirely by the **store**. `Store.ListTasksPage` accepts the request's `page_size`/`page_token`/`filter` verbatim and returns a page of tasks plus the next token; the cursor type, token encoding, page-size bounds, and the "fetch one extra, trim" step are all behind the store boundary. The RPC handler passes fields through and maps errors — it does not know the pagination is keyset-based at all.
+
 Keyset pagination (rather than `LIMIT`/`OFFSET`) is chosen because tasks are ordered `created_at DESC` and new tasks are continually inserted at the top while the UI polls. Offset pagination would skip or duplicate rows whenever a task is created between page loads. A cursor anchored to a specific row is stable against inserts. See [Trade-offs](#trade-offs).
 
 ### 1. Proto Definitions
@@ -45,9 +47,9 @@ The `page_token` is opaque to clients. The server encodes the keyset of the last
 
 ### 2. Pagination Package
 
-Rather than open-coding cursor encoding, page-size validation, and the "fetch one extra, trim, build next token" dance inside the `ListTasks` handler, this logic lives in a small reusable package: **`internal/pagination`**. The handler is left thin and the same helper backs any future paginated List RPC (`ListEvents`, `ListLogs`, …). Per-call code only supplies the two things that are genuinely RPC-specific: the **cursor type** and the function that derives a cursor from a result row.
+The mechanical parts — page-size validation, token encode/decode, and the "fetch one extra, trim, build next token" dance — live in a small generic package, **`internal/pagination`**, consumed by the store. Its exported surface is deliberately tiny: a `Config`, a `Page[T]` result, one sentinel error, and a single `List` entry point that runs a whole page end-to-end around a query closure. Per-store-method code only supplies the two things that are genuinely query-specific: the **cursor type** and the function that derives a cursor from a result row.
 
-The package is storage- and proto-agnostic — it deals in plain ints, strings, and a generic cursor type, so it has no dependency on `sqlc`, `connect`, or the proto package. Callers map its errors to `connect` codes.
+The package is storage- and proto-agnostic — it deals in plain ints, strings, and generic type parameters, so it has no dependency on `sqlc`, `connect`, or the proto package.
 
 ```go
 // internal/pagination/pagination.go
@@ -60,61 +62,63 @@ import (
     "fmt"
 )
 
-// ErrInvalidToken is returned when a page token cannot be decoded.
-// Callers map this to connect.CodeInvalidArgument.
-var ErrInvalidToken = errors.New("invalid page token")
+// ErrInvalidRequest reports a bad page size or an undecodable page token.
+// RPC handlers map it to connect.CodeInvalidArgument.
+var ErrInvalidRequest = errors.New("invalid page request")
 
-// Config bounds the page size for a single List RPC.
+// Config bounds the page size for a paginated list.
 type Config struct {
     Default int // size used when the request omits page_size (0)
     Max     int // largest size a caller may request
 }
 
-// Page is a validated pagination request. Cursor is nil on the first page.
-type Page[C any] struct {
-    Size   int
-    Cursor *C
+// Page is one page of results plus the opaque token for the next page.
+type Page[T any] struct {
+    Items     []T
+    NextToken string // empty when there are no more results
 }
 
-// Limit is the value to pass to the store: one more than the page size, so the
-// caller can tell whether another page exists.
-func (p Page[C]) Limit() int { return p.Size + 1 }
-
-// Parse validates page_size against cfg and decodes page_token (if present)
-// into a cursor of type C. A zero pageSize falls back to cfg.Default.
-func Parse[C any](cfg Config, pageSize int32, pageToken string) (Page[C], error) {
+// List runs one page of a keyset-paginated query. It validates pageSize
+// against cfg, decodes pageToken into a cursor of type C (nil on the first
+// page), and calls query with the cursor and a limit of size+1. If the extra
+// row came back there is a next page: the row is trimmed and NextToken is
+// encoded from cursorOf(last returned row); otherwise NextToken is empty.
+func List[T, C any](
+    cfg Config,
+    pageSize int32,
+    pageToken string,
+    query func(cursor *C, limit int32) ([]T, error),
+    cursorOf func(T) C,
+) (*Page[T], error) {
     size := int(pageSize)
     if size == 0 {
         size = cfg.Default
     }
     if size < 1 || size > cfg.Max {
-        return Page[C]{}, fmt.Errorf("page_size must be between 1 and %d", cfg.Max)
+        return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, cfg.Max)
     }
-    page := Page[C]{Size: size}
+    var cursor *C
     if pageToken != "" {
         c, err := decode[C](pageToken)
         if err != nil {
-            return Page[C]{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+            return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
         }
-        page.Cursor = &c
+        cursor = &c
+    }
+    items, err := query(cursor, int32(size+1))
+    if err != nil {
+        return nil, err
+    }
+    page := &Page[T]{Items: items}
+    if len(items) > size {
+        page.Items = items[:size]
+        token, err := encode(cursorOf(page.Items[size-1]))
+        if err != nil {
+            return nil, err
+        }
+        page.NextToken = token
     }
     return page, nil
-}
-
-// Result trims an over-fetched slice (len up to Size+1) down to Size and
-// returns the next page token. cursorOf maps the last returned row to the
-// cursor encoded in the token. When fewer than Size+1 rows were fetched there
-// is no next page and the token is empty.
-func Result[T, C any](items []T, p Page[C], cursorOf func(T) C) ([]T, string, error) {
-    if len(items) <= p.Size {
-        return items, "", nil
-    }
-    items = items[:p.Size]
-    token, err := encode(cursorOf(items[len(items)-1]))
-    if err != nil {
-        return nil, "", err
-    }
-    return items, token, nil
 }
 
 func encode[C any](c C) (string, error) {
@@ -136,21 +140,11 @@ func decode[C any](token string) (C, error) {
 }
 ```
 
-The only task-specific piece is the cursor struct, which stays next to the handler. The keyset is `(created_at, id)` because `created_at` alone is not unique — two tasks can share a timestamp, so `id` is the tiebreaker.
-
-```go
-// internal/server/apiserver/task.go
-type taskCursor struct {
-    CreatedAt time.Time `json:"c"`
-    ID        int64     `json:"i"`
-}
-```
-
-An invalid/undecodable `page_token` surfaces as `pagination.ErrInvalidToken`, which the handler maps to `connect.CodeInvalidArgument`.
+The same `List` call backs any future paginated store method (`ListEventsPage`, `ListLogsPage`, …) — each one adds only its cursor struct and closures.
 
 ### 3. SQL Query
 
-`internal/store/sql/queries/task.sql` — add a tiebreaker to the ordering, a keyset predicate, an optional name filter, and a limit. The existing `ListTasks` query is updated (callers that want every task continue to use the unfiltered path; see [Other callers](#5-other-callers)):
+`internal/store/sql/queries/task.sql` — add a tiebreaker to the ordering, a keyset predicate, an optional name filter, and a limit. The existing `ListTasks` query is retained (callers that want every task continue to use the unfiltered path; see [Other callers](#5-other-callers)):
 
 ```sql
 -- name: ListTasksPage :many
@@ -174,7 +168,7 @@ Notes:
 
 - `ORDER BY created_at DESC, id DESC` makes the sort deterministic. The current query orders by `created_at DESC` only; the `id` tiebreaker is required for a correct keyset.
 - The `use_cursor` boolean lets the first page (no token) skip the keyset predicate cleanly within a single query.
-- The server fetches `page_size + 1` rows. If `page_size + 1` rows come back, there is a next page: the extra row is dropped from the response and the `next_page_token` is built from the keyset of the **last returned** row. Otherwise `next_page_token` is empty.
+- The store fetches `page_size + 1` rows. If `page_size + 1` rows come back, there is a next page: the extra row is dropped from the result and the `next_page_token` is built from the keyset of the **last returned** row. Otherwise `next_page_token` is empty. This happens inside `pagination.List`; neither the SQL nor the handler deals with it.
 - A partial index supports the keyset scan:
 
 ```sql
@@ -185,34 +179,53 @@ CREATE INDEX tasks_org_created_id_idx
 
 ### 4. Store Layer
 
-`internal/store/task.go` — add a paged variant alongside the existing `ListTasks`:
+`internal/store/task.go` — the paged variant lives alongside the existing `ListTasks` and owns everything pagination-related: the cursor type, the page-size bounds, and the token format. Its params mirror the proto's pagination fields as plain ints and strings, so the RPC handler can pass them through untouched.
+
+The keyset is `(created_at, id)` because `created_at` alone is not unique — two tasks can share a timestamp, so `id` is the tiebreaker. The cursor struct is unexported: no one outside the store ever sees a cursor, only opaque tokens.
 
 ```go
-type ListTasksPageParams struct {
-    OrgID           int64
-    Filter          string
-    Cursor          *taskCursor // nil for the first page
-    Limit           int32       // server passes pageSize + 1
+// taskCursor is the keyset a task page token encodes. created_at is not
+// unique, so id is the tiebreaker.
+type taskCursor struct {
+    CreatedAt time.Time `json:"c"`
+    ID        int64     `json:"i"`
 }
 
-func (s *Store) ListTasksPage(ctx context.Context, tx *sql.Tx, p ListTasksPageParams) ([]*model.Task, error) {
-    args := sqlc.ListTasksPageParams{
-        OrgID:     p.OrgID,
-        Filter:    p.Filter,
-        UseCursor: p.Cursor != nil,
-        PageLimit: p.Limit,
-    }
-    if p.Cursor != nil {
-        args.CursorCreatedAt = p.Cursor.CreatedAt
-        args.CursorID = p.Cursor.ID
-    }
-    rows, err := s.q(tx).ListTasksPage(ctx, args)
-    if err != nil {
-        return nil, err
-    }
-    return toModelTasks(rows)
+var listTasksPaging = pagination.Config{Default: 50, Max: 100}
+
+type ListTasksPageParams struct {
+    OrgID     int64
+    Filter    string // optional case-insensitive substring match on name
+    PageSize  int32  // 0 means the default (50); max 100
+    PageToken string // opaque token from a previous page; empty for the first page
+}
+
+func (s *Store) ListTasksPage(ctx context.Context, tx *sql.Tx, p ListTasksPageParams) (*pagination.Page[*model.Task], error) {
+    return pagination.List(listTasksPaging, p.PageSize, p.PageToken,
+        func(cursor *taskCursor, limit int32) ([]*model.Task, error) {
+            args := sqlc.ListTasksPageParams{
+                OrgID:     p.OrgID,
+                Filter:    p.Filter,
+                UseCursor: cursor != nil,
+                PageLimit: limit,
+            }
+            if cursor != nil {
+                args.CursorCreatedAt = cursor.CreatedAt
+                args.CursorID = cursor.ID
+            }
+            rows, err := s.q(tx).ListTasksPage(ctx, args)
+            if err != nil {
+                return nil, err
+            }
+            return toModelTasks(rows)
+        },
+        func(t *model.Task) taskCursor {
+            return taskCursor{CreatedAt: t.CreatedAt, ID: t.ID}
+        })
 }
 ```
+
+A bad `PageSize` or an undecodable `PageToken` surfaces as a wrapped `pagination.ErrInvalidRequest`; query failures surface as-is. This is the store's only pagination-specific error contract with callers.
 
 The existing `ListTasks(ctx, tx, orgID)` method and its SQL query are retained for internal callers that legitimately need every task (see below).
 
@@ -220,58 +233,48 @@ The existing `ListTasks(ctx, tx, orgID)` method and its SQL query are retained f
 
 `ListTasks` (store) is also used outside the web-facing RPC. These callers must keep fetching the full set and are **not** migrated to the paged query:
 
-- `ListRunnerTasks` / runner reconciliation — needs all tasks for a runner, not a page.
+- `ListTasksForRunner` / runner reconciliation — needs all tasks for a runner, not a page.
 - Any background reconciliation or cleanup loops.
 
 Audit of `store.ListTasks` callers is part of implementation; the rule is: only the `XAgentService.ListTasks` RPC handler switches to `ListTasksPage`.
 
 ### 6. Server Handler
 
-With the package doing the plumbing, the handler stays thin — it wires the request to the store and maps package errors to `connect` codes. The validation shape (default + max) is expressed declaratively via `pagination.Config`:
+With the store owning pagination, the handler is pure plumbing: check the scope, pass the request fields through, map errors, convert to proto. It never sees a cursor, a limit, or a token's contents.
 
 ```go
-var listTasksPaging = pagination.Config{Default: 50, Max: 100}
-
 func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
     caller := apiauth.MustCaller(ctx)
     if !caller.Scopes.Allow(authscope.OpTaskRead) {
         return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot list tasks"))
     }
 
-    page, err := pagination.Parse[taskCursor](listTasksPaging, req.PageSize, req.PageToken)
-    if err != nil {
-        return nil, connect.NewError(connect.CodeInvalidArgument, err)
-    }
-
-    tasks, err := s.store.ListTasksPage(ctx, nil, store.ListTasksPageParams{
-        OrgID:  caller.OrgID,
-        Filter: req.Filter,
-        Cursor: page.Cursor,
-        Limit:  int32(page.Limit()), // page.Size + 1, to detect a next page
+    page, err := s.store.ListTasksPage(ctx, nil, store.ListTasksPageParams{
+        OrgID:     caller.OrgID,
+        Filter:    req.Filter,
+        PageSize:  req.PageSize,
+        PageToken: req.PageToken,
     })
     if err != nil {
-        return nil, connect.NewError(connect.CodeInternal, err)
-    }
-
-    tasks, nextToken, err := pagination.Result(tasks, page, func(t *model.Task) taskCursor {
-        return taskCursor{CreatedAt: t.CreatedAt, ID: t.ID}
-    })
-    if err != nil {
-        return nil, connect.NewError(connect.CodeInternal, err)
+        code := connect.CodeInternal
+        if errors.Is(err, pagination.ErrInvalidRequest) {
+            code = connect.CodeInvalidArgument
+        }
+        return nil, connect.NewError(code, err)
     }
 
     resp := &xagentv1.ListTasksResponse{
-        Tasks:         make([]*xagentv1.Task, len(tasks)),
-        NextPageToken: nextToken,
+        Tasks:         make([]*xagentv1.Task, len(page.Items)),
+        NextPageToken: page.NextToken,
     }
-    for i, t := range tasks {
+    for i, t := range page.Items {
         resp.Tasks[i] = t.Proto(s.baseURL)
     }
     return resp, nil
 }
 ```
 
-`pagination.Parse` returns a wrapped `ErrInvalidToken` for bad page sizes and undecodable tokens alike; the handler reports both as `CodeInvalidArgument`. (If the two ever need distinct treatment, the handler can `errors.Is(err, pagination.ErrInvalidToken)` to tell them apart.)
+The `errors.Is` check against `pagination.ErrInvalidRequest` is the one place the handler acknowledges pagination exists: bad page sizes and undecodable tokens become `CodeInvalidArgument`, everything else `CodeInternal`.
 
 ### 7. Web UI
 
@@ -309,13 +312,13 @@ No other RPC clients consume `ListTasksResponse` in a way that breaks: adding `n
 
 ### 8. Implementation Order
 
-1. `internal/pagination` package (`Config`, `Page`, `Parse`, `Result`) + unit tests — independent of everything else, can land first.
+1. `internal/pagination` package (`Config`, `Page`, `ErrInvalidRequest`, `List`) + unit tests — independent of everything else, can land first.
 2. Proto changes + regenerate (`mise run generate` for Go, `pnpm` buf generate for webui).
 3. SQL migration: add `tasks_org_created_id_idx`; add the `ListTasksPage` query; `sqlc` generate.
-4. Store layer: `ListTasksPage` + params struct.
-5. Server handler: `taskCursor` type + wire up `pagination.Parse`/`pagination.Result`.
+4. Store layer: `taskCursor`, `ListTasksPageParams`, `ListTasksPage`.
+5. Server handler: pass-through wiring + `errors.Is` mapping.
 6. Web UI: `useInfiniteQuery`, debounced server-side filter, "Load more".
-7. Tests (package round-trip + bounds; store-level keyset correctness; handler validation).
+7. Tests (package round-trip + bounds; store-level keyset correctness and token round-trip driven entirely through `ListTasksPage`; handler validation).
 
 ## Trade-offs
 
@@ -331,11 +334,17 @@ No other RPC clients consume `ListTasksResponse` in a way that breaks: adding `n
 
 `ListExternalEvents` uses a bare `limit` with no cursor — it only ever exposes the latest N events and has no "next page". That is insufficient here: the issue asks for the task **pages** to be paginated, i.e. the ability to page through the entire history, not just cap the first slice. Hence the richer `page_token`/`next_page_token` contract. The validation shape (default + max + `CodeInvalidArgument`) still mirrors the existing convention.
 
-### Reusable package vs inline handler logic
+### Store-owned pagination vs handler-owned
 
-**Chosen: an `internal/pagination` package.** Cursor encode/decode, page-size bounds, and the over-fetch-and-trim step are mechanical and identical for every cursor-paginated List RPC. Keeping them in the handler bloats it and invites copy-paste drift when the next RPC (`ListEvents`, `ListLogs`) is paginated. A generic package (over the cursor type `C` and row type `T`) keeps each handler down to a `Parse` call, a store call, and a `Result` call, with only the cursor struct and its `cursorOf` mapping written per RPC. The package stays storage/proto-agnostic so it carries no `sqlc`/`connect`/proto imports; handlers translate its errors into `connect` codes.
+**Chosen: the store owns pagination end-to-end.** An earlier revision had the handler drive the mechanics — `pagination.Parse` before the store call, `pagination.Result` after — with the store exposing raw `Cursor`/`Limit` params. That leaks storage detail: the page token encodes a keyset, and the keyset is the store's ordering (`created_at DESC, id DESC`) — a fact of the SQL, not of the RPC. With the store owning it, `ListTasksPage` takes exactly the proto's pagination fields (as plain ints/strings, so the store still imports no proto or connect) and returns items plus the next token. If the keyset, sort order, or token format ever changes, only the store changes; the handler and any future callers (e.g. the MCP server's task listing) are untouched, and it is impossible for a caller to construct an inconsistent cursor/limit combination.
 
-The trade-off is a generics-heavy helper for what is, today, a single caller. That's acceptable: the issue's framing ("the task **pages**") and the existing un-paginated `ListExternalEvents` both point at more paginated lists soon, and the package is small enough (~60 lines) that the abstraction earns its keep on the second use. Placement under `internal/pagination` (vs `internal/x/...`) is a minor call — it's a first-class concern, not a grab-bag util, so a dedicated package reads better; reviewers may prefer `internal/x/pagination` to match the existing utility convention.
+The costs are minor: the store must distinguish caller mistakes from internal failures, hence the `pagination.ErrInvalidRequest` sentinel; and the store's params adopt proto conventions (`0` → default page size). Both are contained in one params struct and one `errors.Is` check.
+
+### Reusable package vs open-coding in the store
+
+**Chosen: an `internal/pagination` package.** Token encode/decode, page-size bounds, and the over-fetch-and-trim step are mechanical and identical for every keyset-paginated store method. Open-coding them in `ListTasksPage` invites copy-paste drift when the next method (`ListEventsPage`, `ListLogsPage`) is paginated. The generic `List` helper keeps each store method down to one call with a query closure and a `cursorOf` mapping; only the cursor struct is written per method. The trade-off is a generics-heavy helper for what is, today, a single caller — acceptable since the package is ~70 lines and the issue's framing ("the task **pages**") plus the un-paginated `ListExternalEvents` both point at more paginated lists soon.
+
+Placement: `internal/pagination` as proposed. Now that the store is its only consumer, `internal/store/pagination` is also defensible, as is `internal/x/pagination` to match the utility convention — reviewer's call.
 
 ### "Load more" vs numbered pages vs infinite scroll
 
