@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useInfiniteQuery, useMutation } from '@connectrpc/connect-query'
+import { useQuery, useMutation } from '@connectrpc/connect-query'
+import { keepPreviousData } from '@tanstack/react-query'
 import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
@@ -27,16 +29,25 @@ export const Route = createFileRoute('/tasks/')({
 function TasksPage() {
   const orgId = useOrgId()
 
-  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
-    useInfiniteQuery(
-      listTasks,
-      { pageSize: 50, pageToken: '' },
-      {
-        pageParamKey: 'pageToken',
-        getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
-        refetchInterval: 60000,
-      },
-    )
+  // Stack of page tokens for the pages navigated past the first. The current
+  // page's token is the top of the stack; an empty stack is the first page.
+  const [tokens, setTokens] = useState<string[]>([])
+  const pageToken = tokens.at(-1) ?? ''
+
+  const { data, isLoading, error, isPlaceholderData, refetch } = useQuery(
+    listTasks,
+    { pageSize: 50, pageToken },
+    {
+      placeholderData: keepPreviousData,
+      refetchInterval: 60000,
+    },
+  )
+
+  const nextPageToken = data?.nextPageToken ?? ''
+  const goNext = () => {
+    if (nextPageToken) setTokens((t) => [...t, nextPageToken])
+  }
+  const goPrev = () => setTokens((t) => t.slice(0, -1))
 
   if (isLoading) {
     return (
@@ -54,7 +65,7 @@ function TasksPage() {
     )
   }
 
-  const tasks = data?.pages.flatMap((p) => p.tasks) ?? []
+  const tasks = data?.tasks ?? []
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -72,36 +83,33 @@ function TasksPage() {
       {tasks.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">No tasks found</div>
       ) : (
-        <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="hidden md:table-cell">Runner</TableHead>
-                <TableHead className="hidden md:table-cell">Workspace</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden md:table-cell">Created</TableHead>
-                <TableHead className="hidden md:table-cell"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tasks.map((task) => (
-                <TaskRow key={String(task.id)} task={task} onUpdate={refetch} />
-              ))}
-            </TableBody>
-          </Table>
-          {hasNextPage && (
-            <div className="flex justify-center py-6">
-              <Button
-                variant="outline"
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-              >
-                {isFetchingNextPage ? 'Loading...' : 'Load more'}
-              </Button>
-            </div>
-          )}
-        </>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead className="hidden md:table-cell">Runner</TableHead>
+              <TableHead className="hidden md:table-cell">Workspace</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="hidden md:table-cell">Created</TableHead>
+              <TableHead className="hidden md:table-cell"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tasks.map((task) => (
+              <TaskRow key={String(task.id)} task={task} onUpdate={refetch} />
+            ))}
+          </TableBody>
+        </Table>
+      )}
+      {(tokens.length > 0 || nextPageToken) && (
+        <div className="flex justify-center gap-2 py-6">
+          <Button variant="outline" onClick={goPrev} disabled={tokens.length === 0}>
+            Previous
+          </Button>
+          <Button variant="outline" onClick={goNext} disabled={!nextPageToken || isPlaceholderData}>
+            Next
+          </Button>
+        </div>
       )}
     </div>
   )
