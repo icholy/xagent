@@ -121,54 +121,52 @@ message ListEventsByTaskResponse {
 Both tokens are opaque — the server encodes a boundary `id` and a direction as base64. Clients
 treat them as blobs and pass one back as the next request's `page_token`.
 
-### 2. Pagination Package — one Source hierarchy, two entry points
+### 2. Pagination Package — one `Source`, two entry points
 
-The existing one-directional `Source` (used by `ListTasksPage` via `List`) is **already the
-"older / newest-first" half** of what a timeline needs: `Query` fetches the page on the far side
-of the cursor in descending order, and a nil cursor is the newest page — exactly the task list's
-"page toward older tasks, newest first." A followed timeline just adds the *other* half: a walk
-toward **newer** rows.
-
-So rather than a second, parallel source interface, **`BiSource` embeds `Source`** and adds one
-method, `QueryNewer`. Task pagination implements only `Source` (one half) and is **untouched**;
-events implement `BiSource` (both halves). `List`, `Config`, `Page`, `Source`, and
-`ErrInvalidRequest` are unchanged; we add `BiSource`, `BiPage`, and the `ListBi` entry point. The
-scan direction is not part of any source signature — it survives only as an unexported bit inside
-the opaque token.
+There is a **single** `Source` interface, gaining a `Direction` argument, and two entry points
+that drive it: the existing `List` (one-directional, single next-token — the task list) and a new
+`ListBi` (bidirectional, two tokens — the timeline). A source implements only the directions it
+supports and returns `ErrUnsupportedDirection` for the rest: the task source supports only `Older`
+and errors on `Newer`; the event source supports both. `Config`, `Page`, and `ErrInvalidRequest`
+are unchanged; `List`'s signature is unchanged (it passes `Older` internally); we add `Direction`,
+`ErrUnsupportedDirection`, `BiPage`, and `ListBi`. `Source.Query` gains the `Direction` parameter,
+so the just-landed `taskSource` and `List` are adjusted to thread it — a purely internal refactor
+with no `ListTasks` behavior change.
 
 ```go
-// Source is one keyset half: given a cursor, the page of rows on the far side of
-// it in the list's primary (descending / newest-first) order, plus a row→cursor
-// mapping. A nil cursor is the newest page. This is the whole interface a
-// one-directional list (the task list, via List) needs — unchanged.
+// Direction is which way a keyset page reads relative to its cursor: Older
+// (descending; a nil cursor is the newest page) or Newer (ascending). A binary —
+// "no cursor" is a separate fact (nil cursor / empty token), not a third value. A
+// one-directional list uses only Older; a followed timeline uses both.
+type Direction int8
+
+const (
+    Older Direction = iota
+    Newer
+)
+
+// ErrUnsupportedDirection is returned by a Source asked to page in a direction it
+// does not implement (e.g. the task list, one-directional, asked for Newer). It is
+// a programmer error — List only ever asks for Older — so handlers treat it as
+// internal, not as a bad request.
+var ErrUnsupportedDirection = errors.New("unsupported page direction")
+
+// Source fetches a bounded slice of rows in a direction and maps a row to a cursor.
+// A nil cursor with Older is the newest page. Rows come back in the query's natural
+// order (descending for Older, ascending for Newer); ListBi reverses Older pages so
+// its Items are ascending. A source unsupporting a direction returns
+// ErrUnsupportedDirection.
 type Source[T, C any] interface {
-    Query(ctx context.Context, cursor *C, limit int32) ([]T, error)
+    Query(ctx context.Context, cursor *C, dir Direction, limit int32) ([]T, error)
     Cursor(row T) C
 }
 
-// BiSource extends Source with the opposite (ascending / newer) walk, for
-// append-only timelines that also page toward newer rows and live-follow the tail.
-type BiSource[T, C any] interface {
-    Source[T, C]
-    QueryNewer(ctx context.Context, cursor *C, limit int32) ([]T, error)
-}
-
-// direction is which half a page token resumes from. It is an unexported binary,
-// internal to token encoding — it appears in no source signature. "No cursor" is a
-// separate fact (a nil cursor / empty token), not a third value; the newest page is
-// an older-half read with a nil cursor.
-type direction int8
-
-const (
-    older direction = iota // Source.Query (descending); nil cursor → newest page
-    newer                  // BiSource.QueryNewer (ascending)
-)
-
-// biToken is what a bidirectional page token encodes: a caller cursor plus the half
-// to resume from. A token always carries older (prev) or newer (next).
+// biToken is what a bidirectional page token encodes: a caller cursor plus the
+// direction to resume from. A token always carries Older (prev) or Newer (next);
+// the newest page is the absence of a token.
 type biToken[C any] struct {
     Cursor C         `json:"c"`
-    Dir    direction `json:"d"`
+    Dir    Direction `json:"d"`
 }
 
 // BiPage is one page of a bidirectional keyset list. Items are always ascending
@@ -179,20 +177,20 @@ type BiPage[T any] struct {
     NextToken string // newer page; append-only follow keeps this populated past the tail
 }
 
-// ListBi runs one page of a bidirectional keyset query. An empty pageToken reads
-// the newest page (the older half with no cursor). It over-fetches size+1 to detect
-// more rows in the scanned half, normalizes Items to ascending, and derives both
-// tokens:
+// ListBi runs one page of a bidirectional keyset query against a two-directional
+// Source. An empty pageToken reads the newest page (Older, no cursor). It
+// over-fetches size+1 to detect more rows in the scanned direction, normalizes Items
+// to ascending, and derives both tokens:
 //   - PrevToken (older): from the first row, when older rows remain.
 //   - NextToken (newer): from the last row, always — the stream is append-only and
 //     followed, so the tail is only "currently" the end. An empty forward poll
 //     (no new rows yet) echoes the request token so the caller keeps its place.
-func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken string, src BiSource[T, C]) (*BiPage[T], error) {
+func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken string, src Source[T, C]) (*BiPage[T], error) {
     size := cmp.Or(int(pageSize), cfg.Default)
     if size < 1 || size > cfg.Max {
         return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, cfg.Max)
     }
-    dir := older // no token → newest page (older half, no cursor)
+    dir := Older // no token → newest page (Older, no cursor)
     var cursor *C
     if pageToken != "" {
         t, err := decode[biToken[C]](pageToken)
@@ -201,13 +199,7 @@ func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken
         }
         cursor, dir = &t.Cursor, t.Dir
     }
-    var rows []T
-    var err error
-    if dir == newer {
-        rows, err = src.QueryNewer(ctx, cursor, int32(size+1)) // ascending
-    } else {
-        rows, err = src.Query(ctx, cursor, int32(size+1)) // descending (older half)
-    }
+    rows, err := src.Query(ctx, cursor, dir, int32(size+1))
     if err != nil {
         return nil, err
     }
@@ -215,25 +207,25 @@ func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken
     if more {
         rows = rows[:size]
     }
-    if dir == older {
-        slices.Reverse(rows) // older half is descending → ascending
+    if dir == Older {
+        slices.Reverse(rows) // Older is fetched descending → ascending
     }
     page := &BiPage[T]{Items: rows}
     if len(rows) == 0 {
-        if dir == newer {
+        if dir == Newer {
             page.NextToken = pageToken // empty forward poll → keep the caller's place
         }
         return page, nil // empty newest page → empty stream; client re-requests newest
     }
-    // Older rows remain when scrolling forward (newer, by construction) or when the
-    // older-half scan over-fetched.
-    if dir == newer || more {
-        if page.PrevToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[0]), Dir: older}); err != nil {
+    // Older rows remain when scrolling forward (Newer, by construction) or when the
+    // older-ward scan over-fetched.
+    if dir == Newer || more {
+        if page.PrevToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[0]), Dir: Older}); err != nil {
             return nil, err
         }
     }
     // Newer token is always populated: append-only live-follow.
-    if page.NextToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[len(rows)-1]), Dir: newer}); err != nil {
+    if page.NextToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[len(rows)-1]), Dir: Newer}); err != nil {
         return nil, err
     }
     return page, nil
@@ -242,10 +234,25 @@ func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken
 
 `ListBi` bakes the two timeline-specific rules — always-on `NextToken` and empty-poll echo — so
 the store method is a thin call. (The lone case `ListBi` can't synthesize is an *empty* stream:
-the newest page (older half, nil cursor) with zero rows returns empty tokens. A task effectively
+the newest page (`Older`, nil cursor) with zero rows returns empty tokens. A task effectively
 always has its opening instruction event, and even if not, the web UI simply re-requests the
 newest page on the next signal until the first event lands — no synthetic "zero cursor" is
 needed.)
+
+The existing `List` gains one line — it calls `src.Query(ctx, cursor, Older, size+1)` — and the
+just-landed `taskSource.Query` gains the `Direction` parameter with a guard:
+
+```go
+func (src taskSource) Query(ctx context.Context, cursor *taskCursor, dir pagination.Direction, limit int32) ([]*model.Task, error) {
+    if dir != pagination.Older {
+        return nil, fmt.Errorf("task list: %w", pagination.ErrUnsupportedDirection)
+    }
+    // ... existing ListTasksPage query, unchanged ...
+}
+```
+
+`List` only ever passes `Older`, so the guard never trips in practice; it documents and enforces
+that the task list is one-directional.
 
 ### 3. Store Layer
 
@@ -296,8 +303,8 @@ Notes:
 #### Store method
 
 `internal/store/event.go` — `eventCursor` and `eventSource` are unexported; callers only ever see
-opaque tokens. `eventSource` implements `pagination.BiSource` — its two query methods map 1:1 to
-the two SQL queries:
+opaque tokens. `eventSource` implements `pagination.Source`, supporting both directions (unlike
+`taskSource`, which errors on `Newer`):
 
 ```go
 // eventCursor is the keyset a bidirectional event page token encodes. events.id is
@@ -318,43 +325,39 @@ type ListEventsByTaskPageParams struct {
     PageToken string   // opaque bidirectional cursor; empty for the newest page
 }
 
-// eventSource implements pagination.BiSource for a task's events: the older half
-// (Query) maps to the Backward SQL, the newer half (QueryNewer) to the Forward SQL.
+// eventSource implements pagination.Source for a task's events, supporting both
+// directions: Older → the Backward SQL, Newer → the Forward SQL.
 type eventSource struct {
     store  *Store
     tx     *sql.Tx
     params ListEventsByTaskPageParams
 }
 
-func (src eventSource) types() []string {
-    if src.params.Types == nil {
-        return []string{} // nil encodes as SQL NULL; empty array matches the cardinality(...) = 0 guard
+// Query supports both directions: Newer → the Forward (ascending) SQL; Older
+// (including a nil cursor, the newest page) → the Backward (descending) SQL.
+func (src eventSource) Query(ctx context.Context, cursor *eventCursor, dir pagination.Direction, limit int32) ([]*model.Event, error) {
+    types := src.params.Types
+    if types == nil {
+        types = []string{} // nil encodes as SQL NULL; empty array matches the cardinality(...) = 0 guard
     }
-    return src.params.Types
-}
-
-// Query is the older half (Source): descending; a nil cursor is the newest page.
-func (src eventSource) Query(ctx context.Context, cursor *eventCursor, limit int32) ([]*model.Event, error) {
+    if dir == pagination.Newer {
+        rows, err := src.store.q(src.tx).ListEventsByTaskForward(ctx, sqlc.ListEventsByTaskForwardParams{
+            TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: types,
+            CursorID: cursor.ID, PageLimit: limit,
+        })
+        if err != nil {
+            return nil, err
+        }
+        return toModelEvents(rows)
+    }
     args := sqlc.ListEventsByTaskBackwardParams{
-        TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: src.types(),
+        TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: types,
         UseCursor: cursor != nil, PageLimit: limit,
     }
     if cursor != nil {
         args.CursorID = cursor.ID
     }
     rows, err := src.store.q(src.tx).ListEventsByTaskBackward(ctx, args)
-    if err != nil {
-        return nil, err
-    }
-    return toModelEvents(rows)
-}
-
-// QueryNewer is the newer half (BiSource): ascending, rows after the cursor.
-func (src eventSource) QueryNewer(ctx context.Context, cursor *eventCursor, limit int32) ([]*model.Event, error) {
-    rows, err := src.store.q(src.tx).ListEventsByTaskForward(ctx, sqlc.ListEventsByTaskForwardParams{
-        TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: src.types(),
-        CursorID: cursor.ID, PageLimit: limit,
-    })
     if err != nil {
         return nil, err
     }
@@ -534,13 +537,14 @@ legacy callers (empty page fields) get the full list; the web UI opts into bidir
    `prev_page_token`/`next_page_token` on the response, with the tail / always-populated / empty
    semantics documented on the fields; regenerate Go + webui (`mise run generate`, buf for webui).
    Depends on: nothing. Verifiable by: generated code compiles; no behavior change yet.
-2. **Pagination bidirectional extension** — Delivers: `BiSource` (embedding `Source`), `BiPage`, `ListBi`
-   in `internal/pagination` (existing `List`/`Source` untouched). Depends on: nothing. Verifiable
-   by: package unit tests (mocked `BiSource`) — newest page, scroll-back to exhaustion (`PrevToken`
-   empties), forward follow (`NextToken` always set), empty-forward-poll echo, ascending Items in
-   both directions, page-size bounds, undecodable token → `ErrInvalidRequest`.
+2. **Pagination bidirectional extension** — Delivers: `Direction`, `ErrUnsupportedDirection`,
+   `BiPage`, `ListBi` in `internal/pagination`, plus threading `Direction` through `Source.Query` /
+   `List` / `taskSource` (behavior-preserving). Depends on: nothing. Verifiable by: package unit
+   tests (mocked `Source`) — newest page, scroll-back to exhaustion (`PrevToken` empties), forward
+   follow (`NextToken` always set), empty-forward-poll echo, ascending Items in both directions,
+   page-size bounds, undecodable token → `ErrInvalidRequest`; task list still green.
 3. **Store paged queries + method** — Delivers: `ListEventsByTaskForward` / `ListEventsByTaskBackward`
-   SQL (sqlc-generated), `eventCursor`, `eventSource` (`BiSource`), `Store.ListEventsByTaskPage`.
+   SQL (sqlc-generated), `eventCursor`, `eventSource` (two-directional `Source`), `Store.ListEventsByTaskPage`.
    Depends on: (2) (reuses `idx_events_task_id_id`; no migration). Verifiable by: store unit tests
    against a real DB — walking `prev`/`next` covers the whole stream ascending without gaps/dups; a
    tail `next` token picks up a subsequently-inserted event; `types` filter honored; bad size/token
@@ -575,22 +579,29 @@ shapes. But it is *not* a second, parallel source abstraction — see the next t
 is contained in the package (the store and handler stay thin) and is reusable by the next
 append-only timeline (e.g. an org or run event feed).
 
-### One `Source` hierarchy (task uses the older half) vs two parallel sources
+### One `Source` interface (unsupported directions error) vs two source types
 
-**Chosen: `BiSource` embeds `Source`.** An earlier cut had two independent source interfaces —
-`Source` (one `Query`) for `List`, and a separate `BiSource` (a `Query` taking a `Direction`) for
-`ListBi` — which duplicated the abstraction and forced the events source to branch on direction
-inside one method. Unifying them is cleaner *and* is what the shapes already are: the task list's
-`Source.Query` (rows on the far side of the cursor, descending; nil cursor = newest page) is
-literally the **older half** of a timeline. So `BiSource` is `Source` plus one method,
-`QueryNewer`; the task list implements only `Source` and is untouched, events implement both
-halves, and each method maps 1:1 to one SQL query (no in-method direction switch). Scan direction
-drops out of every source signature — it survives only as an unexported binary inside the opaque
-token (`older`/`newer`), so an earlier concern about a three-state `Newest` value is moot: "no
-anchor" is a nil cursor / empty token, and the newest page is the older half with no cursor. The
-one cost is the mild asymmetry that `Source.Query` *is* the older half by convention (rather than
-a neutrally-named pair `QueryOlder`/`QueryNewer`) — accepted because it keeps `Source` and the
-task list exactly as they are.
+**Chosen: a single `Source` that takes a `Direction`, where a source errors on directions it
+doesn't implement.** `List` and `ListBi` consume the *same* interface; `List` drives it in one
+direction (`Older`), `ListBi` in both. The task source supports only `Older` and returns
+`ErrUnsupportedDirection` for `Newer`; the event source supports both. Two alternatives were
+weighed:
+
+- *Two parallel interfaces* (`Source` for `List`, a separate directional `BiSource` for `ListBi`)
+  duplicates the abstraction.
+- *`BiSource` embedding `Source`* (task implements the base, events add a `QueryNewer` method)
+  gives compile-time proof that a one-directional source can't be asked for the other direction —
+  but at the cost of a second interface and a split-method source.
+
+The single interface is the smallest surface: one `Source`, one `Query`, and "which directions do
+I support?" is answered by the implementation, not by a type. The price is that the guard is a
+**runtime** `ErrUnsupportedDirection` rather than a compile-time impossibility — acceptable because
+`List` only ever passes `Older`, so the task source's guard documents a one-directional contract
+that can't actually be violated through the public entry points. `Direction` stays a binary
+(`Older`/`Newer`) with "no cursor" as a separate fact, so the earlier `Newest`-as-a-third-value
+concern stays resolved. The cost elsewhere is that `Source.Query` and the just-landed `taskSource`
+/ `List` grow the `Direction` parameter — a mechanical, behavior-preserving refactor of the task
+pagination code.
 
 ### Always-populated `next_page_token` vs empty-token-means-done
 
@@ -649,5 +660,5 @@ and a followed timeline is a shape the codebase will hit again.
    many rows. Acceptable now; if it bites, add `(task_id, type, id)`. Worth pre-empting, or defer
    until measured?
 4. **`ListExternalEvents` (org feed).** The org-level external feed (`ListEvents`, bare `limit`, no
-   cursor) has the same unbounded shape and could adopt `ListBi` with an org-scoped `BiSource`. In
+   cursor) has the same unbounded shape and could adopt `ListBi` with an org-scoped `Source`. In
    scope as a follow-up, or a separate proposal?
