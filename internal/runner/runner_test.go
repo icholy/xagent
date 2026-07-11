@@ -161,6 +161,64 @@ func TestRunnerStart(t *testing.T) {
 	assert.DeepEqual(t, testx.ExtractField(mock.SubmittedRunnerEvents(), "Event"), []string{"started", "stopped"})
 }
 
+// TestRunnerSpec_PreCreatesLogDir asserts the sandbox spec ships a directory
+// entry for the driver's /xagent/log parent, created 0777 so a non-root driver
+// can write the append-only log file there (the driver's MkdirAll is only a
+// fallback).
+func TestRunnerSpec_PreCreatesLogDir(t *testing.T) {
+	t.Parallel()
+
+	mock := &xagentclient.ClientMock{
+		CreateTaskTokenFunc: func(_ context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
+			return &xagentv1.CreateTaskTokenResponse{Token: "test-token"}, nil
+		},
+	}
+	client := xagentclient.New(xagentclient.Options{BaseURL: "http://localhost"})
+	be, err := dockerbackend.New(dockerbackend.Options{RunnerID: "test-runner"})
+	assert.NilError(t, err)
+	queue, err := NewRunnerEventOutbox(RunnerEventOutboxOptions{
+		StoreDir: t.TempDir(),
+		Client:   client,
+		Backoff:  backoff.NewConstantBackOff(0),
+		Log:      slog.Default(),
+	})
+	assert.NilError(t, err)
+	r, err := New(Options{
+		Client:    mock,
+		Backend:   be,
+		Store:     testStore(t),
+		ServerURL: "http://localhost",
+		Queue:     queue,
+		Workspaces: &workspace.Config{
+			Workspaces: map[string]workspace.Workspace{
+				"test": {
+					Container: workspace.Container{Image: "alpine:latest"},
+					Agent:     workspace.Agent{Type: "dummy"},
+				},
+			},
+		},
+		Concurrency: 1,
+		RunnerID:    "test-runner",
+	})
+	assert.NilError(t, err)
+	t.Cleanup(func() { r.Close() })
+
+	task := &model.Task{ID: 1, Runner: "test-runner", Workspace: "test", Version: 1}
+	spec, err := r.spec(t.Context(), task)
+	assert.NilError(t, err)
+
+	logDir := filepath.Dir(agent.DefaultLogPath)
+	var found bool
+	for _, f := range spec.Files {
+		if f.Path == logDir {
+			found = true
+			assert.Assert(t, f.Dir)
+			assert.Equal(t, f.Mode, int64(0o777))
+		}
+	}
+	assert.Assert(t, found, "spec should pre-create the log dir %q", logDir)
+}
+
 // submitted drives the outbox until it drains the persisted events, then returns
 // the events it delivered through the mock client. The outbox's first Run pass
 // delivers everything already persisted, so this exercises the same durable path

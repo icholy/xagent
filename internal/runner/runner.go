@@ -496,6 +496,10 @@ func (r *Runner) spec(ctx context.Context, task *model.Task) (*backend.Spec, err
 			// Allow non-root agents to write to this directory.
 			{Path: path.Dir(agent.DefaultConfigStore.Path(task.ID)), Mode: 0777, Dir: true},
 			{Path: agent.DefaultConfigStore.Path(task.ID), Data: cfgData, Mode: 0666},
+			// Pre-create the log dir 0777 so a non-root driver can write the
+			// append-only /xagent/log file (the driver's MkdirAll is only a
+			// fallback for a directly-invoked driver).
+			{Path: path.Dir(agent.DefaultLogPath), Mode: 0777, Dir: true},
 		},
 	}, nil
 }
