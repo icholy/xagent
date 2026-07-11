@@ -40,6 +40,12 @@ type InputEvent struct {
 	// Attrs carries the event's matchable dimensions keyed by dimension name
 	// (e.g. "mention", "assignee", "label"), which the attribute matcher reads.
 	Attrs Attrs
+	// Details is source-defined key/value context copied verbatim into the
+	// persisted ExternalPayload for consumers (agent, UI). It is distinct from
+	// Attrs: Attrs are matchable routing dimensions the matcher reads and the
+	// router drops after routing; Details is persisted payload the router does
+	// not interpret.
+	Details map[string]string
 	// Meta carries source-specific data that the router does not interpret. It
 	// lets webhook handlers attach native identity (e.g. the GitHub author)
 	// without leaking source-specific types into eventrouter.
@@ -243,6 +249,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 			Description: input.Description,
 			URL:         input.URL,
 			Data:        input.Data,
+			Details:     input.Details,
 		},
 	}
 	notification := model.Notification{
@@ -338,6 +345,7 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 				Description: input.Description,
 				URL:         input.URL,
 				Data:        input.Data,
+				Details:     input.Details,
 			},
 		}); err != nil {
 			return err
