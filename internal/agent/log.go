@@ -93,11 +93,23 @@ func (l *DriverLog) Sink() io.Writer {
 	return l.sink
 }
 
+// Stdout returns a writer that tees a subprocess's stdout to os.Stdout and the
+// sink. os.Stdout stays wired, so docker logs output is unchanged.
+func (l *DriverLog) Stdout() io.Writer {
+	return io.MultiWriter(os.Stdout, l.Sink())
+}
+
+// Stderr returns a writer that tees a subprocess's stderr to os.Stderr and the
+// sink. os.Stderr stays wired, so docker logs output is unchanged.
+func (l *DriverLog) Stderr() io.Writer {
+	return io.MultiWriter(os.Stderr, l.Sink())
+}
+
 // StartRun writes the per-run delimiter to os.Stderr and the sink before the
 // run's first event, so an operator can find run boundaries in the single
 // append-only log (runs are not split into separate files).
 func (l *DriverLog) StartRun(version int64) {
-	fmt.Fprintf(io.MultiWriter(os.Stderr, l.Sink()), "==== run version=%d pid=%d ====\n", version, os.Getpid())
+	fmt.Fprintf(l.Stderr(), "==== run version=%d pid=%d ====\n", version, os.Getpid())
 }
 
 // Close releases the underlying log file, if any.
