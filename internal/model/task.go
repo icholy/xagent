@@ -2,6 +2,7 @@ package model
 
 import (
 	"cmp"
+	"log/slog"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/authscope"
@@ -86,6 +87,19 @@ type Task struct {
 func (t *Task) Clone() *Task {
 	c := *t
 	return &c
+}
+
+// LogValue implements slog.LogValuer, rendering the task's core state
+// (id, status, command, version) as a grouped attribute. This lets a task be
+// logged as a single structured value — e.g. "original"/"updated" snapshots
+// around the ApplyRunnerEvent fold, where the pair reads as a transition.
+func (t *Task) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.Int64("id", t.ID),
+		slog.Any("status", t.Status),
+		slog.Any("command", t.Command),
+		slog.Int64("version", t.Version),
+	)
 }
 
 // ScopeAttr returns the authscope attributes describing this task, for the

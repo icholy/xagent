@@ -44,9 +44,9 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			if !caller.Scopes.Allow(authscope.OpTaskWrite, task.ScopeAttr()...) {
 				return connect.NewError(connect.CodePermissionDenied, errors.New("cannot submit runner events"))
 			}
-			// Snapshot the task before the fold: ApplyRunnerEvent can legitimately
-			// bump the version and clear the command, so the pre-fold version,
-			// command, and status must be read from the original to diagnose
+			// Snapshot the task before the fold: ApplyRunnerEvent mutates it in
+			// place (it can bump the version and clear the command), so the
+			// original and updated tasks are logged side by side to diagnose
 			// stale-vs-state rejections and read applied events as a transition.
 			original := task.Clone()
 			applied := task.ApplyRunnerEvent(&event)
@@ -54,12 +54,10 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 				"task_id", event.TaskID,
 				"event", event.Event,
 				"version", event.Version,
-				"task_version", original.Version,
-				"command", original.Command,
-				"from_status", original.Status,
-				"status", task.Status,
 				"reason", event.Reason,
 				"applied", applied,
+				"original", original,
+				"updated", task,
 			)
 			if !applied {
 				notification.Ignore = true
