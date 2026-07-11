@@ -27,23 +27,16 @@ export const Route = createFileRoute('/tasks/')({
 function TasksPage() {
   const orgId = useOrgId()
 
-  const {
-    data,
-    isLoading,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    refetch,
-  } = useInfiniteQuery(
-    listTasks,
-    { pageSize: 50 },
-    {
-      pageParamKey: 'pageToken',
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
-      refetchInterval: 60000,
-    },
-  )
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
+    useInfiniteQuery(
+      listTasks,
+      { pageSize: 50, pageToken: '' },
+      {
+        pageParamKey: 'pageToken',
+        getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+        refetchInterval: 60000,
+      },
+    )
 
   if (isLoading) {
     return (
