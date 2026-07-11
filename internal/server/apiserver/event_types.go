@@ -43,3 +43,17 @@ func (s *Server) GetEventTypes(ctx context.Context, req *xagentv1.GetEventTypesR
 	}
 	return &xagentv1.GetEventTypesResponse{EventTypes: pb}, nil
 }
+
+// TestEvent feeds a hand-composed synthetic event into the real routing code
+// scoped to the caller's org (see proposals/draft/test-event-injection.md). The
+// dry-run and fire handlers are later layers; this stub only enforces the scope
+// gate — OpOrgRead, the dry-run scope the proposal assigns in layer 3 — so the
+// method denies a scopeless caller before returning CodeUnimplemented. Layer 3
+// replaces the unimplemented tail with the real dry-run logic behind this gate.
+func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) (*xagentv1.TestEventResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	if !caller.Scopes.Allow(authscope.OpOrgRead) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read org"))
+	}
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.TestEvent is not implemented"))
+}
