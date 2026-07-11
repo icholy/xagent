@@ -104,14 +104,17 @@ type Router struct {
 }
 
 // RouteMatch is the read-only result of evaluating routing rules for one org:
-// the rule that matched and its position in the org's configured list. It is
-// what a dry run reports and what apply consumes. The subscribed-link lookup and
-// the wake-vs-create decision are derived from this by the caller, not stored
-// here.
+// the rule that matched and its position in the org's rule set. It is what a dry
+// run reports and what apply consumes. The subscribed-link lookup and the
+// wake-vs-create decision are derived from this by the caller, not stored here.
 type RouteMatch struct {
 	OrgID     int64
 	Rule      *model.RoutingRule
-	RuleIndex int // index into the org's configured rules (-1 = shipped default)
+	RuleIndex int // position of the matched rule within the org's rule set
+	// RuleDefault is true when Rule came from the shipped default rules (used for
+	// ruleless orgs) rather than the org's configured list; RuleIndex then indexes
+	// those defaults, not the configured rules.
+	RuleDefault bool
 }
 
 // Plan evaluates routing rules for the event and returns one RouteMatch per org
@@ -135,8 +138,8 @@ func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, erro
 	var matches []RouteMatch
 	for _, org := range orgs {
 		rules := org.Rules
-		// RuleIndex points into the org's configured rules; -1 flags a match
-		// against the shipped default rules used for ruleless orgs.
+		// defaulted flags whether the matched rule set is the shipped defaults,
+		// surfaced on the RouteMatch as RuleDefault instead of an index sentinel.
 		defaulted := false
 		if len(rules) == 0 && org.IsMember {
 			// Ruleless orgs fall back to the producers' per-type "xagent:"
@@ -154,11 +157,7 @@ func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, erro
 				continue
 			}
 			if Match(rule, input) {
-				index := i
-				if defaulted {
-					index = -1
-				}
-				matches = append(matches, RouteMatch{OrgID: org.OrgID, Rule: &rule, RuleIndex: index})
+				matches = append(matches, RouteMatch{OrgID: org.OrgID, Rule: &rule, RuleIndex: i, RuleDefault: defaulted})
 				break
 			}
 		}
