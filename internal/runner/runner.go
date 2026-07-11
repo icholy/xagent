@@ -318,12 +318,12 @@ func (r *Runner) Load(ctx context.Context) error {
 		}
 		switch st {
 		case backend.StateRunning: // container up / VM RUNNING: re-attach
-			go r.supervise(ctx, rec.TaskID, h)
+			go r.supervise(ctx, rec.TaskID, rec.Version, h)
 			running++
 		case backend.StateExited: // stopped container / SUSPENDED VM (husk preserved)
-			r.failIfTaskRunning(ctx, rec.TaskID)
+			r.failIfTaskRunning(ctx, rec.TaskID, rec.Version)
 		case backend.StateGone: // removed / TERMINATED: the bound sandbox vanished
-			r.failIfTaskRunning(ctx, rec.TaskID)
+			r.failIfTaskRunning(ctx, rec.TaskID, rec.Version)
 			if err := r.store.Remove(rec.TaskID); err != nil {
 				r.log.Error("load: remove dangling record", "task", rec.TaskID, "err", err)
 			}
@@ -337,7 +337,7 @@ func (r *Runner) Load(ctx context.Context) error {
 // failIfTaskRunning emits a "failed" event for a task whose sandbox is no longer
 // running but whose server status is still RUNNING — the driver's terminal report was
 // lost, so "failed" is the honest outcome (see the driver-owned-events proposal).
-func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
+func (r *Runner) failIfTaskRunning(ctx context.Context, taskID, version int64) {
 	task, err := r.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: taskID})
 	if err != nil {
 		r.log.Error("failed to get task", "task", taskID, "err", err)
@@ -347,11 +347,14 @@ func (r *Runner) failIfTaskRunning(ctx context.Context, taskID int64) {
 		return
 	}
 	r.log.Error("load: sandbox exited without reporting", "task", taskID)
-	// Use version 0 to bypass version check (spontaneous events)
+	// Scope the backstop to the run that exited: a legacy record's version 0
+	// bypasses the guard, a stamped version only applies while the task is still
+	// on that run.
 	if err := r.queue.Enqueue(model.RunnerEvent{
-		TaskID: taskID,
-		Event:  model.RunnerEventFailed,
-		Reason: "sandbox exited",
+		TaskID:  taskID,
+		Version: version,
+		Event:   model.RunnerEventFailed,
+		Reason:  "sandbox exited",
 	}); err != nil {
 		r.die(fmt.Errorf("persist %s for task %d: %w", model.RunnerEventFailed, taskID, err))
 		return
@@ -540,10 +543,11 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 		return err
 	}
 	if err := r.store.Write(taskstate.Record{
-		TaskID: task.ID,
-		Type:   h.Type,
-		ID:     h.ID,
-		Data:   h.Data,
+		TaskID:  task.ID,
+		Version: task.Version,
+		Type:    h.Type,
+		ID:      h.ID,
+		Data:    h.Data,
 	}); err != nil {
 		// The taskstate store is the runner's other durable local store; a write
 		// failure here is the same non-transient disk failure as an outbox
@@ -555,7 +559,7 @@ func (r *Runner) Start(ctx context.Context, task *model.Task) error {
 	// Observe the exit on the runner's root context: Wait is level-triggered and
 	// spawned after the record is persisted, so an exit in the launch→persist
 	// window is not lost.
-	go r.supervise(ctx, task.ID, h)
+	go r.supervise(ctx, task.ID, task.Version, h)
 	return nil
 }
 
@@ -578,7 +582,7 @@ func (r *Runner) gone(taskID int64) error {
 // Otherwise a non-zero exit code means the driver's report was lost, so "failed"
 // is the honest outcome (see the driver-owned-events proposal); exit 0 means the
 // driver already reported and nothing is owed.
-func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) {
+func (r *Runner) supervise(ctx context.Context, taskID, version int64, h backend.Handle) {
 	code, err := r.backend.Wait(ctx, h)
 	if errors.Is(err, context.Canceled) {
 		return // shutdown: leave the sandbox alive for next-boot rehydration
@@ -590,11 +594,14 @@ func (r *Runner) supervise(ctx context.Context, taskID int64, h backend.Handle) 
 		return
 	}
 	r.log.Error("sandbox exited without reporting", "task", taskID, "exitCode", int(code))
-	// Use version 0 to bypass version check (spontaneous events)
+	// Scope the backstop to the run that exited: a legacy record's version 0
+	// bypasses the guard, a stamped version only applies while the task is still
+	// on that run.
 	if err := r.queue.Enqueue(model.RunnerEvent{
-		TaskID: taskID,
-		Event:  model.RunnerEventFailed,
-		Reason: fmt.Sprintf("sandbox exited with status code %d", code),
+		TaskID:  taskID,
+		Version: version,
+		Event:   model.RunnerEventFailed,
+		Reason:  fmt.Sprintf("sandbox exited with status code %d", code),
 	}); err != nil {
 		r.die(fmt.Errorf("persist %s for task %d: %w", model.RunnerEventFailed, taskID, err))
 		return
