@@ -48,16 +48,17 @@ So the only channel that survives to both the agent and the UI is the persisted
 > `CodeLocation` message to `ExternalPayload`. Review feedback (icholy on #1307) was that
 > this couples the shared payload to specific event types — the payload schema should not
 > grow a GitHub-shaped message. This version replaces it with a **generic, source-defined
-> attribute bag**: `ExternalPayload` learns nothing about "code location"; it just carries
+> details bag**: `ExternalPayload` learns nothing about "code location"; it just carries
 > an opaque `map<string, string>` of extra context, and the GitHub extractor is the only
-> code that knows the `path`/`line`/… keys.
+> code that knows the `path`/`line`/… keys. (The map is named `details`, not `attributes`,
+> to stay well clear of the router's routing-only `Attrs` — see Where it lives.)
 
-Add an optional, generic **attributes** map to `ExternalPayload`, populate it in the
+Add an optional, generic **details** map to `ExternalPayload`, populate it in the
 GitHub webhook extractor for review comments, and render it in the timeline. Because the
 agent and UI both read the `ExternalPayload` proto directly, one map reaches both with no
 per-consumer plumbing, and the payload stays source-agnostic.
 
-### Which attributes to keep
+### Which details to keep
 
 The map is opaque to the schema, but the GitHub extractor and the consumers agree on a
 key convention. The minimum useful anchor is `path` + `line`; we also set `side`,
@@ -101,12 +102,12 @@ message ExternalPayload {
   string description = 1;
   string url = 2;
   string data = 3;
-  // attributes carries optional, source-defined key/value context for consumers
+  // details carries optional, source-defined key/value context for consumers
   // (the agent via get_my_task, the web UI timeline). The payload does not
   // interpret it: GitHub review comments populate path/line/side/diff_hunk; other
   // sources may set their own keys or none. Distinct from the router's matchable
   // Attrs, which are not persisted.
-  map<string, string> attributes = 4;
+  map<string, string> details = 4;
 }
 ```
 
@@ -117,11 +118,11 @@ type ExternalPayload struct {
     Description string            `json:"description"`
     URL         string            `json:"url"`
     Data        string            `json:"data"`
-    Attributes  map[string]string `json:"attributes,omitempty"`
+    Details     map[string]string `json:"details,omitempty"`
 }
 ```
 
-`omitempty` means existing JSONB rows (which have no `attributes` key) round-trip
+`omitempty` means existing JSONB rows (which have no `details` key) round-trip
 unchanged. `SetPayloadProto` / `EventPayloadFromProto` copy the map through.
 
 **Why a generic map, and not the alternatives:**
@@ -134,7 +135,7 @@ unchanged. `SetPayloadProto` / `EventPayloadFromProto` copy the map through.
 - **Not "another URL"** — the review-comment `url` we already store *is* a deep link: it
   anchors to the exact diff line for a human who clicks it. A second URL would duplicate
   that and still couldn't carry a machine-readable line, side, or the diff hunk. The gap
-  is *consumable* location data, which the attribute map fills while the existing `url`
+  is *consumable* location data, which the details map fills while the existing `url`
   keeps serving the human deep-link.
 - **Not `Data`** — `Data` is the comment body verbatim; agent and UI treat it as the
   human's message. Prepending `path:line` pollutes the body, is lossy (no room for a diff
@@ -142,11 +143,14 @@ unchanged. `SetPayloadProto` / `EventPayloadFromProto` copy the map through.
 - **Not (only) `Description`** — `Description` is a one-line human summary. We *do* fold
   the path and line into it as a cheap readability win (below), but it can't carry a diff
   hunk or machine-readable keys. Structured-ish context belongs in the map.
-- **Distinct from routing `Attrs`** — the router already has
+- **Distinct from routing `Attrs` — and named to stay that way** — the router already has
   `Attrs map[string][]string`, but those are matchable dimensions consumed by the matcher
   and **dropped after routing** (see the task's "keep routing separate" constraint). The
-  new `attributes` map is persisted payload the router does not interpret; it is not a
-  routing dimension, so nothing here adds `path`/`diff_hunk` to the rule surface.
+  new `details` map is persisted payload the router does not interpret; it is not a
+  routing dimension, so nothing here adds `path`/`diff_hunk` to the rule surface. The name
+  is deliberately `details`, not `attributes`: `InputEvent.Attributes` sitting beside
+  `InputEvent.Attrs` — one persisted, one routing-only-and-dropped — would be too easy to
+  confuse. `Details` vs `Attrs` reads as two clearly different things.
 
 ### Carrying it through the router
 
@@ -157,12 +161,12 @@ only three fields off `InputEvent`. `InputEvent` therefore needs to carry the ma
 ```go
 // eventrouter.InputEvent
 
-// Attributes is source-defined key/value context copied verbatim into the
+// Details is source-defined key/value context copied verbatim into the
 // persisted ExternalPayload for consumers (agent, UI). It is distinct from
 // Attrs: Attrs are matchable routing dimensions the matcher reads and the
-// router drops after routing; Attributes are persisted payload the router does
+// router drops after routing; Details is persisted payload the router does
 // not interpret.
-Attributes map[string]string
+Details map[string]string
 ```
 
 copied into the payload as:
@@ -172,14 +176,15 @@ Payload: &model.ExternalPayload{
     Description: input.Description,
     URL:         input.URL,
     Data:        input.Data,
-    Attributes:  input.Attributes,
+    Details:     input.Details,
 },
 ```
 
-The router forwards it the same way it forwards `Data`, without interpreting it. (The
-near-identical names `Attrs` vs `Attributes` are a readability smell — see Open Questions.)
+The router forwards it the same way it forwards `Data`, without interpreting it. The name
+`Details` (not `Attributes`) keeps it visually distinct from the routing-only `Attrs`
+right beside it on `InputEvent`.
 
-**There are two `ExternalPayload` construction sites, and both must copy `Attributes`:**
+**There are two `ExternalPayload` construction sites, and both must copy `Details`:**
 
 - `Router.attach` (~`eventrouter.go:242`) — the **wake path**: an event routed to an
   already-subscribed task.
@@ -201,25 +206,25 @@ line := c.GetLine()
 if line == 0 { // GitHub sends a null line for comments on an outdated diff
     line = c.GetOriginalLine() // fall back, but record no freshness claim
 }
-attrs := map[string]string{
+details := map[string]string{
     "path": c.GetPath(),
     "line": strconv.Itoa(line),
 }
 if s := c.GetStartLine(); s != 0 {
-    attrs["start_line"] = strconv.Itoa(s)
+    details["start_line"] = strconv.Itoa(s)
 }
 if s := c.GetSide(); s != "" {
-    attrs["side"] = s
+    details["side"] = s
 }
 if h := c.GetDiffHunk(); h != "" {
-    attrs["diff_hunk"] = h
+    details["diff_hunk"] = h
 }
 
 description := fmt.Sprintf("%s reviewed PR #%d", login, number)
 if path := c.GetPath(); path != "" {
     description = fmt.Sprintf("%s reviewed PR #%d (%s:%d)", login, number, path, line)
 }
-// ... InputEvent{ ..., Description: description, Attributes: attrs }
+// ... InputEvent{ ..., Description: description, Details: details }
 ```
 
 The description enrichment means even the existing timeline row and the existing `data`
@@ -227,12 +232,12 @@ channel immediately read better, before any UI change lands.
 
 ### Web UI
 
-`ExternalPayload.attributes` flows to the generated TS client automatically. The timeline
+`ExternalPayload.details` flows to the generated TS client automatically. The timeline
 needs three small changes:
 
-1. `webui/src/lib/timeline.ts` — add an optional `attributes` map to the `external`
+1. `webui/src/lib/timeline.ts` — add an optional `details` map to the `external`
    `TimelineItem` variant and populate it in `eventsToTimeline` from the proto.
-2. `webui/src/components/task-timeline.tsx` (`ExternalRow`) — when `attributes.path` is
+2. `webui/src/components/task-timeline.tsx` (`ExternalRow`) — when `details.path` is
    present, render a monospace `path:line` chip (linking to `item.url`, which already
    deep-links to the comment) between the description and the body. Optionally render
    `diff_hunk` in a collapsed `<pre>` — since the numbers are only capture-time hints, the
@@ -257,17 +262,17 @@ Atlassian integration (`internal/server/atlassianserver/webhook.go`) produces
 (`internal/x/atlassian/webhook.go`, `Comment{ID, Body, Author}`) has no file/line anchor,
 and there is no Bitbucket integration in the tree. If a code-review source (Bitbucket PR
 comments) is added later, its extractor simply sets the same `path`/`line`/… keys on the
-same `attributes` map — no proto or model change.
+same `details` map — no proto or model change.
 
 ### Backward compatibility
 
 - **Stored events**: `events.payload` is schemaless JSONB; no migration. Existing rows
-  have no `attributes` key, so the `omitempty` Go field and the unset proto field leave
+  have no `details` key, so the `omitempty` Go field and the unset proto field leave
   them reading exactly as before.
 - **Proto**: adding a `map` field 4 to `ExternalPayload` is additive; older clients ignore
   the unknown field.
 - **Agent / UI**: both already tolerate an absent field — `get_my_task` omits an empty map
-  from the JSON, and `ExternalRow` guards on `attributes?.path` being present.
+  from the JSON, and `ExternalRow` guards on `details?.path` being present.
 
 ### Out of scope: routing attrs
 
@@ -275,41 +280,41 @@ This proposal is about the payload the agent consumes, not new rule conditions. 
 `path` routing dimension (so a rule could match comments on a given file) is a separate
 concern and is deferred. It would be a cheap addition to the routing `Attrs` if desired
 later, but it changes the routing surface and should be proposed on its own. The persisted
-`attributes` map is intentionally kept distinct from routing `Attrs` for exactly this
+`details` map is intentionally kept distinct from routing `Attrs` for exactly this
 reason.
 
 ## Implementation Plan
 
-1. **Proto + model: `attributes` map** — Delivers: the `ExternalPayload.attributes`
+1. **Proto + model: `details` map** — Delivers: the `ExternalPayload.details`
    map field, regenerated proto, and the Go `map[string]string` mirror wired through
    `SetPayloadProto` / `EventPayloadFromProto` with the `omitempty` JSON tag. Depends on:
    nothing. Verifiable by: `ExternalPayload` proto↔model round-trip unit tests, including
-   an old-shape payload (no `attributes`) unmarshalling cleanly.
-2. **Router plumbing** — Delivers: `InputEvent.Attributes` and its copy into the persisted
+   an old-shape payload (no `details`) unmarshalling cleanly.
+2. **Router plumbing** — Delivers: `InputEvent.Details` and its copy into the persisted
    `ExternalPayload` at **both** construction sites — `Router.attach` (wake path) and
    `Router.create` (rule-created-task path). Depends on: (1). Verifiable by: `eventrouter`
-   tests that route an `InputEvent` with `Attributes` down each path and assert the
+   tests that route an `InputEvent` with `Details` down each path and assert the
    persisted event carries them — including the `create` path, so a rule-created task
    doesn't silently drop the location.
-3. **GitHub extractor** — Delivers: `toInputEvent` populating `Attributes` for
+3. **GitHub extractor** — Delivers: `toInputEvent` populating `Details` for
    `pull_request_review_comment` (path, line with the `original_line` fallback, start_line,
    side, diff_hunk) and folding `path:line` into the description. Depends on: (2).
    Verifiable by: a webhook table test asserting the built `InputEvent` for a sample
    review-comment payload, covering both the current-diff case (`line` set) and the
    null-`line` case where the key is populated from `original_line`.
-4. **Web UI** — Delivers: the `attributes` map in `timeline.ts` and the `path:line` chip
+4. **Web UI** — Delivers: the `details` map in `timeline.ts` and the `path:line` chip
    (plus optional collapsed diff-hunk) in `ExternalRow`. Depends on: (1). Verifiable by:
-   rendering the timeline against an event with `attributes`, and `pnpm lint`.
+   rendering the timeline against an event with `details`, and `pnpm lint`.
 
 ## Trade-offs
 
-- **Generic attribute map vs. a structured per-source message.** Chosen (after review): a
+- **Generic details map vs. a structured per-source message.** Chosen (after review): a
   generic `map<string, string>`. It keeps `ExternalPayload` free of GitHub/code-review
   specifics — the shared payload is what every external event uses, so it shouldn't grow a
   type only review comments populate. Cost: values are stringly-typed and the key set is a
   convention rather than a schema, so producer and consumers must agree on names; the
   consumer does a little more work than reading a typed field.
-- **Attribute map vs. "another URL".** Chosen: the map. The existing `url` already
+- **Details map vs. "another URL".** Chosen: the map. The existing `url` already
   deep-links a human to the exact line; a second URL can't carry a machine-readable
   line/side or the diff hunk, which is precisely the consumable data the agent needs.
 - **One generic map vs. the string channels (`Data`/`Description`).** Chosen: the map,
@@ -322,11 +327,6 @@ reason.
 
 ## Open Questions
 
-- **`Attrs` vs `Attributes` naming.** The persisted `InputEvent.Attributes` sits right next
-  to the routing `InputEvent.Attrs`, and the near-identical names invite confusion. Options:
-  live with it plus clear doc comments (current plan), or rename the routing field to
-  `RoutingAttrs` in a separate cleanup. Leaning on doc comments to keep this proposal
-  scoped.
 - **Cap `diff_hunk`?** A comment on a wide multi-line range can produce a long hunk. Do we
   store it whole, or truncate to the last N lines around the anchor? Leaning whole in the
   first cut, revisit if payloads get large.
