@@ -56,6 +56,7 @@ The package is storage- and proto-agnostic — it deals in plain ints, strings, 
 package pagination
 
 import (
+    "cmp"
     "context"
     "encoding/base64"
     "encoding/json"
@@ -97,10 +98,7 @@ type Source[T, C any] interface {
 // trimmed and NextToken is encoded from src.Cursor(last returned row);
 // otherwise NextToken is empty.
 func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken string, src Source[T, C]) (*Page[T], error) {
-    size := int(pageSize)
-    if size == 0 {
-        size = cfg.Default
-    }
+    size := cmp.Or(int(pageSize), cfg.Default)
     if size < 1 || size > cfg.Max {
         return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, cfg.Max)
     }
