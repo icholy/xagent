@@ -47,7 +47,7 @@ The `page_token` is opaque to clients. The server encodes the keyset of the last
 
 ### 2. Pagination Package
 
-The mechanical parts — page-size validation, token encode/decode, and the "fetch one extra, trim, build next token" dance — live in a small generic package, **`internal/pagination`**, consumed by the store. Its exported surface is deliberately tiny: a `Config`, a `Page[T]` result, one sentinel error, and a single `List` entry point that runs a whole page end-to-end around a query closure. Per-store-method code only supplies the two things that are genuinely query-specific: the **cursor type** and the function that derives a cursor from a result row.
+The mechanical parts — page-size validation, token encode/decode, and the "fetch one extra, trim, build next token" dance — live in a small generic package, **`internal/pagination`**, consumed by the store. Its exported surface is deliberately tiny: a `Config`, a `Page[T]` result, one sentinel error, a `Source[T, C]` interface, and a single `List` entry point that runs a whole page end-to-end against a `Source`. Per-store-method code only supplies the things that are genuinely query-specific: the **cursor type** and a small `Source` implementation providing the query and the row-to-cursor mapping.
 
 The package is storage- and proto-agnostic — it deals in plain ints, strings, and generic type parameters, so it has no dependency on `sqlc`, `connect`, or the proto package.
 
@@ -56,6 +56,7 @@ The package is storage- and proto-agnostic — it deals in plain ints, strings, 
 package pagination
 
 import (
+    "context"
     "encoding/base64"
     "encoding/json"
     "errors"
@@ -78,18 +79,24 @@ type Page[T any] struct {
     NextToken string // empty when there are no more results
 }
 
-// List runs one page of a keyset-paginated query. It validates pageSize
-// against cfg, decodes pageToken into a cursor of type C (nil on the first
-// page), and calls query with the cursor and a limit of size+1. If the extra
-// row came back there is a next page: the row is trimmed and NextToken is
-// encoded from cursorOf(last returned row); otherwise NextToken is empty.
-func List[T, C any](
-    cfg Config,
-    pageSize int32,
-    pageToken string,
-    query func(cursor *C, limit int32) ([]T, error),
-    cursorOf func(T) C,
-) (*Page[T], error) {
+// Source supplies the query-specific parts of a keyset-paginated list:
+// how to fetch a bounded slice of rows after a cursor, and how to derive
+// a cursor from a returned row.
+type Source[T, C any] interface {
+    // Query fetches up to limit rows that sort after cursor.
+    // A nil cursor means the first page.
+    Query(ctx context.Context, cursor *C, limit int32) ([]T, error)
+    // Cursor returns the keyset of row; it is what page tokens encode.
+    Cursor(row T) C
+}
+
+// List runs one page of a keyset-paginated query against src. It validates
+// pageSize against cfg, decodes pageToken into a cursor of type C (nil on
+// the first page), and calls src.Query with the cursor and a limit of
+// size+1. If the extra row came back there is a next page: the row is
+// trimmed and NextToken is encoded from src.Cursor(last returned row);
+// otherwise NextToken is empty.
+func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken string, src Source[T, C]) (*Page[T], error) {
     size := int(pageSize)
     if size == 0 {
         size = cfg.Default
@@ -105,14 +112,14 @@ func List[T, C any](
         }
         cursor = &c
     }
-    items, err := query(cursor, int32(size+1))
+    items, err := src.Query(ctx, cursor, int32(size+1))
     if err != nil {
         return nil, err
     }
     page := &Page[T]{Items: items}
     if len(items) > size {
         page.Items = items[:size]
-        token, err := encode(cursorOf(page.Items[size-1]))
+        token, err := encode(src.Cursor(page.Items[size-1]))
         if err != nil {
             return nil, err
         }
@@ -140,7 +147,7 @@ func decode[C any](token string) (C, error) {
 }
 ```
 
-The same `List` call backs any future paginated store method (`ListEventsPage`, `ListLogsPage`, …) — each one adds only its cursor struct and closures.
+The same `List` call backs any future paginated store method (`ListEventsPage`, `ListLogsPage`, …) — each one adds only its cursor struct and `Source` implementation.
 
 ### 3. SQL Query
 
@@ -181,7 +188,7 @@ CREATE INDEX tasks_org_created_id_idx
 
 `internal/store/task.go` — the paged variant lives alongside the existing `ListTasks` and owns everything pagination-related: the cursor type, the page-size bounds, and the token format. Its params mirror the proto's pagination fields as plain ints and strings, so the RPC handler can pass them through untouched.
 
-The keyset is `(created_at, id)` because `created_at` alone is not unique — two tasks can share a timestamp, so `id` is the tiebreaker. The cursor struct is unexported: no one outside the store ever sees a cursor, only opaque tokens.
+The keyset is `(created_at, id)` because `created_at` alone is not unique — two tasks can share a timestamp, so `id` is the tiebreaker. The store implements `pagination.Source` with an unexported `taskSource` type that carries the `Store`, the transaction, and the request params as fields. Both `taskCursor` and `taskSource` are unexported: no one outside the store ever sees a cursor, only opaque tokens.
 
 ```go
 // taskCursor is the keyset a task page token encodes. created_at is not
@@ -200,28 +207,37 @@ type ListTasksPageParams struct {
     PageToken string // opaque token from a previous page; empty for the first page
 }
 
+// taskSource implements pagination.Source for the tasks table.
+type taskSource struct {
+    store  *Store
+    tx     *sql.Tx
+    params ListTasksPageParams
+}
+
+func (src taskSource) Query(ctx context.Context, cursor *taskCursor, limit int32) ([]*model.Task, error) {
+    args := sqlc.ListTasksPageParams{
+        OrgID:     src.params.OrgID,
+        Filter:    src.params.Filter,
+        UseCursor: cursor != nil,
+        PageLimit: limit,
+    }
+    if cursor != nil {
+        args.CursorCreatedAt = cursor.CreatedAt
+        args.CursorID = cursor.ID
+    }
+    rows, err := src.store.q(src.tx).ListTasksPage(ctx, args)
+    if err != nil {
+        return nil, err
+    }
+    return toModelTasks(rows)
+}
+
+func (src taskSource) Cursor(t *model.Task) taskCursor {
+    return taskCursor{CreatedAt: t.CreatedAt, ID: t.ID}
+}
+
 func (s *Store) ListTasksPage(ctx context.Context, tx *sql.Tx, p ListTasksPageParams) (*pagination.Page[*model.Task], error) {
-    return pagination.List(listTasksPaging, p.PageSize, p.PageToken,
-        func(cursor *taskCursor, limit int32) ([]*model.Task, error) {
-            args := sqlc.ListTasksPageParams{
-                OrgID:     p.OrgID,
-                Filter:    p.Filter,
-                UseCursor: cursor != nil,
-                PageLimit: limit,
-            }
-            if cursor != nil {
-                args.CursorCreatedAt = cursor.CreatedAt
-                args.CursorID = cursor.ID
-            }
-            rows, err := s.q(tx).ListTasksPage(ctx, args)
-            if err != nil {
-                return nil, err
-            }
-            return toModelTasks(rows)
-        },
-        func(t *model.Task) taskCursor {
-            return taskCursor{CreatedAt: t.CreatedAt, ID: t.ID}
-        })
+    return pagination.List(ctx, listTasksPaging, p.PageSize, p.PageToken, taskSource{store: s, tx: tx, params: p})
 }
 ```
 
@@ -312,10 +328,10 @@ No other RPC clients consume `ListTasksResponse` in a way that breaks: adding `n
 
 ### 8. Implementation Order
 
-1. `internal/pagination` package (`Config`, `Page`, `ErrInvalidRequest`, `List`) + unit tests — independent of everything else, can land first.
+1. `internal/pagination` package (`Config`, `Page`, `Source`, `ErrInvalidRequest`, `List`) + unit tests — independent of everything else, can land first.
 2. Proto changes + regenerate (`mise run generate` for Go, `pnpm` buf generate for webui).
 3. SQL migration: add `tasks_org_created_id_idx`; add the `ListTasksPage` query; `sqlc` generate.
-4. Store layer: `taskCursor`, `ListTasksPageParams`, `ListTasksPage`.
+4. Store layer: `taskCursor`, `taskSource`, `ListTasksPageParams`, `ListTasksPage`.
 5. Server handler: pass-through wiring + `errors.Is` mapping.
 6. Web UI: `useInfiniteQuery`, debounced server-side filter, "Load more".
 7. Tests (package round-trip + bounds; store-level keyset correctness and token round-trip driven entirely through `ListTasksPage`; handler validation).
@@ -342,9 +358,13 @@ The costs are minor: the store must distinguish caller mistakes from internal fa
 
 ### Reusable package vs open-coding in the store
 
-**Chosen: an `internal/pagination` package.** Token encode/decode, page-size bounds, and the over-fetch-and-trim step are mechanical and identical for every keyset-paginated store method. Open-coding them in `ListTasksPage` invites copy-paste drift when the next method (`ListEventsPage`, `ListLogsPage`) is paginated. The generic `List` helper keeps each store method down to one call with a query closure and a `cursorOf` mapping; only the cursor struct is written per method. The trade-off is a generics-heavy helper for what is, today, a single caller — acceptable since the package is ~70 lines and the issue's framing ("the task **pages**") plus the un-paginated `ListExternalEvents` both point at more paginated lists soon.
+**Chosen: an `internal/pagination` package.** Token encode/decode, page-size bounds, and the over-fetch-and-trim step are mechanical and identical for every keyset-paginated store method. Open-coding them in `ListTasksPage` invites copy-paste drift when the next method (`ListEventsPage`, `ListLogsPage`) is paginated. The generic `List` helper keeps each store method down to a `Source` implementation and a one-line `List` call; only the cursor struct and the two `Source` methods are written per method. The trade-off is a generics-heavy helper for what is, today, a single caller — acceptable since the package is ~80 lines and the issue's framing ("the task **pages**") plus the un-paginated `ListExternalEvents` both point at more paginated lists soon.
 
 Placement: `internal/pagination` as proposed. Now that the store is its only consumer, `internal/store/pagination` is also defensible, as is `internal/x/pagination` to match the utility convention — reviewer's call.
+
+### `Source` interface vs closure parameters
+
+**Chosen: a `Source[T, C]` interface.** An earlier revision passed the query and the row-to-cursor mapping to `List` as two positional function parameters. The interface names that contract instead: the implementation is a small struct (`taskSource`) whose dependencies — the `Store`, the transaction, the request params — are explicit fields rather than variables captured by closures, `ctx` flows through `Query` explicitly instead of being closed over, and the two methods carry their documentation with them. The `List` call site shrinks to a single argument, and a `Source` can be exercised on its own (e.g. testing `Query`'s keyset behavior against a real database) without going through `List`. The cost is a few lines of struct boilerplate per paginated list.
 
 ### "Load more" vs numbered pages vs infinite scroll
 
