@@ -130,18 +130,19 @@ scan direction, so add a **bidirectional** entry point alongside the existing on
 
 ```go
 // Direction is which way a bidirectional keyset page reads relative to its cursor.
-// The empty token (no cursor) is the newest page; a non-empty token always carries
-// Older or Newer.
+// It is a strict binary — "is there a cursor?" is a separate fact, carried by the
+// nil-ness of the cursor, not a third direction value (see the trade-off on
+// Direction). The newest page is an Older read with a nil cursor.
 type Direction int8
 
 const (
-    Newest Direction = iota // no cursor: the newest (tail) page
-    Older                    // rows older than the cursor (scroll back)
-    Newer                    // rows newer than the cursor (scroll forward / follow)
+    Older Direction = iota // rows older than the cursor (scroll back); nil cursor → newest page
+    Newer                  // rows newer than the cursor (scroll forward / follow)
 )
 
 // biToken is what a bidirectional page token encodes: a caller cursor plus the
-// direction to read from it.
+// direction to read from it. A token always carries Older (prev) or Newer (next);
+// the newest page is the absence of a token, never a distinct direction value.
 type biToken[C any] struct {
     Cursor C         `json:"c"`
     Dir    Direction `json:"d"`
@@ -156,8 +157,9 @@ type BiPage[T any] struct {
 }
 
 // BiSource fetches a bounded slice of rows in a direction and maps a row to a
-// cursor. Rows are returned in the query's natural order (descending for
-// Newest/Older, ascending for Newer); ListBi normalizes Items to ascending.
+// cursor. Rows are returned in the query's natural order (descending for Older,
+// ascending for Newer); ListBi normalizes Items to ascending. A nil cursor with
+// Older reads the newest page (unbounded descending).
 type BiSource[T, C any] interface {
     Query(ctx context.Context, cursor *C, dir Direction, limit int32) ([]T, error)
     Cursor(row T) C
@@ -175,7 +177,7 @@ func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken
     if size < 1 || size > cfg.Max {
         return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, cfg.Max)
     }
-    dir := Newest
+    dir := Older // no token → newest page (unbounded Older read)
     var cursor *C
     if pageToken != "" {
         t, err := decode[biToken[C]](pageToken)
@@ -192,18 +194,18 @@ func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken
     if more {
         rows = rows[:size]
     }
-    if dir != Newer {
-        slices.Reverse(rows) // Newest/Older are fetched descending → ascending
+    if dir == Older {
+        slices.Reverse(rows) // Older is fetched descending → ascending
     }
     page := &BiPage[T]{Items: rows}
     if len(rows) == 0 {
         if dir == Newer {
             page.NextToken = pageToken // empty forward poll → keep the caller's place
         }
-        return page, nil // empty Newest/Older page → empty stream; client re-requests newest
+        return page, nil // empty newest page → empty stream; client re-requests newest
     }
     // Older rows remain when scrolling forward (Newer, by construction) or when the
-    // older-ward scan over-fetched (Newest/Older).
+    // older-ward scan over-fetched.
     if dir == Newer || more {
         if page.PrevToken, err = encode(biToken[C]{Cursor: src.Cursor(rows[0]), Dir: Older}); err != nil {
             return nil, err
@@ -219,9 +221,10 @@ func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken
 
 `ListBi` bakes the two timeline-specific rules — always-on `NextToken` and empty-poll echo — so
 the store method is a thin call. (The lone case `ListBi` can't synthesize is an *empty* stream:
-`Newest` with zero rows returns empty tokens. A task effectively always has its opening
-instruction event, and even if not, the web UI simply re-requests the newest page on the next
-signal until the first event lands — no synthetic "zero cursor" is needed.)
+the newest page (Older, nil cursor) with zero rows returns empty tokens. A task effectively
+always has its opening instruction event, and even if not, the web UI simply re-requests the
+newest page on the next signal until the first event lands — no synthetic "zero cursor" is
+needed.)
 
 ### 3. Store Layer
 
@@ -315,7 +318,7 @@ func (src eventSource) Query(ctx context.Context, cursor *eventCursor, dir pagin
         }
         return toModelEvents(rows)
     }
-    // Newest (cursor == nil) and Older both scan descending.
+    // Older scans descending; a nil cursor is the newest page (no lower bound).
     args := sqlc.ListEventsByTaskBackwardParams{
         TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: types,
         UseCursor: cursor != nil, PageLimit: limit,
@@ -544,6 +547,19 @@ The cost is that `internal/pagination` grows direction awareness — a second en
 ascending. That is more surface than the one-directional `List`, but it is contained in the
 package (the store and handler stay thin) and is reusable by the next append-only timeline (e.g.
 an org or run event feed).
+
+### Direction as a binary (`Older`/`Newer`) vs a three-state with `Newest`
+
+**Chosen: a strict binary, with "no anchor" carried by a nil cursor.** An earlier cut gave
+`Direction` a third value, `Newest`, for the no-cursor bootstrap. That conflates two orthogonal
+facts — *is there a cursor?* and *which way do we read?* — and makes an illegal state
+representable: a page token could encode `Newest`, even though the newest page is exactly the case
+with **no** token. Collapsing it to two directions and representing "no anchor" as a nil cursor
+removes that footgun — a token always carries `Older` or `Newer`, and the newest page is just an
+`Older` read with no lower bound. It is also strictly *more* general, not a corner: an
+oldest-started list (were one ever wanted) is the mirror case — a `Newer` read with a nil cursor —
+so the binary leaves both ends open with no new enum members, whereas `Newest` had baked one
+list's start policy into the direction type.
 
 ### Always-populated `next_page_token` vs empty-token-means-done
 
