@@ -117,7 +117,7 @@ func (s *FileStore) Append(payload json.RawMessage) error {
 	if err != nil {
 		return fmt.Errorf("outbox: marshal record: %w", err)
 	}
-	if err := atomicio.WriteFile(s.livePath(seq), data); err != nil {
+	if err := atomicio.WriteFile(s.livePath(seq), data, 0o600); err != nil {
 		return err
 	}
 	s.live.PushBack(rec)
