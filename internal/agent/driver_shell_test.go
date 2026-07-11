@@ -48,8 +48,9 @@ func TestRun_ForksIntoShell(t *testing.T) {
 	}
 	d := &Driver{TaskID: 1, Client: mock, Log: slog.Default(), ServerURL: srv.URL, Token: "t"}
 
+	resp := &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: 1, ShellSession: "s1"}}
 	runErr := make(chan error, 1)
-	go func() { runErr <- d.run(t.Context()) }()
+	go func() { runErr <- d.run(t.Context(), resp) }()
 
 	// Connect the operator leg and exercise the shell the fork spawned.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
