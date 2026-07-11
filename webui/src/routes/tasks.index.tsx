@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery, useMutation } from '@connectrpc/connect-query'
+import { useInfiniteQuery, useMutation } from '@connectrpc/connect-query'
 import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
@@ -16,10 +15,9 @@ import {
 import { StatusBadge } from '@/components/status-badge'
 import { ArchiveButton } from '@/components/archive-button'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
-import { Plus, Search, X } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/tasks/')({
@@ -28,12 +26,21 @@ export const Route = createFileRoute('/tasks/')({
 
 function TasksPage() {
   const orgId = useOrgId()
-  const [searchQuery, setSearchQuery] = useState('')
 
-  const { data, isLoading, error, refetch } = useQuery(
+  const {
+    data,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery(
     listTasks,
-    {},
+    { pageSize: 50 },
     {
+      pageParamKey: 'pageToken',
+      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
       refetchInterval: 60000,
     },
   )
@@ -54,39 +61,13 @@ function TasksPage() {
     )
   }
 
-  const allTasks = data?.tasks ?? []
-  const search = searchQuery.trim().toLowerCase()
-  const tasks = allTasks.filter((task) => {
-    if (search && !(task.name || `Unnamed - ${task.id}`).toLowerCase().includes(search)) {
-      return false
-    }
-    return true
-  })
+  const tasks = data?.pages.flatMap((p) => p.tasks) ?? []
 
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Filter..."
-              className="pl-8 pr-8 w-48"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
           <Link to="/tasks/new" search={{ org: orgId }}>
             <Button>
               <Plus className="h-4 w-4" />
@@ -98,23 +79,36 @@ function TasksPage() {
       {tasks.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">No tasks found</div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead className="hidden md:table-cell">Runner</TableHead>
-              <TableHead className="hidden md:table-cell">Workspace</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden md:table-cell">Created</TableHead>
-              <TableHead className="hidden md:table-cell"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tasks.map((task) => (
-              <TaskRow key={String(task.id)} task={task} onUpdate={refetch} />
-            ))}
-          </TableBody>
-        </Table>
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead className="hidden md:table-cell">Runner</TableHead>
+                <TableHead className="hidden md:table-cell">Workspace</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="hidden md:table-cell">Created</TableHead>
+                <TableHead className="hidden md:table-cell"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tasks.map((task) => (
+                <TaskRow key={String(task.id)} task={task} onUpdate={refetch} />
+              ))}
+            </TableBody>
+          </Table>
+          {hasNextPage && (
+            <div className="flex justify-center py-6">
+              <Button
+                variant="outline"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? 'Loading...' : 'Load more'}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
