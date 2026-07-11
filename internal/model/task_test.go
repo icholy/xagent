@@ -108,14 +108,15 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: false,
 		},
 		{
-			name: "started: cancelled -> cancelling with stop",
+			name: "started: cancelled -> cancelling with stop (no bump)",
 			before: Task{
-				Status: TaskStatusCancelled,
+				Status:  TaskStatusCancelled,
+				Version: 3,
 			},
 			after: Task{
 				Status:  TaskStatusCancelling,
 				Command: TaskCommandStop,
-				Version: 1,
+				Version: 3,
 			},
 			event: RunnerEvent{
 				Event: RunnerEventStarted,
@@ -123,15 +124,16 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: true,
 		},
 		{
-			name: "started: archived completed -> cancelling with stop",
+			name: "started: archived completed -> cancelling with stop (no bump)",
 			before: Task{
 				Status:   TaskStatusCompleted,
 				Archived: true,
+				Version:  3,
 			},
 			after: Task{
 				Status:   TaskStatusCancelling,
 				Command:  TaskCommandStop,
-				Version:  1,
+				Version:  3,
 				Archived: true,
 			},
 			event: RunnerEvent{
@@ -234,17 +236,20 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			changed: false,
 		},
 		{
-			name: "stopped: running with start command -> pending (ready to restart)",
+			name: "stopped: running with start command -> pending, bumps to next run",
 			before: Task{
 				Status:  TaskStatusRunning,
 				Command: TaskCommandStart,
+				Version: 3,
 			},
 			after: Task{
 				Status:  TaskStatusPending,
 				Command: TaskCommandStart,
+				Version: 4,
 			},
 			event: RunnerEvent{
-				Event: RunnerEventStopped,
+				Event:   RunnerEventStopped,
+				Version: 3,
 			},
 			changed: true,
 		},
@@ -383,6 +388,88 @@ func TestTask_ApplyRunnerEvent(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTask_RunVersionScenarios walks multi-step sequences where the version
+// acts as the run counter (proposals/draft/task-run-versions.md): the counter
+// moves exactly at run boundaries and never under a live run unless a restart
+// deliberately disowns it.
+func TestTask_RunVersionScenarios(t *testing.T) {
+	t.Parallel()
+
+	t.Run("back-to-back wakes coalesce into one bump at the exit fold", func(t *testing.T) {
+		// Run 1 is live; three wakes arrive before the runner reacts.
+		task := Task{Status: TaskStatusRunning, Version: 1}
+		for range 3 {
+			assert.Assert(t, task.Start())
+		}
+		// Each fold set command=start idempotently; the version stayed with run 1.
+		assert.DeepEqual(t, task, Task{
+			Status:  TaskStatusRunning,
+			Command: TaskCommandStart,
+			Version: 1,
+		})
+		// Run 1 exits: its stopped (scoped to 1) applies, folds Running+start ->
+		// Pending, and bumps to run 2 with the command kept for the runner.
+		assert.Assert(t, task.ApplyRunnerEvent(&RunnerEvent{Event: RunnerEventStopped, Version: 1}))
+		assert.DeepEqual(t, task, Task{
+			Status:  TaskStatusPending,
+			Command: TaskCommandStart,
+			Version: 2,
+		})
+		// Run 2 starts and sees all three instructions — one physical follow-up run.
+		assert.Assert(t, task.ApplyRunnerEvent(&RunnerEvent{Event: RunnerEventStarted, Version: 2}))
+		assert.DeepEqual(t, task, Task{Status: TaskStatusRunning, Version: 2})
+	})
+
+	t.Run("versioned cancel round-trip lands cancelled", func(t *testing.T) {
+		// Run 3 is live; cancel does not bump, so the live driver's stopped
+		// (scoped to 3) still matches and cancellation does not wedge.
+		task := Task{Status: TaskStatusRunning, Version: 3}
+		assert.Assert(t, task.Cancel())
+		assert.DeepEqual(t, task, Task{
+			Status:  TaskStatusCancelling,
+			Command: TaskCommandStop,
+			Version: 3,
+		})
+		assert.Assert(t, task.ApplyRunnerEvent(&RunnerEvent{Event: RunnerEventStopped, Version: 3}))
+		assert.DeepEqual(t, task, Task{Status: TaskStatusCancelled, Version: 3})
+	})
+
+	t.Run("restart disowns the killed run", func(t *testing.T) {
+		// Run 1 is live; restart provisions run 2 and disowns run 1.
+		task := Task{Status: TaskStatusRunning, Version: 1}
+		assert.Assert(t, task.Restart())
+		assert.DeepEqual(t, task, Task{
+			Status:  TaskStatusRestarting,
+			Command: TaskCommandRestart,
+			Version: 2,
+		})
+		// The killed run 1's terminal stopped is stale and rejected.
+		assert.Assert(t, !task.ApplyRunnerEvent(&RunnerEvent{Event: RunnerEventStopped, Version: 1}))
+		assert.DeepEqual(t, task, Task{
+			Status:  TaskStatusRestarting,
+			Command: TaskCommandRestart,
+			Version: 2,
+		})
+		// Run 2's started consumes the restart command.
+		assert.Assert(t, task.ApplyRunnerEvent(&RunnerEvent{Event: RunnerEventStarted, Version: 2}))
+		assert.DeepEqual(t, task, Task{Status: TaskStatusRunning, Version: 2})
+	})
+
+	t.Run("version 0 bypasses the run scope", func(t *testing.T) {
+		// A spontaneous failure from a dead run stamps version 0 and applies
+		// regardless of the task's current run.
+		task := Task{Status: TaskStatusRunning, Version: 7}
+		assert.Assert(t, task.ApplyRunnerEvent(&RunnerEvent{Event: RunnerEventFailed, Version: 0}))
+		assert.DeepEqual(t, task, Task{Status: TaskStatusFailed, Version: 7})
+	})
+
+	t.Run("event scoped to a different run is rejected", func(t *testing.T) {
+		task := Task{Status: TaskStatusRunning, Version: 7}
+		assert.Assert(t, !task.ApplyRunnerEvent(&RunnerEvent{Event: RunnerEventStopped, Version: 6}))
+		assert.DeepEqual(t, task, Task{Status: TaskStatusRunning, Version: 7})
+	})
 }
 
 func TestRunnerEvent_LifecycleEvent_FailedReason(t *testing.T) {
@@ -534,9 +621,9 @@ func TestTask_Cancel(t *testing.T) {
 		want   bool
 	}{
 		{
-			name:   "from running succeeds",
-			before: Task{Status: TaskStatusRunning},
-			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 1},
+			name:   "from running succeeds without bumping (version stays with live run)",
+			before: Task{Status: TaskStatusRunning, Version: 3},
+			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 3},
 			want:   true,
 		},
 		{
@@ -564,9 +651,9 @@ func TestTask_Cancel(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "from restarting succeeds",
-			before: Task{Status: TaskStatusRestarting},
-			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 1},
+			name:   "from restarting succeeds without bumping",
+			before: Task{Status: TaskStatusRestarting, Version: 3},
+			after:  Task{Status: TaskStatusCancelling, Command: TaskCommandStop, Version: 3},
 			want:   true,
 		},
 		{
@@ -676,9 +763,9 @@ func TestTask_Start(t *testing.T) {
 		want   bool
 	}{
 		{
-			name:   "from running succeeds without changing status",
-			before: Task{Status: TaskStatusRunning},
-			after:  Task{Status: TaskStatusRunning, Command: TaskCommandStart, Version: 1},
+			name:   "from running succeeds without changing status or version",
+			before: Task{Status: TaskStatusRunning, Version: 3},
+			after:  Task{Status: TaskStatusRunning, Command: TaskCommandStart, Version: 3},
 			want:   true,
 		},
 		{
