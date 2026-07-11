@@ -410,7 +410,7 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, nil)
 	assert.NilError(t, err)
 	assert.DeepEqual(t,
-		model.FilterPayloads(events, []string{model.EventTypeExternal, model.EventTypeLifecycle}),
+		model.FilterPayloads(events, model.EventTypeExternal, model.EventTypeLifecycle),
 		[]model.EventPayload{
 			&model.ExternalPayload{
 				Description: "PR comment from alice",
@@ -468,7 +468,7 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
 	assert.DeepEqual(t,
-		model.FilterPayloads(events, []string{model.EventTypeInstruction}),
+		model.FilterPayloads(events, model.EventTypeInstruction),
 		[]model.EventPayload{
 			&model.InstructionPayload{Text: "Triage this issue."},
 		},
@@ -490,7 +490,7 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	linkEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeLink})
 	assert.NilError(t, err)
 	assert.DeepEqual(t,
-		model.FilterPayloads(linkEvents, []string{model.EventTypeLink}),
+		model.FilterPayloads(linkEvents, model.EventTypeLink),
 		[]model.EventPayload{
 			&model.LinkPayload{LinkID: links[0].ID, Relevance: "trigger", URL: url, Subscribe: true},
 		},
@@ -520,7 +520,7 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	externalEvents, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeExternal})
 	assert.NilError(t, err)
 	assert.DeepEqual(t,
-		model.FilterPayloads(externalEvents, []string{model.EventTypeExternal}),
+		model.FilterPayloads(externalEvents, model.EventTypeExternal),
 		[]model.EventPayload{
 			&model.ExternalPayload{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this"},
 		},
@@ -564,7 +564,7 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 	events, err := s.ListEventsByTask(t.Context(), nil, task.ID, org.OrgID, []string{model.EventTypeInstruction})
 	assert.NilError(t, err)
 	assert.DeepEqual(t,
-		model.FilterPayloads(events, []string{model.EventTypeInstruction}),
+		model.FilterPayloads(events, model.EventTypeInstruction),
 		[]model.EventPayload{
 			&model.InstructionPayload{
 				Text: "You were created by a routing rule in response to a github issue_comment event.",
