@@ -50,6 +50,10 @@ export type TimelineItem =
       description: string
       data?: string
       url?: string
+      // Source-defined key/value context copied from ExternalPayload.details.
+      // The schema is opaque; the UI applies a light convention over well-known
+      // keys (path/line/side/start_line/diff_hunk set by the GitHub extractor).
+      details?: Record<string, string>
       wakes?: boolean
     }
   | {
@@ -186,6 +190,7 @@ export function eventsToTimeline(events: Event[]): TimelineItem[] {
           description: v.description,
           data: v.data || undefined,
           url: v.url || undefined,
+          details: Object.keys(v.details).length > 0 ? v.details : undefined,
           wakes: e.wake,
         })
         break

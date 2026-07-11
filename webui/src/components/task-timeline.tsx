@@ -145,6 +145,7 @@ function ExternalRow({ item }: { item: Extract<TimelineItem, { kind: 'external' 
         </div>
         <div className="border-t border-amber-300/40 px-4 py-3">
           <p className="text-sm font-medium text-foreground">{item.description}</p>
+          {item.details && <CodeLocation details={item.details} url={item.url} />}
           {item.data && (
             <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">{item.data}</p>
           )}
@@ -152,6 +153,58 @@ function ExternalRow({ item }: { item: Extract<TimelineItem, { kind: 'external' 
         </div>
       </div>
     </Row>
+  )
+}
+
+// CodeLocation renders the well-known keys the GitHub extractor sets on
+// ExternalPayload.details for PR review comments: a monospace path:line chip
+// (deep-linking to the comment via the event url) and, when present, the
+// diff_hunk in a collapsed <details>. The line numbers are only capture-time
+// hints while the diff hunk is the durable anchor, so the chip stays compact
+// and the hunk sits one click away. Keys other than the ones we recognize are
+// ignored — the payload schema is generic, the UI convention is light.
+function CodeLocation({ details, url }: { details: Record<string, string>; url?: string }) {
+  const path = details.path
+  if (!path) return null
+
+  const line = details.line
+  const startLine = details.start_line
+  const lineLabel = startLine && line && startLine !== line ? `${startLine}-${line}` : line
+  const label = lineLabel ? `${path}:${lineLabel}` : path
+  const side = details.side
+  const hunk = details.diff_hunk
+
+  const chipClass =
+    'inline-flex max-w-full items-center break-all rounded border border-amber-300/60 bg-amber-100/60 px-1.5 py-0.5 font-mono text-xs text-foreground dark:bg-amber-900/30'
+
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(chipClass, 'hover:border-primary hover:text-primary')}
+          >
+            {label}
+          </a>
+        ) : (
+          <span className={chipClass}>{label}</span>
+        )}
+        {side && <span className="text-[10px] uppercase text-muted-foreground">{side}</span>}
+      </div>
+      {hunk && (
+        <details>
+          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-primary">
+            Diff context
+          </summary>
+          <pre className="mt-1 overflow-x-auto rounded border bg-muted/50 p-2 font-mono text-xs leading-relaxed text-foreground">
+            {hunk}
+          </pre>
+        </details>
+      )}
+    </div>
   )
 }
 
