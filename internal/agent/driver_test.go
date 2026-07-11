@@ -3,7 +3,10 @@ package agent
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -242,6 +245,60 @@ func TestDriverRun_GetTaskError(t *testing.T) {
 	// supervise backstop reports the lost run via the non-zero exit code.
 	assert.ErrorContains(t, err, "failed to get task")
 	assert.Assert(t, cmp.Len(mock.SubmittedRunnerEvents(), 0))
+}
+
+// withLogSink points the driver's sink and slog logger at a real file (as the
+// command wires them in production), and returns a func to read it back.
+func withLogSink(t *testing.T, driver *Driver) func() string {
+	t.Helper()
+	logPath := filepath.Join(t.TempDir(), "log")
+	sink, err := OpenLogSink(logPath)
+	assert.NilError(t, err)
+	t.Cleanup(func() { _ = sink.Close() })
+	driver.LogSink = sink
+	driver.Log = slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, sink), nil))
+	return func() string {
+		data, err := os.ReadFile(logPath)
+		assert.NilError(t, err)
+		return string(data)
+	}
+}
+
+func TestDriverRun_LogsToSink(t *testing.T) {
+	t.Parallel()
+	// Arrange - a driver teeing into a real append-only log file
+	driver, _ := setupDriver(t, &Config{Type: TypeDummy})
+	read := withLogSink(t, driver)
+
+	// Act - two runs against the same file
+	assert.NilError(t, driver.Run(t.Context()))
+	assert.NilError(t, driver.Run(t.Context()))
+
+	// Assert - the run delimiter and the driver's slog lines both reach the log,
+	// and the second run appended a second delimiter below the first.
+	got := read()
+	assert.Assert(t, cmp.Contains(got, "==== run version=7 pid="))
+	assert.Assert(t, cmp.Contains(got, "loaded config"))
+	assert.Equal(t, strings.Count(got, "==== run version="), 2)
+}
+
+func TestDriverRun_SetupCommandOutputTeed(t *testing.T) {
+	t.Parallel()
+	// Arrange - a setup command that writes to stdout and stderr then fails
+	driver, _ := setupDriver(t, &Config{
+		Type:     TypeDummy,
+		Commands: []string{"echo out-marker; echo err-marker >&2; false"},
+	})
+	read := withLogSink(t, driver)
+
+	// Act
+	assert.NilError(t, driver.Run(t.Context()))
+
+	// Assert - the failing command's stdout and stderr land in the log next to
+	// the setup-failure the operator would otherwise see with no output.
+	got := read()
+	assert.Assert(t, cmp.Contains(got, "out-marker"))
+	assert.Assert(t, cmp.Contains(got, "err-marker"))
 }
 
 func TestConfigPrompt(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 )
 
@@ -49,12 +50,16 @@ type Options struct {
 	Log        *slog.Logger
 	Verbose    bool
 	McpServers map[string]McpServer
-	Claude     *ClaudeOptions
-	Codex      *CodexOptions
-	Copilot    *CopilotOptions
-	Cursor     *CursorOptions
-	Sloppy     *SloppyOptions
-	Dummy      *DummyOptions
+	// LogSink tees the underlying CLI's stderr into the driver's append-only
+	// /xagent/log file. It defaults to io.Discard when unset, so the stderr
+	// wiring degrades to plain os.Stderr.
+	LogSink io.Writer
+	Claude  *ClaudeOptions
+	Codex   *CodexOptions
+	Copilot *CopilotOptions
+	Cursor  *CursorOptions
+	Sloppy  *SloppyOptions
+	Dummy   *DummyOptions
 }
 
 // ClaudeOptions contains Claude-specific agent options.
@@ -118,6 +123,7 @@ func NewAgent(opts Options) (Agent, error) {
 			verbose:    opts.Verbose,
 			mcpServers: opts.McpServers,
 			options:    opts.Claude,
+			logSink:    cmp.Or(opts.LogSink, io.Writer(io.Discard)),
 		}, nil
 	case TypeCodex:
 		return &CodexAgent{

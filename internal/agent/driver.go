@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -25,11 +26,28 @@ type Driver struct {
 	Log    *slog.Logger
 	Config ConfigStore // where the task config file lives
 
+	// LogSink is the append-only /xagent/log file the driver tees its setup
+	// command and Claude CLI output into (see proposals/implemented/
+	// driver-logs-to-sandbox.md). The command opens it; it defaults to
+	// io.Discard when unset so tests and directly-constructed drivers behave
+	// exactly as before. os.Stdout/os.Stderr stay in every tee, so docker logs
+	// output is unchanged.
+	LogSink io.Writer
+
 	// ServerURL and Token are the driver's own server credentials, reused to dial
 	// the shell relay WebSocket when the task is a debug-shell run. They mirror
 	// the values passed to xagentclient.New for Client above.
 	ServerURL string
 	Token     string
+}
+
+// sink returns the log sink, defaulting to io.Discard when LogSink is unset so
+// the tees degrade to plain os.Stdout/os.Stderr behavior.
+func (d *Driver) sink() io.Writer {
+	if d.LogSink == nil {
+		return io.Discard
+	}
+	return d.LogSink
 }
 
 // Run executes the task and reports its outcome to the server. The driver
@@ -70,6 +88,12 @@ func (d *Driver) Run(ctx context.Context) error {
 	}
 	task := resp.GetTask()
 	version := task.GetVersion()
+
+	// Write a run delimiter before the first event so an operator can find run
+	// boundaries in the single append-only log (runs are not split per file).
+	// It goes to os.Stderr (docker logs) and the sink (the /xagent/log file)
+	// alike; a directly-constructed driver with no sink writes only to stderr.
+	fmt.Fprintf(io.MultiWriter(os.Stderr, d.sink()), "==== run version=%d pid=%d ====\n", version, os.Getpid())
 
 	// Report started: replaces the startup ping — an acked submit proves the
 	// connection, token, server, and DB are all healthy.
@@ -166,6 +190,7 @@ func (d *Driver) runAgent(ctx context.Context) error {
 		Cursor:     cfg.Cursor,
 		Sloppy:     cfg.Sloppy,
 		Dummy:      cfg.Dummy,
+		LogSink:    d.sink(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
@@ -206,8 +231,12 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 		command := cfg.Commands[i]
 		d.Log.Info("Running setup command", "index", i, "command", command)
 		c := exec.CommandContext(ctx, "sh", "-c", command)
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
+		// Tee the command's output into the log sink so an opaque setup failure
+		// ("setup command N failed") has the command's actual stdout/stderr
+		// sitting next to it in /xagent/log. os.Stdout/os.Stderr stay wired so
+		// docker logs is unchanged.
+		c.Stdout = io.MultiWriter(os.Stdout, d.sink())
+		c.Stderr = io.MultiWriter(os.Stderr, d.sink())
 		if err := c.Run(); err != nil {
 			return fmt.Errorf("setup command %d failed: %w", i, err)
 		}
