@@ -54,6 +54,9 @@ jobs:
           mkdir -p prebuilt
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o prebuilt/xagent-linux-amd64 ./cmd/xagent
 
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.13.0
+
       - name: Run migrations
         env:
           DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
@@ -62,4 +65,4 @@ jobs:
       - name: Run tests
         env:
           TEST_DATABASE_URL: postgres://xagent:xagent@localhost:5432/xagent?sslmode=disable
-        run: go test -v ./...
+        run: gotestsum --format github-actions -- -v ./...
