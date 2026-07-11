@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"syscall"
@@ -16,25 +15,11 @@ import (
 
 // ClaudeAgent implements Agent using Claude Code CLI.
 type ClaudeAgent struct {
-	log        *slog.Logger
+	log        *DriverLog
 	cwd        string
 	verbose    bool
 	mcpServers map[string]McpServer
 	options    *ClaudeOptions
-	// logSink tees the CLI's stderr into the driver's /xagent/log file. Claude's
-	// stdout is the JSON stream we parse into tool summaries (which already flow
-	// through the slog tee), so it is deliberately not teed raw. Defaults to
-	// io.Discard.
-	logSink io.Writer
-}
-
-// sink returns the log sink, defaulting to io.Discard when unset (e.g. a
-// directly-constructed agent) so the stderr tee never writes to a nil writer.
-func (a *ClaudeAgent) sink() io.Writer {
-	if a.logSink == nil {
-		return io.Discard
-	}
-	return a.logSink
 }
 
 // Prompt sends a prompt to Claude and waits for completion.
@@ -82,7 +67,7 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 	// Tee Claude's stderr into the log sink (os.Stderr stays so docker logs is
 	// unchanged). Stdout is not teed raw — it is the JSON stream parsed below
 	// into a.log tool summaries, which already reach the sink via the slog tee.
-	cmd.Stderr = io.MultiWriter(os.Stderr, a.sink())
+	cmd.Stderr = io.MultiWriter(os.Stderr, a.log.Sink())
 
 	// Prevent claude code from auto-updating & allow skipping permissions as root user
 	cmd.Env = append(os.Environ(), "IS_SANDBOX=1", "DISABLE_AUTOUPDATER=1")

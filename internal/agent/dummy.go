@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"time"
@@ -15,7 +14,7 @@ import (
 
 // DummyAgent is a no-op agent implementation for testing.
 type DummyAgent struct {
-	log        *slog.Logger
+	log        *DriverLog
 	cwd        string
 	mcpServers map[string]McpServer
 	options    *DummyOptions

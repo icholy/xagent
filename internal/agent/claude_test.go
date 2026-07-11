@@ -25,13 +25,14 @@ func TestClaudePrompt_StderrTeed(t *testing.T) {
 		`echo '{"type":"assistant","message":{"content":[{"type":"text","text":"hi-from-claude"}]}}'` + "\n"
 	assert.NilError(t, os.WriteFile(bin, []byte(script), 0o755))
 
+	// Separate the logger's output (logBuf) from the raw stderr sink so the
+	// assertions can tell parsed summaries apart from teed stderr.
 	var sink bytes.Buffer
 	var logBuf bytes.Buffer
 	a := &ClaudeAgent{
-		log:     slog.New(slog.NewTextHandler(&logBuf, nil)),
+		log:     &DriverLog{Logger: *slog.New(slog.NewTextHandler(&logBuf, nil)), sink: &sink},
 		cwd:     dir,
 		options: &ClaudeOptions{Bin: bin},
-		logSink: &sink,
 	}
 
 	// Act
