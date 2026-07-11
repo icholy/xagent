@@ -62,7 +62,7 @@ type DriverLog struct {
 // DiscardDriverLog is a DriverLog that discards everything. Tests and
 // directly-invoked drivers use it as the required no-op Log.
 var DiscardDriverLog = &DriverLog{
-	Logger: *slog.New(slog.NewTextHandler(io.Discard, nil)),
+	Logger: *slog.New(slog.DiscardHandler),
 	sink:   io.Discard,
 }
 
