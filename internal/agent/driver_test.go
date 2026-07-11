@@ -10,7 +10,9 @@ import (
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
+	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 // testTaskVersion is the version returned by setupDriver's GetTask mock. The
@@ -38,29 +40,6 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 	return &Driver{TaskID: 1, Client: mock, Log: slog.Default()}, mock
 }
 
-// submittedEvents returns the runner events submitted to the mock, in order.
-func submittedEvents(mock *xagentclient.ClientMock) []string {
-	var events []string
-	for _, call := range mock.SubmitRunnerEventsCalls() {
-		for _, e := range call.SubmitRunnerEventsRequest.Events {
-			events = append(events, e.Event)
-		}
-	}
-	return events
-}
-
-// submittedVersions returns the versions of the runner events submitted to the
-// mock, in order.
-func submittedVersions(mock *xagentclient.ClientMock) []int64 {
-	var versions []int64
-	for _, call := range mock.SubmitRunnerEventsCalls() {
-		for _, e := range call.SubmitRunnerEventsRequest.Events {
-			versions = append(versions, e.Version)
-		}
-	}
-	return versions
-}
-
 func TestDriverRun(t *testing.T) {
 	// Arrange
 	driver, mock := setupDriver(t, &Config{Type: TypeDummy})
@@ -68,10 +47,16 @@ func TestDriverRun(t *testing.T) {
 	// Act
 	err := driver.Run(t.Context())
 
-	// Assert - both events carry the fetched task version
+	// Assert - started then stopped, both stamped with the fetched task version
 	assert.NilError(t, err)
-	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "stopped"})
-	assert.DeepEqual(t, submittedVersions(mock), []int64{testTaskVersion, testTaskVersion})
+	assert.DeepEqual(t,
+		mock.SubmittedRunnerEvents(),
+		[]*xagentv1.RunnerEvent{
+			{TaskId: 1, Version: testTaskVersion, Event: "started"},
+			{TaskId: 1, Version: testTaskVersion, Event: "stopped"},
+		},
+		protocmp.Transform(),
+	)
 }
 
 func TestDriverRun_AgentError(t *testing.T) {
@@ -84,10 +69,19 @@ func TestDriverRun_AgentError(t *testing.T) {
 	// Act
 	err := driver.Run(t.Context())
 
-	// Assert - the failure was reported and acked, so the driver exits 0
+	// Assert - the failure was reported and acked, so the driver exits 0; both
+	// events carry the fetched task version (the failed reason is the dynamic
+	// agent error, ignored here).
 	assert.NilError(t, err)
-	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "failed"})
-	assert.DeepEqual(t, submittedVersions(mock), []int64{testTaskVersion, testTaskVersion})
+	assert.DeepEqual(t,
+		mock.SubmittedRunnerEvents(),
+		[]*xagentv1.RunnerEvent{
+			{TaskId: 1, Version: testTaskVersion, Event: "started"},
+			{TaskId: 1, Version: testTaskVersion, Event: "failed"},
+		},
+		protocmp.Transform(),
+		protocmp.IgnoreFields(&xagentv1.RunnerEvent{}, "reason"),
+	)
 }
 
 func TestDriverRun_AgentConfiguredError(t *testing.T) {
@@ -102,7 +96,15 @@ func TestDriverRun_AgentConfiguredError(t *testing.T) {
 
 	// Assert - the failure was reported and acked, so the driver exits 0
 	assert.NilError(t, err)
-	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "failed"})
+	assert.DeepEqual(t,
+		mock.SubmittedRunnerEvents(),
+		[]*xagentv1.RunnerEvent{
+			{TaskId: 1, Version: testTaskVersion, Event: "started"},
+			{TaskId: 1, Version: testTaskVersion, Event: "failed"},
+		},
+		protocmp.Transform(),
+		protocmp.IgnoreFields(&xagentv1.RunnerEvent{}, "reason"),
+	)
 }
 
 func TestDriverRun_SetupCommandError(t *testing.T) {
@@ -117,7 +119,15 @@ func TestDriverRun_SetupCommandError(t *testing.T) {
 
 	// Assert
 	assert.NilError(t, err)
-	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "failed"})
+	assert.DeepEqual(t,
+		mock.SubmittedRunnerEvents(),
+		[]*xagentv1.RunnerEvent{
+			{TaskId: 1, Version: testTaskVersion, Event: "started"},
+			{TaskId: 1, Version: testTaskVersion, Event: "failed"},
+		},
+		protocmp.Transform(),
+		protocmp.IgnoreFields(&xagentv1.RunnerEvent{}, "reason"),
+	)
 }
 
 func TestDriverRun_Sigterm(t *testing.T) {
@@ -145,7 +155,14 @@ func TestDriverRun_Sigterm(t *testing.T) {
 
 	// Assert - a graceful stop is reported as stopped
 	assert.NilError(t, err)
-	assert.DeepEqual(t, submittedEvents(mock), []string{"started", "stopped"})
+	assert.DeepEqual(t,
+		mock.SubmittedRunnerEvents(),
+		[]*xagentv1.RunnerEvent{
+			{TaskId: 1, Version: testTaskVersion, Event: "started"},
+			{TaskId: 1, Version: testTaskVersion, Event: "stopped"},
+		},
+		protocmp.Transform(),
+	)
 }
 
 func TestDriverRun_StartedSubmitError(t *testing.T) {
@@ -213,7 +230,7 @@ func TestDriverRun_GetTaskError(t *testing.T) {
 	// Assert - the error is returned and no events were emitted; the runner's
 	// supervise backstop reports the lost run via the non-zero exit code.
 	assert.ErrorContains(t, err, "failed to get task")
-	assert.Assert(t, len(submittedEvents(mock)) == 0)
+	assert.Assert(t, cmp.Len(mock.SubmittedRunnerEvents(), 0))
 }
 
 func TestConfigPrompt(t *testing.T) {
