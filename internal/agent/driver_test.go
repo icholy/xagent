@@ -247,25 +247,14 @@ func TestDriverRun_GetTaskError(t *testing.T) {
 	assert.Assert(t, cmp.Len(mock.SubmittedRunnerEvents(), 0))
 }
 
-// withLogSink points the driver's DriverLog at a real file (as the command
-// wires it in production via OpenDriverLog), and returns a func to read it back.
-func withLogSink(t *testing.T, driver *Driver) func() string {
-	t.Helper()
+func TestDriverRun_LogsToSink(t *testing.T) {
+	t.Parallel()
+	// Arrange - a driver teeing into a real append-only log file, wired as the
+	// command does in production via OpenDriverLog.
+	driver, _ := setupDriver(t, &Config{Type: TypeDummy})
 	logPath := filepath.Join(t.TempDir(), "log")
 	driver.Log = OpenDriverLog(logPath)
 	t.Cleanup(func() { _ = driver.Log.Close() })
-	return func() string {
-		data, err := os.ReadFile(logPath)
-		assert.NilError(t, err)
-		return string(data)
-	}
-}
-
-func TestDriverRun_LogsToSink(t *testing.T) {
-	t.Parallel()
-	// Arrange - a driver teeing into a real append-only log file
-	driver, _ := setupDriver(t, &Config{Type: TypeDummy})
-	read := withLogSink(t, driver)
 
 	// Act - two runs against the same file
 	assert.NilError(t, driver.Run(t.Context()))
@@ -274,30 +263,35 @@ func TestDriverRun_LogsToSink(t *testing.T) {
 	// Assert - the run delimiter, the driver's slog lines, and the agent's own
 	// slog lines (the logger is threaded through to the agent) all reach the
 	// log, and the second run appended a second delimiter below the first.
-	got := read()
-	assert.Assert(t, cmp.Contains(got, "==== run version=7 pid="))
-	assert.Assert(t, cmp.Contains(got, "loaded config"))
-	assert.Assert(t, cmp.Contains(got, "dummy agent received prompt"))
-	assert.Equal(t, strings.Count(got, "==== run version="), 2)
+	got, err := os.ReadFile(logPath)
+	assert.NilError(t, err)
+	assert.Assert(t, cmp.Contains(string(got), "==== run version=7 pid="))
+	assert.Assert(t, cmp.Contains(string(got), "loaded config"))
+	assert.Assert(t, cmp.Contains(string(got), "dummy agent received prompt"))
+	assert.Equal(t, strings.Count(string(got), "==== run version="), 2)
 }
 
 func TestDriverRun_SetupCommandOutputTeed(t *testing.T) {
 	t.Parallel()
-	// Arrange - a setup command that writes to stdout and stderr then fails
+	// Arrange - a setup command that writes to stdout and stderr then fails,
+	// with the driver teeing into a real append-only log file.
 	driver, _ := setupDriver(t, &Config{
 		Type:     TypeDummy,
 		Commands: []string{"echo out-marker; echo err-marker >&2; false"},
 	})
-	read := withLogSink(t, driver)
+	logPath := filepath.Join(t.TempDir(), "log")
+	driver.Log = OpenDriverLog(logPath)
+	t.Cleanup(func() { _ = driver.Log.Close() })
 
 	// Act
 	assert.NilError(t, driver.Run(t.Context()))
 
 	// Assert - the failing command's stdout and stderr land in the log next to
 	// the setup-failure the operator would otherwise see with no output.
-	got := read()
-	assert.Assert(t, cmp.Contains(got, "out-marker"))
-	assert.Assert(t, cmp.Contains(got, "err-marker"))
+	got, err := os.ReadFile(logPath)
+	assert.NilError(t, err)
+	assert.Assert(t, cmp.Contains(string(got), "out-marker"))
+	assert.Assert(t, cmp.Contains(string(got), "err-marker"))
 }
 
 func TestConfigPrompt(t *testing.T) {
