@@ -81,48 +81,6 @@ Instructions that land while the task is `Pending`/`Restarting` need no fold
 at all (`CanStart` is false): the already-provisioned run will see them when
 it starts.
 
-### 3. The bypass sentinel becomes -1
-
-`RunnerEvent.Version` (proto and model) gets defined semantics:
-
-- **`N ≥ 1`** — scoped to run N: applies only when `N == task.Version`.
-- **`-1`** — unscoped bypass, the explicit replacement for today's
-  "0 overrides anything". Reserved for emitters that genuinely cannot know
-  the run (legacy `taskstate` records without a stamped version).
-- **`0`** — invalid. No run 0 exists, so a 0-versioned event can never match;
-  it is rejected as stale.
-
-The guard in `ApplyRunnerEvent` becomes:
-
-```go
-// -1 bypasses the run check (unscoped events from legacy senders).
-if e.Version != VersionBypass && e.Version != t.Version {
-    return false // RunnerEventRejectedStale under run-scoped-runner-events
-}
-```
-
-The zero-value hazard inverts from silent to loud: an emitter that forgets to
-set `Version` now produces a rejected event (and, once run-scoped-runner-events
-§3 lands, a visible "ignored" timeline entry) instead of silently clobbering
-whatever run is current.
-
-**Migration.** The server deploys before runners, and old runners/drivers send
-0 meaning "bypass". Rejecting 0 immediately would strand their backstop
-`failed` events and leave dead tasks stuck in `Running`. So the flip is
-two-phase:
-
-1. Server release A: accept both `0` and `-1` as bypass; all in-tree emitters
-   that hardcode 0 (driver, `supervise`, `failIfTaskRunning`) switch to `-1`.
-   The runner binary embeds the prebuilt driver, so both roll together. The
-   two `Poll` emits that already carry `task.Version` (the no-sandbox
-   `stopped`, the dispatch-failure `failed`) are already correctly scoped and
-   stay as they are.
-2. Server release B (after runners are upgraded): `0` becomes reject-as-stale.
-
-`taskstate.Record.Version == 0` (records written by older runners) is mapped
-to `-1` at emit time — "legacy record, run unknown" — which keeps the
-boot-time backstop working across the upgrade.
-
 ### Relationship to `run-scoped-runner-events.md`
 
 This proposal owns the version *semantics*; that draft owns the rejection
@@ -140,9 +98,6 @@ timeline entries, driver reaction to rejection). Two amendments to it:
   `Running+start → Pending` re-queue as the *primary* path, not a legacy one.
   §7's probe remains useful as desync repair (a stale `Running` with no live
   sandbox), but it is no longer load-bearing for the wake flow.
-- Wherever it says legacy emitters "degrade to today's bypass behavior" with
-  version 0, the bypass value becomes `-1` (with the two-phase acceptance of
-  0 above).
 
 The archiver's change-fence (`internal/server/archiver/archiver.go`) is the
 version's only other consumer; it only lists terminal tasks and re-validates
@@ -158,26 +113,15 @@ of them are needed to fix the version itself.
 
 ## Implementation Plan
 
-1. **Model: bump realignment + `-1` sentinel** — Delivers:
-   `model.VersionBypass = -1`; `Start()` on a running task stops bumping;
-   the `Running+start → Pending` fold in `applyRunnerEventStopped` bumps;
-   `Cancel` and the `applyRunnerEventStarted` zombie paths stop bumping; the
-   guard accepts `-1` (and, behind a transition constant, `0`) as bypass and
-   documents `0 = invalid`. Depends on: nothing (inert while all senders emit
-   0/bypass). Verifiable by: state machine tests — back-to-back wake
-   coalescing (k folds, one bump at the exit fold); versioned cancel
-   round-trip; restart disown (old run's versioned `stopped` rejected, new
-   run's `started` consumes the command); `0` and `-1` both bypass;
-   `N != version` rejected.
-2. **Runner + driver: emit `-1`** — Delivers: the driver's three events and
-   the runner's `supervise`/`failIfTaskRunning` backstops send `-1` instead
-   of 0 (or the `taskstate` record's stamped version, once
-   run-scoped-runner-events §5 lands); `Record.Version == 0` maps to `-1` at
-   emit. Depends on: (1) deployed server-side. Verifiable by: runner/driver
-   tests asserting the emitted version.
-3. **Server: reject version 0** — Delivers: the transition constant flips;
-   `0` is rejected as stale. Depends on: (2) rolled out to all runners.
-   Verifiable by: state machine test; staged after a release gap.
+A single model-only layer: `Start()` on a running task stops bumping; the
+`Running+start → Pending` fold in `applyRunnerEventStopped` bumps; `Cancel`
+and the `applyRunnerEventStarted` zombie paths stop bumping; the guard is
+unchanged but its semantics are documented (`N ≥ 1` scoped, `0` unscoped
+bypass). Inert while all senders emit 0. Verifiable by: state machine tests —
+back-to-back wake coalescing (k folds, one bump at the exit fold); versioned
+cancel round-trip (cancel → `stopped` at the pre-cancel version →
+`Cancelled`); restart disown (old run's versioned `stopped` rejected, new
+run's `started` consumes the command); `0` bypasses; `N != version` rejected.
 
 ## Trade-offs
 
@@ -194,9 +138,13 @@ of them are needed to fix the version itself.
   forced dropping `Cancel`'s bump, which run-scoped-runner-events §7 then had
   to work around with a probe. Bumping at the exit fold keeps the counter
   aligned with physical runs and lets the `stopped` apply honestly.
-- **Keeping 0 as the bypass sentinel.** Rejected: 0 is now a meaningful state
-  ("never provisioned"), and the zero-value-means-bypass footgun is one of
-  the root causes in #1052. `-1` must be set deliberately.
+- **Replacing the 0 bypass with a `-1` sentinel.** Rejected: since tasks are
+  seeded at version 1 and the counter only increases, a scoped version 0 can
+  never occur, so 0 is already unambiguous as "unscoped" — and switching
+  sentinels would cost a two-phase rollout (accept both, migrate emitters,
+  reject 0) for no semantic gain. The zero-value footgun (an emitter that
+  forgets to stamp gets bypass instead of rejection) is accepted; it shrinks
+  as run-scoped-runner-events moves every in-tree emitter onto real versions.
 
 ## Open Questions
 
