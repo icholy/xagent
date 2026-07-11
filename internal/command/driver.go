@@ -38,6 +38,7 @@ var DriverCommand = &cli.Command{
 				Token:   cmd.String("token"),
 			}),
 			Log:       slog.Default(),
+			Config:    agent.DefaultConfigStore,
 			ServerURL: cmd.String("server"),
 			Token:     cmd.String("token"),
 		}

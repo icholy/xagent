@@ -21,13 +21,10 @@ const testTaskVersion = 7
 
 // setupDriver writes cfg for task 1 in a temporary config dir and returns a
 // driver backed by a mock client whose SubmitRunnerEvents always acks.
-// The tests mutate the global ConfigDir, so they must not run in parallel.
 func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) {
 	t.Helper()
-	dir := ConfigDir
-	ConfigDir = t.TempDir()
-	t.Cleanup(func() { ConfigDir = dir })
-	assert.NilError(t, SaveConfig(1, cfg))
+	store := ConfigStore(t.TempDir())
+	assert.NilError(t, store.Save(1, cfg))
 	mock := &xagentclient.ClientMock{
 		SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
@@ -37,10 +34,11 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Version: testTaskVersion}}, nil
 		},
 	}
-	return &Driver{TaskID: 1, Client: mock, Log: slog.Default()}, mock
+	return &Driver{TaskID: 1, Client: mock, Log: slog.Default(), Config: store}, mock
 }
 
 func TestDriverRun(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	driver, mock := setupDriver(t, &Config{Type: TypeDummy})
 
@@ -60,6 +58,7 @@ func TestDriverRun(t *testing.T) {
 }
 
 func TestDriverRun_AgentError(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	driver, mock := setupDriver(t, &Config{
 		Type:  TypeDummy,
@@ -85,6 +84,7 @@ func TestDriverRun_AgentError(t *testing.T) {
 }
 
 func TestDriverRun_AgentConfiguredError(t *testing.T) {
+	t.Parallel()
 	// Arrange - the dummy agent is configured to return an error string
 	driver, mock := setupDriver(t, &Config{
 		Type:  TypeDummy,
@@ -108,6 +108,7 @@ func TestDriverRun_AgentConfiguredError(t *testing.T) {
 }
 
 func TestDriverRun_SetupCommandError(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	driver, mock := setupDriver(t, &Config{
 		Type:     TypeDummy,
@@ -130,6 +131,12 @@ func TestDriverRun_SetupCommandError(t *testing.T) {
 	)
 }
 
+// TestDriverRun_Sigterm must not run in parallel: it delivers a process-wide
+// SIGTERM via syscall.Kill, which Go dispatches to every driver's signal
+// handler registered in Run. A parallel sibling would catch the stray signal
+// and stop gracefully instead of taking its own path. Left serial, it runs in
+// the sequential phase with no other Run active, so the signal reaches only its
+// own driver.
 func TestDriverRun_Sigterm(t *testing.T) {
 	// Arrange - the dummy agent sleeps until the run context is cancelled
 	driver, mock := setupDriver(t, &Config{
@@ -166,6 +173,7 @@ func TestDriverRun_Sigterm(t *testing.T) {
 }
 
 func TestDriverRun_StartedSubmitError(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	driver, mock := setupDriver(t, &Config{Type: TypeDummy})
 	mock.SubmitRunnerEventsFunc = func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
@@ -180,6 +188,7 @@ func TestDriverRun_StartedSubmitError(t *testing.T) {
 }
 
 func TestDriverRun_StoppedSubmitError(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	driver, mock := setupDriver(t, &Config{Type: TypeDummy})
 	mock.SubmitRunnerEventsFunc = func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
@@ -197,6 +206,7 @@ func TestDriverRun_StoppedSubmitError(t *testing.T) {
 }
 
 func TestDriverRun_FailedSubmitError(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	driver, mock := setupDriver(t, &Config{
 		Type:  TypeDummy,
@@ -218,6 +228,7 @@ func TestDriverRun_FailedSubmitError(t *testing.T) {
 }
 
 func TestDriverRun_GetTaskError(t *testing.T) {
+	t.Parallel()
 	// Arrange - GetTask (hoisted to the top of Run) fails before any event
 	driver, mock := setupDriver(t, &Config{Type: TypeDummy})
 	mock.GetTaskFunc = func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {

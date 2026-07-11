@@ -23,6 +23,7 @@ type Driver struct {
 	TaskID int64
 	Client xagentclient.Client
 	Log    *slog.Logger
+	Config ConfigStore // where the task config file lives
 
 	// ServerURL and Token are the driver's own server credentials, reused to dial
 	// the shell relay WebSocket when the task is a debug-shell run. They mirror
@@ -136,7 +137,7 @@ func (d *Driver) run(ctx context.Context, task *xagentv1.Task) error {
 // (non-shell) sandbox run.
 func (d *Driver) runAgent(ctx context.Context) error {
 	// Load config
-	cfg, err := LoadConfig(d.TaskID)
+	cfg, err := d.Config.Load(d.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -183,7 +184,7 @@ func (d *Driver) runAgent(ctx context.Context) error {
 
 	// Save config
 	cfg.Started = true
-	if err := SaveConfig(d.TaskID, cfg); err != nil {
+	if err := d.Config.Save(d.TaskID, cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
@@ -193,7 +194,7 @@ func (d *Driver) runAgent(ctx context.Context) error {
 
 // setup runs the setup commands listed in cfg.Commands, resuming from
 // cfg.SetupCommandsCompleted. After each successful command, the updated
-// count is persisted via SaveConfig so a restart can pick up where the
+// count is persisted via d.Config.Save so a restart can pick up where the
 // previous run left off.
 func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 	// Defensive clamp: if the saved count exceeds the current command
@@ -211,7 +212,7 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 			return fmt.Errorf("setup command %d failed: %w", i, err)
 		}
 		cfg.SetupCommandsCompleted = i + 1
-		if err := SaveConfig(d.TaskID, cfg); err != nil {
+		if err := d.Config.Save(d.TaskID, cfg); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 	}
