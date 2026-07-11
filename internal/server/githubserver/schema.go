@@ -2,7 +2,6 @@ package githubserver
 
 import (
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/model"
 )
 
 // init registers githubserver's schemas on the process-wide default registry.
@@ -13,14 +12,12 @@ func init() {
 // RegisterSchemas records the eventrouter schema for every event type
 // githubserver emits (see toInputEvent) on reg. Each schema declares the
 // complete valid attr set for its type (the derived body/url plus its emitted
-// dimensions) and the default rules the producer ships. Only the three
-// comment/review types carry the "xagent:" body-prefix wakeup default; the rest
-// ship no default rules. Every AttrDef is declared inline per event type so its
-// display copy (label/help/placeholder) speaks to that specific event: a "Body"
-// on an issue comment is the comment text, on an opened PR it is the
-// description, rather than sharing a single generic definition. It is exported
-// so tests (e.g. eventrouter's Route tests) can populate an isolated registry
-// with the real producer schemas.
+// dimensions). Every AttrDef is declared inline per event type so its display
+// copy (label/help/placeholder) speaks to that specific event: a "Body" on an
+// issue comment is the comment text, on an opened PR it is the description,
+// rather than sharing a single generic definition. It is exported so tests
+// (e.g. eventrouter's Route tests) can populate an isolated registry with the
+// real producer schemas.
 func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "github",
@@ -52,13 +49,6 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Help:        "The GitHub username of the user who commented (no leading @).",
 			},
 		},
-		// Wake the linked task when the comment body is prefixed with "xagent:".
-		DefaultRules: []model.RoutingRule{{
-			Source:     "github",
-			Type:       EventTypeIssueComment,
-			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
-			Wakeup:     true,
-		}},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "github",
@@ -90,13 +80,6 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Help:        "The GitHub username of the user who left the review comment (no leading @).",
 			},
 		},
-		// Wake the linked task when the review comment body is prefixed with "xagent:".
-		DefaultRules: []model.RoutingRule{{
-			Source:     "github",
-			Type:       EventTypePullRequestReviewComment,
-			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
-			Wakeup:     true,
-		}},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "github",
@@ -128,13 +111,6 @@ func RegisterSchemas(reg *eventrouter.SchemaRegistry) {
 				Help:        "The GitHub username of the user who submitted the review (no leading @).",
 			},
 		},
-		// Wake the linked task when the review body is prefixed with "xagent:".
-		DefaultRules: []model.RoutingRule{{
-			Source:     "github",
-			Type:       EventTypePullRequestReview,
-			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
-			Wakeup:     true,
-		}},
 	})
 	reg.MustRegister(eventrouter.EventTypeDef{
 		Source: "github",
