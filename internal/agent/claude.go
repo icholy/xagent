@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -67,7 +66,7 @@ func (a *ClaudeAgent) Prompt(ctx context.Context, prompt string, resume bool) er
 	// Tee Claude's stderr into the log sink (os.Stderr stays so docker logs is
 	// unchanged). Stdout is not teed raw — it is the JSON stream parsed below
 	// into a.log tool summaries, which already reach the sink via the slog tee.
-	cmd.Stderr = io.MultiWriter(os.Stderr, a.log.Sink())
+	cmd.Stderr = a.log.Stderr()
 
 	// Prevent claude code from auto-updating & allow skipping permissions as root user
 	cmd.Env = append(os.Environ(), "IS_SANDBOX=1", "DISABLE_AUTOUPDATER=1")

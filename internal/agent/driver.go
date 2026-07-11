@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -223,8 +222,8 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 		// ("setup command N failed") has the command's actual stdout/stderr
 		// sitting next to it in /xagent/log. os.Stdout/os.Stderr stay wired so
 		// docker logs is unchanged.
-		c.Stdout = io.MultiWriter(os.Stdout, d.Log.Sink())
-		c.Stderr = io.MultiWriter(os.Stderr, d.Log.Sink())
+		c.Stdout = d.Log.Stdout()
+		c.Stderr = d.Log.Stderr()
 		if err := c.Run(); err != nil {
 			return fmt.Errorf("setup command %d failed: %w", i, err)
 		}
