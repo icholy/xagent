@@ -138,6 +138,13 @@ just-landed `taskSource` and `List` are adjusted (task keeps its query as `Query
 erroring `QueryForward`; `List` calls `QueryBackward`) — a mechanical, behavior-preserving refactor
 of the task pagination code.
 
+The storage-agnostic package deals in plain `int` for counts (`limit`, `Config.Default/Max`,
+the internal `size`). `int32` appears at exactly two type boundaries and nowhere else: the
+`page_size` request value, which is the proto field type passed verbatim into the entry points and
+store params; and the `LIMIT` argument at the sqlc call, converted with `int32(limit)` inside each
+store `Query*` method. (The just-landed `pagination.List`/`Source` use `int32` for `limit` too;
+this narrows it to `int` as part of the same `Source` change.)
+
 ```go
 // ErrUnsupportedDirection is returned by a Source asked to page in a direction it
 // does not implement (e.g. the task list, backward-only, from QueryForward). List
@@ -152,8 +159,8 @@ var ErrUnsupportedDirection = errors.New("unsupported page direction")
 // are ascending. A one-directional list implements one method and returns
 // ErrUnsupportedDirection from the other.
 type Source[T, C any] interface {
-    QueryBackward(ctx context.Context, cursor *C, limit int32) ([]T, error)
-    QueryForward(ctx context.Context, cursor *C, limit int32) ([]T, error)
+    QueryBackward(ctx context.Context, cursor *C, limit int) ([]T, error)
+    QueryForward(ctx context.Context, cursor *C, limit int) ([]T, error)
     Cursor(row T) C
 }
 
@@ -207,9 +214,9 @@ func ListBi[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken
     var rows []T
     var err error
     if dir == forward {
-        rows, err = src.QueryForward(ctx, cursor, int32(size+1)) // ascending
+        rows, err = src.QueryForward(ctx, cursor, size+1) // ascending
     } else {
-        rows, err = src.QueryBackward(ctx, cursor, int32(size+1)) // descending
+        rows, err = src.QueryBackward(ctx, cursor, size+1) // descending
     }
     if err != nil {
         return nil, err
@@ -254,11 +261,11 @@ The existing `List` calls `src.QueryBackward(ctx, cursor, size+1)`, and the just
 `taskSource` splits into its existing backward query plus an erroring forward one:
 
 ```go
-func (src taskSource) QueryBackward(ctx context.Context, cursor *taskCursor, limit int32) ([]*model.Task, error) {
-    // ... existing ListTasksPage query, unchanged ...
+func (src taskSource) QueryBackward(ctx context.Context, cursor *taskCursor, limit int) ([]*model.Task, error) {
+    // ... existing ListTasksPage query; convert limit to int32 only at the sqlc call ...
 }
 
-func (src taskSource) QueryForward(ctx context.Context, _ *taskCursor, _ int32) ([]*model.Task, error) {
+func (src taskSource) QueryForward(ctx context.Context, _ *taskCursor, _ int) ([]*model.Task, error) {
     return nil, fmt.Errorf("task list: %w", pagination.ErrUnsupportedDirection)
 }
 ```
@@ -353,10 +360,10 @@ func (src eventSource) types() []string {
 }
 
 // QueryBackward reads descending; a nil cursor is the newest page (no lower bound).
-func (src eventSource) QueryBackward(ctx context.Context, cursor *eventCursor, limit int32) ([]*model.Event, error) {
+func (src eventSource) QueryBackward(ctx context.Context, cursor *eventCursor, limit int) ([]*model.Event, error) {
     args := sqlc.ListEventsByTaskBackwardParams{
         TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: src.types(),
-        UseCursor: cursor != nil, PageLimit: limit,
+        UseCursor: cursor != nil, PageLimit: int32(limit), // int32 only at the sqlc boundary
     }
     if cursor != nil {
         args.CursorID = cursor.ID
@@ -369,10 +376,10 @@ func (src eventSource) QueryBackward(ctx context.Context, cursor *eventCursor, l
 }
 
 // QueryForward reads ascending, rows after the cursor.
-func (src eventSource) QueryForward(ctx context.Context, cursor *eventCursor, limit int32) ([]*model.Event, error) {
+func (src eventSource) QueryForward(ctx context.Context, cursor *eventCursor, limit int) ([]*model.Event, error) {
     rows, err := src.store.q(src.tx).ListEventsByTaskForward(ctx, sqlc.ListEventsByTaskForwardParams{
         TaskID: src.params.TaskID, OrgID: src.params.OrgID, Types: src.types(),
-        CursorID: cursor.ID, PageLimit: limit,
+        CursorID: cursor.ID, PageLimit: int32(limit), // int32 only at the sqlc boundary
     })
     if err != nil {
         return nil, err
@@ -554,9 +561,10 @@ legacy callers (empty page fields) get the full list; the web UI opts into bidir
    semantics documented on the fields; regenerate Go + webui (`mise run generate`, buf for webui).
    Depends on: nothing. Verifiable by: generated code compiles; no behavior change yet.
 2. **Pagination bidirectional extension** — Delivers: `ErrUnsupportedDirection`, `BiPage`, `ListBi`
-   in `internal/pagination`, plus splitting `Source.Query` into `QueryForward`/`QueryBackward`
-   (`List` calls `QueryBackward`; `taskSource` keeps its query as `QueryBackward` and adds an
-   erroring `QueryForward`) — behavior-preserving. Depends on: nothing. Verifiable by: package unit
+   in `internal/pagination`, plus splitting `Source.Query` into `QueryForward`/`QueryBackward` and
+   narrowing `limit` from `int32` to `int` (`List` calls `QueryBackward`; `taskSource` keeps its
+   query as `QueryBackward` and adds an erroring `QueryForward`) — behavior-preserving. Depends on:
+   nothing. Verifiable by: package unit
    tests (mocked `Source`) — newest page, scroll-back to exhaustion (`PrevToken` empties), forward
    follow (`NextToken` always set), empty-forward-poll echo, ascending Items in both directions,
    page-size bounds, undecodable token → `ErrInvalidRequest`; task list still green.
