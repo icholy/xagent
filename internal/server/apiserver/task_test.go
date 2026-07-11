@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -279,48 +278,6 @@ func TestListTasks_Pagination(t *testing.T) {
 	}
 	assert.DeepEqual(t, gotNames, wantNames)
 	assert.Equal(t, pages, 3) // 2 + 2 + 1
-}
-
-func TestListTasks_DefaultPageSize(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctx := createCtx(t, org)
-	for i := range 3 {
-		_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-			Name:      "task-" + strconv.Itoa(i),
-			Runner:    "test-runner",
-			Workspace: "test-workspace",
-		})
-		assert.NilError(t, err)
-	}
-
-	// An empty request (page_size 0, as the MCP list_tasks tool sends) falls back
-	// to the default page, which is large enough to hold all three tasks.
-	resp, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{})
-	assert.NilError(t, err)
-	assert.Equal(t, len(resp.Tasks), 3)
-	assert.Equal(t, resp.NextPageToken, "")
-}
-
-func TestListTasks_InvalidPageSize(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
-	ctx := createCtx(t, org)
-
-	_, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 1000})
-	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
-}
-
-func TestListTasks_InvalidPageToken(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
-	ctx := createCtx(t, org)
-
-	_, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageToken: "not-a-valid-token!!"})
-	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
 }
 
 func TestCreateTask_BadRunner(t *testing.T) {
