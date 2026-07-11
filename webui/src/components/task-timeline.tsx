@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -145,7 +145,7 @@ function ExternalRow({ item }: { item: Extract<TimelineItem, { kind: 'external' 
         </div>
         <div className="border-t border-amber-300/40 px-4 py-3">
           <p className="text-sm font-medium text-foreground">{item.description}</p>
-          {item.details && <CodeLocation details={item.details} url={item.url} />}
+          {item.details && <EventDetails details={item.details} />}
           {item.data && (
             <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">{item.data}</p>
           )}
@@ -156,55 +156,28 @@ function ExternalRow({ item }: { item: Extract<TimelineItem, { kind: 'external' 
   )
 }
 
-// CodeLocation renders the well-known keys the GitHub extractor sets on
-// ExternalPayload.details for PR review comments: a monospace path:line chip
-// (deep-linking to the comment via the event url) and, when present, the
-// diff_hunk in a collapsed <details>. The line numbers are only capture-time
-// hints while the diff hunk is the durable anchor, so the chip stays compact
-// and the hunk sits one click away. Keys other than the ones we recognize are
-// ignored — the payload schema is generic, the UI convention is light.
-function CodeLocation({ details, url }: { details: Record<string, string>; url?: string }) {
-  const path = details.path
-  if (!path) return null
-
-  const line = details.line
-  const startLine = details.start_line
-  const lineLabel = startLine && line && startLine !== line ? `${startLine}-${line}` : line
-  const label = lineLabel ? `${path}:${lineLabel}` : path
-  const side = details.side
-  const hunk = details.diff_hunk
-
-  const chipClass =
-    'inline-flex max-w-full items-center break-all rounded border border-amber-300/60 bg-amber-100/60 px-1.5 py-0.5 font-mono text-xs text-foreground dark:bg-amber-900/30'
-
+// EventDetails renders the ExternalPayload.details map as raw key/value pairs,
+// collapsed by default. The map is source-defined and opaque to the UI: it makes
+// no assumptions about which keys are present (a GitHub review comment sets
+// path/line/diff_hunk; other sources set their own or none). Values may be
+// multi-line (e.g. a diff hunk), so they wrap and preserve whitespace.
+function EventDetails({ details }: { details: Record<string, string> }) {
+  const entries = Object.entries(details)
+  if (entries.length === 0) return null
   return (
-    <div className="mt-1.5 space-y-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(chipClass, 'hover:border-primary hover:text-primary')}
-          >
-            {label}
-          </a>
-        ) : (
-          <span className={chipClass}>{label}</span>
-        )}
-        {side && <span className="text-[10px] uppercase text-muted-foreground">{side}</span>}
-      </div>
-      {hunk && (
-        <details>
-          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-primary">
-            Diff context
-          </summary>
-          <pre className="mt-1 overflow-x-auto rounded border bg-muted/50 p-2 font-mono text-xs leading-relaxed text-foreground">
-            {hunk}
-          </pre>
-        </details>
-      )}
-    </div>
+    <details className="mt-1.5">
+      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-primary">
+        Details
+      </summary>
+      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        {entries.map(([key, value]) => (
+          <Fragment key={key}>
+            <dt className="font-mono text-muted-foreground">{key}</dt>
+            <dd className="font-mono whitespace-pre-wrap break-words text-foreground">{value}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    </details>
   )
 }
 
