@@ -33,23 +33,23 @@ func TestPlanMatchesRulePerOrgWithoutSideEffects(t *testing.T) {
 
 	// Plan is the read-only matcher Route consumes: it reports the matched rule
 	// per org and writes nothing. Each case exercises a distinct outcome — a
-	// configured rule matches (RuleIndex points at its position), a configured
-	// rule does not match (org dropped), and a ruleless org falls back to the
-	// shipped defaults (RuleIndex -1). None of them touch the store.
+	// configured rule matches (RuleDefault false, RuleIndex points at its
+	// position), a configured rule does not match (org dropped), and a ruleless
+	// org falls back to the shipped defaults (RuleDefault true). None of them
+	// touch the store.
 	const url = "https://github.com/owner/repo/issues/1"
 	tests := []struct {
-		name      string
-		rules     []model.RoutingRule // nil => ruleless org, defaults apply
-		data      string
-		wantMatch bool
-		wantIndex int
+		name        string
+		rules       []model.RoutingRule // nil => ruleless org, defaults apply
+		data        string
+		wantMatch   bool
+		wantDefault bool
 	}{
 		{
 			name:      "configured rule matches",
 			rules:     []model.RoutingRule{{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}}},
 			data:      "xagent: do it",
 			wantMatch: true,
-			wantIndex: 0,
 		},
 		{
 			name:      "configured rule does not match",
@@ -58,11 +58,11 @@ func TestPlanMatchesRulePerOrgWithoutSideEffects(t *testing.T) {
 			wantMatch: false,
 		},
 		{
-			name:      "ruleless org falls back to shipped default",
-			rules:     nil,
-			data:      "xagent: do it",
-			wantMatch: true,
-			wantIndex: -1,
+			name:        "ruleless org falls back to shipped default",
+			rules:       nil,
+			data:        "xagent: do it",
+			wantMatch:   true,
+			wantDefault: true,
 		},
 	}
 	for _, tt := range tests {
@@ -94,7 +94,11 @@ func TestPlanMatchesRulePerOrgWithoutSideEffects(t *testing.T) {
 				assert.Assert(t, cmp.Len(matches, 1))
 				assert.Equal(t, matches[0].OrgID, org.OrgID)
 				assert.Equal(t, matches[0].Rule.Source, "github")
-				assert.Equal(t, matches[0].RuleIndex, tt.wantIndex)
+				assert.Equal(t, matches[0].RuleDefault, tt.wantDefault)
+				if !tt.wantDefault {
+					// A single configured rule that matched sits at index 0.
+					assert.Equal(t, matches[0].RuleIndex, 0)
+				}
 			}
 
 			// Plan is read-only: no tasks (and therefore no events) are written.
