@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,7 +45,7 @@ func TestRun_ForksIntoShell(t *testing.T) {
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, ShellSession: "s1"}}, nil
 		},
 	}
-	d := &Driver{TaskID: 1, Client: mock, Log: slog.Default(), ServerURL: srv.URL, Token: "t"}
+	d := &Driver{TaskID: 1, Client: mock, ServerURL: srv.URL, Token: "t"}
 
 	task := &xagentv1.Task{Id: 1, ShellSession: "s1"}
 	runErr := make(chan error, 1)
