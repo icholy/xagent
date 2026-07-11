@@ -35,9 +35,9 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Version: testTaskVersion}}, nil
 		},
 	}
-	// Log is left nil: the driver defaults to a discard log, so tests that
-	// don't inspect output need no wiring. TestDriverRun_LogsToSink overrides it.
-	return &Driver{TaskID: 1, Client: mock, Config: store}, mock
+	// Log is required; tests that don't inspect output use the discard log.
+	// TestDriverRun_LogsToSink overrides it with a file-backed one.
+	return &Driver{TaskID: 1, Client: mock, Log: DiscardDriverLog, Config: store}, mock
 }
 
 func TestDriverRun(t *testing.T) {

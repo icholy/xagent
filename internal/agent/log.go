@@ -48,21 +48,21 @@ func OpenLogSink(logPath string) (io.WriteCloser, error) {
 
 // DriverLog bundles the driver's structured logger with the raw byte sink they
 // both feed, so the two travel together as a single value instead of as loose
-// fields. The embedded *slog.Logger writes to os.Stderr and the sink; Sink is
+// fields. The embedded slog.Logger writes to os.Stderr and the sink; Sink is
 // the append-only /xagent/log file the driver tees setup command and Claude CLI
 // stdio into. Close releases the underlying log file.
 //
 // os.Stderr stays in the tee, so docker logs output is unchanged.
 type DriverLog struct {
-	*slog.Logger
+	slog.Logger
 	sink   io.Writer
 	closer io.Closer
 }
 
-// discardDriverLog is the default used when a Driver has no DriverLog
-// configured (tests, directly-invoked drivers): it discards everything.
-var discardDriverLog = &DriverLog{
-	Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+// DiscardDriverLog is a DriverLog that discards everything. Tests and
+// directly-invoked drivers use it as the required no-op Log.
+var DiscardDriverLog = &DriverLog{
+	Logger: *slog.New(slog.NewTextHandler(io.Discard, nil)),
 	sink:   io.Discard,
 }
 
@@ -81,13 +81,13 @@ func OpenDriverLog(logPath string) *DriverLog {
 		logger.Warn("failed to open driver log sink, continuing without it",
 			"path", logPath, "err", err)
 	}
-	return &DriverLog{Logger: logger, sink: sink, closer: sink}
+	return &DriverLog{Logger: *logger, sink: sink, closer: sink}
 }
 
 // Sink returns the raw byte sink to tee stdio into, defaulting to io.Discard so
 // the tees degrade to plain os.Stdout/os.Stderr behavior when unset.
 func (l *DriverLog) Sink() io.Writer {
-	if l == nil || l.sink == nil {
+	if l.sink == nil {
 		return io.Discard
 	}
 	return l.sink
@@ -100,9 +100,9 @@ func (l *DriverLog) StartRun(version int64) {
 	fmt.Fprintf(io.MultiWriter(os.Stderr, l.Sink()), "==== run version=%d pid=%d ====\n", version, os.Getpid())
 }
 
-// Close releases the underlying log file, if any. It is nil-safe.
+// Close releases the underlying log file, if any.
 func (l *DriverLog) Close() error {
-	if l == nil || l.closer == nil {
+	if l.closer == nil {
 		return nil
 	}
 	return l.closer.Close()

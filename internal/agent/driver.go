@@ -24,10 +24,10 @@ type Driver struct {
 	Client xagentclient.Client
 	// Log bundles the driver's structured logger with the append-only
 	// /xagent/log sink it tees setup command and Claude CLI output into (see
-	// proposals/implemented/driver-logs-to-sandbox.md). The command builds it
-	// via agent.OpenDriverLog; when nil the driver discards logging, so tests
-	// and directly-invoked drivers need no wiring. os.Stdout/os.Stderr stay in
-	// every tee, so docker logs output is unchanged.
+	// proposals/implemented/driver-logs-to-sandbox.md). It is required: the
+	// command builds it via agent.OpenDriverLog, and tests use
+	// agent.DiscardDriverLog. os.Stdout/os.Stderr stay in every tee, so docker
+	// logs output is unchanged.
 	Log    *DriverLog
 	Config ConfigStore // where the task config file lives
 
@@ -36,15 +36,6 @@ type Driver struct {
 	// the values passed to xagentclient.New for Client above.
 	ServerURL string
 	Token     string
-}
-
-// log returns the driver's DriverLog, defaulting to a discard log when unset so
-// every log/tee call site is nil-safe.
-func (d *Driver) log() *DriverLog {
-	if d.Log == nil {
-		return discardDriverLog
-	}
-	return d.Log
 }
 
 // Run executes the task and reports its outcome to the server. The driver
@@ -64,7 +55,7 @@ func (d *Driver) Run(ctx context.Context) error {
 	signal.Notify(sigCh, syscall.SIGTERM)
 	go func() {
 		<-sigCh
-		d.log().Info("received SIGTERM, stopping agent")
+		d.Log.Info("received SIGTERM, stopping agent")
 		cancel(ErrStop)
 	}()
 	defer signal.Stop(sigCh)
@@ -89,8 +80,8 @@ func (d *Driver) Run(ctx context.Context) error {
 	// Write a run delimiter before the first event so an operator can find run
 	// boundaries in the single append-only log (runs are not split per file).
 	// It goes to os.Stderr (docker logs) and the sink (the /xagent/log file)
-	// alike; a directly-constructed driver with no sink writes only to stderr.
-	d.log().StartRun(version)
+	// alike; with DiscardDriverLog it writes only to stderr.
+	d.Log.StartRun(version)
 
 	// Report started: replaces the startup ping — an acked submit proves the
 	// connection, token, server, and DB are all healthy.
@@ -100,12 +91,12 @@ func (d *Driver) Run(ctx context.Context) error {
 
 	err = d.run(ctx, task)
 	if err != nil && context.Cause(ctx) == ErrStop {
-		d.log().Info("agent stopped gracefully")
+		d.Log.Info("agent stopped gracefully")
 		err = nil
 	}
 	event := model.RunnerEvent{TaskID: d.TaskID, Version: version, Event: model.RunnerEventStopped}
 	if err != nil {
-		d.log().Error("task failed", "err", err)
+		d.Log.Error("task failed", "err", err)
 		// The error already distinguishes setup failures from agent failures
 		// (different wrapped errors), so it carries that context into the
 		// timeline as the failure reason.
@@ -148,7 +139,7 @@ func (d *Driver) run(ctx context.Context, task *xagentv1.Task) error {
 			ServerURL: d.ServerURL,
 			Token:     d.Token,
 			Session:   session,
-			Log:       d.log().Logger,
+			Log:       &d.Log.Logger,
 		})
 	}
 	return d.runAgent(ctx)
@@ -163,7 +154,7 @@ func (d *Driver) runAgent(ctx context.Context) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	d.log().Info("loaded config",
+	d.Log.Info("loaded config",
 		"cwd", cfg.Cwd,
 		"commands", cfg.Commands,
 		"mcp_servers", len(cfg.McpServers),
@@ -187,8 +178,8 @@ func (d *Driver) runAgent(ctx context.Context) error {
 		Cursor:     cfg.Cursor,
 		Sloppy:     cfg.Sloppy,
 		Dummy:      cfg.Dummy,
-		Log:        d.log().Logger,
-		LogSink:    d.log().Sink(),
+		Log:        &d.Log.Logger,
+		LogSink:    d.Log.Sink(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
@@ -211,7 +202,7 @@ func (d *Driver) runAgent(ctx context.Context) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	d.log().Info("Task completed successfully.")
+	d.Log.Info("Task completed successfully.")
 	return nil
 }
 
@@ -227,14 +218,14 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 	}
 	for i := cfg.SetupCommandsCompleted; i < len(cfg.Commands); i++ {
 		command := cfg.Commands[i]
-		d.log().Info("Running setup command", "index", i, "command", command)
+		d.Log.Info("Running setup command", "index", i, "command", command)
 		c := exec.CommandContext(ctx, "sh", "-c", command)
 		// Tee the command's output into the log sink so an opaque setup failure
 		// ("setup command N failed") has the command's actual stdout/stderr
 		// sitting next to it in /xagent/log. os.Stdout/os.Stderr stay wired so
 		// docker logs is unchanged.
-		c.Stdout = io.MultiWriter(os.Stdout, d.log().Sink())
-		c.Stderr = io.MultiWriter(os.Stderr, d.log().Sink())
+		c.Stdout = io.MultiWriter(os.Stdout, d.Log.Sink())
+		c.Stderr = io.MultiWriter(os.Stderr, d.Log.Sink())
 		if err := c.Run(); err != nil {
 			return fmt.Errorf("setup command %d failed: %w", i, err)
 		}
