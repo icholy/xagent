@@ -51,8 +51,8 @@ export type TimelineItem =
       data?: string
       url?: string
       // Source-defined key/value context copied from ExternalPayload.details.
-      // The schema is opaque; the UI applies a light convention over well-known
-      // keys (path/line/side/start_line/diff_hunk set by the GitHub extractor).
+      // The map is opaque to the UI: it is rendered as raw key/value pairs, with
+      // no knowledge of any particular key.
       details?: Record<string, string>
       wakes?: boolean
     }
