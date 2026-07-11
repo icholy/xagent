@@ -494,8 +494,8 @@ func (r *Runner) spec(ctx context.Context, task *model.Task) (*backend.Spec, err
 		},
 		Files: []backend.File{
 			// Allow non-root agents to write to this directory.
-			{Path: path.Dir(agent.ConfigPath(task.ID)), Mode: 0777, Dir: true},
-			{Path: agent.ConfigPath(task.ID), Data: cfgData, Mode: 0666},
+			{Path: path.Dir(agent.DefaultConfigStore.Path(task.ID)), Mode: 0777, Dir: true},
+			{Path: agent.DefaultConfigStore.Path(task.ID), Data: cfgData, Mode: 0666},
 		},
 	}, nil
 }
