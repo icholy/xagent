@@ -214,7 +214,7 @@ function RoutingRulesCard() {
             <Link to="/routing/test" search={{ org: orgId }}>
               <Button variant="outline">
                 <FlaskConical className="h-4 w-4" />
-                Test a routing rule
+                Test
               </Button>
             </Link>
             <Link to="/routing/new" search={{ org: orgId }}>

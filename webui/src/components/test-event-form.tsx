@@ -20,14 +20,6 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -59,9 +51,9 @@ export function TestEventForm() {
   const { data: eventTypesData, isLoading: eventTypesLoading } = useQuery(getEventTypes, {})
   const eventTypes = useMemo(() => eventTypesData?.eventTypes ?? [], [eventTypesData])
 
-  // The configured rules, rendered below so a match can be highlighted by its
-  // rule_index — closing the compose → see-which-rule-fired loop.
-  const { data: rulesData } = useQuery(getRoutingRules, {}, { refetchInterval: 6000 })
+  // The configured rules, looked up so a matched rule's detail (event type,
+  // filters) can be shown inline in the results by its rule_index.
+  const { data: rulesData } = useQuery(getRoutingRules, {})
   const rules = rulesData?.rules ?? []
 
   const [source, setSource] = useState('')
@@ -122,10 +114,6 @@ export function TestEventForm() {
     setConfirmFire(false)
     mutation.mutate(buildRequest(true))
   }
-
-  // Rule indexes that matched, so the rules table can highlight them. A -1
-  // rule_index is the shipped default (no configured row to highlight).
-  const matchedIndexes = new Set((result?.matches ?? []).map((m) => m.ruleIndex))
 
   return (
     <div className="space-y-6">
@@ -271,19 +259,19 @@ export function TestEventForm() {
             disabled={!selectedType || mutation.isPending}
             onClick={() => setConfirmFire(true)}
           >
-            Fire for real
+            Fire
           </Button>
         </div>
       </form>
 
-      {result && <ResultsPanel result={result} orgId={orgId} />}
-
-      <RulesTable rules={rules} eventTypes={eventTypes} matchedIndexes={matchedIndexes} />
+      {result && (
+        <ResultsPanel result={result} orgId={orgId} rules={rules} eventTypes={eventTypes} />
+      )}
 
       <Dialog open={confirmFire} onOpenChange={setConfirmFire}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Fire this event for real?</DialogTitle>
+            <DialogTitle>Fire this event?</DialogTitle>
             <DialogDescription>
               This routes the composed event through the live router: it will wake or create real
               tasks and persist a real event, just like an incoming webhook. This cannot be undone.
@@ -294,7 +282,7 @@ export function TestEventForm() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleFire}>
-              Fire for real
+              Fire
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -303,7 +291,26 @@ export function TestEventForm() {
   )
 }
 
-function ResultsPanel({ result, orgId }: { result: TestEventResponse; orgId: string }) {
+// Compact conditions summary for a matched rule, shown inline in the results.
+function ruleMatchBadges(rule: RoutingRule): string[] {
+  return rule.conditions.map((c) => {
+    const op = OP_LABELS[c.op as ConditionOp] ?? c.op
+    const value = c.value.length > 40 ? c.value.slice(0, 40) + '…' : c.value
+    return `${c.attr} ${op} ${value}`
+  })
+}
+
+function ResultsPanel({
+  result,
+  orgId,
+  rules,
+  eventTypes,
+}: {
+  result: TestEventResponse
+  orgId: string
+  rules: RoutingRule[]
+  eventTypes: EventTypeDef[]
+}) {
   const matches = result.matches
 
   return (
@@ -323,142 +330,94 @@ function ResultsPanel({ result, orgId }: { result: TestEventResponse; orgId: str
         </p>
       ) : (
         <div className="space-y-3">
-          {matches.map((match, i) => (
-            <div key={i} className="space-y-2 rounded-md border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">
-                  {match.ruleIndex < 0 ? 'Default rule' : `Rule #${match.ruleIndex + 1}`}
-                </Badge>
-                {match.wouldWake && <Badge variant="secondary">would wake</Badge>}
-                {match.wouldCreate && <Badge variant="secondary">would create</Badge>}
-              </div>
-
-              {result.fired && match.createdTaskIds.length > 0 && (
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Created tasks: </span>
-                  {match.createdTaskIds.map((id, j) => (
-                    <span key={String(id)}>
-                      {j > 0 && ', '}
-                      <Link
-                        to="/tasks/$id"
-                        params={{ id: String(id) }}
-                        search={{ org: orgId }}
-                        className="text-primary hover:underline"
-                      >
-                        Task {String(id)}
-                      </Link>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {result.fired && match.eventIds.length > 0 && (
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Events written: </span>
-                  {match.eventIds.map((id, j) => (
-                    <span key={String(id)}>
-                      {j > 0 && ', '}
-                      <Link
-                        to="/events/$id"
-                        params={{ id: String(id) }}
-                        search={{ org: orgId }}
-                        className="text-primary hover:underline"
-                      >
-                        Event {String(id)}
-                      </Link>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Compact conditions summary for a rule row, mirroring the routing rules table
-// on the events page.
-function ruleMatchBadges(rule: RoutingRule): string[] {
-  return rule.conditions.map((c) => {
-    const op = OP_LABELS[c.op as ConditionOp] ?? c.op
-    const value = c.value.length > 40 ? c.value.slice(0, 40) + '…' : c.value
-    return `${c.attr} ${op} ${value}`
-  })
-}
-
-function RulesTable({
-  rules,
-  eventTypes,
-  matchedIndexes,
-}: {
-  rules: RoutingRule[]
-  eventTypes: EventTypeDef[]
-  matchedIndexes: Set<number>
-}) {
-  if (rules.length === 0) {
-    return (
-      <div className="rounded-md border p-4 text-muted-foreground text-center text-sm">
-        No routing rules configured
-      </div>
-    )
-  }
-
-  return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">#</TableHead>
-            <TableHead>Event Type</TableHead>
-            <TableHead className="hidden md:table-cell">Filters</TableHead>
-            <TableHead>Action</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rules.map((rule, index) => {
-            const matched = matchedIndexes.has(index)
+          {matches.map((match, i) => {
+            // The matched rule, looked up by the index the router reported, so
+            // its event type + filters render right here in the result.
+            const rule = match.ruleIndex >= 0 ? rules[match.ruleIndex] : undefined
+            const filters = rule ? ruleMatchBadges(rule) : []
             return (
-              <TableRow key={index} className={matched ? 'bg-primary/10' : undefined}>
-                <TableCell className="font-mono text-muted-foreground">
-                  {index + 1}
-                  {matched && (
-                    <Badge variant="secondary" className="ml-2">
-                      matched
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="font-medium whitespace-nowrap">
-                  {eventTypeLabel(eventTypes, rule.source, rule.type)}
-                </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <div className="flex flex-wrap gap-1">
-                    {ruleMatchBadges(rule).map((label) => (
-                      <Badge
-                        key={label}
-                        variant="outline"
-                        className="font-mono max-w-full truncate"
-                      >
-                        {label}
+              <div key={i} className="space-y-2 rounded-md border p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {match.ruleIndex >= 0 ? (
+                    <Link
+                      to="/routing/$index"
+                      params={{ index: String(match.ruleIndex) }}
+                      search={{ org: orgId }}
+                    >
+                      <Badge variant="outline" className="cursor-pointer hover:bg-accent">
+                        Rule #{match.ruleIndex + 1}
                       </Badge>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {rule.wakeup && <Badge variant="secondary">wake</Badge>}
-                    {rule.create && <Badge variant="secondary">create</Badge>}
-                    {!rule.wakeup && !rule.create && (
-                      <span className="text-muted-foreground whitespace-nowrap">None</span>
+                    </Link>
+                  ) : (
+                    <Badge variant="outline">Default rule</Badge>
+                  )}
+                  {match.wouldWake && <Badge variant="secondary">would wake</Badge>}
+                  {match.wouldCreate && <Badge variant="secondary">would create</Badge>}
+                </div>
+
+                {rule && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+                    <span className="text-foreground font-medium">
+                      {eventTypeLabel(eventTypes, rule.source, rule.type)}
+                    </span>
+                    {filters.length > 0 ? (
+                      filters.map((label) => (
+                        <Badge
+                          key={label}
+                          variant="outline"
+                          className="font-mono max-w-full truncate"
+                        >
+                          {label}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span>no filters</span>
                     )}
                   </div>
-                </TableCell>
-              </TableRow>
+                )}
+
+                {result.fired && match.createdTaskIds.length > 0 && (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Created tasks: </span>
+                    {match.createdTaskIds.map((id, j) => (
+                      <span key={String(id)}>
+                        {j > 0 && ', '}
+                        <Link
+                          to="/tasks/$id"
+                          params={{ id: String(id) }}
+                          search={{ org: orgId }}
+                          className="text-primary hover:underline"
+                        >
+                          Task {String(id)}
+                        </Link>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {result.fired && match.eventIds.length > 0 && (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Events written: </span>
+                    {match.eventIds.map((id, j) => (
+                      <span key={String(id)}>
+                        {j > 0 && ', '}
+                        <Link
+                          to="/events/$id"
+                          params={{ id: String(id) }}
+                          search={{ org: orgId }}
+                          className="text-primary hover:underline"
+                        >
+                          Event {String(id)}
+                        </Link>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             )
           })}
-        </TableBody>
-      </Table>
+        </div>
+      )}
     </div>
   )
 }
