@@ -68,6 +68,13 @@ type Page[T any] struct {
 	Items     []T
 	NextToken string
 	PrevToken string
+	// More reports whether another page of rows exists beyond Items in the walked
+	// direction. It is the size+1 over-fetch result, independent of token
+	// emptiness, so a live-follow caller (whose PrevToken is always populated)
+	// can detect the tail without the page-length heuristic: More is false
+	// exactly when Items is the last page along the walk, including at an
+	// exact-page_size boundary (a full final page carries no extra row).
+	More bool
 }
 
 // Token is what an opaque page token encodes and the value List hands to
@@ -129,6 +136,10 @@ type Source[T, C any] interface {
 //     and is populated on any non-empty page so an append-only stream can be
 //     followed; an empty follow-poll echoes the request token so the caller
 //     keeps its place.
+//   - More is the over-fetch result itself: true iff a further page exists along
+//     the walked direction. Unlike NextToken it stays meaningful for the
+//     live-follow walk, whose PrevToken is always populated, so a caller detects
+//     the tail with !More instead of a page-length heuristic.
 //
 // Finally Items is oriented per opt.Reverse. ErrUnsupportedDirection from the
 // requested walk surfaces as ErrInvalidRequest (a bad token the client should
@@ -158,7 +169,7 @@ func List[T, C any](ctx context.Context, opt Options[T, C]) (*Page[T], error) {
 	if more {
 		items = items[:size]
 	}
-	page := &Page[T]{Items: items}
+	page := &Page[T]{Items: items, More: more}
 	switch {
 	case len(items) > 0:
 		// Query returns rows nearest-first, so items[0] is the boundary nearest

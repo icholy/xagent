@@ -233,8 +233,60 @@ func TestList_SinglePage(t *testing.T) {
 			assert.Equal(t, page.NextToken != "", tt.wantNextToken)
 			// PrevToken is set on any non-empty page; empty otherwise.
 			assert.Equal(t, page.PrevToken != "", len(tt.wantItems) > 0)
+			// On the forward walk, More tracks the over-fetch exactly like NextToken:
+			// true only when a further (older) page remains. A full final page — the
+			// exact-page_size boundary — carries no extra row, so More is false.
+			assert.Equal(t, page.More, tt.wantNextToken)
 		})
 	}
+}
+
+// TestList_MoreLiveFollow covers More on the backward (live-follow) walk, where
+// PrevToken is always populated so More is the only tail signal: it stays true
+// while newer rows remain and flips false on the last page — including when that
+// page is exactly page_size (the boundary the length heuristic gets wrong).
+func TestList_MoreLiveFollow(t *testing.T) {
+	t.Parallel()
+	src := pagination.NewMockSource([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, false)
+	opt := pagination.Options[int, int]{DefaultPageSize: 3, MaxPageSize: 100, PageSize: 3, Source: src}
+
+	// Walk to the oldest page to get a follow token with rows above it (2..10).
+	page, err := pagination.List(t.Context(), opt)
+	assert.NilError(t, err)
+	for page.NextToken != "" {
+		opt.PageToken = page.NextToken
+		page, err = pagination.List(t.Context(), opt)
+		assert.NilError(t, err)
+	}
+
+	// Follow newer from the oldest row (1): rows 2..10 remain, so each full page
+	// reports More until the tail.
+	opt.PageToken = page.PrevToken // above 1: [2,3,4], more (5..10 remain)
+	page, err = pagination.List(t.Context(), opt)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, page.Items, []int{4, 3, 2})
+	assert.Assert(t, page.More, "rows 5..10 remain above the page")
+
+	opt.PageToken = page.PrevToken // above 4: [5,6,7], more (8..10 remain)
+	page, err = pagination.List(t.Context(), opt)
+	assert.NilError(t, err)
+	assert.Assert(t, page.More, "rows 8..10 remain above the page")
+
+	// Above 7: [8,9,10] is exactly page_size and the last of the stream — the
+	// boundary case. More must be false even though PrevToken stays populated.
+	opt.PageToken = page.PrevToken
+	page, err = pagination.List(t.Context(), opt)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, page.Items, []int{10, 9, 8})
+	assert.Assert(t, !page.More, "exact page_size tail carries no further page")
+	assert.Assert(t, page.PrevToken != "", "follow token stays populated at the tail")
+
+	// An empty follow-poll past the tail is not "more" either.
+	opt.PageToken = page.PrevToken
+	page, err = pagination.List(t.Context(), opt)
+	assert.NilError(t, err)
+	assert.Assert(t, cmp.Len(page.Items, 0))
+	assert.Assert(t, !page.More, "empty follow-poll has no further page")
 }
 
 // TestList_Errors covers the ErrInvalidRequest contract: out-of-range page sizes

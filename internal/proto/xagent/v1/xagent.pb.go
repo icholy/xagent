@@ -3229,6 +3229,8 @@ type ListEventsByTaskResponse struct {
 	Events        []*Event               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`                                      // Always oldest-first (ascending id), every page and path.
 	PrevPageToken string                 `protobuf:"bytes,2,opt,name=prev_page_token,json=prevPageToken,proto3" json:"prev_page_token,omitempty"` // Older page (scroll back); empty when history is exhausted.
 	NextPageToken string                 `protobuf:"bytes,3,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"` // Newer page (scroll forward / live-follow); ALWAYS populated in
+	// the paged path so a client can keep polling the tail for appends.
+	More          bool `protobuf:"varint,4,opt,name=more,proto3" json:"more,omitempty"` // Whether another page exists beyond `events` in the direction just
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3282,6 +3284,13 @@ func (x *ListEventsByTaskResponse) GetNextPageToken() string {
 		return x.NextPageToken
 	}
 	return ""
+}
+
+func (x *ListEventsByTaskResponse) GetMore() bool {
+	if x != nil {
+		return x.More
+	}
+	return false
 }
 
 type RunnerEvent struct {
@@ -6543,11 +6552,12 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x03 \x01(\tR\tpageToken\"\x94\x01\n" +
+	"page_token\x18\x03 \x01(\tR\tpageToken\"\xa8\x01\n" +
 	"\x18ListEventsByTaskResponse\x12(\n" +
 	"\x06events\x18\x01 \x03(\v2\x10.xagent.v1.EventR\x06events\x12&\n" +
 	"\x0fprev_page_token\x18\x02 \x01(\tR\rprevPageToken\x12&\n" +
-	"\x0fnext_page_token\x18\x03 \x01(\tR\rnextPageToken\"\x8c\x01\n" +
+	"\x0fnext_page_token\x18\x03 \x01(\tR\rnextPageToken\x12\x12\n" +
+	"\x04more\x18\x04 \x01(\bR\x04more\"\x8c\x01\n" +
 	"\vRunnerEvent\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x14\n" +
 	"\x05event\x18\x02 \x01(\tR\x05event\x12\x18\n" +
