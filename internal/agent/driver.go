@@ -261,38 +261,38 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 // takes the legacy unpaged path instead).
 const eventPageSize = 50
 
+// injectableEventTypes is the set of event arms injected into the wake prompt:
+// to-agent instructions and self-contained external triggers. It is pushed to
+// the server as the ListEventsByTask types filter so the paged walk returns only
+// these arms (report/lifecycle/link are excluded server-side).
+var injectableEventTypes = []string{model.EventTypeInstruction, model.EventTypeExternal}
+
 // drainEvents walks the task's event stream forward from cfg.NextEventToken to
-// the tail via xagentclient.ListEventsByTask. It returns the instruction +
-// external events accumulated across the walk (the events eligible for wake
-// injection) along with the final next_page_token — the cursor position after
-// the current stream tail.
+// the tail via xagentclient.ListEventsByTask, filtered server-side to the
+// injectable arms (instruction + external). It returns the events accumulated
+// across the walk along with the final next_page_token — the cursor position
+// after the current filtered tail.
 //
-// The token advances over the FULL stream (the paged walk also yields
-// report/lifecycle/link events), so the returned cursor reflects the real tail
-// regardless of how many events are injectable. Only the injectable subset is
-// retained: the filter narrows to instruction + external, never moving the
-// cursor.
+// The cursor tracks the filtered stream: because event ids are monotonic, every
+// future injectable event has a higher id than the saved token and is delivered
+// on a later wake, so pushing the filter server-side never drops one.
 func (d *Driver) drainEvents(ctx context.Context, cfg *Config) ([]*xagentv1.Event, string, error) {
 	token := cfg.NextEventToken
-	drained := 0
 	var events []*xagentv1.Event
-	req := &xagentv1.ListEventsByTaskRequest{TaskId: d.TaskID, PageSize: eventPageSize, PageToken: cfg.NextEventToken}
+	req := &xagentv1.ListEventsByTaskRequest{
+		TaskId:    d.TaskID,
+		PageSize:  eventPageSize,
+		PageToken: cfg.NextEventToken,
+		Types:     injectableEventTypes,
+	}
 	for resp, err := range xagentclient.ListEventsByTask(ctx, d.Client, req) {
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to fetch events: %w", err)
 		}
 		token = resp.GetNextPageToken()
-		for _, e := range resp.GetEvents() {
-			drained++
-			if p := model.EventPayloadFromProto(e); p != nil {
-				switch p.Type() {
-				case model.EventTypeInstruction, model.EventTypeExternal:
-					events = append(events, e)
-				}
-			}
-		}
+		events = append(events, resp.GetEvents()...)
 	}
-	d.Log.Info("drained events", "count", drained, "retained", len(events))
+	d.Log.Info("drained events", "count", len(events))
 	return events, token, nil
 }
 
