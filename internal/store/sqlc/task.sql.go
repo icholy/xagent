@@ -283,18 +283,19 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 const listTasksPage = `-- name: ListTasksPage :many
 SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
 FROM tasks
-WHERE archived = FALSE
-  AND org_id = $1
+WHERE org_id = $1
+  AND ($2::bool OR archived = FALSE)
   AND (
-    NOT $2::bool
-    OR (created_at, id) < ($3::timestamp, $4::bigint)
+    NOT $3::bool
+    OR (created_at, id) < ($4::timestamp, $5::bigint)
   )
 ORDER BY created_at DESC, id DESC
-LIMIT $5
+LIMIT $6
 `
 
 type ListTasksPageParams struct {
 	OrgID           int64     `json:"org_id"`
+	Archived        bool      `json:"archived"`
 	UseCursor       bool      `json:"use_cursor"`
 	CursorCreatedAt time.Time `json:"cursor_created_at"`
 	CursorID        int64     `json:"cursor_id"`
@@ -304,6 +305,7 @@ type ListTasksPageParams struct {
 func (q *Queries) ListTasksPage(ctx context.Context, arg ListTasksPageParams) ([]Task, error) {
 	rows, err := q.db.QueryContext(ctx, listTasksPage,
 		arg.OrgID,
+		arg.Archived,
 		arg.UseCursor,
 		arg.CursorCreatedAt,
 		arg.CursorID,
