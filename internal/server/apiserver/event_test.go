@@ -484,6 +484,53 @@ func TestListEventsByTask_LiveFollow(t *testing.T) {
 	assert.Equal(t, poll2.Events[0].GetExternal().Description, "Event 2")
 }
 
+func TestListEventsByTask_TypesFilter(t *testing.T) {
+	t.Parallel()
+	// Arrange - a task whose stream carries mixed event types: the lifecycle
+	// CREATED event from task creation, plus a seeded instruction and external.
+	srv := New(Options{Store: teststore.New(t)})
+	org := orgWithWorkspace(t, srv)
+	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.InstructionPayload{Text: "do the thing"},
+	}))
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "PR comment"},
+	}))
+
+	// Empty types on the paged path → all types (instruction + external + the
+	// lifecycle CREATED), so more than the two seeded events come back.
+	all, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: 100,
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, len(all.Events) >= 3)
+
+	// A types filter narrows to just the requested types.
+	resp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: 100,
+		Types: []string{model.EventTypeExternal},
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Events), 1)
+	assert.Equal(t, resp.Events[0].GetExternal().Description, "PR comment")
+
+	// Multiple types widen the filter but still exclude lifecycle.
+	resp, err = srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: 100,
+		Types: []string{model.EventTypeInstruction, model.EventTypeExternal},
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(resp.Events), 2)
+	assert.Equal(t, resp.Events[0].GetInstruction().Text, "do the thing")
+	assert.Equal(t, resp.Events[1].GetExternal().Description, "PR comment")
+}
+
 func TestListEventsByTask_InvalidArgs(t *testing.T) {
 	t.Parallel()
 	// Arrange

@@ -114,6 +114,7 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 		OrgID:     caller.OrgID,
 		PageSize:  req.PageSize,
 		PageToken: req.PageToken,
+		Types:     req.Types,
 	})
 	if err != nil {
 		code := connect.CodeInternal
