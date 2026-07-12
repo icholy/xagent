@@ -165,6 +165,19 @@ func (d *Driver) runAgent(ctx context.Context) error {
 		return err
 	}
 
+	// Fetch new events and drain to the tail before running the agent. This runs
+	// on every run (first run and wake) uniformly: it pages ListEventsByTask
+	// forward from cfg.NextEventToken (empty on the first run) to the tail. The
+	// events are not injected here — injection is Layer 3 — but the drain must
+	// walk the full stream so the cursor reflects the real tail. The advanced
+	// cursor is held on cfg but persisted only by the post-run Save below, so a
+	// run that fails before that Save leaves the stored cursor untouched and the
+	// next run re-fetches from the same position (at-least-once). See
+	// proposals/draft/wake-prompt-event-injection.md.
+	if cfg.NextEventToken, err = d.drainEvents(ctx, cfg); err != nil {
+		return err
+	}
+
 	// Start agent
 	a, err := NewAgent(Options{
 		Type:       cfg.Type,
@@ -194,7 +207,9 @@ func (d *Driver) runAgent(ctx context.Context) error {
 		return err
 	}
 
-	// Save config
+	// Save config. The event cursor advanced in memory during the drain above but
+	// is persisted only here, after a.Prompt returned without error, so a run that
+	// failed mid-prompt leaves the stored cursor untouched (at-least-once).
 	cfg.Started = true
 	if err := d.Config.Save(d.TaskID, cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
@@ -233,6 +248,34 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 		}
 	}
 	return nil
+}
+
+// eventPageSize bounds each ListEventsByTask page the drain walks. A non-zero
+// size selects the paged live-follow path (an empty page_token with size 0
+// takes the legacy unpaged path instead).
+const eventPageSize = 50
+
+// drainEvents walks the task's event stream forward from cfg.NextEventToken to
+// the tail via xagentclient.ListEventsByTask and returns the final
+// next_page_token — the cursor position after the current stream tail.
+//
+// The events are intentionally discarded at this layer: Layer 2 only advances
+// the cursor and injects nothing. Layer 3 will consume the events for injection.
+// The drain still walks the full stream so the returned cursor reflects the real
+// tail regardless of how many events are pending.
+func (d *Driver) drainEvents(ctx context.Context, cfg *Config) (string, error) {
+	token := cfg.NextEventToken
+	drained := 0
+	req := &xagentv1.ListEventsByTaskRequest{TaskId: d.TaskID, PageSize: eventPageSize, PageToken: cfg.NextEventToken}
+	for resp, err := range xagentclient.ListEventsByTask(ctx, d.Client, req) {
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch events: %w", err)
+		}
+		token = resp.GetNextPageToken()
+		drained += len(resp.GetEvents())
+	}
+	d.Log.Info("drained events", "count", drained)
+	return token, nil
 }
 
 //go:embed PROMPT.md

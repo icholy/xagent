@@ -34,6 +34,10 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 		GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Version: testTaskVersion}}, nil
 		},
+		// A first (non-wake) run seeds the event cursor from the tail token.
+		ListEventsByTaskFunc: func(_ context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+			return &xagentv1.ListEventsByTaskResponse{NextPageToken: "tail-token"}, nil
+		},
 	}
 	// Log is required; tests that don't inspect output use the discard log.
 	// TestDriverRun_LogsToSink overrides it with a file-backed one.
@@ -58,6 +62,79 @@ func TestDriverRun(t *testing.T) {
 		},
 		protocmp.Transform(),
 	)
+}
+
+func TestDriverRun_DrainsEventsToTail(t *testing.T) {
+	t.Parallel()
+	// Arrange - a run whose event stream spans three pages: two with More=true
+	// then a final one (More=false) that marks the tail. The drain must follow
+	// next_page_token across all three and persist the final one.
+	store := ConfigStore(t.TempDir())
+	assert.NilError(t, store.Save(1, &Config{Type: TypeDummy}))
+	pages := map[string]*xagentv1.ListEventsByTaskResponse{
+		"":   {NextPageToken: "p1", More: true},
+		"p1": {NextPageToken: "p2", More: true},
+		"p2": {NextPageToken: "tail"}, // More defaults to false → tail reached
+	}
+	// The iterator mutates the request's PageToken in place, so the recorded call
+	// requests all alias one pointer — capture the token at call time instead.
+	var seenTokens []string
+	mock := &xagentclient.ClientMock{
+		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+			return &xagentv1.SubmitRunnerEventsResponse{}, nil
+		},
+		GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Version: testTaskVersion}}, nil
+		},
+		ListEventsByTaskFunc: func(_ context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+			seenTokens = append(seenTokens, req.GetPageToken())
+			return pages[req.GetPageToken()], nil
+		},
+	}
+	driver := &Driver{TaskID: 1, Client: mock, Log: DiscardDriverLog, Config: store}
+
+	// Act
+	assert.NilError(t, driver.Run(t.Context()))
+
+	// Assert - the three pages were walked in order and the final tail token was
+	// persisted as the new cursor.
+	assert.DeepEqual(t, seenTokens, []string{"", "p1", "p2"})
+	cfg, err := store.Load(1)
+	assert.NilError(t, err)
+	assert.Equal(t, cfg.NextEventToken, "tail")
+}
+
+func TestDriverRun_EventTokenNotAdvancedOnError(t *testing.T) {
+	t.Parallel()
+	// Arrange - a run whose agent errors. The drain computes a fresh tail token,
+	// but a failed run must leave the saved cursor untouched (at-least-once: the
+	// next run re-fetches from the same position).
+	store := ConfigStore(t.TempDir())
+	assert.NilError(t, store.Save(1, &Config{
+		Type:           TypeDummy,
+		NextEventToken: "old-token",
+		Dummy:          &DummyOptions{Error: "dummy agent failed on purpose"},
+	}))
+	mock := &xagentclient.ClientMock{
+		SubmitRunnerEventsFunc: func(_ context.Context, _ *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
+			return &xagentv1.SubmitRunnerEventsResponse{}, nil
+		},
+		GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+			return &xagentv1.GetTaskResponse{Task: &xagentv1.Task{Id: req.Id, Version: testTaskVersion}}, nil
+		},
+		ListEventsByTaskFunc: func(_ context.Context, _ *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+			return &xagentv1.ListEventsByTaskResponse{NextPageToken: "new-token"}, nil
+		},
+	}
+	driver := &Driver{TaskID: 1, Client: mock, Log: DiscardDriverLog, Config: store}
+
+	// Act - the driver reports the failure and exits 0, but the run did not succeed.
+	assert.NilError(t, driver.Run(t.Context()))
+
+	// Assert - the cursor was NOT advanced past its pre-run value.
+	cfg, err := store.Load(1)
+	assert.NilError(t, err)
+	assert.Equal(t, cfg.NextEventToken, "old-token")
 }
 
 func TestDriverRun_AgentError(t *testing.T) {
