@@ -31,10 +31,7 @@ import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Plus } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
-import {
-  useOrgLocalStorage,
-  useOrgLocalStorageBoolean,
-} from '@/hooks/use-org-local-storage'
+import { useOrgLocalStorage, useOrgLocalStorageBoolean } from '@/hooks/use-org-local-storage'
 
 const PAGE_SIZE_OPTIONS = ['10', '20', '50', '100']
 
