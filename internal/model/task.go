@@ -71,6 +71,11 @@ type Task struct {
 	Archived  bool        `json:"archived"`
 	CreatedAt time.Time   `json:"created_at"`
 	UpdatedAt time.Time   `json:"updated_at"`
+	// Namespace partitions subscription matching in the event router. Empty is
+	// the default namespace — the behavior every existing task already has. It is
+	// set at creation and read-only thereafter (see
+	// proposals/draft/task-namespaces.md).
+	Namespace string `json:"namespace,omitempty"`
 	// AutoArchive controls auto-archive after the task reaches a terminal
 	// status. 0 = never (default); <0 = archive immediately; >0 = delay.
 	AutoArchive time.Duration `json:"auto_archive,omitempty"`

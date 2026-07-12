@@ -27,8 +27,8 @@ func (q *Queries) ClearShellSession(ctx context.Context, arg ClearShellSessionPa
 }
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO tasks (name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session, namespace)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING id
 `
 
@@ -45,6 +45,7 @@ type CreateTaskParams struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	AutoArchive  int64     `json:"auto_archive"`
 	ShellSession string    `json:"shell_session"`
+	Namespace    string    `json:"namespace"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, error) {
@@ -61,6 +62,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (int64, 
 		arg.UpdatedAt,
 		arg.AutoArchive,
 		arg.ShellSession,
+		arg.Namespace,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -82,7 +84,7 @@ func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session, namespace
 FROM tasks
 WHERE id = $1 AND org_id = $2
 `
@@ -109,12 +111,13 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 		&i.UpdatedAt,
 		&i.AutoArchive,
 		&i.ShellSession,
+		&i.Namespace,
 	)
 	return i, err
 }
 
 const getTaskForUpdate = `-- name: GetTaskForUpdate :one
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session, namespace
 FROM tasks
 WHERE id = $1 AND org_id = $2
 FOR UPDATE
@@ -142,12 +145,13 @@ func (q *Queries) GetTaskForUpdate(ctx context.Context, arg GetTaskForUpdatePara
 		&i.UpdatedAt,
 		&i.AutoArchive,
 		&i.ShellSession,
+		&i.Namespace,
 	)
 	return i, err
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session, namespace
 FROM tasks
 WHERE archived = FALSE AND org_id = $1
 ORDER BY created_at DESC
@@ -176,6 +180,7 @@ func (q *Queries) ListTasks(ctx context.Context, orgID int64) ([]Task, error) {
 			&i.UpdatedAt,
 			&i.AutoArchive,
 			&i.ShellSession,
+			&i.Namespace,
 		); err != nil {
 			return nil, err
 		}
@@ -232,7 +237,7 @@ func (q *Queries) ListTasksDueForArchive(ctx context.Context, limit int32) ([]Li
 }
 
 const listTasksForRunner = `-- name: ListTasksForRunner :many
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session, namespace
 FROM tasks
 WHERE runner = $1 AND org_id = $2 AND command != 0 AND archived = FALSE
 ORDER BY created_at DESC
@@ -266,6 +271,7 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 			&i.UpdatedAt,
 			&i.AutoArchive,
 			&i.ShellSession,
+			&i.Namespace,
 		); err != nil {
 			return nil, err
 		}
@@ -281,7 +287,7 @@ func (q *Queries) ListTasksForRunner(ctx context.Context, arg ListTasksForRunner
 }
 
 const listTasksPage = `-- name: ListTasksPage :many
-SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
+SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session, namespace
 FROM tasks
 WHERE org_id = $1
   AND ($2::bool OR archived = FALSE)
@@ -332,6 +338,7 @@ func (q *Queries) ListTasksPage(ctx context.Context, arg ListTasksPageParams) ([
 			&i.UpdatedAt,
 			&i.AutoArchive,
 			&i.ShellSession,
+			&i.Namespace,
 		); err != nil {
 			return nil, err
 		}

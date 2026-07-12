@@ -67,6 +67,7 @@ type Task struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	AutoArchive  int64     `json:"auto_archive"`
 	ShellSession string    `json:"shell_session"`
+	Namespace    string    `json:"namespace"`
 }
 
 type TaskLink struct {
