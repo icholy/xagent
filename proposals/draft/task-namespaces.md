@@ -294,10 +294,15 @@ Net: a deployment that never sets a namespace behaves identically to today.
 
 ## Implementation Plan
 
-1. **Schema migration** — Delivers: `tasks.namespace TEXT NOT NULL DEFAULT ''`
-   plus an index supporting the subscription lookup (e.g. on
-   `(org_id, namespace)` or extending the routing-key access path). New dbmate
-   migration under `internal/store/sql/migrations/`, schema dumped to
+1. **Schema migration** — Delivers: `tasks.namespace TEXT NOT NULL DEFAULT ''`.
+   No index: the subscription lookup keys on `routing_key` + org, and namespace
+   filtering happens in Go in the router (step 4 compares `link.Namespace ==
+   rule.Namespace` over the batch lookup; step 3 only adds `t.namespace` as a
+   selected column via the `links → tasks` join). Nothing predicates or sorts
+   tasks by `namespace` in SQL, so an index on it would carry write-side cost for
+   no read benefit. Add one later only if a namespace-filtered query appears (e.g.
+   a "list tasks in namespace X" view). New dbmate migration under
+   `internal/store/sql/migrations/`, schema dumped to
    `internal/store/sql/schema.sql`. Depends on: nothing. Verifiable by: migration
    runs cleanly up and down; `schema.sql` regenerates.
 
