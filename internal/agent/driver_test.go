@@ -407,7 +407,7 @@ func TestDriverRun_SetupCommandOutputTeed(t *testing.T) {
 
 func TestConfigPrompt(t *testing.T) {
 	cfg := &Config{}
-	got, err := cfg.prompt("")
+	got, err := cfg.prompt(nil)
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(got, "xagent:get_my_task"))
 }
@@ -415,34 +415,33 @@ func TestConfigPrompt(t *testing.T) {
 func TestConfigPrompt_Started(t *testing.T) {
 	// A wake with nothing pending falls back to a bare nudge — no get_my_task.
 	cfg := &Config{Started: true}
-	got, err := cfg.prompt("")
+	got, err := cfg.prompt(nil)
 	assert.NilError(t, err)
 	assert.Equal(t, got, "The task was updated. Continue.")
 }
 
 func TestConfigPrompt_StartedWithEvents(t *testing.T) {
-	// A wake with pending events injects the raw event JSON directly, so the
-	// wake no longer depends on a get_my_task tool call.
-	events := `[
-  {
-    "id": "42",
-    "external": {
-      "description": "PR review requested"
-    }
-  }
-]`
+	// A wake with pending events injects the raw event JSON directly (marshaled by
+	// the template's eventsJSON func), so the wake no longer depends on a
+	// get_my_task tool call.
+	events := []*xagentv1.Event{
+		{Id: 42, Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{Description: "PR review requested"}}},
+	}
+	want, err := marshalEventsJSON(events)
+	assert.NilError(t, err)
+
 	cfg := &Config{Started: true}
 	got, err := cfg.prompt(events)
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(got, "The task received new events:"))
-	assert.Assert(t, strings.Contains(got, events))
+	assert.Assert(t, strings.Contains(got, want))
 	assert.Assert(t, strings.Contains(got, "Continue working on the task."))
 	assert.Assert(t, !strings.Contains(got, "get_my_task"))
 }
 
 func TestConfigPrompt_WorkspacePromptAppended(t *testing.T) {
 	cfg := &Config{Started: true, Prompt: "Custom workspace instructions."}
-	got, err := cfg.prompt("")
+	got, err := cfg.prompt(nil)
 	assert.NilError(t, err)
 	assert.Equal(t, got, "The task was updated. Continue.\n\nCustom workspace instructions.")
 }
