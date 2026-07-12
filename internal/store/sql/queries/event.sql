@@ -35,3 +35,30 @@ FROM events
 WHERE task_id = $1 AND org_id = $2
   AND (cardinality(sqlc.arg(types)::text[]) = 0 OR type = ANY(sqlc.arg(types)::text[]))
 ORDER BY id;
+
+-- name: ListEventsByTaskDesc :many
+-- Newest-first slice: the newest page (no cursor) and scroll-back (id < cursor).
+-- Backs the pagination-forward (primary) walk; List reverses to ascending for
+-- display. The optional types filter matches ListEventsByTask; covered by
+-- idx_events_task_id_id (no new migration).
+SELECT id, org_id, created_at, task_id, type, wake, payload
+FROM events
+WHERE task_id = sqlc.arg(task_id)
+  AND org_id = sqlc.arg(org_id)
+  AND (cardinality(sqlc.arg(types)::text[]) = 0 OR type = ANY(sqlc.arg(types)::text[]))
+  AND (NOT sqlc.arg(use_cursor)::bool OR id < sqlc.arg(cursor_id)::bigint)
+ORDER BY id DESC
+LIMIT sqlc.arg(page_limit);
+
+-- name: ListEventsByTaskAsc :many
+-- Live-follow slice (id > cursor), ascending. Backs the pagination-backward
+-- walk. The optional types filter matches ListEventsByTask; covered by
+-- idx_events_task_id_id (no new migration).
+SELECT id, org_id, created_at, task_id, type, wake, payload
+FROM events
+WHERE task_id = sqlc.arg(task_id)
+  AND org_id = sqlc.arg(org_id)
+  AND (cardinality(sqlc.arg(types)::text[]) = 0 OR type = ANY(sqlc.arg(types)::text[]))
+  AND id > sqlc.arg(cursor_id)::bigint
+ORDER BY id ASC
+LIMIT sqlc.arg(page_limit);
