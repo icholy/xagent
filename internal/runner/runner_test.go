@@ -77,6 +77,11 @@ func TestRunnerStart(t *testing.T) {
 		GetTaskFunc: func(_ context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			return &xagentv1.GetTaskResponse{Task: task.Proto("")}, nil
 		},
+		// The driver drains the event stream before running the agent; an empty
+		// page (more=false) makes the drain a single no-op call.
+		ListEventsByTaskFunc: func(_ context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+			return &xagentv1.ListEventsByTaskResponse{}, nil
+		},
 	}
 
 	// Create httptest server with the mock
