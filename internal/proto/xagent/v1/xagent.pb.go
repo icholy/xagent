@@ -3142,8 +3142,11 @@ func (*DeleteEventResponse) Descriptor() ([]byte, []int) {
 }
 
 type ListEventsByTaskRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        int64                  `protobuf:"varint,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	TaskId   int64                  `protobuf:"varint,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	PageSize int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"` // Max events per page (default 50, max 200). 0 with an empty
+	// page_token selects the legacy unpaged path (all events, ascending).
+	PageToken     string `protobuf:"bytes,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"` // Opaque bidirectional cursor (encodes a boundary id + direction).
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3185,9 +3188,25 @@ func (x *ListEventsByTaskRequest) GetTaskId() int64 {
 	return 0
 }
 
+func (x *ListEventsByTaskRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListEventsByTaskRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
 type ListEventsByTaskResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Events        []*Event               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	Events        []*Event               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`                                      // Always oldest-first (ascending id), every page and path.
+	PrevPageToken string                 `protobuf:"bytes,2,opt,name=prev_page_token,json=prevPageToken,proto3" json:"prev_page_token,omitempty"` // Older page (scroll back); empty when history is exhausted.
+	NextPageToken string                 `protobuf:"bytes,3,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"` // Newer page (scroll forward / live-follow); ALWAYS populated in
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3227,6 +3246,20 @@ func (x *ListEventsByTaskResponse) GetEvents() []*Event {
 		return x.Events
 	}
 	return nil
+}
+
+func (x *ListEventsByTaskResponse) GetPrevPageToken() string {
+	if x != nil {
+		return x.PrevPageToken
+	}
+	return ""
+}
+
+func (x *ListEventsByTaskResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
 }
 
 type RunnerEvent struct {
@@ -6469,11 +6502,16 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x05event\x18\x01 \x01(\v2\x10.xagent.v1.EventR\x05event\"$\n" +
 	"\x12DeleteEventRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x15\n" +
-	"\x13DeleteEventResponse\"2\n" +
+	"\x13DeleteEventResponse\"n\n" +
 	"\x17ListEventsByTaskRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\x03R\x06taskId\"D\n" +
+	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x1b\n" +
+	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x03 \x01(\tR\tpageToken\"\x94\x01\n" +
 	"\x18ListEventsByTaskResponse\x12(\n" +
-	"\x06events\x18\x01 \x03(\v2\x10.xagent.v1.EventR\x06events\"\x8c\x01\n" +
+	"\x06events\x18\x01 \x03(\v2\x10.xagent.v1.EventR\x06events\x12&\n" +
+	"\x0fprev_page_token\x18\x02 \x01(\tR\rprevPageToken\x12&\n" +
+	"\x0fnext_page_token\x18\x03 \x01(\tR\rnextPageToken\"\x8c\x01\n" +
 	"\vRunnerEvent\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x14\n" +
 	"\x05event\x18\x02 \x01(\tR\x05event\x12\x18\n" +
