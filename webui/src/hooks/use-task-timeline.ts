@@ -5,12 +5,20 @@ import { listEventsByTask } from '@/gen/xagent/v1/xagent-XAgentService_connectqu
 import type { ListEventsByTaskResponse } from '@/gen/xagent/v1/xagent_pb'
 import { eventsToTimeline } from '@/lib/timeline'
 import { useTimelineFollowers } from '@/lib/services'
+import { startVisibilityPoll } from '@/lib/visibility-poll'
 
 // The timeline is append-only, so every page is an immutable ascending window
 // over a fixed id range. That lets us open at the tail, prepend older pages on
 // demand, and fetch only the newer page on each live signal — no reversal, no
 // refetchInterval, no invalidation of loaded pages.
 const PAGE_SIZE = 50
+
+// New-entry detection is driven by the SSE task_logs signal (→ follow()). A
+// dropped or missed signal would stall the tail until the next signal or an SSE
+// reconnect, so poll follow() on an interval as a backstop. follow() is a cheap
+// one-page tail-fetch (an idle poll is one empty-page request), and
+// cancelRefetch: false makes an overlap with an SSE-driven follow a no-op.
+const FOLLOW_POLL_MS = 30_000
 
 // Live-follow tail polls return an empty page once the stream is caught up
 // (next_page_token is always populated, so it can't signal "done"). Left alone
@@ -77,6 +85,12 @@ export function useTaskTimeline(taskId: bigint) {
     () => timelineFollowers.register(String(taskId), () => void follow()),
     [timelineFollowers, taskId, follow],
   )
+
+  // Backstop the SSE-driven live-follow with a visibility-gated interval so a
+  // dropped task_logs signal can't stall the tail longer than the poll period.
+  // The poll is skipped while the tab is hidden (a background tab has closed the
+  // SSE and reconnects + resyncs on foreground).
+  useEffect(() => startVisibilityPoll(() => void follow(), FOLLOW_POLL_MS), [follow])
 
   // Every page is ascending, so the loaded pages flatten into one ascending
   // stream — no reversal.
