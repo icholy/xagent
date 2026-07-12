@@ -32,7 +32,7 @@ func TestList_NewestPage(t *testing.T) {
 	assert.Assert(t, page.BackwardToken != "", "live-follow token is always set")
 	// One query, no probe of the opposite walk.
 	assert.Assert(t, cmp.Len(src.QueryCalls(), 1))
-	assert.Equal(t, src.QueryCalls()[0].Backward, false)
+	assert.Equal(t, src.QueryCalls()[0].Token.Backward, false)
 	assert.Equal(t, src.QueryCalls()[0].Limit, 4) // over-fetch is size+1
 }
 
