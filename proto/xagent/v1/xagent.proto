@@ -411,10 +411,18 @@ message DeleteEventResponse {}
 
 message ListEventsByTaskRequest {
   int64 task_id = 1;
+  int32 page_size = 2;    // Max events per page (default 50, max 200). 0 with an empty
+                          // page_token selects the legacy unpaged path (all events, ascending).
+  string page_token = 3;  // Opaque bidirectional cursor (encodes a boundary id + direction).
+                          // Empty returns the newest page.
 }
 
 message ListEventsByTaskResponse {
-  repeated Event events = 1;
+  repeated Event events = 1;   // Always oldest-first (ascending id), every page and path.
+  string prev_page_token = 2;  // Older page (scroll back); empty when history is exhausted.
+  string next_page_token = 3;  // Newer page (scroll forward / live-follow); ALWAYS populated in
+                               // the paged path so a client can keep polling the tail for appends.
+                               // A page shorter than page_size means the tail is currently reached.
 }
 
 message RunnerEvent {
