@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/select'
 import { RelativeTime } from '@/components/relative-time'
 import { eventTypeLabel, OP_LABELS, type ConditionOp } from '@/lib/routing-rules'
-import { ChevronDown, ChevronUp, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, FlaskConical, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
 export const Route = createFileRoute('/events/')({
@@ -210,12 +210,20 @@ function RoutingRulesCard() {
           bottom; the first match wins.
         </CardDescription>
         <CardAction>
-          <Link to="/routing/new" search={{ org: orgId }}>
-            <Button>
-              <Plus className="h-4 w-4" />
-              Rule
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link to="/routing/test" search={{ org: orgId }}>
+              <Button variant="outline">
+                <FlaskConical className="h-4 w-4" />
+                Test a routing rule
+              </Button>
+            </Link>
+            <Link to="/routing/new" search={{ org: orgId }}>
+              <Button>
+                <Plus className="h-4 w-4" />
+                Rule
+              </Button>
+            </Link>
+          </div>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">
