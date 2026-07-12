@@ -23,8 +23,8 @@ ORDER BY created_at DESC;
 -- name: ListTasksPage :many
 SELECT id, name, runner, workspace, status, command, version, org_id, archived, created_at, updated_at, auto_archive, shell_session
 FROM tasks
-WHERE archived = FALSE
-  AND org_id = sqlc.arg(org_id)
+WHERE org_id = sqlc.arg(org_id)
+  AND (sqlc.arg(archived)::bool OR archived = FALSE)
   AND (
     NOT sqlc.arg(use_cursor)::bool
     OR (created_at, id) < (sqlc.arg(cursor_created_at)::timestamp, sqlc.arg(cursor_id)::bigint)
