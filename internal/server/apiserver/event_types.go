@@ -77,6 +77,7 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 		Description: req.Description,
 		UserID:      caller.ID,
 		Orgs:        []int64{caller.OrgID},
+		Attrs:       eventrouter.Attrs{},
 		Details:     req.Details,
 	}
 	for key, value := range req.Attrs {
@@ -86,9 +87,6 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 		case "url":
 			input.URL = value
 		default:
-			if input.Attrs == nil {
-				input.Attrs = eventrouter.Attrs{}
-			}
 			input.Attrs[key] = []string{value}
 		}
 	}
