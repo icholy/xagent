@@ -36,10 +36,13 @@ func ListEventsByTask(ctx context.Context, c Client, req *xagentv1.ListEventsByT
 	return func(yield func(*xagentv1.ListEventsByTaskResponse, error) bool) {
 		// Shallow-copy req so PageToken can advance as we walk without mutating the
 		// caller's request (and so re-ranging restarts from the original cursor).
+		// Types carries forward unchanged on every page so a server-side type
+		// filter applies to the whole walk.
 		cur := &xagentv1.ListEventsByTaskRequest{
 			TaskId:    req.GetTaskId(),
 			PageSize:  req.GetPageSize(),
 			PageToken: req.GetPageToken(),
+			Types:     req.GetTypes(),
 		}
 		for {
 			resp, err := c.ListEventsByTask(ctx, cur)

@@ -105,23 +105,22 @@ func TestDriverRun_DrainsEventsToTail(t *testing.T) {
 	assert.Equal(t, cfg.NextEventToken, "tail")
 }
 
-func TestDrainEvents_FiltersToInjectableTypes(t *testing.T) {
+func TestDrainEvents_RequestsServerSideTypeFilter(t *testing.T) {
 	t.Parallel()
-	// Arrange - a single page mixing every event type. The drain retains only the
-	// instruction + external events for injection while advancing the token over
-	// the FULL stream (report/lifecycle/link filtered out must not move the cursor).
+	// Arrange - the drain pushes the instruction + external filter to the server
+	// via the request's Types field (the server does the filtering), then returns
+	// the events it gets back and the tail token.
 	page := &xagentv1.ListEventsByTaskResponse{
 		NextPageToken: "tail",
 		Events: []*xagentv1.Event{
 			{Id: 1, Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{Text: "do the thing"}}},
-			{Id: 2, Payload: &xagentv1.Event_Report{Report: &xagentv1.ReportPayload{Content: "working"}}},
 			{Id: 3, Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{Description: "PR comment"}}},
-			{Id: 4, Payload: &xagentv1.Event_Lifecycle{Lifecycle: &xagentv1.LifecyclePayload{}}},
-			{Id: 5, Payload: &xagentv1.Event_Link{Link: &xagentv1.LinkPayload{Url: "https://example.com"}}},
 		},
 	}
+	var gotTypes []string
 	mock := &xagentclient.ClientMock{
-		ListEventsByTaskFunc: func(_ context.Context, _ *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+		ListEventsByTaskFunc: func(_ context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+			gotTypes = req.GetTypes()
 			return page, nil
 		},
 	}
@@ -130,9 +129,10 @@ func TestDrainEvents_FiltersToInjectableTypes(t *testing.T) {
 	// Act
 	events, token, err := driver.drainEvents(t.Context(), &Config{})
 
-	// Assert - only the instruction (id 1) and external (id 3) events survive, in
-	// order, and the token advanced to the page's tail.
+	// Assert - the request carried the type filter, and the returned events and
+	// tail token passed through.
 	assert.NilError(t, err)
+	assert.DeepEqual(t, gotTypes, []string{"instruction", "external"})
 	assert.Equal(t, token, "tail")
 	assert.Assert(t, cmp.Len(events, 2))
 	assert.Equal(t, events[0].GetId(), int64(1))
