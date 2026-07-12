@@ -107,12 +107,12 @@ function TasksPage() {
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
+            <Label htmlFor="show-archived">Show archived</Label>
             <Switch
               id="show-archived"
               checked={archived}
               onCheckedChange={handleShowArchivedChange}
             />
-            <Label htmlFor="show-archived">Show archived</Label>
           </div>
           <Select value={pageSize} onValueChange={handlePageSizeChange}>
             <SelectTrigger className="w-32">
