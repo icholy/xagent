@@ -37,38 +37,34 @@ func TestRenderGolden(t *testing.T) {
 		},
 	}
 	tests := []struct {
-		name    string
-		started bool
-		prompt  string
-		events  []*xagentv1.Event
-		golden  string
+		name   string
+		opts   Options
+		golden string
 	}{
 		{
 			name:   "first run bootstraps via get_my_task",
+			opts:   Options{},
 			golden: "prompt-first-run.golden",
 		},
 		{
-			name:    "wake injects pending events",
-			started: true,
-			events:  events,
-			golden:  "prompt-wake-events.golden",
+			name:   "wake injects pending events",
+			opts:   Options{Started: true, Events: events},
+			golden: "prompt-wake-events.golden",
 		},
 		{
-			name:    "wake with nothing pending falls back",
-			started: true,
-			golden:  "prompt-wake-empty.golden",
+			name:   "wake with nothing pending falls back",
+			opts:   Options{Started: true},
+			golden: "prompt-wake-empty.golden",
 		},
 		{
-			name:    "wake injects events with a workspace prompt appended",
-			started: true,
-			prompt:  "Custom workspace instructions.",
-			events:  events,
-			golden:  "prompt-wake-events-workspace.golden",
+			name:   "wake injects events with a workspace prompt appended",
+			opts:   Options{Started: true, Prompt: "Custom workspace instructions.", Events: events},
+			golden: "prompt-wake-events-workspace.golden",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.started, tt.prompt, tt.events)
+			got, err := Render(tt.opts)
 			assert.NilError(t, err)
 			golden.Assert(t, got, tt.golden)
 		})

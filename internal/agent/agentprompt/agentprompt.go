@@ -40,24 +40,24 @@ var promptTemplate = template.Must(
 	template.New("prompt").Funcs(template.FuncMap{"RenderEvent": RenderEvent}).Parse(promptText),
 )
 
-// Render builds the bootstrap prompt sent to the agent. started reports whether
-// the task has run before; prompt is the workspace prompt appended at the end;
-// events is the instruction + external events since the saved cursor. The wake
-// branch of the template loops over the events, rendering each via the
-// RenderEvent func. events is empty on the first run and on a wake with nothing
-// pending, in which case nothing is injected.
-func Render(started bool, prompt string, events []*xagentv1.Event) (string, error) {
+// Options are the inputs to Render.
+type Options struct {
+	// Started reports whether the task has run before. The first run renders the
+	// get_my_task bootstrap; a subsequent run renders the wake branch.
+	Started bool
+	// Prompt is the workspace prompt appended at the end, if any.
+	Prompt string
+	// Events is the instruction + external events since the saved cursor. The wake
+	// branch of the template loops over them, rendering each via the RenderEvent
+	// func. It is empty on the first run and on a wake with nothing pending, in
+	// which case nothing is injected.
+	Events []*xagentv1.Event
+}
+
+// Render builds the bootstrap prompt sent to the agent from opts.
+func Render(opts Options) (string, error) {
 	var b strings.Builder
-	err := promptTemplate.Execute(&b, struct {
-		Started bool
-		Prompt  string
-		Events  []*xagentv1.Event
-	}{
-		Started: started,
-		Prompt:  prompt,
-		Events:  events,
-	})
-	if err != nil {
+	if err := promptTemplate.Execute(&b, opts); err != nil {
 		return "", err
 	}
 	return b.String(), nil
