@@ -12,7 +12,9 @@ import (
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/pagination"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/store"
 )
 
 func (s *Server) ListExternalEvents(ctx context.Context, req *xagentv1.ListExternalEventsRequest) (*xagentv1.ListExternalEventsResponse, error) {
@@ -93,14 +95,39 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
 		}
 	}
-	// nil types → all event types. The store returns ascending (chronological)
-	// stream order (ORDER BY id), which is what the only order-sensitive consumer
-	// — the activity timeline — wants, so pass it through as-is.
-	events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID, nil)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+	// Legacy unpaged path: no pagination fields → all events, ascending. nil types
+	// → all event types. The store returns ascending (chronological) stream order
+	// (ORDER BY id), which is what the only order-sensitive consumer — the activity
+	// timeline — wants, so pass it through as-is.
+	if req.PageSize == 0 && req.PageToken == "" {
+		events, err := s.store.ListEventsByTask(ctx, nil, req.TaskId, caller.OrgID, nil)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		return &xagentv1.ListEventsByTaskResponse{
+			Events: model.ProtoMap(events),
+		}, nil
 	}
+	// Paged path: bidirectional keyset page (empty token → newest page).
+	page, err := s.store.ListEventsByTaskPage(ctx, nil, store.ListEventsByTaskPageParams{
+		TaskID:    req.TaskId,
+		OrgID:     caller.OrgID,
+		PageSize:  req.PageSize,
+		PageToken: req.PageToken,
+	})
+	if err != nil {
+		code := connect.CodeInternal
+		if errors.Is(err, pagination.ErrInvalidRequest) {
+			code = connect.CodeInvalidArgument
+		}
+		return nil, connect.NewError(code, err)
+	}
+	// The primary (forward) walk goes toward older rows, so the store's NextToken
+	// is the timeline's "previous" (scroll-back) page; the reverse (backward) walk
+	// is the newer/live-follow "next".
 	return &xagentv1.ListEventsByTaskResponse{
-		Events: model.ProtoMap(events),
+		Events:        model.ProtoMap(page.Items),
+		PrevPageToken: page.NextToken,
+		NextPageToken: page.PrevToken,
 	}, nil
 }
