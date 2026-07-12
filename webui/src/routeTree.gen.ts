@@ -18,6 +18,7 @@ import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
+import { Route as RoutingTestRouteImport } from './routes/routing.test'
 import { Route as RoutingNewRouteImport } from './routes/routing.new'
 import { Route as RoutingIndexRouteImport } from './routes/routing.$index'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
@@ -70,6 +71,11 @@ const TasksIdRoute = TasksIdRouteImport.update({
   path: '/tasks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RoutingTestRoute = RoutingTestRouteImport.update({
+  id: '/routing/test',
+  path: '/routing/test',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RoutingNewRoute = RoutingNewRouteImport.update({
   id: '/routing/new',
   path: '/routing/new',
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
+  '/routing/test': typeof RoutingTestRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
+  '/routing/test': typeof RoutingTestRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
+  '/routing/test': typeof RoutingTestRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/routing/$index'
     | '/routing/new'
+    | '/routing/test'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/routing/$index'
     | '/routing/new'
+    | '/routing/test'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/routing/$index'
     | '/routing/new'
+    | '/routing/test'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
@@ -216,6 +228,7 @@ export interface RootRouteChildren {
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   RoutingIndexRoute: typeof RoutingIndexRoute
   RoutingNewRoute: typeof RoutingNewRoute
+  RoutingTestRoute: typeof RoutingTestRoute
   TasksIdRoute: typeof TasksIdRoute
   TasksNewRoute: typeof TasksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
@@ -290,6 +303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/routing/test': {
+      id: '/routing/test'
+      path: '/routing/test'
+      fullPath: '/routing/test'
+      preLoaderRoute: typeof RoutingTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/routing/new': {
       id: '/routing/new'
       path: '/routing/new'
@@ -344,6 +364,7 @@ const rootRouteChildren: RootRouteChildren = {
   OauthAuthorizeRoute: OauthAuthorizeRoute,
   RoutingIndexRoute: RoutingIndexRoute,
   RoutingNewRoute: RoutingNewRoute,
+  RoutingTestRoute: RoutingTestRoute,
   TasksIdRoute: TasksIdRoute,
   TasksNewRoute: TasksNewRoute,
   EventsIndexRoute: EventsIndexRoute,
