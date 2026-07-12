@@ -26,11 +26,11 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
-import { TaskTimeline } from '@/components/task-timeline'
+import { TaskTimelineChat } from '@/components/task-timeline-chat'
 import { TaskShellPanel } from '@/components/task-shell-panel'
 import { TaskLinksTab } from '@/components/task-links'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Send, Loader2, List, Terminal, Link2 } from 'lucide-react'
+import { Send, Loader2, List, Terminal, Link2, ChevronDown } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
@@ -62,6 +62,9 @@ function TaskDetail() {
       replace: true,
     })
   const [instruction, setInstruction] = useState('')
+  // On mobile the metadata strip collapses to just the status row; this toggles
+  // the rest (runner/workspace/created/updated). Always shown on md+.
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-grow the composer to fit its content. Done in JS rather than relying on
@@ -244,63 +247,73 @@ function TaskDetail() {
       {/* Details + activity in a single card: a metadata header strip followed
           by the selected view (timeline / shell / links). The tab switcher that
           picks the view lives up in the page header, beside the actions menu. */}
-      <div className="overflow-hidden rounded-lg border">
+      <div
+        className={cn(
+          'overflow-hidden rounded-lg border',
+          tab === 'timeline' && 'flex h-[calc(100dvh-12rem)] flex-col',
+        )}
+      >
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b p-4 text-sm">
-          <div className="flex items-center gap-2">
+          {/* Status row: always visible. On mobile it's the collapsed header,
+              with a chevron that expands the rest; on md+ the chevron is hidden. */}
+          <div className="flex w-full items-center gap-2 md:w-auto">
             <span className="text-muted-foreground">Status:</span>
             <StatusBadge task={task} />
             <CommandBadge task={task} />
             <ArchivedBadge task={task} />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto h-6 w-6 md:hidden"
+              onClick={() => setDetailsOpen((v) => !v)}
+              aria-label={detailsOpen ? 'Hide details' : 'Show details'}
+              aria-expanded={detailsOpen}
+            >
+              <ChevronDown
+                className={cn('h-4 w-4 transition-transform', detailsOpen && 'rotate-180')}
+              />
+            </Button>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Runner:</span>
-            <span>{task.runner}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Workspace:</span>
-            <span>{task.workspace}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Created:</span>
-            <span>
-              {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
-            </span>
-          </div>
-          {task.updatedAt && (
+          {/* The rest: hidden on mobile until expanded, always shown on md+. */}
+          <div
+            className={cn(
+              'flex-wrap items-center gap-x-6 gap-y-2 md:flex',
+              detailsOpen ? 'flex' : 'hidden',
+            )}
+          >
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Updated:</span>
+              <span className="text-muted-foreground">Runner:</span>
+              <span>{task.runner}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Workspace:</span>
+              <span>{task.workspace}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Created:</span>
               <span>
-                <RelativeTime date={timestampDate(task.updatedAt)} />
+                {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
               </span>
             </div>
-          )}
+            {task.updatedAt && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Updated:</span>
+                <span>
+                  <RelativeTime date={timestampDate(task.updatedAt)} />
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {tab === 'timeline' && (
-          <>
-            <div className="p-6">
-              {/* Scroll-back into history. The timeline opens at the newest
-                  page; this pulls older pages until the first event is
-                  reached, at which point prev_page_token empties and the
-                  button disappears. */}
-              {hasOlder && (
-                <div className="mb-4 flex justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => loadOlder()}
-                    disabled={isLoadingOlder}
-                  >
-                    {isLoadingOlder ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Load older'}
-                  </Button>
-                </div>
-              )}
-              <TaskTimeline items={timeline} />
-            </div>
-
-            {/* Add instruction */}
-            {!isArchivedTask(task) && (
-              <div className="border-t p-4">
+          <TaskTimelineChat
+            items={timeline}
+            hasOlder={hasOlder}
+            loadOlder={loadOlder}
+            isLoadingOlder={isLoadingOlder}
+            composer={
+              isArchivedTask(task) ? undefined : (
                 <form onSubmit={handleAddInstruction} className="flex items-end gap-2">
                   <Textarea
                     ref={textareaRef}
@@ -325,9 +338,9 @@ function TaskDetail() {
                     )}
                   </Button>
                 </form>
-              </div>
-            )}
-          </>
+              )
+            }
+          />
         )}
 
         {tab === 'shell' && (
