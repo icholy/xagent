@@ -5,13 +5,13 @@ import {
   getTaskDetails,
   listTasks,
   listExternalEvents,
-  listEventsByTask,
   getEvent,
   listWorkspaces,
   listOrgMembers,
   listKeys,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { useNotificationSSE } from '@/lib/services'
+import { notifyTimelineFollowers } from '@/lib/timeline-follow'
 import type { Notification, NotificationResource } from '@/lib/notification-sse'
 
 function invalidateResource(qc: QueryClient, r: NotificationResource) {
@@ -31,15 +31,11 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
       break
     case 'task_logs':
       // The logs table is gone; reports and lifecycle transitions are events on
-      // the task's stream. A task_logs change means the stream grew, so refresh
-      // the task's events.
-      qc.invalidateQueries({
-        queryKey: createConnectQueryKey({
-          schema: listEventsByTask,
-          input: { taskId: BigInt(r.id) },
-          cardinality: 'finite',
-        }),
-      })
+      // the task's stream. A task_logs change means the stream grew. The
+      // timeline is an append-only bidirectional infinite query, so instead of
+      // invalidating (which would re-fetch every loaded page), drive its
+      // live-follow: fetch only the newer page and append it at the tail.
+      notifyTimelineFollowers(String(r.id))
       break
     case 'task_links':
       qc.invalidateQueries({
