@@ -119,25 +119,22 @@ type eventSource struct {
 	params ListEventsByTaskPageParams
 }
 
-func (src eventSource) types() []string {
-	// A nil slice encodes as SQL NULL (cardinality(NULL) is NULL, not 0), which
-	// would filter everything out; coerce to an empty array so the "all types"
-	// case matches the query's cardinality(...) = 0 guard.
-	if src.params.Types == nil {
-		return []string{}
-	}
-	return src.params.Types
-}
-
 // Query serves both walks: token.Backward == true is the ascending live-follow
 // (rows newer than the cursor); token.Backward == false the primary descending
 // walk (a nil cursor = newest page).
 func (src eventSource) Query(ctx context.Context, token pagination.Token[eventCursor], limit int) ([]*model.Event, error) {
+	// A nil slice encodes as SQL NULL (cardinality(NULL) is NULL, not 0), which
+	// would filter everything out; coerce to an empty array so the "all types"
+	// case matches the query's cardinality(...) = 0 guard.
+	types := src.params.Types
+	if types == nil {
+		types = []string{}
+	}
 	if token.Backward {
 		rows, err := src.store.q(src.tx).ListEventsByTaskAsc(ctx, sqlc.ListEventsByTaskAscParams{
 			TaskID:    src.params.TaskID,
 			OrgID:     src.params.OrgID,
-			Types:     src.types(),
+			Types:     types,
 			CursorID:  token.Cursor.ID,
 			PageLimit: int32(limit), // int32 only at the sqlc boundary
 		})
@@ -149,7 +146,7 @@ func (src eventSource) Query(ctx context.Context, token pagination.Token[eventCu
 	args := sqlc.ListEventsByTaskDescParams{
 		TaskID:    src.params.TaskID,
 		OrgID:     src.params.OrgID,
-		Types:     src.types(),
+		Types:     types,
 		UseCursor: token.Cursor != nil,
 		PageLimit: int32(limit), // int32 only at the sqlc boundary
 	}
