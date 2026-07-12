@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
   getTaskDetails,
-  listEventsByTask,
   updateTask,
   archiveTask,
   unarchiveTask,
@@ -14,7 +13,7 @@ import { useState, useRef, useLayoutEffect } from 'react'
 import type { TaskTab } from '@/lib/task'
 import { toTaskTab } from '@/lib/task'
 import { canOpenShell, isArchivedTask } from '@/lib/task'
-import { eventsToTimeline } from '@/lib/timeline'
+import { useTaskTimeline } from '@/hooks/use-task-timeline'
 import { useOrgId } from '@/hooks/use-org-id'
 import { useShellState } from '@/hooks/use-shell-state'
 import { isShellActive } from '@/lib/shell-sessions'
@@ -84,15 +83,21 @@ function TaskDetail() {
 
   // The single activity view is the timeline: every instruction, external
   // event, report, lifecycle transition, and link the task produced, in order.
-  const { data: eventsData, refetch: refetchEvents } = useQuery(
-    listEventsByTask,
-    { taskId },
-    { refetchInterval: 60000 },
-  )
+  // It is a bidirectional infinite query — opens at the tail, loads older pages
+  // on demand, and follows the tail on each SSE task_logs signal.
+  const {
+    timeline,
+    follow: followTimeline,
+    loadOlder,
+    hasOlder,
+    isLoadingOlder,
+  } = useTaskTimeline(taskId)
 
   const refetchAll = () => {
     refetch()
-    refetchEvents()
+    // A mutation may append a timeline event (a new instruction, a lifecycle
+    // transition); pull just the newer page so it shows without a full refetch.
+    followTimeline()
   }
 
   const updateMutation = useMutation(updateTask, { onSuccess: refetchAll })
@@ -159,7 +164,6 @@ function TaskDetail() {
 
   const task = data?.task
   const links = data?.links ?? []
-  const timeline = eventsToTimeline(eventsData?.events ?? [])
 
   if (!task) {
     return (
@@ -275,6 +279,22 @@ function TaskDetail() {
         {tab === 'timeline' && (
           <>
             <div className="p-6">
+              {/* Scroll-back into history. The timeline opens at the newest
+                  page; this pulls older pages until the first event is
+                  reached, at which point prev_page_token empties and the
+                  button disappears. */}
+              {hasOlder && (
+                <div className="mb-4 flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadOlder()}
+                    disabled={isLoadingOlder}
+                  >
+                    {isLoadingOlder ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Load older'}
+                  </Button>
+                </div>
+              )}
               <TaskTimeline items={timeline} />
             </div>
 
