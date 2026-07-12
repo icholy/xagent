@@ -26,6 +26,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 		OrgID:     caller.OrgID,
 		PageSize:  req.PageSize,
 		PageToken: req.PageToken,
+		Archived:  req.Archived,
 	})
 	if err != nil {
 		code := connect.CodeInternal
