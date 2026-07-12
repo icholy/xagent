@@ -22,6 +22,7 @@ import { ArchivedBadge } from '@/components/archived-badge'
 import { ArchiveButton } from '@/components/archive-button'
 import { TaskActionsMenu } from '@/components/task-actions-menu'
 import { StatusBadge } from '@/components/status-badge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { RelativeTime } from '@/components/relative-time'
@@ -261,6 +262,11 @@ function TaskDetail() {
             <StatusBadge task={task} />
             <CommandBadge task={task} />
             <ArchivedBadge task={task} />
+            {task.namespace && (
+              <Badge variant="secondary" title="Namespace">
+                {task.namespace}
+              </Badge>
+            )}
             <Button
               variant="ghost"
               size="icon"

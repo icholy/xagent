@@ -280,6 +280,21 @@ export function RoutingRuleForm({
         </div>
       </div>
 
+      <div className="space-y-2 rounded-md border p-4">
+        <Label htmlFor="namespace">Namespace (optional)</Label>
+        <Input
+          id="namespace"
+          placeholder="Default namespace"
+          value={values.namespace}
+          onChange={(e) => setValues({ ...values, namespace: e.target.value })}
+        />
+        <p className="text-muted-foreground text-xs">
+          Partitions subscription matching. Leave empty for the default namespace. A task created by
+          this rule inherits the namespace, and the rule's wake-vs-create decision only sees
+          subscribers in the same namespace.
+        </p>
+      </div>
+
       <div className="space-y-4 rounded-md border p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
