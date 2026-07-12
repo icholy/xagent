@@ -338,6 +338,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 			notification.Resources = []model.NotificationResource{
 				{Action: "updated", Type: "task", ID: taskID},
 				{Action: "updated", Type: "event", ID: event.ID},
+				{Action: "appended", Type: "task_logs", ID: taskID},
 			}
 			notification.ChannelMessage = fmt.Sprintf("Task %d: %s (%s)", taskID, input.Description, input.URL)
 			return tx.Commit()
