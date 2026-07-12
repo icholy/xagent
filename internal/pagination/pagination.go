@@ -6,11 +6,12 @@
 // Pagination is bidirectional. A page token carries a boundary cursor plus a
 // Backward bool (default false = the primary/forward walk). List passes that
 // bit straight into Source.Query, and returns two continuation tokens on every
-// page: ForwardToken continues the primary walk (toward older rows) and empties
-// when that direction is exhausted; BackwardToken reverses it (toward newer
-// rows) and, on a non-empty page, stays populated so an append-only stream can
-// be followed past its tail. A forward-only caller (the task list) simply
-// ignores BackwardToken and behaves exactly as it did before bidirectionality.
+// page: NextToken continues the primary (forward) walk (toward older rows) and
+// empties when that direction is exhausted; PrevToken reverses it (the backward
+// walk, toward newer rows) and, on a non-empty page, stays populated so an
+// append-only stream can be followed past its tail. A forward-only caller (the
+// task list) simply ignores PrevToken and behaves exactly as it did before
+// bidirectionality.
 package pagination
 
 import (
@@ -54,15 +55,15 @@ type Config struct {
 }
 
 // Page is one page plus the two continuation tokens, both derived from the
-// page's own boundary rows — no extra query. ForwardToken continues the primary
-// walk (older) and empties when that direction is exhausted; BackwardToken
-// reverses it (newer) and, on a non-empty page, stays populated past the tail
-// so an append-only stream can be followed. A forward-only caller (the task
-// list) simply ignores BackwardToken.
+// page's own boundary rows — no extra query. NextToken continues the primary
+// (forward) walk and empties when that direction is exhausted; PrevToken
+// reverses it (the backward walk) and, on a non-empty page, stays populated past
+// the tail so an append-only stream can be followed. A forward-only caller (the
+// task list) simply ignores PrevToken.
 type Page[T any] struct {
-	Items         []T
-	ForwardToken  string
-	BackwardToken string
+	Items     []T
+	NextToken string
+	PrevToken string
 }
 
 // Token is what an opaque page token encodes and the value List hands to
@@ -117,13 +118,13 @@ type Source[T, C any] interface {
 // the returned page's own boundary rows, so a bidirectional page costs a single
 // query with no probe of the opposite walk:
 //
-//   - ForwardToken (older) comes from the lowest-key boundary and is populated
-//     only when the over-fetch shows more rows remain that way — it empties at
-//     history's end.
-//   - BackwardToken (newer) comes from the highest-key boundary and is
-//     populated on any non-empty page so an append-only stream can be followed;
-//     an empty follow-poll echoes the request token so the caller keeps its
-//     place.
+//   - NextToken (the forward walk, older) comes from the lowest-key boundary and
+//     is populated only when the over-fetch shows more rows remain that way — it
+//     empties at history's end.
+//   - PrevToken (the backward walk, newer) comes from the highest-key boundary
+//     and is populated on any non-empty page so an append-only stream can be
+//     followed; an empty follow-poll echoes the request token so the caller
+//     keeps its place.
 //
 // Finally Items is oriented per cfg.Reverse. ErrUnsupportedDirection from the
 // requested walk surfaces as ErrInvalidRequest (a bad token the client should
@@ -167,10 +168,10 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 			// Newer/live-follow page: follow onward from the furthest (highest)
 			// key — always resumable so the tail can be polled — and expose the
 			// nearest (lowest) key as the way back into older history.
-			if page.BackwardToken, err = Encode(Token[C]{Cursor: &furthest, Backward: true}); err != nil {
+			if page.PrevToken, err = Encode(Token[C]{Cursor: &furthest, Backward: true}); err != nil {
 				return nil, err
 			}
-			if page.ForwardToken, err = Encode(Token[C]{Cursor: &nearest}); err != nil {
+			if page.NextToken, err = Encode(Token[C]{Cursor: &nearest}); err != nil {
 				return nil, err
 			}
 		} else {
@@ -178,11 +179,11 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 			// newer/live-follow direction, always populated on a non-empty page;
 			// the furthest (lowest) key continues toward older history, but only
 			// when the over-fetch shows more remain.
-			if page.BackwardToken, err = Encode(Token[C]{Cursor: &nearest, Backward: true}); err != nil {
+			if page.PrevToken, err = Encode(Token[C]{Cursor: &nearest, Backward: true}); err != nil {
 				return nil, err
 			}
 			if more {
-				if page.ForwardToken, err = Encode(Token[C]{Cursor: &furthest}); err != nil {
+				if page.NextToken, err = Encode(Token[C]{Cursor: &furthest}); err != nil {
 					return nil, err
 				}
 			}
@@ -190,7 +191,7 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 	case backward:
 		// Empty follow-poll: no boundary row to derive from, so echo the request
 		// token — the same resume cursor — to keep the caller's place at the tail.
-		page.BackwardToken = pageToken
+		page.PrevToken = pageToken
 	}
 	// Orient Items relative to the forward walk's order: reverse a forward page
 	// iff Reverse, a backward page iff !Reverse. Because the two walks are
