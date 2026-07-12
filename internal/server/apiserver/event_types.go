@@ -17,8 +17,7 @@ import (
 // routing-rule editor UI) can discover the valid (source, type) event kinds and
 // the attributes a rule may condition on for each. The registry is global —
 // populated by the producer packages' init (githubserver, atlassianserver) — so
-// the response is not org-scoped; the shipped DefaultRules are intentionally not
-// exposed.
+// the response is not org-scoped.
 func (s *Server) GetEventTypes(ctx context.Context, req *xagentv1.GetEventTypesRequest) (*xagentv1.GetEventTypesResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpOrgRead) {

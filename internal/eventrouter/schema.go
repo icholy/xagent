@@ -23,15 +23,12 @@ type AttrDef struct {
 // set: it always includes the derived views "body" and "url" (see
 // InputEvent.Attr) plus the type's own emitted dimensions. Each AttrDef carries
 // its own display copy so clients render labels/help/placeholders from the
-// schema. DefaultRules holds the fully-defined rules the producer ships for this
-// type (e.g. the "xagent:" body-prefix wakeup for comment types); DefaultRules
-// aggregates them across every registered def.
+// schema.
 type EventTypeDef struct {
-	Source       string
-	Type         string
-	Label        string    // human label, e.g. "GitHub: Issue/PR Comment"
-	Attrs        []AttrDef // complete valid attr set, including derived body/url
-	DefaultRules []model.RoutingRule
+	Source string
+	Type   string
+	Label  string    // human label, e.g. "GitHub: Issue/PR Comment"
+	Attrs  []AttrDef // complete valid attr set, including derived body/url
 }
 
 // hasAttr reports whether def declares an attr with the given key.
@@ -40,9 +37,9 @@ func (def EventTypeDef) hasAttr(key string) bool {
 }
 
 // SchemaRegistry holds the set of registered event-type schemas and the routing
-// state derived from them (the source:type index and the accumulated default
-// rules). It is populated by MustRegister rather than a central table.
-// Construct one with NewSchemaRegistry, which initializes the index map.
+// state derived from them (the source:type index). It is populated by
+// MustRegister rather than a central table. Construct one with
+// NewSchemaRegistry, which initializes the index map.
 type SchemaRegistry struct {
 	// eventTypes holds every registered schema in registration order. It is the
 	// machine-readable contract that the router, rule validation, and (later) the
@@ -52,11 +49,6 @@ type SchemaRegistry struct {
 
 	// eventTypeByKey indexes eventTypes by "source:type" for O(1) lookup.
 	eventTypeByKey map[string]EventTypeDef
-
-	// defaultRules accumulates every registered schema's DefaultRules in
-	// registration order, so DefaultRules is a plain lookup rather than a
-	// per-call flatten.
-	defaultRules []model.RoutingRule
 }
 
 // NewSchemaRegistry returns an empty registry ready for registration, with its
@@ -68,8 +60,8 @@ func NewSchemaRegistry() *SchemaRegistry {
 }
 
 // MustRegister records def as the schema for its (Source, Type) event kind,
-// making it available to EventTypeFor, EventTypes, and DefaultRules. It panics
-// if a def with the same (Source, Type) is already registered.
+// making it available to EventTypeFor and EventTypes. It panics if a def with
+// the same (Source, Type) is already registered.
 func (r *SchemaRegistry) MustRegister(def EventTypeDef) {
 	key := def.Source + ":" + def.Type
 	if _, dup := r.eventTypeByKey[key]; dup {
@@ -77,7 +69,6 @@ func (r *SchemaRegistry) MustRegister(def EventTypeDef) {
 	}
 	r.eventTypes = append(r.eventTypes, def)
 	r.eventTypeByKey[key] = def
-	r.defaultRules = append(r.defaultRules, def.DefaultRules...)
 }
 
 // EventTypeFor returns the registry entry for a (source, type) pair, and false
@@ -91,16 +82,6 @@ func (r *SchemaRegistry) EventTypeFor(source, typ string) (EventTypeDef, bool) {
 // iteration over the registry and the GetEventTypes RPC.
 func (r *SchemaRegistry) EventTypes() []EventTypeDef {
 	return slices.Clone(r.eventTypes)
-}
-
-// DefaultRules returns every registered schema's DefaultRules in registration
-// order, as accumulated during registration. It is the new-shape replacement
-// for the legacy type-less {Prefix:"xagent:", Wakeup:true} fallback: rather than
-// a validation special-case, the default set is an ordinary list of
-// fully-defined rules contributed by the producers. The router uses it as the
-// ruleless-org fallback.
-func (r *SchemaRegistry) DefaultRules() []model.RoutingRule {
-	return slices.Clone(r.defaultRules)
 }
 
 // Validate checks the rule against the event-type registry, returning a wrapped

@@ -11,20 +11,13 @@ import (
 // Clearly-synthetic schema fixtures under the fake "test" source. The package's
 // tests register only the ones each case needs on an isolated registry, so they
 // stay self-contained rather than importing the producer packages that register
-// the real github/atlassian schemas. Only test/comment ships a default rule,
-// mirroring the comment/review types in production.
+// the real github/atlassian schemas.
 var (
 	testComment = EventTypeDef{
 		Source: "test",
 		Type:   "comment",
 		Label:  "Test: Comment",
 		Attrs:  []AttrDef{{Key: "body"}, {Key: "url"}, {Key: "mention"}},
-		DefaultRules: []model.RoutingRule{{
-			Source:     "test",
-			Type:       "comment",
-			Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
-			Wakeup:     true,
-		}},
 	}
 	testLabel = EventTypeDef{
 		Source: "test",
@@ -173,21 +166,6 @@ func TestSchemaRegistryEventTypes(t *testing.T) {
 	assert.Equal(t, defs[0].Type, "comment")
 	assert.Equal(t, defs[1].Type, "label")
 	assert.Equal(t, defs[2].Type, "opened")
-}
-
-func TestSchemaRegistryDefaultRules(t *testing.T) {
-	reg := NewSchemaRegistry()
-	// test/comment ships a default rule; test/opened does not, so only the
-	// comment rule is accumulated.
-	reg.MustRegister(testComment)
-	reg.MustRegister(testOpened)
-
-	assert.DeepEqual(t, reg.DefaultRules(), []model.RoutingRule{{
-		Source:     "test",
-		Type:       "comment",
-		Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}},
-		Wakeup:     true,
-	}})
 }
 
 func TestSchemaRegistryMustRegisterDuplicatePanics(t *testing.T) {
