@@ -108,12 +108,7 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 			continue
 		}
 
-		pbMatches = append(pbMatches, &xagentv1.TestEventMatch{
-			OrgId:       match.OrgID,
-			RuleIndex:   match.ProtoRuleIndex(),
-			WouldWake:   match.Rule.Wakeup,
-			WouldCreate: match.Rule.Create != nil,
-		})
+		pbMatches = append(pbMatches, match.Proto())
 	}
 
 	return &xagentv1.TestEventResponse{Matches: pbMatches, Fired: false}, nil
