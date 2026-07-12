@@ -35,8 +35,9 @@ var ErrInvalidRequest = errors.New("invalid page request")
 // never hands out. List wraps it as ErrInvalidRequest (a bad token).
 var ErrUnsupportedDirection = errors.New("unsupported page direction")
 
-// Config bounds the page size and sets the display order of Page.Items via
-// Reverse, defined relative to the forward walk's order:
+// Options configures a single List call: the page-size bounds, the request's
+// size and cursor, the Source to walk, and Reverse, which sets the display
+// order of Page.Items relative to the forward walk's order:
 //
 //   - Reverse == false (default): forward pages are returned as-is and backward
 //     pages reversed, so Items always read in the forward walk's order
@@ -48,10 +49,13 @@ var ErrUnsupportedDirection = errors.New("unsupported page direction")
 // Reverse affects only Items ordering, never token derivation. Because the two
 // Query walks are mutually opposite, this single flag lands every page — from
 // either direction — in one consistent order.
-type Config struct {
-	Default int  // size used when the request omits page_size (0)
-	Max     int  // largest size a caller may request
-	Reverse bool // display Items in the reverse of the forward walk's order
+type Options[T any, C any] struct {
+	DefaultPageSize int    // size used when the request omits page_size (0)
+	MaxPageSize     int    // largest size a caller may request
+	Reverse         bool   // display Items in the reverse of the forward walk's order
+	PageSize        int    // requested size (0 -> DefaultPageSize)
+	PageToken       string // opaque cursor; empty -> newest page
+	Source          Source[T, C]
 }
 
 // Page is one page plus the two continuation tokens, both derived from the
@@ -109,14 +113,14 @@ type Source[T, C any] interface {
 	Cursor(row T) C
 }
 
-// List runs one page of a keyset-paginated query against src.
+// List runs one page of a keyset-paginated query against opt.Source.
 //
-// It validates pageSize against cfg, decodes pageToken into a cursor and a
-// direction (an empty token is the newest page: nil cursor, forward), and calls
-// src.Query once with a limit of size+1 — the over-fetch reveals whether more
-// rows lie further along that walk. Both continuation tokens are derived from
-// the returned page's own boundary rows, so a bidirectional page costs a single
-// query with no probe of the opposite walk:
+// It validates opt.PageSize against opt's bounds, decodes opt.PageToken into a
+// cursor and a direction (an empty token is the newest page: nil cursor,
+// forward), and calls Source.Query once with a limit of size+1 — the over-fetch
+// reveals whether more rows lie further along that walk. Both continuation
+// tokens are derived from the returned page's own boundary rows, so a
+// bidirectional page costs a single query with no probe of the opposite walk:
 //
 //   - NextToken (the forward walk, older) comes from the lowest-key boundary and
 //     is populated only when the over-fetch shows more rows remain that way — it
@@ -126,23 +130,23 @@ type Source[T, C any] interface {
 //     followed; an empty follow-poll echoes the request token so the caller
 //     keeps its place.
 //
-// Finally Items is oriented per cfg.Reverse. ErrUnsupportedDirection from the
+// Finally Items is oriented per opt.Reverse. ErrUnsupportedDirection from the
 // requested walk surfaces as ErrInvalidRequest (a bad token the client should
 // not have had); other query failures surface as-is.
-func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken string, src Source[T, C]) (*Page[T], error) {
-	size := cmp.Or(int(pageSize), cfg.Default)
-	if size < 1 || size > cfg.Max {
-		return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, cfg.Max)
+func List[T, C any](ctx context.Context, opt Options[T, C]) (*Page[T], error) {
+	size := cmp.Or(opt.PageSize, opt.DefaultPageSize)
+	if size < 1 || size > opt.MaxPageSize {
+		return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, opt.MaxPageSize)
 	}
 	var token Token[C]
-	if pageToken != "" {
+	if opt.PageToken != "" {
 		var err error
-		if token, err = Decode[C](pageToken); err != nil {
+		if token, err = Decode[C](opt.PageToken); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 		}
 	}
 	backward := token.Backward
-	items, err := src.Query(ctx, token, size+1)
+	items, err := opt.Source.Query(ctx, token, size+1)
 	if err != nil {
 		if errors.Is(err, ErrUnsupportedDirection) {
 			return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -162,8 +166,8 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 		// Same-direction continuation resumes from the furthest row; the
 		// opposite direction resumes from the nearest row (back toward where the
 		// cursor came from).
-		nearest := src.Cursor(items[0])
-		furthest := src.Cursor(items[len(items)-1])
+		nearest := opt.Source.Cursor(items[0])
+		furthest := opt.Source.Cursor(items[len(items)-1])
 		if backward {
 			// Newer/live-follow page: follow onward from the furthest (highest)
 			// key — always resumable so the tail can be polled — and expose the
@@ -191,12 +195,12 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 	case backward:
 		// Empty follow-poll: no boundary row to derive from, so echo the request
 		// token — the same resume cursor — to keep the caller's place at the tail.
-		page.PrevToken = pageToken
+		page.PrevToken = opt.PageToken
 	}
 	// Orient Items relative to the forward walk's order: reverse a forward page
 	// iff Reverse, a backward page iff !Reverse. Because the two walks are
 	// mutually opposite, this lands every page in one consistent order.
-	if backward != cfg.Reverse {
+	if backward != opt.Reverse {
 		slices.Reverse(page.Items)
 	}
 	return page, nil

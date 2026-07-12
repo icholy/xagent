@@ -77,8 +77,6 @@ type taskCursor struct {
 	Archived  bool      `json:"a,omitempty"`
 }
 
-var listTasksPaging = pagination.Config{Default: 50, Max: 100}
-
 // ListTasksPageParams mirrors the RPC's pagination fields as plain values so
 // the handler can pass them through untouched.
 type ListTasksPageParams struct {
@@ -139,7 +137,14 @@ func (src taskSource) Cursor(t *model.Task) taskCursor {
 // filter disagrees with the request surfaces as a wrapped
 // pagination.ErrInvalidRequest; query failures surface as-is.
 func (s *Store) ListTasksPage(ctx context.Context, tx *sql.Tx, p ListTasksPageParams) (*pagination.Page[*model.Task], error) {
-	return pagination.List(ctx, listTasksPaging, p.PageSize, p.PageToken, taskSource{store: s, tx: tx, params: p})
+	return pagination.List(ctx, pagination.Options[*model.Task, taskCursor]{
+		DefaultPageSize: 50,
+		MaxPageSize:     100,
+		Reverse:         false,
+		PageSize:        int(p.PageSize),
+		PageToken:       p.PageToken,
+		Source:          taskSource{store: s, tx: tx, params: p},
+	})
 }
 
 func (s *Store) ListTasksForRunner(ctx context.Context, tx *sql.Tx, runner string, orgID int64) ([]*model.Task, error) {

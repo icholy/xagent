@@ -95,10 +95,6 @@ type eventCursor struct {
 	ID int64 `json:"i"`
 }
 
-// Timelines are dense (a report/lifecycle/tool row per step), so the default and
-// max pages are larger than the task list's; Reverse renders oldest-at-top.
-var listEventsPaging = pagination.Config{Default: 50, Max: 200, Reverse: true}
-
 // ListEventsByTaskPageParams mirrors the RPC's pagination fields as plain values
 // so the handler can pass them through untouched.
 type ListEventsByTaskPageParams struct {
@@ -165,7 +161,7 @@ func (src eventSource) Cursor(e *model.Event) eventCursor {
 }
 
 // ListEventsByTaskPage returns a bidirectional keyset page of a task's events,
-// always oldest-first (Config.Reverse). An empty PageToken returns the newest
+// always oldest-first (Options.Reverse). An empty PageToken returns the newest
 // page; the returned NextToken continues toward older history (empties when
 // exhausted) and PrevToken toward newer rows (stays populated on a non-empty
 // page so the append-only tail can be followed). It owns the cursor keyset (id),
@@ -173,7 +169,16 @@ func (src eventSource) Cursor(e *model.Event) eventCursor {
 // undecodable PageToken surfaces as a wrapped pagination.ErrInvalidRequest;
 // query failures surface as-is.
 func (s *Store) ListEventsByTaskPage(ctx context.Context, tx *sql.Tx, p ListEventsByTaskPageParams) (*pagination.Page[*model.Event], error) {
-	return pagination.List(ctx, listEventsPaging, p.PageSize, p.PageToken, eventSource{store: s, tx: tx, params: p})
+	// Timelines are dense (a report/lifecycle/tool row per step), so the default
+	// and max pages are larger than the task list's; Reverse renders oldest-at-top.
+	return pagination.List(ctx, pagination.Options[*model.Event, eventCursor]{
+		DefaultPageSize: 50,
+		MaxPageSize:     200,
+		Reverse:         true,
+		PageSize:        int(p.PageSize),
+		PageToken:       p.PageToken,
+		Source:          eventSource{store: s, tx: tx, params: p},
+	})
 }
 
 func toModelEvent(row sqlc.Event) (*model.Event, error) {
