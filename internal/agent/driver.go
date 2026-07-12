@@ -183,17 +183,6 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	}
 	cfg.NextEventToken = token
 
-	// On a wake (cfg.Started) with retained events, inject them into the prompt so
-	// the wake no longer depends on a get_my_task tool call. The first run drops
-	// the events — its bootstrap prompt establishes fuller context via get_my_task
-	// — but the token still advanced above so the next wake starts from the tail.
-	var eventsJSON string
-	if cfg.Started && len(events) > 0 {
-		if eventsJSON, err = marshalEventsJSON(events); err != nil {
-			return fmt.Errorf("failed to marshal events: %w", err)
-		}
-	}
-
 	// Start agent
 	a, err := NewAgent(Options{
 		Type:       cfg.Type,
@@ -213,8 +202,10 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	}
 	defer a.Close()
 
-	// Bootstrap prompt
-	prompt, err := cfg.prompt(eventsJSON)
+	// Bootstrap prompt. The events drained above are injected into the wake branch
+	// of the template (marshaled there by the eventsJSON template func); the first
+	// run and a wake with nothing pending render without them.
+	prompt, err := cfg.prompt(events)
 	if err != nil {
 		return fmt.Errorf("failed to build prompt: %w", err)
 	}
@@ -309,7 +300,8 @@ func (d *Driver) drainEvents(ctx context.Context, cfg *Config) ([]*xagentv1.Even
 // marshalEventsJSON renders events as a raw JSON array using the same protojson
 // options get_my_task's taskDetailsToMap uses (Indent: "  "), so the injected
 // payload is byte-for-byte the shape the events array already has in
-// get_my_task output — the agent parses one format, not two.
+// get_my_task output — the agent parses one format, not two. It is registered as
+// the eventsJSON template func so the marshaling happens inside PROMPT.md.
 func marshalEventsJSON(events []*xagentv1.Event) (string, error) {
 	marshalOpts := protojson.MarshalOptions{Indent: "  "}
 	raws := make([]json.RawMessage, len(events))
@@ -330,18 +322,20 @@ func marshalEventsJSON(events []*xagentv1.Event) (string, error) {
 //go:embed PROMPT.md
 var promptText string
 
-var promptTemplate = template.Must(template.New("prompt").Parse(promptText))
+var promptTemplate = template.Must(
+	template.New("prompt").Funcs(template.FuncMap{"eventsJSON": marshalEventsJSON}).Parse(promptText),
+)
 
-// prompt builds the bootstrap prompt sent to the agent. events is the raw JSON
-// array of instruction + external events since the saved cursor, injected into
-// the wake branch of the template; it is empty on the first run and on a wake
-// with nothing pending.
-func (c *Config) prompt(events string) (string, error) {
+// prompt builds the bootstrap prompt sent to the agent. events is the instruction
+// + external events since the saved cursor; the wake branch of the template
+// marshals them via the eventsJSON func. It is empty on the first run and on a
+// wake with nothing pending, in which case nothing is injected.
+func (c *Config) prompt(events []*xagentv1.Event) (string, error) {
 	var b strings.Builder
 	err := promptTemplate.Execute(&b, struct {
 		Started bool
 		Prompt  string
-		Events  string
+		Events  []*xagentv1.Event
 	}{
 		Started: c.Started,
 		Prompt:  c.Prompt,

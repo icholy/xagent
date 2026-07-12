@@ -2,7 +2,7 @@
 {{- if .Events -}}
 The task received new events:
 
-{{ .Events }}
+{{ eventsJSON .Events }}
 
 Continue working on the task.
 {{- else -}}
