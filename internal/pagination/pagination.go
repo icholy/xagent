@@ -136,7 +136,7 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 	var token Token[C]
 	if pageToken != "" {
 		var err error
-		if token, err = decode[Token[C]](pageToken); err != nil {
+		if token, err = Decode[C](pageToken); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 		}
 	}
@@ -167,10 +167,10 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 			// Newer/live-follow page: follow onward from the furthest (highest)
 			// key — always resumable so the tail can be polled — and expose the
 			// nearest (lowest) key as the way back into older history.
-			if page.BackwardToken, err = encodeToken(furthest, true); err != nil {
+			if page.BackwardToken, err = Encode(Token[C]{Cursor: &furthest, Backward: true}); err != nil {
 				return nil, err
 			}
-			if page.ForwardToken, err = encodeToken(nearest, false); err != nil {
+			if page.ForwardToken, err = Encode(Token[C]{Cursor: &nearest}); err != nil {
 				return nil, err
 			}
 		} else {
@@ -178,11 +178,11 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 			// newer/live-follow direction, always populated on a non-empty page;
 			// the furthest (lowest) key continues toward older history, but only
 			// when the over-fetch shows more remain.
-			if page.BackwardToken, err = encodeToken(nearest, true); err != nil {
+			if page.BackwardToken, err = Encode(Token[C]{Cursor: &nearest, Backward: true}); err != nil {
 				return nil, err
 			}
 			if more {
-				if page.ForwardToken, err = encodeToken(furthest, false); err != nil {
+				if page.ForwardToken, err = Encode(Token[C]{Cursor: &furthest}); err != nil {
 					return nil, err
 				}
 			}
@@ -201,24 +201,22 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 	return page, nil
 }
 
-func encodeToken[C any](cursor C, backward bool) (string, error) {
-	return encode(Token[C]{Cursor: &cursor, Backward: backward})
-}
-
-func encode[C any](c C) (string, error) {
-	b, err := json.Marshal(c)
+// Encode serializes a Token into its opaque base64 page-token string.
+func Encode[C any](t Token[C]) (string, error) {
+	b, err := json.Marshal(t)
 	if err != nil {
 		return "", err
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-func decode[C any](token string) (C, error) {
-	var c C
+// Decode parses an opaque base64 page-token string back into a Token.
+func Decode[C any](token string) (Token[C], error) {
+	var t Token[C]
 	b, err := base64.URLEncoding.DecodeString(token)
 	if err != nil {
-		return c, err
+		return t, err
 	}
-	err = json.Unmarshal(b, &c)
-	return c, err
+	err = json.Unmarshal(b, &t)
+	return t, err
 }
