@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useOrgId } from './use-org-id'
 
 /**
@@ -32,4 +32,19 @@ export function useOrgLocalStorage(
   )
 
   return [value, set]
+}
+
+/**
+ * Like useOrgLocalStorage, but stores a boolean.
+ * The value is persisted as the string "true"/"false" under the org-scoped key.
+ */
+export function useOrgLocalStorageBoolean(
+  key: string,
+  defaultValue: boolean,
+): [boolean, (value: boolean) => void] {
+  const [value, setValue] = useOrgLocalStorage(key, String(defaultValue))
+
+  const set = useCallback((v: boolean) => setValue(String(v)), [setValue])
+
+  return useMemo(() => [value === 'true', set], [value, set])
 }

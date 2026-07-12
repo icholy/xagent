@@ -31,7 +31,10 @@ import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Plus } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
-import { useOrgLocalStorage } from '@/hooks/use-org-local-storage'
+import {
+  useOrgLocalStorage,
+  useOrgLocalStorageBoolean,
+} from '@/hooks/use-org-local-storage'
 
 const PAGE_SIZE_OPTIONS = ['10', '20', '50', '100']
 
@@ -43,8 +46,7 @@ function TasksPage() {
   const orgId = useOrgId()
 
   const [pageSize, setPageSize] = useOrgLocalStorage('tasks-page-size', '20')
-  const [showArchived, setShowArchived] = useOrgLocalStorage('tasks-show-archived', 'false')
-  const archived = showArchived === 'true'
+  const [archived, setArchived] = useOrgLocalStorageBoolean('tasks-show-archived', false)
 
   // Stack of page tokens for the pages navigated past the first. The current
   // page's token is the top of the stack; an empty stack is the first page.
@@ -71,7 +73,7 @@ function TasksPage() {
   // filter-bound), so restart from the first page — exactly how page-size
   // changes already behave.
   const handleShowArchivedChange = (checked: boolean) => {
-    setShowArchived(checked ? 'true' : 'false')
+    setArchived(checked)
     setTokens([])
   }
 
