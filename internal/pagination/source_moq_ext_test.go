@@ -5,7 +5,7 @@ import (
 	"slices"
 )
 
-// NewBiSource returns a SourceMock backed by an in-memory slice of int keys,
+// NewMockSource returns a SourceMock backed by an in-memory slice of int keys,
 // treating each row as its own keyset (T and C are both int). Rows are held in
 // ascending key order internally; the argument order is irrelevant. It walks
 // both directions per the Source contract:
@@ -17,7 +17,7 @@ import (
 //
 // If forwardOnly is set, the backward walk returns ErrUnsupportedDirection,
 // mirroring the task list.
-func NewBiSource(rows []int, forwardOnly bool) *SourceMock[int, int] {
+func NewMockSource(rows []int, forwardOnly bool) *SourceMock[int, int] {
 	sorted := slices.Clone(rows)
 	slices.Sort(sorted)
 	return &SourceMock[int, int]{
