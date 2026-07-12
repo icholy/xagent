@@ -2,22 +2,18 @@ package agent
 
 import (
 	"context"
-	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
-	"text/template"
 
+	"github.com/icholy/xagent/internal/agent/agentprompt"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/shell"
 	"github.com/icholy/xagent/internal/xagentclient"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type Driver struct {
@@ -203,9 +199,9 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	defer a.Close()
 
 	// Bootstrap prompt. The events drained above are injected into the wake branch
-	// of the template (marshaled there by the eventsJSON template func); the first
+	// of the template (marshaled there by the RenderEvent template func); the first
 	// run and a wake with nothing pending render without them.
-	prompt, err := cfg.prompt(events)
+	prompt, err := agentprompt.Render(cfg.Started, cfg.Prompt, events)
 	if err != nil {
 		return fmt.Errorf("failed to build prompt: %w", err)
 	}
@@ -289,52 +285,4 @@ func (d *Driver) drainEvents(ctx context.Context, cfg *Config) ([]*xagentv1.Even
 	}
 	d.Log.Info("drained events", "count", len(events))
 	return events, token, nil
-}
-
-// RenderEvent marshals a single event to indented JSON. It protojson-marshals the
-// event, then re-indents through json.MarshalIndent — the same path get_my_task's
-// taskDetailsToMap takes — so an injected event is byte-for-byte the shape it has
-// in the get_my_task events array (the agent parses one format, not two) and, as a
-// bonus, is deterministic: protojson deliberately varies its inter-token
-// whitespace, and routing through encoding/json normalizes it away. Registered as
-// the RenderEvent template func; PROMPT.md loops over the events and joins the
-// rendered objects into a JSON array.
-func RenderEvent(event *xagentv1.Event) (string, error) {
-	data, err := protojson.Marshal(event)
-	if err != nil {
-		return "", err
-	}
-	out, err := json.MarshalIndent(json.RawMessage(data), "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
-}
-
-//go:embed PROMPT.md
-var promptText string
-
-var promptTemplate = template.Must(
-	template.New("prompt").Funcs(template.FuncMap{"RenderEvent": RenderEvent}).Parse(promptText),
-)
-
-// prompt builds the bootstrap prompt sent to the agent. events is the instruction
-// + external events since the saved cursor; the wake branch of the template loops
-// over them, rendering each via the RenderEvent func. It is empty on the first run
-// and on a wake with nothing pending, in which case nothing is injected.
-func (c *Config) prompt(events []*xagentv1.Event) (string, error) {
-	var b strings.Builder
-	err := promptTemplate.Execute(&b, struct {
-		Started bool
-		Prompt  string
-		Events  []*xagentv1.Event
-	}{
-		Started: c.Started,
-		Prompt:  c.Prompt,
-		Events:  events,
-	})
-	if err != nil {
-		return "", err
-	}
-	return b.String(), nil
 }
