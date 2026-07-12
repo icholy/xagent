@@ -5,12 +5,23 @@ import (
 	"fmt"
 	"testing"
 
+	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 )
+
+// eventIDs projects the response events to their ids, for order-sensitive
+// comparison across paged and unpaged reads of the same stream.
+func eventIDs(events []*xagentv1.Event) []int64 {
+	ids := make([]int64, len(events))
+	for i, e := range events {
+		ids[i] = e.Id
+	}
+	return ids
+}
 
 // orgWithWorkspace creates an org that has a runner/workspace pair, which is a
 // prerequisite for creating the tasks that events are now scoped to.
@@ -319,6 +330,145 @@ func TestListEventsByTask(t *testing.T) {
 		{Description: "Event 1"},
 		{Description: "Event 2"},
 	}, protocmp.Transform())
+}
+
+func TestListEventsByTask_LegacyNoTokens(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := orgWithWorkspace(t, srv)
+	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "Event 1"},
+	}))
+
+	// Act - no pagination fields → the legacy unpaged path.
+	resp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{TaskId: taskID})
+
+	// Assert - full ascending list, no tokens (exactly today's behavior).
+	assert.NilError(t, err)
+	assert.Assert(t, len(resp.Events) >= 2) // lifecycle CREATED + the external event
+	assert.Equal(t, resp.PrevPageToken, "")
+	assert.Equal(t, resp.NextPageToken, "")
+}
+
+func TestListEventsByTask_Paged(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := orgWithWorkspace(t, srv)
+	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
+	for i := range 5 {
+		assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+			TaskID:  taskID,
+			OrgID:   org.OrgID,
+			Payload: &model.ExternalPayload{Description: fmt.Sprintf("Event %d", i+1)},
+		}))
+	}
+
+	// The legacy unpaged list is the ground-truth ascending order.
+	full, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{TaskId: taskID})
+	assert.NilError(t, err)
+	total := len(full.Events)
+	assert.Assert(t, total > 2) // multiple pages at page size 2
+
+	// Newest page: empty token + a page size returns the last page-size events
+	// ascending, with both tokens populated — older history exists, and the
+	// live-follow token is always set on the paged path.
+	const pageSize = 2
+	newest, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: pageSize,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(newest.Events), pageSize)
+	assert.DeepEqual(t, eventIDs(newest.Events), eventIDs(full.Events[total-pageSize:]))
+	assert.Assert(t, newest.PrevPageToken != "")
+	assert.Assert(t, newest.NextPageToken != "")
+
+	// Walk prev (scroll back) to the oldest event. Each page is ascending, so
+	// prepending older pages reconstructs the full ascending stream; prev empties
+	// once history is exhausted.
+	got := append([]*xagentv1.Event(nil), newest.Events...)
+	for token := newest.PrevPageToken; token != ""; {
+		page, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+			TaskId: taskID, PageSize: pageSize, PageToken: token,
+		})
+		assert.NilError(t, err)
+		assert.Assert(t, len(page.Events) > 0)
+		got = append(append([]*xagentv1.Event(nil), page.Events...), got...)
+		token = page.PrevPageToken
+	}
+	assert.DeepEqual(t, eventIDs(got), eventIDs(full.Events))
+}
+
+func TestListEventsByTask_LiveFollow(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := orgWithWorkspace(t, srv)
+	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "Event 1"},
+	}))
+
+	// A large page fits the whole stream: no older history (prev empty), but the
+	// live-follow token is still populated so the tail can be polled.
+	newest, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: 100,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, newest.PrevPageToken, "")
+	assert.Assert(t, newest.NextPageToken != "")
+
+	// Follow the tail with nothing newer yet → an empty page whose token echoes the
+	// resume cursor so polling continues.
+	poll, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: 100, PageToken: newest.NextPageToken,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(poll.Events), 0)
+	assert.Assert(t, poll.NextPageToken != "")
+
+	// Append a new event, then follow again → it appears at the tail.
+	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+		TaskID:  taskID,
+		OrgID:   org.OrgID,
+		Payload: &model.ExternalPayload{Description: "Event 2"},
+	}))
+	poll2, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: 100, PageToken: poll.NextPageToken,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(poll2.Events), 1)
+	assert.Equal(t, poll2.Events[0].GetExternal().Description, "Event 2")
+}
+
+func TestListEventsByTask_InvalidArgs(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := orgWithWorkspace(t, srv)
+	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
+
+	// A page size past the max → CodeInvalidArgument.
+	_, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: 5000,
+	})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
+
+	// An undecodable page token → CodeInvalidArgument.
+	_, err = srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageToken: "@@not-a-valid-token@@",
+	})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
 }
 
 func TestListEventsByTask_Permissions(t *testing.T) {
