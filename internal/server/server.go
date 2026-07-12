@@ -10,6 +10,7 @@ import (
 	"connectrpc.com/otelconnect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/oauthflow"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/server/apiserver"
@@ -84,6 +85,13 @@ func New(opts Options) *Server {
 		Atlassian: opts.Atlassian,
 		AppKey:    opts.AppKey,
 		Shells:    shell,
+		// Router powers TestEvent's dry-run matcher. It only reads (Router.Plan),
+		// so OnRouteOutcome is intentionally left unset.
+		Router: &eventrouter.Router{
+			Log:       log,
+			Store:     opts.Store,
+			Publisher: opts.Publisher,
+		},
 	}
 	// Only populate GitHub when configured: assigning a typed-nil
 	// *githubserver.Server into the interface field would make

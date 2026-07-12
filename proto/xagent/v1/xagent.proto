@@ -699,22 +699,16 @@ message TestEventResponse {
 }
 
 // TestEventMatch is the per-org dry-run/fire report the handler builds from a
-// RouteMatch plus a subscribed-link lookup. rule_index comes from the match; the
-// wake/create fields are derived by the handler (they are not stored on
+// RouteMatch. rule_index comes from the match; the wake/create fields are
+// derived from the matched rule by the handler (they are not stored on
 // RouteMatch).
 message TestEventMatch {
   int64 org_id = 1;
   int32 rule_index = 2;      // which configured rule matched (-1 = shipped default)
   bool would_wake = 3;       // matched rule's wakeup flag
-  repeated TestEventTask wake_tasks = 4; // subscribed tasks that (would) wake
   bool would_create = 5;     // a task would be / was created
   repeated int64 created_task_ids = 6;   // populated only when fired && would_create
   repeated int64 event_ids = 7;          // synthetic event rows written when fired
-}
-
-message TestEventTask {
-  int64 id = 1;
-  string name = 2;
 }
 
 message CreateGitHubTokenRequest {}
