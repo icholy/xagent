@@ -67,20 +67,22 @@ func (e InputEvent) Attr(key string) []string {
 	}
 }
 
-// RouteOutcome describes what the Router did with an InputEvent for one org. It
-// gives the callback the routing context — which org matched, the rule, the
-// affected tasks, and whether a task was created — so it can react differently
-// per case:
+// RouteOutcome describes what the Router did with an InputEvent for one org: the
+// rule that matched, the tasks woken or created, the external event rows written
+// for them, and whether a task was created. It is what Apply returns per matched
+// org and what Route hands the OnRouteOutcome callback, so the callback can react
+// differently per case:
 //
 //	Created                       -> a task was created
 //	!Created && len(TaskIDs) > 0  -> existing task(s) were woken
 //	!Created && len(TaskIDs) == 0 -> matched, but nothing was created or woken
 type RouteOutcome struct {
-	Input   InputEvent         // the routed event, including its Meta
-	OrgID   int64              // the org whose routing rule matched
-	Rule    *model.RoutingRule // the rule that matched
-	TaskIDs []int64            // tasks created or woken
-	Created bool               // whether a task was created (vs woken / matched-only)
+	Input    InputEvent         // the routed event, including its Meta
+	OrgID    int64              // the org whose routing rule matched
+	Rule     *model.RoutingRule // the rule that matched
+	TaskIDs  []int64            // tasks created or woken
+	EventIDs []int64            // external event rows written (one per created/woken task)
+	Created  bool               // whether a task was created (vs woken / matched-only)
 }
 
 // Router routes events to subscribed tasks via the store.
@@ -188,6 +190,74 @@ func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, erro
 	return matches, nil
 }
 
+// Apply is the write half of routing: for each match it wakes the subscribed
+// task(s) for the event URL or — if the matched rule has a Create action —
+// creates a new task, reusing the same attach/create primitives Route uses. It
+// returns one RouteOutcome per match, aligned to the input order (a match that
+// did nothing yields an outcome with no TaskIDs/Events and Created false), so
+// callers can report exactly which tasks and event rows were written. It never
+// invokes OnRouteOutcome; Route layers that on top of the returned outcomes, and
+// TestEvent's fire mode calls Apply directly to route a synthetic event as an
+// ordinary event without any outbound side effects.
+func (r *Router) Apply(ctx context.Context, input InputEvent, matches []RouteMatch) ([]RouteOutcome, error) {
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	// Link lookup runs only for orgs that have a matching rule. Links are stored
+	// with routing_key = model.RoutingKey(url), so derive the key the same way:
+	// a non-canonical event URL (a comment URL, an API URL) resolves to the same
+	// key as the stored link.
+	orgIDs := make([]int64, 0, len(matches))
+	for _, match := range matches {
+		orgIDs = append(orgIDs, match.OrgID)
+	}
+	key := model.RoutingKey(input.URL)
+	linksByOrg, err := r.Store.FindSubscribedLinksForOrgs(ctx, nil, key, orgIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wake if a subscribed link exists; otherwise create if the matched rule opts in.
+	outcomes := make([]RouteOutcome, len(matches))
+	for i, match := range matches {
+		outcome := RouteOutcome{Input: input, OrgID: match.OrgID, Rule: match.Rule}
+
+		if links := linksByOrg[match.OrgID]; len(links) > 0 {
+			// Events are task-scoped: fan the external event out as one event row
+			// per subscribed task instead of a shared row plus junction rows.
+			seen := map[int64]bool{}
+			for _, link := range links {
+				if seen[link.TaskID] {
+					continue
+				}
+				seen[link.TaskID] = true
+				event, err := r.attach(ctx, link.TaskID, input, match.OrgID, match.Rule.Wakeup)
+				if err != nil {
+					r.Log.Error("failed to attach event to task", "task_id", link.TaskID, "err", err)
+					continue
+				}
+				outcome.TaskIDs = append(outcome.TaskIDs, link.TaskID)
+				outcome.EventIDs = append(outcome.EventIDs, event.ID)
+			}
+		} else if match.Rule.Create != nil {
+			task, event, err := r.create(ctx, input, match.OrgID, match.Rule)
+			if err != nil {
+				r.Log.Error("failed to create task from rule", "org_id", match.OrgID, "err", err)
+				continue
+			}
+			outcome.TaskIDs = []int64{task.ID}
+			outcome.EventIDs = []int64{event.ID}
+			outcome.Created = true
+		}
+		// else: matched a rule but no subscribed link and no create action — the
+		// outcome carries only the rule/org (matched, nothing done).
+
+		outcomes[i] = outcome
+	}
+	return outcomes, nil
+}
+
 // Route evaluates routing rules for every org the event belongs to. An org's
 // rules are eligible when the actor is a member of it (existing behavior — all
 // the org's rules apply) or when the org appears in input.Orgs and the rule
@@ -203,67 +273,24 @@ func (r *Router) Route(ctx context.Context, input InputEvent) (int, error) {
 		return 0, nil
 	}
 
-	// Plan is the shared read-only matcher; Route applies its result across
-	// every org the event belongs to.
+	// Plan is the shared read-only matcher; Apply is the shared write half. Route
+	// is those two plus the OnRouteOutcome callback, once per matched org.
 	matches, err := r.Plan(ctx, input)
 	if err != nil {
 		return 0, err
 	}
-	if len(matches) == 0 {
-		return 0, nil
-	}
-
-	// Link lookup runs only for orgs that have a matching rule. Links are stored
-	// with routing_key = model.RoutingKey(url), so derive the key the same way:
-	// a non-canonical event URL (a comment URL, an API URL) resolves to the same
-	// key as the stored link.
-	orgIDs := make([]int64, 0, len(matches))
-	for _, match := range matches {
-		orgIDs = append(orgIDs, match.OrgID)
-	}
-	key := model.RoutingKey(input.URL)
-	linksByOrg, err := r.Store.FindSubscribedLinksForOrgs(ctx, nil, key, orgIDs)
+	outcomes, err := r.Apply(ctx, input, matches)
 	if err != nil {
 		return 0, err
 	}
 
-	// Wake if a subscribed link exists; otherwise create if the matched rule opts in.
+	// Apply already built each per-org outcome; Route just tallies the affected
+	// tasks and hands each outcome to the callback. It fires for every matched
+	// org, including one that did nothing (no subscribed link and no create
+	// action), matching prior behavior.
 	var n int
-	for _, match := range matches {
-		// Built at the top, updated by whichever branch runs, passed to the
-		// callback at the end. Defaults to "matched, nothing done" (no TaskIDs,
-		// Created false).
-		outcome := RouteOutcome{Input: input, OrgID: match.OrgID, Rule: match.Rule}
-
-		if links := linksByOrg[match.OrgID]; len(links) > 0 {
-			// Events are task-scoped: fan the external event out as one event row
-			// per subscribed task instead of a shared row plus junction rows.
-			seen := map[int64]bool{}
-			for _, link := range links {
-				if seen[link.TaskID] {
-					continue
-				}
-				seen[link.TaskID] = true
-				if err := r.attach(ctx, link.TaskID, input, match.OrgID, match.Rule.Wakeup); err != nil {
-					r.Log.Error("failed to attach event to task", "task_id", link.TaskID, "err", err)
-					continue
-				}
-				outcome.TaskIDs = append(outcome.TaskIDs, link.TaskID)
-				n++
-			}
-		} else if match.Rule.Create != nil {
-			taskID, err := r.create(ctx, input, match.OrgID, match.Rule)
-			if err != nil {
-				r.Log.Error("failed to create task from rule", "org_id", match.OrgID, "err", err)
-				continue
-			}
-			outcome.TaskIDs = []int64{taskID}
-			outcome.Created = true
-			n++
-		}
-		// else: matched a rule but no subscribed link and no create action —
-		// outcome stays empty, and we still fire the callback below.
-
+	for _, outcome := range outcomes {
+		n += len(outcome.TaskIDs)
 		if r.OnRouteOutcome != nil {
 			r.OnRouteOutcome(ctx, outcome)
 		}
@@ -296,7 +323,10 @@ func (r *Router) publish(ctx context.Context, n model.Notification) {
 // When wake is false (a rule with Wakeup: false), it leaves the task untouched
 // — no task.Start(), no audit log — but still emits a channel notification
 // unconditionally so the event isn't silently swallowed.
-func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, orgID int64, wake bool) error {
+//
+// It returns the external event row it created so callers that report the
+// written rows (TestEvent's fire mode) can surface it.
+func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, orgID int64, wake bool) (*model.Event, error) {
 	event := &model.Event{
 		TaskID: taskID,
 		OrgID:  orgID,
@@ -354,10 +384,10 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 		return tx.Commit()
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	r.publish(ctx, notification)
-	return nil
+	return event, nil
 }
 
 // create handles the create-task branch of routing. It creates the task, a
@@ -367,9 +397,14 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 // subscribed link and takes the wake path. Genuinely-concurrent
 // overlapping txns can still produce duplicates — accepted as a v1
 // limitation.
-func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) (int64, error) {
+//
+// It returns the created task and the external (trigger) event row — the one
+// carrying the ExternalPayload — so callers that report the written rows
+// (TestEvent's fire mode) can surface them.
+func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule *model.RoutingRule) (*model.Task, *model.Event, error) {
 	var notification model.Notification
-	var taskID int64
+	var task *model.Task
+	var external *model.Event
 	err := r.Store.WithTx(ctx, nil, func(tx *sql.Tx) error {
 		// A custom prompt replaces the default preamble rather than supplementing
 		// it — use one or the other, never both.
@@ -377,7 +412,7 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		if prompt == "" {
 			prompt = fmt.Sprintf("You were created by a routing rule in response to a %s %s event.", input.Source, input.Type)
 		}
-		task := &model.Task{
+		task = &model.Task{
 			Runner:      rule.Create.Runner,
 			Workspace:   rule.Create.Workspace,
 			Status:      model.TaskStatusPending,
@@ -389,12 +424,11 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		if err := r.Store.CreateTask(ctx, tx, task); err != nil {
 			return err
 		}
-		taskID = task.ID
 		// Emit the external (trigger) event first so it leads the timeline (ordered
 		// by event id), the same way it appears when an event wakes an existing task
 		// (see attach). The event that caused the task to exist should precede the
 		// "Created" lifecycle event it triggered.
-		if err := r.Store.CreateEvent(ctx, tx, &model.Event{
+		external = &model.Event{
 			TaskID: task.ID,
 			OrgID:  orgID,
 			Payload: &model.ExternalPayload{
@@ -403,7 +437,8 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 				Data:        input.Data,
 				Details:     input.Details,
 			},
-		}); err != nil {
+		}
+		if err := r.Store.CreateEvent(ctx, tx, external); err != nil {
 			return err
 		}
 		// Record the creation as a lifecycle event. The router (not a user) created
@@ -474,8 +509,8 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 		return tx.Commit()
 	})
 	if err != nil {
-		return 0, err
+		return nil, nil, err
 	}
 	r.publish(ctx, notification)
-	return taskID, nil
+	return task, external, nil
 }
