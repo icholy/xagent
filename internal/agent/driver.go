@@ -201,7 +201,11 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	// Bootstrap prompt. The events drained above are injected into the wake branch
 	// of the template (marshaled there by the RenderEvent template func); the first
 	// run and a wake with nothing pending render without them.
-	prompt, err := agentprompt.Render(cfg.Started, cfg.Prompt, events)
+	prompt, err := agentprompt.Render(agentprompt.Options{
+		Started: cfg.Started,
+		Prompt:  cfg.Prompt,
+		Events:  events,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to build prompt: %w", err)
 	}
