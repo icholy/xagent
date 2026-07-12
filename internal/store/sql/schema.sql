@@ -493,6 +493,13 @@ CREATE INDEX idx_workspaces_runner_id ON public.workspaces USING btree (runner_i
 
 
 --
+-- Name: tasks_org_created_id_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tasks_org_created_id_active_idx ON public.tasks USING btree (org_id, created_at DESC, id DESC) WHERE (archived = false);
+
+
+--
 -- Name: tasks_org_created_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -609,4 +616,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260705000001'),
     ('20260711000001'),
     ('20260712000001'),
-    ('20260712000002');
+    ('20260712000002'),
+    ('20260712000003');
