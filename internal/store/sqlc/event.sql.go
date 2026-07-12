@@ -182,3 +182,124 @@ func (q *Queries) ListEventsByTask(ctx context.Context, arg ListEventsByTaskPara
 	}
 	return items, nil
 }
+
+const listEventsByTaskAsc = `-- name: ListEventsByTaskAsc :many
+SELECT id, org_id, created_at, task_id, type, wake, payload
+FROM events
+WHERE task_id = $1
+  AND org_id = $2
+  AND (cardinality($3::text[]) = 0 OR type = ANY($3::text[]))
+  AND id > $4::bigint
+ORDER BY id ASC
+LIMIT $5
+`
+
+type ListEventsByTaskAscParams struct {
+	TaskID    int64    `json:"task_id"`
+	OrgID     int64    `json:"org_id"`
+	Types     []string `json:"types"`
+	CursorID  int64    `json:"cursor_id"`
+	PageLimit int32    `json:"page_limit"`
+}
+
+// Live-follow slice (id > cursor), ascending. Backs the pagination-backward
+// walk. The optional types filter matches ListEventsByTask; covered by
+// idx_events_task_id_id (no new migration).
+func (q *Queries) ListEventsByTaskAsc(ctx context.Context, arg ListEventsByTaskAscParams) ([]Event, error) {
+	rows, err := q.db.QueryContext(ctx, listEventsByTaskAsc,
+		arg.TaskID,
+		arg.OrgID,
+		pq.Array(arg.Types),
+		arg.CursorID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Event{}
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.CreatedAt,
+			&i.TaskID,
+			&i.Type,
+			&i.Wake,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventsByTaskDesc = `-- name: ListEventsByTaskDesc :many
+SELECT id, org_id, created_at, task_id, type, wake, payload
+FROM events
+WHERE task_id = $1
+  AND org_id = $2
+  AND (cardinality($3::text[]) = 0 OR type = ANY($3::text[]))
+  AND (NOT $4::bool OR id < $5::bigint)
+ORDER BY id DESC
+LIMIT $6
+`
+
+type ListEventsByTaskDescParams struct {
+	TaskID    int64    `json:"task_id"`
+	OrgID     int64    `json:"org_id"`
+	Types     []string `json:"types"`
+	UseCursor bool     `json:"use_cursor"`
+	CursorID  int64    `json:"cursor_id"`
+	PageLimit int32    `json:"page_limit"`
+}
+
+// Newest-first slice: the newest page (no cursor) and scroll-back (id < cursor).
+// Backs the pagination-forward (primary) walk; List reverses to ascending for
+// display. The optional types filter matches ListEventsByTask; covered by
+// idx_events_task_id_id (no new migration).
+func (q *Queries) ListEventsByTaskDesc(ctx context.Context, arg ListEventsByTaskDescParams) ([]Event, error) {
+	rows, err := q.db.QueryContext(ctx, listEventsByTaskDesc,
+		arg.TaskID,
+		arg.OrgID,
+		pq.Array(arg.Types),
+		arg.UseCursor,
+		arg.CursorID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Event{}
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.CreatedAt,
+			&i.TaskID,
+			&i.Type,
+			&i.Wake,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
