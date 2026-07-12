@@ -17,6 +17,9 @@ type Link struct {
 	Title      string    `json:"title"`
 	Subscribe  bool      `json:"subscribe"`
 	CreatedAt  time.Time `json:"created_at"`
+	// Namespace is the namespace of the link's task, surfaced read-only via the
+	// task join for subscription routing. It is not stored on the link itself.
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // Proto converts a Link to its protobuf representation.

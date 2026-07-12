@@ -52,6 +52,7 @@ type TaskOptions struct {
 	Status    model.TaskStatus
 	Runner    string
 	Workspace string
+	Namespace string
 	Links     []LinkOptions
 }
 
@@ -66,6 +67,7 @@ func CreateTask(t *testing.T, s *store.Store, org *Org, opts *TaskOptions) *mode
 		Status:    cmp.Or(opts.Status, model.TaskStatusPending),
 		Runner:    opts.Runner,
 		Workspace: cmp.Or(opts.Workspace, "default"),
+		Namespace: opts.Namespace,
 	}
 	if err := s.CreateTask(t.Context(), nil, task); err != nil {
 		t.Fatal(err)

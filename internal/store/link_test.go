@@ -66,3 +66,43 @@ func TestFindSubscribedLinksForOrgsMatchesRoutingKey(t *testing.T) {
 	assert.Equal(t, byRouting[org.OrgID][0].RoutingKey, "https://github.com/o/r/pull/5")
 	assert.Equal(t, len(byURL[org.OrgID]), 0)
 }
+
+func TestFindSubscribedLinksForOrgsCarriesNamespace(t *testing.T) {
+	t.Parallel()
+	// Arrange - two subscribers to the same routing key: one in the "reviewbot"
+	// namespace, one in the default namespace.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	nsTask := teststore.CreateTask(t, s, org, &teststore.TaskOptions{Namespace: "reviewbot"})
+	defTask := teststore.CreateTask(t, s, org, nil)
+	routingKey := "https://github.com/o/r/pull/7"
+	nsLink := &model.Link{
+		TaskID:     nsTask.ID,
+		URL:        routingKey,
+		RoutingKey: routingKey,
+		Subscribe:  true,
+		CreatedAt:  time.Now(),
+	}
+	assert.NilError(t, s.CreateLink(t.Context(), nil, nsLink))
+	defLink := &model.Link{
+		TaskID:     defTask.ID,
+		URL:        routingKey,
+		RoutingKey: routingKey,
+		Subscribe:  true,
+		CreatedAt:  time.Now(),
+	}
+	assert.NilError(t, s.CreateLink(t.Context(), nil, defLink))
+
+	// Act
+	byRouting, err := s.FindSubscribedLinksForOrgs(t.Context(), nil, routingKey, []int64{org.OrgID})
+	assert.NilError(t, err)
+
+	// Assert - each returned link carries its task's namespace.
+	byID := map[int64]*model.Link{}
+	for _, l := range byRouting[org.OrgID] {
+		byID[l.ID] = l
+	}
+	assert.Equal(t, len(byID), 2)
+	assert.Equal(t, byID[nsLink.ID].Namespace, "reviewbot")
+	assert.Equal(t, byID[defLink.ID].Namespace, "")
+}

@@ -61,6 +61,7 @@ func (s *Store) FindSubscribedLinksForOrgs(ctx context.Context, tx *sql.Tx, rout
 			Title:      row.Title,
 			Subscribe:  row.Subscribe,
 			CreatedAt:  row.CreatedAt,
+			Namespace:  row.Namespace,
 		})
 	}
 	return result, nil
