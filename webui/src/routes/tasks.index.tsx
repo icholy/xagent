@@ -2,10 +2,14 @@ import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import { keepPreviousData } from '@tanstack/react-query'
-import { listTasks, archiveTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
+import {
+  listTasks,
+  archiveTask,
+  unarchiveTask,
+} from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Task } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
-import { canArchiveTask } from '@/lib/task'
+import { canArchiveTask, canUnarchiveTask } from '@/lib/task'
 import {
   Table,
   TableBody,
@@ -175,25 +179,27 @@ function TasksPage() {
 function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   const orgId = useOrgId()
   const archiveMutation = useMutation(archiveTask, { onSuccess: () => onUpdate() })
+  const unarchiveMutation = useMutation(unarchiveTask, { onSuccess: () => onUpdate() })
 
   const handleArchive = async () => {
     await archiveMutation.mutateAsync({ id: task.id })
   }
 
+  const handleUnarchive = async () => {
+    await unarchiveMutation.mutateAsync({ id: task.id })
+  }
+
   return (
     <TableRow className={task.archived ? 'text-muted-foreground' : undefined}>
       <TableCell>
-        <span className="flex items-center gap-2">
-          <Link
-            to="/tasks/$id"
-            search={{ org: orgId }}
-            params={{ id: String(task.id) }}
-            className="text-primary hover:underline"
-          >
-            {task.name || `Unnamed - ${task.id}`}
-          </Link>
-          <ArchivedBadge task={task} />
-        </span>
+        <Link
+          to="/tasks/$id"
+          search={{ org: orgId }}
+          params={{ id: String(task.id) }}
+          className="text-primary hover:underline"
+        >
+          {task.name || `Unnamed - ${task.id}`}
+        </Link>
       </TableCell>
       <TableCell className="hidden md:table-cell">{task.runner}</TableCell>
       <TableCell className="hidden md:table-cell">{task.workspace}</TableCell>
@@ -201,17 +207,19 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
         <span className="flex items-center gap-2">
           <StatusBadge task={task} />
           <CommandBadge task={task} />
+          <ArchivedBadge task={task} />
         </span>
       </TableCell>
       <TableCell className="hidden md:table-cell text-muted-foreground">
         {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        {canArchiveTask(task) && (
+        {(canArchiveTask(task) || canUnarchiveTask(task)) && (
           <ArchiveButton
             task={task}
             onArchive={handleArchive}
-            pending={archiveMutation.isPending}
+            onUnarchive={handleUnarchive}
+            pending={archiveMutation.isPending || unarchiveMutation.isPending}
             compact
           />
         )}
