@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -198,6 +200,69 @@ func TestListTasks(t *testing.T) {
 	// Assert
 	assert.NilError(t, err)
 	assert.Equal(t, len(resp.Tasks), 2)
+}
+
+func TestListTasks_IncludeArchived(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	// One active task and one archived task in the same org.
+	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "active", Runner: "test-runner", Workspace: "test-workspace"})
+	assert.NilError(t, err)
+	assert.NilError(t, srv.store.CreateTask(ctx, nil, &model.Task{
+		Runner: "test-runner", Workspace: "test-workspace", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true,
+	}))
+
+	// The default request (archived unset) returns active tasks only, unchanged.
+	def, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{})
+	assert.NilError(t, err)
+	assert.Equal(t, len(def.Tasks), 1)
+	assert.Assert(t, !def.Tasks[0].Archived)
+
+	// Archived: false is likewise active-only.
+	off, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{Archived: false})
+	assert.NilError(t, err)
+	assert.Equal(t, len(off.Tasks), 1)
+
+	// Archived: true returns active and archived rows together.
+	on, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{Archived: true})
+	assert.NilError(t, err)
+	assert.Equal(t, len(on.Tasks), 2)
+}
+
+func TestListTasks_ArchivedTokenMismatch(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	// Two active and two archived rows so each filter mints a next-page token.
+	_, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "active-1", Runner: "test-runner", Workspace: "test-workspace"})
+	assert.NilError(t, err)
+	_, err = srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{Name: "active-2", Runner: "test-runner", Workspace: "test-workspace"})
+	assert.NilError(t, err)
+	assert.NilError(t, srv.store.CreateTask(ctx, nil, &model.Task{
+		Runner: "test-runner", Workspace: "test-workspace", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true,
+	}))
+	assert.NilError(t, srv.store.CreateTask(ctx, nil, &model.Task{
+		Runner: "test-runner", Workspace: "test-workspace", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true,
+	}))
+
+	// A token minted under archived=true, replayed under archived=false → invalid.
+	archivedPage, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 1, Archived: true})
+	assert.NilError(t, err)
+	assert.Assert(t, archivedPage.NextPageToken != "")
+	_, err = srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 1, PageToken: archivedPage.NextPageToken, Archived: false})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
+
+	// And the reverse: an active-minted token replayed under archived=true.
+	activePage, err := srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 1, Archived: false})
+	assert.NilError(t, err)
+	assert.Assert(t, activePage.NextPageToken != "")
+	_, err = srv.ListTasks(ctx, &xagentv1.ListTasksRequest{PageSize: 1, PageToken: activePage.NextPageToken, Archived: true})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
 }
 
 func TestListTasks_Permissions(t *testing.T) {
