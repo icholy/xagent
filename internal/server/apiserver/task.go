@@ -36,7 +36,7 @@ func (s *Server) ListTasks(ctx context.Context, req *xagentv1.ListTasksRequest) 
 	}
 	resp := &xagentv1.ListTasksResponse{
 		Tasks:         make([]*xagentv1.Task, len(page.Items)),
-		NextPageToken: page.ForwardToken,
+		NextPageToken: page.NextToken,
 	}
 	for i, t := range page.Items {
 		resp.Tasks[i] = t.Proto(s.baseURL)
