@@ -59,11 +59,11 @@ type Config struct {
     // Agent-managed state
     SetupCommandsCompleted int    `json:"setup_commands_completed,omitempty"`
     Started                bool   `json:"started,omitempty"`
-    EventToken             string `json:"event_token,omitempty"` // pagination cursor for events already delivered to the agent
+    NextEventToken         string `json:"next_event_token,omitempty"` // pagination cursor for events already delivered to the agent
 }
 ```
 
-`EventToken` is the opaque `next_page_token` the event stream returned last time
+`NextEventToken` is the opaque `next_page_token` the event stream returned last time
 — the same base64 keyset cursor `ListEventsByTask` hands back
 (`internal/store/event.go`, `internal/pagination/pagination.go`). Its zero value
 (`""`) is the natural first-run state: "no page consumed yet." The config file
@@ -98,12 +98,12 @@ right primitive and no new endpoint is needed.
 
 Flow:
 
-- **First run** — `EventToken` is empty. `ListEventsByTask(task_id, page_size=N)`
+- **First run** — `NextEventToken` is empty. `ListEventsByTask(task_id, page_size=N)`
   with an empty token returns the newest page (oldest-first within the page) plus
   a fresh `next_page_token` pointing at the current tail. The driver saves that
   token and injects nothing (first run bootstraps via `get_my_task`).
 
-- **Wake** — `ListEventsByTask(task_id, page_token=EventToken)`. The live-follow
+- **Wake** — `ListEventsByTask(task_id, page_token=NextEventToken)`. The live-follow
   walk returns the events newer than the token, oldest-first. A page shorter than
   `page_size` means the tail is reached; a full page means more may remain, so the
   driver follows the returned `next_page_token` until it gets a short page,
@@ -130,7 +130,7 @@ untouched; the server-side filter is noted as an [open question](#open-questions
 `runAgent` (`internal/agent/driver.go:149`) gains an event-fetch step between
 loading the config and building the prompt:
 
-1. **Fetch.** Call `ListEventsByTask(task_id, page_token=cfg.EventToken)`,
+1. **Fetch.** Call `ListEventsByTask(task_id, page_token=cfg.NextEventToken)`,
    draining pages to the tail as above. Marshal each retained event with the same
    `protojson` options `taskDetailsToMap` uses (`Indent: "  "`), so the injected
    payload is byte-for-byte the shape the `events` array already has in
@@ -153,7 +153,7 @@ loading the config and building the prompt:
    `The task was updated. Continue.` — no tool-call instruction, because the
    design's whole point is that the wake no longer depends on one.
 
-3. **Advance.** After `a.Prompt` returns, set `cfg.EventToken` to the final
+3. **Advance.** After `a.Prompt` returns, set `cfg.NextEventToken` to the final
    `next_page_token` and `Config.Save`, next to the existing `cfg.Started = true`
    save (`internal/agent/driver.go:197`).
 
@@ -212,13 +212,13 @@ call can no longer silently drop them.
 
 ## Implementation Plan
 
-1. **`EventToken` config field** — Delivers: the `event_token` string field on
+1. **`NextEventToken` config field** — Delivers: the `next_event_token` string field on
    `agent.Config`. Depends on: nothing. Verifiable by: a load/save round-trip
    test in `internal/agent`.
 
 2. **Driver seeds the token** — Delivers: the first-run empty-token
    `ListEventsByTask` call that saves the tail `next_page_token` (no injection).
-   Depends on: (1). Verifiable by: a driver test asserting `EventToken` is
+   Depends on: (1). Verifiable by: a driver test asserting `NextEventToken` is
    non-empty after a non-wake run.
 
 3. **Driver injects on wake** — Delivers: the `PROMPT.md` wake-branch change, the
