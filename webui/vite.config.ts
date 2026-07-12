@@ -11,6 +11,10 @@ export default defineConfig({
   build: {
     outDir: '../internal/server/webui',
     emptyOutDir: true,
+    // The app ships as a single bundle (no route/vendor code-splitting yet),
+    // so the entry chunk exceeds Rollup's default 500 kB warning threshold.
+    // Raise the limit to silence the warning until code-splitting is added.
+    chunkSizeWarningLimit: 1500,
   },
   resolve: {
     alias: {
