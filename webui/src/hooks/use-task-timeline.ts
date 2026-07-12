@@ -5,7 +5,7 @@ import { listEventsByTask } from '@/gen/xagent/v1/xagent-XAgentService_connectqu
 import type { ListEventsByTaskResponse } from '@/gen/xagent/v1/xagent_pb'
 import { eventsToTimeline } from '@/lib/timeline'
 import { useTimelineFollowers } from '@/lib/services'
-import { startVisibilityPoll } from '@/lib/visibility-poll'
+import { useVisibilityInterval } from './use-visibility-interval'
 
 // The timeline is append-only, so every page is an immutable ascending window
 // over a fixed id range. That lets us open at the tail, prepend older pages on
@@ -90,7 +90,7 @@ export function useTaskTimeline(taskId: bigint) {
   // dropped task_logs signal can't stall the tail longer than the poll period.
   // The poll is skipped while the tab is hidden (a background tab has closed the
   // SSE and reconnects + resyncs on foreground).
-  useEffect(() => startVisibilityPoll(() => void follow(), FOLLOW_POLL_MS), [follow])
+  useVisibilityInterval(() => void follow(), FOLLOW_POLL_MS)
 
   // Every page is ascending, so the loaded pages flatten into one ascending
   // stream — no reversal.
