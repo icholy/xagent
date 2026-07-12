@@ -116,6 +116,11 @@ message Task {
   // session id (see proposals/draft/driver-reverse-shell.md). Empty => normal
   // agent run. Persistent and server-owned; the runner never touches it.
   string shell_session = 16;
+  // Namespace partitions subscription matching in the event router. Empty is
+  // the default namespace — the behavior every existing task already has. Set
+  // at creation and read-only thereafter (see
+  // proposals/draft/task-namespaces.md).
+  string namespace = 17;
 }
 
 message McpServer {
@@ -167,6 +172,9 @@ message CreateTaskRequest {
   repeated Instruction instructions = 4;
   string runner = 5;  // Runner ID that should handle this task
   google.protobuf.Duration auto_archive = 6;
+  // Optional namespace for the created task. Empty (default) is the default
+  // namespace. See Task.namespace.
+  string namespace = 7;
 }
 
 message CreateTaskResponse {
@@ -632,6 +640,11 @@ message RoutingRule {
   // need not be oauth-linked). Defaults false — rules are member-only unless
   // explicitly opted in.
   bool public = 11;
+  // namespace partitions subscription matching. The router scopes this rule's
+  // wake-vs-create decision to subscribers whose task shares this namespace,
+  // and a created task is stamped with it. Empty (default) is the default
+  // namespace — the behavior every existing rule already has.
+  string namespace = 12;
 }
 
 message CreateTaskAction {

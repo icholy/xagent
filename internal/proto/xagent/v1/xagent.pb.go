@@ -447,7 +447,12 @@ type Task struct {
 	// Non-empty => this sandbox run is a reverse shell for this rendezvous
 	// session id (see proposals/draft/driver-reverse-shell.md). Empty => normal
 	// agent run. Persistent and server-owned; the runner never touches it.
-	ShellSession  string `protobuf:"bytes,16,opt,name=shell_session,json=shellSession,proto3" json:"shell_session,omitempty"`
+	ShellSession string `protobuf:"bytes,16,opt,name=shell_session,json=shellSession,proto3" json:"shell_session,omitempty"`
+	// Namespace partitions subscription matching in the event router. Empty is
+	// the default namespace — the behavior every existing task already has. Set
+	// at creation and read-only thereafter (see
+	// proposals/draft/task-namespaces.md).
+	Namespace     string `protobuf:"bytes,17,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -576,6 +581,13 @@ func (x *Task) GetAutoArchive() *durationpb.Duration {
 func (x *Task) GetShellSession() string {
 	if x != nil {
 		return x.ShellSession
+	}
+	return ""
+}
+
+func (x *Task) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
 	}
 	return ""
 }
@@ -1021,12 +1033,15 @@ func (x *ListRunnerTasksResponse) GetTasks() []*Task {
 }
 
 type CreateTaskRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Workspace     string                 `protobuf:"bytes,3,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	Instructions  []*Instruction         `protobuf:"bytes,4,rep,name=instructions,proto3" json:"instructions,omitempty"`
-	Runner        string                 `protobuf:"bytes,5,opt,name=runner,proto3" json:"runner,omitempty"` // Runner ID that should handle this task
-	AutoArchive   *durationpb.Duration   `protobuf:"bytes,6,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Name         string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Workspace    string                 `protobuf:"bytes,3,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Instructions []*Instruction         `protobuf:"bytes,4,rep,name=instructions,proto3" json:"instructions,omitempty"`
+	Runner       string                 `protobuf:"bytes,5,opt,name=runner,proto3" json:"runner,omitempty"` // Runner ID that should handle this task
+	AutoArchive  *durationpb.Duration   `protobuf:"bytes,6,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
+	// Optional namespace for the created task. Empty (default) is the default
+	// namespace. See Task.namespace.
+	Namespace     string `protobuf:"bytes,7,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1094,6 +1109,13 @@ func (x *CreateTaskRequest) GetAutoArchive() *durationpb.Duration {
 		return x.AutoArchive
 	}
 	return nil
+}
+
+func (x *CreateTaskRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
 }
 
 type CreateTaskResponse struct {
@@ -5451,7 +5473,12 @@ type RoutingRule struct {
 	// public lets this rule fire for actors who are not members of the org (and
 	// need not be oauth-linked). Defaults false — rules are member-only unless
 	// explicitly opted in.
-	Public        bool `protobuf:"varint,11,opt,name=public,proto3" json:"public,omitempty"`
+	Public bool `protobuf:"varint,11,opt,name=public,proto3" json:"public,omitempty"`
+	// namespace partitions subscription matching. The router scopes this rule's
+	// wake-vs-create decision to subscribers whose task shares this namespace,
+	// and a created task is stamped with it. Empty (default) is the default
+	// namespace — the behavior every existing rule already has.
+	Namespace     string `protobuf:"bytes,12,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5526,6 +5553,13 @@ func (x *RoutingRule) GetPublic() bool {
 		return x.Public
 	}
 	return false
+}
+
+func (x *RoutingRule) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
 }
 
 type CreateTaskAction struct {
@@ -6326,7 +6360,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x06cancel\x18\x02 \x01(\bR\x06cancel\x12\x18\n" +
 	"\arestart\x18\x03 \x01(\bR\arestart\x12\x14\n" +
 	"\x05start\x18\x04 \x01(\bR\x05start\x12\x1c\n" +
-	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\xa0\x04\n" +
+	"\tunarchive\x18\x05 \x01(\bR\tunarchive\"\xbe\x04\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
@@ -6344,7 +6378,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\barchived\x18\r \x01(\bR\barchived\x12\x10\n" +
 	"\x03url\x18\x0e \x01(\tR\x03url\x12<\n" +
 	"\fauto_archive\x18\x0f \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\x12#\n" +
-	"\rshell_session\x18\x10 \x01(\tR\fshellSessionJ\x04\b\x03\x10\x04J\x04\b\x06\x10\a\"\xb6\x01\n" +
+	"\rshell_session\x18\x10 \x01(\tR\fshellSession\x12\x1c\n" +
+	"\tnamespace\x18\x11 \x01(\tR\tnamespaceJ\x04\b\x03\x10\x04J\x04\b\x06\x10\a\"\xb6\x01\n" +
 	"\tMcpServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
@@ -6375,13 +6410,14 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x16ListRunnerTasksRequest\x12\x16\n" +
 	"\x06runner\x18\x01 \x01(\tR\x06runner\"@\n" +
 	"\x17ListRunnerTasksResponse\x12%\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"\xdd\x01\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\"\xfb\x01\n" +
 	"\x11CreateTaskRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tworkspace\x18\x03 \x01(\tR\tworkspace\x12:\n" +
 	"\finstructions\x18\x04 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x16\n" +
 	"\x06runner\x18\x05 \x01(\tR\x06runner\x12<\n" +
-	"\fauto_archive\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\vautoArchiveJ\x04\b\x02\x10\x03\"9\n" +
+	"\fauto_archive\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\x12\x1c\n" +
+	"\tnamespace\x18\a \x01(\tR\tnamespaceJ\x04\b\x02\x10\x03\"9\n" +
 	"\x12CreateTaskResponse\x12#\n" +
 	"\x04task\x18\x01 \x01(\v2\x0f.xagent.v1.TaskR\x04task\" \n" +
 	"\x0eGetTaskRequest\x12\x0e\n" +
@@ -6635,7 +6671,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\rRuleCondition\x12\x12\n" +
 	"\x04attr\x18\x01 \x01(\tR\x04attr\x12\x0e\n" +
 	"\x02op\x18\x02 \x01(\tR\x02op\x12\x14\n" +
-	"\x05value\x18\x03 \x01(\tR\x05value\"\xf6\x01\n" +
+	"\x05value\x18\x03 \x01(\tR\x05value\"\x94\x02\n" +
 	"\vRoutingRule\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x123\n" +
@@ -6645,7 +6681,8 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"conditions\x18\n" +
 	" \x03(\v2\x18.xagent.v1.RuleConditionR\n" +
 	"conditions\x12\x16\n" +
-	"\x06public\x18\v \x01(\bR\x06publicJ\x04\b\x03\x10\x04J\x04\b\x04\x10\x05J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\t\"\x9e\x01\n" +
+	"\x06public\x18\v \x01(\bR\x06public\x12\x1c\n" +
+	"\tnamespace\x18\f \x01(\tR\tnamespaceJ\x04\b\x03\x10\x04J\x04\b\x04\x10\x05J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\t\"\x9e\x01\n" +
 	"\x10CreateTaskAction\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
 	"\x06runner\x18\x02 \x01(\tR\x06runner\x12\x16\n" +

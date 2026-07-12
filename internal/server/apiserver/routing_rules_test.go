@@ -57,6 +57,35 @@ func TestSetAndGetRoutingRules(t *testing.T) {
 	assert.DeepEqual(t, getResp.Rules, rules, protocmp.Transform())
 }
 
+func TestSetAndGetRoutingRules_Namespace(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, nil)
+	ctx := createCtx(t, org)
+	rules := []*xagentv1.RoutingRule{
+		{Source: "github", Type: "label_added", Conditions: []*xagentv1.RuleCondition{{Attr: "label", Op: "equals", Value: "reviewbot"}}, Namespace: "reviewbot"},
+		{Source: "github", Type: "issue_comment", Conditions: []*xagentv1.RuleCondition{{Attr: "body", Op: "prefix", Value: "bot:"}}},
+	}
+
+	// Act
+	setResp, err := srv.SetRoutingRules(ctx, &xagentv1.SetRoutingRulesRequest{Rules: rules})
+
+	// Assert: the namespace round-trips through set, and the default (empty)
+	// namespace is preserved untouched.
+	assert.NilError(t, err)
+	assert.DeepEqual(t, setResp.Rules, rules, protocmp.Transform())
+
+	// Act
+	getResp, err := srv.GetRoutingRules(ctx, &xagentv1.GetRoutingRulesRequest{})
+
+	// Assert: set -> get preserves each rule's namespace.
+	assert.NilError(t, err)
+	assert.DeepEqual(t, getResp.Rules, rules, protocmp.Transform())
+	assert.Equal(t, getResp.Rules[0].Namespace, "reviewbot")
+	assert.Equal(t, getResp.Rules[1].Namespace, "")
+}
+
 func TestSetRoutingRules_OrgIsolation(t *testing.T) {
 	t.Parallel()
 	// Arrange

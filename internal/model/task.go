@@ -135,6 +135,7 @@ func (t *Task) Proto(baseURL string) *xagentv1.Task {
 		UpdatedAt:    timestamppb.New(t.UpdatedAt),
 		AutoArchive:  durationpb.New(t.AutoArchive),
 		ShellSession: t.ShellSession,
+		Namespace:    t.Namespace,
 		Actions: &xagentv1.TaskActions{
 			Archive:   t.CanArchive(),
 			Unarchive: t.CanUnarchive(),
@@ -167,6 +168,7 @@ func TaskFromProto(pb *xagentv1.Task) *Task {
 		UpdatedAt:    updatedAt,
 		AutoArchive:  pb.AutoArchive.AsDuration(),
 		ShellSession: pb.ShellSession,
+		Namespace:    pb.Namespace,
 	}
 }
 

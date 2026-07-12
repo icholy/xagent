@@ -92,6 +92,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Name:      req.Name,
 		Runner:    req.Runner,
 		Workspace: req.Workspace,
+		Namespace: req.Namespace,
 		Status:    model.TaskStatusPending,
 		Command:   model.TaskCommandStart,
 		Version:   1,

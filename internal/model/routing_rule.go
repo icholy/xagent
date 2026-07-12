@@ -79,10 +79,11 @@ func CreateTaskActionFromProto(pb *xagentv1.CreateTaskAction) *CreateTaskAction 
 // Proto converts a RoutingRule to its protobuf representation.
 func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 	pb := &xagentv1.RoutingRule{
-		Source: r.Source,
-		Type:   r.Type,
-		Wakeup: r.Wakeup,
-		Public: r.Public,
+		Source:    r.Source,
+		Type:      r.Type,
+		Wakeup:    r.Wakeup,
+		Public:    r.Public,
+		Namespace: r.Namespace,
 	}
 	for _, c := range r.Conditions {
 		pb.Conditions = append(pb.Conditions, &xagentv1.RuleCondition{
@@ -100,11 +101,12 @@ func (r *RoutingRule) Proto() *xagentv1.RoutingRule {
 // RoutingRuleFromProto converts a protobuf RoutingRule to the model type.
 func RoutingRuleFromProto(pb *xagentv1.RoutingRule) RoutingRule {
 	rule := RoutingRule{
-		Source: pb.Source,
-		Type:   pb.Type,
-		Create: CreateTaskActionFromProto(pb.Create),
-		Wakeup: pb.Wakeup,
-		Public: pb.Public,
+		Source:    pb.Source,
+		Type:      pb.Type,
+		Create:    CreateTaskActionFromProto(pb.Create),
+		Wakeup:    pb.Wakeup,
+		Public:    pb.Public,
+		Namespace: pb.Namespace,
 	}
 	for _, c := range pb.Conditions {
 		rule.Conditions = append(rule.Conditions, Condition{
