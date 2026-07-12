@@ -1,6 +1,6 @@
 ---
 name: xagent-orchestrator
-description: Act as an engineering manager across the whole delegation lifecycle. Scope and design work with the user, delegate it to xagent tasks, and review the proposals and PRs that come back — requesting changes by commenting on the PR and tagging the author rather than fixing them yourself. When a plan is already settled, drive it to completion as an ordered stack of small "layer-cake" PRs (one task per layer, landed one at a time and gated on merge), tracked in a GitHub issue that survives context loss.
+description: Act as an engineering manager across the whole delegation lifecycle. Scope and design work with the user, delegate it to xagent tasks, and review the proposals and PRs that come back — requesting changes by commenting on the PR and tagging the author rather than fixing them yourself. When a plan is settled, drive it to completion as an ordered stack of small "layer-cake" PRs (one task per layer, landed one at a time and gated on merge). All work is tracked on a GitHub Project board — the durable index a fresh session reads to pick up exactly where the last one left off, regardless of which xagent tasks have been auto-archived.
 ---
 
 # xagent Orchestrator
@@ -18,8 +18,9 @@ The mode spans two cadences that share the same posture:
   a layer-cake breakdown), deliver it as a stack of thin PRs, one layer at a time, gated on
   merge. See [Executing a settled plan](#executing-a-settled-plan).
 
-Both delegate the work and review what comes back; only the cadence differs. You move between
-them fluidly — a scoping session that lands on an accepted plan flows straight into execution.
+Both delegate the work and review what comes back; only the cadence differs. Everything you
+drive is tracked on [the board](#the-board), so state survives across sessions even though
+xagent tasks get auto-archived.
 
 ## Core rules
 
@@ -38,8 +39,8 @@ them fluidly — a scoping session that lands on an accepted plan flows straight
    served its purpose.
 4. **Committing is allowed, but deliberate.** The default is to delegate, but you do
    commit directly in some cases:
-   - Workflow / config / tooling files (skills, settings, docs about process, the tracking
-     issue) — like this skill itself.
+   - Workflow / config / tooling files (skills, settings, docs about process) — like this
+     skill itself.
    - Genuinely complex work that needs a lot of human-in-the-loop iteration, where the
      back-and-forth is faster done together than round-tripped through a task.
    When in doubt, prefer delegating; commit directly only when one of these clearly
@@ -58,13 +59,101 @@ them fluidly — a scoping session that lands on an accepted plan flows straight
    task](#relaying-feedback-to-the-task)). Editing the PR branch yourself is a last resort —
    a trivial mechanical fixup a round trip isn't worth, or when the user asks.
 
+## The board
+
+The GitHub Project board is the orchestrator's **durable index** — the one place a fresh
+session reads to reconstruct what's in flight, no matter which xagent tasks have since been
+auto-archived. It is `icholy`'s Project **#2 ("Kanban")**, a single-select **Status** field
+with five columns:
+
+```
+Backlog → Ready → In progress → In review → Done
+```
+
+Two kinds of card live on it:
+
+- **Effort — a top-level GitHub issue.** One issue per unit of work you take on.
+  Lifecycle: `Backlog → Ready → In progress → Done`. An effort that is broken into layers
+  **skips In review** (its layers carry that state). A small effort with no layers — a
+  single-PR fix, or an investigation — has no sub-issues and passes through **In review**
+  itself while its one PR is open.
+- **Layer — a GitHub sub-issue.** For an effort executed as a layer cake, one **sub-issue**
+  per layer, linked under the parent so the parent shows N/M sub-issue progress. Lifecycle:
+  `Ready → In progress → In review → Done`. A layer **skips Backlog**. Title format:
+  `<proposal-slug> LN: <description>` (e.g. `task-namespaces L1: schema migration`), body
+  `Part of #<parent>` — **never `Closes`** (a merged layer must not auto-close the parent).
+
+Each column means exactly one thing:
+
+| Column | Meaning |
+| --- | --- |
+| **Backlog** | Untriaged top-level issues — the human's pile. |
+| **Ready** | Ready to pull next: a triaged top-level issue, or the next layer of an in-progress effort. |
+| **In progress** | Actively worked — a live delegated task. |
+| **In review** | A PR is open, awaiting the human's merge. |
+| **Done** | Merged / complete. |
+
+**Who moves what.** The human moves top-level issues `Backlog → Ready` and **merges PRs**.
+You do everything else: move a parent to In progress, create the layer sub-issues, and walk
+each card across the columns as tasks run and PRs open and merge. Never move a card to Done
+yourself before its PR is actually merged.
+
+**Ready is pull-based, not a poll.** You do not watch Ready continuously. You look at it when
+you've just wrapped the current thing — a layer merged, or an effort finished — and are
+reaching for the next thing to start. The next layer or a freshly-triaged top-level issue
+will be waiting there.
+
+**Board plumbing** (`gh` needs the `read:project,project` scopes — if a call 403s on scope,
+run `gh auth refresh -s read:project,project`):
+
+```bash
+# Read the board (raise --limit past the default 30 or new cards get truncated)
+gh project item-list 2 --owner icholy --limit 100 --format json
+
+# Move a card to a column (get <itemId> from item-list; ids below can drift — rediscover
+# with `gh project field-list 2 --owner icholy` and a Status field-options query)
+gh project item-edit --id <itemId> \
+  --project-id PVT_kwHOAA5l7c4BdMmV \
+  --field-id  PVTSSF_lAHOAA5l7c4BdMmVzhXv0o0 \
+  --single-select-option-id <optionId>
+#   Backlog f75ad846 · Ready 61e4505c · In progress 47fc9ee4 · In review df73e18b · Done 98236657
+
+# Add an issue to the board
+gh project item-add 2 --owner icholy --url https://github.com/icholy/xagent/issues/<n>
+
+# Link a sub-issue under a parent (node ids from `gh issue view <n> --json id`)
+gh api graphql -f query='mutation($p:ID!,$c:ID!){addSubIssue(input:{issueId:$p,subIssueId:$c}){subIssue{number}}}' \
+  -F p=<parentNodeId> -F c=<childNodeId>
+```
+
+### Picking up where a previous session left off
+
+The board makes recovery possible: fresh context, or handed off from another agent, you
+reconstruct the whole state by reading it.
+
+1. **Read the board.** The **In progress** and **In review** columns are the live efforts.
+   *Ready* is the queue of what to start next.
+2. **Open each in-progress parent and read its sub-issue tree.** The layer in *In review* has
+   an open PR (awaiting the human's merge, or your relayed feedback); the layer in *In
+   progress* is being built; the next layer sits in *Ready* under it. That is your resume
+   point — the auto-archived xagent tasks don't matter.
+3. **Re-establish mute.** Mute state is per-session and does not survive a restart: run
+   `channel_mute(all=true)`, then `channel_unmute` any task still in flight for the active
+   layer (there may be none — the task can have been archived; the board still tells you the
+   state).
+4. **Don't double-delegate.** Before creating a task for the active layer, check whether its
+   PR already exists (*In review*) or a task is already running. If the layer's PR turns out
+   to be merged, move it to Done and advance.
+5. **Continue** the per-layer loop from the current layer.
+
 ## Workflow
 
-The design & delegate loop. When the approach is already settled, skip to
-[Executing a settled plan](#executing-a-settled-plan).
+The design & delegate loop. You pull work from the board's [Ready column](#the-board) — check
+it when you've wrapped the current thing, not continuously. When the approach is already
+settled, skip to [Executing a settled plan](#executing-a-settled-plan).
 
-1. **Scope** — Work with the user to understand the problem and settle on an approach.
-   Ask clarifying questions when a decision is genuinely theirs to make.
+1. **Scope** — Take a top-level issue from Ready and understand the problem with the user;
+   settle on an approach. Ask clarifying questions when a decision is genuinely theirs to make.
 2. **Validate (optional)** — If an approach has technical unknowns, prototype locally to
    de-risk it. Read the relevant code, probe APIs, confirm feasibility. Keep notes; throw
    the code away.
@@ -80,106 +169,74 @@ The design & delegate loop. When the approach is already settled, skip to
    them. Align on what actually needs to change. Don't post feedback to the PR until then.
 6. **Request changes** — Once aligned, comment on the PR tagging the author with concrete
    change requests. Iterate until it's right.
-7. **Track** — Keep the user oriented: which tasks are running, what landed, what's
-   blocked, and what the next delegation should be.
+7. **Track** — Keep the board current and the user oriented: which efforts are running, what
+   landed, what's blocked, and what the next pull should be.
 
-When a design task lands an accepted plan with a layer-cake breakdown, the natural next step
-is to execute it — move to the section below.
+A Ready issue that lands an accepted plan with a layer-cake breakdown flows straight into
+execution below.
 
 ## Executing a settled plan
 
-When the approach is agreed and the job is to build it, switch cadence: deliver the plan as
-an **ordered stack of small PRs**, one xagent task per layer, landed one at a time. The human
-reviews and merges each PR; a merge is your go signal to pour the next layer. This is still
-delegate-and-review — the agents write the code — just with a tighter, gated rhythm.
+When an effort's approach is agreed and the job is to build it, deliver it as an **ordered
+stack of small PRs** — one xagent task per layer, landed one at a time — and track the whole
+thing on [the board](#the-board). The human reviews and merges each PR; a merge is your go
+signal to pour the next layer. This is still delegate-and-review — the agents write the code —
+just with a tighter, gated rhythm.
 
-The defaults that make this work (all strong recommendations, not ceremony for its own sake):
+The defaults that make this work (strong recommendations, not ceremony for its own sake):
 
-- **One layer, one task, one PR.** Each slice of the plan becomes one task that opens one PR.
-  Don't fan the whole plan out into parallel tasks (see [Running layers in
-  parallel](#running-layers-in-parallel) for the exception).
+- **One layer, one task, one PR.** Each slice becomes one task that opens one PR. Don't fan the
+  whole plan out into parallel tasks (see [Running layers in parallel](#running-layers-in-parallel)
+  for the exception).
 - **Default to strictly sequential, gated on merge.** Land layer N before starting layer N+1.
   Merges land on `master`, so each new task branches from a `master` that already contains
-  every prior layer — no branch stacking, no cross-PR rebasing. The plan stays a clean cake
-  because each layer is baked in before the next is poured.
-- **Keep a tracking issue as the durable source of truth.** This conversation and your mute
-  state are ephemeral; the GitHub issue is what lets you (or another agent) resume after
-  context loss. See [Tracking issue](#tracking-issue).
-- **Mute all, unmute the active layer.** So the only channel notifications you get are from
-  the layer currently in flight. See [Notification discipline](#notification-discipline).
+  every prior layer — no branch stacking, no cross-PR rebasing.
+- **The board is the source of truth.** The parent effort and its layer sub-issues are cards;
+  their columns are the durable record that lets any session resume.
 
-### Before you start executing
+### Entry: a Ready issue
 
-- **You need a layer-cake breakdown** — usually the `## Implementation Plan` of an accepted
-  proposal (`proposals/accepted/*.md`): an ordered list of thin slices, each with
-  *Delivers / Depends on / Verifiable by*. If the plan exists but has no such breakdown,
-  produce the ordered slice list yourself and **confirm it with the user** before kicking
-  anything off.
+You pick up a top-level issue the human has moved into **Ready**. Two cases:
+
+- **No proposal yet** → delegate a task to write one (a proposal PR; see the `proposal`
+  skill). The parent **stays in Ready** while the proposal is written. When the proposal
+  merges, you have a layer-cake breakdown and move to the execute case below. (Guard against
+  double-delegating a proposal task on resume — the board card is still in Ready either way.)
+- **Proposal merged** → execute it.
+
+### Before executing (once the proposal is in)
+
+- **Confirm the layer-cake breakdown** — usually the proposal's `## Implementation Plan`: an
+  ordered list of thin slices, each with *Delivers / Depends on / Verifiable by*. If there is
+  no such breakdown, produce the ordered slice list yourself and **confirm it with the user**.
 - **Confirm the order and the first slice** with the user.
-- **Open the tracking issue** — once, before the first delegation — with a checkbox per layer
-  and a link to the plan (see [Tracking issue](#tracking-issue)).
+- **Move the parent to In progress**, and **create one sub-issue per layer** under it —
+  titled `<proposal-slug> LN: <description>`, linked as a GitHub sub-issue, body `Part of
+  #<parent>`. All layer sub-issues start in **Ready**.
 - **Set the mute baseline:** `channel_mute(all=true)`.
 
-### The per-layer loop (repeat once per layer)
+### The per-layer loop (repeat once per layer, in order)
 
-1. **Delegate the current layer.** Create one xagent task for the current slice with a lean
-   instruction (see [Writing a layer's task instruction](#writing-a-layers-task-instruction))
-   that references the tracking issue. Immediately `channel_unmute(task_ids=[<new id>])`.
-   Record the in-flight task under the active layer in the tracking issue's `## Status`, and
-   show the user the task URL.
-2. **Wait.** Let it run. Because only this task is unmuted, its completion notification is
-   your review signal.
-3. **Review the PR** against the slice's intent and the plan. Confirm it's thin, correct,
-   self-contained, and doesn't reach into a later layer's scope.
+1. **Delegate the current layer.** Create one xagent task for the layer with a lean
+   instruction (see [Writing a layer's task
+   instruction](#writing-a-layers-task-instruction)). Move the layer's sub-issue `Ready → In
+   progress`. Immediately `channel_unmute(task_ids=[<new id>])`, and show the user the task URL.
+2. **Wait.** Because only this task is unmuted, its completion notification is your review
+   signal.
+3. **PR opens → move the layer to In review.** Read the PR against the slice's intent and the
+   plan: thin, correct, self-contained, and not reaching into a later layer's scope.
 4. **Discuss with the human** before posting anything (core rule 6).
 5. **Relay changes / iterate.** Once aligned, post the feedback on the PR tagging the author;
    the event system wakes the task to fix it (see [Relaying feedback to the
    task](#relaying-feedback-to-the-task)). Re-review the updated PR and loop until it's right.
-   Don't edit the PR yourself, and don't advance.
-6. **Gate on merge, then update the issue.** The human merges the PR — that merge is the go
-   signal. Verify it's actually merged, check the layer's box in the tracking issue and record
-   its PR link, reset `## Status` to the next layer, then return to step 1.
+   The card stays in *In review*. Don't edit the PR yourself, and don't advance.
+6. **Merge → move the layer to Done.** The human merges the PR — that merge is the go signal.
+   Verify it's actually merged, move the sub-issue to Done and close it (the parent's N/M
+   progress ticks up), then return to step 1 for the next layer, which is waiting in *Ready*.
 7. **Track.** Tell the user which layers are done, which is in flight, and what's next.
 
-Continue until the final slice is merged. Then check the last box, set the issue's `## Status`
-to `Done.`, close it, and report the plan complete. If the user wants normal notifications
-back afterward, `channel_unmute(all=true)`.
-
-### Tracking issue
-
-The tracking issue is the implementation's durable memory. It outlives this conversation: if
-your context is lost, another agent reads the issue and knows exactly where to resume — which
-layers merged, which is in flight, and what's next. Maintain it yourself with the GitHub tools
-(`mcp__meta__Github__issue_write` to open it and to edit its body).
-
-**Create it once, before the first layer**, with a checkbox per slice in plan order:
-
-```markdown
-Title: Implement <plan name>
-
-Tracking issue for `proposals/accepted/<plan>.md`. One PR per layer, merged in order.
-
-## Layers
-- [ ] 1. Schema migration — <one line>
-- [ ] 2. Backend store + RPC — <one line>
-- [ ] 3. CLI wire-up — <one line>
-- [ ] 4. Web UI — <one line>
-
-## Status
-_Not started._
-```
-
-**Keep it current** — this is the part that makes recovery possible:
-
-- **On delegating a layer:** set `## Status` to the active layer with its task URL, and add
-  the PR link once opened — e.g. `Layer 2 in flight — task <url>, PR #NNN`.
-- **On merge:** check that layer's box and append the merged PR to its line
-  (`- [x] 2. Backend store + RPC — #NNN`), then reset `## Status` to the next layer.
-- **On completion:** all boxes checked, `## Status` → `Done.`, close the issue.
-
-Reference the tracking issue from every layer's task instruction and every layer PR with `Part
-of #NNN` so the links are bidirectional. Use `Part of`, **not** `Closes` — a layer PR must not
-auto-close the tracker; only the final layer (or you, by hand) closes it.
+When the final layer is Done, **move the parent to Done and close it**, and report the plan
+complete. If the user wants normal notifications back afterward, `channel_unmute(all=true)`.
 
 ### Notification discipline
 
@@ -215,22 +272,8 @@ The loop:
 2. **Post it on the PR**, tagging the author (`@icholy-bot`), as a review comment or
    `mcp__meta__Github__add_issue_comment`. Be specific and actionable — name the files and the
    exact signature/behavior you want, and point at symbols instead of pasting code.
-3. **Wait for the wake**, then **re-review** the updated PR. Iterate until it's right; during
-   execution, don't advance to the next layer until this one merges.
-
-### Resuming after context loss
-
-If you're picking up an in-flight execution cold — fresh context, or handed off from another
-agent:
-
-1. **Read the tracking issue.** Checked boxes are done; `## Status` names the active layer and
-   its task/PR.
-2. **Re-establish mute.** Mute state is per-session and does not survive a restart: run
-   `channel_mute(all=true)`, then `channel_unmute` any task still in flight for the active
-   layer.
-3. **Don't double-delegate.** Check whether the active layer's task/PR already exists before
-   creating one. If its PR is already merged, update the issue and move to the next layer.
-4. **Continue the per-layer loop** from the current layer.
+3. **Wait for the wake**, then **re-review** the updated PR. The layer stays in *In review*
+   until it merges; don't advance to the next layer until then.
 
 ### Writing a layer's task instruction
 
@@ -239,19 +282,19 @@ for each layer:
 
 - **Reference the plan file; don't paste it.** Point at the proposal (e.g. "implement slice N
   of `proposals/accepted/foo.md`"), not a copy of its text.
-- **Name the slice** exactly as it appears in the plan.
+- **Name the slice** exactly as it appears in the plan, and reference the layer sub-issue
+  (`Part of #<layer>`).
 - **Say the prior layers are already on `master`.** The agent branches from `master`; it does
   not stack on a prior PR branch.
 - **Scope-guard hard:** implement *only this slice* — "do NOT start on later layers."
-- **Reference the tracking issue** (`Part of #NNN`).
 - **Name the deliverable (a PR) and the conventional-commit type.**
 
 ### Running layers in parallel
 
 Default to strictly sequential. Only run layers concurrently if the user explicitly opts in
 **and** the slices are genuinely independent (no shared files, no ordering dependency). If you
-do, unmute each task you create and track them separately — but the merge-gate remains the
-standard, and the tracking issue still gets one checkbox per layer.
+do, unmute each task you create and track them separately on the board — but the merge-gate
+remains the standard.
 
 ## Handling task notifications
 
@@ -283,11 +326,13 @@ searching, reading, or analysis, kick off a task for it rather than spending you
 context on the sweep.
 
 - **Bug hunts / audits → a GitHub issue.** When the task is finding bugs or problems, the
-  deliverable is usually a GitHub issue on this repo describing what was found.
+  deliverable is usually a GitHub issue on this repo describing what was found. New findings
+  land in the board's **Backlog** for the human to triage.
 - **Implementation plans → a proposal PR.** When the task is figuring out *how* to build
   something, the deliverable is a proposal markdown file in a PR (see the `proposal`
-  skill). An accepted proposal with a layer-cake breakdown is exactly what feeds
-  [Executing a settled plan](#executing-a-settled-plan).
+  skill). This is the "no proposal yet" branch of an effort — an accepted proposal with a
+  layer-cake breakdown is exactly what feeds [Executing a settled
+  plan](#executing-a-settled-plan).
 - **Small scope → do it yourself.** If the investigation is narrow (a couple of files, a
   quick API check), just do it inline. Delegate when the search is broad or the analysis
   is deep.
