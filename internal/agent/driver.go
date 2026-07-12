@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -261,17 +262,11 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 // takes the legacy unpaged path instead).
 const eventPageSize = 50
 
-// injectableEventTypes is the set of event arms injected into the wake prompt:
-// to-agent instructions and self-contained external triggers. It is pushed to
-// the server as the ListEventsByTask types filter so the paged walk returns only
-// these arms (report/lifecycle/link are excluded server-side).
-var injectableEventTypes = []string{model.EventTypeInstruction, model.EventTypeExternal}
-
 // drainEvents walks the task's event stream forward from cfg.NextEventToken to
-// the tail via xagentclient.ListEventsByTask, filtered server-side to the
-// injectable arms (instruction + external). It returns the events accumulated
-// across the walk along with the final next_page_token — the cursor position
-// after the current filtered tail.
+// the tail via xagentclient.ListEventsByTask, filtered server-side (via the types
+// filter) to the injectable arms — to-agent instructions and self-contained
+// external triggers. It returns the events accumulated across the walk along with
+// the final next_page_token — the cursor position after the current filtered tail.
 //
 // The cursor tracks the filtered stream: because event ids are monotonic, every
 // future injectable event has a higher id than the saved token and is delivered
@@ -283,7 +278,7 @@ func (d *Driver) drainEvents(ctx context.Context, cfg *Config) ([]*xagentv1.Even
 		TaskId:    d.TaskID,
 		PageSize:  eventPageSize,
 		PageToken: cfg.NextEventToken,
-		Types:     injectableEventTypes,
+		Types:     []string{model.EventTypeInstruction, model.EventTypeExternal},
 	}
 	for resp, err := range xagentclient.ListEventsByTask(ctx, d.Client, req) {
 		if err != nil {
@@ -296,18 +291,24 @@ func (d *Driver) drainEvents(ctx context.Context, cfg *Config) ([]*xagentv1.Even
 	return events, token, nil
 }
 
-// RenderEvent marshals a single event to JSON using the same protojson options
-// get_my_task's taskDetailsToMap uses (Indent: "  "), so an injected event is
-// byte-for-byte the shape it has in the get_my_task events array — the agent
-// parses one format, not two. It is registered as the RenderEvent template func;
-// PROMPT.md loops over the events and joins the rendered objects into a JSON
-// array.
+// RenderEvent marshals a single event to indented JSON. It protojson-marshals the
+// event, then re-indents through json.MarshalIndent — the same path get_my_task's
+// taskDetailsToMap takes — so an injected event is byte-for-byte the shape it has
+// in the get_my_task events array (the agent parses one format, not two) and, as a
+// bonus, is deterministic: protojson deliberately varies its inter-token
+// whitespace, and routing through encoding/json normalizes it away. Registered as
+// the RenderEvent template func; PROMPT.md loops over the events and joins the
+// rendered objects into a JSON array.
 func RenderEvent(event *xagentv1.Event) (string, error) {
-	data, err := protojson.MarshalOptions{Indent: "  "}.Marshal(event)
+	data, err := protojson.Marshal(event)
 	if err != nil {
 		return "", err
 	}
-	return string(data), nil
+	out, err := json.MarshalIndent(json.RawMessage(data), "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 //go:embed PROMPT.md
