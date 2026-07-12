@@ -9,19 +9,10 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
+	"github.com/icholy/xagent/internal/x/testx"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gotest.tools/v3/assert"
 )
-
-// eventIDs projects the response events to their ids, for order-sensitive
-// comparison across paged and unpaged reads of the same stream.
-func eventIDs(events []*xagentv1.Event) []int64 {
-	ids := make([]int64, len(events))
-	for i, e := range events {
-		ids[i] = e.Id
-	}
-	return ids
-}
 
 // orgWithWorkspace creates an org that has a runner/workspace pair, which is a
 // prerequisite for creating the tasks that events are now scoped to.
@@ -373,7 +364,8 @@ func TestListEventsByTask_Paged(t *testing.T) {
 	// The legacy unpaged list is the ground-truth ascending order.
 	full, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{TaskId: taskID})
 	assert.NilError(t, err)
-	total := len(full.Events)
+	fullIDs := testx.ExtractField(full.Events, "Id").([]int64)
+	total := len(fullIDs)
 	assert.Assert(t, total > 2) // multiple pages at page size 2
 
 	// Newest page: empty token + a page size returns the last page-size events
@@ -385,24 +377,24 @@ func TestListEventsByTask_Paged(t *testing.T) {
 	})
 	assert.NilError(t, err)
 	assert.Equal(t, len(newest.Events), pageSize)
-	assert.DeepEqual(t, eventIDs(newest.Events), eventIDs(full.Events[total-pageSize:]))
+	assert.DeepEqual(t, testx.ExtractField(newest.Events, "Id"), fullIDs[total-pageSize:])
 	assert.Assert(t, newest.PrevPageToken != "")
 	assert.Assert(t, newest.NextPageToken != "")
 
 	// Walk prev (scroll back) to the oldest event. Each page is ascending, so
 	// prepending older pages reconstructs the full ascending stream; prev empties
 	// once history is exhausted.
-	got := append([]*xagentv1.Event(nil), newest.Events...)
+	got := testx.ExtractField(newest.Events, "Id").([]int64)
 	for token := newest.PrevPageToken; token != ""; {
 		page, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
 			TaskId: taskID, PageSize: pageSize, PageToken: token,
 		})
 		assert.NilError(t, err)
 		assert.Assert(t, len(page.Events) > 0)
-		got = append(append([]*xagentv1.Event(nil), page.Events...), got...)
+		got = append(testx.ExtractField(page.Events, "Id").([]int64), got...)
 		token = page.PrevPageToken
 	}
-	assert.DeepEqual(t, eventIDs(got), eventIDs(full.Events))
+	assert.DeepEqual(t, got, fullIDs)
 }
 
 func TestListEventsByTask_LiveFollow(t *testing.T) {
