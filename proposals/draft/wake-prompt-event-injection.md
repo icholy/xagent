@@ -1,0 +1,301 @@
+# Inject New Events Into the Wake Prompt via a Saved Cursor
+
+Issue: https://github.com/icholy/xagent/issues/946
+
+## Problem
+
+When a task is woken (restarted after a new instruction or external event), the
+driver resumes the agent's session with a fixed nudge and nothing else. The
+wake branch of the bootstrap template is literally:
+
+```
+The task was updated. Check xagent:get_my_task and continue.
+```
+
+(`internal/agent/PROMPT.md`, rendered by `Config.prompt` in
+`internal/agent/driver.go:244`.)
+
+So every wake costs the agent a `get_my_task` round-trip just to discover *why*
+it was woken — even though the server already knew the new events at dispatch
+time (they are the reason the task was restarted). Two problems follow:
+
+1. **It's a convention, not a contract.** The wake only works if the prompt
+   nags the model into calling the tool and the model complies. We have seen the
+   harness render the `get_my_task` `<invoke>` block as literal text and exit
+   without ever making the call — a silent no-op that leaves the agent unaware
+   of the event that woke it. The one thing a wake exists to deliver depends on
+   a tool call that can fail invisibly.
+
+2. **It costs a turn.** The model burns a turn fetching context that could have
+   been handed to it in the prompt it already received.
+
+This proposal pushes the new events into the wake prompt instead of making the
+agent pull them. The driver keeps a per-task **event cursor**, fetches the
+events newer than the cursor on each wake, and injects their **raw JSON** (the
+same shape `get_my_task` returns) directly into the prompt it hands the harness.
+The wake no longer depends on any tool call.
+
+This is the narrow, wake-path slice of #946. The issue's broader "render the
+whole brief server-side and mark events delivered" is discussed under
+[Trade-offs](#trade-offs); this design deliberately keeps the cursor
+**driver-local** and reuses the existing event stream rather than adding a
+server-side delivery-tracking column.
+
+## Design
+
+### Where the cursor lives
+
+The driver already persists per-task state to a JSON config file in the
+sandbox: `ConfigStore` writes `/tmp/xagent/{taskID}.json` via atomic
+write, and the `Config` struct already carries agent-managed state
+(`SetupCommandsCompleted`, `Started`) alongside the runner-provided fields
+(`internal/agent/config.go`). The cursor is one more agent-managed field:
+
+```go
+type Config struct {
+    // ... runner-provided fields ...
+
+    // Agent-managed state
+    SetupCommandsCompleted int   `json:"setup_commands_completed,omitempty"`
+    Started                bool  `json:"started,omitempty"`
+    EventCursor            int64 `json:"event_cursor,omitempty"` // highest event id already delivered to the agent
+}
+```
+
+`EventCursor` is the id of the newest event the agent has already been shown.
+Its zero value (`0`) is the natural first-run state: "no events delivered yet."
+The config file survives a restart because the driver-owned-events design
+restarts the **same** container (the filesystem persists — see
+`proposals/accepted/driver-owned-events.md`), so the cursor written by one run
+is read by the next. If the container is *recreated* rather than restarted, the
+config file is gone and the cursor resets to `0` — but so do `Started` and
+`SetupCommandsCompleted`, so a recreate is already a fresh first run and the
+reset is consistent.
+
+Storing the cursor in the sandbox (rather than server-side) keeps this change
+entirely within the driver + one read RPC: no schema migration, no new task
+column, no delivery bookkeeping on the write path.
+
+### Fetching "events since cursor"
+
+We need a primitive the driver can call with a raw event id and get back the
+events newer than it. Two options:
+
+**Option A — reuse `ListEventsByTask` paging.** The bidirectional keyset
+pagination that just landed already has exactly the right SQL: the live-follow
+(backward) walk is `ListEventsByTaskAsc`, `WHERE id > cursor_id ORDER BY id ASC`
+(`internal/store/sql/queries/event.sql`). But it is only reachable through
+`ListEventsByTaskPage` with an **opaque** `page_token` (base64 of
+`{cursor, backward}` — `internal/pagination/pagination.go`). The driver holds a
+raw id, not a server-minted token, and clients should not fabricate opaque
+tokens. Driving the paged API to "everything since id N" would mean minting a
+synthetic token or walking pages until the tail — awkward for a one-shot fetch.
+
+**Option B — a dedicated `ListEventsSince` RPC (chosen).** Add a thin,
+purpose-built read:
+
+```proto
+message ListEventsSinceRequest {
+  int64 task_id = 1;
+  int64 after_event_id = 2; // exclusive; 0 returns the whole to-agent stream
+}
+message ListEventsSinceResponse {
+  repeated Event events = 1; // instruction + external, oldest-first (ascending id)
+}
+```
+
+The handler filters to the same event types the brief uses —
+`model.EventTypeInstruction` and `model.EventTypeExternal` (see
+`GetTaskDetails` in `internal/server/apiserver/task.go`, which passes exactly
+this pair) — so an injected wake shows precisely what a fresh `get_my_task`
+would *newly* surface, and never echoes the agent's own `report`/`link` or
+internal `lifecycle` events back at it. The store method wraps the existing
+`ListEventsByTaskAsc` sqlc query directly (no pagination envelope), authorized
+against the task like every other task-scoped read.
+
+We choose B: the driver's contract becomes "give a cursor, get the newer
+to-agent events, oldest-first" — a single unbounded-but-cursor-scoped read that
+maps one-to-one onto the need. It reuses the pagination *SQL* while skipping the
+opaque-token *envelope* that exists for the scrollable Web UI, not for a
+one-shot server-to-driver fetch.
+
+### The wake path
+
+`runAgent` (`internal/agent/driver.go:149`) gains an event-fetch step between
+loading the config and building the prompt:
+
+1. **Fetch.** Call `ListEventsSince(task_id, cfg.EventCursor)`. Marshal each
+   returned event with the same `protojson` options `taskDetailsToMap` uses
+   (`Indent: "  "`), so the injected payload is byte-for-byte the shape the
+   `events` array already has in `get_my_task` output — the agent parses one
+   format, not two.
+
+2. **Inject (wake only).** When `cfg.Started` is true and the fetch returned
+   events, the wake branch of `PROMPT.md` renders the raw JSON instead of the
+   `get_my_task` nudge:
+
+   ```
+   The task received new events:
+
+   [ { "id": "...", "createdAt": "...", "external": { ... } }, ... ]
+
+   Continue working on the task.
+   ```
+
+   When `cfg.Started` is true but the fetch returned nothing (a spurious wake,
+   or events of a type the brief filters out), the branch falls back to a bare
+   `The task was updated. Continue.` — no tool-call instruction, because the
+   design's whole point is that the wake no longer depends on one.
+
+3. **Advance.** After `a.Prompt` returns, set `cfg.EventCursor` to the highest
+   id fetched and `Config.Save`, next to the existing `cfg.Started = true`
+   save (`internal/agent/driver.go:197`).
+
+The template's data struct grows one field:
+
+```go
+err := promptTemplate.Execute(&b, struct {
+    Started bool
+    Prompt  string
+    Events  string // raw JSON array of events since the cursor; empty when none
+}{ ... })
+```
+
+### First-run initialization
+
+The **first** run (`cfg.Started == false`) keeps today's bootstrap: the prompt
+tells the agent to call `get_my_task`, which establishes full context (task
+name, links, status, and all instructions) — more than the event stream alone
+carries. But the driver still runs the fetch on the first run to **seed the
+cursor**: it calls `ListEventsSince(task_id, 0)`, ignores the payload for
+injection (the bootstrap prompt already covers instructions), and advances
+`EventCursor` to the max id returned when it saves the config at the end of the
+run.
+
+Seeding at run start (via a fetch whose result defines the baseline) is
+race-safe in the *safe* direction: any event that arrives after the fetch has a
+higher id, so it is `> cursor` and gets delivered on the next wake. The only
+cost is that an event the agent already saw through its own `get_my_task` call
+(which runs slightly later than the driver's seed fetch) may be re-injected once
+on the next wake — a harmless duplicate, never a miss.
+
+### Delivery timing: at-least-once
+
+The cursor advances **after** `a.Prompt` returns, not before. If the run crashes
+or fails mid-prompt, the cursor is not advanced and the next run re-injects the
+same events. This is at-least-once delivery: duplicates are possible, misses are
+not — the same bias the driver-owned-events design takes with duplicate runner
+events ("duplicates are safe"). An injected event the agent has already handled
+is a cheap re-read; a dropped event is a task that never learns why it was
+woken.
+
+### `get_my_task` stays
+
+`get_my_task` is unchanged and still registered
+(`internal/agentmcp/xmcp.go`). It remains useful for:
+
+- **First-run bootstrap** (unchanged), which needs task name/links/status, not
+  just events.
+- **Mid-run refresh** — a long-running agent asking "did anything arrive while I
+  was working?" Start-time context is now pushed; mid-run context is still
+  pulled.
+
+What changes is that the **wake path no longer depends on it**. Removing that
+dependency is the reliability win: the events that justify the wake are in the
+prompt text the model already reads, so a harness that fails to execute a tool
+call can no longer silently drop them.
+
+## Implementation Plan
+
+1. **`ListEventsSince` store method + RPC** — Delivers: `ListEventsSinceRequest`/
+   `Response` in `proto/xagent/v1/xagent.proto`, the `apiserver` handler
+   (filtered to instruction + external, task-authorized), and a store method
+   wrapping the existing `ListEventsByTaskAsc` query. Depends on: nothing (the
+   ascending-since SQL already exists). Verifiable by: store + handler unit
+   tests — seed N events, assert `after_event_id` returns only newer ones,
+   oldest-first, correctly type-filtered.
+
+2. **`EventCursor` config field** — Delivers: the `event_cursor` field on
+   `agent.Config`. Depends on: nothing. Verifiable by: a load/save round-trip
+   test in `internal/agent`.
+
+3. **Driver seeds the cursor** — Delivers: the first-run fetch that advances
+   `EventCursor` to the current max id (no injection). Depends on: (1), (2).
+   Verifiable by: a driver test asserting the cursor is non-zero and equal to
+   the newest event id after a non-wake run.
+
+4. **Driver injects on wake** — Delivers: the `PROMPT.md` wake-branch change,
+   the `Events` template field, the fetch-and-inject in `runAgent`, and the
+   post-run cursor advance. Depends on: (3). Verifiable by: updating
+   `internal/agent/driver_test.go` — the two existing assertions that the wake
+   prompt equals `"The task was updated. Check xagent:get_my_task and
+   continue."` become assertions that it contains the injected event JSON when
+   events are pending, and the bare `"The task was updated. Continue."` fallback
+   when none are.
+
+5. **Docs/prompt cleanup** — Delivers: PROMPT.md wording that documents
+   `get_my_task` as an on-demand mid-run refresh rather than a required wake
+   step. Depends on: (4). Verifiable by: template rendering tests.
+
+Layers 1 and 2 are independent and independently mergeable; 3 and 4 build the
+behavior on top; 5 is cosmetic.
+
+## Trade-offs
+
+**Driver-local cursor vs. server-side delivery tracking.** #946 frames the
+cursor as "delivery cursors on events": mark an event delivered server-side once
+it enters a brief. This proposal instead keeps the cursor in the sandbox config
+file. The driver-local approach needs no migration, no new column, and no
+write-path bookkeeping, and it composes cleanly with the same-container-restart
+model where the file already persists other resume state. Its cost is that the
+cursor is per-sandbox: a container *recreate* resets it (mitigated — a recreate
+already resets `Started`/setup state, so it is a fresh run), and the server has
+no record of what a given agent has seen (only the agent's sandbox does). If we
+later want a server-authoritative "what has this task's agent seen" for the Web
+UI or for multi-consumer delivery, a server-side cursor is the better home; for
+the single-driver wake path, sandbox-local is simpler.
+
+**Raw JSON vs. a rendered brief.** We inject the same `protojson` event shape
+`get_my_task` already returns, not a human-readable summary. This means one
+format for the agent to parse (it already handles this shape), zero new
+rendering code, and no second format to keep in sync. The cost is that a raw
+JSON array is less scannable than prose — acceptable, because the consumer is a
+model that already reads this exact structure, and the issue explicitly calls
+for the raw shape rather than a formatted brief.
+
+**Dedicated RPC vs. reusing the paged endpoint.** A new `ListEventsSince` is
+more API surface than reusing `ListEventsByTask`. But "everything since raw id
+N" does not map onto the paged endpoint's opaque cursor without the client
+fabricating tokens or walking pages; a dedicated read is the honest primitive
+and still reuses the underlying `ListEventsByTaskAsc` SQL.
+
+**At-least-once duplicates.** Advancing the cursor after the run means a
+retried run re-injects. Chosen deliberately over at-most-once (advance before
+the run), which would drop the wake's payload on any mid-run failure — the
+worse outcome for a mechanism whose entire job is to deliver that payload.
+
+## Open Questions
+
+- **Event type filter.** The brief today is instruction + external. Should the
+  wake injection ever include `lifecycle` events (e.g. a status change made by a
+  human while the agent was asleep)? The current answer is no — lifecycle is
+  internal timeline, not agent input — but external triggers that carry
+  `details` may already cover the useful cases.
+
+- **Cursor advance point under partial delivery.** If `a.Prompt` injects events
+  but the agent errors partway, we re-inject on retry (at-least-once). Is there
+  any event whose *re-delivery* is harmful (e.g. one that instructs an
+  irreversible external action)? If so, the cursor would need to advance the
+  moment the prompt is accepted rather than after the run — trading a miss risk
+  for a double-action risk. Current stance: re-delivery is safe because the
+  agent re-reads context, not re-executes a command queue.
+
+- **Should first-run also drop `get_my_task`?** This design keeps the first-run
+  bootstrap on `get_my_task` because it needs task metadata beyond events. Fully
+  retiring the tool from the driver prompt (pushing name/links/status too) is
+  the larger #946 brief and is left as future work.
+
+- **Interaction with #945 (C2-hosted agent MCP).** If the agent MCP moves
+  server-side, the cursor and the injection could move with it. Does the
+  driver-local cursor become redundant, or does the driver still own wake-prompt
+  assembly? Worth settling before both land.
