@@ -1,5 +1,13 @@
 {{- if .Started -}}
-The task was updated. Check xagent:get_my_task and continue.
+{{- if .Events -}}
+The task received new events:
+
+{{ .Events }}
+
+Continue working on the task.
+{{- else -}}
+The task was updated. Continue.
+{{- end -}}
 {{- else -}}
 Use xagent:get_my_task to fetch your task instructions and execute them.
 If the task does not have a name, use xagent:update_my_task to set one.

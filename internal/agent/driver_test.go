@@ -104,6 +104,40 @@ func TestDriverRun_DrainsEventsToTail(t *testing.T) {
 	assert.Equal(t, cfg.NextEventToken, "tail")
 }
 
+func TestDrainEvents_FiltersToInjectableTypes(t *testing.T) {
+	t.Parallel()
+	// Arrange - a single page mixing every event type. The drain retains only the
+	// instruction + external events for injection while advancing the token over
+	// the FULL stream (report/lifecycle/link filtered out must not move the cursor).
+	page := &xagentv1.ListEventsByTaskResponse{
+		NextPageToken: "tail",
+		Events: []*xagentv1.Event{
+			{Id: 1, Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{Text: "do the thing"}}},
+			{Id: 2, Payload: &xagentv1.Event_Report{Report: &xagentv1.ReportPayload{Content: "working"}}},
+			{Id: 3, Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{Description: "PR comment"}}},
+			{Id: 4, Payload: &xagentv1.Event_Lifecycle{Lifecycle: &xagentv1.LifecyclePayload{}}},
+			{Id: 5, Payload: &xagentv1.Event_Link{Link: &xagentv1.LinkPayload{Url: "https://example.com"}}},
+		},
+	}
+	mock := &xagentclient.ClientMock{
+		ListEventsByTaskFunc: func(_ context.Context, _ *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+			return page, nil
+		},
+	}
+	driver := &Driver{TaskID: 1, Client: mock, Log: DiscardDriverLog}
+
+	// Act
+	events, token, err := driver.drainEvents(t.Context(), &Config{})
+
+	// Assert - only the instruction (id 1) and external (id 3) events survive, in
+	// order, and the token advanced to the page's tail.
+	assert.NilError(t, err)
+	assert.Equal(t, token, "tail")
+	assert.Assert(t, cmp.Len(events, 2))
+	assert.Equal(t, events[0].GetId(), int64(1))
+	assert.Equal(t, events[1].GetId(), int64(3))
+}
+
 func TestDriverRun_EventTokenNotAdvancedOnError(t *testing.T) {
 	t.Parallel()
 	// Arrange - a run whose agent errors. The drain computes a fresh tail token,
@@ -373,21 +407,42 @@ func TestDriverRun_SetupCommandOutputTeed(t *testing.T) {
 
 func TestConfigPrompt(t *testing.T) {
 	cfg := &Config{}
-	got, err := cfg.prompt()
+	got, err := cfg.prompt("")
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(got, "xagent:get_my_task"))
 }
 
 func TestConfigPrompt_Started(t *testing.T) {
+	// A wake with nothing pending falls back to a bare nudge — no get_my_task.
 	cfg := &Config{Started: true}
-	got, err := cfg.prompt()
+	got, err := cfg.prompt("")
 	assert.NilError(t, err)
-	assert.Equal(t, got, "The task was updated. Check xagent:get_my_task and continue.")
+	assert.Equal(t, got, "The task was updated. Continue.")
+}
+
+func TestConfigPrompt_StartedWithEvents(t *testing.T) {
+	// A wake with pending events injects the raw event JSON directly, so the
+	// wake no longer depends on a get_my_task tool call.
+	events := `[
+  {
+    "id": "42",
+    "external": {
+      "description": "PR review requested"
+    }
+  }
+]`
+	cfg := &Config{Started: true}
+	got, err := cfg.prompt(events)
+	assert.NilError(t, err)
+	assert.Assert(t, strings.Contains(got, "The task received new events:"))
+	assert.Assert(t, strings.Contains(got, events))
+	assert.Assert(t, strings.Contains(got, "Continue working on the task."))
+	assert.Assert(t, !strings.Contains(got, "get_my_task"))
 }
 
 func TestConfigPrompt_WorkspacePromptAppended(t *testing.T) {
 	cfg := &Config{Started: true, Prompt: "Custom workspace instructions."}
-	got, err := cfg.prompt()
+	got, err := cfg.prompt("")
 	assert.NilError(t, err)
-	assert.Equal(t, got, "The task was updated. Check xagent:get_my_task and continue.\n\nCustom workspace instructions.")
+	assert.Equal(t, got, "The task was updated. Continue.\n\nCustom workspace instructions.")
 }

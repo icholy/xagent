@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/shell"
 	"github.com/icholy/xagent/internal/xagentclient"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type Driver struct {
@@ -167,15 +169,29 @@ func (d *Driver) runAgent(ctx context.Context) error {
 
 	// Fetch new events and drain to the tail before running the agent. This runs
 	// on every run (first run and wake) uniformly: it pages ListEventsByTask
-	// forward from cfg.NextEventToken (empty on the first run) to the tail. The
-	// events are not injected here — injection is Layer 3 — but the drain must
-	// walk the full stream so the cursor reflects the real tail. The advanced
-	// cursor is held on cfg but persisted only by the post-run Save below, so a
-	// run that fails before that Save leaves the stored cursor untouched and the
-	// next run re-fetches from the same position (at-least-once). See
+	// forward from cfg.NextEventToken (empty on the first run) to the tail,
+	// returning the instruction + external events accumulated across the walk
+	// (report/lifecycle/link events are filtered out for injection, but the token
+	// still advances over the full stream). The advanced cursor is held on cfg but
+	// persisted only by the post-run Save below, so a run that fails before that
+	// Save leaves the stored cursor untouched and the next run re-fetches from the
+	// same position (at-least-once). See
 	// proposals/draft/wake-prompt-event-injection.md.
-	if cfg.NextEventToken, err = d.drainEvents(ctx, cfg); err != nil {
+	events, token, err := d.drainEvents(ctx, cfg)
+	if err != nil {
 		return err
+	}
+	cfg.NextEventToken = token
+
+	// On a wake (cfg.Started) with retained events, inject them into the prompt so
+	// the wake no longer depends on a get_my_task tool call. The first run drops
+	// the events — its bootstrap prompt establishes fuller context via get_my_task
+	// — but the token still advanced above so the next wake starts from the tail.
+	var eventsJSON string
+	if cfg.Started && len(events) > 0 {
+		if eventsJSON, err = marshalEventsJSON(events); err != nil {
+			return fmt.Errorf("failed to marshal events: %w", err)
+		}
 	}
 
 	// Start agent
@@ -198,7 +214,7 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	defer a.Close()
 
 	// Bootstrap prompt
-	prompt, err := cfg.prompt()
+	prompt, err := cfg.prompt(eventsJSON)
 	if err != nil {
 		return fmt.Errorf("failed to build prompt: %w", err)
 	}
@@ -256,26 +272,59 @@ func (d *Driver) setup(ctx context.Context, cfg *Config) error {
 const eventPageSize = 50
 
 // drainEvents walks the task's event stream forward from cfg.NextEventToken to
-// the tail via xagentclient.ListEventsByTask and returns the final
-// next_page_token — the cursor position after the current stream tail.
+// the tail via xagentclient.ListEventsByTask. It returns the instruction +
+// external events accumulated across the walk (the events eligible for wake
+// injection) along with the final next_page_token — the cursor position after
+// the current stream tail.
 //
-// The events are intentionally discarded at this layer: Layer 2 only advances
-// the cursor and injects nothing. Layer 3 will consume the events for injection.
-// The drain still walks the full stream so the returned cursor reflects the real
-// tail regardless of how many events are pending.
-func (d *Driver) drainEvents(ctx context.Context, cfg *Config) (string, error) {
+// The token advances over the FULL stream (the paged walk also yields
+// report/lifecycle/link events), so the returned cursor reflects the real tail
+// regardless of how many events are injectable. Only the injectable subset is
+// retained: the filter narrows to instruction + external, never moving the
+// cursor.
+func (d *Driver) drainEvents(ctx context.Context, cfg *Config) ([]*xagentv1.Event, string, error) {
 	token := cfg.NextEventToken
 	drained := 0
+	var events []*xagentv1.Event
 	req := &xagentv1.ListEventsByTaskRequest{TaskId: d.TaskID, PageSize: eventPageSize, PageToken: cfg.NextEventToken}
 	for resp, err := range xagentclient.ListEventsByTask(ctx, d.Client, req) {
 		if err != nil {
-			return "", fmt.Errorf("failed to fetch events: %w", err)
+			return nil, "", fmt.Errorf("failed to fetch events: %w", err)
 		}
 		token = resp.GetNextPageToken()
-		drained += len(resp.GetEvents())
+		for _, e := range resp.GetEvents() {
+			drained++
+			if p := model.EventPayloadFromProto(e); p != nil {
+				switch p.Type() {
+				case model.EventTypeInstruction, model.EventTypeExternal:
+					events = append(events, e)
+				}
+			}
+		}
 	}
-	d.Log.Info("drained events", "count", drained)
-	return token, nil
+	d.Log.Info("drained events", "count", drained, "retained", len(events))
+	return events, token, nil
+}
+
+// marshalEventsJSON renders events as a raw JSON array using the same protojson
+// options get_my_task's taskDetailsToMap uses (Indent: "  "), so the injected
+// payload is byte-for-byte the shape the events array already has in
+// get_my_task output — the agent parses one format, not two.
+func marshalEventsJSON(events []*xagentv1.Event) (string, error) {
+	marshalOpts := protojson.MarshalOptions{Indent: "  "}
+	raws := make([]json.RawMessage, len(events))
+	for i, e := range events {
+		data, err := marshalOpts.Marshal(e)
+		if err != nil {
+			return "", err
+		}
+		raws[i] = data
+	}
+	out, err := json.MarshalIndent(raws, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 //go:embed PROMPT.md
@@ -283,15 +332,20 @@ var promptText string
 
 var promptTemplate = template.Must(template.New("prompt").Parse(promptText))
 
-// prompt builds the bootstrap prompt sent to the agent.
-func (c *Config) prompt() (string, error) {
+// prompt builds the bootstrap prompt sent to the agent. events is the raw JSON
+// array of instruction + external events since the saved cursor, injected into
+// the wake branch of the template; it is empty on the first run and on a wake
+// with nothing pending.
+func (c *Config) prompt(events string) (string, error) {
 	var b strings.Builder
 	err := promptTemplate.Execute(&b, struct {
 		Started bool
 		Prompt  string
+		Events  string
 	}{
 		Started: c.Started,
 		Prompt:  c.Prompt,
+		Events:  events,
 	})
 	if err != nil {
 		return "", err
