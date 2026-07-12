@@ -140,8 +140,9 @@ a client keeps polling the tail.
 
 ```go
 // ErrUnsupportedDirection is returned by a Source asked to walk a direction it does
-// not implement (e.g. the task list from QueryBackward). List catches it and leaves
-// that direction's page token empty.
+// not implement (e.g. the task list from QueryBackward). List never probes for support,
+// so it surfaces only if a client submits a page token for a walk the Source lacks —
+// which a forward-only source's caller never hands out.
 var ErrUnsupportedDirection = errors.New("unsupported page direction")
 
 // Source walks a keyset in two opposite directions and maps a row to a cursor.
@@ -159,7 +160,8 @@ var ErrUnsupportedDirection = errors.New("unsupported page direction")
 //     keys / newer rows, but the package does not depend on it.)
 //
 // A one-directional Source returns ErrUnsupportedDirection from the walk it does not
-// implement; List then leaves that direction's continuation token empty.
+// implement. List never calls that walk to build a page (both tokens come from the page
+// it already fetched), so the error only surfaces if a client resubmits a token for it.
 type Source[T, C any] interface {
     QueryForward(ctx context.Context, cursor *C, limit int) ([]T, error)
     QueryBackward(ctx context.Context, cursor *C, limit int) ([]T, error)
@@ -191,11 +193,11 @@ type keysetToken[C any] struct {
     Backward bool `json:"b,omitempty"`
 }
 
-// Page is one page plus the two continuation tokens. ForwardToken continues the
-// primary walk (older); BackwardToken the reverse (newer). A token is empty when its
-// direction is exhausted (forward, at the oldest row) or unsupported (a
-// one-directional source). BackwardToken, when supported, stays populated past the
-// tail so an append-only stream can be followed.
+// Page is one page plus the two continuation tokens, both derived from the page's own
+// boundary rows — no extra query. ForwardToken continues the primary walk (older) and
+// empties when that direction is exhausted; BackwardToken reverses it (newer) and, on a
+// non-empty page, stays populated past the tail so an append-only stream can be followed.
+// A forward-only caller (the task list) simply ignores BackwardToken.
 type Page[T any] struct {
     Items         []T
     ForwardToken  string
@@ -209,14 +211,18 @@ type Page[T any] struct {
 2. Call `QueryForward` or `QueryBackward` (per `backward`) with `limit = size+1`; over-fetch tells
    whether more rows lie further in that direction. `ErrUnsupportedDirection` from the requested
    walk surfaces as a bad token (the client shouldn't have had it).
-3. Compute both continuation tokens from the **scan-order** rows *before* reordering: the
-   forward/older boundary is the lowest-key row, the backward/newer boundary the highest-key row.
-   - **ForwardToken** (older): from the older boundary, populated only when older rows remain.
-   - **BackwardToken** (newer): from the newer boundary, populated whenever the source supports
-     backward — always, for append-only follow; an empty follow-poll echoes the request token so
-     the caller keeps its place. Support is checked by calling the other walk; a source that
-     returns `ErrUnsupportedDirection` (the task list) yields an empty `BackwardToken` with no DB
-     round-trip, since it errors without querying.
+3. Derive both continuation tokens from the page's own boundary rows *before* reordering — one
+   query per page, no probe of the opposite walk:
+   - **ForwardToken** (older): from the boundary furthest along the walk (the lowest-key row under
+     the forward = descending convention), populated only when the over-fetch shows more rows remain
+     that way.
+   - **BackwardToken** (newer): from the boundary nearest the cursor (the highest-key row), populated
+     on any non-empty page so an append-only stream can be followed; an empty follow-poll echoes the
+     request token so the caller keeps its place.
+   `List` never calls the opposite walk to decide whether to emit a token — both come from the page
+   it already fetched, so a bidirectional page still costs a **single query**. A forward-only source's
+   caller doesn't expose its `BackwardToken`, and `ErrUnsupportedDirection` is reached only if a
+   client resubmits a token for a walk the source lacks (which that caller never hands out).
 4. Orient `Items` per `cfg.Reverse`: reverse a forward page iff `Reverse`, a backward page iff
    `!Reverse` (see `Config`). Because the two walks are mutually opposite, this lands every page in
    one consistent order regardless of which direction produced it. This is the *only* per-list
@@ -224,8 +230,10 @@ type Page[T any] struct {
 
 The task list keeps `Reverse: false` (the default — newest-first, unchanged), implements
 `QueryForward` (its existing `ListTasksPage` query), and returns `ErrUnsupportedDirection` from
-`QueryBackward` — so its `BackwardToken` is always empty and its `ForwardToken` is the same
-next-page token it emits today. The timeline sets `Reverse: true` and implements both walks.
+`QueryBackward`. Its `ForwardToken` is the same next-page token it emits today; `List` also fills a
+`BackwardToken` from the page boundary, but the task list neither exposes nor resubmits it (the
+`ListTasks` response has no newer-token field), so `QueryBackward` is never actually called. The
+timeline sets `Reverse: true` and implements both walks.
 
 The one case `List` can't synthesize a follow token for is a *truly empty* stream: the newest page
 returns zero rows, so there is no newer boundary to derive `BackwardToken` from and both tokens
@@ -535,9 +543,10 @@ legacy callers (empty page fields) get the full list; the web UI opts into bidir
    `taskSource` keeps its query as `QueryForward` and adds an erroring `QueryBackward` —
    behavior-preserving. Depends on: nothing. Verifiable by: package unit tests (mocked `Source`) —
    newest page (empty token), forward scroll to exhaustion (`ForwardToken` empties), backward follow
-   (`BackwardToken` always set), empty-follow-poll echo, unsupported backward → empty
-   `BackwardToken`, `Reverse` on/off ordering, page-size bounds, undecodable token →
-   `ErrInvalidRequest`; task list still green.
+   (`BackwardToken` always set), empty-follow-poll echo, a bidirectional page costs one query (no
+   probe), submitting a backward token to a forward-only source → `ErrUnsupportedDirection`,
+   `Reverse` on/off ordering, page-size bounds, undecodable token → `ErrInvalidRequest`; task list
+   still green.
 3. **Store paged queries + method** — Delivers: `ListEventsByTaskDesc` / `ListEventsByTaskAsc`
    SQL (sqlc-generated), `eventCursor`, `eventSource` (both walks), `Store.ListEventsByTaskPage`.
    Depends on: (2) (reuses `idx_events_task_id_id`; no migration). Verifiable by: store unit tests
@@ -580,9 +589,10 @@ behavior, and it is reusable by the next append-only timeline (e.g. an org or ru
 value is the intuitive default; there is no exported `Direction` type. `Source` splits into
 `QueryForward` (the primary, descending, newest-first walk — the task list's existing behavior) and
 `QueryBackward` (the ascending, newer/live-follow walk). A one-directional source returns
-`ErrUnsupportedDirection` from the walk it doesn't implement; `List` catches it and leaves that
-direction's token empty — for the task list, `QueryBackward` errors *without a DB round-trip*, so
-its `BackwardToken` is always empty and it pays nothing. Alternatives weighed and rejected: a
+`ErrUnsupportedDirection` from the walk it doesn't implement; `List` never probes it (both tokens
+come from the already-fetched page, so a bidirectional page costs one query), and the guard trips
+only if a client resubmits a token for the missing walk — which the forward-only task list never
+exposes. Alternatives weighed and rejected: a
 `dir Direction` **flag** on one method (re-exposes a direction type and switches inside every
 source); two **parallel interfaces** or `BiSource` embedding `Source` (a second interface); and a
 separate `ListBi`/`BiPage` (duplicate entry points and page types). The one real cost of the fold
@@ -602,10 +612,10 @@ history's end.** An append-only followed stream has no real "done" at the newest
 only *currently* the end, and new rows will arrive — so the newer token must survive the tail to
 act as the live-follow cursor ("caught up" is signalled by a short page). The older end *is*
 finite, so the forward/older token empties normally. `List` applies this by direction: the forward
-(older) token is over-fetch-gated (empties), the backward (newer) token stays populated whenever
-the source supports backward. The task list, forward-only, therefore behaves exactly as before
-(its forward token empties at the end; it has no newer token) — bounded and followed pagination
-coexist in one `List` without either compromising the other.
+(older) token is over-fetch-gated (empties), the backward (newer) token is filled from the page
+boundary on any non-empty page. The task list, forward-only, ignores its newer token (its RPC
+exposes no field for one), so it behaves exactly as before (its forward token empties at the end) —
+bounded and followed pagination coexist in one `List` without either compromising the other.
 
 ### Single-column `id` keyset vs `(created_at, id)`
 
