@@ -10,23 +10,10 @@ import (
 	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/pubsub"
-	"github.com/icholy/xagent/internal/server/atlassianserver"
-	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
-
-// testRegistry builds an isolated schema registry populated with the real
-// producer schemas via their exported RegisterSchemas helpers, so the Route
-// tests exercise the same translation the server uses in production without
-// depending on the process-wide DefaultSchemaRegistry.
-func testRegistry() *eventrouter.SchemaRegistry {
-	reg := eventrouter.NewSchemaRegistry()
-	githubserver.RegisterSchemas(reg)
-	atlassianserver.RegisterSchemas(reg)
-	return reg
-}
 
 func TestPlanMatchesRulePerOrgWithoutSideEffects(t *testing.T) {
 	t.Parallel()
@@ -65,7 +52,7 @@ func TestPlanMatchesRulePerOrgWithoutSideEffects(t *testing.T) {
 			s := teststore.New(t)
 			org := teststore.CreateOrg(t, s, nil)
 			assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, tt.rules))
-			r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+			r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 			// Act
 			matches, err := r.Plan(t.Context(), eventrouter.InputEvent{
@@ -111,7 +98,7 @@ func TestPlanReturnsMatchPerMemberOrg(t *testing.T) {
 	rule := []model.RoutingRule{{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}}}
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, orgA.OrgID, rule))
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, orgB.OrgID, rule))
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	matches, err := r.Plan(t.Context(), eventrouter.InputEvent{
 		Source: "github",
@@ -146,9 +133,8 @@ func TestRouteCreatesEventAndStartsTask(t *testing.T) {
 		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}, Wakeup: true},
 	}))
 	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	// Act
@@ -187,9 +173,8 @@ func TestRouteNonCanonicalURLMatchesByRoutingKey(t *testing.T) {
 		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}, Wakeup: true},
 	}))
 	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	// Act: event URL is the comment permalink, not the canonical issue URL.
@@ -228,9 +213,8 @@ func TestRouteDeduplicatesTasksWithMultipleLinks(t *testing.T) {
 		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}, Wakeup: true},
 	}))
 	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	// Act
@@ -279,7 +263,7 @@ func TestRouteNoOp(t *testing.T) {
 					Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 				})
 			}
-			r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+			r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 			// Act
 			n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -318,9 +302,8 @@ func TestRouteOrgRulesOverrideDefaults(t *testing.T) {
 	})
 	assert.NilError(t, err)
 	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
+		Log:   slog.Default(),
+		Store: s,
 	}
 
 	// Act - "xagent:" prefix should NOT match because the org overrode the defaults
@@ -360,7 +343,6 @@ func TestRouter_AttachSetsWakeMessage(t *testing.T) {
 		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	r := &eventrouter.Router{
-		Registry:  testRegistry(),
 		Log:       slog.Default(),
 		Store:     s,
 		Publisher: pub,
@@ -407,7 +389,6 @@ func TestRouter_AttachToRunningTaskStaysSilent(t *testing.T) {
 		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
 	r := &eventrouter.Router{
-		Registry:  testRegistry(),
 		Log:       slog.Default(),
 		Store:     s,
 		Publisher: pub,
@@ -453,7 +434,7 @@ func TestRouteNoWakeAttachesEventWithoutRestart(t *testing.T) {
 	pub := &pubsub.PublisherMock{
 		PublishFunc: func(_ context.Context, _ model.Notification) error { return nil },
 	}
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s, Publisher: pub}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s, Publisher: pub}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -506,7 +487,7 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
 		{Source: "github", Wakeup: true},
 	}))
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -560,7 +541,7 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 		},
 	}})
 	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -663,7 +644,7 @@ func TestRouteCreateRuleWithoutPromptUsesDefaultPreamble(t *testing.T) {
 		Create: &model.CreateTaskAction{Workspace: "default", Runner: "test-runner"},
 	}})
 	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -725,7 +706,7 @@ func TestRouteCreateRuleAutoArchive(t *testing.T) {
 				},
 			}})
 			assert.NilError(t, err)
-			r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+			r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 			// Act
 			n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -760,7 +741,7 @@ func TestRouteCreateRuleThatDoesNotMatch(t *testing.T) {
 		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 	}})
 	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -793,7 +774,7 @@ func TestRouteRedeliveryDedup(t *testing.T) {
 		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 	}})
 	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	input := eventrouter.InputEvent{
 		Source: "github",
@@ -830,7 +811,7 @@ func TestRouteFirstMatchingRuleWins(t *testing.T) {
 		{Source: "github", Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"}},
 	})
 	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -890,7 +871,7 @@ func TestRoutePerOrgIsolation(t *testing.T) {
 		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 	}})
 	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -943,8 +924,8 @@ func TestRouteLinkQueryScopedToMatchedOrgs(t *testing.T) {
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, orgB.OrgID, []model.RoutingRule{
 		{Source: "github", Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"}},
 	}))
-	// Org C has empty rules — defaultRules apply, prefix won't match.
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	// Org C has empty rules — a ruleless org matches nothing.
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -986,7 +967,7 @@ func TestRouteRuleLessOrgRoutesNothing(t *testing.T) {
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -1019,7 +1000,7 @@ func TestRouteAssignmentCreatesTaskAndLink(t *testing.T) {
 		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r", Prompt: "Review it."},
 	}})
 	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -1071,7 +1052,7 @@ func TestRouteAssignmentCreateThenCommentWakes(t *testing.T) {
 		{Source: "github", Type: "issue_comment", Conditions: []model.Condition{{Attr: "body", Op: "prefix", Value: "xagent:"}}, Wakeup: true},
 	})
 	assert.NilError(t, err)
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act: first event creates the task and a subscribed link.
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -1136,7 +1117,7 @@ func TestRouteNonMemberOrgMatchesOnlyPublicRule(t *testing.T) {
 			Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 		},
 	}))
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -1161,7 +1142,7 @@ func TestRouteNonMemberOrgWithoutPublicRuleIsNoOp(t *testing.T) {
 	t.Parallel()
 
 	// Arrange: a non-member org whose matching rule is not public — it must not
-	// fire, and its ruleless-org default fallback must not apply either.
+	// fire.
 	s := teststore.New(t)
 	actorOrg := teststore.CreateOrg(t, s, nil)
 	nonMemberOrg := teststore.CreateOrg(t, s, nil)
@@ -1169,7 +1150,7 @@ func TestRouteNonMemberOrgWithoutPublicRuleIsNoOp(t *testing.T) {
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, nonMemberOrg.OrgID, []model.RoutingRule{
 		{Source: "github", Type: "issue_comment", Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"}},
 	}))
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -1192,9 +1173,9 @@ func TestRouteNonMemberOrgWithoutPublicRuleIsNoOp(t *testing.T) {
 func TestRouteRuleLessNonMemberOrgRoutesNothing(t *testing.T) {
 	t.Parallel()
 
-	// Arrange: a non-member org with no routing rules at all. The default-rule
-	// fallback is gated on membership, so nothing routes even though the body
-	// carries the "xagent:" prefix that the defaults would otherwise match.
+	// Arrange: a non-member org with no routing rules at all. A ruleless org
+	// matches nothing, so nothing routes even though the body carries the
+	// "xagent:" prefix a rule could otherwise match.
 	s := teststore.New(t)
 	actorOrg := teststore.CreateOrg(t, s, nil)
 	nonMemberOrg := teststore.CreateOrg(t, s, nil)
@@ -1203,7 +1184,7 @@ func TestRouteRuleLessNonMemberOrgRoutesNothing(t *testing.T) {
 		Status: model.TaskStatusCompleted,
 		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -1234,7 +1215,7 @@ func TestRouteEmptyUserWithOrgsRoutesPublicRule(t *testing.T) {
 		Public: true,
 		Create: &model.CreateTaskAction{Workspace: "default", Runner: "r"},
 	}}))
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -1272,7 +1253,7 @@ func TestRouteMemberOrgInOrgsUsesFullRuleSet(t *testing.T) {
 	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
 		{Source: "github", Type: "issue_comment", Wakeup: true},
 	}))
-	r := &eventrouter.Router{Registry: testRegistry(), Log: slog.Default(), Store: s}
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
 
 	// Act: pass the member org's own id in Orgs.
 	n, err := r.Route(t.Context(), eventrouter.InputEvent{
@@ -1365,9 +1346,8 @@ func TestRouteOnRouteOutcome(t *testing.T) {
 			}
 			var outcomes []eventrouter.RouteOutcome
 			r := &eventrouter.Router{
-				Registry: testRegistry(),
-				Log:      slog.Default(),
-				Store:    s,
+				Log:   slog.Default(),
+				Store: s,
 				OnRouteOutcome: func(_ context.Context, o eventrouter.RouteOutcome) {
 					outcomes = append(outcomes, o)
 				},
@@ -1430,9 +1410,8 @@ func TestRouteOnRouteOutcomeFiresOncePerMatchedOrg(t *testing.T) {
 
 	byOrg := map[int64]eventrouter.RouteOutcome{}
 	r := &eventrouter.Router{
-		Registry: testRegistry(),
-		Log:      slog.Default(),
-		Store:    s,
+		Log:   slog.Default(),
+		Store: s,
 		OnRouteOutcome: func(_ context.Context, o eventrouter.RouteOutcome) {
 			byOrg[o.OrgID] = o
 		},

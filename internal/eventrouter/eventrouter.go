@@ -1,7 +1,6 @@
 package eventrouter
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"fmt"
@@ -91,13 +90,6 @@ type Router struct {
 	Store     *store.Store
 	Publisher pubsub.Publisher
 
-	// Registry supplies the schemas backing the ruleless-org default rules
-	// (reg.DefaultRules()). When nil, Route falls back to DefaultSchemaRegistry —
-	// the process-wide registry the producer packages populate from init — so
-	// production construction sites need not set it. Tests inject an isolated
-	// registry to control which schemas are present.
-	Registry *SchemaRegistry
-
 	// OnRouteOutcome, if set, is called synchronously once per matched org
 	// after routing handles that org, with the request context. The Router
 	// imposes no concurrency or lifetime policy — the callback owns that (e.g.
@@ -114,24 +106,15 @@ type RouteMatch struct {
 	OrgID     int64
 	Rule      *model.RoutingRule
 	RuleIndex int // position of the matched rule within the org's rule set
-	// RuleDefault is true when Rule came from the shipped default rules (used for
-	// ruleless orgs) rather than the org's configured list; RuleIndex then indexes
-	// those defaults, not the configured rules.
-	RuleDefault bool
 }
 
-// Proto renders the match as a TestEventMatch for the dry-run report. A shipped
-// default match has no configured position, so RuleIndex reports the -1 sentinel
-// rather than its index within the defaults; a configured match reports its
-// RuleIndex. WouldWake/WouldCreate are derived from the matched rule alone.
+// Proto renders the match as a TestEventMatch for the dry-run report. RuleIndex
+// reports the matched rule's position within the org's configured rules;
+// WouldWake/WouldCreate are derived from the matched rule alone.
 func (m RouteMatch) Proto() *xagentv1.TestEventMatch {
-	ruleIndex := int32(m.RuleIndex)
-	if m.RuleDefault {
-		ruleIndex = -1
-	}
 	return &xagentv1.TestEventMatch{
 		OrgId:       m.OrgID,
-		RuleIndex:   ruleIndex,
+		RuleIndex:   int32(m.RuleIndex),
 		WouldWake:   m.Rule.Wakeup,
 		WouldCreate: m.Rule.Create != nil,
 	}
@@ -150,27 +133,12 @@ func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, erro
 
 	// The store returns conditions-native rules (legacy rows translated on read),
 	// so matching runs directly through the attribute-based matcher against the
-	// input event. Resolve the registry once for the default-rule fallback
-	// (nil-defaulting to the process-wide registry).
-	reg := cmp.Or(r.Registry, DefaultSchemaRegistry)
-
+	// input event. A ruleless org matches nothing.
+	//
 	// First matching rule per org; orgs with no match are dropped.
 	var matches []RouteMatch
 	for _, org := range orgs {
-		rules := org.Rules
-		// defaulted flags whether the matched rule set is the shipped defaults,
-		// surfaced on the RouteMatch as RuleDefault instead of an index sentinel.
-		defaulted := false
-		if len(rules) == 0 && org.IsMember {
-			// Ruleless orgs fall back to the producers' per-type "xagent:"
-			// body-prefix wakeup defaults, already conditions-native. The
-			// fallback stays member-only: a ruleless non-member org routes
-			// nothing, since non-member routing always requires an explicit
-			// opt-in rule.
-			rules = reg.DefaultRules()
-			defaulted = true
-		}
-		for i, rule := range rules {
+		for i, rule := range org.Rules {
 			// Member org: every rule is eligible. Non-member org (in input.Orgs
 			// but not the actor's): only rules that opted in via Public.
 			if !org.IsMember && !rule.Public {
@@ -178,10 +146,9 @@ func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, erro
 			}
 			if Match(rule, input) {
 				matches = append(matches, RouteMatch{
-					OrgID:       org.OrgID,
-					Rule:        &rule,
-					RuleIndex:   i,
-					RuleDefault: defaulted,
+					OrgID:     org.OrgID,
+					Rule:      &rule,
+					RuleIndex: i,
 				})
 				break
 			}
