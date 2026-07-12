@@ -1,0 +1,24 @@
+The task received new events:
+
+[
+{
+  "id":  "42",
+  "createdAt":  "2023-11-14T22:13:20Z",
+  "external":  {
+    "description":  "PR review requested",
+    "url":  "https://github.com/icholy/xagent/pull/1394"
+  }
+},
+{
+  "id":  "43",
+  "createdAt":  "2023-11-14T22:15:00Z",
+  "instruction":  {
+    "text":  "keep going",
+    "url":  "https://github.com/icholy/xagent/issues/2"
+  }
+}
+]
+
+Continue working on the task.
+
+Custom workspace instructions.
