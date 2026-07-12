@@ -53,7 +53,7 @@ func (q *Queries) DeleteLink(ctx context.Context, id int64) error {
 }
 
 const findSubscribedLinksForOrgs = `-- name: FindSubscribedLinksForOrgs :many
-SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_key, t.org_id
+SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_key, t.org_id, t.namespace
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
 WHERE l.routing_key = $1 AND l.subscribe = TRUE AND t.archived = FALSE
@@ -76,6 +76,7 @@ type FindSubscribedLinksForOrgsRow struct {
 	CreatedAt  time.Time `json:"created_at"`
 	RoutingKey string    `json:"routing_key"`
 	OrgID      int64     `json:"org_id"`
+	Namespace  string    `json:"namespace"`
 }
 
 func (q *Queries) FindSubscribedLinksForOrgs(ctx context.Context, arg FindSubscribedLinksForOrgsParams) ([]FindSubscribedLinksForOrgsRow, error) {
@@ -97,6 +98,7 @@ func (q *Queries) FindSubscribedLinksForOrgs(ctx context.Context, arg FindSubscr
 			&i.CreatedAt,
 			&i.RoutingKey,
 			&i.OrgID,
+			&i.Namespace,
 		); err != nil {
 			return nil, err
 		}

@@ -14,7 +14,7 @@ ORDER BY l.created_at ASC;
 DELETE FROM task_links WHERE id = $1;
 
 -- name: FindSubscribedLinksForOrgs :many
-SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_key, t.org_id
+SELECT l.id, l.task_id, l.relevance, l.url, l.title, l.subscribe, l.created_at, l.routing_key, t.org_id, t.namespace
 FROM task_links l
 JOIN tasks t ON l.task_id = t.id
 WHERE l.routing_key = sqlc.arg(routing_key) AND l.subscribe = TRUE AND t.archived = FALSE
