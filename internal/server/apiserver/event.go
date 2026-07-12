@@ -129,5 +129,6 @@ func (s *Server) ListEventsByTask(ctx context.Context, req *xagentv1.ListEventsB
 		Events:        model.ProtoMap(page.Items),
 		PrevPageToken: page.NextToken,
 		NextPageToken: page.PrevToken,
+		More:          page.More,
 	}, nil
 }

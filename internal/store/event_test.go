@@ -58,6 +58,46 @@ func TestListEventsByTaskPage(t *testing.T) {
 	assert.DeepEqual(t, got, want)
 }
 
+func TestListEventsByTaskPage_More(t *testing.T) {
+	t.Parallel()
+	// Arrange - seed exactly 9 events so the final page (page size 3) is full,
+	// exercising the exact-page_size boundary the length heuristic gets wrong.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	task := teststore.CreateTask(t, s, org, nil)
+	for i := range 9 {
+		assert.NilError(t, s.CreateEvent(t.Context(), nil, &model.Event{
+			TaskID:  task.ID,
+			OrgID:   org.OrgID,
+			Payload: &model.ReportPayload{Content: fmt.Sprintf("report %d", i+1)},
+		}))
+	}
+
+	// Act/Assert - walk NextToken toward older history. More stays true while an
+	// older page remains and flips false on the last (full) page, even though the
+	// walk lands on an exact page_size boundary.
+	var wantMore []bool
+	token := ""
+	for {
+		page, err := s.ListEventsByTaskPage(t.Context(), nil, store.ListEventsByTaskPageParams{
+			TaskID:    task.ID,
+			OrgID:     org.OrgID,
+			PageSize:  3,
+			PageToken: token,
+		})
+		assert.NilError(t, err)
+		// More agrees with NextToken on this forward walk: both mark older history.
+		assert.Equal(t, page.More, page.NextToken != "")
+		wantMore = append(wantMore, page.More)
+		if page.NextToken == "" {
+			break
+		}
+		token = page.NextToken
+	}
+	// Three full pages (3+3+3); the tail page reports no further page.
+	assert.DeepEqual(t, wantMore, []bool{true, true, false})
+}
+
 func TestListEventsByTaskPage_LiveFollow(t *testing.T) {
 	t.Parallel()
 	// Arrange
@@ -92,6 +132,7 @@ func TestListEventsByTaskPage_LiveFollow(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(empty.Items), 0)
 	assert.Assert(t, empty.PrevToken != "") // still resumable
+	assert.Assert(t, !empty.More)           // nothing newer: the tail is reached
 
 	// Act - a subsequently-inserted event is picked up by the same tail token.
 	newEvent := &model.Event{
@@ -108,8 +149,28 @@ func TestListEventsByTaskPage_LiveFollow(t *testing.T) {
 	})
 	assert.NilError(t, err)
 
-	// Assert
+	// Assert - the one new event, and no further page beyond it.
 	assert.DeepEqual(t, testx.ExtractField(page.Items, "ID"), []int64{newEvent.ID})
+	assert.Assert(t, !page.More)
+
+	// Insert two more events so more than a (small) page is newer than the tail
+	// cursor, then follow with page size 2: More is true while newer rows remain.
+	for i := range 2 {
+		assert.NilError(t, s.CreateEvent(t.Context(), nil, &model.Event{
+			TaskID:  task.ID,
+			OrgID:   org.OrgID,
+			Payload: &model.ReportPayload{Content: fmt.Sprintf("report %d", i+5)},
+		}))
+	}
+	backlog, err := s.ListEventsByTaskPage(t.Context(), nil, store.ListEventsByTaskPageParams{
+		TaskID:    task.ID,
+		OrgID:     org.OrgID,
+		PageSize:  2,
+		PageToken: follow,
+	})
+	assert.NilError(t, err)
+	assert.Equal(t, len(backlog.Items), 2)
+	assert.Assert(t, backlog.More) // a third newer event remains beyond this page
 }
 
 func TestListEventsByTaskPage_TypesFilter(t *testing.T) {

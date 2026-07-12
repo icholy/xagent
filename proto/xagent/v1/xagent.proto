@@ -430,7 +430,11 @@ message ListEventsByTaskResponse {
   string prev_page_token = 2;  // Older page (scroll back); empty when history is exhausted.
   string next_page_token = 3;  // Newer page (scroll forward / live-follow); ALWAYS populated in
                                // the paged path so a client can keep polling the tail for appends.
-                               // A page shorter than page_size means the tail is currently reached.
+  bool more = 4;               // Whether another page exists beyond `events` in the direction just
+                               // walked (older for a prev_page_token request, newer for live-follow).
+                               // Break on !more instead of the shorter-than-page_size heuristic, which
+                               // misfires at an exact page_size boundary. Always false on the legacy
+                               // unpaged path, which returns the whole stream.
 }
 
 message RunnerEvent {

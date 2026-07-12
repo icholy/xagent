@@ -397,6 +397,47 @@ func TestListEventsByTask_Paged(t *testing.T) {
 	assert.DeepEqual(t, got, fullIDs)
 }
 
+func TestListEventsByTask_More(t *testing.T) {
+	t.Parallel()
+	// Arrange - createTestTask seeds one lifecycle CREATED event; add 5 externals
+	// for 6 total, an exact multiple of page size 2 so the oldest page is full
+	// (the exact-page_size boundary).
+	srv := New(Options{Store: teststore.New(t)})
+	org := orgWithWorkspace(t, srv)
+	ctx := createCtx(t, org)
+	taskID := createTestTask(t, srv, ctx)
+	for i := range 5 {
+		assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
+			TaskID:  taskID,
+			OrgID:   org.OrgID,
+			Payload: &model.ExternalPayload{Description: fmt.Sprintf("Event %d", i+1)},
+		}))
+	}
+
+	// Newest page (empty token) walks toward older history: More is true while an
+	// older page remains. Walk prev_page_token to the oldest page, collecting More.
+	const pageSize = 2
+	var gotMore []bool
+	resp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: taskID, PageSize: pageSize,
+	})
+	assert.NilError(t, err)
+	for {
+		// More agrees with prev_page_token on this scroll-back walk.
+		assert.Equal(t, resp.More, resp.PrevPageToken != "")
+		gotMore = append(gotMore, resp.More)
+		if resp.PrevPageToken == "" {
+			break
+		}
+		resp, err = srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+			TaskId: taskID, PageSize: pageSize, PageToken: resp.PrevPageToken,
+		})
+		assert.NilError(t, err)
+	}
+	// 6 events / 2 = 3 pages; only the last (oldest, full) page has no further page.
+	assert.DeepEqual(t, gotMore, []bool{true, true, false})
+}
+
 func TestListEventsByTask_LiveFollow(t *testing.T) {
 	t.Parallel()
 	// Arrange
@@ -427,6 +468,7 @@ func TestListEventsByTask_LiveFollow(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(poll.Events), 0)
 	assert.Assert(t, poll.NextPageToken != "")
+	assert.Assert(t, !poll.More) // tail reached: no further page despite the live token
 
 	// Append a new event, then follow again → it appears at the tail.
 	assert.NilError(t, srv.store.CreateEvent(ctx, nil, &model.Event{
