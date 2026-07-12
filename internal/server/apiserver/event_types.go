@@ -108,15 +108,9 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 			continue
 		}
 
-		// A default-rule match has no configured index; report it as -1 (the proto
-		// contract for the shipped default) rather than its position in the defaults.
-		ruleIndex := int32(match.RuleIndex)
-		if match.RuleDefault {
-			ruleIndex = -1
-		}
 		pbMatches = append(pbMatches, &xagentv1.TestEventMatch{
 			OrgId:       match.OrgID,
-			RuleIndex:   ruleIndex,
+			RuleIndex:   match.ProtoRuleIndex(),
 			WouldWake:   match.Rule.Wakeup,
 			WouldCreate: match.Rule.Create != nil,
 		})
