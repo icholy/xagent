@@ -41,4 +41,15 @@ export class TimelineFollowers {
     if (!set) return
     for (const follow of set) follow()
   }
+
+  // notifyAll fires every registered follow across all task ids. It's the
+  // reconnect counterpart to notify: after the SSE drops and comes back, each
+  // mounted timeline catches up on anything missed during the gap with a single
+  // tail-follow (fetch newer-than-tail, append) rather than refetching every
+  // loaded page. A no-op when no timeline is mounted.
+  notifyAll(): void {
+    for (const set of this.followers.values()) {
+      for (const follow of set) follow()
+    }
+  }
 }
