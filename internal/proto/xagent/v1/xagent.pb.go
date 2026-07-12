@@ -824,6 +824,7 @@ type ListTasksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PageSize      int32                  `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`   // Max tasks to return (default: 50, max: 100)
 	PageToken     string                 `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"` // Opaque cursor from a previous next_page_token; empty for the first page
+	Archived      bool                   `protobuf:"varint,3,opt,name=archived,proto3" json:"archived,omitempty"`                   // Include archived tasks alongside active ones (default: false)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -870,6 +871,13 @@ func (x *ListTasksRequest) GetPageToken() string {
 		return x.PageToken
 	}
 	return ""
+}
+
+func (x *ListTasksRequest) GetArchived() bool {
+	if x != nil {
+		return x.Archived
+	}
+	return false
 }
 
 type ListTasksResponse struct {
@@ -6322,11 +6330,12 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x04orgs\x18\x02 \x03(\v2\x0e.xagent.v1.OrgR\x04orgs\x12$\n" +
 	"\x0edefault_org_id\x18\x03 \x01(\x03R\fdefaultOrgId\x12?\n" +
 	"\x0egithub_account\x18\x04 \x01(\v2\x18.xagent.v1.GitHubAccountR\rgithubAccount\x12H\n" +
-	"\x11atlassian_account\x18\x05 \x01(\v2\x1b.xagent.v1.AtlassianAccountR\x10atlassianAccount\"N\n" +
+	"\x11atlassian_account\x18\x05 \x01(\v2\x1b.xagent.v1.AtlassianAccountR\x10atlassianAccount\"j\n" +
 	"\x10ListTasksRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x02 \x01(\tR\tpageToken\"b\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\x12\x1a\n" +
+	"\barchived\x18\x03 \x01(\bR\barchived\"b\n" +
 	"\x11ListTasksResponse\x12%\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x0f.xagent.v1.TaskR\x05tasks\x12&\n" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"0\n" +
