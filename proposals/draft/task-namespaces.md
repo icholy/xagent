@@ -318,13 +318,17 @@ Net: a deployment that never sets a namespace behaves identically to today.
    task in `namespace='reviewbot'` carries that namespace, a default-namespace link
    carries `""`.
 
-4. **Router matching + create** — Delivers: per-(org, namespace) matching, in-loop
-   filtering of the single batch lookup by the matched rule's namespace, and
+4. **Router matching + create** — Delivers: in-loop filtering of the single batch
+   lookup by the matched rule's namespace (the wake-vs-create partition) and
    `create` stamping `task.Namespace = rule.Namespace`. Adds `RoutingRule.Namespace`
-   to the model. Depends on: (2), (3). Verifiable by: eventrouter test reproducing
-   the motivating scenario — a default-namespace subscriber present, a `reviewbot`
-   create rule still creates the reviewer; and the two-rules-different-namespace
-   case fires both. This is the slice that closes the issue.
+   to the model. Matching stays **first-match-per-org** for now — per-(org,
+   namespace) matching (so a default rule and a namespaced rule matching the same
+   event both fire) is deferred as a follow-up; this layer delivers only the
+   subscription partitioning + create stamping. Depends on: (2), (3). Verifiable by:
+   eventrouter test reproducing the motivating scenario — a default-namespace
+   subscriber present, a `reviewbot` create rule (the first-matching rule) still
+   creates the reviewer because the default subscriber is filtered out by the
+   namespace scope in `Apply`. This is the slice that closes the issue.
 
 5. **Proto + API handlers** — Delivers: `namespace` on `Task`, `CreateTaskRequest`,
    `RoutingRule` in `proto/xagent/v1/xagent.proto` (regenerate); `CreateTask`
