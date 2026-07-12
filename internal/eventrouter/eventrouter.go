@@ -135,30 +135,26 @@ func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, erro
 	// so matching runs directly through the attribute-based matcher against the
 	// input event. A ruleless org matches nothing.
 	//
-	// First matching rule per (org, namespace); orgs with no match are dropped.
-	// Matching per namespace keeps rules in different namespaces from shadowing
-	// each other — a namespaced create rule fires even when a default-namespace
-	// rule matches the same event. With every rule in the default namespace this
-	// reduces to the prior first-match-per-org behavior.
+	// First matching rule per org; orgs with no match are dropped. Per-namespace
+	// matching — so a default rule and a namespaced rule matching the same event
+	// both fire — is deferred as a follow-up; this layer only partitions the
+	// wake-vs-create decision (see Apply) and stamps created tasks with the
+	// rule's namespace.
 	var matches []RouteMatch
 	for _, org := range orgs {
-		matchedNS := map[string]bool{}
 		for i, rule := range org.Rules {
 			// Member org: every rule is eligible. Non-member org (in input.Orgs
 			// but not the actor's): only rules that opted in via Public.
 			if !org.IsMember && !rule.Public {
 				continue
 			}
-			if matchedNS[rule.Namespace] {
-				continue
-			}
 			if Match(rule, input) {
-				matchedNS[rule.Namespace] = true
 				matches = append(matches, RouteMatch{
 					OrgID:     org.OrgID,
 					Rule:      &rule,
 					RuleIndex: i,
 				})
+				break
 			}
 		}
 	}
