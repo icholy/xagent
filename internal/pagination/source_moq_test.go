@@ -21,7 +21,7 @@ var _ Source[any, any] = &SourceMock[any, any]{}
 //			CursorFunc: func(row T) C {
 //				panic("mock out the Cursor method")
 //			},
-//			QueryFunc: func(ctx context.Context, cursor *C, limit int32) ([]T, error) {
+//			QueryFunc: func(ctx context.Context, cursor *C, backward bool, limit int) ([]T, error) {
 //				panic("mock out the Query method")
 //			},
 //		}
@@ -35,7 +35,7 @@ type SourceMock[T any, C any] struct {
 	CursorFunc func(row T) C
 
 	// QueryFunc mocks the Query method.
-	QueryFunc func(ctx context.Context, cursor *C, limit int32) ([]T, error)
+	QueryFunc func(ctx context.Context, cursor *C, backward bool, limit int) ([]T, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -50,8 +50,10 @@ type SourceMock[T any, C any] struct {
 			Ctx context.Context
 			// Cursor is the cursor argument value.
 			Cursor *C
+			// Backward is the backward argument value.
+			Backward bool
 			// Limit is the limit argument value.
-			Limit int32
+			Limit int
 		}
 	}
 	lockCursor sync.RWMutex
@@ -91,23 +93,25 @@ func (mock *SourceMock[T, C]) CursorCalls() []struct {
 }
 
 // Query calls QueryFunc.
-func (mock *SourceMock[T, C]) Query(ctx context.Context, cursor *C, limit int32) ([]T, error) {
+func (mock *SourceMock[T, C]) Query(ctx context.Context, cursor *C, backward bool, limit int) ([]T, error) {
 	if mock.QueryFunc == nil {
 		panic("SourceMock.QueryFunc: method is nil but Source.Query was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		Cursor *C
-		Limit  int32
+		Ctx      context.Context
+		Cursor   *C
+		Backward bool
+		Limit    int
 	}{
-		Ctx:    ctx,
-		Cursor: cursor,
-		Limit:  limit,
+		Ctx:      ctx,
+		Cursor:   cursor,
+		Backward: backward,
+		Limit:    limit,
 	}
 	mock.lockQuery.Lock()
 	mock.calls.Query = append(mock.calls.Query, callInfo)
 	mock.lockQuery.Unlock()
-	return mock.QueryFunc(ctx, cursor, limit)
+	return mock.QueryFunc(ctx, cursor, backward, limit)
 }
 
 // QueryCalls gets all the calls that were made to Query.
@@ -115,14 +119,16 @@ func (mock *SourceMock[T, C]) Query(ctx context.Context, cursor *C, limit int32)
 //
 //	len(mockedSource.QueryCalls())
 func (mock *SourceMock[T, C]) QueryCalls() []struct {
-	Ctx    context.Context
-	Cursor *C
-	Limit  int32
+	Ctx      context.Context
+	Cursor   *C
+	Backward bool
+	Limit    int
 } {
 	var calls []struct {
-		Ctx    context.Context
-		Cursor *C
-		Limit  int32
+		Ctx      context.Context
+		Cursor   *C
+		Backward bool
+		Limit    int
 	}
 	mock.lockQuery.RLock()
 	calls = mock.calls.Query
